@@ -39,7 +39,10 @@ export default function ResetLoginForm({
       </div>
       <div className="button-row">
         <SubmitButton />
-        <a className="button button-secondary" href={`/UserAdmin/UserAdmin.aspx?Alphabet=${encodeURIComponent(alphabet)}`}>
+        <a
+          className="button button-secondary"
+          href={`/UserAdmin/UserAdmin.aspx?Alphabet=${encodeURIComponent(alphabet)}`}
+        >
           Back
         </a>
       </div>

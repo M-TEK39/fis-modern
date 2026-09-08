@@ -27,7 +27,9 @@ function UnavailableState() {
       </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Your session could not be checked.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
         <Link className="button button-primary" href="/accidents">
           Try again
@@ -48,7 +50,9 @@ function AccessRestricted() {
       </div>
       <p className="eyebrow">Access restricted</p>
       <h2>You do not have permission to access Accident Maintenance.</h2>
-      <p className="muted-copy">Contact your FIS administrator if you need accident-management access.</p>
+      <p className="muted-copy">
+        Contact your FIS administrator if you need accident-management access.
+      </p>
     </section>
   );
 }
@@ -68,7 +72,11 @@ async function AccidentMenuContent() {
     return <UnavailableState />;
   }
 
-  if (!session.roles.some((role) => role.localeCompare(ACCIDENTS_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(ACCIDENTS_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
     return <AccessRestricted />;
   }
 
@@ -78,9 +86,13 @@ async function AccidentMenuContent() {
         <section className="vehicle-menu-tile">
           <h2 className="sr-only">Accident help</h2>
           <details open>
-            <summary className="vehicle-menu-header">Accident Maintenance Information / Help</summary>
+            <summary className="vehicle-menu-header">
+              Accident Maintenance Information / Help
+            </summary>
             <div className="vehicle-menu-body">
-              <AccidentMenuLink href="/accidents/help">Accident Maintenance Information / Help</AccidentMenuLink>
+              <AccidentMenuLink href="/accidents/help">
+                Accident Maintenance Information / Help
+              </AccidentMenuLink>
             </div>
           </details>
         </section>
@@ -91,7 +103,9 @@ async function AccidentMenuContent() {
             <summary className="vehicle-menu-header">Accident Maintenance for Garage</summary>
             <div className="vehicle-menu-body">
               <AccidentMenuLink href="/accidents/garage">1) Accident Maintenance</AccidentMenuLink>
-              <AccidentMenuLink href="/accidents/garage/delete">2) Delete an Accident</AccidentMenuLink>
+              <AccidentMenuLink href="/accidents/garage/delete">
+                2) Delete an Accident
+              </AccidentMenuLink>
             </div>
           </details>
         </section>

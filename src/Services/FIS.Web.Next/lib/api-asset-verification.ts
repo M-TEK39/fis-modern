@@ -42,12 +42,16 @@ export type AssetVerificationRecord = {
   isDeleted: boolean;
 };
 
-export type AssetVerificationInput = Omit<AssetVerificationRecord, "assetVerificationCode" | "verificationStatus" | "isDeleted"> & {
+export type AssetVerificationInput = Omit<
+  AssetVerificationRecord,
+  "assetVerificationCode" | "verificationStatus" | "isDeleted"
+> & {
   assetVerificationCode?: number;
   verificationStatus?: string | null;
 };
 
-export type AssetVerificationApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type AssetVerificationApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class AssetVerificationApiError extends Error {
   constructor(
@@ -106,7 +110,8 @@ function getCollection(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new AssetVerificationApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new AssetVerificationApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -114,20 +119,40 @@ async function requestApi(path: string, init: RequestInit = {}) {
     const response = await fetch(new URL(path.replace(/^\//, ""), getApiBaseUrl()), {
       ...init,
       cache: "no-store",
-      headers: { accept: "application/json", cookie: cookieHeader, ...(init.body ? { "content-type": "application/json" } : {}), ...init.headers },
+      headers: {
+        accept: "application/json",
+        cookie: cookieHeader,
+        ...(init.body ? { "content-type": "application/json" } : {}),
+        ...init.headers,
+      },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) throw new AssetVerificationApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
-    if (response.status === 404) throw new AssetVerificationApiError("not-found", "The asset verification record was not found.", response.status);
+    if (response.status === 401 || response.status === 403)
+      throw new AssetVerificationApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
+    if (response.status === 404)
+      throw new AssetVerificationApiError(
+        "not-found",
+        "The asset verification record was not found.",
+        response.status,
+      );
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the stable status message when the API has no JSON body.
       }
-      throw new AssetVerificationApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new AssetVerificationApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -228,15 +253,27 @@ function toApiInput(input: AssetVerificationInput) {
 
 export async function getAssetVerifications() {
   const payload = await readJson(await requestApi("api/assetverification"));
-  return getCollection(payload).map(mapRecord).filter((value): value is AssetVerificationRecord => value !== null);
+  return getCollection(payload)
+    .map(mapRecord)
+    .filter((value): value is AssetVerificationRecord => value !== null);
 }
 
 export async function createAssetVerification(input: AssetVerificationInput) {
-  const payload = await readJson(await requestApi("api/assetverification", { method: "POST", body: JSON.stringify(toApiInput(input)) }));
+  const payload = await readJson(
+    await requestApi("api/assetverification", {
+      method: "POST",
+      body: JSON.stringify(toApiInput(input)),
+    }),
+  );
   return mapRecord(payload);
 }
 
 export async function updateAssetVerification(code: number, input: AssetVerificationInput) {
-  const payload = await readJson(await requestApi(`api/assetverification/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(toApiInput({ ...input, assetVerificationCode: code })) }));
+  const payload = await readJson(
+    await requestApi(`api/assetverification/${encodeURIComponent(code)}`, {
+      method: "PUT",
+      body: JSON.stringify(toApiInput({ ...input, assetVerificationCode: code })),
+    }),
+  );
   return mapRecord(payload);
 }

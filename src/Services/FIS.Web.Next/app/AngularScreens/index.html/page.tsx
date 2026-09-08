@@ -6,7 +6,9 @@ function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function LegacyAngularEntryPage({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+export default async function LegacyAngularEntryPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
   const sub = (getQueryValue(query.sub) ?? "SiteStaff").trim().toLowerCase();
   const departmentCode = getQueryValue(query.departmentCode);
@@ -21,7 +23,8 @@ export default async function LegacyAngularEntryPage({ searchParams }: Readonly<
   if (sub === "vehiclephotoupload") redirect(`/vehicle-photos${suffix}`);
   if (sub === "vehiclephotoedit") {
     const vehicleId = getQueryValue(query.vehicleId);
-    if (vehicleId && /^\d+$/.test(vehicleId)) redirect(`/vehicle-photos/manage/${vehicleId}${suffix}`);
+    if (vehicleId && /^\d+$/.test(vehicleId))
+      redirect(`/vehicle-photos/manage/${vehicleId}${suffix}`);
   }
   if (sub === "authorisermanagement") redirect(`/drivers/authorisers${suffix}`);
   if (sub === "authoriseredit") redirect(`/drivers/authorisers/edit${suffix}`);

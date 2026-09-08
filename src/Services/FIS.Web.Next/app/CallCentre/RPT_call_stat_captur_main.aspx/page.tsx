@@ -1,5 +1,11 @@
 import { CallCentreReportPage } from "@/app/call-centre/reports/[mode]/page";
 
-export default function LegacyCallCentreStatistics(props: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  return CallCentreReportPage({ ...props, forcedMode: "statistics", routePath: "/CallCentre/RPT_call_stat_captur_main.aspx" });
+export default function LegacyCallCentreStatistics(props: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return CallCentreReportPage({
+    ...props,
+    forcedMode: "statistics",
+    routePath: "/CallCentre/RPT_call_stat_captur_main.aspx",
+  });
 }

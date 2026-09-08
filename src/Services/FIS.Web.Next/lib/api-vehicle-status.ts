@@ -12,9 +12,7 @@ import {
   type VehicleStatusType,
 } from "@/app/vehicles/status/status-types";
 
-export {
-  VEHICLE_STATUS_OPTIONS,
-};
+export { VEHICLE_STATUS_OPTIONS };
 export type {
   VehicleStatusOption,
   VehicleStatusReport,
@@ -59,7 +57,8 @@ export type VehicleStatusChangeResult = {
   actionsPerformed: string[];
 };
 
-export type VehicleStatusApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type VehicleStatusApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class VehicleStatusApiError extends Error {
   constructor(
@@ -190,7 +189,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
         // Keep the status-based message when the API has no JSON error body.
       }
 
-      throw new VehicleStatusApiError(response.status >= 500 ? "unavailable" : "invalid-response", message);
+      throw new VehicleStatusApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+      );
     }
 
     return response;
@@ -226,22 +228,33 @@ function mapVehicle(value: unknown): VehicleStatusVehicle | null {
   return {
     vmfCode,
     fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")) || null,
-    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")) || null,
+    registrationNumber:
+      asString(getValue(value, "registration_number", "registrationNumber")) || null,
     modelName:
-      asString(getValue(value, "model_name", "modelName", "model_description", "modelDescription")) || null,
-    typeName: asString(getValue(value, "type_name", "typeName", "type_description", "typeDescription")) || null,
+      asString(
+        getValue(value, "model_name", "modelName", "model_description", "modelDescription"),
+      ) || null,
+    typeName:
+      asString(getValue(value, "type_name", "typeName", "type_description", "typeDescription")) ||
+      null,
     statusCode: asNumber(getValue(value, "vehicle_status_code", "vehicleStatusCode")) ?? 0,
     statusDescription:
-      asString(getValue(value, "status_description", "statusDescription", "vehicle_status_description")) || null,
+      asString(
+        getValue(value, "status_description", "statusDescription", "vehicle_status_description"),
+      ) || null,
     statusDate: asString(getValue(value, "vehicle_status_date", "vehicleStatusDate")) || null,
     locationCode: asNumber(getValue(value, "location_code", "locationCode")),
-    locationDescription: asString(getValue(value, "location_description", "locationDescription")) || null,
+    locationDescription:
+      asString(getValue(value, "location_description", "locationDescription")) || null,
     siteCode: asNumber(getValue(value, "site_code", "siteCode", "location_code", "locationCode")),
     yearManufactured: asNumber(getValue(value, "year_manufactured", "yearManufactured")),
     colour: asString(getValue(value, "colour")) || null,
     chassisNumber: asString(getValue(value, "chassis_number", "chassisNumber")) || null,
-    engineNumber: asString(getValue(value, "engine_number_1", "engineNumber1", "engine_number")) || null,
-    hiredFrom: asString(getValue(value, "purchased_from", "purchasedFrom", "hired_from", "hiredFrom")) || null,
+    engineNumber:
+      asString(getValue(value, "engine_number_1", "engineNumber1", "engine_number")) || null,
+    hiredFrom:
+      asString(getValue(value, "purchased_from", "purchasedFrom", "hired_from", "hiredFrom")) ||
+      null,
     currentOdo: asNumber(getValue(value, "current_odo", "currentOdo")),
   };
 }
@@ -276,16 +289,23 @@ function mapReportRow(value: unknown): VehicleStatusReportRow | null {
   return {
     vmfCode,
     fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")) || null,
-    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")) || null,
+    registrationNumber:
+      asString(getValue(value, "registration_number", "registrationNumber")) || null,
     invoiceNumber: asString(getValue(value, "invoice_number", "invoiceNumber")) || null,
     makeDescription: asString(getValue(value, "make_description", "makeDescription")) || null,
     modelDescription: asString(getValue(value, "model_description", "modelDescription")) || null,
     statusCode: asNumber(getValue(value, "vehicle_status_code", "vehicleStatusCode")) ?? 0,
-    statusText: asString(getValue(value, "status_text", "statusText", "status_description", "statusDescription")) || null,
+    statusText:
+      asString(
+        getValue(value, "status_text", "statusText", "status_description", "statusDescription"),
+      ) || null,
     typeCode: asNumber(getValue(value, "type_code", "typeCode")),
     typeDescription: asString(getValue(value, "type_description", "typeDescription")) || null,
     locationCode: asNumber(getValue(value, "location_code", "locationCode")),
-    siteName: asString(getValue(value, "site_name", "siteName", "location_description", "locationDescription")) || null,
+    siteName:
+      asString(
+        getValue(value, "site_name", "siteName", "location_description", "locationDescription"),
+      ) || null,
     remark: mapReportRemark(getValue(value, "active_remark", "activeRemark")),
   };
 }
@@ -308,7 +328,9 @@ function mapReportLookups(value: unknown) {
 }
 
 export async function searchVehiclesForStatus(searchTerm: string) {
-  const response = await requestApi(`api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm)}`);
+  const response = await requestApi(
+    `api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm)}`,
+  );
   return getCollection(await readJson(response))
     .map(mapVehicle)
     .filter((vehicle): vehicle is VehicleStatusVehicle => vehicle !== null);
@@ -333,8 +355,12 @@ export async function getSitesForVehicleStatus() {
       }
 
       const code = asNumber(getValue(value, "site_code", "siteCode"));
-      const description = asString(getValue(value, "description", "site_description", "siteDescription"));
-      return code !== null && description ? { code, description } satisfies VehicleStatusSite : null;
+      const description = asString(
+        getValue(value, "description", "site_description", "siteDescription"),
+      );
+      return code !== null && description
+        ? ({ code, description } satisfies VehicleStatusSite)
+        : null;
     })
     .filter((site): site is VehicleStatusSite => site !== null)
     .toSorted((left, right) => left.description.localeCompare(right.description));
@@ -350,7 +376,9 @@ export async function getVehicleTypesForStatus(): Promise<VehicleStatusType[]> {
 
       const code = asNumber(getValue(value, "type_code", "typeCode"));
       const description = asString(getValue(value, "type_description", "typeDescription"));
-      return code !== null && description ? { code, description } satisfies VehicleStatusType : null;
+      return code !== null && description
+        ? ({ code, description } satisfies VehicleStatusType)
+        : null;
     })
     .filter((type): type is VehicleStatusType => type !== null)
     .toSorted((left, right) => left.description.localeCompare(right.description));
@@ -379,7 +407,10 @@ export async function getVehicleStatusReport(
   const path = `api/report/new-in-service${query.size > 0 ? `?${query.toString()}` : ""}`;
   const payload = await readJson(await requestApi(path));
   if (!isRecord(payload)) {
-    throw new VehicleStatusApiError("invalid-response", "The FIS API returned an invalid vehicle status report.");
+    throw new VehicleStatusApiError(
+      "invalid-response",
+      "The FIS API returned an invalid vehicle status report.",
+    );
   }
 
   const rows = getCollection(getValue(payload, "vehicles", "rows", "data"))
@@ -404,10 +435,12 @@ export async function getVehicleStatusReport(
 }
 
 async function completeRemarkRequest(path: string, body: object) {
-  await readJson(await requestApi(path, {
-    method: "POST",
-    body: JSON.stringify(body),
-  }));
+  await readJson(
+    await requestApi(path, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  );
 }
 
 export async function addVehicleRemarkAgainstApi(vmfCode: number, category: string, text: string) {
@@ -417,10 +450,17 @@ export async function addVehicleRemarkAgainstApi(vmfCode: number, category: stri
   });
 }
 
-export async function resolveVehicleRemarkAgainstApi(vmfCode: number, remarkId: number, resolutionNotes: string) {
-  await completeRemarkRequest(`api/vehicles/${encodeURIComponent(vmfCode)}/remarks/${encodeURIComponent(remarkId)}/resolve`, {
-    resolution_notes: resolutionNotes,
-  });
+export async function resolveVehicleRemarkAgainstApi(
+  vmfCode: number,
+  remarkId: number,
+  resolutionNotes: string,
+) {
+  await completeRemarkRequest(
+    `api/vehicles/${encodeURIComponent(vmfCode)}/remarks/${encodeURIComponent(remarkId)}/resolve`,
+    {
+      resolution_notes: resolutionNotes,
+    },
+  );
 }
 
 export async function changeVehicleStatusAgainstApi(
@@ -442,7 +482,10 @@ export async function changeVehicleStatusAgainstApi(
 
   const payload = await readJson(response);
   if (!isRecord(payload)) {
-    throw new VehicleStatusApiError("invalid-response", "The FIS API returned an invalid status response.");
+    throw new VehicleStatusApiError(
+      "invalid-response",
+      "The FIS API returned an invalid status response.",
+    );
   }
 
   return {
@@ -453,6 +496,9 @@ export async function changeVehicleStatusAgainstApi(
       asString(getValue(payload, "new_status_description", "newStatusDescription")) || null,
     effectiveDate: asString(getValue(payload, "effective_date", "effectiveDate")) || null,
     locationCode: asNumber(getValue(payload, "location_code", "locationCode")),
-    actionsPerformed: mapPresent(getCollection(getValue(payload, "actions_performed", "actionsPerformed")), asString),
+    actionsPerformed: mapPresent(
+      getCollection(getValue(payload, "actions_performed", "actionsPerformed")),
+      asString,
+    ),
   } satisfies VehicleStatusChangeResult;
 }

@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { deleteHqAccidentAction, type HqDeleteActionState } from "@/app/accidents/hq/delete/actions";
+import {
+  deleteHqAccidentAction,
+  type HqDeleteActionState,
+} from "@/app/accidents/hq/delete/actions";
 import type { AccidentEditRecord } from "@/lib/api-accidents";
 
 const initialActionState: HqDeleteActionState = { status: "idle" };
@@ -22,16 +25,28 @@ function formatTime(value: string | null) {
 }
 
 function vehicleLabel(accident: AccidentEditRecord) {
-  return [accident.vehicleFleetNumber, accident.vehicleRegistrationNumber].filter(Boolean).join(" / ") || `VMF ${accident.vmfCode}`;
+  return (
+    [accident.vehicleFleetNumber, accident.vehicleRegistrationNumber].filter(Boolean).join(" / ") ||
+    `VMF ${accident.vmfCode}`
+  );
 }
 
 function SummaryField({ label, value }: Readonly<{ label: string; value: string }>) {
-  return <div className="vehicle-summary-field"><dt>{label}</dt><dd>{value}</dd></div>;
+  return (
+    <div className="vehicle-summary-field">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
 }
 
 function DeleteButton() {
   const { pending } = useFormStatus();
-  return <button className="button button-danger" type="submit" disabled={pending}>{pending ? "Deleting..." : "DELETE"}</button>;
+  return (
+    <button className="button button-danger" type="submit" disabled={pending}>
+      {pending ? "Deleting..." : "DELETE"}
+    </button>
+  );
 }
 
 export default function HqDeleteConfirm({ accident }: Readonly<{ accident: AccidentEditRecord }>) {
@@ -39,8 +54,19 @@ export default function HqDeleteConfirm({ accident }: Readonly<{ accident: Accid
 
   return (
     <>
-      <div className="notice notice-warning" role="alert"><span aria-hidden="true">!</span><span>This permanently deletes the accident record from the current C# API. Review it before continuing.</span></div>
-      {state.status === "error" && state.message ? <div className="notice notice-error" role="alert"><span aria-hidden="true">!</span><span>{state.message}</span></div> : null}
+      <div className="notice notice-warning" role="alert">
+        <span aria-hidden="true">!</span>
+        <span>
+          This permanently deletes the accident record from the current C# API. Review it before
+          continuing.
+        </span>
+      </div>
+      {state.status === "error" && state.message ? (
+        <div className="notice notice-error" role="alert">
+          <span aria-hidden="true">!</span>
+          <span>{state.message}</span>
+        </div>
+      ) : null}
       <dl className="vehicle-review-grid">
         <SummaryField label="Vehicle" value={`${vehicleLabel(accident)} (${accident.vmfCode})`} />
         <SummaryField label="Accident date" value={formatDate(accident.occurenceDate)} />
@@ -54,7 +80,12 @@ export default function HqDeleteConfirm({ accident }: Readonly<{ accident: Accid
       </dl>
       <form action={formAction} className="vehicle-review-readonly">
         <input type="hidden" name="accidentCode" value={accident.accidentCode} readOnly />
-        <div className="button-row"><Link className="button button-secondary" href="/accidents/hq/delete">Back to Search</Link><DeleteButton /></div>
+        <div className="button-row">
+          <Link className="button button-secondary" href="/accidents/hq/delete">
+            Back to Search
+          </Link>
+          <DeleteButton />
+        </div>
       </form>
     </>
   );

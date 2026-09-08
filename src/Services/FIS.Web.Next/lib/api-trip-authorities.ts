@@ -135,7 +135,8 @@ export type CreateTripAuthorityRequest = {
 
 export class TripAuthorityApiError extends Error {
   constructor(
-    public readonly reason: "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "rejected",
+    public readonly reason:
+      "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "rejected",
     message: string,
   ) {
     super(message);
@@ -227,7 +228,9 @@ function mapVehicle(value: unknown): TripAuthorityVehicle | null {
     licenceDueDate: asString(getValue(value, "licenceDueDate", "licence_due_date")),
     make: asString(getValue(value, "makeDescription", "make_description", "make")),
     model: asString(getValue(value, "modelDescription", "model_description", "model")),
-    contractType: asString(getValue(value, "contractType", "contract_type")) ?? statusDescriptionForCode(statusCode),
+    contractType:
+      asString(getValue(value, "contractType", "contract_type")) ??
+      statusDescriptionForCode(statusCode),
     siteCode: asNumber(getValue(value, "siteCode", "site_code")),
   };
 }
@@ -250,10 +253,14 @@ function mapTrip(value: unknown): TripAuthorityRecord | null {
     tripReason: asString(getValue(value, "tripReason", "trip_reason")),
     tripRequestNumber: asString(getValue(value, "tripRequestNumber", "trip_request_number")),
     tripTypeCode: asNumber(getValue(value, "tripTypeCode", "trip_type_code")),
-    tripIncidentTypeCode: asNumber(getValue(value, "tripIncidentTypeCode", "trip_incident_type_code")),
+    tripIncidentTypeCode: asNumber(
+      getValue(value, "tripIncidentTypeCode", "trip_incident_type_code"),
+    ),
     userAccessCode: asNumber(getValue(value, "userAccessCode", "user_access_code")),
     lockedForTransfer: asBoolean(getValue(value, "lockedForTransfer", "locked_for_transfer")),
-    tripIsMonthly: asBoolean(getValue(value, "tripIsMonthly", "Trip_Is_Monthly", "trip_is_monthly")),
+    tripIsMonthly: asBoolean(
+      getValue(value, "tripIsMonthly", "Trip_Is_Monthly", "trip_is_monthly"),
+    ),
     endOdometer: asNumber(getValue(value, "endOdometer", "end_odo_meter")),
     issueDate: asString(getValue(value, "issueDate", "issue_date")),
     expiryDate: asString(getValue(value, "expiryDate", "expiry_date")),
@@ -276,7 +283,9 @@ function mapDriver(value: unknown): TripAuthorityDriver | null {
     contractNumber: asString(getValue(value, "contractNumber", "driver_contractnumber")),
     licenceNumber: asString(getValue(value, "licenceNumber", "driver_licence_number")),
     licenceIssueDate: asString(getValue(value, "licenceIssueDate", "driver_licence_issuedate")),
-    licenceLastVerifiedDate: asString(getValue(value, "licenceLastVerifiedDate", "driver_licence_lastVerifiedDate")),
+    licenceLastVerifiedDate: asString(
+      getValue(value, "licenceLastVerifiedDate", "driver_licence_lastVerifiedDate"),
+    ),
     hasPdp: asBoolean(getValue(value, "hasPdp", "driver_hasPDP")),
     pdpExpiryDate: asString(getValue(value, "pdpExpiryDate", "driver_PDP_ExpiryDate")),
     licenceExpiryDate: asString(getValue(value, "licenceExpiryDate", "driver_licence_ExpiryDate")),
@@ -308,7 +317,9 @@ function mapRoute(value: unknown): TripAuthorityRoute | null {
     endLocation: asString(getValue(value, "endLocation", "end_route_location_name")),
     estimatedDistance: asNumber(getValue(value, "estimatedDistance", "estimated_distance")),
     distance: asNumber(getValue(value, "distance")),
-    projectNumber: asString(getValue(value, "projectNumber", "project_number", "bas_project_number")),
+    projectNumber: asString(
+      getValue(value, "projectNumber", "project_number", "bas_project_number"),
+    ),
     fundCode: asString(getValue(value, "fundCode", "fund_code", "bas_fund_code")),
     editedByUserCode: asNumber(getValue(value, "editedByUserCode", "modified_by_user_code")),
   };
@@ -380,12 +391,18 @@ export async function getTripAuthorities() {
 export async function getTripAuthorityDetails(tripId: number) {
   const payload = await requestApi(`api/Trip/${tripId}/details`);
   if (!isRecord(payload)) {
-    throw new TripAuthorityApiError("invalid-response", "The FIS API returned an invalid trip authority detail response.");
+    throw new TripAuthorityApiError(
+      "invalid-response",
+      "The FIS API returned an invalid trip authority detail response.",
+    );
   }
 
   const trip = mapTrip(getValue(payload, "trip"));
   if (trip === null) {
-    throw new TripAuthorityApiError("invalid-response", "The FIS API returned an invalid trip authority.");
+    throw new TripAuthorityApiError(
+      "invalid-response",
+      "The FIS API returned an invalid trip authority.",
+    );
   }
 
   const mapDetailCollection = <T>(key: string, mapper: (value: unknown) => T | null) => {
@@ -417,7 +434,10 @@ export async function closeTripAuthority(tripId: number, request: CloseTripAutho
 
   const trip = mapTrip(payload);
   if (!trip) {
-    throw new TripAuthorityApiError("invalid-response", "The FIS API returned an invalid closed trip authority.");
+    throw new TripAuthorityApiError(
+      "invalid-response",
+      "The FIS API returned an invalid closed trip authority.",
+    );
   }
 
   return trip;
@@ -472,7 +492,10 @@ export async function createTripAuthority(request: CreateTripAuthorityRequest) {
 
   const trip = mapTrip(payload);
   if (!trip) {
-    throw new TripAuthorityApiError("invalid-response", "The FIS API returned an invalid created trip authority.");
+    throw new TripAuthorityApiError(
+      "invalid-response",
+      "The FIS API returned an invalid created trip authority.",
+    );
   }
 
   return trip;

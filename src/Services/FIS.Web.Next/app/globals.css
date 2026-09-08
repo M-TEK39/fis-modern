@@ -50,11 +50,19 @@ body {
 
 body {
   background:
-    radial-gradient(circle at 12% 8%, hsl(217 91% 50% / 0.08), transparent 32rem),
-    var(--fis-app-bg);
+    radial-gradient(circle at 12% 8%, hsl(217 91% 50% / 0.08), transparent 32rem), var(--fis-app-bg);
   color: var(--fis-text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-feature-settings: "rlig" 1, "calt" 1;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-feature-settings:
+    "rlig" 1,
+    "calt" 1;
   -webkit-font-smoothing: antialiased;
   line-height: 1.6;
 }
@@ -284,7 +292,9 @@ input:focus-visible {
   background: var(--fis-elevated);
   color: var(--fis-text);
   padding: 0.7rem 0.85rem;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .field input::placeholder {
@@ -307,7 +317,9 @@ input:focus-visible {
   background: var(--fis-elevated);
   color: var(--fis-text);
   padding: 0.7rem 0.85rem;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .field textarea {
@@ -458,7 +470,10 @@ input:focus-visible {
   padding: 0.65rem 1rem;
   font-size: 0.88rem;
   font-weight: 700;
-  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
 }
 
 .button:hover:not(:disabled) {
@@ -812,7 +827,9 @@ input:focus-visible {
   background: var(--fis-surface);
   box-shadow: var(--fis-shadow);
   padding: 1.25rem;
-  transition: border-color 160ms ease, transform 160ms ease;
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease;
 }
 
 .doc-card:hover {

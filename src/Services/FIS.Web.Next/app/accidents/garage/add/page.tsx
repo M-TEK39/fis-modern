@@ -34,7 +34,9 @@ function getInitialVehicleCode(value: string | undefined) {
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function AddFallback() {
@@ -54,7 +56,9 @@ function ApiUnavailable() {
       </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Vehicle options could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
         <Link className="button button-primary" href="/accidents/garage/add">
           Try again
@@ -71,7 +75,9 @@ function NoVehicles({ searchTerm }: { searchTerm: string }) {
   return (
     <section className="vehicle-status-card" role="alert">
       <p className="eyebrow">No vehicle found</p>
-      <h2>{searchTerm ? `No vehicle matched “${searchTerm}”.` : "No active vehicles are available."}</h2>
+      <h2>
+        {searchTerm ? `No vehicle matched “${searchTerm}”.` : "No active vehicles are available."}
+      </h2>
       <p className="muted-copy">Return to the Garage search and choose a valid GG or GP number.</p>
       <div className="button-row">
         <Link className="button button-secondary" href="/accidents/garage">
@@ -109,7 +115,9 @@ async function GarageAddContent({ searchParams }: GarageAddPageProps) {
   const query = await searchParams;
   const searchType = getSearchType(getQueryValue(query.type) ?? getQueryValue(query.Radio1));
   const searchTerm = (getQueryValue(query.q) ?? getQueryValue(query.txtGGNum) ?? "").trim();
-  const initialVehicleCode = getInitialVehicleCode(getQueryValue(query.vmfCode) ?? getQueryValue(query.vmf));
+  const initialVehicleCode = getInitialVehicleCode(
+    getQueryValue(query.vmfCode) ?? getQueryValue(query.vmf),
+  );
   const today = new Date().toISOString().slice(0, 10);
 
   let vehicleOptions;
@@ -157,7 +165,10 @@ async function GarageAddContent({ searchParams }: GarageAddPageProps) {
       return <SessionRecovery returnPath="/accidents/garage/add" />;
     }
 
-    console.error("FIS garage accident vehicle options failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS garage accident vehicle options failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return <ApiUnavailable />;
   }
 }

@@ -11,9 +11,14 @@ const REPORTS_BY_PATH: Record<string, string | undefined> = {
   "rpt_logs_per_dept_1.aspx": "logsheets",
 };
 
-export default async function LegacyLogsheetReportPage({ params, searchParams }: Readonly<{ params: Promise<{ path: string[] }>; searchParams: Promise<ReportQuery> }>) {
+export default async function LegacyLogsheetReportPage({
+  params,
+  searchParams,
+}: Readonly<{ params: Promise<{ path: string[] }>; searchParams: Promise<ReportQuery> }>) {
   const { path } = await params;
   const reportKey = REPORTS_BY_PATH[path.join("/").toLowerCase()];
   if (!reportKey) return <ReportsRoutePage slug="logsheets" searchParams={searchParams} />;
-  return <ReportsRoutePage slug="logsheets" searchParams={searchParams} forcedReportKey={reportKey} />;
+  return (
+    <ReportsRoutePage slug="logsheets" searchParams={searchParams} forcedReportKey={reportKey} />
+  );
 }

@@ -26,10 +26,14 @@ export type VehiclePhotoRecord = {
   description: string | null;
 };
 
-export type VehiclePhotoApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type VehiclePhotoApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class VehiclePhotoApiError extends Error {
-  constructor(public readonly reason: VehiclePhotoApiErrorReason, message: string) {
+  constructor(
+    public readonly reason: VehiclePhotoApiErrorReason,
+    message: string,
+  ) {
     super(message);
     this.name = "VehiclePhotoApiError";
   }
@@ -75,7 +79,8 @@ function getCollection(payload: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new VehiclePhotoApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new VehiclePhotoApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -108,7 +113,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
       } catch {
         // Keep the status-based message when the API has no JSON error body.
       }
-      throw new VehiclePhotoApiError(response.status >= 500 ? "unavailable" : "invalid-response", message);
+      throw new VehiclePhotoApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+      );
     }
 
     return response;
@@ -124,7 +132,10 @@ async function readJson(response: Response) {
   try {
     return (await response.json()) as unknown;
   } catch {
-    throw new VehiclePhotoApiError("invalid-response", "The FIS API returned invalid vehicle photo JSON.");
+    throw new VehiclePhotoApiError(
+      "invalid-response",
+      "The FIS API returned invalid vehicle photo JSON.",
+    );
   }
 }
 
@@ -138,22 +149,35 @@ function mapVehicle(value: unknown): VehiclePhotoSearchRecord | null {
   return {
     vmfCode,
     ggNumber: asString(getValue(value, "ggNumber", "GGNumber", "fleetNumber", "fleet_number")),
-    registrationNumber: asString(getValue(value, "registrationNumber", "RegistrationNumber", "registration_number")),
-    makeAndModel: asString(getValue(value, "makeAndModel", "MakeAndModel", "modelName", "model_name"))
-      ?? (modelCode === null ? null : `Model ${modelCode}`),
-    yearManufactured: asNumber(getValue(value, "yearManufactured", "YearManufactured", "year_manufactured")),
+    registrationNumber: asString(
+      getValue(value, "registrationNumber", "RegistrationNumber", "registration_number"),
+    ),
+    makeAndModel:
+      asString(getValue(value, "makeAndModel", "MakeAndModel", "modelName", "model_name")) ??
+      (modelCode === null ? null : `Model ${modelCode}`),
+    yearManufactured: asNumber(
+      getValue(value, "yearManufactured", "YearManufactured", "year_manufactured"),
+    ),
     colour: asString(getValue(value, "colour", "Colour")),
     hireType: asString(getValue(value, "hireType", "HireType")),
-    status: asString(getValue(value, "status", "Status", "statusDescription", "status_description")),
+    status: asString(
+      getValue(value, "status", "Status", "statusDescription", "status_description"),
+    ),
     hiredFrom: asString(getValue(value, "hiredFrom", "HiredFrom")),
-    statusDate: asString(getValue(value, "statusDate", "StatusDate", "vehicleStatusDate", "vehicle_status_date")),
+    statusDate: asString(
+      getValue(value, "statusDate", "StatusDate", "vehicleStatusDate", "vehicle_status_date"),
+    ),
   };
 }
 
 function mapPhoto(value: unknown): VehiclePhotoRecord | null {
   if (!isRecord(value)) return null;
-  const vehiclePhotoInfoCode = asNumber(getValue(value, "vehiclePhotoInfoCode", "VehiclePhotoInfoCode", "id"));
-  const vehicleMasterCode = asNumber(getValue(value, "vehicleMasterCode", "VehicleMasterCode", "vmfCode"));
+  const vehiclePhotoInfoCode = asNumber(
+    getValue(value, "vehiclePhotoInfoCode", "VehiclePhotoInfoCode", "id"),
+  );
+  const vehicleMasterCode = asNumber(
+    getValue(value, "vehicleMasterCode", "VehicleMasterCode", "vmfCode"),
+  );
   if (vehiclePhotoInfoCode === null || vehicleMasterCode === null) return null;
   return {
     vehiclePhotoInfoCode,
@@ -167,12 +191,16 @@ function mapPhoto(value: unknown): VehiclePhotoRecord | null {
 export async function getVehicleSearchCriteria() {
   const response = await requestApi("api/VehicleSearchCriteria");
   const payload = await readJson(response);
-  return getCollection(payload).map(asString).filter((value): value is string => value !== null);
+  return getCollection(payload)
+    .map(asString)
+    .filter((value): value is string => value !== null);
 }
 
 export async function searchVehiclePhotos(keyword: string) {
   if (!keyword.trim()) return [];
-  const response = await requestApi(`api/VehicleLookup?keyword=${encodeURIComponent(keyword.trim())}&limit=100`);
+  const response = await requestApi(
+    `api/VehicleLookup?keyword=${encodeURIComponent(keyword.trim())}&limit=100`,
+  );
   return getCollection(await readJson(response))
     .map(mapVehicle)
     .filter((value): value is VehiclePhotoSearchRecord => value !== null);
@@ -181,7 +209,8 @@ export async function searchVehiclePhotos(keyword: string) {
 export async function getVehiclePhotoVehicle(vmfCode: number) {
   const response = await requestApi(`api/VehicleLookup/${encodeURIComponent(vmfCode)}`);
   const vehicle = mapVehicle(await readJson(response));
-  if (!vehicle) throw new VehiclePhotoApiError("invalid-response", "The FIS API returned an invalid vehicle.");
+  if (!vehicle)
+    throw new VehiclePhotoApiError("invalid-response", "The FIS API returned an invalid vehicle.");
   return vehicle;
 }
 
@@ -201,7 +230,10 @@ export async function createVehiclePhoto(payload: Record<string, unknown>) {
 }
 
 export async function updateVehiclePhoto(id: number, payload: Record<string, unknown>) {
-  await requestApi(`api/vehiclephoto/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(payload) });
+  await requestApi(`api/vehiclephoto/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function deleteVehiclePhoto(id: number) {

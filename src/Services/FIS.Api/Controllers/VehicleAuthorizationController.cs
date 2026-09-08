@@ -21,7 +21,8 @@ public class VehicleAuthorizationController : BaseApiController
 
     public VehicleAuthorizationController(
         IVehicleAuthorizationRepository repository,
-        ILogger<VehicleAuthorizationController> logger)
+        ILogger<VehicleAuthorizationController> logger
+    )
     {
         _repository = repository;
         _logger = logger;
@@ -31,22 +32,32 @@ public class VehicleAuthorizationController : BaseApiController
     /// Validates that the current user is not the vehicle capturer (prevents self-approval)
     /// </summary>
     /// <returns>Null if validation passes, or ForbidResult with error message if validation fails</returns>
-    private ActionResult? ValidateSelfApprovalPrevention(PreVehicleMaster preVehicle, int currentUserId)
+    private ActionResult? ValidateSelfApprovalPrevention(
+        PreVehicleMaster preVehicle,
+        int currentUserId
+    )
     {
         // Check if current user is the vehicle capturer
-        if (preVehicle.created_by_user_code.HasValue &&
-            preVehicle.created_by_user_code.Value == currentUserId)
+        if (
+            preVehicle.created_by_user_code.HasValue
+            && preVehicle.created_by_user_code.Value == currentUserId
+        )
         {
             _logger.LogWarning(
                 "Self-approval blocked: User {UserId} attempted to approve their own captured vehicle {VehicleId}",
-                currentUserId, preVehicle.temp_vmf_code);
+                currentUserId,
+                preVehicle.temp_vmf_code
+            );
 
-            return StatusCode(403, new
-            {
-                error = "You cannot review or approve your own captured vehicle.",
-                vehicleId = preVehicle.temp_vmf_code,
-                userId = currentUserId
-            });
+            return StatusCode(
+                403,
+                new
+                {
+                    error = "You cannot review or approve your own captured vehicle.",
+                    vehicleId = preVehicle.temp_vmf_code,
+                    userId = currentUserId,
+                }
+            );
         }
 
         return null; // Validation passed
@@ -118,11 +129,16 @@ public class VehicleAuthorizationController : BaseApiController
     [HttpGet("history")]
     public async Task<ActionResult<IEnumerable<PreVehicleMasterDto>>> GetAuthorizationHistory(
         [FromQuery] DateTime? startDate = null,
-        [FromQuery] DateTime? endDate = null)
+        [FromQuery] DateTime? endDate = null
+    )
     {
         try
         {
-            _logger.LogInformation("Fetching authorization history from {StartDate} to {EndDate}", startDate, endDate);
+            _logger.LogInformation(
+                "Fetching authorization history from {StartDate} to {EndDate}",
+                startDate,
+                endDate
+            );
             var vehicles = await _repository.GetAuthorizationHistoryAsync(startDate, endDate);
             var dtos = vehicles.Select(MapToDto);
             return Ok(dtos);
@@ -152,7 +168,10 @@ public class VehicleAuthorizationController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving vehicle maintenance types");
-            return StatusCode(503, new { message = "Vehicle maintenance options are unavailable." });
+            return StatusCode(
+                503,
+                new { message = "Vehicle maintenance options are unavailable." }
+            );
         }
     }
 
@@ -164,17 +183,29 @@ public class VehicleAuthorizationController : BaseApiController
     {
         try
         {
-            _logger.LogInformation("Fetching vehicle authorization for chassis {ChassisNumber}", chassisNumber);
+            _logger.LogInformation(
+                "Fetching vehicle authorization for chassis {ChassisNumber}",
+                chassisNumber
+            );
             var vehicle = await _repository.GetByChassisNumberAsync(chassisNumber);
 
             if (vehicle == null)
-                return NotFound(new { message = $"Vehicle authorization not found for chassis number: {chassisNumber}" });
+                return NotFound(
+                    new
+                    {
+                        message = $"Vehicle authorization not found for chassis number: {chassisNumber}",
+                    }
+                );
 
             return Ok(MapToDto(vehicle));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching vehicle authorization for chassis {ChassisNumber}", chassisNumber);
+            _logger.LogError(
+                ex,
+                "Error fetching vehicle authorization for chassis {ChassisNumber}",
+                chassisNumber
+            );
             return StatusCode(500, "Error retrieving vehicle authorization");
         }
     }
@@ -214,7 +245,11 @@ public class VehicleAuthorizationController : BaseApiController
         try
         {
             var userId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} approving vehicle authorization {Id}", userId, id);
+            _logger.LogInformation(
+                "User {UserId} approving vehicle authorization {Id}",
+                userId,
+                id
+            );
 
             // Fetch vehicle to validate self-approval prevention
             var preVehicle = await _repository.GetByIdAsync(id);
@@ -228,7 +263,11 @@ public class VehicleAuthorizationController : BaseApiController
 
             await _repository.ApproveAsync(id, userId, approval?.Comment);
 
-            _logger.LogInformation("Vehicle authorization {Id} approved by user {UserId}", id, userId);
+            _logger.LogInformation(
+                "Vehicle authorization {Id} approved by user {UserId}",
+                id,
+                userId
+            );
             return Ok(new { message = "Vehicle authorization approved successfully", id });
         }
         catch (KeyNotFoundException ex)
@@ -238,7 +277,11 @@ public class VehicleAuthorizationController : BaseApiController
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogWarning(ex, "Invalid operation when approving vehicle authorization {Id}", id);
+            _logger.LogWarning(
+                ex,
+                "Invalid operation when approving vehicle authorization {Id}",
+                id
+            );
             return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
@@ -264,8 +307,12 @@ public class VehicleAuthorizationController : BaseApiController
                 return BadRequest(new { message = "Rejection reason is required" });
 
             var userId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} rejecting vehicle authorization {Id} with reason: {Reason}",
-                userId, id, rejection.RejectionReason);
+            _logger.LogInformation(
+                "User {UserId} rejecting vehicle authorization {Id} with reason: {Reason}",
+                userId,
+                id,
+                rejection.RejectionReason
+            );
 
             // Fetch vehicle to validate self-approval prevention
             var preVehicle = await _repository.GetByIdAsync(id);
@@ -279,7 +326,11 @@ public class VehicleAuthorizationController : BaseApiController
 
             await _repository.RejectAsync(id, userId, rejection.RejectionReason, rejection.Comment);
 
-            _logger.LogInformation("Vehicle authorization {Id} rejected by user {UserId}", id, userId);
+            _logger.LogInformation(
+                "Vehicle authorization {Id} rejected by user {UserId}",
+                id,
+                userId
+            );
             return Ok(new { message = "Vehicle authorization rejected successfully", id });
         }
         catch (KeyNotFoundException ex)
@@ -306,11 +357,19 @@ public class VehicleAuthorizationController : BaseApiController
                 return BadRequest(new { message = "Comment cannot be empty" });
 
             var userId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} adding comment to vehicle authorization {Id}", userId, id);
+            _logger.LogInformation(
+                "User {UserId} adding comment to vehicle authorization {Id}",
+                userId,
+                id
+            );
 
             await _repository.AddCommentAsync(id, commentDto.Comment, userId);
 
-            _logger.LogInformation("Comment added to vehicle authorization {Id} by user {UserId}", id, userId);
+            _logger.LogInformation(
+                "Comment added to vehicle authorization {Id} by user {UserId}",
+                id,
+                userId
+            );
             return Ok(new { message = "Comment added successfully", id });
         }
         catch (KeyNotFoundException ex)
@@ -329,7 +388,9 @@ public class VehicleAuthorizationController : BaseApiController
     /// Create new vehicle authorization entry
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<PreVehicleMasterDto>> CreatePreVehicleMaster([FromBody] CreatePreVehicleMasterDto dto)
+    public async Task<ActionResult<PreVehicleMasterDto>> CreatePreVehicleMaster(
+        [FromBody] CreatePreVehicleMasterDto dto
+    )
     {
         try
         {
@@ -343,8 +404,11 @@ public class VehicleAuthorizationController : BaseApiController
             }
 
             var userId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} creating vehicle authorization for chassis {ChassisNumber}",
-                userId, dto.ChassisNumber);
+            _logger.LogInformation(
+                "User {UserId} creating vehicle authorization for chassis {ChassisNumber}",
+                userId,
+                dto.ChassisNumber
+            );
 
             var vehicleAuth = new PreVehicleMaster
             {
@@ -378,19 +442,24 @@ public class VehicleAuthorizationController : BaseApiController
                 MaintenanceStartDate = dto.MaintenanceStartDate,
                 MaintenancePeriodMonths = dto.MaintenancePeriodMonths,
                 MaintenanceKilos = dto.MaintenanceKilos,
-                MaintenanceValue = dto.MaintenanceValue
+                MaintenanceValue = dto.MaintenanceValue,
             };
 
             var created = await _repository.CreateAsync(vehicleAuth, userId);
-            _logger.LogInformation("Vehicle authorization created with ID {Id} for chassis {ChassisNumber}",
-                created.temp_vmf_code, created.chassis_number);
+            _logger.LogInformation(
+                "Vehicle authorization created with ID {Id} for chassis {ChassisNumber}",
+                created.temp_vmf_code,
+                created.chassis_number
+            );
 
             return CreatedAtAction(
                 nameof(GetById),
                 new { id = created.temp_vmf_code },
-                MapToDto(created));
+                MapToDto(created)
+            );
         }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
         {
             _logger.LogWarning(ex, "Duplicate vehicle inception capture rejected");
             return Conflict(new { message = ex.Message });
@@ -411,7 +480,10 @@ public class VehicleAuthorizationController : BaseApiController
     /// Update vehicle authorization (only allowed if status is "Awaiting Authorization" or "Rejected")
     /// </summary>
     [HttpPut("{id}")]
-    public async Task<ActionResult> UpdatePreVehicleMaster(int id, [FromBody] UpdatePreVehicleMasterDto dto)
+    public async Task<ActionResult> UpdatePreVehicleMaster(
+        int id,
+        [FromBody] UpdatePreVehicleMasterDto dto
+    )
     {
         try
         {
@@ -453,7 +525,11 @@ public class VehicleAuthorizationController : BaseApiController
 
             await _repository.UpdateAsync(existing, userId);
 
-            _logger.LogInformation("Vehicle authorization {Id} updated by user {UserId}", id, userId);
+            _logger.LogInformation(
+                "Vehicle authorization {Id} updated by user {UserId}",
+                id,
+                userId
+            );
             return Ok(new { message = "Vehicle authorization updated successfully", id });
         }
         catch (KeyNotFoundException ex)
@@ -481,7 +557,11 @@ public class VehicleAuthorizationController : BaseApiController
 
             await _repository.DeleteAsync(id, userId);
 
-            _logger.LogInformation("Vehicle authorization {Id} deleted by user {UserId}", id, userId);
+            _logger.LogInformation(
+                "Vehicle authorization {Id} deleted by user {UserId}",
+                id,
+                userId
+            );
             return NoContent();
         }
         catch (KeyNotFoundException ex)
@@ -535,7 +615,7 @@ public class VehicleAuthorizationController : BaseApiController
             AuthorizationComment = v.authorization_comment,
             VmfCode = v.vmf_code,
             DateCreated = v.date_created,
-            CreatedByUserCode = v.created_by_user_code
+            CreatedByUserCode = v.created_by_user_code,
         };
     }
 
@@ -553,25 +633,29 @@ public class VehicleAuthorizationController : BaseApiController
             return "Vehicle inception data is required.";
         }
 
-        if (string.IsNullOrWhiteSpace(dto.ChassisNumber) ||
-            string.IsNullOrWhiteSpace(dto.EngineNumber) ||
-            string.IsNullOrWhiteSpace(dto.Colour) ||
-            string.IsNullOrWhiteSpace(dto.PurchaseFrom) ||
-            string.IsNullOrWhiteSpace(dto.Comment))
+        if (
+            string.IsNullOrWhiteSpace(dto.ChassisNumber)
+            || string.IsNullOrWhiteSpace(dto.EngineNumber)
+            || string.IsNullOrWhiteSpace(dto.Colour)
+            || string.IsNullOrWhiteSpace(dto.PurchaseFrom)
+            || string.IsNullOrWhiteSpace(dto.Comment)
+        )
         {
             return "Complete all required vehicle identity, purchase, and comment fields.";
         }
 
-        if (dto.ModelCode is null or <= 0 ||
-            dto.LocationCode is null or <= 0 ||
-            dto.TypeCode is null or <= 0 ||
-            dto.VsCode is null or <= 0 ||
-            dto.VehicleStatusCode is null or < 0 ||
-            dto.YearManufactured is null or < 1900 ||
-            dto.TakeOnOdo is null or < 0 or > 999999 ||
-            dto.TakeOnDate is null ||
-            dto.PurchaseDate is null ||
-            dto.PurchaseAmount is null or < 5000 or > 9999999)
+        if (
+            dto.ModelCode is null or <= 0
+            || dto.LocationCode is null or <= 0
+            || dto.TypeCode is null or <= 0
+            || dto.VsCode is null or <= 0
+            || dto.VehicleStatusCode is null or < 0
+            || dto.YearManufactured is null or < 1900
+            || dto.TakeOnOdo is null or < 0 or > 999999
+            || dto.TakeOnDate is null
+            || dto.PurchaseDate is null
+            || dto.PurchaseAmount is null or < 5000 or > 9999999
+        )
         {
             return "Enter valid positive reference values and measurements. Purchase amount must be between 5,000 and 9,999,999.";
         }
@@ -588,13 +672,18 @@ public class VehicleAuthorizationController : BaseApiController
             ("Invoice number", dto.InvoiceNumber, 60),
             ("GP number", dto.GpNumber, 9),
             ("Fleet notes", dto.FleetNotes, 255),
-            ("Damage details", dto.DamagesComment, 355));
+            ("Damage details", dto.DamagesComment, 355)
+        );
         if (lengthError is not null)
         {
             return lengthError;
         }
 
-        if (dto.EngineNumber.Trim().Equals(dto.ChassisNumber.Trim(), StringComparison.OrdinalIgnoreCase))
+        if (
+            dto
+                .EngineNumber.Trim()
+                .Equals(dto.ChassisNumber.Trim(), StringComparison.OrdinalIgnoreCase)
+        )
         {
             return "Chassis and engine numbers must be different.";
         }
@@ -604,12 +693,18 @@ public class VehicleAuthorizationController : BaseApiController
             return "Current GG number must use the legacy format G|letters|letters|numbers|numbers|numbers|G, for example GVN001G.";
         }
 
-        if (!string.IsNullOrWhiteSpace(dto.ReplacedGGNumber) && !IsValidGgNumber(dto.ReplacedGGNumber))
+        if (
+            !string.IsNullOrWhiteSpace(dto.ReplacedGGNumber)
+            && !IsValidGgNumber(dto.ReplacedGGNumber)
+        )
         {
             return "Replace GG number must use the legacy format G|letters|letters|numbers|numbers|numbers|G, for example GVN001G.";
         }
 
-        if (dto.TakeOnDate.Value.Date > DateTime.Today || dto.PurchaseDate.Value.Date > DateTime.Today)
+        if (
+            dto.TakeOnDate.Value.Date > DateTime.Today
+            || dto.PurchaseDate.Value.Date > DateTime.Today
+        )
         {
             return "Take-on and purchase dates cannot be in the future.";
         }
@@ -619,14 +714,19 @@ public class VehicleAuthorizationController : BaseApiController
             return "Purchase date cannot be before the take-on date.";
         }
 
-        if (dto.DamageStatus is not null && !dto.DamageStatus.Equals("Y", StringComparison.OrdinalIgnoreCase) &&
-            !dto.DamageStatus.Equals("N", StringComparison.OrdinalIgnoreCase))
+        if (
+            dto.DamageStatus is not null
+            && !dto.DamageStatus.Equals("Y", StringComparison.OrdinalIgnoreCase)
+            && !dto.DamageStatus.Equals("N", StringComparison.OrdinalIgnoreCase)
+        )
         {
             return "Damage status must be Y or N.";
         }
 
-        if (dto.DamageStatus?.Equals("Y", StringComparison.OrdinalIgnoreCase) == true &&
-            string.IsNullOrWhiteSpace(dto.DamagesComment))
+        if (
+            dto.DamageStatus?.Equals("Y", StringComparison.OrdinalIgnoreCase) == true
+            && string.IsNullOrWhiteSpace(dto.DamagesComment)
+        )
         {
             return "Damage details are required when the vehicle has damage.";
         }
@@ -676,7 +776,11 @@ public class VehicleAuthorizationController : BaseApiController
             }
         }
 
-        if (dto.MaintenancePeriodMonths is < 0 || dto.MaintenanceKilos is < 0 || dto.MaintenanceValue is < 0)
+        if (
+            dto.MaintenancePeriodMonths is < 0
+            || dto.MaintenanceKilos is < 0
+            || dto.MaintenanceValue is < 0
+        )
         {
             return "Maintenance measurements cannot be negative.";
         }
@@ -684,7 +788,9 @@ public class VehicleAuthorizationController : BaseApiController
         return null;
     }
 
-    private static string? FirstLengthError(params (string Name, string? Value, int Maximum)[] values)
+    private static string? FirstLengthError(
+        params (string Name, string? Value, int Maximum)[] values
+    )
     {
         foreach (var (name, value, maximum) in values)
         {
@@ -697,8 +803,12 @@ public class VehicleAuthorizationController : BaseApiController
         return null;
     }
 
-    private static bool IsValidGgNumber(string value)
-        => System.Text.RegularExpressions.Regex.IsMatch(value.Trim(), "^G[A-Z]{2}[0-9]{3}G$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private static bool IsValidGgNumber(string value) =>
+        System.Text.RegularExpressions.Regex.IsMatch(
+            value.Trim(),
+            "^G[A-Z]{2}[0-9]{3}G$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase
+        );
 }
 
 #region DTOs

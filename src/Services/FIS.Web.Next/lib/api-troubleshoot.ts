@@ -59,7 +59,8 @@ export type VehicleMasterLookup = {
   recoveredGg: string | null;
 };
 
-export type TroubleshootApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type TroubleshootApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class TroubleshootApiError extends Error {
   constructor(
@@ -118,7 +119,9 @@ function getCollection(value: unknown) {
 async function readErrorMessage(response: Response, fallback: string) {
   try {
     const payload = (await response.json()) as unknown;
-    return isRecord(payload) ? asString(getValue(payload, "message", "Message", "error")) ?? fallback : fallback;
+    return isRecord(payload)
+      ? (asString(getValue(payload, "message", "Message", "error")) ?? fallback)
+      : fallback;
   } catch {
     return fallback;
   }
@@ -126,7 +129,8 @@ async function readErrorMessage(response: Response, fallback: string) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new TroubleshootApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new TroubleshootApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -134,12 +138,32 @@ async function requestApi(path: string, init: RequestInit = {}) {
     const response = await fetch(new URL(path.replace(/^\//, ""), getApiBaseUrl()), {
       ...init,
       cache: "no-store",
-      headers: { accept: "application/json", cookie: cookieHeader, ...(init.body ? { "content-type": "application/json" } : {}), ...init.headers },
+      headers: {
+        accept: "application/json",
+        cookie: cookieHeader,
+        ...(init.body ? { "content-type": "application/json" } : {}),
+        ...init.headers,
+      },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) throw new TroubleshootApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
-    if (response.status === 404) throw new TroubleshootApiError("not-found", "The requested Troubleshoot record was not found.", response.status);
-    if (!response.ok) throw new TroubleshootApiError(response.status >= 500 ? "unavailable" : "invalid-response", await readErrorMessage(response, `FIS API returned HTTP ${response.status}.`), response.status);
+    if (response.status === 401 || response.status === 403)
+      throw new TroubleshootApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
+    if (response.status === 404)
+      throw new TroubleshootApiError(
+        "not-found",
+        "The requested Troubleshoot record was not found.",
+        response.status,
+      );
+    if (!response.ok)
+      throw new TroubleshootApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        await readErrorMessage(response, `FIS API returned HTTP ${response.status}.`),
+        response.status,
+      );
     return response;
   } catch (error) {
     if (error instanceof TroubleshootApiError) throw error;
@@ -159,12 +183,16 @@ async function readJson(response: Response) {
 
 function mapUser(value: unknown): TroubleshootUser | null {
   if (!isRecord(value)) return null;
-  const userAccessCode = asNumber(getValue(value, "userAccessCode", "UserAccessCode", "user_access_code"));
+  const userAccessCode = asNumber(
+    getValue(value, "userAccessCode", "UserAccessCode", "user_access_code"),
+  );
   if (userAccessCode === null) return null;
   return {
     userAccessCode,
     name: asString(getValue(value, "name", "Name")) ?? "",
-    siteDescription: asString(getValue(value, "siteDescription", "SiteDescription", "site_description")),
+    siteDescription: asString(
+      getValue(value, "siteDescription", "SiteDescription", "site_description"),
+    ),
     firstName: asString(getValue(value, "firstName", "FirstName", "firstname")),
     lastName: asString(getValue(value, "lastName", "LastName", "surname")),
   };
@@ -206,11 +234,15 @@ function mapOdometer(value: unknown): TroubleshootOdometerResult | null {
 function mapTripWithoutRoutes(value: unknown): TripsWithoutRoutes | null {
   if (!isRecord(value)) return null;
   return {
-    tripAuthorityCode: asNumber(getValue(value, "tripAuthorityCode", "TripAuthorityCode", "trip_authority_code")),
+    tripAuthorityCode: asNumber(
+      getValue(value, "tripAuthorityCode", "TripAuthorityCode", "trip_authority_code"),
+    ),
     contractCode: asNumber(getValue(value, "contractCode", "ContractCode", "contract_code")),
     issueDate: asString(getValue(value, "issueDate", "IssueDate", "issue_date")),
     tripReason: asString(getValue(value, "tripReason", "TripReason", "trip_reason")),
-    tripRequestNumber: asString(getValue(value, "tripRequestNumber", "TripRequestNumber", "trip_request_number")),
+    tripRequestNumber: asString(
+      getValue(value, "tripRequestNumber", "TripRequestNumber", "trip_request_number"),
+    ),
     approverName: asString(getValue(value, "approverName", "ApproverName", "approver_name")),
   };
 }
@@ -220,7 +252,11 @@ function mapRank(value: unknown): ApproverRank | null {
   const id = asNumber(getValue(value, "id", "Id", "rankCode", "rank_code"));
   if (id === null) return null;
   const description = asString(getValue(value, "description", "Description"));
-  return { id, rankName: asString(getValue(value, "rankName", "RankName")) ?? description, description };
+  return {
+    id,
+    rankName: asString(getValue(value, "rankName", "RankName")) ?? description,
+    description,
+  };
 }
 
 function mapVehicle(value: unknown): VehicleMasterLookup | null {
@@ -230,7 +266,9 @@ function mapVehicle(value: unknown): VehicleMasterLookup | null {
   return {
     vmfCode,
     fleetNumber: asString(getValue(value, "fleetNumber", "FleetNumber", "fleet_number")),
-    registrationNumber: asString(getValue(value, "registrationNumber", "RegistrationNumber", "registration_number")),
+    registrationNumber: asString(
+      getValue(value, "registrationNumber", "RegistrationNumber", "registration_number"),
+    ),
     currentOdometer: asNumber(getValue(value, "currentOdometer", "CurrentOdometer", "current_odo")),
     recoveredGg: asString(getValue(value, "recoveredGg", "RecoveredGg", "recovered_gg")),
   };
@@ -238,64 +276,131 @@ function mapVehicle(value: unknown): VehicleMasterLookup | null {
 
 export async function getTroubleshootUsers() {
   const payload = await readJson(await requestApi("api/troubleshoot/users"));
-  return getCollection(payload).map(mapUser).filter((value): value is TroubleshootUser => value !== null);
+  return getCollection(payload)
+    .map(mapUser)
+    .filter((value): value is TroubleshootUser => value !== null);
 }
 
 export async function getTroubleshootSiteUsers() {
   const payload = await readJson(await requestApi("api/troubleshoot/departmentsites"));
-  return getCollection(payload).map(mapSiteUser).filter((value): value is TroubleshootSiteUser => value !== null);
+  return getCollection(payload)
+    .map(mapSiteUser)
+    .filter((value): value is TroubleshootSiteUser => value !== null);
 }
 
 export async function searchTroubleshootLogs(userAccessCode: number) {
-  const payload = await readJson(await requestApi("api/troubleshoot/log/search", { method: "POST", body: JSON.stringify({ userAccessCode }) }));
-  return getCollection(payload).map(mapLog).filter((value): value is TroubleshootLogEntry => value !== null);
+  const payload = await readJson(
+    await requestApi("api/troubleshoot/log/search", {
+      method: "POST",
+      body: JSON.stringify({ userAccessCode }),
+    }),
+  );
+  return getCollection(payload)
+    .map(mapLog)
+    .filter((value): value is TroubleshootLogEntry => value !== null);
 }
 
 export async function updateTroubleshootLogs() {
-  const payload = await readJson(await requestApi("api/troubleshoot/log/update", { method: "POST", body: JSON.stringify({}) }));
-  return isRecord(payload) ? asNumber(getValue(payload, "updated", "Updated")) ?? 0 : 0;
+  const payload = await readJson(
+    await requestApi("api/troubleshoot/log/update", { method: "POST", body: JSON.stringify({}) }),
+  );
+  return isRecord(payload) ? (asNumber(getValue(payload, "updated", "Updated")) ?? 0) : 0;
 }
 
-export async function getTroubleshootReports(input: { problemKeyword?: string; userAccessCode?: number; fromDate?: string; toDate?: string; openInExcel?: boolean }) {
-  const payload = await readJson(await requestApi("api/troubleshoot/reports/general", { method: "POST", body: JSON.stringify({
-    problemKeyword: input.problemKeyword || null,
-    userAccessCode: input.userAccessCode ?? null,
-    fromDate: input.fromDate || null,
-    toDate: input.toDate || null,
-    openInExcel: input.openInExcel === true,
-  }) }));
-  return getCollection(payload).map(mapLog).filter((value): value is TroubleshootLogEntry => value !== null);
+export async function getTroubleshootReports(input: {
+  problemKeyword?: string;
+  userAccessCode?: number;
+  fromDate?: string;
+  toDate?: string;
+  openInExcel?: boolean;
+}) {
+  const payload = await readJson(
+    await requestApi("api/troubleshoot/reports/general", {
+      method: "POST",
+      body: JSON.stringify({
+        problemKeyword: input.problemKeyword || null,
+        userAccessCode: input.userAccessCode ?? null,
+        fromDate: input.fromDate || null,
+        toDate: input.toDate || null,
+        openInExcel: input.openInExcel === true,
+      }),
+    }),
+  );
+  return getCollection(payload)
+    .map(mapLog)
+    .filter((value): value is TroubleshootLogEntry => value !== null);
 }
 
-export async function searchTroubleshootOdometer(input: { searchMode: "GG" | "REG" | "TA"; searchValue: string }) {
-  const payload = await readJson(await requestApi("api/troubleshoot/odometer/search", { method: "POST", body: JSON.stringify(input) }));
-  return getCollection(payload).map(mapOdometer).filter((value): value is TroubleshootOdometerResult => value !== null);
+export async function searchTroubleshootOdometer(input: {
+  searchMode: "GG" | "REG" | "TA";
+  searchValue: string;
+}) {
+  const payload = await readJson(
+    await requestApi("api/troubleshoot/odometer/search", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  );
+  return getCollection(payload)
+    .map(mapOdometer)
+    .filter((value): value is TroubleshootOdometerResult => value !== null);
 }
 
 export async function getTripsWithoutRoutes() {
   const payload = await readJson(await requestApi("api/troubleshoot/trips-without-routes"));
-  return getCollection(payload).map(mapTripWithoutRoutes).filter((value): value is TripsWithoutRoutes => value !== null);
+  return getCollection(payload)
+    .map(mapTripWithoutRoutes)
+    .filter((value): value is TripsWithoutRoutes => value !== null);
 }
 
 export async function removeTripsWithoutRoutes(input: { fromDate?: string; toDate?: string }) {
-  const payload = await readJson(await requestApi("api/troubleshoot/remove-trips-no-routes", { method: "POST", body: JSON.stringify({
-    fromDate: input.fromDate || null,
-    toDate: input.toDate || null,
-  }) }));
-  return isRecord(payload) ? asNumber(getValue(payload, "removed", "Removed")) ?? 0 : 0;
+  const payload = await readJson(
+    await requestApi("api/troubleshoot/remove-trips-no-routes", {
+      method: "POST",
+      body: JSON.stringify({
+        fromDate: input.fromDate || null,
+        toDate: input.toDate || null,
+      }),
+    }),
+  );
+  return isRecord(payload) ? (asNumber(getValue(payload, "removed", "Removed")) ?? 0) : 0;
 }
 
 export async function getApproverRanks() {
   const payload = await readJson(await requestApi("api/authorisers/ranks"));
-  return getCollection(payload).map(mapRank).filter((value): value is ApproverRank => value !== null);
+  return getCollection(payload)
+    .map(mapRank)
+    .filter((value): value is ApproverRank => value !== null);
 }
 
-export async function saveApproverRanks(ranks: { id: number; rankName: string; description: string }[]) {
-  const payload = await readJson(await requestApi("api/authorisers/ranks", { method: "POST", body: JSON.stringify(ranks.map((rank) => ({ id: rank.id, rankName: rank.rankName, description: rank.description }))) }));
-  return getCollection(payload).map(mapRank).filter((value): value is ApproverRank => value !== null);
+export async function saveApproverRanks(
+  ranks: { id: number; rankName: string; description: string }[],
+) {
+  const payload = await readJson(
+    await requestApi("api/authorisers/ranks", {
+      method: "POST",
+      body: JSON.stringify(
+        ranks.map((rank) => ({
+          id: rank.id,
+          rankName: rank.rankName,
+          description: rank.description,
+        })),
+      ),
+    }),
+  );
+  return getCollection(payload)
+    .map(mapRank)
+    .filter((value): value is ApproverRank => value !== null);
 }
 
 export async function getVehicleMasterLookup(vehicleIdentifier: string) {
-  const payload = await readJson(await requestApi("api/troubleshoot/vehicle-master-edit", { method: "POST", body: JSON.stringify({ vehicleIdentifier }) }));
-  return getCollection(payload).map(mapVehicle).filter((value): value is VehicleMasterLookup => value !== null);
+  const payload = await readJson(
+    await requestApi("api/troubleshoot/vehicle-master-edit", {
+      method: "POST",
+      body: JSON.stringify({ vehicleIdentifier }),
+    }),
+  );
+  return getCollection(payload)
+    .map(mapVehicle)
+    .filter((value): value is VehicleMasterLookup => value !== null);
 }

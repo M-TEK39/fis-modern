@@ -42,7 +42,10 @@ export type DepartmentRecord = {
   comments: string | null;
 };
 
-export type DepartmentInput = Omit<DepartmentRecord, "departmentCode" | "dateCreated" | "dateUpdated" | "modifiedByUserCode"> & {
+export type DepartmentInput = Omit<
+  DepartmentRecord,
+  "departmentCode" | "dateCreated" | "dateUpdated" | "modifiedByUserCode"
+> & {
   departmentCode?: number;
 };
 
@@ -106,14 +109,18 @@ function asBoolean(value: unknown) {
 function mapDepartment(value: unknown): DepartmentRecord | null {
   if (!isRecord(value)) return null;
 
-  const departmentCode = asNumber(getValue(value, "departmentCode", "DepartmentCode", "department_code"));
+  const departmentCode = asNumber(
+    getValue(value, "departmentCode", "DepartmentCode", "department_code"),
+  );
   if (departmentCode === null) return null;
 
   return {
     departmentCode,
     companyCode: asNumber(getValue(value, "companyCode", "CompanyCode", "company_code")) ?? 0,
     description: asString(getValue(value, "description", "Description")),
-    responsiblePerson: asString(getValue(value, "responsiblePerson", "ResponsiblePerson", "res_person")),
+    responsiblePerson: asString(
+      getValue(value, "responsiblePerson", "ResponsiblePerson", "res_person"),
+    ),
     address1: asString(getValue(value, "address1", "Address1")),
     address2: asString(getValue(value, "address2", "Address2")),
     address3: asString(getValue(value, "address3", "Address3")),
@@ -121,39 +128,80 @@ function mapDepartment(value: unknown): DepartmentRecord | null {
     telephone: asString(getValue(value, "telephone", "Telephone")),
     fax: asString(getValue(value, "fax", "Fax")),
     netAddress: asString(getValue(value, "netAddress", "NetAddress", "net_address")),
-    departmentNumber: asString(getValue(value, "departmentNumber", "DepartmentNumber", "Department_number")),
+    departmentNumber: asString(
+      getValue(value, "departmentNumber", "DepartmentNumber", "Department_number"),
+    ),
     cellNumber: asString(getValue(value, "cellNumber", "CellNumber", "cell_number")),
     notes: asString(getValue(value, "notes", "Notes")),
-    departmentAbbr: asString(getValue(value, "departmentAbbr", "DepartmentAbbr", "department_abbr")),
-    basInstallationCode: asString(getValue(value, "basInstallationCode", "BasInstallationCode", "bas_installation_code")),
+    departmentAbbr: asString(
+      getValue(value, "departmentAbbr", "DepartmentAbbr", "department_abbr"),
+    ),
+    basInstallationCode: asString(
+      getValue(value, "basInstallationCode", "BasInstallationCode", "bas_installation_code"),
+    ),
     deptActive: asBoolean(getValue(value, "deptActive", "DeptActive", "dept_active")),
     cloEmail: asString(getValue(value, "cloEmail", "CloEmail", "clo_email")),
     telephone2: asString(getValue(value, "telephone2", "Telephone2")),
     fax2: asString(getValue(value, "fax2", "Fax2")),
-    financialSystemCode: asNumber(getValue(value, "financialSystemCode", "FinancialSystemCode", "financial_system_code")),
-    financialSystemActive: getValue(value, "financialSystemActive", "FinancialSystemActive", "financial_system_active") === undefined
-      ? null
-      : asBoolean(getValue(value, "financialSystemActive", "FinancialSystemActive", "financial_system_active")),
-    financialSystemActivateDate: asString(getValue(value, "financialSystemActivateDate", "FinancialSystemActivateDate", "financial_system_activate_date")),
+    financialSystemCode: asNumber(
+      getValue(value, "financialSystemCode", "FinancialSystemCode", "financial_system_code"),
+    ),
+    financialSystemActive:
+      getValue(
+        value,
+        "financialSystemActive",
+        "FinancialSystemActive",
+        "financial_system_active",
+      ) === undefined
+        ? null
+        : asBoolean(
+            getValue(
+              value,
+              "financialSystemActive",
+              "FinancialSystemActive",
+              "financial_system_active",
+            ),
+          ),
+    financialSystemActivateDate: asString(
+      getValue(
+        value,
+        "financialSystemActivateDate",
+        "FinancialSystemActivateDate",
+        "financial_system_activate_date",
+      ),
+    ),
     defaultSite: asNumber(getValue(value, "defaultSite", "DefaultSite", "default_site")),
-    exportIsActive: getValue(value, "exportIsActive", "ExportIsActive", "export_is_active") === undefined
-      ? null
-      : asBoolean(getValue(value, "exportIsActive", "ExportIsActive", "export_is_active")),
-    dateLastExported: asString(getValue(value, "dateLastExported", "DateLastExported", "date_last_exported")),
-    serviceKilometres: asNumber(getValue(value, "serviceKilometres", "ServiceKilometres", "Service_Kilometres")) ?? 0,
+    exportIsActive:
+      getValue(value, "exportIsActive", "ExportIsActive", "export_is_active") === undefined
+        ? null
+        : asBoolean(getValue(value, "exportIsActive", "ExportIsActive", "export_is_active")),
+    dateLastExported: asString(
+      getValue(value, "dateLastExported", "DateLastExported", "date_last_exported"),
+    ),
+    serviceKilometres:
+      asNumber(getValue(value, "serviceKilometres", "ServiceKilometres", "Service_Kilometres")) ??
+      0,
     serviceYears: asNumber(getValue(value, "serviceYears", "ServiceYears", "Service_Years")) ?? 0,
-    overheadPercentage: asNumber(getValue(value, "overheadPercentage", "OverheadPercentage", "Overhead_Percentage")) ?? 0,
+    overheadPercentage:
+      asNumber(
+        getValue(value, "overheadPercentage", "OverheadPercentage", "Overhead_Percentage"),
+      ) ?? 0,
     dateCreated: asString(getValue(value, "dateCreated", "DateCreated", "date_created")),
     dateUpdated: asString(getValue(value, "dateUpdated", "DateUpdated", "date_updated")),
-    userAccessCode: asNumber(getValue(value, "userAccessCode", "UserAccessCode", "user_access_code")),
-    modifiedByUserCode: asNumber(getValue(value, "modifiedByUserCode", "ModifiedByUserCode", "modified_by_user_code")),
+    userAccessCode: asNumber(
+      getValue(value, "userAccessCode", "UserAccessCode", "user_access_code"),
+    ),
+    modifiedByUserCode: asNumber(
+      getValue(value, "modifiedByUserCode", "ModifiedByUserCode", "modified_by_user_code"),
+    ),
     comments: asString(getValue(value, "comments", "Comments")),
   };
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new DepartmentApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new DepartmentApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -167,19 +215,28 @@ async function requestApi(path: string, init: RequestInit = {}) {
     });
 
     if (response.status === 401 || response.status === 403) {
-      throw new DepartmentApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new DepartmentApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
 
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the API body is not JSON.
       }
 
-      throw new DepartmentApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new DepartmentApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
 
     return response;
@@ -201,8 +258,11 @@ async function readJson(response: Response) {
 
 export async function getDepartments() {
   const payload = await readJson(await requestApi("api/department"));
-  if (!Array.isArray(payload)) throw new DepartmentApiError("invalid-response", "The department response was not a list.");
-  return payload.map(mapDepartment).filter((department): department is DepartmentRecord => department !== null);
+  if (!Array.isArray(payload))
+    throw new DepartmentApiError("invalid-response", "The department response was not a list.");
+  return payload
+    .map(mapDepartment)
+    .filter((department): department is DepartmentRecord => department !== null);
 }
 
 export async function getDepartment(departmentCode: number) {
@@ -212,7 +272,11 @@ export async function getDepartment(departmentCode: number) {
 
 export async function getDepartmentDeleteCheck(departmentCode: number) {
   const payload = await readJson(await requestApi(`api/department/${departmentCode}/delete-check`));
-  if (!isRecord(payload)) throw new DepartmentApiError("invalid-response", "The department dependency response was invalid.");
+  if (!isRecord(payload))
+    throw new DepartmentApiError(
+      "invalid-response",
+      "The department dependency response was invalid.",
+    );
 
   return {
     siteCount: asNumber(getValue(payload, "siteCount", "SiteCount")) ?? 0,
@@ -222,20 +286,24 @@ export async function getDepartmentDeleteCheck(departmentCode: number) {
 }
 
 export async function createDepartment(department: DepartmentInput) {
-  const payload = await readJson(await requestApi("api/department", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(department),
-  }));
+  const payload = await readJson(
+    await requestApi("api/department", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(department),
+    }),
+  );
   return mapDepartment(payload);
 }
 
 export async function updateDepartment(departmentCode: number, department: DepartmentInput) {
-  const payload = await readJson(await requestApi(`api/department/${departmentCode}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(department),
-  }));
+  const payload = await readJson(
+    await requestApi(`api/department/${departmentCode}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(department),
+    }),
+  );
   return mapDepartment(payload);
 }
 

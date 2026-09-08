@@ -40,21 +40,29 @@ namespace FIS.Core.Application.Interfaces
         /// </summary>
         /// <param name="searchTerm">The search term to filter by</param>
         /// <returns>Collection of matching maintenance trigger entities</returns>
-        Task<IEnumerable<MaintenanceTriggerEntity>> SearchMaintenanceTriggersAsync(string searchTerm);
+        Task<IEnumerable<MaintenanceTriggerEntity>> SearchMaintenanceTriggersAsync(
+            string searchTerm
+        );
 
         /// <summary>
         /// Creates a new maintenance trigger
         /// </summary>
         /// <param name="maintenanceTrigger">The maintenance trigger entity to create</param>
         /// <returns>The created maintenance trigger entity</returns>
-        Task<MaintenanceTriggerEntity> CreateAsync(MaintenanceTriggerEntity maintenanceTrigger, int currentUserId);
+        Task<MaintenanceTriggerEntity> CreateAsync(
+            MaintenanceTriggerEntity maintenanceTrigger,
+            int currentUserId
+        );
 
         /// <summary>
         /// Updates an existing maintenance trigger
         /// </summary>
         /// <param name="maintenanceTrigger">The maintenance trigger entity to update</param>
         /// <returns>The updated maintenance trigger entity</returns>
-        Task<MaintenanceTriggerEntity> UpdateAsync(MaintenanceTriggerEntity maintenanceTrigger, int currentUserId);
+        Task<MaintenanceTriggerEntity> UpdateAsync(
+            MaintenanceTriggerEntity maintenanceTrigger,
+            int currentUserId
+        );
 
         /// <summary>
         /// Deletes a maintenance trigger by its code

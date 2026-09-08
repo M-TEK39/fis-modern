@@ -33,10 +33,15 @@ export type TrackingWriteInput = {
   track_note: string | null;
 };
 
-export type TrackingApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type TrackingApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class TrackingApiError extends Error {
-  constructor(public readonly reason: TrackingApiErrorReason, message: string, public readonly status?: number) {
+  constructor(
+    public readonly reason: TrackingApiErrorReason,
+    message: string,
+    public readonly status?: number,
+  ) {
     super(message);
     this.name = "TrackingApiError";
   }
@@ -103,13 +108,16 @@ function mapTracking(value: unknown): TrackingRecord | null {
     note: asString(getValue(value, "track_note", "trackNote")),
     isDeleted: asBoolean(getValue(value, "is_deleted", "isDeleted")),
     fleetNumber: asString(getValue(vehicleRecord, "fleet_number", "fleetNumber")),
-    registrationNumber: asString(getValue(vehicleRecord, "registration_number", "registrationNumber")),
+    registrationNumber: asString(
+      getValue(vehicleRecord, "registration_number", "registrationNumber"),
+    ),
   };
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new TrackingApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new TrackingApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -120,9 +128,24 @@ async function requestApi(path: string, init: RequestInit = {}) {
       headers: { accept: "application/json", cookie: cookieHeader, ...init.headers },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) throw new TrackingApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
-    if (response.status === 404) throw new TrackingApiError("not-found", "The tracking record was not found.", response.status);
-    if (!response.ok) throw new TrackingApiError("unavailable", `FIS API returned HTTP ${response.status}.`, response.status);
+    if (response.status === 401 || response.status === 403)
+      throw new TrackingApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
+    if (response.status === 404)
+      throw new TrackingApiError(
+        "not-found",
+        "The tracking record was not found.",
+        response.status,
+      );
+    if (!response.ok)
+      throw new TrackingApiError(
+        "unavailable",
+        `FIS API returned HTTP ${response.status}.`,
+        response.status,
+      );
     return response;
   } catch (error) {
     if (error instanceof TrackingApiError) throw error;
@@ -142,7 +165,9 @@ async function readJson(response: Response) {
 
 async function readTrackingList(path: string, init?: RequestInit) {
   const payload = await readJson(await requestApi(path, init));
-  return getCollection(payload).map(mapTracking).filter((item): item is TrackingRecord => item !== null);
+  return getCollection(payload)
+    .map(mapTracking)
+    .filter((item): item is TrackingRecord => item !== null);
 }
 
 async function postReport(path: string, body: unknown) {
@@ -163,35 +188,49 @@ export async function getTracking(trackCode: number) {
 }
 
 export async function createTracking(input: TrackingWriteInput) {
-  const payload = await readJson(await requestApi("api/tracking", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(input),
-  }));
+  const payload = await readJson(
+    await requestApi("api/tracking", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
   return mapTracking(payload);
 }
 
 export async function updateTracking(trackCode: number, input: TrackingWriteInput) {
-  const payload = await readJson(await requestApi(`api/tracking/${encodeURIComponent(trackCode)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ track_code: trackCode, ...input }),
-  }));
+  const payload = await readJson(
+    await requestApi(`api/tracking/${encodeURIComponent(trackCode)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ track_code: trackCode, ...input }),
+    }),
+  );
   return mapTracking(payload);
 }
 
 const reportRange = (startDate: string, endDate: string) => ({ startDate, endDate });
 
 export function getTrackingOneVehicleReport(vmfCode: number, startDate: string, endDate: string) {
-  return postReport("api/tracking/reports/one-vehicle", { vmfCode, ...reportRange(startDate, endDate) });
+  return postReport("api/tracking/reports/one-vehicle", {
+    vmfCode,
+    ...reportRange(startDate, endDate),
+  });
 }
 
 export function getTrackingOneDeviceReport(deviceId: string) {
   return postReport("api/tracking/reports/one-device", { deviceId });
 }
 
-export function getTrackingAllVehiclesReport(trackerType: string, startDate: string, endDate: string) {
-  return postReport("api/tracking/reports/all-vehicles", { trackerType, ...reportRange(startDate, endDate) });
+export function getTrackingAllVehiclesReport(
+  trackerType: string,
+  startDate: string,
+  endDate: string,
+) {
+  return postReport("api/tracking/reports/all-vehicles", {
+    trackerType,
+    ...reportRange(startDate, endDate),
+  });
 }
 
 export function getTrackingAllDevicesReport(startDate: string, endDate: string) {
@@ -202,10 +241,28 @@ export function getTrackingInstallPeriodReport(startDate: string, endDate: strin
   return postReport("api/tracking/reports/install-period", reportRange(startDate, endDate));
 }
 
-export function getTrackingSitePeriodReport(siteCode: number, allSites: boolean, startDate: string, endDate: string) {
-  return postReport("api/tracking/reports/site-period", { siteCode, allSites, ...reportRange(startDate, endDate) });
+export function getTrackingSitePeriodReport(
+  siteCode: number,
+  allSites: boolean,
+  startDate: string,
+  endDate: string,
+) {
+  return postReport("api/tracking/reports/site-period", {
+    siteCode,
+    allSites,
+    ...reportRange(startDate, endDate),
+  });
 }
 
-export function getTrackingDeptPeriodReport(departmentCode: number, allDepartments: boolean, startDate: string, endDate: string) {
-  return postReport("api/tracking/reports/dept-period", { departmentCode, allDepartments, ...reportRange(startDate, endDate) });
+export function getTrackingDeptPeriodReport(
+  departmentCode: number,
+  allDepartments: boolean,
+  startDate: string,
+  endDate: string,
+) {
+  return postReport("api/tracking/reports/dept-period", {
+    departmentCode,
+    allDepartments,
+    ...reportRange(startDate, endDate),
+  });
 }

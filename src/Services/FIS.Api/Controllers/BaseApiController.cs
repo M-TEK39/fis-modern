@@ -17,12 +17,14 @@ public abstract class BaseApiController : ControllerBase
     protected int GetCurrentUserId()
     {
         var userAccessCodeClaim = User.FindFirst("user_access_code")?.Value;
-        
+
         if (int.TryParse(userAccessCodeClaim, out int userId))
         {
             return userId;
         }
 
-        throw new UnauthorizedAccessException("Authenticated user does not include a valid user_access_code claim.");
+        throw new UnauthorizedAccessException(
+            "Authenticated user does not include a valid user_access_code claim."
+        );
     }
 }

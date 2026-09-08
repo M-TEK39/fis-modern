@@ -25,7 +25,9 @@ function getText(formData: FormData, key: string) {
 function getInput(formData: FormData): ExtraCodeWriteInput {
   const description = getText(formData, "description");
   if (!description || description.length > 50) {
-    throw new ExtraCodeValidationError("Extra description is required and must be 50 characters or fewer.");
+    throw new ExtraCodeValidationError(
+      "Extra description is required and must be 50 characters or fewer.",
+    );
   }
   return { description };
 }
@@ -41,16 +43,27 @@ function getCode(formData: FormData) {
 
 async function authorizeExtraCodeMaintenance() {
   const session = await getSession();
-  if (session.status === "unavailable") return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
-  if (session.status !== "authenticated") return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
-  if (!hasVehicleManagementPermission(session.accessLevel)) return { ok: false as const, message: "You do not have permission to maintain extras." };
+  if (session.status === "unavailable")
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
+  if (session.status !== "authenticated")
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
+  if (!hasVehicleManagementPermission(session.accessLevel))
+    return { ok: false as const, message: "You do not have permission to maintain extras." };
   return { ok: true as const };
 }
 
 function apiErrorMessage(error: unknown, operation: string) {
   if (error instanceof ExtraCodeApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return `The extra code ${operation} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return `The extra code ${operation} service is temporarily unavailable. Please try again.`;
     if (error.fleetNumbers.length > 0) {
       return `This extra is linked to vehicles ${error.fleetNumbers.join(", ")}. Remove it from those vehicles before deleting it.`;
     }
@@ -73,9 +86,19 @@ export async function createExtraCodeAction(
   if (!access.ok) return { status: "error", message: access.message };
   try {
     const created = await createExtraCode(getInput(formData));
-    if (!created) throw new ExtraCodeApiError("invalid-response", "The FIS API did not return the created extra code.");
+    if (!created)
+      throw new ExtraCodeApiError(
+        "invalid-response",
+        "The FIS API did not return the created extra code.",
+      );
   } catch (error) {
-    return { status: "error", message: error instanceof ExtraCodeValidationError ? error.message : apiErrorMessage(error, "creation") };
+    return {
+      status: "error",
+      message:
+        error instanceof ExtraCodeValidationError
+          ? error.message
+          : apiErrorMessage(error, "creation"),
+    };
   }
   revalidateExtraCodeRoutes();
   redirect("/validation-data/extras?saved=created");
@@ -87,34 +110,47 @@ export async function deleteExtraCodeAction(formData: FormData) {
   try {
     extraCode = getCode(formData);
   } catch (error) {
-    redirect(`/validation-data/extras?error=${encodeURIComponent(error instanceof Error ? error.message : "Extra code is invalid.")}`);
+    redirect(
+      `/validation-data/extras?error=${encodeURIComponent(error instanceof Error ? error.message : "Extra code is invalid.")}`,
+    );
   }
 
   if (!access.ok) {
-    redirect(`/validation-data/extras/delete?code=${extraCode}&error=${encodeURIComponent(access.message)}`);
+    redirect(
+      `/validation-data/extras/delete?code=${extraCode}&error=${encodeURIComponent(access.message)}`,
+    );
   }
 
   let dependencies;
   try {
     dependencies = await getExtraCodeDeleteCheck(extraCode);
   } catch (error) {
-    redirect(`/validation-data/extras/delete?code=${extraCode}&error=${encodeURIComponent(apiErrorMessage(error, "dependency check"))}`);
+    redirect(
+      `/validation-data/extras/delete?code=${extraCode}&error=${encodeURIComponent(apiErrorMessage(error, "dependency check"))}`,
+    );
   }
 
   if (!dependencies.checkAvailable) {
-    redirect(`/validation-data/extras/delete?code=${extraCode}&error=${encodeURIComponent("Extra dependencies could not be verified, so the extra was not deleted.")}`);
+    redirect(
+      `/validation-data/extras/delete?code=${extraCode}&error=${encodeURIComponent("Extra dependencies could not be verified, so the extra was not deleted.")}`,
+    );
   }
   if (!dependencies.canDelete || dependencies.vehicleCount > 0) {
-    const message = dependencies.fleetNumbers.length > 0
-      ? `This extra is linked to vehicles ${dependencies.fleetNumbers.join(", ")}. Remove it from those vehicles before deleting it.`
-      : "Remove this extra from the linked vehicle data before deleting it.";
-    redirect(`/validation-data/extras/delete?code=${extraCode}&error=${encodeURIComponent(message)}`);
+    const message =
+      dependencies.fleetNumbers.length > 0
+        ? `This extra is linked to vehicles ${dependencies.fleetNumbers.join(", ")}. Remove it from those vehicles before deleting it.`
+        : "Remove this extra from the linked vehicle data before deleting it.";
+    redirect(
+      `/validation-data/extras/delete?code=${extraCode}&error=${encodeURIComponent(message)}`,
+    );
   }
 
   try {
     await deleteExtraCode(extraCode);
   } catch (error) {
-    redirect(`/validation-data/extras/delete?code=${extraCode}&error=${encodeURIComponent(apiErrorMessage(error, "deletion"))}`);
+    redirect(
+      `/validation-data/extras/delete?code=${extraCode}&error=${encodeURIComponent(apiErrorMessage(error, "deletion"))}`,
+    );
   }
   revalidateExtraCodeRoutes();
   redirect("/validation-data/extras?saved=deleted");

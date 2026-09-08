@@ -17,7 +17,8 @@ public class NoticeManagementController : BaseApiController
     public NoticeManagementController(
         INoticeRepository noticeRepository,
         INoticeScheduleRepository noticeScheduleRepository,
-        ILogger<NoticeManagementController> logger)
+        ILogger<NoticeManagementController> logger
+    )
     {
         _noticeRepository = noticeRepository;
         _noticeScheduleRepository = noticeScheduleRepository;
@@ -39,8 +40,8 @@ public class NoticeManagementController : BaseApiController
                 "Notice Schedules",
                 "Notice Details",
                 "Create Notice",
-                "View Active Notices"
-            }
+                "View Active Notices",
+            },
         };
         return Ok(menu);
     }
@@ -69,7 +70,7 @@ public class NoticeManagementController : BaseApiController
                 EndDate = s.end_date,
                 SortOrder = s.sort_order,
                 CreatedBy = s.CreatedByUser?.email,
-                CreatedDate = s.date_created
+                CreatedDate = s.date_created,
             });
 
             return Ok(scheduleDtos);
@@ -85,11 +86,16 @@ public class NoticeManagementController : BaseApiController
     /// Create new notice schedule
     /// </summary>
     [HttpPost("notice-schedules")]
-    public async Task<ActionResult<NoticeScheduleDto>> CreateNoticeSchedule([FromBody] CreateNoticeScheduleDto request)
+    public async Task<ActionResult<NoticeScheduleDto>> CreateNoticeSchedule(
+        [FromBody] CreateNoticeScheduleDto request
+    )
     {
         try
         {
-            _logger.LogInformation("Creating notice schedule for NoticeId: {NoticeId}", request.NoticeId);
+            _logger.LogInformation(
+                "Creating notice schedule for NoticeId: {NoticeId}",
+                request.NoticeId
+            );
 
             var noticeSchedule = new NoticeSchedule
             {
@@ -97,10 +103,13 @@ public class NoticeManagementController : BaseApiController
                 title_field = request.TitleField,
                 start_date = request.StartDate,
                 end_date = request.EndDate,
-                sort_order = request.SortOrder
+                sort_order = request.SortOrder,
             };
 
-            var created = await _noticeScheduleRepository.CreateAsync(noticeSchedule, GetCurrentUserId());
+            var created = await _noticeScheduleRepository.CreateAsync(
+                noticeSchedule,
+                GetCurrentUserId()
+            );
 
             var createdDto = new NoticeScheduleDto
             {
@@ -111,14 +120,18 @@ public class NoticeManagementController : BaseApiController
                 EndDate = created.end_date,
                 CreatedBy = GetCurrentUsername(),
                 CreatedDate = created.date_created,
-                SortOrder = created.sort_order
+                SortOrder = created.sort_order,
             };
 
             return Ok(createdDto);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating notice schedule for NoticeId: {NoticeId}", request.NoticeId);
+            _logger.LogError(
+                ex,
+                "Error creating notice schedule for NoticeId: {NoticeId}",
+                request.NoticeId
+            );
             return StatusCode(500, "Error creating notice schedule");
         }
     }
@@ -127,7 +140,10 @@ public class NoticeManagementController : BaseApiController
     /// Update existing notice schedule
     /// </summary>
     [HttpPut("notice-schedules/{id}")]
-    public async Task<ActionResult<NoticeScheduleDto>> UpdateNoticeSchedule(int id, [FromBody] UpdateNoticeScheduleDto request)
+    public async Task<ActionResult<NoticeScheduleDto>> UpdateNoticeSchedule(
+        int id,
+        [FromBody] UpdateNoticeScheduleDto request
+    )
     {
         try
         {
@@ -154,7 +170,7 @@ public class NoticeManagementController : BaseApiController
                 TitleField = updated.title_field ?? "",
                 StartDate = updated.start_date,
                 EndDate = updated.end_date,
-                SortOrder = updated.sort_order
+                SortOrder = updated.sort_order,
             };
 
             return Ok(updatedDto);
@@ -218,7 +234,7 @@ public class NoticeManagementController : BaseApiController
                 NoticeBody = notice.notice_body,
                 NoticePerson = notice.notice_person,
                 NoticePersonTitle = notice.notice_person_title,
-                CreatedDate = notice.date_created
+                CreatedDate = notice.date_created,
             };
 
             return Ok(noticeDto);
@@ -247,7 +263,7 @@ public class NoticeManagementController : BaseApiController
                 notice_title = request.NoticeTitle,
                 notice_body = request.NoticeBody,
                 notice_person = request.NoticePerson,
-                notice_person_title = request.NoticePersonTitle
+                notice_person_title = request.NoticePersonTitle,
             };
 
             var created = await _noticeRepository.CreateAsync(notice, GetCurrentUserId());
@@ -261,7 +277,7 @@ public class NoticeManagementController : BaseApiController
                 NoticeBody = created.notice_body,
                 NoticePerson = created.notice_person,
                 NoticePersonTitle = created.notice_person_title,
-                CreatedDate = created.date_created
+                CreatedDate = created.date_created,
             };
 
             return Ok(createdDto);
@@ -277,7 +293,10 @@ public class NoticeManagementController : BaseApiController
     /// Update existing notice
     /// </summary>
     [HttpPut("notices/{id}")]
-    public async Task<ActionResult<NoticeDto>> UpdateNotice(int id, [FromBody] UpdateNoticeDto request)
+    public async Task<ActionResult<NoticeDto>> UpdateNotice(
+        int id,
+        [FromBody] UpdateNoticeDto request
+    )
     {
         try
         {
@@ -307,7 +326,7 @@ public class NoticeManagementController : BaseApiController
                 NoticeBody = updated.notice_body,
                 NoticePerson = updated.notice_person,
                 NoticePersonTitle = updated.notice_person_title,
-                CreatedDate = updated.date_created
+                CreatedDate = updated.date_created,
             };
 
             return Ok(updatedDto);

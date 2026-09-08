@@ -146,7 +146,8 @@ export type ReliefVehicleRequest = {
   Reason: string;
 };
 
-export type ContractApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type ContractApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class ContractApiError extends Error {
   constructor(
@@ -192,7 +193,8 @@ function asNumber(value: unknown) {
 
 function asBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
-  if (typeof value === "string") return ["true", "1", "y", "yes"].includes(value.trim().toLowerCase());
+  if (typeof value === "string")
+    return ["true", "1", "y", "yes"].includes(value.trim().toLowerCase());
   if (typeof value === "number") return value !== 0;
   return false;
 }
@@ -222,11 +224,15 @@ function mapContract(value: unknown): ContractRecord | null {
     vmfCode,
     siteCode,
     fleetNumber: asString(getValue(value, "vehicleFleetNumber", "fleetNumber", "fleet_number")),
-    registrationNumber: asString(getValue(value, "vehicleRegistrationNumber", "registrationNumber", "registration_number")),
+    registrationNumber: asString(
+      getValue(value, "vehicleRegistrationNumber", "registrationNumber", "registration_number"),
+    ),
     siteDescription: asString(getValue(value, "siteDescription", "siteName", "site_name")),
     driverId: asString(getValue(value, "driverId", "DriverId", "driver_id")),
     driverName: asString(getValue(value, "driverName", "DriverName", "driver_name")),
-    contractTypeCode: asString(getValue(value, "contractTypeCode", "contract_type", "contract_type_code")),
+    contractTypeCode: asString(
+      getValue(value, "contractTypeCode", "contract_type", "contract_type_code"),
+    ),
     contractStatusCode: statusCode ?? (stillCurrent?.toUpperCase() === "Y" ? 3 : null),
     contractStatusDate: asString(getValue(value, "contractStatusDate", "contract_status_date")),
     stillCurrent,
@@ -242,13 +248,17 @@ function mapContract(value: unknown): ContractRecord | null {
     approverCode: asNumber(getValue(value, "approverCode", "approver_code")),
     parentContractCode: asNumber(getValue(value, "parentContractCode", "parent_contract_code")),
     reliefForContract: asNumber(getValue(value, "reliefForContract", "relief_for_contract")),
-    vehicleAssessmentCode: asNumber(getValue(value, "vehicleAssessmentCode", "vehicle_assessment_code")),
+    vehicleAssessmentCode: asNumber(
+      getValue(value, "vehicleAssessmentCode", "vehicle_assessment_code"),
+    ),
     monthlyKm: asNumber(getValue(value, "monthlyKm", "monthly_km")),
     hoursUsed: asNumber(getValue(value, "hoursUsed", "hours_used")),
     basFundCode: asString(getValue(value, "basFundCode", "bas_fund_code")),
     basObjectiveCode: asString(getValue(value, "basObjectiveCode", "bas_objective_code")),
     basProjectNumber: asString(getValue(value, "basProjectNumber", "bas_project_number")),
-    basResponsibilityCode: asString(getValue(value, "basResponsibilityCode", "bas_responsibility_code")),
+    basResponsibilityCode: asString(
+      getValue(value, "basResponsibilityCode", "bas_responsibility_code"),
+    ),
     journalDetailCode: asString(getValue(value, "journalDetailCode", "journal_detail_code")),
     contractGroupCode: asNumber(getValue(value, "contractGroupCode", "contract_group_code")),
     lockedForTransfer: asBoolean(getValue(value, "lockedForTransfer", "locked_for_transfer")),
@@ -258,21 +268,34 @@ function mapContract(value: unknown): ContractRecord | null {
     collectorFirstname: asString(getValue(value, "collectorFirstname", "collector_firstname")),
     collectorSurname: asString(getValue(value, "collectorSurname", "collector_surname")),
     collectorSaId: asString(getValue(value, "collectorSaId", "collector_sa_id")),
-    collectorPassportNumber: asString(getValue(value, "collectorPassportNumber", "collector_passportnumber")),
-    collectorOfficeNumber: asString(getValue(value, "collectorOfficeNumber", "collector_office_number")),
-    collectorCellphoneNumber: asString(getValue(value, "collectorCellphoneNumber", "collector_cellphone_number")),
+    collectorPassportNumber: asString(
+      getValue(value, "collectorPassportNumber", "collector_passportnumber"),
+    ),
+    collectorOfficeNumber: asString(
+      getValue(value, "collectorOfficeNumber", "collector_office_number"),
+    ),
+    collectorCellphoneNumber: asString(
+      getValue(value, "collectorCellphoneNumber", "collector_cellphone_number"),
+    ),
     collectorOffice: asString(getValue(value, "collectorOffice", "collector_office")),
-    collectorDesignation: asString(getValue(value, "collectorDesignation", "collector_designation")),
-    reliefVehicleOption: getValue(value, "reliefVehicleOption", "relief_vehicle_option") === undefined
-      ? null
-      : asBoolean(getValue(value, "reliefVehicleOption", "relief_vehicle_option")),
+    collectorDesignation: asString(
+      getValue(value, "collectorDesignation", "collector_designation"),
+    ),
+    reliefVehicleOption:
+      getValue(value, "reliefVehicleOption", "relief_vehicle_option") === undefined
+        ? null
+        : asBoolean(getValue(value, "reliefVehicleOption", "relief_vehicle_option")),
     leaseContractPeriod: asNumber(getValue(value, "leaseContractPeriod", "lease_contract_period")),
-    contractEstimatedOverallKm: asNumber(getValue(value, "contractEstimatedOverallKm", "contract_estimated_overall_km")),
+    contractEstimatedOverallKm: asNumber(
+      getValue(value, "contractEstimatedOverallKm", "contract_estimated_overall_km"),
+    ),
     intendedStartDate: asString(getValue(value, "intendedStartDate", "intended_start_date")),
     intendedStartTime: asString(getValue(value, "intendedStartTime", "intended_start_time")),
     captureDate: asString(getValue(value, "captureDate", "capture_date")),
     modifiedDate: asString(getValue(value, "modifiedDate", "modified_date")),
-    reassignedFromContractCode: asNumber(getValue(value, "reassignedFromContractCode", "reassigned_from_contract_code")),
+    reassignedFromContractCode: asNumber(
+      getValue(value, "reassignedFromContractCode", "reassigned_from_contract_code"),
+    ),
     dateCreated: asString(getValue(value, "dateCreated", "date_created")),
     dateUpdated: asString(getValue(value, "dateUpdated", "date_updated")),
     createdByUserCode: asNumber(getValue(value, "createdByUserCode", "created_by_user_code")),
@@ -311,7 +334,8 @@ function mapReliefVehicleSearchResult(value: unknown): ReliefVehicleSearchResult
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new ContractApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new ContractApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -373,62 +397,87 @@ function mapPage(payload: unknown, requestedPage: number, requestedPageSize: num
   const page = asNumber(getValue(record, "page")) ?? requestedPage;
   const pageSize = asNumber(getValue(record, "page_size", "pageSize")) ?? requestedPageSize;
   const totalRecords = asNumber(getValue(record, "total_records", "totalRecords")) ?? items.length;
-  const totalPages = asNumber(getValue(record, "total_pages", "totalPages")) ?? Math.max(1, Math.ceil(totalRecords / pageSize));
+  const totalPages =
+    asNumber(getValue(record, "total_pages", "totalPages")) ??
+    Math.max(1, Math.ceil(totalRecords / pageSize));
   return { items, page, pageSize, totalRecords, totalPages: Math.max(1, totalPages) };
 }
 
-export async function getContractPage(options: {
-  page?: number;
-  pageSize?: number;
-  statusCode?: number | null;
-  siteCode?: number | null;
-  stillCurrent?: string | null;
-  startDateFrom?: string | null;
-  startDateTo?: string | null;
-  vmfCode?: number | null;
-} = {}) {
+export async function getContractPage(
+  options: {
+    page?: number;
+    pageSize?: number;
+    statusCode?: number | null;
+    siteCode?: number | null;
+    stillCurrent?: string | null;
+    startDateFrom?: string | null;
+    startDateTo?: string | null;
+    vmfCode?: number | null;
+  } = {},
+) {
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 12));
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-  if (options.statusCode !== null && options.statusCode !== undefined) params.set("status", String(options.statusCode));
-  if (options.siteCode !== null && options.siteCode !== undefined) params.set("siteCode", String(options.siteCode));
+  if (options.statusCode !== null && options.statusCode !== undefined)
+    params.set("status", String(options.statusCode));
+  if (options.siteCode !== null && options.siteCode !== undefined)
+    params.set("siteCode", String(options.siteCode));
   if (options.stillCurrent) params.set("stillCurrent", options.stillCurrent);
   if (options.startDateFrom) params.set("startDateFrom", options.startDateFrom);
   if (options.startDateTo) params.set("startDateTo", options.startDateTo);
-  if (options.vmfCode !== null && options.vmfCode !== undefined) params.set("vmfCode", String(options.vmfCode));
+  if (options.vmfCode !== null && options.vmfCode !== undefined)
+    params.set("vmfCode", String(options.vmfCode));
 
-  return mapPage(await readJson(await requestApi(`api/contracts?${params.toString()}`)), page, pageSize);
+  return mapPage(
+    await readJson(await requestApi(`api/contracts?${params.toString()}`)),
+    page,
+    pageSize,
+  );
 }
 
 export async function getContract(contractCode: number) {
-  const record = mapContract(await readJson(await requestApi(`api/contracts/${encodeURIComponent(contractCode)}`)));
-  if (!record) throw new ContractApiError("invalid-response", "The FIS API returned an invalid contract record.");
+  const record = mapContract(
+    await readJson(await requestApi(`api/contracts/${encodeURIComponent(contractCode)}`)),
+  );
+  if (!record)
+    throw new ContractApiError(
+      "invalid-response",
+      "The FIS API returned an invalid contract record.",
+    );
   return record;
 }
 
 export async function searchContractVehicles(query: string) {
-  const payload = await readJson(await requestApi(`api/contracts/vehicle-search?query=${encodeURIComponent(query)}`));
+  const payload = await readJson(
+    await requestApi(`api/contracts/vehicle-search?query=${encodeURIComponent(query)}`),
+  );
   return getCollection(payload)
     .map(mapVehicleSearchResult)
     .filter((item): item is ContractVehicleSearchResult => item !== null);
 }
 
 export async function searchReliefVehicles(query: string) {
-  const payload = await readJson(await requestApi(`api/contracts/relief/search?query=${encodeURIComponent(query)}`));
+  const payload = await readJson(
+    await requestApi(`api/contracts/relief/search?query=${encodeURIComponent(query)}`),
+  );
   return getCollection(payload)
     .map(mapReliefVehicleSearchResult)
     .filter((item): item is ReliefVehicleSearchResult => item !== null && item.isAvailable);
 }
 
 export async function hireContractAgainstApi(request: HireContractRequest) {
-  return readJson(await requestApi("api/contracts/hire", { method: "POST", body: JSON.stringify(request) }));
+  return readJson(
+    await requestApi("api/contracts/hire", { method: "POST", body: JSON.stringify(request) }),
+  );
 }
 
 export async function editContractAgainstApi(contractCode: number, request: EditContractRequest) {
-  return readJson(await requestApi(`api/contracts/${encodeURIComponent(contractCode)}/edit`, {
-    method: "PUT",
-    body: JSON.stringify(request),
-  }));
+  return readJson(
+    await requestApi(`api/contracts/${encodeURIComponent(contractCode)}/edit`, {
+      method: "PUT",
+      body: JSON.stringify(request),
+    }),
+  );
 }
 
 export async function postContractAction(path: string, body: unknown = {}) {
@@ -436,26 +485,39 @@ export async function postContractAction(path: string, body: unknown = {}) {
 }
 
 export async function extendContractAgainstApi(contractCode: number, newTargetReturnDate: string) {
-  return postContractAction(`api/contracts/${encodeURIComponent(contractCode)}/extend`, { NewTargetReturnDate: newTargetReturnDate });
+  return postContractAction(`api/contracts/${encodeURIComponent(contractCode)}/extend`, {
+    NewTargetReturnDate: newTargetReturnDate,
+  });
 }
 
 export async function closeContractAgainstApi(contractCode: number, request: CloseContractRequest) {
   return postContractAction(`api/contracts/${encodeURIComponent(contractCode)}/close`, request);
 }
 
-export async function reassignContractAgainstApi(contractCode: number, request: ContractReassignRequest) {
+export async function reassignContractAgainstApi(
+  contractCode: number,
+  request: ContractReassignRequest,
+) {
   return postContractAction(`api/contracts/${encodeURIComponent(contractCode)}/reassign`, request);
 }
 
-export async function createReliefContractAgainstApi(contractCode: number, request: ReliefVehicleRequest) {
+export async function createReliefContractAgainstApi(
+  contractCode: number,
+  request: ReliefVehicleRequest,
+) {
   return postContractAction(`api/contracts/${encodeURIComponent(contractCode)}/relief`, request);
 }
 
-export async function updateContractHistoryAgainstApi(contractCode: number, request: ContractHistoryBackdatingRequest) {
-  return readJson(await requestApi(`api/contracts/${encodeURIComponent(contractCode)}/history`, {
-    method: "PUT",
-    body: JSON.stringify(request),
-  }));
+export async function updateContractHistoryAgainstApi(
+  contractCode: number,
+  request: ContractHistoryBackdatingRequest,
+) {
+  return readJson(
+    await requestApi(`api/contracts/${encodeURIComponent(contractCode)}/history`, {
+      method: "PUT",
+      body: JSON.stringify(request),
+    }),
+  );
 }
 
 export async function getContractPrintout(contractCode: number) {

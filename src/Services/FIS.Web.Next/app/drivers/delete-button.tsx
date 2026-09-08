@@ -11,7 +11,14 @@ type DeleteButtonProps = {
   fieldName: "authoriserCode" | "siteDriverCode";
 };
 
-export default function DeleteButton({ action, id, name, departmentCode, siteCode, fieldName }: Readonly<DeleteButtonProps>) {
+export default function DeleteButton({
+  action,
+  id,
+  name,
+  departmentCode,
+  siteCode,
+  fieldName,
+}: Readonly<DeleteButtonProps>) {
   return (
     <form action={action}>
       <input name={fieldName} type="hidden" value={id} />

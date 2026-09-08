@@ -85,7 +85,8 @@ function asBoolean(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new LossTypeApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new LossTypeApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -97,17 +98,26 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
     if (response.status === 401 || response.status === 403) {
-      throw new LossTypeApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new LossTypeApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the API body is not JSON.
       }
-      throw new LossTypeApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new LossTypeApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -128,7 +138,9 @@ async function readJson(response: Response) {
 
 function mapLossType(value: unknown): LossTypeRecord | null {
   if (!isRecord(value)) return null;
-  const lossTypeCode = asNumber(getValue(value, "loss_type_code", "LossTypeCode", "lossTypeCode", "loss_code", "LossCode"));
+  const lossTypeCode = asNumber(
+    getValue(value, "loss_type_code", "LossTypeCode", "lossTypeCode", "loss_code", "LossCode"),
+  );
   if (lossTypeCode === null) return null;
 
   return {
@@ -136,8 +148,12 @@ function mapLossType(value: unknown): LossTypeRecord | null {
     description: asString(getValue(value, "loss_description", "Description", "description")),
     dateCreated: asString(getValue(value, "date_created", "DateCreated", "dateCreated")),
     dateUpdated: asString(getValue(value, "date_updated", "DateUpdated", "dateUpdated")),
-    createdByUserCode: asNumber(getValue(value, "created_by_user_code", "CreatedByUserCode", "createdByUserCode")),
-    modifiedByUserCode: asNumber(getValue(value, "modified_by_user_code", "ModifiedByUserCode", "modifiedByUserCode")),
+    createdByUserCode: asNumber(
+      getValue(value, "created_by_user_code", "CreatedByUserCode", "createdByUserCode"),
+    ),
+    modifiedByUserCode: asNumber(
+      getValue(value, "modified_by_user_code", "ModifiedByUserCode", "modifiedByUserCode"),
+    ),
     isDeleted: asBoolean(getValue(value, "is_deleted", "IsDeleted", "isDeleted")),
   };
 }
@@ -153,40 +169,63 @@ function mapLossDependency(value: unknown): LossTypeDeleteDependency | null {
 
 export async function getLossTypes() {
   const payload = await readJson(await requestApi("api/losstype"));
-  if (!Array.isArray(payload)) throw new LossTypeApiError("invalid-response", "The loss type response was not a list.");
+  if (!Array.isArray(payload))
+    throw new LossTypeApiError("invalid-response", "The loss type response was not a list.");
   return payload.map(mapLossType).filter((item): item is LossTypeRecord => item !== null);
 }
 
 export async function getLossType(lossTypeCode: number) {
-  return mapLossType(await readJson(await requestApi(`api/losstype/${encodeURIComponent(lossTypeCode)}`)));
+  return mapLossType(
+    await readJson(await requestApi(`api/losstype/${encodeURIComponent(lossTypeCode)}`)),
+  );
 }
 
 export async function getLossTypeDeleteCheck(lossTypeCode: number): Promise<LossTypeDeleteCheck> {
-  const payload = await readJson(await requestApi(`api/losstype/${encodeURIComponent(lossTypeCode)}/delete-check`));
-  if (!isRecord(payload)) throw new LossTypeApiError("invalid-response", "The loss type dependency response was invalid.");
+  const payload = await readJson(
+    await requestApi(`api/losstype/${encodeURIComponent(lossTypeCode)}/delete-check`),
+  );
+  if (!isRecord(payload))
+    throw new LossTypeApiError(
+      "invalid-response",
+      "The loss type dependency response was invalid.",
+    );
   const rawLosses = getValue(payload, "losses", "Losses");
   return {
-    lossCount: asNumber(getValue(payload, "lossCount", "LossCount")) ?? (Array.isArray(rawLosses) ? rawLosses.length : 0),
-    losses: Array.isArray(rawLosses) ? rawLosses.map(mapLossDependency).filter((item): item is LossTypeDeleteDependency => item !== null) : [],
+    lossCount:
+      asNumber(getValue(payload, "lossCount", "LossCount")) ??
+      (Array.isArray(rawLosses) ? rawLosses.length : 0),
+    losses: Array.isArray(rawLosses)
+      ? rawLosses
+          .map(mapLossDependency)
+          .filter((item): item is LossTypeDeleteDependency => item !== null)
+      : [],
     canDelete: asBoolean(getValue(payload, "canDelete", "CanDelete")),
     checkAvailable: asBoolean(getValue(payload, "checkAvailable", "CheckAvailable")),
   };
 }
 
 export async function createLossType(input: LossTypeWriteInput) {
-  return mapLossType(await readJson(await requestApi("api/losstype", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ loss_description: input.description }),
-  })));
+  return mapLossType(
+    await readJson(
+      await requestApi("api/losstype", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ loss_description: input.description }),
+      }),
+    ),
+  );
 }
 
 export async function updateLossType(lossTypeCode: number, input: LossTypeWriteInput) {
-  return mapLossType(await readJson(await requestApi(`api/losstype/${encodeURIComponent(lossTypeCode)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ loss_type_code: lossTypeCode, loss_description: input.description }),
-  })));
+  return mapLossType(
+    await readJson(
+      await requestApi(`api/losstype/${encodeURIComponent(lossTypeCode)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ loss_type_code: lossTypeCode, loss_description: input.description }),
+      }),
+    ),
+  );
 }
 
 export async function deleteLossType(lossTypeCode: number) {

@@ -16,14 +16,19 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function AccessRestricted() {
@@ -51,7 +56,9 @@ function ApiUnavailable() {
       </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Vehicle reference data could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
         <Link className="button button-primary" href="/vehicles/create">
           Try again
@@ -142,7 +149,10 @@ export default async function VehicleCreatePage() {
       return <SessionRecovery returnPath="/vehicles/create" />;
     }
 
-    console.error("FIS vehicle create reference data request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle create reference data request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return (
       <main className="page-shell vehicle-page-shell">
         <ApiUnavailable />

@@ -35,7 +35,8 @@ export type VehicleDocumentRecord = {
   isPdf: boolean;
 };
 
-export type VehicleDocumentApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type VehicleDocumentApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class VehicleDocumentApiError extends Error {
   constructor(
@@ -113,7 +114,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
     }
 
     if (response.status === 404) {
-      throw new VehicleDocumentApiError("not-found", "The requested vehicle document was not found.");
+      throw new VehicleDocumentApiError(
+        "not-found",
+        "The requested vehicle document was not found.",
+      );
     }
 
     if (!response.ok) {
@@ -127,7 +131,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
         // Keep the status-based message when the API has no JSON error body.
       }
 
-      throw new VehicleDocumentApiError(response.status >= 500 ? "unavailable" : "invalid-response", message);
+      throw new VehicleDocumentApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+      );
     }
 
     return response;
@@ -146,7 +153,10 @@ async function readJson(response: Response) {
   try {
     return (await response.json()) as unknown;
   } catch {
-    throw new VehicleDocumentApiError("invalid-response", "The FIS API returned invalid document JSON.");
+    throw new VehicleDocumentApiError(
+      "invalid-response",
+      "The FIS API returned invalid document JSON.",
+    );
   }
 }
 
@@ -174,14 +184,19 @@ function mapDocument(value: unknown): VehicleDocumentRecord | null {
     return null;
   }
 
-  const mimeType = asString(getValue(value, "mime_type", "mimeType", "contentType")) ?? "application/octet-stream";
-  const fileSizeBytes = asNumber(getValue(value, "file_size_bytes", "fileSizeBytes"))
-    ?? (asNumber(getValue(value, "file_size_kb", "fileSizeKb")) ?? 0) * 1024;
+  const mimeType =
+    asString(getValue(value, "mime_type", "mimeType", "contentType")) ?? "application/octet-stream";
+  const fileSizeBytes =
+    asNumber(getValue(value, "file_size_bytes", "fileSizeBytes")) ??
+    (asNumber(getValue(value, "file_size_kb", "fileSizeKb")) ?? 0) * 1024;
 
   return {
     documentId,
-    category: asString(getValue(value, "document_category", "documentCategory", "category")) ?? "Other",
-    description: asString(getValue(value, "document_description", "documentDescription", "description")),
+    category:
+      asString(getValue(value, "document_category", "documentCategory", "category")) ?? "Other",
+    description: asString(
+      getValue(value, "document_description", "documentDescription", "description"),
+    ),
     fileName,
     mimeType,
     fileSizeBytes: fileSizeBytes > 0 ? fileSizeBytes : null,
@@ -195,7 +210,9 @@ function mapDocument(value: unknown): VehicleDocumentRecord | null {
 
 export async function getVehicleDocuments(vmfCode: number, category?: string) {
   const query = category ? `?category=${encodeURIComponent(category)}` : "";
-  const response = await requestApi(`api/vehicles/${encodeURIComponent(vmfCode)}/documents${query}`);
+  const response = await requestApi(
+    `api/vehicles/${encodeURIComponent(vmfCode)}/documents${query}`,
+  );
   const documents = getCollection(await readJson(response))
     .map(mapDocument)
     .filter((document): document is VehicleDocumentRecord => document !== null);
@@ -214,9 +231,12 @@ export async function uploadVehicleDocument(vmfCode: number, formData: FormData)
 }
 
 export async function deleteVehicleDocument(vmfCode: number, documentId: number) {
-  await requestApi(`api/vehicles/${encodeURIComponent(vmfCode)}/documents/${encodeURIComponent(documentId)}`, {
-    method: "DELETE",
-  });
+  await requestApi(
+    `api/vehicles/${encodeURIComponent(vmfCode)}/documents/${encodeURIComponent(documentId)}`,
+    {
+      method: "DELETE",
+    },
+  );
 
   return { ok: true as const };
 }

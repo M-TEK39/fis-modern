@@ -19,8 +19,8 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
 
     public async Task<VehicleRemark?> GetByIdAsync(int remarkId)
     {
-        return await _context.VehicleRemarks
-            .Include(r => r.Vehicle)
+        return await _context
+            .VehicleRemarks.Include(r => r.Vehicle)
             .Include(r => r.CreatedByUser)
             .Include(r => r.ResolvedByUser)
             .FirstOrDefaultAsync(r => r.remark_id == remarkId && !r.is_deleted);
@@ -28,8 +28,8 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
 
     public async Task<IEnumerable<VehicleRemark>> GetByVehicleAsync(int vmfCode)
     {
-        return await _context.VehicleRemarks
-            .Include(r => r.CreatedByUser)
+        return await _context
+            .VehicleRemarks.Include(r => r.CreatedByUser)
             .Include(r => r.ResolvedByUser)
             .Where(r => r.vmf_code == vmfCode && !r.is_deleted)
             .OrderByDescending(r => r.date_created)
@@ -38,8 +38,8 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
 
     public async Task<IEnumerable<VehicleRemark>> GetActiveByVehicleAsync(int vmfCode)
     {
-        return await _context.VehicleRemarks
-            .Include(r => r.CreatedByUser)
+        return await _context
+            .VehicleRemarks.Include(r => r.CreatedByUser)
             .Where(r => r.vmf_code == vmfCode && !r.is_deleted && !r.is_resolved)
             .OrderByDescending(r => r.date_created)
             .ToListAsync();
@@ -47,8 +47,8 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
 
     public async Task<VehicleRemark?> GetLatestActiveByVehicleAsync(int vmfCode)
     {
-        return await _context.VehicleRemarks
-            .Include(r => r.CreatedByUser)
+        return await _context
+            .VehicleRemarks.Include(r => r.CreatedByUser)
             .Where(r => r.vmf_code == vmfCode && !r.is_deleted && !r.is_resolved)
             .OrderByDescending(r => r.date_created)
             .FirstOrDefaultAsync();
@@ -56,8 +56,8 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
 
     public async Task<IEnumerable<VehicleRemark>> GetAllActiveAsync()
     {
-        return await _context.VehicleRemarks
-            .Include(r => r.Vehicle)
+        return await _context
+            .VehicleRemarks.Include(r => r.Vehicle)
             .Include(r => r.CreatedByUser)
             .Where(r => !r.is_deleted && !r.is_resolved)
             .OrderByDescending(r => r.date_created)
@@ -78,11 +78,16 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
             ?? throw new InvalidOperationException("Failed to retrieve created vehicle remark");
     }
 
-    public async Task<VehicleRemark> ResolveAsync(int remarkId, int resolvedByUserId, string? resolutionNotes)
+    public async Task<VehicleRemark> ResolveAsync(
+        int remarkId,
+        int resolvedByUserId,
+        string? resolutionNotes
+    )
     {
-        var remark = await _context.VehicleRemarks
-            .FirstOrDefaultAsync(r => r.remark_id == remarkId && !r.is_deleted)
-            ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
+        var remark =
+            await _context.VehicleRemarks.FirstOrDefaultAsync(r =>
+                r.remark_id == remarkId && !r.is_deleted
+            ) ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
 
         if (remark.is_resolved)
             throw new InvalidOperationException($"Remark {remarkId} is already resolved.");
@@ -102,9 +107,10 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
 
     public async Task DeleteAsync(int remarkId, int currentUserId)
     {
-        var remark = await _context.VehicleRemarks
-            .FirstOrDefaultAsync(r => r.remark_id == remarkId && !r.is_deleted)
-            ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
+        var remark =
+            await _context.VehicleRemarks.FirstOrDefaultAsync(r =>
+                r.remark_id == remarkId && !r.is_deleted
+            ) ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
 
         remark.is_deleted = true;
         remark.date_updated = DateTime.UtcNow;

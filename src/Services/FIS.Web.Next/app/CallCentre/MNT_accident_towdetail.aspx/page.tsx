@@ -27,7 +27,9 @@ function getPositiveInt(value: string) {
 }
 
 function hasRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function apiErrorMessage(error: unknown) {
@@ -41,7 +43,9 @@ function apiErrorMessage(error: unknown) {
 function AccessRestricted() {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">Access restricted</p>
       <h2>You do not have permission to capture call centre incidents.</h2>
       <p className="muted-copy">This page requires the Call Centre role.</p>
@@ -74,7 +78,11 @@ function TowingForm({
           <h2 id="accident-tow-title">Capture Towing Details</h2>
         </div>
       </div>
-      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
       <form action={saveAccidentTowingAction} className="form-stack">
         <input name="ccVMF" type="hidden" value={vmfCode} />
         <input name="cccode" type="hidden" value={callCentreCode} />
@@ -86,7 +94,12 @@ function TowingForm({
         <input name="xtrssite" type="hidden" value={call.transportOfficerSite ?? ""} />
         <div className="field">
           <label htmlFor="accident-tow-problem">Vehicle Problem</label>
-          <input id="accident-tow-problem" name="txtDamage" maxLength={60} defaultValue={damageDescription} />
+          <input
+            id="accident-tow-problem"
+            name="txtDamage"
+            maxLength={60}
+            defaultValue={damageDescription}
+          />
         </div>
         <div className="field">
           <label htmlFor="accident-tow-truck">Road Assistance Company</label>
@@ -94,7 +107,8 @@ function TowingForm({
             <option value="">Select assistance company</option>
             {towTrucks.map((towTruck) => (
               <option key={towTruck.code} value={towTruck.code}>
-                {towTruck.name ?? `Company ${towTruck.code}`}{towTruck.telephone ? ` (${towTruck.telephone})` : ""}
+                {towTruck.name ?? `Company ${towTruck.code}`}
+                {towTruck.telephone ? ` (${towTruck.telephone})` : ""}
               </option>
             ))}
           </select>
@@ -102,11 +116,21 @@ function TowingForm({
         <div className="field-grid">
           <div className="field">
             <label htmlFor="accident-tow-contact-name">Contact Person Name</label>
-            <input id="accident-tow-contact-name" name="xconname" maxLength={30} defaultValue={call.transportOfficerName ?? ""} />
+            <input
+              id="accident-tow-contact-name"
+              name="xconname"
+              maxLength={30}
+              defaultValue={call.transportOfficerName ?? ""}
+            />
           </div>
           <div className="field">
             <label htmlFor="accident-tow-contact-tel">Contact Person Tel</label>
-            <input id="accident-tow-contact-tel" name="xcontel" maxLength={20} defaultValue={call.transportOfficerTel ?? ""} />
+            <input
+              id="accident-tow-contact-tel"
+              name="xcontel"
+              maxLength={20}
+              defaultValue={call.transportOfficerTel ?? ""}
+            />
           </div>
         </div>
         <div className="field">
@@ -114,8 +138,12 @@ function TowingForm({
           <input id="accident-tow-remarks" name="xrem" maxLength={50} />
         </div>
         <div className="button-row">
-          <button className="button button-primary" type="submit">Submit</button>
-          <Link className="button button-secondary" href="/CallCentre/MNT_Call_Centre.aspx">Cancel</Link>
+          <button className="button button-primary" type="submit">
+            Submit
+          </button>
+          <Link className="button button-secondary" href="/CallCentre/MNT_Call_Centre.aspx">
+            Cancel
+          </Link>
         </div>
       </form>
     </section>
@@ -133,15 +161,29 @@ export default async function LegacyAccidentTowDetailPage({
   }
 
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/CallCentre/MNT_accident_towdetail.aspx" /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath="/CallCentre/MNT_accident_towdetail.aspx" />
+      </main>
+    );
   }
 
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><h2>The sign-in service is temporarily unavailable.</h2></section></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <section className="vehicle-status-card" role="alert">
+          <h2>The sign-in service is temporarily unavailable.</h2>
+        </section>
+      </main>
+    );
   }
 
   if (!hasRole(session.roles)) {
-    return <main className="page-shell vehicle-page-shell"><AccessRestricted /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <AccessRestricted />
+      </main>
+    );
   }
 
   const values = await searchParams;
@@ -155,7 +197,9 @@ export default async function LegacyAccidentTowDetailPage({
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-status-card" role="alert">
           <h2>The accident reference is missing.</h2>
-          <Link className="button button-secondary" href="/CallCentre/MNT_Call_Centre.aspx">Back to Call Centre</Link>
+          <Link className="button button-secondary" href="/CallCentre/MNT_Call_Centre.aspx">
+            Back to Call Centre
+          </Link>
         </section>
       </main>
     );
@@ -182,9 +226,15 @@ export default async function LegacyAccidentTowDetailPage({
             <h1 id="accident-tow-page-title">Accident Towing Details</h1>
             <p>Complete the towing request created by the accident workflow.</p>
           </div>
-          <Link className="button button-secondary" href="/CallCentre/MNT_Call_Centre.aspx">Back to Call Centre</Link>
+          <Link className="button button-secondary" href="/CallCentre/MNT_Call_Centre.aspx">
+            Back to Call Centre
+          </Link>
         </header>
-        {loadError ? <section className="vehicle-status-card" role="alert"><h2>{loadError}</h2></section> : null}
+        {loadError ? (
+          <section className="vehicle-status-card" role="alert">
+            <h2>{loadError}</h2>
+          </section>
+        ) : null}
         {!loadError && call ? (
           <TowingForm
             call={call}

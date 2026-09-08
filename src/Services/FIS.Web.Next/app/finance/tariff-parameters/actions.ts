@@ -17,8 +17,10 @@ function resultPath(year: string, result: string, message: string) {
 
 function apiMessage(error: unknown) {
   if (error instanceof FinanceApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return "The Finance service is temporarily unavailable. Please try again.";
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return "The Finance service is temporarily unavailable. Please try again.";
     return error.message;
   }
   return "The tariff parameter operation could not be completed.";
@@ -36,18 +38,38 @@ function responseMessage(value: unknown, year: string, operation: string) {
 export async function updateTariffParametersAction(formData: FormData) {
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
-  if (session.status !== "authenticated") redirect(resultPath("", "error", "The sign-in service is temporarily unavailable. Please try again."));
-  if (!hasTariffApproverRole(session.roles)) redirect(resultPath("", "forbidden", "Your account does not have permission to approve or reject tariff parameters."));
+  if (session.status !== "authenticated")
+    redirect(
+      resultPath("", "error", "The sign-in service is temporarily unavailable. Please try again."),
+    );
+  if (!hasTariffApproverRole(session.roles))
+    redirect(
+      resultPath(
+        "",
+        "forbidden",
+        "Your account does not have permission to approve or reject tariff parameters.",
+      ),
+    );
 
   const year = text(formData, "year");
   const operation = text(formData, "operation").toLowerCase();
-  if (!/^\d{4}$/.test(year) || !["approve", "reject"].includes(operation)) redirect(resultPath(year, "error", "The tariff parameter operation is invalid."));
+  if (!/^\d{4}$/.test(year) || !["approve", "reject"].includes(operation))
+    redirect(resultPath(year, "error", "The tariff parameter operation is invalid."));
 
   let result: unknown;
   try {
-    result = await runFinanceAction(`api/finance/tariff-parameters/${encodeURIComponent(year)}/${operation}`, {});
+    result = await runFinanceAction(
+      `api/finance/tariff-parameters/${encodeURIComponent(year)}/${operation}`,
+      {},
+    );
   } catch (error) {
     redirect(resultPath(year, "error", apiMessage(error)));
   }
-  redirect(resultPath(year, "success", responseMessage(result, year, operation === "approve" ? "approved" : "rejected")));
+  redirect(
+    resultPath(
+      year,
+      "success",
+      responseMessage(result, year, operation === "approve" ? "approved" : "rejected"),
+    ),
+  );
 }

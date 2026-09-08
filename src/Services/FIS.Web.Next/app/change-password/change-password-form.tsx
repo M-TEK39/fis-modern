@@ -18,8 +18,15 @@ function SubmitButton() {
   );
 }
 
-export default function ChangePasswordForm({ passwordChangeRequired }: { passwordChangeRequired: boolean }) {
-  const [state, formAction] = useActionState<ChangePasswordActionState, FormData>(changePasswordAction, initialState);
+export default function ChangePasswordForm({
+  passwordChangeRequired,
+}: {
+  passwordChangeRequired: boolean;
+}) {
+  const [state, formAction] = useActionState<ChangePasswordActionState, FormData>(
+    changePasswordAction,
+    initialState,
+  );
 
   if (state.status === "success") {
     return (

@@ -28,7 +28,8 @@ export type VehicleSourcePage = {
   capabilities: VehicleSourceCapabilities;
 };
 
-export type VehicleSourceApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "conflict";
+export type VehicleSourceApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "conflict";
 
 export class VehicleSourceApiError extends Error {
   constructor(
@@ -154,7 +155,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
     }
 
     if (response.status === 409) {
-      throw new VehicleSourceApiError("conflict", await getErrorMessage(response, "The vehicle source could not be saved."));
+      throw new VehicleSourceApiError(
+        "conflict",
+        await getErrorMessage(response, "The vehicle source could not be saved."),
+      );
     }
 
     if (!response.ok) {
@@ -195,13 +199,17 @@ export async function getVehicleSources(): Promise<VehicleSourcePage> {
   try {
     payload = await response.json();
   } catch {
-    throw new VehicleSourceApiError("invalid-response", "The FIS API returned invalid vehicle source data.");
+    throw new VehicleSourceApiError(
+      "invalid-response",
+      "The FIS API returned invalid vehicle source data.",
+    );
   }
 
   const items = getCollection(payload)
     .map(mapSource)
     .filter((source): source is VehicleSource => source !== null);
-  const capabilities = isRecord(payload) && isRecord(payload.capabilities) ? payload.capabilities : {};
+  const capabilities =
+    isRecord(payload) && isRecord(payload.capabilities) ? payload.capabilities : {};
 
   return {
     items,

@@ -2,10 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import {
-  searchVehiclesAgainstApi,
-  VehicleCreateApiError,
-} from "@/lib/api-vehicle-create";
+import { searchVehiclesAgainstApi, VehicleCreateApiError } from "@/lib/api-vehicle-create";
 import {
   updateVehicleAgainstApi,
   VehicleEditApiError,
@@ -32,7 +29,12 @@ function getText(formData: FormData, key: string) {
 
 function getInteger(formData: FormData, key: string, label: string): number;
 function getInteger(formData: FormData, key: string, label: string, required: false): number | null;
-function getInteger(formData: FormData, key: string, label: string, required = true): number | null {
+function getInteger(
+  formData: FormData,
+  key: string,
+  label: string,
+  required = true,
+): number | null {
   const value = getText(formData, key);
   if (!value && !required) {
     return null;
@@ -56,7 +58,10 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -66,15 +71,24 @@ async function authorizeVehicleEdit() {
   const session = await getSession();
 
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
 
   if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return { ok: false as const, message: "You do not have permission to maintain Vehicle Master records." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain Vehicle Master records.",
+    };
   }
 
   return { ok: true as const };
@@ -120,7 +134,10 @@ export async function searchVehicleEditAction(
       return { status: "error", message: searchErrorMessage(error), results: [] };
     }
 
-    console.error("FIS vehicle edit search failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle edit search failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "error", message: "Vehicle search failed. Please try again.", results: [] };
   }
 }
@@ -133,7 +150,9 @@ function buildUpdateRequest(formData: FormData): VehicleUpdateRequest {
   const colour = getText(formData, "colour");
 
   if (!fleetNumber || !registrationNumber || !engineNumber || !chassisNumber || !colour) {
-    throw new VehicleFormValidationError("Complete all required vehicle identity and colour fields.");
+    throw new VehicleFormValidationError(
+      "Complete all required vehicle identity and colour fields.",
+    );
   }
 
   if (engineNumber === chassisNumber) {
@@ -166,7 +185,9 @@ function buildUpdateRequest(formData: FormData): VehicleUpdateRequest {
     year < 1900 ||
     year > new Date().getFullYear() + 1
   ) {
-    throw new VehicleFormValidationError("Enter valid reference values and non-negative vehicle measurements.");
+    throw new VehicleFormValidationError(
+      "Enter valid reference values and non-negative vehicle measurements.",
+    );
   }
 
   return {
@@ -184,7 +205,8 @@ function buildUpdateRequest(formData: FormData): VehicleUpdateRequest {
     gvm,
     year_manufactured: year,
     colour,
-    ifms_vehicle_register_number: getText(formData, "ifmsVehicleRegisterNumber").toUpperCase() || null,
+    ifms_vehicle_register_number:
+      getText(formData, "ifmsVehicleRegisterNumber").toUpperCase() || null,
     natis_model_number: getText(formData, "natisModelNumber").toUpperCase() || null,
     recalculate_tariff: formData.get("recalculateTariff") === "on",
   };
@@ -238,7 +260,10 @@ export async function updateVehicleAction(
       return { status: "error", message: updateErrorMessage(error) };
     }
 
-    console.error("FIS vehicle update failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle update failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "error", message: "Vehicle update failed. Please try again." };
   }
 

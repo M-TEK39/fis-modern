@@ -26,7 +26,10 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -102,11 +105,16 @@ function toEditReferenceData(
     models,
     types,
     statuses,
-    locations: referenceData.locations.map((location) => ({ code: location.code, label: location.name })),
+    locations: referenceData.locations.map((location) => ({
+      code: location.code,
+      label: location.name,
+    })),
   };
 }
 
-function toEditFormData(vehicle: Awaited<ReturnType<typeof getVehicleForEdit>>): VehicleEditFormData {
+function toEditFormData(
+  vehicle: Awaited<ReturnType<typeof getVehicleForEdit>>,
+): VehicleEditFormData {
   return {
     vmfCode: vehicle.vmfCode,
     fleetNumber: vehicle.fleetNumber,
@@ -174,7 +182,9 @@ export default async function VehicleEditPage({ params }: VehicleEditPageProps) 
           <header className="vehicle-page-header">
             <div>
               <p className="eyebrow">Vehicle master maintenance</p>
-              <h1 id="vehicle-edit-title">Edit Vehicle {vehicle.fleetNumber || `#${vehicle.vmfCode}`}</h1>
+              <h1 id="vehicle-edit-title">
+                Edit Vehicle {vehicle.fleetNumber || `#${vehicle.vmfCode}`}
+              </h1>
               <p>Update the supported vehicle master fields, then return to the edit search.</p>
             </div>
             <Link className="button button-secondary" href="/vehicles">
@@ -183,7 +193,11 @@ export default async function VehicleEditPage({ params }: VehicleEditPageProps) 
           </header>
           <VehicleEditFormClient
             vehicle={toEditFormData(vehicle)}
-            referenceData={toEditReferenceData(referenceData, vehicle.vehicleStatusCode, vehicle.statusDescription)}
+            referenceData={toEditReferenceData(
+              referenceData,
+              vehicle.vehicleStatusCode,
+              vehicle.statusDescription,
+            )}
             updateAction={updateVehicleAction}
           />
           <div className="vehicle-footer-actions">
@@ -215,7 +229,10 @@ export default async function VehicleEditPage({ params }: VehicleEditPageProps) 
       );
     }
 
-    console.error("FIS vehicle edit request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle edit request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return (
       <main className="page-shell vehicle-page-shell">
         <ApiUnavailable />

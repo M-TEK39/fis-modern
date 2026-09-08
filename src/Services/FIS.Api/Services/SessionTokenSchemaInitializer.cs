@@ -9,7 +9,8 @@ namespace FIS.Api.Services;
 /// </summary>
 public class SessionTokenSchemaInitializer : IHostedService
 {
-    private const string EnsureSchemaSql = @"
+    private const string EnsureSchemaSql =
+        @"
 IF OBJECT_ID('dbo.fis_session_tokens', 'U') IS NULL
 BEGIN
     CREATE TABLE dbo.fis_session_tokens (
@@ -27,7 +28,10 @@ END";
     private readonly IServiceProvider _services;
     private readonly ILogger<SessionTokenSchemaInitializer> _logger;
 
-    public SessionTokenSchemaInitializer(IServiceProvider services, ILogger<SessionTokenSchemaInitializer> logger)
+    public SessionTokenSchemaInitializer(
+        IServiceProvider services,
+        ILogger<SessionTokenSchemaInitializer> logger
+    )
     {
         _services = services;
         _logger = logger;
@@ -44,7 +48,10 @@ END";
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to ensure fis_session_tokens table exists. Login will fail until the table is created manually via scripts/sql/001_fis_session_tokens.sql");
+            _logger.LogError(
+                ex,
+                "Failed to ensure fis_session_tokens table exists. Login will fail until the table is created manually via scripts/sql/001_fis_session_tokens.sql"
+            );
             // Don't crash the app — let it start so other endpoints work; only login is affected
         }
     }

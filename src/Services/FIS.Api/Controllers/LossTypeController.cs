@@ -14,9 +14,7 @@ public class LossTypeController : BaseApiController
     private readonly ILogger<LossTypeController> _logger;
     private readonly ILossTypeRepository _repository;
 
-    public LossTypeController(
-        ILogger<LossTypeController> logger,
-        ILossTypeRepository repository)
+    public LossTypeController(ILogger<LossTypeController> logger, ILossTypeRepository repository)
     {
         _logger = logger;
         _repository = repository;
@@ -83,11 +81,15 @@ public class LossTypeController : BaseApiController
                 return BadRequest(new { message = validationError });
             }
 
-            var created = await _repository.CreateAsync(new LossType
-            {
-                loss_description = request.Description!.Trim()
-            }, GetCurrentUserId());
-            return CreatedAtAction(nameof(GetByCode), new { code = created.loss_type_code }, MapToDto(created));
+            var created = await _repository.CreateAsync(
+                new LossType { loss_description = request.Description!.Trim() },
+                GetCurrentUserId()
+            );
+            return CreatedAtAction(
+                nameof(GetByCode),
+                new { code = created.loss_type_code },
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -97,7 +99,10 @@ public class LossTypeController : BaseApiController
     }
 
     [HttpPut("{code:int}")]
-    public async Task<ActionResult<LossTypeDto>> Update(short code, [FromBody] UpdateLossTypeDto request)
+    public async Task<ActionResult<LossTypeDto>> Update(
+        short code,
+        [FromBody] UpdateLossTypeDto request
+    )
     {
         try
         {
@@ -142,17 +147,25 @@ public class LossTypeController : BaseApiController
             var deleteCheck = await _repository.GetDeleteCheckAsync(code);
             if (!deleteCheck.CheckAvailable)
             {
-                return StatusCode(503, new { message = "Loss type dependencies could not be verified, so the loss type was not deleted." });
+                return StatusCode(
+                    503,
+                    new
+                    {
+                        message = "Loss type dependencies could not be verified, so the loss type was not deleted.",
+                    }
+                );
             }
 
             if (!deleteCheck.CanDelete)
             {
-                return Conflict(new
-                {
-                    message = "Delete or change the linked loss records before deleting this loss description.",
-                    lossCount = deleteCheck.LossCount,
-                    losses = deleteCheck.Losses
-                });
+                return Conflict(
+                    new
+                    {
+                        message = "Delete or change the linked loss records before deleting this loss description.",
+                        lossCount = deleteCheck.LossCount,
+                        losses = deleteCheck.Losses,
+                    }
+                );
             }
 
             await _repository.DeleteAsync(code, GetCurrentUserId());
@@ -165,8 +178,8 @@ public class LossTypeController : BaseApiController
         }
     }
 
-    private static LossTypeDto MapToDto(LossType type)
-        => new()
+    private static LossTypeDto MapToDto(LossType type) =>
+        new()
         {
             LossTypeCode = type.loss_type_code,
             LossCode = type.loss_type_code,
@@ -175,11 +188,11 @@ public class LossTypeController : BaseApiController
             DateUpdated = type.date_updated,
             CreatedByUserCode = type.created_by_user_code,
             ModifiedByUserCode = type.modified_by_user_code,
-            IsDeleted = type.is_deleted
+            IsDeleted = type.is_deleted,
         };
 
-    private static string? ValidateDescription(string? description)
-        => string.IsNullOrWhiteSpace(description) || description.Trim().Length > 30
+    private static string? ValidateDescription(string? description) =>
+        string.IsNullOrWhiteSpace(description) || description.Trim().Length > 30
             ? "Loss description is required and must be 30 characters or fewer."
             : null;
 }
@@ -223,6 +236,4 @@ public class CreateLossTypeDto
     public string? Description { get; set; }
 }
 
-public class UpdateLossTypeDto : CreateLossTypeDto
-{
-}
+public class UpdateLossTypeDto : CreateLossTypeDto { }

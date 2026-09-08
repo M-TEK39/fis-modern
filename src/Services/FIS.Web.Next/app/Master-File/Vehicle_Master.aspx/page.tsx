@@ -5,5 +5,7 @@ type LegacyVehicleMasterPageProps = {
 };
 
 export default function LegacyVehicleMasterPage({ searchParams }: LegacyVehicleMasterPageProps) {
-  return <VehicleMasterPage routePath="/Master-File/Vehicle_Master.aspx" searchParams={searchParams} />;
+  return (
+    <VehicleMasterPage routePath="/Master-File/Vehicle_Master.aspx" searchParams={searchParams} />
+  );
 }

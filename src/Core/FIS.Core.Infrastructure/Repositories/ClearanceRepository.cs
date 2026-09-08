@@ -27,7 +27,7 @@ public class ClearanceRepository : IClearanceRepository
         "Merchant_code",
         "Clearance_amount",
         "clearance_comment",
-        "clearance_kilo"
+        "clearance_kilo",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -36,7 +36,7 @@ public class ClearanceRepository : IClearanceRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private static readonly string[] RequiredColumns =
@@ -48,7 +48,7 @@ public class ClearanceRepository : IClearanceRepository
         "Merchant_code",
         "Clearance_amount",
         "clearance_comment",
-        "clearance_kilo"
+        "clearance_kilo",
     ];
 
     private readonly FisDbContext _context;
@@ -58,19 +58,21 @@ public class ClearanceRepository : IClearanceRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Clearance?> GetByIdAsync(int clearanceCode)
-        => (await QueryAsync(
-            "[clearance_code] = @clearanceCode",
-            command => AddParameter(command, "@clearanceCode", DbType.Int32, clearanceCode)))
-            .SingleOrDefault();
+    public async Task<Clearance?> GetByIdAsync(int clearanceCode) =>
+        (
+            await QueryAsync(
+                "[clearance_code] = @clearanceCode",
+                command => AddParameter(command, "@clearanceCode", DbType.Int32, clearanceCode)
+            )
+        ).SingleOrDefault();
 
-    public async Task<IEnumerable<Clearance>> GetAllAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<Clearance>> GetAllAsync() => await QueryAsync();
 
-    public async Task<IEnumerable<Clearance>> GetByVehicleAsync(int vmfCode)
-        => await QueryAsync(
+    public async Task<IEnumerable<Clearance>> GetByVehicleAsync(int vmfCode) =>
+        await QueryAsync(
             "[vmf_code] = @vmfCode",
-            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode));
+            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
+        );
 
     public async Task<ClearanceLookupResult?> LookupVehicleAsync(string fleetOrReg)
     {
@@ -109,7 +111,7 @@ public class ClearanceRepository : IClearanceRepository
             {
                 vmf_code = ReadInt32(reader, "vmf_code") ?? 0,
                 fleet_number = ReadString(reader, "fleet_number"),
-                registration_number = ReadString(reader, "registration_number")
+                registration_number = ReadString(reader, "registration_number"),
             };
         }
         finally
@@ -124,11 +126,13 @@ public class ClearanceRepository : IClearanceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The report query is composed only from fixed legacy columns, fixed table names, and allowlisted optional filters; values are parameters.")]
+        Justification = "The report query is composed only from fixed legacy columns, fixed table names, and allowlisted optional filters; values are parameters."
+    )]
     public async Task<IReadOnlyList<ClearanceReportRow>> GetUniversalReportAsync(
         DateTime? startDate,
         DateTime? endDate,
-        int? merchantCode)
+        int? merchantCode
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
@@ -146,7 +150,7 @@ public class ClearanceRepository : IClearanceRepository
             var conditions = new List<string>
             {
                 "c.[vmf_code] > 1",
-                GetActiveFilter("c", availableColumns)
+                GetActiveFilter("c", availableColumns),
             };
 
             if (startDate.HasValue)
@@ -185,15 +189,17 @@ public class ClearanceRepository : IClearanceRepository
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
-                results.Add(new ClearanceReportRow
-                {
-                    clearance_code = ReadInt32(reader, "clearance_code"),
-                    fleet_number = ReadString(reader, "fleet_number"),
-                    clearance_comment = ReadString(reader, "clearance_comment"),
-                    merchant_name = ReadString(reader, "Merchant_Name"),
-                    clearance_number = ReadInt32(reader, "clearance_number"),
-                    clearance_date = ReadDateTime(reader, "Clearance_date")
-                });
+                results.Add(
+                    new ClearanceReportRow
+                    {
+                        clearance_code = ReadInt32(reader, "clearance_code"),
+                        fleet_number = ReadString(reader, "fleet_number"),
+                        clearance_comment = ReadString(reader, "clearance_comment"),
+                        merchant_name = ReadString(reader, "Merchant_Name"),
+                        clearance_number = ReadInt32(reader, "clearance_number"),
+                        clearance_date = ReadDateTime(reader, "Clearance_date"),
+                    }
+                );
             }
 
             return results;
@@ -217,15 +223,30 @@ public class ClearanceRepository : IClearanceRepository
             .ToList();
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_created", "@dateCreated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "created_by_user_code",
             "@createdByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            false
+        );
 
         clearance.clearance_code = await ExecuteInsertAsync(values);
         clearance.date_created = now;
@@ -242,7 +263,8 @@ public class ClearanceRepository : IClearanceRepository
         if (existing == null)
         {
             throw new InvalidOperationException(
-                $"Clearance with clearance_code {clearance.clearance_code} not found");
+                $"Clearance with clearance_code {clearance.clearance_code} not found"
+            );
         }
 
         var availableColumns = await GetAvailableColumnsAsync();
@@ -251,15 +273,30 @@ public class ClearanceRepository : IClearanceRepository
             .ToList();
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "modified_by_user_code",
             "@modifiedByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, clearance.is_deleted);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            clearance.is_deleted
+        );
 
         await ExecuteUpdateAsync(clearance.clearance_code, values, availableColumns);
         clearance.date_created = existing.date_created;
@@ -272,7 +309,8 @@ public class ClearanceRepository : IClearanceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "DeleteAsync selects between fixed legacy SQL statements and uses a parameter for the record identifier.")]
+        Justification = "DeleteAsync selects between fixed legacy SQL statements and uses a parameter for the record identifier."
+    )]
     public async Task DeleteAsync(int clearanceCode, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -303,7 +341,8 @@ public class ClearanceRepository : IClearanceRepository
                         command,
                         "@modifiedByUserCode",
                         DbType.Int32,
-                        currentUserId > 0 ? currentUserId : null);
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
                 command.CommandText = $"""
@@ -336,10 +375,12 @@ public class ClearanceRepository : IClearanceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters.")]
+        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters."
+    )]
     private async Task<List<Clearance>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
@@ -355,7 +396,11 @@ public class ClearanceRepository : IClearanceRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = LegacyColumns
                 .Select(column => GetColumnProjection(availableColumns, column))
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
                 .ToArray();
             var conditions = new List<string>();
             if (!string.IsNullOrWhiteSpace(predicate))
@@ -393,7 +438,8 @@ public class ClearanceRepository : IClearanceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The INSERT statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task<int> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -408,7 +454,10 @@ public class ClearanceRepository : IClearanceRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{TableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[clearance_code]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
@@ -427,11 +476,13 @@ public class ClearanceRepository : IClearanceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The UPDATE statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task ExecuteUpdateAsync(
         int clearanceCode,
         IReadOnlyList<WriteValue> values,
-        IReadOnlySet<string> availableColumns)
+        IReadOnlySet<string> availableColumns
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -446,7 +497,10 @@ public class ClearanceRepository : IClearanceRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{TableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [clearance_code] = @clearanceCode
                   AND {GetActiveFilter(null, availableColumns)}
                 """;
@@ -492,11 +546,14 @@ public class ClearanceRepository : IClearanceRepository
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"The required clearance compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                    $"The required clearance compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             return columns;
@@ -512,8 +569,9 @@ public class ClearanceRepository : IClearanceRepository
 
     private static Clearance MapClearance(
         DbDataReader reader,
-        IReadOnlySet<string> availableColumns)
-        => new()
+        IReadOnlySet<string> availableColumns
+    ) =>
+        new()
         {
             clearance_code = ReadInt32(reader, "clearance_code") ?? 0,
             vmf_code = ReadInt32(reader, "vmf_code") ?? 0,
@@ -523,25 +581,38 @@ public class ClearanceRepository : IClearanceRepository
             Clearance_amount = ReadDecimal(reader, "Clearance_amount"),
             clearance_comment = ReadString(reader, "clearance_comment"),
             clearance_kilo = ReadInt32(reader, "clearance_kilo"),
-            date_created = ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
+            date_created =
+                ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
                 ?? ReadDateTime(reader, "Clearance_date")
                 ?? DateTime.MinValue,
             date_updated = ReadDateTimeIfAvailable(reader, availableColumns, "date_updated"),
-            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
-            modified_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "modified_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "created_by_user_code"
+            ),
+            modified_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "modified_by_user_code"
+            ),
+            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false,
         };
 
-    private static List<WriteValue> BuildLegacyWriteValues(Clearance clearance)
-        =>
+    private static List<WriteValue> BuildLegacyWriteValues(Clearance clearance) =>
         [
             new("vmf_code", "@vmfCode", DbType.Int32, clearance.vmf_code),
             new("clearance_number", "@clearanceNumber", DbType.Int32, clearance.clearance_number),
             new("Clearance_date", "@clearanceDate", DbType.DateTime2, clearance.Clearance_date),
             new("Merchant_code", "@merchantCode", DbType.Int32, clearance.Merchant_code),
             new("Clearance_amount", "@clearanceAmount", DbType.Decimal, clearance.Clearance_amount),
-            new("clearance_comment", "@clearanceComment", DbType.String, clearance.clearance_comment),
-            new("clearance_kilo", "@clearanceKilo", DbType.Int32, clearance.clearance_kilo)
+            new(
+                "clearance_comment",
+                "@clearanceComment",
+                DbType.String,
+                clearance.clearance_comment
+            ),
+            new("clearance_kilo", "@clearanceKilo", DbType.Int32, clearance.clearance_kilo),
         ];
 
     private static void AddOptionalValue(
@@ -550,7 +621,8 @@ public class ClearanceRepository : IClearanceRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -595,29 +667,35 @@ public class ClearanceRepository : IClearanceRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "sql_variant"
+            _ => "sql_variant",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetColumnProjection(IReadOnlySet<string> columns, string column)
-        => columns.Contains(column)
+    private static string GetColumnProjection(IReadOnlySet<string> columns, string column) =>
+        columns.Contains(column)
             ? $"[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetLegacySqlType(column)}) AS [{column}]";
 
-    private static string GetLegacySqlType(string column)
-        => column switch
+    private static string GetLegacySqlType(string column) =>
+        column switch
         {
-            "clearance_code" or "vmf_code" or "clearance_number" or "Merchant_code" or "clearance_kilo" => "int",
+            "clearance_code"
+            or "vmf_code"
+            or "clearance_number"
+            or "Merchant_code"
+            or "clearance_kilo" => "int",
             "Clearance_date" => "datetime2",
             "Clearance_amount" => "decimal(18, 2)",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
 
     private static string? ReadString(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
     }
 
     private static DateTime? ReadDateTime(DbDataReader reader, string column)
@@ -629,8 +707,8 @@ public class ClearanceRepository : IClearanceRepository
     private static DateTime? ReadDateTimeIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadDateTime(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadDateTime(reader, column) : null;
 
     private static int? ReadInt32(DbDataReader reader, string column)
     {
@@ -641,8 +719,8 @@ public class ClearanceRepository : IClearanceRepository
     private static int? ReadInt32IfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadInt32(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadInt32(reader, column) : null;
 
     private static decimal? ReadDecimal(DbDataReader reader, string column)
     {
@@ -653,7 +731,8 @@ public class ClearanceRepository : IClearanceRepository
     private static bool? ReadBooleanIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
+        string column
+    )
     {
         if (!columns.Contains(column))
         {

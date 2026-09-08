@@ -25,12 +25,20 @@ const initialUpdateState: VehicleBarcodeUpdateActionState = { status: "idle" };
 
 function SearchSubmitButton() {
   const { pending } = useFormStatus();
-  return <button className="button button-primary" type="submit" disabled={pending}>{pending ? "Searching..." : "Find"}</button>;
+  return (
+    <button className="button button-primary" type="submit" disabled={pending}>
+      {pending ? "Searching..." : "Find"}
+    </button>
+  );
 }
 
 function UpdateSubmitButton() {
   const { pending } = useFormStatus();
-  return <button className="button button-primary" type="submit" disabled={pending}>{pending ? "Updating..." : "Update"}</button>;
+  return (
+    <button className="button button-primary" type="submit" disabled={pending}>
+      {pending ? "Updating..." : "Update"}
+    </button>
+  );
 }
 
 function vehicleLabel(vehicle: VehicleBarcodeVehicle) {
@@ -46,7 +54,8 @@ export default function VehicleBarcodeClient({
   const [selectedVmfCode, setSelectedVmfCode] = useState("");
   const [barcode, setBarcode] = useState("");
 
-  const selectedVehicle = searchState.results.find((vehicle) => String(vehicle.vmfCode) === selectedVmfCode) ?? null;
+  const selectedVehicle =
+    searchState.results.find((vehicle) => String(vehicle.vmfCode) === selectedVmfCode) ?? null;
 
   useEffect(() => {
     setSelectedVmfCode("");
@@ -72,8 +81,12 @@ export default function VehicleBarcodeClient({
         <form action={searchFormAction} className="vehicle-quick-search-form">
           <fieldset className="field">
             <legend>Number type</legend>
-            <label><input type="radio" name="searchMode" value="GG" defaultChecked /> GG</label>
-            <label><input type="radio" name="searchMode" value="GP" /> GP</label>
+            <label>
+              <input type="radio" name="searchMode" value="GG" defaultChecked /> GG
+            </label>
+            <label>
+              <input type="radio" name="searchMode" value="GP" /> GP
+            </label>
           </fieldset>
           <div className="field">
             <label htmlFor="vehicleBarcodeSearch">GG number or GP number</label>
@@ -87,20 +100,39 @@ export default function VehicleBarcodeClient({
             />
           </div>
           <div className="vehicle-create-actions vehicle-quick-search-actions">
-            <Link className="button button-secondary" href="/vehicles/barcode">Clear</Link>
+            <Link className="button button-secondary" href="/vehicles/barcode">
+              Clear
+            </Link>
             <SearchSubmitButton />
           </div>
         </form>
 
-        {searchState.status === "error" && searchState.message ? <div className="notice notice-error" role="alert"><span aria-hidden="true">!</span><span>{searchState.message}</span></div> : null}
-        {searchState.status === "success" && searchState.message ? <p className="muted-copy" role="status">{searchState.message}</p> : null}
+        {searchState.status === "error" && searchState.message ? (
+          <div className="notice notice-error" role="alert">
+            <span aria-hidden="true">!</span>
+            <span>{searchState.message}</span>
+          </div>
+        ) : null}
+        {searchState.status === "success" && searchState.message ? (
+          <p className="muted-copy" role="status">
+            {searchState.message}
+          </p>
+        ) : null}
 
         {searchState.results.length > 0 ? (
           <div className="field vehicle-barcode-match-field">
             <label htmlFor="vehicleBarcodeMatch">Vehicle match</label>
-            <select id="vehicleBarcodeMatch" value={selectedVmfCode} onChange={(event) => selectVehicle(event.target.value)}>
+            <select
+              id="vehicleBarcodeMatch"
+              value={selectedVmfCode}
+              onChange={(event) => selectVehicle(event.target.value)}
+            >
               <option value="">Select vehicle...</option>
-              {searchState.results.map((vehicle) => <option key={vehicle.vmfCode} value={vehicle.vmfCode}>{vehicleLabel(vehicle)}</option>)}
+              {searchState.results.map((vehicle) => (
+                <option key={vehicle.vmfCode} value={vehicle.vmfCode}>
+                  {vehicleLabel(vehicle)}
+                </option>
+              ))}
             </select>
           </div>
         ) : null}
@@ -118,18 +150,39 @@ export default function VehicleBarcodeClient({
             <input name="vmfCode" type="hidden" value={selectedVehicle.vmfCode} readOnly />
             <div className="field">
               <label htmlFor="vehicleBarcodeFleetNumber">GG number</label>
-              <input id="vehicleBarcodeFleetNumber" type="text" value={selectedVehicle.fleetNumber || "-"} readOnly />
+              <input
+                id="vehicleBarcodeFleetNumber"
+                type="text"
+                value={selectedVehicle.fleetNumber || "-"}
+                readOnly
+              />
             </div>
             <div className="field">
               <label htmlFor="vehicleBarcodeValue">Barcode</label>
-              <input id="vehicleBarcodeValue" name="barcode" type="text" maxLength={50} value={barcode} onChange={(event) => setBarcode(event.target.value)} />
+              <input
+                id="vehicleBarcodeValue"
+                name="barcode"
+                type="text"
+                maxLength={50}
+                value={barcode}
+                onChange={(event) => setBarcode(event.target.value)}
+              />
             </div>
             <div className="vehicle-create-actions">
               <UpdateSubmitButton />
             </div>
           </form>
-          {updateState.status === "error" && updateState.message ? <div className="notice notice-error" role="alert"><span aria-hidden="true">!</span><span>{updateState.message}</span></div> : null}
-          {updateState.status === "success" && updateState.message ? <p className="muted-copy" role="status">{updateState.message}</p> : null}
+          {updateState.status === "error" && updateState.message ? (
+            <div className="notice notice-error" role="alert">
+              <span aria-hidden="true">!</span>
+              <span>{updateState.message}</span>
+            </div>
+          ) : null}
+          {updateState.status === "success" && updateState.message ? (
+            <p className="muted-copy" role="status">
+              {updateState.message}
+            </p>
+          ) : null}
         </section>
       ) : null}
     </div>

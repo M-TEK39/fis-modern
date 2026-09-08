@@ -9,7 +9,22 @@ namespace FIS.Core.Infrastructure.Repositories;
 public class LogbookRepository : ILogbookRepository
 {
     private static readonly string[] ModernRequiredColumns =
-    ["logbookcode", "vmf_code", "begin_num", "end_num", "handout_date", "site_code", "lb_receiver_name", "lb_tel_num", "lb_comment", "date_created", "date_updated", "created_by_user_code", "modified_by_user_code", "is_deleted"];
+    [
+        "logbookcode",
+        "vmf_code",
+        "begin_num",
+        "end_num",
+        "handout_date",
+        "site_code",
+        "lb_receiver_name",
+        "lb_tel_num",
+        "lb_comment",
+        "date_created",
+        "date_updated",
+        "created_by_user_code",
+        "modified_by_user_code",
+        "is_deleted",
+    ];
 
     private readonly FisDbContext _context;
     private readonly LegacyLogbookRepository _legacyRepository;
@@ -26,7 +41,8 @@ public class LogbookRepository : ILogbookRepository
         if (!await IsModernSchemaAvailableAsync())
             return await _legacyRepository.GetByIdAsync(logbookCode);
 
-        return await _context.Set<Logbook>()
+        return await _context
+            .Set<Logbook>()
             .Include(l => l.Vehicle)
             .Include(l => l.Site)
             .FirstOrDefaultAsync(l => l.logbookcode == logbookCode && !l.is_deleted);
@@ -37,7 +53,8 @@ public class LogbookRepository : ILogbookRepository
         if (!await IsModernSchemaAvailableAsync())
             return await _legacyRepository.GetAllAsync();
 
-        return await _context.Set<Logbook>()
+        return await _context
+            .Set<Logbook>()
             .Include(l => l.Vehicle)
             .Include(l => l.Site)
             .Where(l => !l.is_deleted)
@@ -49,7 +66,8 @@ public class LogbookRepository : ILogbookRepository
         if (!await IsModernSchemaAvailableAsync())
             return await _legacyRepository.GetByVehicleAsync(vmfCode);
 
-        return await _context.Set<Logbook>()
+        return await _context
+            .Set<Logbook>()
             .Where(l => l.vmf_code == vmfCode && !l.is_deleted)
             .Include(l => l.Vehicle)
             .Include(l => l.Site)
@@ -61,7 +79,8 @@ public class LogbookRepository : ILogbookRepository
         if (!await IsModernSchemaAvailableAsync())
             return await _legacyRepository.GetBySiteAsync(siteCode);
 
-        return await _context.Set<Logbook>()
+        return await _context
+            .Set<Logbook>()
             .Where(l => l.site_code == siteCode && !l.is_deleted)
             .Include(l => l.Vehicle)
             .Include(l => l.Site)
@@ -93,7 +112,9 @@ public class LogbookRepository : ILogbookRepository
 
         var existing = await _context.Set<Logbook>().FindAsync(logbook.logbookcode);
         if (existing == null)
-            throw new InvalidOperationException($"Logbook with logbookcode {logbook.logbookcode} not found");
+            throw new InvalidOperationException(
+                $"Logbook with logbookcode {logbook.logbookcode} not found"
+            );
 
         _context.Entry(existing).CurrentValues.SetValues(logbook);
         existing.date_updated = DateTime.UtcNow;
@@ -134,7 +155,8 @@ public class LogbookRepository : ILogbookRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = "SELECT [COLUMN_NAME] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table";
+            command.CommandText =
+                "SELECT [COLUMN_NAME] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table";
             AddParameter(command, "@schema", "dbo");
             AddParameter(command, "@table", "logbook");
 
@@ -153,7 +175,11 @@ public class LogbookRepository : ILogbookRepository
         }
     }
 
-    private static void AddParameter(System.Data.Common.DbCommand command, string name, string value)
+    private static void AddParameter(
+        System.Data.Common.DbCommand command,
+        string name,
+        string value
+    )
     {
         var parameter = command.CreateParameter();
         parameter.ParameterName = name;

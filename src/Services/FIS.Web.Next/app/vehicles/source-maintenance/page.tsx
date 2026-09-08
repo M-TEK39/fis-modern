@@ -5,7 +5,11 @@ import { redirect } from "next/navigation";
 import { logoutAction } from "@/app/actions/auth";
 import { saveVehicleSourceAction } from "@/app/vehicles/source-maintenance/actions";
 import VehicleSourceClient from "@/app/vehicles/source-maintenance/vehicle-source-client";
-import { getVehicleSources, VehicleSourceApiError, type VehicleSourcePage } from "@/lib/api-vehicle-sources";
+import {
+  getVehicleSources,
+  VehicleSourceApiError,
+  type VehicleSourcePage,
+} from "@/lib/api-vehicle-sources";
 import SessionRecovery from "@/app/home/session-recovery";
 import { getSession } from "@/lib/session";
 
@@ -34,7 +38,10 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -43,7 +50,9 @@ function hasVehicleManagementPermission(accessLevel?: string) {
 function StatusCard({ title, message }: Readonly<{ title: string; message: string }>) {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">{title}</p>
       <h2>{message}</h2>
     </section>
@@ -62,15 +71,30 @@ export default async function VehicleSourcePage({
   }
 
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={routePath} /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath={routePath} />
+      </main>
+    );
   }
 
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><StatusCard title="API unavailable" message="The vehicle source service is unavailable." /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <StatusCard title="API unavailable" message="The vehicle source service is unavailable." />
+      </main>
+    );
   }
 
   if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return <main className="page-shell vehicle-page-shell"><StatusCard title="Access restricted" message="You do not have permission to maintain vehicle sources." /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <StatusCard
+          title="Access restricted"
+          message="You do not have permission to maintain vehicle sources."
+        />
+      </main>
+    );
   }
 
   let sourcePage: VehicleSourcePage;
@@ -78,11 +102,25 @@ export default async function VehicleSourcePage({
     sourcePage = await getVehicleSources();
   } catch (error) {
     if (error instanceof VehicleSourceApiError && error.reason === "unauthorized") {
-      return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={routePath} /></main>;
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <SessionRecovery returnPath={routePath} />
+        </main>
+      );
     }
 
-    console.error("FIS vehicle source initial load failed", error instanceof Error ? error.message : "unknown error");
-    return <main className="page-shell vehicle-page-shell"><StatusCard title="API unavailable" message="Vehicle source information could not be loaded." /></main>;
+    console.error(
+      "FIS vehicle source initial load failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <StatusCard
+          title="API unavailable"
+          message="Vehicle source information could not be loaded."
+        />
+      </main>
+    );
   }
 
   const query = searchParams ? await searchParams : {};
@@ -97,7 +135,9 @@ export default async function VehicleSourcePage({
             <h1 id="vehicle-source-title">Vehicle Source Maintenance</h1>
             <p>Add or edit vehicle source records.</p>
           </div>
-          <Link className="button button-secondary" href="/vehicles">Vehicle Master</Link>
+          <Link className="button button-secondary" href="/vehicles">
+            Vehicle Master
+          </Link>
         </header>
 
         {saved ? (
@@ -115,8 +155,14 @@ export default async function VehicleSourcePage({
         />
 
         <div className="vehicle-footer-actions">
-          <Link className="button button-secondary" href="/vehicles">Back to Vehicle Master</Link>
-          <form action={logoutAction}><button className="button button-secondary" type="submit">Sign out</button></form>
+          <Link className="button button-secondary" href="/vehicles">
+            Back to Vehicle Master
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
         </div>
       </section>
     </main>

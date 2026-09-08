@@ -23,7 +23,7 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
     [
         "licence_fee_code",
         "licence_description",
-        "licence_fee"
+        "licence_fee",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -32,7 +32,7 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private readonly FisDbContext _context;
@@ -47,11 +47,14 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         var modern = await GetSourceAsync(ModernTableName);
         if (modern is not null)
         {
-            var result = (await QueryAsync(
-                modern,
-                "[licence_fee_code] = @licenceFeeCode",
-                command => AddParameter(command, "@licenceFeeCode", DbType.Int16, licenceFeeCode)))
-                .SingleOrDefault();
+            var result = (
+                await QueryAsync(
+                    modern,
+                    "[licence_fee_code] = @licenceFeeCode",
+                    command =>
+                        AddParameter(command, "@licenceFeeCode", DbType.Int16, licenceFeeCode)
+                )
+            ).SingleOrDefault();
             if (result is not null)
             {
                 return result;
@@ -61,11 +64,14 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         var legacy = await GetSourceAsync(LegacyTableName);
         return legacy is null
             ? null
-            : (await QueryAsync(
-                legacy,
-                "[licence_fee_code] = @licenceFeeCode",
-                command => AddParameter(command, "@licenceFeeCode", DbType.Int16, licenceFeeCode)))
-                .SingleOrDefault();
+            : (
+                await QueryAsync(
+                    legacy,
+                    "[licence_fee_code] = @licenceFeeCode",
+                    command =>
+                        AddParameter(command, "@licenceFeeCode", DbType.Int16, licenceFeeCode)
+                )
+            ).SingleOrDefault();
     }
 
     public async Task<LicenseFee?> GetByDescriptionAsync(string description)
@@ -76,7 +82,14 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         }
 
         var predicate = "LOWER([licence_description]) = @description";
-        var configure = new Action<DbCommand>(command => AddParameter(command, "@description", DbType.String, description.Trim().ToLowerInvariant()));
+        var configure = new Action<DbCommand>(command =>
+            AddParameter(
+                command,
+                "@description",
+                DbType.String,
+                description.Trim().ToLowerInvariant()
+            )
+        );
         var modern = await GetSourceAsync(ModernTableName);
         if (modern is not null)
         {
@@ -88,7 +101,9 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         }
 
         var legacy = await GetSourceAsync(LegacyTableName);
-        return legacy is null ? null : (await QueryAsync(legacy, predicate, configure)).SingleOrDefault();
+        return legacy is null
+            ? null
+            : (await QueryAsync(legacy, predicate, configure)).SingleOrDefault();
     }
 
     public async Task<IEnumerable<LicenseFee>> GetAllAsync()
@@ -120,7 +135,14 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         }
 
         var predicate = "LOWER(COALESCE([licence_description], '')) LIKE @searchTerm";
-        var configure = new Action<DbCommand>(command => AddParameter(command, "@searchTerm", DbType.String, $"%{searchTerm.Trim().ToLowerInvariant()}%"));
+        var configure = new Action<DbCommand>(command =>
+            AddParameter(
+                command,
+                "@searchTerm",
+                DbType.String,
+                $"%{searchTerm.Trim().ToLowerInvariant()}%"
+            )
+        );
         var modern = await GetSourceAsync(ModernTableName);
         if (modern is not null)
         {
@@ -157,7 +179,8 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
                     connection,
                     "SELECT COUNT(1) FROM [dbo].[model] WHERE [licence_fee_code] = @licenceFeeCode",
                     licenceFeeCode,
-                    transaction)
+                    transaction
+                )
                 : 0;
             return new LicenseFeeDeleteCheck(modelCount);
         }
@@ -182,7 +205,10 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         licenseFee.modified_by_user_code = currentUserId > 0 ? currentUserId : null;
         licenseFee.is_deleted = false;
 
-        licenseFee.licence_fee_code = await ExecuteInsertAsync(source, BuildValues(licenseFee, source.Columns));
+        licenseFee.licence_fee_code = await ExecuteInsertAsync(
+            source,
+            BuildValues(licenseFee, source.Columns)
+        );
         return licenseFee;
     }
 
@@ -190,27 +216,31 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
     {
         ArgumentNullException.ThrowIfNull(licenseFee);
 
-        var existing = await FindByIdAsync(licenseFee.licence_fee_code)
-            ?? throw new InvalidOperationException($"LicenseFee with licence_fee_code {licenseFee.licence_fee_code} not found");
+        var existing =
+            await FindByIdAsync(licenseFee.licence_fee_code)
+            ?? throw new InvalidOperationException(
+                $"LicenseFee with licence_fee_code {licenseFee.licence_fee_code} not found"
+            );
         var now = DateTime.UtcNow;
         licenseFee.date_created = existing.Fee.date_created;
         licenseFee.created_by_user_code = existing.Fee.created_by_user_code;
         licenseFee.date_updated = now;
-        licenseFee.modified_by_user_code = currentUserId > 0
-            ? currentUserId
-            : existing.Fee.modified_by_user_code;
+        licenseFee.modified_by_user_code =
+            currentUserId > 0 ? currentUserId : existing.Fee.modified_by_user_code;
         licenseFee.is_deleted = existing.Fee.is_deleted;
 
         await ExecuteUpdateAsync(
             existing.Source,
             licenseFee.licence_fee_code,
-            BuildValues(licenseFee, existing.Source.Columns, includeCreateAudit: false));
+            BuildValues(licenseFee, existing.Source.Columns, includeCreateAudit: false)
+        );
     }
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The delete statement is selected from fixed table compatibility sources and the fee code is parameterized.")]
+        Justification = "The delete statement is selected from fixed table compatibility sources and the fee code is parameterized."
+    )]
     public async Task DeleteAsync(short licenceFeeCode, int currentUserId)
     {
         var existing = await FindByIdAsync(licenceFeeCode);
@@ -233,14 +263,21 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             if (source.Columns.Contains("is_deleted"))
             {
-                command.CommandText = $"UPDATE [dbo].[{source.TableName}] SET [is_deleted] = @isDeleted, [date_updated] = @dateUpdated, [modified_by_user_code] = @modifiedByUserCode WHERE [licence_fee_code] = @licenceFeeCode";
+                command.CommandText =
+                    $"UPDATE [dbo].[{source.TableName}] SET [is_deleted] = @isDeleted, [date_updated] = @dateUpdated, [modified_by_user_code] = @modifiedByUserCode WHERE [licence_fee_code] = @licenceFeeCode";
                 AddParameter(command, "@isDeleted", DbType.Boolean, true);
                 AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-                AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                AddParameter(
+                    command,
+                    "@modifiedByUserCode",
+                    DbType.Int32,
+                    currentUserId > 0 ? currentUserId : null
+                );
             }
             else
             {
-                command.CommandText = $"DELETE FROM [dbo].[{source.TableName}] WHERE [licence_fee_code] = @licenceFeeCode";
+                command.CommandText =
+                    $"DELETE FROM [dbo].[{source.TableName}] WHERE [licence_fee_code] = @licenceFeeCode";
             }
 
             AddParameter(command, "@licenceFeeCode", DbType.Int16, licenceFeeCode);
@@ -260,11 +297,14 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         var modern = await GetSourceAsync(ModernTableName);
         if (modern is not null)
         {
-            var result = (await QueryAsync(
-                modern,
-                "[licence_fee_code] = @licenceFeeCode",
-                command => AddParameter(command, "@licenceFeeCode", DbType.Int16, licenceFeeCode)))
-                .SingleOrDefault();
+            var result = (
+                await QueryAsync(
+                    modern,
+                    "[licence_fee_code] = @licenceFeeCode",
+                    command =>
+                        AddParameter(command, "@licenceFeeCode", DbType.Int16, licenceFeeCode)
+                )
+            ).SingleOrDefault();
             if (result is not null)
             {
                 return (result, modern);
@@ -277,27 +317,33 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
             return null;
         }
 
-        var legacyResult = (await QueryAsync(
-            legacy,
-            "[licence_fee_code] = @licenceFeeCode",
-            command => AddParameter(command, "@licenceFeeCode", DbType.Int16, licenceFeeCode)))
-            .SingleOrDefault();
+        var legacyResult = (
+            await QueryAsync(
+                legacy,
+                "[licence_fee_code] = @licenceFeeCode",
+                command => AddParameter(command, "@licenceFeeCode", DbType.Int16, licenceFeeCode)
+            )
+        ).SingleOrDefault();
         return legacyResult is null ? null : (legacyResult, legacy);
     }
 
-    private async Task<TableSource> GetSourceForWriteAsync()
-        => await GetSourceAsync(ModernTableName) ??
-           await GetSourceAsync(LegacyTableName) ??
-           throw new InvalidOperationException("Neither the modern nor legacy licence fee table is available.");
+    private async Task<TableSource> GetSourceForWriteAsync() =>
+        await GetSourceAsync(ModernTableName)
+        ?? await GetSourceAsync(LegacyTableName)
+        ?? throw new InvalidOperationException(
+            "Neither the modern nor legacy licence fee table is available."
+        );
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and table name are composed only from fixed compatibility columns and table names; predicates and values are parameterized.")]
+        Justification = "The SELECT list and table name are composed only from fixed compatibility columns and table names; predicates and values are parameterized."
+    )]
     private async Task<List<LicenseFee>> QueryAsync(
         TableSource source,
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -312,7 +358,9 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = RequiredColumns
                 .Select(column => $"[{column}] AS [{column}]")
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(source.Columns, column)))
+                .Concat(
+                    OptionalColumns.Select(column => GetOptionalProjection(source.Columns, column))
+                )
                 .ToArray();
             var conditions = new List<string> { GetNotDeletedFilter(source.Columns) };
             if (!string.IsNullOrWhiteSpace(predicate))
@@ -320,7 +368,8 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
                 conditions.Add(predicate);
             }
 
-            command.CommandText = $"SELECT {string.Join(", ", projection)} FROM [dbo].[{source.TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [licence_description], [licence_fee_code]";
+            command.CommandText =
+                $"SELECT {string.Join(", ", projection)} FROM [dbo].[{source.TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [licence_description], [licence_fee_code]";
             configure?.Invoke(command);
 
             var results = new List<LicenseFee>();
@@ -344,8 +393,12 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement uses a fixed compatibility table name and parameterized values.")]
-    private async Task<short> ExecuteInsertAsync(TableSource source, IReadOnlyList<WriteValue> values)
+        Justification = "The INSERT statement uses a fixed compatibility table name and parameterized values."
+    )]
+    private async Task<short> ExecuteInsertAsync(
+        TableSource source,
+        IReadOnlyList<WriteValue> values
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -358,7 +411,8 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"INSERT INTO [dbo].[{source.TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[licence_fee_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+            command.CommandText =
+                $"INSERT INTO [dbo].[{source.TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[licence_fee_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
             AddParameters(command, values);
             return Convert.ToInt16(await command.ExecuteScalarAsync());
         }
@@ -374,8 +428,13 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement uses a fixed compatibility table name and parameterized values.")]
-    private async Task ExecuteUpdateAsync(TableSource source, short licenceFeeCode, IReadOnlyList<WriteValue> values)
+        Justification = "The UPDATE statement uses a fixed compatibility table name and parameterized values."
+    )]
+    private async Task ExecuteUpdateAsync(
+        TableSource source,
+        short licenceFeeCode,
+        IReadOnlyList<WriteValue> values
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -388,7 +447,8 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"UPDATE [dbo].[{source.TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [licence_fee_code] = @licenceFeeCode";
+            command.CommandText =
+                $"UPDATE [dbo].[{source.TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [licence_fee_code] = @licenceFeeCode";
             AddParameters(command, values);
             AddParameter(command, "@licenceFeeCode", DbType.Int16, licenceFeeCode);
             await command.ExecuteNonQueryAsync();
@@ -413,7 +473,14 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
 
         try
         {
-            if (!await TableExistsAsync(connection, "dbo", tableName, _context.Database.CurrentTransaction?.GetDbTransaction()))
+            if (
+                !await TableExistsAsync(
+                    connection,
+                    "dbo",
+                    tableName,
+                    _context.Database.CurrentTransaction?.GetDbTransaction()
+                )
+            )
             {
                 return null;
             }
@@ -452,28 +519,48 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
     private static List<WriteValue> BuildValues(
         LicenseFee licenseFee,
         IReadOnlySet<string> availableColumns,
-        bool includeCreateAudit = true)
+        bool includeCreateAudit = true
+    )
     {
         var values = new List<WriteValue>
         {
-            new("licence_description", "@description", DbType.String, licenseFee.licence_description),
+            new(
+                "licence_description",
+                "@description",
+                DbType.String,
+                licenseFee.licence_description
+            ),
             new("licence_fee", "@fee", DbType.Decimal, licenseFee.licence_fee),
             new("date_updated", "@dateUpdated", DbType.DateTime2, licenseFee.date_updated),
-            new("modified_by_user_code", "@modifiedByUserCode", DbType.Int32, licenseFee.modified_by_user_code)
+            new(
+                "modified_by_user_code",
+                "@modifiedByUserCode",
+                DbType.Int32,
+                licenseFee.modified_by_user_code
+            ),
         };
 
         if (includeCreateAudit)
         {
-            values.Add(new("date_created", "@dateCreated", DbType.DateTime2, licenseFee.date_created));
-            values.Add(new("created_by_user_code", "@createdByUserCode", DbType.Int32, licenseFee.created_by_user_code));
+            values.Add(
+                new("date_created", "@dateCreated", DbType.DateTime2, licenseFee.date_created)
+            );
+            values.Add(
+                new(
+                    "created_by_user_code",
+                    "@createdByUserCode",
+                    DbType.Int32,
+                    licenseFee.created_by_user_code
+                )
+            );
             values.Add(new("is_deleted", "@isDeleted", DbType.Boolean, false));
         }
 
         return values.Where(value => availableColumns.Contains(value.Column)).ToList();
     }
 
-    private static LicenseFee MapLicenseFee(DbDataReader reader)
-        => new()
+    private static LicenseFee MapLicenseFee(DbDataReader reader) =>
+        new()
         {
             licence_fee_code = ReadInt16(reader, "licence_fee_code") ?? 0,
             licence_description = ReadString(reader, "licence_description"),
@@ -482,7 +569,7 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
             date_updated = ReadDateTime(reader, "date_updated"),
             created_by_user_code = ReadInt32(reader, "created_by_user_code"),
             modified_by_user_code = ReadInt32(reader, "modified_by_user_code"),
-            is_deleted = ReadBoolean(reader, "is_deleted") ?? false
+            is_deleted = ReadBoolean(reader, "is_deleted") ?? false,
         };
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
@@ -497,13 +584,13 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetNotDeletedFilter(IReadOnlySet<string> columns)
-        => columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
+    private static string GetNotDeletedFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
 
     private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)
     {
@@ -525,12 +612,14 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The helper is called with fixed repository statements and the fee code is parameterized.")]
+        Justification = "The helper is called with fixed repository statements and the fee code is parameterized."
+    )]
     private static async Task<int> CountAsync(
         DbConnection connection,
         string sql,
         short licenceFeeCode,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -543,7 +632,8 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         DbConnection connection,
         string schema,
         string table,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -558,24 +648,25 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         return Convert.ToInt32(await command.ExecuteScalarAsync()) > 0;
     }
 
-    private static string? ReadString(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToString(reader[column])?.TrimEnd();
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToString(reader[column])?.TrimEnd();
 
-    private static short? ReadInt16(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
+    private static short? ReadInt16(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
 
-    private static int? ReadInt32(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
+    private static int? ReadInt32(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
 
-    private static decimal? ReadDecimal(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToDecimal(reader[column]);
+    private static decimal? ReadDecimal(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToDecimal(reader[column]);
 
-    private static DateTime? ReadDateTime(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
+    private static DateTime? ReadDateTime(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
 
-    private static bool? ReadBoolean(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToBoolean(reader[column]);
+    private static bool? ReadBoolean(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToBoolean(reader[column]);
 
     private sealed record TableSource(string TableName, HashSet<string> Columns);
+
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 }

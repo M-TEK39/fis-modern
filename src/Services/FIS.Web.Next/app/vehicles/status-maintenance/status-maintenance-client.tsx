@@ -165,8 +165,8 @@ function VehicleHistory({ vehicle }: Readonly<{ vehicle: VehicleStatusVehicle }>
         </table>
       </div>
       <p className="status-maintenance-note" role="note">
-        The current C# API exposes the current status but not the full legacy status-history query. This row is a
-        current-record snapshot, not a complete history.
+        The current C# API exposes the current status but not the full legacy status-history query.
+        This row is a current-record snapshot, not a complete history.
       </p>
     </section>
   );
@@ -211,7 +211,10 @@ function SearchResults({
                 <td>{valueOrDash(vehicle.statusDescription || vehicle.statusCode)}</td>
                 <td>{formatDate(vehicle.statusDate)}</td>
                 <td>
-                  <Link className="button button-secondary button-small" href={vehicleLink(vehicle.vmfCode, returnUrl)}>
+                  <Link
+                    className="button button-secondary button-small"
+                    href={vehicleLink(vehicle.vmfCode, returnUrl)}
+                  >
                     Manage status
                   </Link>
                 </td>
@@ -256,7 +259,9 @@ export default function StatusMaintenanceClient({
   statusOptions,
 }: StatusMaintenanceClientProps) {
   const [searchState, searchAction] = useActionState(searchVehicleStatusAction, initialSearchState);
-  const [statusState, statusAction] = useActionState(changeVehicleStatusAction, { status: "idle" } satisfies VehicleStatusActionState);
+  const [statusState, statusAction] = useActionState(changeVehicleStatusAction, {
+    status: "idle",
+  } satisfies VehicleStatusActionState);
   const [searchMode, setSearchMode] = useState("GG");
   const [selectedStatusCode, setSelectedStatusCode] = useState<number | null>(null);
   const [effectiveDate] = useState(todayInputValue);
@@ -284,7 +289,11 @@ export default function StatusMaintenanceClient({
           </div>
         </div>
         <form action={searchAction} className="status-maintenance-search-form">
-          <div className="status-maintenance-search-modes" role="radiogroup" aria-label="Vehicle search mode">
+          <div
+            className="status-maintenance-search-modes"
+            role="radiogroup"
+            aria-label="Vehicle search mode"
+          >
             <label className="vehicle-checkbox-label">
               <input
                 type="radio"
@@ -361,7 +370,9 @@ export default function StatusMaintenanceClient({
                 </div>
               </div>
               {nextStatuses.length === 0 ? (
-                <p className="status-maintenance-note">No follow-on statuses found in the status catalog.</p>
+                <p className="status-maintenance-note">
+                  No follow-on statuses found in the status catalog.
+                </p>
               ) : (
                 <form action={statusAction} className="status-maintenance-form">
                   <input type="hidden" name="vmfCode" value={initialVehicle.vmfCode} />
@@ -384,7 +395,13 @@ export default function StatusMaintenanceClient({
 
                   <div className="field">
                     <label htmlFor="effectiveDate">Effective From</label>
-                    <input id="effectiveDate" name="effectiveDate" type="date" defaultValue={effectiveDate} required />
+                    <input
+                      id="effectiveDate"
+                      name="effectiveDate"
+                      type="date"
+                      defaultValue={effectiveDate}
+                      required
+                    />
                   </div>
 
                   <div className="field">
@@ -406,7 +423,12 @@ export default function StatusMaintenanceClient({
                   {showStolenSite ? (
                     <div className="field">
                       <label htmlFor="siteCode">Book Under Site</label>
-                      <select id="siteCode" name="siteCode" defaultValue={initialVehicle.siteCode ?? ""} required>
+                      <select
+                        id="siteCode"
+                        name="siteCode"
+                        defaultValue={initialVehicle.siteCode ?? ""}
+                        required
+                      >
                         <option value="">Select site</option>
                         {initialSites.map((site) => (
                           <option key={site.code} value={site.code}>
@@ -421,12 +443,19 @@ export default function StatusMaintenanceClient({
                     <div className="status-maintenance-sold-fields">
                       <h3>Sold Information</h3>
                       <p className="status-maintenance-note" role="note">
-                        Sold fields are required by the legacy flow, but the current C# status endpoint cannot persist
-                        them. The update is blocked until that API contract is extended.
+                        Sold fields are required by the legacy flow, but the current C# status
+                        endpoint cannot persist them. The update is blocked until that API contract
+                        is extended.
                       </p>
                       <div className="field">
                         <label htmlFor="soldAmount">Sold Amount</label>
-                        <input id="soldAmount" name="soldAmount" type="number" min="0" step="0.01" />
+                        <input
+                          id="soldAmount"
+                          name="soldAmount"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                        />
                       </div>
                       <div className="field">
                         <label htmlFor="soldDate">Sold Date</label>
@@ -440,8 +469,9 @@ export default function StatusMaintenanceClient({
                   ) : null}
 
                   <p className="status-maintenance-note" role="note">
-                    The current endpoint persists the status and effective date, and applies its stolen-vehicle site
-                    side effect. Odometer and general comments are not persisted by this API contract.
+                    The current endpoint persists the status and effective date, and applies its
+                    stolen-vehicle site side effect. Odometer and general comments are not persisted
+                    by this API contract.
                   </p>
 
                   {statusState.status === "error" && statusState.message ? (
@@ -452,7 +482,10 @@ export default function StatusMaintenanceClient({
                   ) : null}
                   <div className="button-row">
                     <StatusSubmitButton />
-                    <Link className="button button-secondary" href={initialReturnUrl || "/vehicles"}>
+                    <Link
+                      className="button button-secondary"
+                      href={initialReturnUrl || "/vehicles"}
+                    >
                       Return to Previous Page
                     </Link>
                   </div>

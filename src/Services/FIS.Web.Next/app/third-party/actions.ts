@@ -29,12 +29,23 @@ function optionalText(formData: FormData, name: string) {
 }
 
 function integer(formData: FormData, name: string, label: string): number;
-function integer(formData: FormData, name: string, label: string, required: false): number | undefined;
-function integer(formData: FormData, name: string, label: string, required = true): number | undefined {
+function integer(
+  formData: FormData,
+  name: string,
+  label: string,
+  required: false,
+): number | undefined;
+function integer(
+  formData: FormData,
+  name: string,
+  label: string,
+  required = true,
+): number | undefined {
   const value = text(formData, name);
   if (!value && !required) return undefined;
   const parsed = Number(value);
-  if (!value || !Number.isSafeInteger(parsed) || parsed <= 0) throw new Error(`${label} is required.`);
+  if (!value || !Number.isSafeInteger(parsed) || parsed <= 0)
+    throw new Error(`${label} is required.`);
   return parsed;
 }
 
@@ -50,9 +61,11 @@ function redirectError(path: string, message: string): never {
 
 function apiMessage(error: unknown, operation: string) {
   if (error instanceof ThirdPartyApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
     if (error.reason === "not-found") return "The selected third-party record no longer exists.";
-    if (error.reason === "unavailable") return `The third-party ${operation} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "unavailable")
+      return `The third-party ${operation} service is temporarily unavailable. Please try again.`;
     return error.message;
   }
   return `The third-party ${operation} could not be completed. Please try again.`;
@@ -60,19 +73,37 @@ function apiMessage(error: unknown, operation: string) {
 
 async function authorize() {
   const session = await getSession();
-  if (session.status === "unavailable") return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
-  if (session.status !== "authenticated") return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
-  const hasPermission = session.accessLevel ? (() => {
-    try {
-      return (BigInt(session.accessLevel) & CONTRACT_MANAGEMENT_PERMISSION) === CONTRACT_MANAGEMENT_PERMISSION;
-    } catch {
-      return false;
-    }
-  })() : false;
-  const hasRole = session.roles.some((role) => role.localeCompare(THIRD_PARTY_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  if (session.status === "unavailable")
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
+  if (session.status !== "authenticated")
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
+  const hasPermission = session.accessLevel
+    ? (() => {
+        try {
+          return (
+            (BigInt(session.accessLevel) & CONTRACT_MANAGEMENT_PERMISSION) ===
+            CONTRACT_MANAGEMENT_PERMISSION
+          );
+        } catch {
+          return false;
+        }
+      })()
+    : false;
+  const hasRole = session.roles.some(
+    (role) => role.localeCompare(THIRD_PARTY_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
   return hasPermission || hasRole
     ? { ok: true as const }
-    : { ok: false as const, message: "You do not have permission to maintain third-party rentals." };
+    : {
+        ok: false as const,
+        message: "You do not have permission to maintain third-party rentals.",
+      };
 }
 
 function revalidateThirdParty() {
@@ -105,7 +136,12 @@ export async function saveThirdPartySupplierAction(formData: FormData) {
     };
     await saveThirdPartySupplier(supplierId, input);
   } catch (error) {
-    redirectError("/third-party?tab=suppliers", error instanceof Error && !(error instanceof ThirdPartyApiError) ? error.message : apiMessage(error, "supplier save"));
+    redirectError(
+      "/third-party?tab=suppliers",
+      error instanceof Error && !(error instanceof ThirdPartyApiError)
+        ? error.message
+        : apiMessage(error, "supplier save"),
+    );
   }
   revalidateThirdParty();
   redirect(`/third-party?tab=suppliers&saved=${supplierId === null ? "created" : "updated"}`);
@@ -137,10 +173,16 @@ export async function saveThirdPartyProjectAction(formData: FormData) {
       order_reference: optionalText(formData, "orderReference"),
       class_configuration: optionalText(formData, "classConfiguration"),
     };
-    if (input.end_date < input.start_date) throw new Error("Project end date cannot be earlier than its start date.");
+    if (input.end_date < input.start_date)
+      throw new Error("Project end date cannot be earlier than its start date.");
     await saveThirdPartyProject(projectId, input);
   } catch (error) {
-    redirectError("/third-party?tab=projects", error instanceof Error && !(error instanceof ThirdPartyApiError) ? error.message : apiMessage(error, "project save"));
+    redirectError(
+      "/third-party?tab=projects",
+      error instanceof Error && !(error instanceof ThirdPartyApiError)
+        ? error.message
+        : apiMessage(error, "project save"),
+    );
   }
   revalidateThirdParty();
   redirect(`/third-party?tab=projects&saved=${projectId === null ? "created" : "updated"}`);
@@ -160,10 +202,17 @@ export async function createThirdPartyAllocationAction(formData: FormData) {
     };
     await createThirdPartyAllocation(input!);
   } catch (error) {
-    redirectError("/third-party?tab=allocation", error instanceof Error && !(error instanceof ThirdPartyApiError) ? error.message : apiMessage(error, "allocation"));
+    redirectError(
+      "/third-party?tab=allocation",
+      error instanceof Error && !(error instanceof ThirdPartyApiError)
+        ? error.message
+        : apiMessage(error, "allocation"),
+    );
   }
   revalidateThirdParty();
-  redirect(`/third-party?tab=allocation&departmentCode=${encodeURIComponent(text(formData, "departmentCode"))}&projectId=${input!.project_id}&supplierId=${input!.supplier_id}&saved=allocated`);
+  redirect(
+    `/third-party?tab=allocation&departmentCode=${encodeURIComponent(text(formData, "departmentCode"))}&projectId=${input!.project_id}&supplierId=${input!.supplier_id}&saved=allocated`,
+  );
 }
 
 export async function deleteThirdPartyAllocationAction(formData: FormData) {
@@ -174,8 +223,15 @@ export async function deleteThirdPartyAllocationAction(formData: FormData) {
     allocationId = integer(formData, "allocationId", "Allocation");
     await deleteThirdPartyAllocation(allocationId);
   } catch (error) {
-    redirectError("/third-party?tab=allocation", error instanceof Error && !(error instanceof ThirdPartyApiError) ? error.message : apiMessage(error, "allocation deletion"));
+    redirectError(
+      "/third-party?tab=allocation",
+      error instanceof Error && !(error instanceof ThirdPartyApiError)
+        ? error.message
+        : apiMessage(error, "allocation deletion"),
+    );
   }
   revalidateThirdParty();
-  redirect(`/third-party?tab=allocation&projectId=${encodeURIComponent(text(formData, "projectId"))}&deleted=1`);
+  redirect(
+    `/third-party?tab=allocation&projectId=${encodeURIComponent(text(formData, "projectId"))}&deleted=1`,
+  );
 }

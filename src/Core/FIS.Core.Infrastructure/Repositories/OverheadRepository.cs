@@ -23,7 +23,8 @@ public class OverheadRepository : IOverheadRepository
     /// </summary>
     public async Task<List<Overhead>> GetByTariffParameterAsync(int tariffParameterId)
     {
-        return await _context.Set<Overhead>()
+        return await _context
+            .Set<Overhead>()
             .Where(o => o.TariffParameterID == tariffParameterId)
             .OrderBy(o => o.OverheadTypeId)
             .ToListAsync();
@@ -34,10 +35,11 @@ public class OverheadRepository : IOverheadRepository
     /// </summary>
     public async Task<Overhead?> GetByTypeAsync(int tariffParameterId, int overheadTypeId)
     {
-        return await _context.Set<Overhead>()
+        return await _context
+            .Set<Overhead>()
             .FirstOrDefaultAsync(o =>
-                o.TariffParameterID == tariffParameterId &&
-                o.OverheadTypeId == overheadTypeId);
+                o.TariffParameterID == tariffParameterId && o.OverheadTypeId == overheadTypeId
+            );
     }
 
     /// <summary>
@@ -45,8 +47,7 @@ public class OverheadRepository : IOverheadRepository
     /// </summary>
     public async Task<Overhead?> GetByIdAsync(int overheadId)
     {
-        return await _context.Set<Overhead>()
-            .FirstOrDefaultAsync(o => o.OverheadId == overheadId);
+        return await _context.Set<Overhead>().FirstOrDefaultAsync(o => o.OverheadId == overheadId);
     }
 
     /// <summary>
@@ -54,7 +55,8 @@ public class OverheadRepository : IOverheadRepository
     /// </summary>
     public async Task<decimal> GetTotalAsync(int tariffParameterId)
     {
-        return await _context.Set<Overhead>()
+        return await _context
+            .Set<Overhead>()
             .Where(o => o.TariffParameterID == tariffParameterId)
             .SumAsync(o => o.OverheadAmount);
     }
@@ -80,7 +82,9 @@ public class OverheadRepository : IOverheadRepository
 
         var existing = await _context.Set<Overhead>().FindAsync(overhead.OverheadId);
         if (existing == null)
-            throw new InvalidOperationException($"Overhead with OverheadId {overhead.OverheadId} not found");
+            throw new InvalidOperationException(
+                $"Overhead with OverheadId {overhead.OverheadId} not found"
+            );
 
         overhead.ModifiedDate = DateTime.Now;
         _context.Entry(existing).CurrentValues.SetValues(overhead);

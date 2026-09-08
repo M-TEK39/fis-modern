@@ -58,7 +58,8 @@ export type AuctionReport = {
   data: AuctionRecord[];
 };
 
-export type AuctionApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type AuctionApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class AuctionApiError extends Error {
   constructor(
@@ -170,7 +171,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
         // Keep the status-based message when the API has no JSON error body.
       }
 
-      throw new AuctionApiError(response.status >= 500 ? "unavailable" : "invalid-response", message);
+      throw new AuctionApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+      );
     }
 
     return response;
@@ -231,7 +235,10 @@ function mapAuction(value: unknown): AuctionRecord | null {
 
 function mapReport(value: unknown): AuctionReport {
   if (!isRecord(value)) {
-    throw new AuctionApiError("invalid-response", "The FIS API returned an invalid auction report.");
+    throw new AuctionApiError(
+      "invalid-response",
+      "The FIS API returned an invalid auction report.",
+    );
   }
 
   return {
@@ -247,8 +254,10 @@ export async function getAuctions() {
   return getCollection(await readJson(response))
     .map(mapAuction)
     .filter((auction): auction is AuctionRecord => auction !== null)
-    .sort((left, right) =>
-      (right.authDate ?? "").localeCompare(left.authDate ?? "") || right.auctionCode - left.auctionCode,
+    .sort(
+      (left, right) =>
+        (right.authDate ?? "").localeCompare(left.authDate ?? "") ||
+        right.auctionCode - left.auctionCode,
     );
 }
 
@@ -256,7 +265,10 @@ export async function getAuction(auctionCode: number) {
   const response = await requestApi(`api/Auction/${encodeURIComponent(auctionCode)}`);
   const auction = mapAuction(await readJson(response));
   if (!auction) {
-    throw new AuctionApiError("invalid-response", "The FIS API returned an invalid auction record.");
+    throw new AuctionApiError(
+      "invalid-response",
+      "The FIS API returned an invalid auction record.",
+    );
   }
 
   return auction;

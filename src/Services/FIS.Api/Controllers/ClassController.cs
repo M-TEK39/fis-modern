@@ -96,8 +96,13 @@ public class ClassController : BaseApiController
             var currentUserId = GetCurrentUserId();
             var createdClass = await _classRepository.CreateAsync(
                 ApplyWriteDto(new Class(), dto),
-                currentUserId);
-            return CreatedAtAction(nameof(GetById), new { id = createdClass.class_code }, MapToDto(createdClass));
+                currentUserId
+            );
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = createdClass.class_code },
+                MapToDto(createdClass)
+            );
         }
         catch (Exception ex)
         {
@@ -107,7 +112,10 @@ public class ClassController : BaseApiController
     }
 
     [HttpPut("{id:int}")]
-    public async Task<ActionResult<ClassResponseDto>> Update(short id, [FromBody] UpdateClassDto dto)
+    public async Task<ActionResult<ClassResponseDto>> Update(
+        short id,
+        [FromBody] UpdateClassDto dto
+    )
     {
         try
         {
@@ -124,7 +132,8 @@ public class ClassController : BaseApiController
 
             var updatedClass = await _classRepository.UpdateAsync(
                 ApplyWriteDto(new Class { class_code = id }, dto),
-                GetCurrentUserId());
+                GetCurrentUserId()
+            );
             return Ok(MapToDto(updatedClass));
         }
         catch (Exception ex)
@@ -147,12 +156,14 @@ public class ClassController : BaseApiController
             var deleteCheck = await _classRepository.GetDeleteCheckAsync(id);
             if (!deleteCheck.CanDelete)
             {
-                return Conflict(new
-                {
-                    message = "Models and vehicles assigned to this class must be changed before deleting it.",
-                    modelCount = deleteCheck.ModelCount,
-                    vehicleCount = deleteCheck.VehicleCount
-                });
+                return Conflict(
+                    new
+                    {
+                        message = "Models and vehicles assigned to this class must be changed before deleting it.",
+                        modelCount = deleteCheck.ModelCount,
+                        vehicleCount = deleteCheck.VehicleCount,
+                    }
+                );
             }
 
             await _classRepository.DeleteAsync(id, GetCurrentUserId());
@@ -165,8 +176,8 @@ public class ClassController : BaseApiController
         }
     }
 
-    private static ClassResponseDto MapToDto(Class classEntity)
-        => new()
+    private static ClassResponseDto MapToDto(Class classEntity) =>
+        new()
         {
             class_code = classEntity.class_code,
             description = classEntity.description,
@@ -181,7 +192,7 @@ public class ClassController : BaseApiController
             date_updated = classEntity.date_updated,
             created_by_user_code = classEntity.created_by_user_code,
             modified_by_user_code = classEntity.modified_by_user_code,
-            is_deleted = classEntity.is_deleted
+            is_deleted = classEntity.is_deleted,
         };
 
     private static Class ApplyWriteDto(Class target, CreateClassDto dto)
@@ -204,9 +215,11 @@ public class ClassController : BaseApiController
             return "Description is required and must be 60 characters or fewer.";
         }
 
-        if (string.IsNullOrWhiteSpace(dto.class_number) ||
-            dto.class_number.Trim().Length != 3 ||
-            dto.class_number.Trim().Any(character => !char.IsDigit(character)))
+        if (
+            string.IsNullOrWhiteSpace(dto.class_number)
+            || dto.class_number.Trim().Length != 3
+            || dto.class_number.Trim().Any(character => !char.IsDigit(character))
+        )
         {
             return "Class number is required and must contain exactly 3 digits.";
         }
@@ -226,8 +239,10 @@ public class ClassController : BaseApiController
             return "Depreciation percent is required and must be between 0 and 99.99.";
         }
 
-        if (dto.odometer_life is null or < 0 or > 999999m ||
-            decimal.Truncate(dto.odometer_life.Value) != dto.odometer_life.Value)
+        if (
+            dto.odometer_life is null or < 0 or > 999999m
+            || decimal.Truncate(dto.odometer_life.Value) != dto.odometer_life.Value
+        )
         {
             return "Odometer life is required and must be a whole number between 0 and 999999.";
         }
@@ -237,8 +252,10 @@ public class ClassController : BaseApiController
             return "Appreciate percent is required and must be between 0 and 99.";
         }
 
-        if (dto.replacement_cost is null or < 0 or > 99999999m ||
-            decimal.Truncate(dto.replacement_cost.Value) != dto.replacement_cost.Value)
+        if (
+            dto.replacement_cost is null or < 0 or > 99999999m
+            || decimal.Truncate(dto.replacement_cost.Value) != dto.replacement_cost.Value
+        )
         {
             return "Replacement cost is required and must be a whole number between 0 and 99999999.";
         }

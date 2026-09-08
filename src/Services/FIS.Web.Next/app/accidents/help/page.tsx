@@ -17,13 +17,18 @@ type HelpEntry = {
 const HELP_ENTRIES: readonly HelpEntry[] = [
   {
     term: "Accident Maintenance",
-    description: "The capturing and updating of data for vehicles that have been involved in an accident.",
+    description:
+      "The capturing and updating of data for vehicles that have been involved in an accident.",
   },
   {
     term: "GG/ GP Number",
     description: "Registration number of the vehicle that has been involved in the accident.",
   },
-  { id: "submit-maintenance", term: "Submit", description: "Submits the information to the database." },
+  {
+    id: "submit-maintenance",
+    term: "Submit",
+    description: "Submits the information to the database.",
+  },
   { term: "MOD", description: "Allows a user to edit or modify previous entries in the system." },
   {
     term: "Add",
@@ -34,15 +39,22 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
   { term: "GG CAR Km", description: "Odometer reading of the vehicle involved in the accident." },
   {
     term: "Date Updated",
-    description: "The last date on which any updates were made to data related to this vehicle or accident.",
+    description:
+      "The last date on which any updates were made to data related to this vehicle or accident.",
   },
-  { term: "Accident Description", description: "Description of the damage to the Government vehicle." },
+  {
+    term: "Accident Description",
+    description: "Description of the damage to the Government vehicle.",
+  },
   { term: "Accident Category", description: "Identification of the accident type." },
   {
     term: "Notify HQ",
     description: "Indicates whether Head Office has been supplied with all relevant documentation.",
   },
-  { term: "Notify Date HQ", description: "Date documentation pertaining to this matter was forwarded to Head Office." },
+  {
+    term: "Notify Date HQ",
+    description: "Date documentation pertaining to this matter was forwarded to Head Office.",
+  },
   {
     term: "GG Driver Fault",
     description: "Indicates whether the GG driver was responsible for the accident.",
@@ -58,30 +70,46 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
   { term: "Site", description: "Site where the vehicle and driver are stationed." },
   {
     term: "Trip Authority",
-    description: "Indicates whether the person had a valid Trip Authority for the specified vehicle at the time of the accident.",
+    description:
+      "Indicates whether the person had a valid Trip Authority for the specified vehicle at the time of the accident.",
   },
   {
     term: "Transport Officer",
-    description: "The Transport Officer of the user department responsible for the specified vehicle.",
+    description:
+      "The Transport Officer of the user department responsible for the specified vehicle.",
   },
   {
     term: "Transport Officer Tel.",
     description: "The contact telephone number of the relevant Transport Officer.",
   },
-  { term: "GG Reference", description: "The unique reference number issued by GGMT for this matter." },
+  {
+    term: "GG Reference",
+    description: "The unique reference number issued by GGMT for this matter.",
+  },
   {
     term: "Case Number",
-    description: "The reference number issued by the South African Police Service and allocated to this accident.",
+    description:
+      "The reference number issued by the South African Police Service and allocated to this accident.",
   },
   { term: "GG Car Damage", description: "Damage value." },
   { term: "GG Damage Desc", description: "Description of the damage to the GG vehicle." },
-  { term: "Death", description: "Indicates whether any person was killed as a result of the accident." },
-  { term: "Injured", description: "Indicates whether any person was injured as a result of the accident." },
+  {
+    term: "Death",
+    description: "Indicates whether any person was killed as a result of the accident.",
+  },
+  {
+    term: "Injured",
+    description: "Indicates whether any person was injured as a result of the accident.",
+  },
   {
     term: "Private Car Registration+",
-    description: "Registration number of the private vehicle with which the GG vehicle was involved in this accident.",
+    description:
+      "Registration number of the private vehicle with which the GG vehicle was involved in this accident.",
   },
-  { term: "Private Party Name", description: "Identification of the private party driving the private vehicle." },
+  {
+    term: "Private Party Name",
+    description: "Identification of the private party driving the private vehicle.",
+  },
   { term: "Private Car Damage", description: "Damage value." },
   { term: "Claim Received", description: "Indicates whether a claim has been received." },
   { term: "Claim amount", description: "The amount of the claim that has been received." },
@@ -95,7 +123,9 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
 ];
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function HelpFallback() {
@@ -115,7 +145,9 @@ function ApiUnavailable() {
       </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Your session could not be checked.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
         <Link className="button button-primary" href="/accidents/help">
           Try again
@@ -136,7 +168,9 @@ function AccessRestricted() {
       </div>
       <p className="eyebrow">Access restricted</p>
       <h2>You do not have permission to access Accident Maintenance help.</h2>
-      <p className="muted-copy">Contact your FIS administrator if you need accident-management access.</p>
+      <p className="muted-copy">
+        Contact your FIS administrator if you need accident-management access.
+      </p>
     </section>
   );
 }
@@ -166,20 +200,21 @@ async function AccidentHelpContent() {
         <section aria-labelledby="accident-help-purpose">
           <h2 id="accident-help-purpose">Purpose of Program</h2>
           <p>
-            The purpose of the accidents program is to provide a uniform program for capturing data about vehicles
-            involved in accidents and the subsequent outcome of those accidents.
+            The purpose of the accidents program is to provide a uniform program for capturing data
+            about vehicles involved in accidents and the subsequent outcome of those accidents.
           </p>
         </section>
 
         <section aria-labelledby="accident-help-analysis">
           <h2 id="accident-help-analysis">Term / Field Analysis</h2>
           <p>
-            The required data fields are mostly self-explanatory, but the definitions below specify their intended
-            meaning.
+            The required data fields are mostly self-explanatory, but the definitions below specify
+            their intended meaning.
           </p>
           <p>
-            It is assumed that each user of the GGMT administrative functions on the Fleet Information System has
-            received on-the-job training for the field relevant to their division.
+            It is assumed that each user of the GGMT administrative functions on the Fleet
+            Information System has received on-the-job training for the field relevant to their
+            division.
           </p>
         </section>
 

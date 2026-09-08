@@ -4,10 +4,7 @@ import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import type { VehicleSourceActionState } from "@/app/vehicles/source-maintenance/actions";
-import type {
-  VehicleSource,
-  VehicleSourceCapabilities,
-} from "@/lib/api-vehicle-sources";
+import type { VehicleSource, VehicleSourceCapabilities } from "@/lib/api-vehicle-sources";
 
 type VehicleSourceAction = (
   previousState: VehicleSourceActionState,
@@ -49,15 +46,19 @@ function SourceForm({
   onCancel: () => void;
 }>) {
   const [state, formAction] = useActionState(action, { status: "idle" });
-  const [values, setValues] = useState<VehicleSourceFormValues>(() => source ? {
-    name: source.name,
-    physicalAddress: source.physicalAddress,
-    postalAddress: source.postalAddress,
-    telephoneNumber: source.telephoneNumber,
-    faxNumber: source.faxNumber,
-    emailAddress: source.emailAddress,
-    contactPerson: source.contactPerson,
-  } : EMPTY_VALUES);
+  const [values, setValues] = useState<VehicleSourceFormValues>(() =>
+    source
+      ? {
+          name: source.name,
+          physicalAddress: source.physicalAddress,
+          postalAddress: source.postalAddress,
+          telephoneNumber: source.telephoneNumber,
+          faxNumber: source.faxNumber,
+          emailAddress: source.emailAddress,
+          contactPerson: source.contactPerson,
+        }
+      : EMPTY_VALUES,
+  );
 
   function setValue(field: keyof VehicleSourceFormValues, value: string) {
     setValues((current) => ({ ...current, [field]: value }));
@@ -68,7 +69,9 @@ function SourceForm({
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">Vehicle source maintenance</p>
-          <h2 id="vehicle-source-form-title">{source ? "Edit Vehicle Source" : "Add Vehicle Source"}</h2>
+          <h2 id="vehicle-source-form-title">
+            {source ? "Edit Vehicle Source" : "Add Vehicle Source"}
+          </h2>
         </div>
       </div>
 
@@ -76,8 +79,8 @@ function SourceForm({
         <div className="notice notice-warning" role="note">
           <span aria-hidden="true">!</span>
           <span>
-            This database does not expose all legacy vehicle source fields. Unavailable fields are read-only here and
-            will not be overwritten.
+            This database does not expose all legacy vehicle source fields. Unavailable fields are
+            read-only here and will not be overwritten.
           </span>
         </div>
       ) : null}
@@ -158,7 +161,9 @@ function SourceForm({
               disabled={!capabilities.emailAddress}
               value={values.emailAddress}
               onChange={(event) => setValue("emailAddress", event.target.value)}
-              aria-describedby={!capabilities.emailAddress ? "vehicle-source-legacy-fields-note" : undefined}
+              aria-describedby={
+                !capabilities.emailAddress ? "vehicle-source-legacy-fields-note" : undefined
+              }
             />
           </div>
           <div className="field">
@@ -171,15 +176,18 @@ function SourceForm({
               disabled={!capabilities.contactPerson}
               value={values.contactPerson}
               onChange={(event) => setValue("contactPerson", event.target.value)}
-              aria-describedby={!capabilities.contactPerson ? "vehicle-source-legacy-fields-note" : undefined}
+              aria-describedby={
+                !capabilities.contactPerson ? "vehicle-source-legacy-fields-note" : undefined
+              }
             />
           </div>
         </div>
 
         {!capabilities.emailAddress || !capabilities.contactPerson ? (
           <p id="vehicle-source-legacy-fields-note" className="vehicle-required-note">
-            The legacy database stores these fields. They can be edited when the connected database exposes them;
-            this database does not, so existing values cannot be recovered or changed from this screen.
+            The legacy database stores these fields. They can be edited when the connected database
+            exposes them; this database does not, so existing values cannot be recovered or changed
+            from this screen.
           </p>
         ) : null}
 
@@ -255,7 +263,11 @@ export default function VehicleSourceClient({
           >
             Edit Vehicle Source
           </button>
-          <button className="button button-secondary" type="button" onClick={() => setEditing(null)}>
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={() => setEditing(null)}
+          >
             Add New Vehicle Source
           </button>
         </div>

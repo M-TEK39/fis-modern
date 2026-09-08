@@ -8,7 +8,9 @@ import { getSession } from "@/lib/session";
 const CLEARANCE_ROLE = "Clearance";
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function AccessRestricted() {

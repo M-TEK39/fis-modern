@@ -25,7 +25,9 @@ function getPositiveInt(formData: FormData, key: string, label: string, allowZer
   const value = getText(formData, key);
   const parsed = Number(value);
   if (!value || !Number.isInteger(parsed) || (allowZero ? parsed < 0 : parsed <= 0)) {
-    throw new FuelCardValidationError(`${label} must be a ${allowZero ? "zero or greater" : "positive whole number"}.`);
+    throw new FuelCardValidationError(
+      `${label} must be a ${allowZero ? "zero or greater" : "positive whole number"}.`,
+    );
   }
   return parsed;
 }
@@ -41,9 +43,21 @@ function redirectWithMessage(path: string, key: string, message: string): never 
 
 async function authorizeFuelCards() {
   const session = await getSession();
-  if (session.status === "unavailable") return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
-  if (session.status !== "authenticated") return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
-  if (!session.roles.some((role) => role.localeCompare(FUEL_CARDS_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
+  if (session.status === "unavailable")
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
+  if (session.status !== "authenticated")
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(FUEL_CARDS_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
     return { ok: false as const, message: "You do not have permission to maintain Fuelcards." };
   }
   return { ok: true as const };
@@ -51,8 +65,10 @@ async function authorizeFuelCards() {
 
 function apiErrorMessage(error: unknown, subject: string) {
   if (error instanceof FuelCardApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return `The fuel card service is temporarily unavailable. Please try again.`;
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return `The fuel card service is temporarily unavailable. Please try again.`;
     if (error.reason === "not-found") return `The ${subject} record was not found.`;
   }
   return `${subject[0].toUpperCase()}${subject.slice(1)} operation failed. Please try again.`;
@@ -82,7 +98,8 @@ export async function saveFuelCardAction(formData: FormData) {
     revalidatePath("/fuel-cards/vehicle");
     redirectWithMessage(returnPath, "saved", "Fuelcard added successfully.");
   } catch (error) {
-    if (error instanceof FuelCardValidationError) redirectWithMessage(returnPath, "error", error.message);
+    if (error instanceof FuelCardValidationError)
+      redirectWithMessage(returnPath, "error", error.message);
     redirectWithMessage(returnPath, "error", apiErrorMessage(error, "fuelcard"));
   }
 }
@@ -95,7 +112,8 @@ export async function savePrivateHireFuelCardAction(formData: FormData) {
   try {
     const counter = getPositiveInt(formData, "counter", "Counter", true);
     const registrationNumber = getText(formData, "registrationNumber");
-    if (!registrationNumber) throw new FuelCardValidationError("A registration number is required.");
+    if (!registrationNumber)
+      throw new FuelCardValidationError("A registration number is required.");
     await createPrivateHireFuelCard({
       RegistrationNumber: registrationNumber,
       Counter: counter,
@@ -106,7 +124,8 @@ export async function savePrivateHireFuelCardAction(formData: FormData) {
     revalidatePath("/fuel-cards/private-hire/vehicle");
     redirectWithMessage(returnPath, "saved", "Private hire fuelcard added successfully.");
   } catch (error) {
-    if (error instanceof FuelCardValidationError) redirectWithMessage(returnPath, "error", error.message);
+    if (error instanceof FuelCardValidationError)
+      redirectWithMessage(returnPath, "error", error.message);
     redirectWithMessage(returnPath, "error", apiErrorMessage(error, "private hire fuelcard"));
   }
 }
@@ -122,7 +141,8 @@ export async function deleteFuelCardAction(formData: FormData) {
     revalidatePath("/fuel-cards/delete");
     redirectWithMessage(returnPath, "deleted", "Fuelcard deleted successfully.");
   } catch (error) {
-    if (error instanceof FuelCardValidationError) redirectWithMessage(returnPath, "error", error.message);
+    if (error instanceof FuelCardValidationError)
+      redirectWithMessage(returnPath, "error", error.message);
     redirectWithMessage(returnPath, "error", apiErrorMessage(error, "fuelcard"));
   }
 }
@@ -138,7 +158,8 @@ export async function deletePrivateHireFuelCardAction(formData: FormData) {
     revalidatePath("/fuel-cards/private-hire/delete");
     redirectWithMessage(returnPath, "deleted", "Private hire fuelcard deleted successfully.");
   } catch (error) {
-    if (error instanceof FuelCardValidationError) redirectWithMessage(returnPath, "error", error.message);
+    if (error instanceof FuelCardValidationError)
+      redirectWithMessage(returnPath, "error", error.message);
     redirectWithMessage(returnPath, "error", apiErrorMessage(error, "private hire fuelcard"));
   }
 }

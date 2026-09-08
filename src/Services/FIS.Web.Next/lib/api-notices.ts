@@ -29,9 +29,13 @@ export type Notice = {
 
 export type NoticeInput = Omit<Notice, "noticeId" | "createdDate">;
 
-export type NoticeScheduleInput = Omit<NoticeSchedule, "noticeScheduleId" | "createdBy" | "createdDate">;
+export type NoticeScheduleInput = Omit<
+  NoticeSchedule,
+  "noticeScheduleId" | "createdBy" | "createdDate"
+>;
 
-export type NoticeApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "conflict";
+export type NoticeApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "conflict";
 
 export class NoticeApiError extends Error {
   constructor(
@@ -94,7 +98,9 @@ function collection(value: unknown) {
 function mapSchedule(value: unknown): NoticeSchedule | null {
   if (!isRecord(value)) return null;
 
-  const noticeScheduleId = asNumber(getValue(value, "noticeScheduleId", "NoticeScheduleId", "notice_schedule_id"));
+  const noticeScheduleId = asNumber(
+    getValue(value, "noticeScheduleId", "NoticeScheduleId", "notice_schedule_id"),
+  );
   const noticeId = asNumber(getValue(value, "noticeId", "NoticeId", "notice_id"));
   if (noticeScheduleId === null || noticeId === null) return null;
 
@@ -105,7 +111,9 @@ function mapSchedule(value: unknown): NoticeSchedule | null {
     startDate: asNullableString(getValue(value, "startDate", "StartDate", "start_date")),
     endDate: asNullableString(getValue(value, "endDate", "EndDate", "end_date")),
     createdBy: asNullableString(getValue(value, "createdBy", "CreatedBy", "created_by")),
-    createdDate: asNullableString(getValue(value, "createdDate", "CreatedDate", "date_created", "created_date")),
+    createdDate: asNullableString(
+      getValue(value, "createdDate", "CreatedDate", "date_created", "created_date"),
+    ),
     sortOrder: asNumber(getValue(value, "sortOrder", "SortOrder", "sort_order")),
   };
 }
@@ -119,12 +127,16 @@ function mapNotice(value: unknown): Notice | null {
   return {
     noticeId,
     noticeDate: asNullableString(getValue(value, "noticeDate", "NoticeDate", "notice_date")),
-    createdDate: asNullableString(getValue(value, "createdDate", "CreatedDate", "date_created", "created_date")),
+    createdDate: asNullableString(
+      getValue(value, "createdDate", "CreatedDate", "date_created", "created_date"),
+    ),
     noticeFrom: asString(getValue(value, "noticeFrom", "NoticeFrom", "notice_from")),
     noticeTitle: asString(getValue(value, "noticeTitle", "NoticeTitle", "notice_title")),
     noticeBody: asString(getValue(value, "noticeBody", "NoticeBody", "notice_body")),
     noticePerson: asString(getValue(value, "noticePerson", "NoticePerson", "notice_person")),
-    noticePersonTitle: asString(getValue(value, "noticePersonTitle", "NoticePersonTitle", "notice_person_title")),
+    noticePersonTitle: asString(
+      getValue(value, "noticePersonTitle", "NoticePersonTitle", "notice_person_title"),
+    ),
   };
 }
 
@@ -140,7 +152,8 @@ async function errorMessage(response: Response, fallback: string) {
 
 async function requestApi(path: string, init: RequestInit = {}, forwardAuthCookie = true) {
   const cookieHeader = forwardAuthCookie ? await getForwardedAuthCookieHeader() : null;
-  if (forwardAuthCookie && !cookieHeader) throw new NoticeApiError("unauthorized", "No FIS access cookie is available.");
+  if (forwardAuthCookie && !cookieHeader)
+    throw new NoticeApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -167,7 +180,10 @@ async function requestApi(path: string, init: RequestInit = {}, forwardAuthCooki
     }
 
     if (response.status === 409) {
-      throw new NoticeApiError("conflict", await errorMessage(response, "The notice could not be saved."));
+      throw new NoticeApiError(
+        "conflict",
+        await errorMessage(response, "The notice could not be saved."),
+      );
     }
 
     if (!response.ok) {
@@ -196,16 +212,22 @@ async function readJson(response: Response) {
 
 export async function getNoticeSchedules() {
   const payload = await readJson(await requestApi("api/notice-management/notice-schedules"));
-  return collection(payload).map(mapSchedule).filter((item): item is NoticeSchedule => item !== null);
+  return collection(payload)
+    .map(mapSchedule)
+    .filter((item): item is NoticeSchedule => item !== null);
 }
 
 export async function getActiveNotices() {
   const payload = await readJson(await requestApi("api/notices/active", {}, false));
-  return collection(payload).map(mapNotice).filter((item): item is Notice => item !== null);
+  return collection(payload)
+    .map(mapNotice)
+    .filter((item): item is Notice => item !== null);
 }
 
 export async function getNoticeSchedule(noticeScheduleId: number) {
-  const payload = await readJson(await requestApi(`api/notice-management/notice-schedules/${noticeScheduleId}`));
+  const payload = await readJson(
+    await requestApi(`api/notice-management/notice-schedules/${noticeScheduleId}`),
+  );
   return mapSchedule(payload);
 }
 
@@ -215,73 +237,93 @@ export async function getNotice(noticeId: number) {
 }
 
 export async function createNotice(input: NoticeInput) {
-  const payload = await readJson(await requestApi("api/notice-management/notices", {
-    method: "POST",
-    body: JSON.stringify({
-      noticeDate: input.noticeDate,
-      noticeFrom: input.noticeFrom,
-      noticeTitle: input.noticeTitle,
-      noticeBody: input.noticeBody,
-      noticePerson: input.noticePerson,
-      noticePersonTitle: input.noticePersonTitle,
+  const payload = await readJson(
+    await requestApi("api/notice-management/notices", {
+      method: "POST",
+      body: JSON.stringify({
+        noticeDate: input.noticeDate,
+        noticeFrom: input.noticeFrom,
+        noticeTitle: input.noticeTitle,
+        noticeBody: input.noticeBody,
+        noticePerson: input.noticePerson,
+        noticePersonTitle: input.noticePersonTitle,
+      }),
     }),
-  }));
+  );
   const notice = mapNotice(payload);
-  if (!notice) throw new NoticeApiError("invalid-response", "The FIS API returned an invalid created notice.");
+  if (!notice)
+    throw new NoticeApiError("invalid-response", "The FIS API returned an invalid created notice.");
   return notice;
 }
 
 export async function updateNotice(noticeId: number, input: NoticeInput) {
-  const payload = await readJson(await requestApi(`api/notice-management/notices/${noticeId}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      noticeId,
-      noticeDate: input.noticeDate,
-      noticeFrom: input.noticeFrom,
-      noticeTitle: input.noticeTitle,
-      noticeBody: input.noticeBody,
-      noticePerson: input.noticePerson,
-      noticePersonTitle: input.noticePersonTitle,
+  const payload = await readJson(
+    await requestApi(`api/notice-management/notices/${noticeId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        noticeId,
+        noticeDate: input.noticeDate,
+        noticeFrom: input.noticeFrom,
+        noticeTitle: input.noticeTitle,
+        noticeBody: input.noticeBody,
+        noticePerson: input.noticePerson,
+        noticePersonTitle: input.noticePersonTitle,
+      }),
     }),
-  }));
+  );
   const notice = mapNotice(payload);
-  if (!notice) throw new NoticeApiError("invalid-response", "The FIS API returned an invalid updated notice.");
+  if (!notice)
+    throw new NoticeApiError("invalid-response", "The FIS API returned an invalid updated notice.");
   return notice;
 }
 
 export async function createNoticeSchedule(input: NoticeScheduleInput) {
-  const payload = await readJson(await requestApi("api/notice-management/notice-schedules", {
-    method: "POST",
-    body: JSON.stringify({
-      noticeId: input.noticeId,
-      titleField: input.titleField,
-      startDate: input.startDate,
-      endDate: input.endDate,
-      sortOrder: input.sortOrder,
+  const payload = await readJson(
+    await requestApi("api/notice-management/notice-schedules", {
+      method: "POST",
+      body: JSON.stringify({
+        noticeId: input.noticeId,
+        titleField: input.titleField,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        sortOrder: input.sortOrder,
+      }),
     }),
-  }));
+  );
   const schedule = mapSchedule(payload);
-  if (!schedule) throw new NoticeApiError("invalid-response", "The FIS API returned an invalid created schedule.");
+  if (!schedule)
+    throw new NoticeApiError(
+      "invalid-response",
+      "The FIS API returned an invalid created schedule.",
+    );
   return schedule;
 }
 
 export async function updateNoticeSchedule(noticeScheduleId: number, input: NoticeScheduleInput) {
-  const payload = await readJson(await requestApi(`api/notice-management/notice-schedules/${noticeScheduleId}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      noticeScheduleId,
-      noticeId: input.noticeId,
-      titleField: input.titleField,
-      startDate: input.startDate,
-      endDate: input.endDate,
-      sortOrder: input.sortOrder,
+  const payload = await readJson(
+    await requestApi(`api/notice-management/notice-schedules/${noticeScheduleId}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        noticeScheduleId,
+        noticeId: input.noticeId,
+        titleField: input.titleField,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        sortOrder: input.sortOrder,
+      }),
     }),
-  }));
+  );
   const schedule = mapSchedule(payload);
-  if (!schedule) throw new NoticeApiError("invalid-response", "The FIS API returned an invalid updated schedule.");
+  if (!schedule)
+    throw new NoticeApiError(
+      "invalid-response",
+      "The FIS API returned an invalid updated schedule.",
+    );
   return schedule;
 }
 
 export async function deleteNoticeSchedule(noticeScheduleId: number) {
-  await requestApi(`api/notice-management/notice-schedules/${noticeScheduleId}`, { method: "DELETE" });
+  await requestApi(`api/notice-management/notice-schedules/${noticeScheduleId}`, {
+    method: "DELETE",
+  });
 }

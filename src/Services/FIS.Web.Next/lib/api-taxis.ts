@@ -62,13 +62,23 @@ export type TaxiRecord = {
   siteName: string | null;
 };
 
-export type TaxiInput = Omit<TaxiRecord, "requestId" | "dateCreated" | "dateUpdated" | "departmentName" | "siteName"> & {
+export type TaxiInput = Omit<
+  TaxiRecord,
+  "requestId" | "dateCreated" | "dateUpdated" | "departmentName" | "siteName"
+> & {
   requestId?: number;
 };
 
 export type TaxiLogReference = {
   contractors: Array<{ contractorId: number; contractorName: string }>;
-  classes: Array<{ contractorId: number; classId: number; description: string; kmTariff: number | null; driverPerHour: number | null; dailyTariff: number | null }>;
+  classes: Array<{
+    contractorId: number;
+    classId: number;
+    description: string;
+    kmTariff: number | null;
+    driverPerHour: number | null;
+    dailyTariff: number | null;
+  }>;
   notes: Array<{ noteCode: number; description: string }>;
 };
 
@@ -144,7 +154,10 @@ export type TaxiScanDocRecord = {
 export type TaxiApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class TaxiApiError extends Error {
-  constructor(public readonly reason: TaxiApiErrorReason, message: string) {
+  constructor(
+    public readonly reason: TaxiApiErrorReason,
+    message: string,
+  ) {
     super(message);
     this.name = "TaxiApiError";
   }
@@ -182,7 +195,8 @@ function asNumber(value: unknown) {
 function asBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") return ["true", "1", "y", "yes"].includes(value.trim().toLowerCase());
+  if (typeof value === "string")
+    return ["true", "1", "y", "yes"].includes(value.trim().toLowerCase());
   return null;
 }
 
@@ -208,14 +222,22 @@ async function requestApi(path: string, init: RequestInit = {}) {
       headers: {
         accept: "application/json",
         cookie: cookieHeader,
-        ...(init.body && !(init.body instanceof FormData) ? { "content-type": "application/json" } : {}),
+        ...(init.body && !(init.body instanceof FormData)
+          ? { "content-type": "application/json" }
+          : {}),
         ...init.headers,
       },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) throw new TaxiApiError("unauthorized", "The FIS access cookie was rejected.");
-    if (response.status === 404) throw new TaxiApiError("not-found", "The requested taxi record was not found.");
-    if (!response.ok) throw new TaxiApiError(response.status >= 500 ? "unavailable" : "invalid-response", `FIS API returned HTTP ${response.status}.`);
+    if (response.status === 401 || response.status === 403)
+      throw new TaxiApiError("unauthorized", "The FIS access cookie was rejected.");
+    if (response.status === 404)
+      throw new TaxiApiError("not-found", "The requested taxi record was not found.");
+    if (!response.ok)
+      throw new TaxiApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        `FIS API returned HTTP ${response.status}.`,
+      );
     return response;
   } catch (error) {
     if (error instanceof TaxiApiError) throw error;
@@ -298,7 +320,9 @@ function mapTaxi(value: unknown): TaxiRecord | null {
 
 function mapTaxiScanDoc(value: unknown): TaxiScanDocRecord | null {
   if (!isRecord(value)) return null;
-  const scanDocCode = asNumber(getValue(value, "scan_doc_code", "scanDocCode", "taxi_scandoc_code"));
+  const scanDocCode = asNumber(
+    getValue(value, "scan_doc_code", "scanDocCode", "taxi_scandoc_code"),
+  );
   const vmfCode = asNumber(getValue(value, "vmf_code", "vmfCode"));
   if (scanDocCode === null || vmfCode === null) return null;
   return {
@@ -311,7 +335,8 @@ function mapTaxiScanDoc(value: unknown): TaxiScanDocRecord | null {
     dateUpdated: asString(getValue(value, "date_updated", "dateUpdated")),
     fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
     registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
-    fileUrl: asString(getValue(value, "file_url", "fileUrl")) ?? `/api/taxi-scan-docs/${scanDocCode}/file`,
+    fileUrl:
+      asString(getValue(value, "file_url", "fileUrl")) ?? `/api/taxi-scan-docs/${scanDocCode}/file`,
   };
 }
 
@@ -375,58 +400,110 @@ export async function getTaxis() {
 }
 
 export async function getTaxi(requestId: number) {
-  const taxi = mapTaxi(await readJson(await requestApi(`api/Taxi/${encodeURIComponent(requestId)}`)));
-  if (!taxi) throw new TaxiApiError("invalid-response", "The FIS API returned an invalid taxi requisition.");
+  const taxi = mapTaxi(
+    await readJson(await requestApi(`api/Taxi/${encodeURIComponent(requestId)}`)),
+  );
+  if (!taxi)
+    throw new TaxiApiError("invalid-response", "The FIS API returned an invalid taxi requisition.");
   return taxi;
 }
 
 export async function getTaxiByRequisition(rekNum: string) {
-  const taxi = mapTaxi(await readJson(await requestApi(`api/Taxi/lookup/${encodeURIComponent(rekNum)}`)));
-  if (!taxi) throw new TaxiApiError("invalid-response", "The FIS API returned an invalid taxi requisition.");
+  const taxi = mapTaxi(
+    await readJson(await requestApi(`api/Taxi/lookup/${encodeURIComponent(rekNum)}`)),
+  );
+  if (!taxi)
+    throw new TaxiApiError("invalid-response", "The FIS API returned an invalid taxi requisition.");
   return taxi;
 }
 
 export async function createTaxi(input: TaxiInput) {
-  const taxi = mapTaxi(await readJson(await requestApi("api/Taxi", { method: "POST", body: JSON.stringify(taxiPayload(input)) })));
-  if (!taxi) throw new TaxiApiError("invalid-response", "The FIS API returned an invalid created taxi requisition.");
+  const taxi = mapTaxi(
+    await readJson(
+      await requestApi("api/Taxi", { method: "POST", body: JSON.stringify(taxiPayload(input)) }),
+    ),
+  );
+  if (!taxi)
+    throw new TaxiApiError(
+      "invalid-response",
+      "The FIS API returned an invalid created taxi requisition.",
+    );
   return taxi;
 }
 
 export async function updateTaxi(requestId: number, input: TaxiInput) {
-  const taxi = mapTaxi(await readJson(await requestApi(`api/Taxi/${encodeURIComponent(requestId)}`, { method: "PUT", body: JSON.stringify(taxiPayload({ ...input, requestId })) })));
-  if (!taxi) throw new TaxiApiError("invalid-response", "The FIS API returned an invalid updated taxi requisition.");
+  const taxi = mapTaxi(
+    await readJson(
+      await requestApi(`api/Taxi/${encodeURIComponent(requestId)}`, {
+        method: "PUT",
+        body: JSON.stringify(taxiPayload({ ...input, requestId })),
+      }),
+    ),
+  );
+  if (!taxi)
+    throw new TaxiApiError(
+      "invalid-response",
+      "The FIS API returned an invalid updated taxi requisition.",
+    );
   return taxi;
 }
 
 function getTaxiCollection(payload: unknown) {
-  return getCollection(payload).map(mapTaxi).filter((taxi): taxi is TaxiRecord => taxi !== null);
+  return getCollection(payload)
+    .map(mapTaxi)
+    .filter((taxi): taxi is TaxiRecord => taxi !== null);
 }
 
 export async function getTaxiLogReferences(): Promise<TaxiLogReference> {
   const payload = await readJson(await requestApi("api/TaxiLog/references"));
-  if (!isRecord(payload)) throw new TaxiApiError("invalid-response", "The FIS API returned invalid taxi-log references.");
-  const contractors = getCollection(getValue(payload, "Contractors", "contractors")).flatMap((value) => {
-    if (!isRecord(value)) return [];
-    const contractorId = asNumber(getValue(value, "ContractorId", "contractorId"));
-    return contractorId === null ? [] : [{ contractorId, contractorName: asString(getValue(value, "ContractorName", "contractorName")) ?? `Contractor ${contractorId}` }];
-  });
+  if (!isRecord(payload))
+    throw new TaxiApiError("invalid-response", "The FIS API returned invalid taxi-log references.");
+  const contractors = getCollection(getValue(payload, "Contractors", "contractors")).flatMap(
+    (value) => {
+      if (!isRecord(value)) return [];
+      const contractorId = asNumber(getValue(value, "ContractorId", "contractorId"));
+      return contractorId === null
+        ? []
+        : [
+            {
+              contractorId,
+              contractorName:
+                asString(getValue(value, "ContractorName", "contractorName")) ??
+                `Contractor ${contractorId}`,
+            },
+          ];
+    },
+  );
   const classes = getCollection(getValue(payload, "Classes", "classes")).flatMap((value) => {
     if (!isRecord(value)) return [];
     const contractorId = asNumber(getValue(value, "ContractorId", "contractorId"));
     const classId = asNumber(getValue(value, "ClassId", "classId"));
-    return contractorId === null || classId === null ? [] : [{
-      contractorId,
-      classId,
-      description: asString(getValue(value, "Description", "description")) ?? `Class ${classId}`,
-      kmTariff: asNumber(getValue(value, "KmTariff", "kmTariff")),
-      driverPerHour: asNumber(getValue(value, "DriverPerHour", "driverPerHour")),
-      dailyTariff: asNumber(getValue(value, "DailyTariff", "dailyTariff")),
-    }];
+    return contractorId === null || classId === null
+      ? []
+      : [
+          {
+            contractorId,
+            classId,
+            description:
+              asString(getValue(value, "Description", "description")) ?? `Class ${classId}`,
+            kmTariff: asNumber(getValue(value, "KmTariff", "kmTariff")),
+            driverPerHour: asNumber(getValue(value, "DriverPerHour", "driverPerHour")),
+            dailyTariff: asNumber(getValue(value, "DailyTariff", "dailyTariff")),
+          },
+        ];
   });
   const notes = getCollection(getValue(payload, "Notes", "notes")).flatMap((value) => {
     if (!isRecord(value)) return [];
     const noteCode = asNumber(getValue(value, "NoteCode", "noteCode"));
-    return noteCode === null ? [] : [{ noteCode, description: asString(getValue(value, "Description", "description")) ?? `Note ${noteCode}` }];
+    return noteCode === null
+      ? []
+      : [
+          {
+            noteCode,
+            description:
+              asString(getValue(value, "Description", "description")) ?? `Note ${noteCode}`,
+          },
+        ];
   });
   return { contractors, classes, notes };
 }
@@ -437,24 +514,28 @@ function mapLookup(value: unknown): TaxiLogLookup | null {
   const rekNum = asString(getValue(value, "RekNum", "rekNum"));
   if (requestId === null || rekNum === null) return null;
   const detailValue = getValue(value, "Log", "log");
-  const detail = isRecord(detailValue) ? {
-    logId: asNumber(getValue(detailValue, "LogId", "logId")) ?? 0,
-    driverStartOdo: asNumber(getValue(detailValue, "DriverStartOdo", "driverStartOdo")),
-    driverEndOdo: asNumber(getValue(detailValue, "DriverEndOdo", "driverEndOdo")),
-    driverStartDate: asString(getValue(detailValue, "DriverStartDate", "driverStartDate")),
-    driverEndDate: asString(getValue(detailValue, "DriverEndDate", "driverEndDate")),
-    driverStartTime: asString(getValue(detailValue, "DriverStartTime", "driverStartTime")),
-    driverEndTime: asString(getValue(detailValue, "DriverEndTime", "driverEndTime")),
-    taxiLogNoteCode: asNumber(getValue(detailValue, "TaxiLogNoteCode", "taxiLogNoteCode")),
-    quotedTariff: asNumber(getValue(detailValue, "QuotedTariff", "quotedTariff")),
-  } satisfies TaxiLogDetail : null;
+  const detail = isRecord(detailValue)
+    ? ({
+        logId: asNumber(getValue(detailValue, "LogId", "logId")) ?? 0,
+        driverStartOdo: asNumber(getValue(detailValue, "DriverStartOdo", "driverStartOdo")),
+        driverEndOdo: asNumber(getValue(detailValue, "DriverEndOdo", "driverEndOdo")),
+        driverStartDate: asString(getValue(detailValue, "DriverStartDate", "driverStartDate")),
+        driverEndDate: asString(getValue(detailValue, "DriverEndDate", "driverEndDate")),
+        driverStartTime: asString(getValue(detailValue, "DriverStartTime", "driverStartTime")),
+        driverEndTime: asString(getValue(detailValue, "DriverEndTime", "driverEndTime")),
+        taxiLogNoteCode: asNumber(getValue(detailValue, "TaxiLogNoteCode", "taxiLogNoteCode")),
+        quotedTariff: asNumber(getValue(detailValue, "QuotedTariff", "quotedTariff")),
+      } satisfies TaxiLogDetail)
+    : null;
   return {
     requestId,
     rekNum,
     contractorId: asNumber(getValue(value, "ContractorId", "contractorId")),
     contractorName: asString(getValue(value, "ContractorName", "contractorName")),
     vehicleTypeCode: asNumber(getValue(value, "VehicleTypeCode", "vehicleTypeCode")),
-    vehicleTypeDescription: asString(getValue(value, "VehicleTypeDescription", "vehicleTypeDescription")),
+    vehicleTypeDescription: asString(
+      getValue(value, "VehicleTypeDescription", "vehicleTypeDescription"),
+    ),
     registrationNumber: asString(getValue(value, "RegistrationNumber", "registrationNumber")),
     fleetNumber: asString(getValue(value, "FleetNumber", "fleetNumber")),
     driver: asString(getValue(value, "Driver", "driver")),
@@ -469,8 +550,11 @@ function mapLookup(value: unknown): TaxiLogLookup | null {
 
 export async function getTaxiLogLookup(rekNum: string, mode?: "ENTER" | "EDIT") {
   const query = mode ? `?mode=${encodeURIComponent(mode)}` : "";
-  const lookup = mapLookup(await readJson(await requestApi(`api/TaxiLog/lookup/${encodeURIComponent(rekNum)}${query}`)));
-  if (!lookup) throw new TaxiApiError("invalid-response", "The FIS API returned an invalid taxi-log lookup.");
+  const lookup = mapLookup(
+    await readJson(await requestApi(`api/TaxiLog/lookup/${encodeURIComponent(rekNum)}${query}`)),
+  );
+  if (!lookup)
+    throw new TaxiApiError("invalid-response", "The FIS API returned an invalid taxi-log lookup.");
   return lookup;
 }
 
@@ -496,23 +580,28 @@ function taxiLogPayload(input: TaxiLogInput) {
 export async function saveTaxiLog(input: TaxiLogInput, logId?: number) {
   const path = logId ? `api/TaxiLog/${encodeURIComponent(logId)}` : "api/TaxiLog";
   const method = logId ? "PUT" : "POST";
-  const lookup = mapLookup(await readJson(await requestApi(path, { method, body: JSON.stringify(taxiLogPayload(input)) })));
-  if (!lookup) throw new TaxiApiError("invalid-response", "The FIS API returned an invalid saved taxi log.");
+  const lookup = mapLookup(
+    await readJson(await requestApi(path, { method, body: JSON.stringify(taxiLogPayload(input)) })),
+  );
+  if (!lookup)
+    throw new TaxiApiError("invalid-response", "The FIS API returned an invalid saved taxi log.");
   return lookup;
 }
 
 export async function createTaxiWhiteLog(input: WhiteLogInput) {
-  return readJson(await requestApi("api/Taxi/white-log", {
-    method: "POST",
-    body: JSON.stringify({
-      vmf_code: input.vmfCode,
-      start_odo: input.startOdo,
-      end_odo: input.endOdo,
-      start_date: input.startDate,
-      end_date: input.endDate,
-      driver: input.driver,
+  return readJson(
+    await requestApi("api/Taxi/white-log", {
+      method: "POST",
+      body: JSON.stringify({
+        vmf_code: input.vmfCode,
+        start_odo: input.startOdo,
+        end_odo: input.endOdo,
+        start_date: input.startDate,
+        end_date: input.endDate,
+        driver: input.driver,
+      }),
     }),
-  }));
+  );
 }
 
 export async function getTaxiScanDocs() {
@@ -521,14 +610,25 @@ export async function getTaxiScanDocs() {
     .filter((document): document is TaxiScanDocRecord => document !== null);
 }
 
-export async function uploadTaxiScanDoc(input: { vmfCode: number; periodBegin: string; periodEnd: string; file: File }) {
+export async function uploadTaxiScanDoc(input: {
+  vmfCode: number;
+  periodBegin: string;
+  periodEnd: string;
+  file: File;
+}) {
   const body = new FormData();
   body.set("vmfCode", String(input.vmfCode));
   body.set("periodBegin", input.periodBegin);
   body.set("periodEnd", input.periodEnd);
   body.set("file", input.file, input.file.name);
-  const document = mapTaxiScanDoc(await readJson(await requestApi("api/taxi-scan-docs", { method: "POST", body })));
-  if (!document) throw new TaxiApiError("invalid-response", "The FIS API returned an invalid uploaded taxi scan.");
+  const document = mapTaxiScanDoc(
+    await readJson(await requestApi("api/taxi-scan-docs", { method: "POST", body })),
+  );
+  if (!document)
+    throw new TaxiApiError(
+      "invalid-response",
+      "The FIS API returned an invalid uploaded taxi scan.",
+    );
   return document;
 }
 

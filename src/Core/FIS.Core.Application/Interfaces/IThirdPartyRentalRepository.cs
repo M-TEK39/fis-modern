@@ -2,24 +2,74 @@ namespace FIS.Core.Application.Interfaces;
 
 public interface IThirdPartyRentalRepository
 {
-    Task<IReadOnlyList<ThirdPartySupplierRecord>> GetSuppliersAsync(CancellationToken cancellationToken = default);
-    Task<ThirdPartySupplierRecord?> GetSupplierAsync(int supplierId, CancellationToken cancellationToken = default);
-    Task<ThirdPartySupplierRecord> CreateSupplierAsync(ThirdPartySupplierWrite input, int currentUserId, CancellationToken cancellationToken = default);
-    Task<ThirdPartySupplierRecord> UpdateSupplierAsync(int supplierId, ThirdPartySupplierWrite input, int currentUserId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<ThirdPartyServiceOption>> GetServiceOptionsAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ThirdPartySupplierRecord>> GetSuppliersAsync(
+        CancellationToken cancellationToken = default
+    );
+    Task<ThirdPartySupplierRecord?> GetSupplierAsync(
+        int supplierId,
+        CancellationToken cancellationToken = default
+    );
+    Task<ThirdPartySupplierRecord> CreateSupplierAsync(
+        ThirdPartySupplierWrite input,
+        int currentUserId,
+        CancellationToken cancellationToken = default
+    );
+    Task<ThirdPartySupplierRecord> UpdateSupplierAsync(
+        int supplierId,
+        ThirdPartySupplierWrite input,
+        int currentUserId,
+        CancellationToken cancellationToken = default
+    );
+    Task<IReadOnlyList<ThirdPartyServiceOption>> GetServiceOptionsAsync(
+        CancellationToken cancellationToken = default
+    );
 
-    Task<IReadOnlyList<ThirdPartyProjectRecord>> GetProjectsAsync(CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<ThirdPartyProjectRecord>> GetProjectsByDepartmentAsync(short departmentCode, CancellationToken cancellationToken = default);
-    Task<ThirdPartyProjectRecord?> GetProjectAsync(int projectId, CancellationToken cancellationToken = default);
-    Task<ThirdPartyProjectRecord> CreateProjectAsync(ThirdPartyProjectWrite input, int currentUserId, CancellationToken cancellationToken = default);
-    Task<ThirdPartyProjectRecord> UpdateProjectAsync(int projectId, ThirdPartyProjectWrite input, int currentUserId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ThirdPartyProjectRecord>> GetProjectsAsync(
+        CancellationToken cancellationToken = default
+    );
+    Task<IReadOnlyList<ThirdPartyProjectRecord>> GetProjectsByDepartmentAsync(
+        short departmentCode,
+        CancellationToken cancellationToken = default
+    );
+    Task<ThirdPartyProjectRecord?> GetProjectAsync(
+        int projectId,
+        CancellationToken cancellationToken = default
+    );
+    Task<ThirdPartyProjectRecord> CreateProjectAsync(
+        ThirdPartyProjectWrite input,
+        int currentUserId,
+        CancellationToken cancellationToken = default
+    );
+    Task<ThirdPartyProjectRecord> UpdateProjectAsync(
+        int projectId,
+        ThirdPartyProjectWrite input,
+        int currentUserId,
+        CancellationToken cancellationToken = default
+    );
 
-    Task<IReadOnlyList<ThirdPartyAllocationRecord>> GetAllocationsByProjectAsync(int projectId, CancellationToken cancellationToken = default);
-    Task<ThirdPartyAllocationRecord> CreateAllocationAsync(ThirdPartyAllocationWrite input, int currentUserId, CancellationToken cancellationToken = default);
-    Task DeleteAllocationAsync(int allocationId, int currentUserId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ThirdPartyAllocationRecord>> GetAllocationsByProjectAsync(
+        int projectId,
+        CancellationToken cancellationToken = default
+    );
+    Task<ThirdPartyAllocationRecord> CreateAllocationAsync(
+        ThirdPartyAllocationWrite input,
+        int currentUserId,
+        CancellationToken cancellationToken = default
+    );
+    Task DeleteAllocationAsync(
+        int allocationId,
+        int currentUserId,
+        CancellationToken cancellationToken = default
+    );
 
-    Task<IReadOnlyList<ThirdPartyVehicleRecord>> GetVehiclesBySupplierAsync(int supplierId, CancellationToken cancellationToken = default);
-    Task<IReadOnlyList<ThirdPartyClassRequirementRecord>> GetClassRequirementsAsync(int projectId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ThirdPartyVehicleRecord>> GetVehiclesBySupplierAsync(
+        int supplierId,
+        CancellationToken cancellationToken = default
+    );
+    Task<IReadOnlyList<ThirdPartyClassRequirementRecord>> GetClassRequirementsAsync(
+        int projectId,
+        CancellationToken cancellationToken = default
+    );
 }
 
 public sealed record ThirdPartySupplierRecord(
@@ -34,7 +84,8 @@ public sealed record ThirdPartySupplierRecord(
     string? contact_person,
     string? notes,
     string? service_code,
-    bool? active);
+    bool? active
+);
 
 public sealed record ThirdPartySupplierWrite(
     string name,
@@ -49,7 +100,8 @@ public sealed record ThirdPartySupplierWrite(
     string? service_code,
     bool active,
     int ctg_code = 2,
-    bool is_third_party = true);
+    bool is_third_party = true
+);
 
 public sealed record ThirdPartyServiceOption(int code, string name);
 
@@ -69,7 +121,8 @@ public sealed record ThirdPartyProjectRecord(
     string? rp_cell,
     string? notes,
     string? order_reference,
-    string? class_configuration);
+    string? class_configuration
+);
 
 public sealed record ThirdPartyProjectWrite(
     short department_code,
@@ -86,7 +139,8 @@ public sealed record ThirdPartyProjectWrite(
     string? rp_cell,
     string? notes,
     string? order_reference,
-    string? class_configuration);
+    string? class_configuration
+);
 
 public sealed record ThirdPartyAllocationRecord(
     int allocation_id,
@@ -94,23 +148,27 @@ public sealed record ThirdPartyAllocationRecord(
     int? supplier_id,
     int? vehicle_id,
     int? class_id,
-    int? quantity);
+    int? quantity
+);
 
 public sealed record ThirdPartyAllocationWrite(
     int project_id,
     int? supplier_id,
     int? vehicle_id,
     int? class_id,
-    int? quantity);
+    int? quantity
+);
 
 public sealed record ThirdPartyVehicleRecord(
     int vehicle_id,
     string? registration_number,
     string? model_description,
     string? model_year,
-    string? chassis_number);
+    string? chassis_number
+);
 
 public sealed record ThirdPartyClassRequirementRecord(
     int class_id,
     string? class_name,
-    int? required_count);
+    int? required_count
+);

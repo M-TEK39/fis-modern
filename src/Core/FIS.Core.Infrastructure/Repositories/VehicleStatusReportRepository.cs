@@ -17,7 +17,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "SQL identifiers come only from fixed compatibility allowlists; all user values are parameters.")]
+    Justification = "SQL identifiers come only from fixed compatibility allowlists; all user values are parameters."
+)]
 public sealed class VehicleStatusReportRepository : IVehicleStatusReportRepository
 {
     private const string VehicleTableName = "vehicle_master";
@@ -43,7 +44,7 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         "chassis_number",
         "year_manufactured",
         "invoice_number",
-        "vs_code"
+        "vs_code",
     ];
 
     private static readonly string[] RequiredRemarkColumns =
@@ -52,7 +53,7 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         "vmf_code",
         "remark_category",
         "remark_text",
-        "is_resolved"
+        "is_resolved",
     ];
 
     private readonly FisDbContext _context;
@@ -76,7 +77,12 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         try
         {
             var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            var vehicleColumns = await GetColumnsAsync(connection, VehicleTableName, RequiredVehicleColumns, transaction);
+            var vehicleColumns = await GetColumnsAsync(
+                connection,
+                VehicleTableName,
+                RequiredVehicleColumns,
+                transaction
+            );
             var modelColumns = await GetColumnsAsync(connection, ModelTableName, transaction);
             var makeColumns = await GetColumnsAsync(connection, MakeTableName, transaction);
             var typeColumns = await GetColumnsAsync(connection, TypeTableName, transaction);
@@ -84,7 +90,13 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
             var statusColumns = await GetColumnsAsync(connection, StatusTableName, transaction);
             var remarkColumns = await GetColumnsAsync(connection, RemarksTableName, transaction);
 
-            var vehicles = await QueryVehiclesAsync(connection, transaction, vehicleColumns, modelColumns, query);
+            var vehicles = await QueryVehiclesAsync(
+                connection,
+                transaction,
+                vehicleColumns,
+                modelColumns,
+                query
+            );
             var remarksAvailable = RequiredRemarkColumns.All(remarkColumns.Contains);
             if (remarksAvailable && vehicles.Count > 0)
             {
@@ -92,23 +104,57 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
                     connection,
                     transaction,
                     remarkColumns,
-                    vehicles.Select(vehicle => vehicle.VmfCode));
+                    vehicles.Select(vehicle => vehicle.VmfCode)
+                );
                 vehicles = vehicles
-                    .Select(vehicle => vehicle with
-                    {
-                        ActiveRemark = remarks.TryGetValue(vehicle.VmfCode, out var remark) ? remark : null
-                    })
+                    .Select(vehicle =>
+                        vehicle with
+                        {
+                            ActiveRemark = remarks.TryGetValue(vehicle.VmfCode, out var remark)
+                                ? remark
+                                : null,
+                        }
+                    )
                     .ToList();
             }
 
             return new VehicleStatusReportPage(
                 vehicles,
-                await QueryLookupAsync(connection, transaction, SiteTableName, "Site_code", "description", siteColumns),
-                await QueryLookupAsync(connection, transaction, TypeTableName, "type_code", "type_description", typeColumns),
-                await QueryLookupAsync(connection, transaction, MakeTableName, "make_code", "make_description", makeColumns),
+                await QueryLookupAsync(
+                    connection,
+                    transaction,
+                    SiteTableName,
+                    "Site_code",
+                    "description",
+                    siteColumns
+                ),
+                await QueryLookupAsync(
+                    connection,
+                    transaction,
+                    TypeTableName,
+                    "type_code",
+                    "type_description",
+                    typeColumns
+                ),
+                await QueryLookupAsync(
+                    connection,
+                    transaction,
+                    MakeTableName,
+                    "make_code",
+                    "make_description",
+                    makeColumns
+                ),
                 await QueryModelLookupAsync(connection, transaction, modelColumns),
-                await QueryLookupAsync(connection, transaction, StatusTableName, "vehicle_status_code", "status_description", statusColumns),
-                remarksAvailable);
+                await QueryLookupAsync(
+                    connection,
+                    transaction,
+                    StatusTableName,
+                    "vehicle_status_code",
+                    "status_description",
+                    statusColumns
+                ),
+                remarksAvailable
+            );
         }
         finally
         {
@@ -124,20 +170,23 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         DbTransaction? transaction,
         IReadOnlySet<string> vehicleColumns,
         IReadOnlySet<string> modelColumns,
-        VehicleStatusReportQuery query)
+        VehicleStatusReportQuery query
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
 
-        var conditions = new List<string>
-        {
-            GetNotDeletedFilter("v", vehicleColumns)
-        };
+        var conditions = new List<string> { GetNotDeletedFilter("v", vehicleColumns) };
 
         if (query.VehicleStatusCode.HasValue)
         {
             conditions.Add("[v].[vehicle_status_code] = @vehicleStatusCode");
-            AddParameter(command, "@vehicleStatusCode", DbType.Int16, query.VehicleStatusCode.Value);
+            AddParameter(
+                command,
+                "@vehicleStatusCode",
+                DbType.Int16,
+                query.VehicleStatusCode.Value
+            );
         }
         else
         {
@@ -146,16 +195,46 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
             AddParameter(command, "@withdrawnStatus", DbType.Int16, 2);
         }
 
-        AddCodeFilter(conditions, command, "[v].[vs_code]", "@vehicleSourceCode", DbType.Byte, query.VehicleSourceCode);
-        AddCodeFilter(conditions, command, "[v].[type_code]", "@typeCode", DbType.Int16, query.TypeCode);
-        AddCodeFilter(conditions, command, "[v].[location_code]", "@locationCode", DbType.Int16, query.LocationCode);
-        AddCodeFilter(conditions, command, "[v].[model_code]", "@modelCode", DbType.Int16, query.ModelCode);
+        AddCodeFilter(
+            conditions,
+            command,
+            "[v].[vs_code]",
+            "@vehicleSourceCode",
+            DbType.Byte,
+            query.VehicleSourceCode
+        );
+        AddCodeFilter(
+            conditions,
+            command,
+            "[v].[type_code]",
+            "@typeCode",
+            DbType.Int16,
+            query.TypeCode
+        );
+        AddCodeFilter(
+            conditions,
+            command,
+            "[v].[location_code]",
+            "@locationCode",
+            DbType.Int16,
+            query.LocationCode
+        );
+        AddCodeFilter(
+            conditions,
+            command,
+            "[v].[model_code]",
+            "@modelCode",
+            DbType.Int16,
+            query.ModelCode
+        );
 
         if (query.MakeCode.HasValue)
         {
             if (modelColumns.Contains("model_code") && modelColumns.Contains("make_code"))
             {
-                conditions.Add("EXISTS (SELECT 1 FROM [dbo].[model] AS [make_filter_model] WHERE [make_filter_model].[model_code] = [v].[model_code] AND [make_filter_model].[make_code] = @makeCode)");
+                conditions.Add(
+                    "EXISTS (SELECT 1 FROM [dbo].[model] AS [make_filter_model] WHERE [make_filter_model].[model_code] = [v].[model_code] AND [make_filter_model].[make_code] = @makeCode)"
+                );
                 AddParameter(command, "@makeCode", DbType.Int16, query.MakeCode.Value);
             }
             else
@@ -167,19 +246,35 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            conditions.Add("(" + string.Join(
-                " OR ",
-                [
-                    "LOWER(COALESCE([v].[fleet_number], '')) LIKE @search",
-                    "LOWER(COALESCE([v].[registration_number], '')) LIKE @search",
-                    "LOWER(COALESCE([v].[chassis_number], '')) LIKE @search",
-                    "LOWER(COALESCE([v].[engine_number_1], '')) LIKE @search",
-                    "LOWER(COALESCE([v].[invoice_number], '')) LIKE @search"
-                ]) + ")");
-            AddParameter(command, "@search", DbType.String, $"%{query.Search.Trim().ToLowerInvariant()}%");
+            conditions.Add(
+                "("
+                    + string.Join(
+                        " OR ",
+                        [
+                            "LOWER(COALESCE([v].[fleet_number], '')) LIKE @search",
+                            "LOWER(COALESCE([v].[registration_number], '')) LIKE @search",
+                            "LOWER(COALESCE([v].[chassis_number], '')) LIKE @search",
+                            "LOWER(COALESCE([v].[engine_number_1], '')) LIKE @search",
+                            "LOWER(COALESCE([v].[invoice_number], '')) LIKE @search",
+                        ]
+                    )
+                    + ")"
+            );
+            AddParameter(
+                command,
+                "@search",
+                DbType.String,
+                $"%{query.Search.Trim().ToLowerInvariant()}%"
+            );
         }
 
-        var dateCreated = GetDateExpression("v", vehicleColumns, "date_created", "captured_date", "take_on_date");
+        var dateCreated = GetDateExpression(
+            "v",
+            vehicleColumns,
+            "date_created",
+            "captured_date",
+            "take_on_date"
+        );
         command.CommandText = $"""
             SELECT
                 [v].[vmf_code] AS [vmf_code],
@@ -206,23 +301,26 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            results.Add(new VehicleStatusReportVehicle(
-                ReadInt32(reader, "vmf_code") ?? 0,
-                ReadString(reader, "fleet_number"),
-                ReadString(reader, "registration_number"),
-                ReadInt16(reader, "vehicle_status_code"),
-                ReadInt16(reader, "type_code"),
-                ReadByte(reader, "vs_code"),
-                ReadInt16(reader, "model_code"),
-                ReadInt16(reader, "location_code"),
-                ReadString(reader, "chassis_number"),
-                ReadString(reader, "engine_number_1"),
-                ReadInt16(reader, "year_manufactured"),
-                ReadDateTime(reader, "take_on_date"),
-                ReadString(reader, "invoice_number"),
-                ReadDateTime(reader, "date_created"),
-                ReadInt32(reader, "current_odo"),
-                null));
+            results.Add(
+                new VehicleStatusReportVehicle(
+                    ReadInt32(reader, "vmf_code") ?? 0,
+                    ReadString(reader, "fleet_number"),
+                    ReadString(reader, "registration_number"),
+                    ReadInt16(reader, "vehicle_status_code"),
+                    ReadInt16(reader, "type_code"),
+                    ReadByte(reader, "vs_code"),
+                    ReadInt16(reader, "model_code"),
+                    ReadInt16(reader, "location_code"),
+                    ReadString(reader, "chassis_number"),
+                    ReadString(reader, "engine_number_1"),
+                    ReadInt16(reader, "year_manufactured"),
+                    ReadDateTime(reader, "take_on_date"),
+                    ReadString(reader, "invoice_number"),
+                    ReadDateTime(reader, "date_created"),
+                    ReadInt32(reader, "current_odo"),
+                    null
+                )
+            );
         }
 
         return results;
@@ -234,7 +332,8 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         string tableName,
         string codeColumn,
         string descriptionColumn,
-        IReadOnlySet<string> columns)
+        IReadOnlySet<string> columns
+    )
     {
         if (!columns.Contains(codeColumn) || !columns.Contains(descriptionColumn))
         {
@@ -258,7 +357,12 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
             var code = ReadInt32(reader, "lookup_code");
             if (code.HasValue)
             {
-                results.Add(new VehicleStatusReportLookup(code.Value, ReadString(reader, "lookup_description") ?? string.Empty));
+                results.Add(
+                    new VehicleStatusReportLookup(
+                        code.Value,
+                        ReadString(reader, "lookup_description") ?? string.Empty
+                    )
+                );
             }
         }
 
@@ -268,7 +372,8 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
     private static async Task<IReadOnlyList<VehicleStatusReportModelLookup>> QueryModelLookupAsync(
         DbConnection connection,
         DbTransaction? transaction,
-        IReadOnlySet<string> columns)
+        IReadOnlySet<string> columns
+    )
     {
         if (!columns.Contains("model_code") || !columns.Contains("model_description"))
         {
@@ -277,9 +382,7 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        var makeCode = columns.Contains("make_code")
-            ? "[make_code]"
-            : "CAST(NULL AS smallint)";
+        var makeCode = columns.Contains("make_code") ? "[make_code]" : "CAST(NULL AS smallint)";
         var notDeleted = GetNotDeletedFilter(string.Empty, columns);
         command.CommandText = $"""
             SELECT [model_code] AS [model_code],
@@ -297,10 +400,13 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
             var code = ReadInt32(reader, "model_code");
             if (code.HasValue)
             {
-                results.Add(new VehicleStatusReportModelLookup(
-                    code.Value,
-                    ReadString(reader, "model_description") ?? string.Empty,
-                    ReadInt32(reader, "make_code")));
+                results.Add(
+                    new VehicleStatusReportModelLookup(
+                        code.Value,
+                        ReadString(reader, "model_description") ?? string.Empty,
+                        ReadInt32(reader, "make_code")
+                    )
+                );
             }
         }
 
@@ -311,18 +417,21 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         DbConnection connection,
         DbTransaction? transaction,
         IReadOnlySet<string> columns,
-        IEnumerable<int> vmfCodes)
+        IEnumerable<int> vmfCodes
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         var codeParameters = vmfCodes
             .Distinct()
-            .Select((vmfCode, index) =>
-            {
-                var name = $"@vmfCode{index}";
-                AddParameter(command, name, DbType.Int32, vmfCode);
-                return name;
-            })
+            .Select(
+                (vmfCode, index) =>
+                {
+                    var name = $"@vmfCode{index}";
+                    AddParameter(command, name, DbType.Int32, vmfCode);
+                    return name;
+                }
+            )
             .ToArray();
 
         if (codeParameters.Length == 0)
@@ -334,7 +443,7 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         {
             "[vmf_code] IN (" + string.Join(", ", codeParameters) + ")",
             "[is_resolved] = 0",
-            GetNotDeletedFilter(string.Empty, columns)
+            GetNotDeletedFilter(string.Empty, columns),
         };
         var dateCreated = GetDateExpression(string.Empty, columns, "date_created");
         command.CommandText = $"""
@@ -362,7 +471,8 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
                 ReadInt32(reader, "remark_id") ?? 0,
                 ReadString(reader, "remark_category"),
                 ReadString(reader, "remark_text"),
-                ReadDateTime(reader, "date_created"));
+                ReadDateTime(reader, "date_created")
+            );
         }
 
         return results;
@@ -371,14 +481,15 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
     private static async Task<HashSet<string>> GetColumnsAsync(
         DbConnection connection,
         string tableName,
-        DbTransaction? transaction)
-        => await GetColumnsAsync(connection, tableName, null, transaction);
+        DbTransaction? transaction
+    ) => await GetColumnsAsync(connection, tableName, null, transaction);
 
     private static async Task<HashSet<string>> GetColumnsAsync(
         DbConnection connection,
         string tableName,
         IReadOnlyCollection<string>? requiredColumns,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -400,10 +511,14 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
 
         if (requiredColumns is not null)
         {
-            var missingColumns = requiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = requiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
-                throw new InvalidOperationException($"The required vehicle status report columns are not available on {tableName}: {string.Join(", ", missingColumns)}");
+                throw new InvalidOperationException(
+                    $"The required vehicle status report columns are not available on {tableName}: {string.Join(", ", missingColumns)}"
+                );
             }
         }
 
@@ -416,7 +531,8 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         string column,
         string parameterName,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (value is null)
         {
@@ -435,7 +551,11 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
             : "1 = 1";
     }
 
-    private static string GetDateExpression(string alias, IReadOnlySet<string> columns, params string[] candidates)
+    private static string GetDateExpression(
+        string alias,
+        IReadOnlySet<string> columns,
+        params string[] candidates
+    )
     {
         var prefix = string.IsNullOrEmpty(alias) ? string.Empty : $"[{alias}].";
         var expressions = candidates
@@ -446,24 +566,24 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         {
             0 => "CAST(NULL AS datetime2)",
             1 => expressions[0],
-            _ => $"COALESCE({string.Join(", ", expressions)})"
+            _ => $"COALESCE({string.Join(", ", expressions)})",
         };
     }
 
-    private static string? ReadString(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : reader[column]?.ToString();
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : reader[column]?.ToString();
 
-    private static int? ReadInt32(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
+    private static int? ReadInt32(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
 
-    private static short? ReadInt16(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
+    private static short? ReadInt16(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
 
-    private static byte? ReadByte(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToByte(reader[column]);
+    private static byte? ReadByte(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToByte(reader[column]);
 
-    private static DateTime? ReadDateTime(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
+    private static DateTime? ReadDateTime(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
 
     private static void AddParameter(DbCommand command, string name, DbType type, object? value)
     {

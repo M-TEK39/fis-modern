@@ -77,7 +77,8 @@ function asBoolean(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new DriverLicenceApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new DriverLicenceApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -89,17 +90,26 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
     if (response.status === 401 || response.status === 403) {
-      throw new DriverLicenceApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new DriverLicenceApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the API body is not JSON.
       }
-      throw new DriverLicenceApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new DriverLicenceApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -128,25 +138,43 @@ function mapDriverLicence(value: unknown): DriverLicenceRecord | null {
     description: asString(getValue(value, "Description", "description")),
     dateCreated: asString(getValue(value, "DateCreated", "date_created", "dateCreated")),
     dateUpdated: asString(getValue(value, "DateUpdated", "date_updated", "dateUpdated")),
-    createdByUserCode: asNumber(getValue(value, "CreatedByUserCode", "created_by_user_code", "createdByUserCode")),
-    modifiedByUserCode: asNumber(getValue(value, "ModifiedByUserCode", "modified_by_user_code", "modifiedByUserCode")),
+    createdByUserCode: asNumber(
+      getValue(value, "CreatedByUserCode", "created_by_user_code", "createdByUserCode"),
+    ),
+    modifiedByUserCode: asNumber(
+      getValue(value, "ModifiedByUserCode", "modified_by_user_code", "modifiedByUserCode"),
+    ),
     isDeleted: asBoolean(getValue(value, "IsDeleted", "is_deleted", "isDeleted")),
   };
 }
 
 export async function getDriverLicences() {
   const payload = await readJson(await requestApi("api/DriverLicence"));
-  if (!Array.isArray(payload)) throw new DriverLicenceApiError("invalid-response", "The driver licence response was not a list.");
+  if (!Array.isArray(payload))
+    throw new DriverLicenceApiError(
+      "invalid-response",
+      "The driver licence response was not a list.",
+    );
   return payload.map(mapDriverLicence).filter((item): item is DriverLicenceRecord => item !== null);
 }
 
 export async function getDriverLicence(licenceCode: number) {
-  return mapDriverLicence(await readJson(await requestApi(`api/DriverLicence/${encodeURIComponent(licenceCode)}`)));
+  return mapDriverLicence(
+    await readJson(await requestApi(`api/DriverLicence/${encodeURIComponent(licenceCode)}`)),
+  );
 }
 
-export async function getDriverLicenceDeleteCheck(licenceCode: number): Promise<DriverLicenceDeleteCheck> {
-  const payload = await readJson(await requestApi(`api/DriverLicence/${encodeURIComponent(licenceCode)}/delete-check`));
-  if (!isRecord(payload)) throw new DriverLicenceApiError("invalid-response", "The driver licence dependency response was invalid.");
+export async function getDriverLicenceDeleteCheck(
+  licenceCode: number,
+): Promise<DriverLicenceDeleteCheck> {
+  const payload = await readJson(
+    await requestApi(`api/DriverLicence/${encodeURIComponent(licenceCode)}/delete-check`),
+  );
+  if (!isRecord(payload))
+    throw new DriverLicenceApiError(
+      "invalid-response",
+      "The driver licence dependency response was invalid.",
+    );
   return {
     modelCount: asNumber(getValue(payload, "modelCount", "ModelCount")) ?? 0,
     canDelete: asBoolean(getValue(payload, "canDelete", "CanDelete")),
@@ -154,19 +182,27 @@ export async function getDriverLicenceDeleteCheck(licenceCode: number): Promise<
 }
 
 export async function createDriverLicence(input: DriverLicenceWriteInput) {
-  return mapDriverLicence(await readJson(await requestApi("api/DriverLicence", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ description: input.description }),
-  })));
+  return mapDriverLicence(
+    await readJson(
+      await requestApi("api/DriverLicence", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ description: input.description }),
+      }),
+    ),
+  );
 }
 
 export async function updateDriverLicence(licenceCode: number, input: DriverLicenceWriteInput) {
-  return mapDriverLicence(await readJson(await requestApi(`api/DriverLicence/${encodeURIComponent(licenceCode)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ licence_code: licenceCode, description: input.description }),
-  })));
+  return mapDriverLicence(
+    await readJson(
+      await requestApi(`api/DriverLicence/${encodeURIComponent(licenceCode)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ licence_code: licenceCode, description: input.description }),
+      }),
+    ),
+  );
 }
 
 export async function deleteDriverLicence(licenceCode: number) {

@@ -23,8 +23,8 @@ public class AccessLevelRepository : IAccessLevelRepository
     /// </summary>
     public async Task<AccessLevel?> GetByIdAsync(short accessLevelId)
     {
-        return await _context.AccessLevels
-            .Where(a => !a.is_deleted)
+        return await _context
+            .AccessLevels.Where(a => !a.is_deleted)
             .FirstOrDefaultAsync(a => a.AccessLevelID == accessLevelId);
     }
 
@@ -36,10 +36,12 @@ public class AccessLevelRepository : IAccessLevelRepository
         if (string.IsNullOrWhiteSpace(accessLevelName))
             return null;
 
-        return await _context.AccessLevels
-            .Where(a => !a.is_deleted)
-            .FirstOrDefaultAsync(a => a.AccessLevelName != null &&
-                                     a.AccessLevelName.ToLower() == accessLevelName.ToLower().Trim());
+        return await _context
+            .AccessLevels.Where(a => !a.is_deleted)
+            .FirstOrDefaultAsync(a =>
+                a.AccessLevelName != null
+                && a.AccessLevelName.ToLower() == accessLevelName.ToLower().Trim()
+            );
     }
 
     /// <summary>
@@ -47,8 +49,8 @@ public class AccessLevelRepository : IAccessLevelRepository
     /// </summary>
     public async Task<IEnumerable<AccessLevel>> GetAllAsync()
     {
-        return await _context.AccessLevels
-            .Where(a => !a.is_deleted)
+        return await _context
+            .AccessLevels.Where(a => !a.is_deleted)
             .OrderBy(a => a.AccessLevelValue)
             .ToListAsync();
     }
@@ -72,11 +74,14 @@ public class AccessLevelRepository : IAccessLevelRepository
     /// </summary>
     public async Task UpdateAsync(AccessLevel accessLevel, int currentUserId)
     {
-        var existing = await _context.AccessLevels
-            .FirstOrDefaultAsync(a => a.AccessLevelID == accessLevel.AccessLevelID);
+        var existing = await _context.AccessLevels.FirstOrDefaultAsync(a =>
+            a.AccessLevelID == accessLevel.AccessLevelID
+        );
 
         if (existing == null)
-            throw new KeyNotFoundException($"Access level with ID {accessLevel.AccessLevelID} not found");
+            throw new KeyNotFoundException(
+                $"Access level with ID {accessLevel.AccessLevelID} not found"
+            );
 
         existing.date_updated = DateTime.Now;
         existing.modified_by_user_code = currentUserId;
@@ -94,8 +99,9 @@ public class AccessLevelRepository : IAccessLevelRepository
     /// </summary>
     public async Task DeleteAsync(short accessLevelId, int currentUserId)
     {
-        var accessLevel = await _context.AccessLevels
-            .FirstOrDefaultAsync(a => a.AccessLevelID == accessLevelId);
+        var accessLevel = await _context.AccessLevels.FirstOrDefaultAsync(a =>
+            a.AccessLevelID == accessLevelId
+        );
 
         if (accessLevel == null)
             throw new KeyNotFoundException($"Access level with ID {accessLevelId} not found");

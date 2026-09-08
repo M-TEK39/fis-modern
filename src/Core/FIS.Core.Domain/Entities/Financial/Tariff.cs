@@ -93,7 +93,6 @@ public class Tariff
     public int? modified_by { get; set; }
 
     // Global audit fields (AI_CODING_RULES.md - Section 4.5)
-    
 
     [Column("date_updated")]
     public DateTime? date_updated { get; set; }

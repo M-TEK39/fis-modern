@@ -57,7 +57,10 @@ function SubmitButton() {
 }
 
 function vehicleLabel(vehicle: AccidentVehicleOption) {
-  return [vehicle.fleetNumber, vehicle.registrationNumber].filter(Boolean).join(" / ") || `VMF ${vehicle.vmfCode}`;
+  return (
+    [vehicle.fleetNumber, vehicle.registrationNumber].filter(Boolean).join(" / ") ||
+    `VMF ${vehicle.vmfCode}`
+  );
 }
 
 export default function GarageAddForm({
@@ -111,7 +114,13 @@ export default function GarageAddForm({
         </div>
         <div className="vehicle-create-grid">
           <Field id="reportedDate" label="Date reported" required>
-            <input id="reportedDate" name="reportedDate" type="date" defaultValue={today} required />
+            <input
+              id="reportedDate"
+              name="reportedDate"
+              type="date"
+              defaultValue={today}
+              required
+            />
           </Field>
           <Field id="occurenceDate" label="Accident date" required>
             <input id="occurenceDate" name="occurenceDate" type="date" required />
@@ -134,10 +143,22 @@ export default function GarageAddForm({
             <textarea id="description" name="description" maxLength={60} rows={3} required />
           </Field>
           <Field id="driverName" label="GG driver name">
-            <input id="driverName" name="driverName" type="text" maxLength={25} autoComplete="name" />
+            <input
+              id="driverName"
+              name="driverName"
+              type="text"
+              maxLength={25}
+              autoComplete="name"
+            />
           </Field>
           <Field id="driverEmployNumber" label="Driver ID number">
-            <input id="driverEmployNumber" name="driverEmployNumber" type="text" maxLength={13} inputMode="numeric" />
+            <input
+              id="driverEmployNumber"
+              name="driverEmployNumber"
+              type="text"
+              maxLength={13}
+              inputMode="numeric"
+            />
           </Field>
         </div>
       </section>
@@ -153,13 +174,7 @@ export default function GarageAddForm({
         </div>
         <div className="vehicle-create-grid">
           <Field id="ggReference" label="GG reference (do not edit)">
-            <input
-              id="ggReference"
-              name="ggReference"
-              type="text"
-              maxLength={20}
-              readOnly
-            />
+            <input id="ggReference" name="ggReference" type="text" maxLength={20} readOnly />
           </Field>
           <Field id="hqReference" label="HQ reference">
             <input id="hqReference" name="hqReference" type="text" maxLength={20} />
@@ -176,7 +191,14 @@ export default function GarageAddForm({
         </div>
         <div className="vehicle-create-grid">
           <Field id="excessAmount" label="Excess amount">
-            <input id="excessAmount" name="excessAmount" type="number" min="0" step="0.01" defaultValue="0" />
+            <input
+              id="excessAmount"
+              name="excessAmount"
+              type="number"
+              min="0"
+              step="0.01"
+              defaultValue="0"
+            />
           </Field>
         </div>
       </section>

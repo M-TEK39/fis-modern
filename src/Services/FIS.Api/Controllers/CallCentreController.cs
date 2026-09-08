@@ -1,8 +1,8 @@
 using System.Data;
 using System.Data.Common;
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
-using FIS.Api.Services;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,7 +30,8 @@ public class CallCentreController : BaseApiController
         LossCompatibilityService lossService,
         CallCentreEditCompatibilityService editCompatibilityService,
         FisDbContext context,
-        ILogger<CallCentreController> logger)
+        ILogger<CallCentreController> logger
+    )
     {
         _repository = repository;
         _towingRepository = towingRepository;
@@ -43,7 +44,8 @@ public class CallCentreController : BaseApiController
 
     [HttpPost("hijack")]
     public async Task<ActionResult<HiJackCreateResultDto>> CreateHiJack(
-        [FromBody] CreateHiJackDto dto)
+        [FromBody] CreateHiJackDto dto
+    )
     {
         if (!ModelState.IsValid)
         {
@@ -67,7 +69,9 @@ public class CallCentreController : BaseApiController
 
         if (!IsIncidentChoice(dto.InformCro) || !IsIncidentChoice(dto.CallClosed))
         {
-            return BadRequest(new { error = "The incident notification and closure choices are invalid." });
+            return BadRequest(
+                new { error = "The incident notification and closure choices are invalid." }
+            );
         }
 
         var currentUserId = GetCurrentUserId();
@@ -80,7 +84,7 @@ public class CallCentreController : BaseApiController
             Incident_time = dto.IncidentTime,
             Counter = 1,
             User_access_code = GetLegacyUserAccessCode(),
-            Capture_name = User.Identity?.Name
+            Capture_name = User.Identity?.Name,
         };
         ApplyFields(call, dto);
         call.Incident_type = "Hi-Jack";
@@ -102,24 +106,21 @@ public class CallCentreController : BaseApiController
         try
         {
             var created = await _repository.CreateAsync(call, currentUserId);
-            return Ok(new HiJackCreateResultDto
-            {
-                CallCentreCode = created.Call_centre_code
-            });
+            return Ok(new HiJackCreateResultDto { CallCentreCode = created.Call_centre_code });
         }
         catch (Exception ex)
         {
             _logger.LogError(
                 ex,
                 "Error creating Hi-Jack record for vehicle {VmfCode}",
-                dto.VmfCode);
+                dto.VmfCode
+            );
             return StatusCode(500, new { error = "Failed to create Hi-Jack record." });
         }
     }
 
     [HttpPost("loss")]
-    public async Task<ActionResult<LossCreateResultDto>> CreateLoss(
-        [FromBody] CreateLossDto dto)
+    public async Task<ActionResult<LossCreateResultDto>> CreateLoss([FromBody] CreateLossDto dto)
     {
         if (!ModelState.IsValid)
         {
@@ -146,10 +147,15 @@ public class CallCentreController : BaseApiController
             return BadRequest(new { error = "A loss type is required." });
         }
 
-        if (!IsIncidentChoice(dto.InformCro) || !IsIncidentChoice(dto.CallClosed) ||
-            !IsIncidentChoice(dto.TowNeed))
+        if (
+            !IsIncidentChoice(dto.InformCro)
+            || !IsIncidentChoice(dto.CallClosed)
+            || !IsIncidentChoice(dto.TowNeed)
+        )
         {
-            return BadRequest(new { error = "The incident notification, closure, or towing choices are invalid." });
+            return BadRequest(
+                new { error = "The incident notification, closure, or towing choices are invalid." }
+            );
         }
 
         var currentUserId = GetCurrentUserId();
@@ -163,7 +169,7 @@ public class CallCentreController : BaseApiController
             Incident_time = null,
             Counter = 1,
             User_access_code = GetLegacyUserAccessCode(),
-            Capture_name = User.Identity?.Name
+            Capture_name = User.Identity?.Name,
         };
         ApplyFields(call, dto);
         call.Incident_type = "Loss_Theft";
@@ -180,7 +186,9 @@ public class CallCentreController : BaseApiController
         call.Driver_name = driverProvided ? dto.DriverName : dto.TransportOfficerName;
         call.Driver_tel = driverProvided ? dto.DriverTel : dto.TransportOfficerTel;
 
-        await using var transaction = await _context.Database.BeginTransactionAsync(HttpContext.RequestAborted);
+        await using var transaction = await _context.Database.BeginTransactionAsync(
+            HttpContext.RequestAborted
+        );
         try
         {
             var createdCall = await _repository.CreateAsync(call, currentUserId);
@@ -201,16 +209,20 @@ public class CallCentreController : BaseApiController
                     0,
                     0,
                     createdCall.Call_centre_code,
-                    dto.TowNeed),
+                    dto.TowNeed
+                ),
                 currentUserId,
-                HttpContext.RequestAborted);
+                HttpContext.RequestAborted
+            );
 
             await transaction.CommitAsync(HttpContext.RequestAborted);
-            return Ok(new LossCreateResultDto
-            {
-                CallCentreCode = createdCall.Call_centre_code,
-                LossCode = createdLoss,
-            });
+            return Ok(
+                new LossCreateResultDto
+                {
+                    CallCentreCode = createdCall.Call_centre_code,
+                    LossCode = createdLoss,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -218,14 +230,16 @@ public class CallCentreController : BaseApiController
             _logger.LogError(
                 ex,
                 "Error creating Loss/Theft record for vehicle {VmfCode}",
-                dto.VmfCode);
+                dto.VmfCode
+            );
             return StatusCode(500, new { error = "Failed to create Loss/Theft record." });
         }
     }
 
     [HttpPost("accident")]
     public async Task<ActionResult<AccidentCreateResultDto>> CreateAccident(
-        [FromBody] CreateAccidentDto dto)
+        [FromBody] CreateAccidentDto dto
+    )
     {
         if (!ModelState.IsValid)
         {
@@ -244,7 +258,9 @@ public class CallCentreController : BaseApiController
 
         if (!IsIncidentChoice(dto.InformCro) || !IsIncidentChoice(dto.CallClosed))
         {
-            return BadRequest(new { error = "The incident notification and closure choices are invalid." });
+            return BadRequest(
+                new { error = "The incident notification and closure choices are invalid." }
+            );
         }
 
         if (!IsQuestionChoice(dto.Death) || !IsQuestionChoice(dto.Injured))
@@ -267,7 +283,7 @@ public class CallCentreController : BaseApiController
             Incident_time = dto.IncidentTime,
             Counter = 1,
             User_access_code = GetLegacyUserAccessCode(),
-            Capture_name = User.Identity?.Name
+            Capture_name = User.Identity?.Name,
         };
         ApplyFields(call, dto);
         call.Incident_type = "Accident";
@@ -284,7 +300,9 @@ public class CallCentreController : BaseApiController
         call.Driver_name = driverProvided ? dto.DriverName : dto.TransportOfficerName;
         call.Driver_tel = driverProvided ? dto.DriverTel : dto.TransportOfficerTel;
 
-        await using var transaction = await _context.Database.BeginTransactionAsync(HttpContext.RequestAborted);
+        await using var transaction = await _context.Database.BeginTransactionAsync(
+            HttpContext.RequestAborted
+        );
         try
         {
             var createdCall = await _repository.CreateAsync(call, currentUserId);
@@ -314,16 +332,20 @@ public class CallCentreController : BaseApiController
                     "C",
                     now,
                     dto.OccurencePlace,
-                    dto.TowNeed),
+                    dto.TowNeed
+                ),
                 currentUserId,
-                HttpContext.RequestAborted);
+                HttpContext.RequestAborted
+            );
 
             await transaction.CommitAsync(HttpContext.RequestAborted);
-            return Ok(new AccidentCreateResultDto
-            {
-                CallCentreCode = createdCall.Call_centre_code,
-                AccidentCode = createdAccident
-            });
+            return Ok(
+                new AccidentCreateResultDto
+                {
+                    CallCentreCode = createdCall.Call_centre_code,
+                    AccidentCode = createdAccident,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -331,7 +353,8 @@ public class CallCentreController : BaseApiController
             _logger.LogError(
                 ex,
                 "Error creating accident record for vehicle {VmfCode}",
-                dto.VmfCode);
+                dto.VmfCode
+            );
             return StatusCode(500, new { error = "Failed to create accident record." });
         }
     }
@@ -339,22 +362,44 @@ public class CallCentreController : BaseApiController
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CallCentre>>> GetAll()
     {
-        try { return Ok(await _repository.GetAllAsync()); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500, "Error"); }
+        try
+        {
+            return Ok(await _repository.GetAllAsync());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500, "Error");
+        }
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<CallCentre>> GetById(short id)
     {
-        try { var item = await _repository.GetByIdAsync(id); return item == null ? NotFound() : Ok(item); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500, "Error"); }
+        try
+        {
+            var item = await _repository.GetByIdAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500, "Error");
+        }
     }
 
     [HttpGet("vehicle/{vmfCode}")]
     public async Task<ActionResult<IEnumerable<CallCentre>>> GetByVehicle(int vmfCode)
     {
-        try { return Ok(await _repository.GetByVehicleAsync(vmfCode)); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500, "Error"); }
+        try
+        {
+            return Ok(await _repository.GetByVehicleAsync(vmfCode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500, "Error");
+        }
     }
 
     [HttpPost]
@@ -373,7 +418,7 @@ public class CallCentreController : BaseApiController
                 Incident_date = dto.IncidentDate ?? now.Date,
                 Incident_time = dto.IncidentTime ?? now,
                 Counter = dto.Counter ?? 1,
-                User_access_code = dto.UserAccessCode ?? GetLegacyUserAccessCode()
+                User_access_code = dto.UserAccessCode ?? GetLegacyUserAccessCode(),
             };
             ApplyFields(item, dto);
 
@@ -383,13 +428,17 @@ public class CallCentreController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating call centre record");
-            return StatusCode(500, new { error = "Failed to create call centre record", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to create call centre record", message = ex.Message }
+            );
         }
     }
 
     [HttpPost("road-assistance")]
     public async Task<ActionResult<RoadAssistanceCreateResultDto>> CreateRoadAssistance(
-        [FromBody] CreateRoadAssistanceDto dto)
+        [FromBody] CreateRoadAssistanceDto dto
+    )
     {
         if (dto.VmfCode is not > 0)
         {
@@ -401,14 +450,18 @@ public class CallCentreController : BaseApiController
             return BadRequest(new { error = "The incident type must be Road_Assistance." });
         }
 
-        if (!string.Equals(dto.InformCro, "Y", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(dto.InformCro, "N", StringComparison.OrdinalIgnoreCase))
+        if (
+            !string.Equals(dto.InformCro, "Y", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(dto.InformCro, "N", StringComparison.OrdinalIgnoreCase)
+        )
         {
             return BadRequest(new { error = "Inform_CRO must be Y or N." });
         }
 
-        if (!string.Equals(dto.CallClosed, "Y", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(dto.CallClosed, "N", StringComparison.OrdinalIgnoreCase))
+        if (
+            !string.Equals(dto.CallClosed, "Y", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(dto.CallClosed, "N", StringComparison.OrdinalIgnoreCase)
+        )
         {
             return BadRequest(new { error = "call_closed must be Y or N." });
         }
@@ -423,13 +476,15 @@ public class CallCentreController : BaseApiController
             Incident_time = dto.IncidentTime,
             Counter = 1,
             User_access_code = GetLegacyUserAccessCode(),
-            Capture_name = User.Identity?.Name
+            Capture_name = User.Identity?.Name,
         };
         ApplyFields(call, dto);
         call.User_access_code = GetLegacyUserAccessCode();
         call.Capture_name = User.Identity?.Name;
 
-        await using var transaction = await _context.Database.BeginTransactionAsync(HttpContext.RequestAborted);
+        await using var transaction = await _context.Database.BeginTransactionAsync(
+            HttpContext.RequestAborted
+        );
         try
         {
             var createdCall = await _repository.CreateAsync(call, currentUserId);
@@ -445,16 +500,18 @@ public class CallCentreController : BaseApiController
                 Tow_Truck_code = dto.TowTruckCode,
                 Contact_person_name = dto.TransportOfficerName,
                 Contact_person_tel = dto.TransportOfficerTel,
-                Remaks = dto.TowingRemarks
+                Remaks = dto.TowingRemarks,
             };
             var createdTowing = await _towingRepository.CreateAsync(towing, currentUserId);
 
             await transaction.CommitAsync(HttpContext.RequestAborted);
-            return Ok(new RoadAssistanceCreateResultDto
-            {
-                CallCentreCode = createdCall.Call_centre_code,
-                TowingCode = createdTowing.Towing_code
-            });
+            return Ok(
+                new RoadAssistanceCreateResultDto
+                {
+                    CallCentreCode = createdCall.Call_centre_code,
+                    TowingCode = createdTowing.Towing_code,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -462,7 +519,8 @@ public class CallCentreController : BaseApiController
             _logger.LogError(
                 ex,
                 "Error creating road assistance record for vehicle {VmfCode}",
-                dto.VmfCode);
+                dto.VmfCode
+            );
             return StatusCode(500, new { error = "Failed to create road assistance record." });
         }
     }
@@ -487,7 +545,10 @@ public class CallCentreController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating call centre record {Id}", id);
-            return StatusCode(500, new { error = "Failed to update call centre record", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to update call centre record", message = ex.Message }
+            );
         }
     }
 
@@ -506,7 +567,11 @@ public class CallCentreController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading child edit details for call centre record {Id}", id);
+            _logger.LogError(
+                ex,
+                "Error loading child edit details for call centre record {Id}",
+                id
+            );
             return StatusCode(500, new { error = "Failed to load call centre edit details." });
         }
     }
@@ -540,22 +605,33 @@ public class CallCentreController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error linking booking {BookingId} to call centre record {Id}", dto.BookingId, id);
-            return StatusCode(500, new { error = "Failed to link booking to the call centre record." });
+            _logger.LogError(
+                ex,
+                "Error linking booking {BookingId} to call centre record {Id}",
+                dto.BookingId,
+                id
+            );
+            return StatusCode(
+                500,
+                new { error = "Failed to link booking to the call centre record." }
+            );
         }
     }
 
     [HttpPut("{id}/edit-details")]
     public async Task<ActionResult<CallCentre>> UpdateEditDetails(
         short id,
-        [FromBody] UpdateCallCentreEditDetailsDto dto)
+        [FromBody] UpdateCallCentreEditDetailsDto dto
+    )
     {
         if (!ModelState.IsValid || dto.CallCentre is null)
         {
             return BadRequest(ModelState);
         }
 
-        await using var transaction = await _context.Database.BeginTransactionAsync(HttpContext.RequestAborted);
+        await using var transaction = await _context.Database.BeginTransactionAsync(
+            HttpContext.RequestAborted
+        );
         try
         {
             var existing = await _repository.GetByIdAsync(id);
@@ -570,7 +646,8 @@ public class CallCentreController : BaseApiController
                 id,
                 dto.ChildUpdates ?? new CallCentreEditUpdate(),
                 GetCurrentUserId(),
-                HttpContext.RequestAborted);
+                HttpContext.RequestAborted
+            );
 
             await transaction.CommitAsync(HttpContext.RequestAborted);
             return Ok(updated);
@@ -578,7 +655,11 @@ public class CallCentreController : BaseApiController
         catch (Exception ex)
         {
             await transaction.RollbackAsync(HttpContext.RequestAborted);
-            _logger.LogError(ex, "Error updating complete call centre edit workflow for record {Id}", id);
+            _logger.LogError(
+                ex,
+                "Error updating complete call centre edit workflow for record {Id}",
+                id
+            );
             return StatusCode(500, new { error = "Failed to update call centre edit details." });
         }
     }
@@ -586,8 +667,16 @@ public class CallCentreController : BaseApiController
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(short id)
     {
-        try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500, "Error"); }
+        try
+        {
+            await _repository.DeleteAsync(id, GetCurrentUserId());
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500, "Error");
+        }
     }
 
     #region Specialized Operations
@@ -606,8 +695,8 @@ public class CallCentreController : BaseApiController
                 "Edit Incident",
                 "Notifications",
                 "Reports",
-                "Help"
-            }
+                "Help",
+            },
         };
         return Ok(menu);
     }
@@ -627,19 +716,19 @@ public class CallCentreController : BaseApiController
                 new HelpSectionDto
                 {
                     Title = "Incident Capture",
-                    Content = "Record new service requests and incidents reported by departments"
+                    Content = "Record new service requests and incidents reported by departments",
                 },
                 new HelpSectionDto
                 {
                     Title = "Incident Editing",
-                    Content = "Update existing incident records and track resolution status"
+                    Content = "Update existing incident records and track resolution status",
                 },
                 new HelpSectionDto
                 {
                     Title = "Notifications",
-                    Content = "View pending notifications and alerts for open incidents"
-                }
-            }
+                    Content = "View pending notifications and alerts for open incidents",
+                },
+            },
         };
         return Ok(help);
     }
@@ -665,16 +754,17 @@ public class CallCentreController : BaseApiController
                 .Select(c => new NotificationDto
                 {
                     NotificationId = c.Call_centre_code,
-                    Message = $"Call from {c.Caller_name ?? "Unknown"} for vehicle {c.GG_number ?? "N/A"}",
+                    Message =
+                        $"Call from {c.Caller_name ?? "Unknown"} for vehicle {c.GG_number ?? "N/A"}",
                     CreatedDate = c.Call_date ?? c.date_created,
-                    IsRead = false // Could be enhanced with a separate read tracking mechanism
+                    IsRead = false, // Could be enhanced with a separate read tracking mechanism
                 })
                 .ToList();
 
             var notifications = new CallCentreNotificationsDto
             {
                 Notifications = notificationsList,
-                UnreadCount = notificationsList.Count
+                UnreadCount = notificationsList.Count,
             };
             return Ok(notifications);
         }
@@ -703,8 +793,8 @@ public class CallCentreController : BaseApiController
                 "Statistics",
                 "CLO Inquiry",
                 "Data Access",
-                "Open Calls"
-            }
+                "Open Calls",
+            },
         };
         return Ok(menu);
     }
@@ -713,12 +803,19 @@ public class CallCentreController : BaseApiController
     /// Generate call centre report by department and site for a period
     /// </summary>
     [HttpPost("reports/dept-site-period")]
-    public async Task<ActionResult<CallCentreReportDto>> GetReportDeptSitePeriod([FromBody] CallCentreDeptSitePeriodRequestDto request)
+    public async Task<ActionResult<CallCentreReportDto>> GetReportDeptSitePeriod(
+        [FromBody] CallCentreDeptSitePeriodRequestDto request
+    )
     {
         try
         {
-            _logger.LogInformation("Generating dept/site period report: Dept={DepartmentCode}, Site={SiteCode}, Start={StartDate}, End={EndDate}",
-                request.DepartmentCode, request.SiteCode, request.StartDate, request.EndDate);
+            _logger.LogInformation(
+                "Generating dept/site period report: Dept={DepartmentCode}, Site={SiteCode}, Start={StartDate}, End={EndDate}",
+                request.DepartmentCode,
+                request.SiteCode,
+                request.StartDate,
+                request.EndDate
+            );
 
             var calls = await _repository.GetByDateRangeAsync(request.StartDate, request.EndDate);
 
@@ -735,7 +832,7 @@ public class CallCentreController : BaseApiController
                 RecordCount = filteredCalls.Count,
                 GeneratedDate = DateTime.UtcNow,
                 StartDate = request.StartDate,
-                EndDate = request.EndDate
+                EndDate = request.EndDate,
             };
             return Ok(report);
         }
@@ -750,11 +847,18 @@ public class CallCentreController : BaseApiController
     /// Generate call centre statistics report
     /// </summary>
     [HttpGet("reports/statistics")]
-    public async Task<ActionResult<CallCentreReportDto>> GetReportStatistics([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
+    public async Task<ActionResult<CallCentreReportDto>> GetReportStatistics(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate
+    )
     {
         try
         {
-            _logger.LogInformation("Generating statistics report: Start={StartDate}, End={EndDate}", startDate, endDate);
+            _logger.LogInformation(
+                "Generating statistics report: Start={StartDate}, End={EndDate}",
+                startDate,
+                endDate
+            );
 
             var start = startDate ?? DateTime.UtcNow.AddMonths(-1);
             var end = endDate ?? DateTime.UtcNow;
@@ -767,16 +871,26 @@ public class CallCentreController : BaseApiController
             var statistics = new
             {
                 TotalCalls = callsList.Count,
-                CallsBySite = callsList.GroupBy(c => c.Driver_Site ?? 0)
+                CallsBySite = callsList
+                    .GroupBy(c => c.Driver_Site ?? 0)
                     .Select(g => new { SiteCode = g.Key, Count = g.Count() })
                     .OrderByDescending(x => x.Count)
                     .ToList(),
-                CallsByDate = callsList.GroupBy(c => (c.Call_date ?? c.date_created).Date)
+                CallsByDate = callsList
+                    .GroupBy(c => (c.Call_date ?? c.date_created).Date)
                     .Select(g => new { Date = g.Key, Count = g.Count() })
                     .OrderBy(x => x.Date)
                     .ToList(),
-                UniqueVehicles = callsList.Where(c => c.vmf_code.HasValue).Select(c => c.vmf_code).Distinct().Count(),
-                UniqueCallers = callsList.Where(c => !string.IsNullOrEmpty(c.Caller_name)).Select(c => c.Caller_name).Distinct().Count()
+                UniqueVehicles = callsList
+                    .Where(c => c.vmf_code.HasValue)
+                    .Select(c => c.vmf_code)
+                    .Distinct()
+                    .Count(),
+                UniqueCallers = callsList
+                    .Where(c => !string.IsNullOrEmpty(c.Caller_name))
+                    .Select(c => c.Caller_name)
+                    .Distinct()
+                    .Count(),
             };
 
             var report = new CallCentreReportDto
@@ -786,7 +900,7 @@ public class CallCentreController : BaseApiController
                 RecordCount = 1,
                 GeneratedDate = DateTime.UtcNow,
                 StartDate = start,
-                EndDate = end
+                EndDate = end,
             };
             return Ok(report);
         }
@@ -814,7 +928,10 @@ public class CallCentreController : BaseApiController
 
             var filteredCalls = allCalls
                 .Where(c => !c.is_deleted)
-                .Where(c => c.GG_number != null && c.GG_number.Contains(cloNumber, StringComparison.OrdinalIgnoreCase))
+                .Where(c =>
+                    c.GG_number != null
+                    && c.GG_number.Contains(cloNumber, StringComparison.OrdinalIgnoreCase)
+                )
                 .OrderByDescending(c => c.Call_date ?? c.date_created)
                 .ToList();
 
@@ -823,7 +940,7 @@ public class CallCentreController : BaseApiController
                 ReportType = "CLO",
                 Data = filteredCalls.Cast<object>().ToList(),
                 RecordCount = filteredCalls.Count,
-                GeneratedDate = DateTime.UtcNow
+                GeneratedDate = DateTime.UtcNow,
             };
             return Ok(report);
         }
@@ -838,11 +955,18 @@ public class CallCentreController : BaseApiController
     /// Generate data access report
     /// </summary>
     [HttpGet("reports/data-access")]
-    public async Task<ActionResult<CallCentreReportDto>> GetReportDataAccess([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
+    public async Task<ActionResult<CallCentreReportDto>> GetReportDataAccess(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate
+    )
     {
         try
         {
-            _logger.LogInformation("Generating data access report: Start={StartDate}, End={EndDate}", startDate, endDate);
+            _logger.LogInformation(
+                "Generating data access report: Start={StartDate}, End={EndDate}",
+                startDate,
+                endDate
+            );
 
             var start = startDate ?? DateTime.UtcNow.AddMonths(-1);
             var end = endDate ?? DateTime.UtcNow;
@@ -862,7 +986,7 @@ public class CallCentreController : BaseApiController
                     UserName = g.Key,
                     AccessCount = g.Count(),
                     FirstAccess = g.Min(c => c.date_created),
-                    LastAccess = g.Max(c => c.date_updated ?? c.date_created)
+                    LastAccess = g.Max(c => c.date_updated ?? c.date_created),
                 })
                 .OrderByDescending(x => x.AccessCount)
                 .ToList();
@@ -874,7 +998,7 @@ public class CallCentreController : BaseApiController
                 RecordCount = dataAccessSummary.Count,
                 GeneratedDate = DateTime.UtcNow,
                 StartDate = start,
-                EndDate = end
+                EndDate = end,
             };
             return Ok(report);
         }
@@ -892,7 +1016,9 @@ public class CallCentreController : BaseApiController
     /// resolved at runtime in the same way as the Call_centre repository.
     /// </summary>
     [HttpGet("reports/data-access/{callCentreCode:int}")]
-    public async Task<ActionResult<CallCentreDataAccessReportDto>> GetReportDataAccessDetail(int callCentreCode)
+    public async Task<ActionResult<CallCentreDataAccessReportDto>> GetReportDataAccessDetail(
+        int callCentreCode
+    )
     {
         if (callCentreCode <= 0 || callCentreCode > short.MaxValue)
         {
@@ -908,21 +1034,30 @@ public class CallCentreController : BaseApiController
             }
 
             var access = await ReadLegacyAccessRowsAsync((short)callCentreCode);
-            return Ok(new CallCentreDataAccessReportDto
-            {
-                CallCentreCode = (short)callCentreCode,
-                AccessTableAvailable = access.Available,
-                Entries = access.Entries
-            });
+            return Ok(
+                new CallCentreDataAccessReportDto
+                {
+                    CallCentreCode = (short)callCentreCode,
+                    AccessTableAvailable = access.Available,
+                    Entries = access.Entries,
+                }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading data access detail for call centre record {CallCentreCode}", callCentreCode);
+            _logger.LogError(
+                ex,
+                "Error loading data access detail for call centre record {CallCentreCode}",
+                callCentreCode
+            );
             return StatusCode(500, new { error = "Failed to load data access detail." });
         }
     }
 
-    private async Task<(bool Available, List<CallCentreDataAccessEntryDto> Entries)> ReadLegacyAccessRowsAsync(short callCentreCode)
+    private async Task<(
+        bool Available,
+        List<CallCentreDataAccessEntryDto> Entries
+    )> ReadLegacyAccessRowsAsync(short callCentreCode)
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -944,7 +1079,9 @@ public class CallCentreController : BaseApiController
             AddDbParameter(columnsCommand, "@table", DbType.String, "Call_Centre_Counter");
 
             var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            await using (var reader = await columnsCommand.ExecuteReaderAsync(HttpContext.RequestAborted))
+            await using (
+                var reader = await columnsCommand.ExecuteReaderAsync(HttpContext.RequestAborted)
+            )
             {
                 while (await reader.ReadAsync(HttpContext.RequestAborted))
                 {
@@ -972,11 +1109,11 @@ public class CallCentreController : BaseApiController
             var timeProjection = columns.Contains("DataCapture_time")
                 ? "[DataCapture_time] AS [DataCapture_time]"
                 : "CAST(NULL AS datetime2) AS [DataCapture_time]";
-            var orderBy = columns.Contains("Call_Centre_Counter_code")
-                ? "ORDER BY [Call_Centre_Counter_code]"
+            var orderBy =
+                columns.Contains("Call_Centre_Counter_code") ? "ORDER BY [Call_Centre_Counter_code]"
                 : columns.Contains("DataCapture_date")
                     ? $"ORDER BY [DataCapture_date]{(columns.Contains("DataCapture_time") ? ", [DataCapture_time]" : string.Empty)}"
-                    : "ORDER BY (SELECT 1)";
+                : "ORDER BY (SELECT 1)";
 
             await using var command = connection.CreateCommand();
             command.CommandText = $"""
@@ -988,17 +1125,24 @@ public class CallCentreController : BaseApiController
             AddDbParameter(command, "@callCentreCode", DbType.Int16, callCentreCode);
 
             var entries = new List<CallCentreDataAccessEntryDto>();
-            await using var dataReader = await command.ExecuteReaderAsync(HttpContext.RequestAborted);
+            await using var dataReader = await command.ExecuteReaderAsync(
+                HttpContext.RequestAborted
+            );
             while (await dataReader.ReadAsync(HttpContext.RequestAborted))
             {
-                entries.Add(new CallCentreDataAccessEntryDto
-                {
-                    CallCentreCounterCode = ReadNullableInt16(dataReader, "Call_Centre_Counter_code"),
-                    Counter = ReadNullableInt16(dataReader, "CounterCC"),
-                    DataCaptureId = ReadNullableInt16(dataReader, "DataCapture_id"),
-                    DataCaptureDate = ReadNullableDateTime(dataReader, "DataCapture_date"),
-                    DataCaptureTime = ReadNullableDateTime(dataReader, "DataCapture_time")
-                });
+                entries.Add(
+                    new CallCentreDataAccessEntryDto
+                    {
+                        CallCentreCounterCode = ReadNullableInt16(
+                            dataReader,
+                            "Call_Centre_Counter_code"
+                        ),
+                        Counter = ReadNullableInt16(dataReader, "CounterCC"),
+                        DataCaptureId = ReadNullableInt16(dataReader, "DataCapture_id"),
+                        DataCaptureDate = ReadNullableDateTime(dataReader, "DataCapture_date"),
+                        DataCaptureTime = ReadNullableDateTime(dataReader, "DataCapture_time"),
+                    }
+                );
             }
 
             return (true, entries);
@@ -1059,7 +1203,7 @@ public class CallCentreController : BaseApiController
                 RecordCount = openCalls.Count,
                 GeneratedDate = DateTime.UtcNow,
                 StartDate = ninetyDaysAgo,
-                EndDate = DateTime.UtcNow
+                EndDate = DateTime.UtcNow,
             };
             return Ok(report);
         }
@@ -1118,17 +1262,20 @@ public class CallCentreController : BaseApiController
         target.call_closed = dto.CallClosed;
     }
 
-    private static bool IsIncidentChoice(string? value)
-        => string.Equals(value, "Y", StringComparison.OrdinalIgnoreCase) ||
-           string.Equals(value, "N", StringComparison.OrdinalIgnoreCase);
+    private static bool IsIncidentChoice(string? value) =>
+        string.Equals(value, "Y", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, "N", StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsQuestionChoice(string? value)
-        => IsIncidentChoice(value) || string.Equals(value, "?", StringComparison.Ordinal);
+    private static bool IsQuestionChoice(string? value) =>
+        IsIncidentChoice(value) || string.Equals(value, "?", StringComparison.Ordinal);
 }
 
 #region Call Centre DTOs
 
-public class CallCentreMenuDto { public List<string> Options { get; set; } = new(); }
+public class CallCentreMenuDto
+{
+    public List<string> Options { get; set; } = new();
+}
 
 public class CallCentreHelpDto
 {
@@ -1151,7 +1298,10 @@ public class NotificationDto
     public bool IsRead { get; set; }
 }
 
-public class CallCentreReportMenuDto { public List<string> Reports { get; set; } = new(); }
+public class CallCentreReportMenuDto
+{
+    public List<string> Reports { get; set; } = new();
+}
 
 public class CallCentreDeptSitePeriodRequestDto
 {
@@ -1187,13 +1337,9 @@ public class CallCentreDataAccessEntryDto
     public DateTime? DataCaptureTime { get; set; }
 }
 
-public class CreateCallCentreDto : CallCentreFieldsDto
-{
-}
+public class CreateCallCentreDto : CallCentreFieldsDto { }
 
-public class UpdateCallCentreDto : CallCentreFieldsDto
-{
-}
+public class UpdateCallCentreDto : CallCentreFieldsDto { }
 
 public class LinkBookingDto
 {
@@ -1231,9 +1377,7 @@ public class CreateAccidentDto : CallCentreFieldsDto
     public string? AccidentDriverEmployNumber { get; set; }
 }
 
-public class CreateHiJackDto : CallCentreFieldsDto
-{
-}
+public class CreateHiJackDto : CallCentreFieldsDto { }
 
 public class CreateLossDto : CallCentreFieldsDto
 {

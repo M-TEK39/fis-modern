@@ -7,9 +7,13 @@ public class DelayHandler : StepHandlerBase
 {
     public override string HandlerType => "delay";
 
-    public DelayHandler(ILogger<DelayHandler> logger) : base(logger) { }
+    public DelayHandler(ILogger<DelayHandler> logger)
+        : base(logger) { }
 
-    protected override async Task<StepExecutionResult> ExecuteInternalAsync(Dictionary<string, object> parameters, WorkflowExecutionContext context)
+    protected override async Task<StepExecutionResult> ExecuteInternalAsync(
+        Dictionary<string, object> parameters,
+        WorkflowExecutionContext context
+    )
     {
         var delaySeconds = GetRequiredParameter<int>(parameters, "delaySeconds");
 
@@ -19,7 +23,9 @@ public class DelayHandler : StepHandlerBase
         return StepExecutionResult.SuccessResult($"Delay of {delaySeconds} seconds completed");
     }
 
-    public override Task<Interfaces.Workflow.ValidationResult> ValidateParametersAsync(Dictionary<string, object> parameters)
+    public override Task<Interfaces.Workflow.ValidationResult> ValidateParametersAsync(
+        Dictionary<string, object> parameters
+    )
     {
         var result = new Interfaces.Workflow.ValidationResult { IsValid = true };
 

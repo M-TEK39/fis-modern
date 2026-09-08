@@ -16,8 +16,8 @@ public class NotificationLogRepository : INotificationLogRepository
 
     public async Task<NotificationLog?> GetByIdAsync(int logId)
     {
-        return await _context.NotificationLogs
-            .Include(l => l.Notification)
+        return await _context
+            .NotificationLogs.Include(l => l.Notification)
             .Include(l => l.Workflow)
             .Include(l => l.Step)
             .FirstOrDefaultAsync(l => l.LogID == logId && !l.is_deleted);
@@ -25,40 +25,40 @@ public class NotificationLogRepository : INotificationLogRepository
 
     public async Task<IEnumerable<NotificationLog>> GetAllAsync()
     {
-        return await _context.NotificationLogs
-            .Where(l => !l.is_deleted)
+        return await _context
+            .NotificationLogs.Where(l => !l.is_deleted)
             .OrderByDescending(l => l.date_created)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<NotificationLog>> GetByWorkflowIdAsync(int workflowId)
     {
-        return await _context.NotificationLogs
-            .Where(l => l.WorkflowID == workflowId && !l.is_deleted)
+        return await _context
+            .NotificationLogs.Where(l => l.WorkflowID == workflowId && !l.is_deleted)
             .OrderByDescending(l => l.date_created)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<NotificationLog>> GetByStatusAsync(string status)
     {
-        return await _context.NotificationLogs
-            .Where(l => l.DeliveryStatus == status && !l.is_deleted)
+        return await _context
+            .NotificationLogs.Where(l => l.DeliveryStatus == status && !l.is_deleted)
             .OrderByDescending(l => l.date_created)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<NotificationLog>> GetFailedNotificationsAsync()
     {
-        return await _context.NotificationLogs
-            .Where(l => l.DeliveryStatus == "Failed" && !l.is_deleted)
+        return await _context
+            .NotificationLogs.Where(l => l.DeliveryStatus == "Failed" && !l.is_deleted)
             .OrderByDescending(l => l.date_created)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<NotificationLog>> GetPendingNotificationsAsync()
     {
-        return await _context.NotificationLogs
-            .Where(l => l.DeliveryStatus == "Pending" && !l.is_deleted)
+        return await _context
+            .NotificationLogs.Where(l => l.DeliveryStatus == "Pending" && !l.is_deleted)
             .OrderBy(l => l.date_created)
             .ToListAsync();
     }
@@ -76,8 +76,9 @@ public class NotificationLogRepository : INotificationLogRepository
 
     public async Task UpdateAsync(NotificationLog log)
     {
-        var existing = await _context.NotificationLogs
-            .FirstOrDefaultAsync(l => l.LogID == log.LogID);
+        var existing = await _context.NotificationLogs.FirstOrDefaultAsync(l =>
+            l.LogID == log.LogID
+        );
 
         if (existing == null)
             throw new InvalidOperationException($"NotificationLog {log.LogID} not found");
@@ -91,8 +92,7 @@ public class NotificationLogRepository : INotificationLogRepository
 
     public async Task DeleteAsync(int logId)
     {
-        var log = await _context.NotificationLogs
-            .FirstOrDefaultAsync(l => l.LogID == logId);
+        var log = await _context.NotificationLogs.FirstOrDefaultAsync(l => l.LogID == logId);
 
         if (log != null)
         {

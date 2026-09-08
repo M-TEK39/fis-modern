@@ -26,29 +26,43 @@ function text(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function number(formData: FormData, key: string, label: string, options: { required?: boolean; integer?: boolean; min?: number } = {}) {
+function number(
+  formData: FormData,
+  key: string,
+  label: string,
+  options: { required?: boolean; integer?: boolean; min?: number } = {},
+) {
   const value = text(formData, key);
   if (!value && !options.required) return null;
   const parsed = Number(value);
-  const valid = Number.isFinite(parsed)
-    && (!options.integer || Number.isInteger(parsed))
-    && (options.min === undefined || parsed >= options.min);
+  const valid =
+    Number.isFinite(parsed) &&
+    (!options.integer || Number.isInteger(parsed)) &&
+    (options.min === undefined || parsed >= options.min);
   if (!value || !valid) throw new TaxiValidationError(`${label} is invalid.`);
   return parsed;
 }
 
-function dateTime(formData: FormData, dateKey: string, timeKey: string, label: string, required = false) {
+function dateTime(
+  formData: FormData,
+  dateKey: string,
+  timeKey: string,
+  label: string,
+  required = false,
+) {
   const date = text(formData, dateKey);
   const time = text(formData, timeKey);
   if (!date && !time && !required) return null;
-  if (!date || !time || Number.isNaN(Date.parse(`${date}T${time}:00`))) throw new TaxiValidationError(`${label} must be a valid date and time.`);
+  if (!date || !time || Number.isNaN(Date.parse(`${date}T${time}:00`)))
+    throw new TaxiValidationError(`${label} must be a valid date and time.`);
   return `${date}T${time}:00`;
 }
 
 function dateOnly(formData: FormData, key: string, label: string, required = false) {
   const value = text(formData, key);
   if (!value && !required) return null;
-  if (!value || Number.isNaN(Date.parse(`${value}T00:00:00`))) throw new TaxiValidationError(`${label} must be a valid date.`);
+  if (!value || Number.isNaN(Date.parse(`${value}T00:00:00`)))
+    throw new TaxiValidationError(`${label} must be a valid date.`);
   return `${value}T00:00:00`;
 }
 
@@ -64,15 +78,23 @@ function redirectWithMessage(path: string, key: "saved" | "error", message: stri
 
 async function authorizeTaxi() {
   const session = await getSession();
-  if (session.status !== "authenticated") return "Your session has expired. Sign in again before continuing.";
-  if (!session.roles.some((role) => role.localeCompare(TAXI_ROLE, undefined, { sensitivity: "accent" }) === 0)) return "You do not have permission to use Taxi Maintenance.";
+  if (session.status !== "authenticated")
+    return "Your session has expired. Sign in again before continuing.";
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(TAXI_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  )
+    return "You do not have permission to use Taxi Maintenance.";
   return null;
 }
 
 function apiErrorMessage(error: unknown, subject: string) {
   if (error instanceof TaxiApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return `The Taxi ${subject} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return `The Taxi ${subject} service is temporarily unavailable. Please try again.`;
     if (error.reason === "not-found") return `The ${subject} record was not found.`;
   }
   return `The Taxi ${subject} operation failed. Please try again.`;
@@ -85,8 +107,18 @@ function existingTaxiInput(taxi: Awaited<ReturnType<typeof getTaxi>>): TaxiInput
 
 function taxiInput(formData: FormData, existing?: Awaited<ReturnType<typeof getTaxi>>): TaxiInput {
   const rekNum = text(formData, "rekNum");
-  const siteCode = number(formData, "siteCode", "Site code", { required: true, integer: true, min: 1 });
-  const required = dateTime(formData, "dateRequired", "timeRequired", "Transport date and time", true);
+  const siteCode = number(formData, "siteCode", "Site code", {
+    required: true,
+    integer: true,
+    min: 1,
+  });
+  const required = dateTime(
+    formData,
+    "dateRequired",
+    "timeRequired",
+    "Transport date and time",
+    true,
+  );
   const official = text(formData, "official");
   if (!rekNum) throw new TaxiValidationError("Requisition number is required.");
   if (!official) throw new TaxiValidationError("Official/passenger name is required.");
@@ -96,11 +128,17 @@ function taxiInput(formData: FormData, existing?: Awaited<ReturnType<typeof getT
     rekNum,
     contractorId: number(formData, "contractorId", "Service provider", { integer: true, min: 1 }),
     vmfCode: text(formData, "vmfCode") || null,
-    departmentCode: number(formData, "departmentCode", "Department code", { integer: true, min: 1 }),
+    departmentCode: number(formData, "departmentCode", "Department code", {
+      integer: true,
+      min: 1,
+    }),
     siteCode: siteCode ?? 0,
     dateRequired: required ?? "",
     timeRequired: required ?? "",
-    vehicleTypeCode: number(formData, "vehicleTypeCode", "Vehicle class", { integer: true, min: 0 }),
+    vehicleTypeCode: number(formData, "vehicleTypeCode", "Vehicle class", {
+      integer: true,
+      min: 0,
+    }),
     official,
     rank: text(formData, "rank") || null,
     confirmed: existing?.confirmed ?? null,
@@ -157,9 +195,14 @@ export async function saveTaxiRequestAction(formData: FormData) {
     const saved = requestId ? await updateTaxi(requestId, input) : await createTaxi(input);
     revalidatePath("/taxis");
     revalidatePath("/taxis/requests");
-    redirectWithMessage(`${returnPath}?mode=${requestId ? "edit" : "add"}`, "saved", `Taxi requisition ${saved.rekNum} saved.`);
+    redirectWithMessage(
+      `${returnPath}?mode=${requestId ? "edit" : "add"}`,
+      "saved",
+      `Taxi requisition ${saved.rekNum} saved.`,
+    );
   } catch (error) {
-    if (error instanceof Error && !(error instanceof TaxiApiError)) redirectWithMessage(returnPath, "error", error.message);
+    if (error instanceof Error && !(error instanceof TaxiApiError))
+      redirectWithMessage(returnPath, "error", error.message);
     redirectWithMessage(returnPath, "error", apiErrorMessage(error, "requisition"));
   }
 }
@@ -169,36 +212,75 @@ export async function cancelTaxiRequestAction(formData: FormData) {
   const accessError = await authorizeTaxi();
   if (accessError) redirectWithMessage(returnPath, "error", accessError);
   try {
-    const requestId = number(formData, "requestId", "Request ID", { required: true, integer: true, min: 1 });
+    const requestId = number(formData, "requestId", "Request ID", {
+      required: true,
+      integer: true,
+      min: 1,
+    });
     const taxi = await getTaxi(requestId ?? 0);
     const reason = text(formData, "cancelReason") || "Cancelled by user";
     await updateTaxi(requestId ?? 0, { ...existingTaxiInput(taxi), cancelled: reason });
     revalidatePath("/taxis");
     redirectWithMessage(returnPath, "saved", `Taxi requisition ${taxi.rekNum} cancelled.`);
   } catch (error) {
-    redirectWithMessage(returnPath, "error", error instanceof TaxiValidationError ? error.message : apiErrorMessage(error, "cancellation"));
+    redirectWithMessage(
+      returnPath,
+      "error",
+      error instanceof TaxiValidationError ? error.message : apiErrorMessage(error, "cancellation"),
+    );
   }
 }
 
 function taxiLogInput(formData: FormData): TaxiLogInput {
-  const requestId = number(formData, "requestId", "Request ID", { required: true, integer: true, min: 1 });
-  const contractorId = number(formData, "contractorId", "Service provider", { required: true, integer: true, min: 1 });
-  const driverStartOdo = number(formData, "driverStartOdo", "Driver start odometer", { required: true, min: 0 });
-  const driverEndOdo = number(formData, "driverEndOdo", "Driver end odometer", { required: true, min: 0 });
+  const requestId = number(formData, "requestId", "Request ID", {
+    required: true,
+    integer: true,
+    min: 1,
+  });
+  const contractorId = number(formData, "contractorId", "Service provider", {
+    required: true,
+    integer: true,
+    min: 1,
+  });
+  const driverStartOdo = number(formData, "driverStartOdo", "Driver start odometer", {
+    required: true,
+    min: 0,
+  });
+  const driverEndOdo = number(formData, "driverEndOdo", "Driver end odometer", {
+    required: true,
+    min: 0,
+  });
   const startDate = dateOnly(formData, "driverStartDate", "Driver start date", true);
   const endDate = dateOnly(formData, "driverEndDate", "Driver end date", true);
   const driverStartTime = text(formData, "driverStartTime");
   const driverEndTime = text(formData, "driverEndTime");
-  if (!requestId || !contractorId || driverStartOdo === null || driverEndOdo === null || !startDate || !endDate || !driverStartTime || !driverEndTime) throw new TaxiValidationError("Complete all required taxi-log fields.");
-  if (driverEndOdo <= driverStartOdo) throw new TaxiValidationError("Driver end odometer must be greater than driver start odometer.");
+  if (
+    !requestId ||
+    !contractorId ||
+    driverStartOdo === null ||
+    driverEndOdo === null ||
+    !startDate ||
+    !endDate ||
+    !driverStartTime ||
+    !driverEndTime
+  )
+    throw new TaxiValidationError("Complete all required taxi-log fields.");
+  if (driverEndOdo <= driverStartOdo)
+    throw new TaxiValidationError(
+      "Driver end odometer must be greater than driver start odometer.",
+    );
   const driver = text(formData, "driver");
   const registrationNumber = text(formData, "registrationNumber");
-  if (!driver || !registrationNumber) throw new TaxiValidationError("Driver and registration number are required.");
+  if (!driver || !registrationNumber)
+    throw new TaxiValidationError("Driver and registration number are required.");
   return {
     requestId,
     rekNum: text(formData, "rekNum"),
     contractorId,
-    vehicleTypeCode: number(formData, "vehicleTypeCode", "Vehicle class", { integer: true, min: 0 }),
+    vehicleTypeCode: number(formData, "vehicleTypeCode", "Vehicle class", {
+      integer: true,
+      min: 0,
+    }),
     registrationNumber,
     driver,
     driverStartOdo,
@@ -224,7 +306,11 @@ export async function saveTaxiLogAction(formData: FormData) {
     revalidatePath("/taxis/logs/edit");
     redirectWithMessage(returnPath, "saved", `Taxi log ${input.rekNum} saved.`);
   } catch (error) {
-    redirectWithMessage(returnPath, "error", error instanceof TaxiValidationError ? error.message : apiErrorMessage(error, "log"));
+    redirectWithMessage(
+      returnPath,
+      "error",
+      error instanceof TaxiValidationError ? error.message : apiErrorMessage(error, "log"),
+    );
   }
 }
 
@@ -233,19 +319,44 @@ export async function saveTaxiWhiteLogAction(formData: FormData) {
   const accessError = await authorizeTaxi();
   if (accessError) redirectWithMessage(returnPath, "error", accessError);
   try {
-    const vmfCode = number(formData, "vmfCode", "GG number", { required: true, integer: true, min: 1 });
-    const startOdo = number(formData, "startOdo", "Start odometer", { required: true, integer: true, min: 0 });
-    const endOdo = number(formData, "endOdo", "End odometer", { required: true, integer: true, min: 0 });
+    const vmfCode = number(formData, "vmfCode", "GG number", {
+      required: true,
+      integer: true,
+      min: 1,
+    });
+    const startOdo = number(formData, "startOdo", "Start odometer", {
+      required: true,
+      integer: true,
+      min: 0,
+    });
+    const endOdo = number(formData, "endOdo", "End odometer", {
+      required: true,
+      integer: true,
+      min: 0,
+    });
     const startDate = dateOnly(formData, "startDate", "Start date", true);
     const endDate = dateOnly(formData, "endDate", "End date", true);
     const driver = text(formData, "driver");
-    if (vmfCode === null || startOdo === null || endOdo === null || !startDate || !endDate || !driver) throw new TaxiValidationError("Complete all required white-log fields.");
-    if (endOdo <= startOdo) throw new TaxiValidationError("End odometer must be greater than start odometer.");
+    if (
+      vmfCode === null ||
+      startOdo === null ||
+      endOdo === null ||
+      !startDate ||
+      !endDate ||
+      !driver
+    )
+      throw new TaxiValidationError("Complete all required white-log fields.");
+    if (endOdo <= startOdo)
+      throw new TaxiValidationError("End odometer must be greater than start odometer.");
     await createTaxiWhiteLog({ vmfCode, startOdo, endOdo, startDate, endDate, driver });
     revalidatePath("/taxis/logs/white-log");
     redirectWithMessage(returnPath, "saved", "Taxi white log saved.");
   } catch (error) {
-    redirectWithMessage(returnPath, "error", error instanceof TaxiValidationError ? error.message : apiErrorMessage(error, "white log"));
+    redirectWithMessage(
+      returnPath,
+      "error",
+      error instanceof TaxiValidationError ? error.message : apiErrorMessage(error, "white log"),
+    );
   }
 }
 
@@ -254,19 +365,30 @@ export async function uploadTaxiScanDocAction(formData: FormData) {
   const accessError = await authorizeTaxi();
   if (accessError) redirectWithMessage(returnPath, "error", accessError);
   try {
-    const vmfCode = number(formData, "vmfCode", "Vehicle", { required: true, integer: true, min: 1 });
+    const vmfCode = number(formData, "vmfCode", "Vehicle", {
+      required: true,
+      integer: true,
+      min: 1,
+    });
     const begin = dateOnly(formData, "periodBegin", "Certificate begin date", true);
     const end = dateOnly(formData, "periodEnd", "Certificate end date", true);
     const file = formData.get("file");
     if (vmfCode === null || !begin || !end || !(file instanceof File) || file.size === 0) {
       throw new TaxiValidationError("Choose a vehicle, certificate period, and image scan.");
     }
-    if (file.size > 20 * 1024 * 1024) throw new TaxiValidationError("The scan must be 20 MB or smaller.");
+    if (file.size > 20 * 1024 * 1024)
+      throw new TaxiValidationError("The scan must be 20 MB or smaller.");
     await uploadTaxiScanDoc({ vmfCode, periodBegin: begin, periodEnd: end, file });
     revalidatePath("/taxis/scan-requisition");
     redirectWithMessage(returnPath, "saved", "Taxi requisition certificate uploaded.");
   } catch (error) {
-    redirectWithMessage(returnPath, "error", error instanceof TaxiValidationError ? error.message : apiErrorMessage(error, "requisition scan"));
+    redirectWithMessage(
+      returnPath,
+      "error",
+      error instanceof TaxiValidationError
+        ? error.message
+        : apiErrorMessage(error, "requisition scan"),
+    );
   }
 }
 
@@ -275,11 +397,21 @@ export async function deleteTaxiScanDocAction(formData: FormData) {
   const accessError = await authorizeTaxi();
   if (accessError) redirectWithMessage(returnPath, "error", accessError);
   try {
-    const scanDocCode = number(formData, "scanDocCode", "Scan document", { required: true, integer: true, min: 1 });
+    const scanDocCode = number(formData, "scanDocCode", "Scan document", {
+      required: true,
+      integer: true,
+      min: 1,
+    });
     await deleteTaxiScanDoc(scanDocCode ?? 0);
     revalidatePath("/taxis/scan-requisition");
     redirectWithMessage(returnPath, "saved", "Taxi requisition certificate deleted.");
   } catch (error) {
-    redirectWithMessage(returnPath, "error", error instanceof TaxiValidationError ? error.message : apiErrorMessage(error, "requisition scan deletion"));
+    redirectWithMessage(
+      returnPath,
+      "error",
+      error instanceof TaxiValidationError
+        ? error.message
+        : apiErrorMessage(error, "requisition scan deletion"),
+    );
   }
 }

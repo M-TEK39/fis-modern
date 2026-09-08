@@ -32,7 +32,12 @@ function getText(formData: FormData, key: string) {
 
 function getInteger(formData: FormData, key: string, label: string): number;
 function getInteger(formData: FormData, key: string, label: string, required: false): number | null;
-function getInteger(formData: FormData, key: string, label: string, required = true): number | null {
+function getInteger(
+  formData: FormData,
+  key: string,
+  label: string,
+  required = true,
+): number | null {
   const value = getText(formData, key);
   if (!value && !required) {
     return null;
@@ -97,7 +102,9 @@ function getOptionalDecimal(formData: FormData, key: string, label: string) {
   return parsed;
 }
 
-function validateAndBuildRequest(formData: FormData): { request: CreateVehicleRequest } | { error: string } {
+function validateAndBuildRequest(
+  formData: FormData,
+): { request: CreateVehicleRequest } | { error: string } {
   try {
     const fleetNumber = getText(formData, "fleetNumber").toUpperCase() || null;
     const gpNumber = getText(formData, "gpNumber").toUpperCase() || null;
@@ -129,7 +136,9 @@ function validateAndBuildRequest(formData: FormData): { request: CreateVehicleRe
       ["Fleet notes", fleetNotes, 255],
       ["Damage details", damagesComment, 355],
     ] as const satisfies readonly (readonly [string, string | null, number])[];
-    const lengthError = tooLong.find(([, value, maximum]) => value !== null && value.length > maximum);
+    const lengthError = tooLong.find(
+      ([, value, maximum]) => value !== null && value.length > maximum,
+    );
     if (lengthError) {
       return { error: `${lengthError[0]} cannot exceed ${lengthError[2]} characters.` };
     }
@@ -157,17 +166,29 @@ function validateAndBuildRequest(formData: FormData): { request: CreateVehicleRe
     const purchaseAmount = getDecimal(formData, "purchaseAmount", "Purchase amount");
     const takeOnDate = getDate(formData, "takeOnDate", "Take-on date");
     const purchaseDate = getDate(formData, "purchaseDate", "Purchase date");
-    const maintenanceTypeCode = getInteger(formData, "maintenanceTypeCode", "Maintenance type", false);
-    const maintenanceStartDate = getOptionalDate(formData, "maintenanceStartDate", "Maintenance start date");
-    const maintenancePeriodMonths = getInteger(formData, "maintenancePeriodMonths", "Maintenance period", false);
+    const maintenanceTypeCode = getInteger(
+      formData,
+      "maintenanceTypeCode",
+      "Maintenance type",
+      false,
+    );
+    const maintenanceStartDate = getOptionalDate(
+      formData,
+      "maintenanceStartDate",
+      "Maintenance start date",
+    );
+    const maintenancePeriodMonths = getInteger(
+      formData,
+      "maintenancePeriodMonths",
+      "Maintenance period",
+      false,
+    );
     const maintenanceKilos = getInteger(formData, "maintenanceKilos", "Maintenance kilos", false);
     const maintenanceValue = getOptionalDecimal(formData, "maintenanceValue", "Maintenance value");
-    const extraCodes = formData
-      .getAll("extraCodes")
-      .flatMap((value) => {
-        const parsed = Number(value);
-        return typeof value === "string" && Number.isInteger(parsed) && parsed > 0 ? [parsed] : [];
-      });
+    const extraCodes = formData.getAll("extraCodes").flatMap((value) => {
+      const parsed = Number(value);
+      return typeof value === "string" && Number.isInteger(parsed) && parsed > 0 ? [parsed] : [];
+    });
     const damageStatus = getText(formData, "damageStatus") || "N";
 
     if (
@@ -192,7 +213,10 @@ function validateAndBuildRequest(formData: FormData): { request: CreateVehicleRe
 
     if (typeCode === 1 || typeCode === 2 || typeCode === 3) {
       if (sourceCode !== 1) {
-        return { error: "VIP Services, Permanent Hire, and Pool Vehicle entries must use g-Fleet Normal as Hired From." };
+        return {
+          error:
+            "VIP Services, Permanent Hire, and Pool Vehicle entries must use g-Fleet Normal as Hired From.",
+        };
       }
     } else if (typeCode === 4) {
       if (sourceCode !== 2 && sourceCode !== 3) {
@@ -205,15 +229,23 @@ function validateAndBuildRequest(formData: FormData): { request: CreateVehicleRe
     }
 
     if (maintenanceTypeCode !== null && (maintenanceValue === null || maintenanceValue <= 0)) {
-      return { error: "Maintenance value must be greater than zero when a maintenance option is selected." };
+      return {
+        error: "Maintenance value must be greater than zero when a maintenance option is selected.",
+      };
     }
 
     if (maintenanceTypeCode !== null && !maintenanceStartDate) {
       return { error: "Maintenance start date is required when a maintenance option is selected." };
     }
 
-    if (maintenanceTypeCode !== null && maintenanceStartDate && Number(maintenanceStartDate.slice(0, 4)) < year) {
-      return { error: "Maintenance start date cannot be earlier than the vehicle's manufactured year." };
+    if (
+      maintenanceTypeCode !== null &&
+      maintenanceStartDate &&
+      Number(maintenanceStartDate.slice(0, 4)) < year
+    ) {
+      return {
+        error: "Maintenance start date cannot be earlier than the vehicle's manufactured year.",
+      };
     }
 
     if (damageStatus === "Y" && !damagesComment) {
@@ -300,7 +332,10 @@ export async function createVehicleAction(
       };
     }
 
-    console.error("FIS vehicle creation failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle creation failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "error", message: "Vehicle creation failed. Please try again." };
   }
 
@@ -317,7 +352,11 @@ export async function searchVehicleAction(
 
   const searchTerm = getText(formData, "quickSearch");
   if (!searchTerm) {
-    return { status: "error", message: "Enter a VIN, engine, GG, or invoice number to search.", results: [] };
+    return {
+      status: "error",
+      message: "Enter a VIN, engine, GG, or invoice number to search.",
+      results: [],
+    };
   }
 
   try {
@@ -339,7 +378,10 @@ export async function searchVehicleAction(
       };
     }
 
-    console.error("FIS vehicle search failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle search failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "error", message: "Vehicle search failed. Please try again.", results: [] };
   }
 }

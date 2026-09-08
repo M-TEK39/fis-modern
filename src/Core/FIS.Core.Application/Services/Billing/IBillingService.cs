@@ -25,9 +25,7 @@ public interface IBillingService
     /// - Tariff = from GetVehicleTariff function
     /// - Amount = ROUND(quantity * tariff, 2)
     /// </remarks>
-    Task<JournalDetail> CreateContractBillingRecordAsync(
-        Contract contract,
-        bool isUpdate = false);
+    Task<JournalDetail> CreateContractBillingRecordAsync(Contract contract, bool isUpdate = false);
 
     /// <summary>
     /// Auto-create billing record when trip is completed.
@@ -44,10 +42,7 @@ public interface IBillingService
     /// - Tariff = from GetVehicleTariff(contractCode, date, 'KILOS')
     /// - Amount = ROUND(quantity * tariff, 2)
     /// </remarks>
-    Task<JournalDetail> CreateTripBillingRecordAsync(
-        Trip trip,
-        int startOdometer,
-        int endOdometer);
+    Task<JournalDetail> CreateTripBillingRecordAsync(Trip trip, int startOdometer, int endOdometer);
 
     /// <summary>
     /// Auto-create billing record when fuel is purchased.
@@ -83,7 +78,8 @@ public interface IBillingService
         DateTime startDate,
         DateTime endDate,
         string contractType,
-        int? hoursUsed = null);
+        int? hoursUsed = null
+    );
 
     /// <summary>
     /// Calculate kilometer billing amount for a trip.
@@ -97,7 +93,8 @@ public interface IBillingService
         int contractCode,
         int startOdometer,
         int endOdometer,
-        DateTime date);
+        DateTime date
+    );
 
     /// <summary>
     /// Calculate fuel billing amount for a purchase.
@@ -106,10 +103,7 @@ public interface IBillingService
     /// <param name="liters">Liters purchased</param>
     /// <param name="purchaseDate">Date of purchase</param>
     /// <returns>Calculated amount (liters * fuel tariff)</returns>
-    Task<decimal> CalculateFuelAmountAsync(
-        int fuelTypeCode,
-        decimal liters,
-        DateTime purchaseDate);
+    Task<decimal> CalculateFuelAmountAsync(int fuelTypeCode, decimal liters, DateTime purchaseDate);
 
     #endregion
 
@@ -135,7 +129,8 @@ public interface IBillingService
         string contractType,
         DateTime startDate,
         DateTime endDate,
-        int? hoursUsed = null);
+        int? hoursUsed = null
+    );
 
     /// <summary>
     /// Calculate number of days between two dates (legacy DateDiff helper).
@@ -197,7 +192,8 @@ public interface IBillingService
     Task<JournalDetail> CreateRebillRecordAsync(
         Guid originalJournalDetailCode,
         string newFinancialYear,
-        string reason);
+        string reason
+    );
 
     /// <summary>
     /// Reverse a journal detail transaction.
@@ -212,9 +208,7 @@ public interface IBillingService
     /// - Negative quantity and amount
     /// - journal_detail_reversalof = original GUID
     /// </remarks>
-    Task<JournalDetail> ReverseJournalDetailAsync(
-        Guid journalDetailCode,
-        string reason);
+    Task<JournalDetail> ReverseJournalDetailAsync(Guid journalDetailCode, string reason);
 
     /// <summary>
     /// Check if reversal requires rebill (cross-fiscal-year).
@@ -244,7 +238,8 @@ public interface IBillingService
     /// </remarks>
     Task<JournalDetail> UpdateContractBillingAsync(
         Contract contract,
-        ContractChangeType changeType);
+        ContractChangeType changeType
+    );
 
     /// <summary>
     /// Update charged_until date on contract when billing is created.
@@ -274,7 +269,8 @@ public interface IBillingService
     Task<List<JournalDetail>> GetUnpostedJournalDetailsAsync(
         int? departmentCode = null,
         DateTime? startDate = null,
-        DateTime? endDate = null);
+        DateTime? endDate = null
+    );
 
     /// <summary>
     /// Mark journal details as posted.
@@ -307,7 +303,8 @@ public interface IBillingService
     Task<BillingValidationResult> ValidateTripForBillingAsync(
         Trip trip,
         int startOdometer,
-        int endOdometer);
+        int endOdometer
+    );
 
     #endregion
 }
@@ -338,7 +335,7 @@ public enum ContractChangeType
     /// <summary>
     /// Contract changed requiring reversal and new billing record.
     /// </summary>
-    Reversal
+    Reversal,
 }
 
 /// <summary>
@@ -374,11 +371,7 @@ public class BillingValidationResult
     /// </summary>
     public static BillingValidationResult Invalid(params string[] errors)
     {
-        return new BillingValidationResult
-        {
-            IsValid = false,
-            Errors = errors.ToList()
-        };
+        return new BillingValidationResult { IsValid = false, Errors = errors.ToList() };
     }
 
     /// <summary>

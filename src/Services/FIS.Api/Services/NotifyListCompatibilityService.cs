@@ -16,7 +16,8 @@ namespace FIS.Api.Services;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "Command text is assembled only from fixed statements and allowlisted schema identifiers.")]
+    Justification = "Command text is assembled only from fixed statements and allowlisted schema identifiers."
+)]
 public sealed class NotifyListCompatibilityService
 {
     private const string TableName = "Notify_List";
@@ -30,7 +31,8 @@ public sealed class NotifyListCompatibilityService
 
     public async Task<IReadOnlyList<NotifyListRecord>> GetAllAsync(
         string? search,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var columns = await GetAvailableColumnsAsync(cancellationToken);
         return await ReadAsync(columns, search, code: null, cancellationToken);
@@ -38,7 +40,8 @@ public sealed class NotifyListCompatibilityService
 
     public async Task<NotifyListRecord?> GetByIdAsync(
         int code,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var columns = await GetAvailableColumnsAsync(cancellationToken);
         var records = await ReadAsync(columns, search: null, code: code, cancellationToken);
@@ -49,14 +52,11 @@ public sealed class NotifyListCompatibilityService
         string? description,
         string? email,
         int? userCode,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var columns = await GetAvailableColumnsAsync(cancellationToken);
-        var insertColumns = new List<string>
-        {
-            "[Notify_list_desc]",
-            "[Notify_email1]"
-        };
+        var insertColumns = new List<string> { "[Notify_list_desc]", "[Notify_email1]" };
         var values = new List<string> { "@description", "@email" };
 
         if (columns.Contains("date_created"))
@@ -112,7 +112,12 @@ public sealed class NotifyListCompatibilityService
                 return null;
             }
 
-            return await ReadByIdAsync(connection, columns, Convert.ToInt32(newCode), cancellationToken);
+            return await ReadByIdAsync(
+                connection,
+                columns,
+                Convert.ToInt32(newCode),
+                cancellationToken
+            );
         }
         finally
         {
@@ -128,13 +133,14 @@ public sealed class NotifyListCompatibilityService
         string? description,
         string? email,
         int? userCode,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var columns = await GetAvailableColumnsAsync(cancellationToken);
         var assignments = new List<string>
         {
             "[Notify_list_desc] = @description",
-            "[Notify_email1] = @email"
+            "[Notify_email1] = @email",
         };
 
         if (columns.Contains("date_updated"))
@@ -193,7 +199,11 @@ public sealed class NotifyListCompatibilityService
         }
     }
 
-    public async Task<bool> DeleteAsync(int code, int? userCode, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(
+        int code,
+        int? userCode,
+        CancellationToken cancellationToken = default
+    )
     {
         var columns = await GetAvailableColumnsAsync(cancellationToken);
         var assignments = new List<string>();
@@ -264,7 +274,8 @@ public sealed class NotifyListCompatibilityService
         IReadOnlySet<string> columns,
         string? search,
         int? code,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -290,9 +301,16 @@ public sealed class NotifyListCompatibilityService
         DbConnection connection,
         IReadOnlySet<string> columns,
         int code,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
-        var records = await ReadManyAsync(connection, columns, search: null, code: code, cancellationToken);
+        var records = await ReadManyAsync(
+            connection,
+            columns,
+            search: null,
+            code: code,
+            cancellationToken
+        );
         return records.Count == 0 ? null : records[0];
     }
 
@@ -301,7 +319,8 @@ public sealed class NotifyListCompatibilityService
         IReadOnlySet<string> columns,
         string? search,
         int? code,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
@@ -309,7 +328,9 @@ public sealed class NotifyListCompatibilityService
         var predicates = new List<string> { GetActiveFilter(columns).Trim() };
         if (!string.IsNullOrWhiteSpace(search))
         {
-            predicates.Add("([Notify_list_desc] LIKE '%' + @search + '%' OR [Notify_email1] LIKE '%' + @search + '%')");
+            predicates.Add(
+                "([Notify_list_desc] LIKE '%' + @search + '%' OR [Notify_email1] LIKE '%' + @search + '%')"
+            );
         }
 
         if (code.HasValue)
@@ -343,18 +364,23 @@ public sealed class NotifyListCompatibilityService
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            records.Add(new NotifyListRecord(
-                reader.GetInt32(reader.GetOrdinal("Notify_list_code")),
-                ReadString(reader, "Notify_list_desc"),
-                ReadString(reader, "Notify_email1"),
-                ReadDateTime(reader, "date_created") ?? DateTime.MinValue,
-                ReadDateTime(reader, "date_updated")));
+            records.Add(
+                new NotifyListRecord(
+                    reader.GetInt32(reader.GetOrdinal("Notify_list_code")),
+                    ReadString(reader, "Notify_list_desc"),
+                    ReadString(reader, "Notify_email1"),
+                    ReadDateTime(reader, "date_created") ?? DateTime.MinValue,
+                    ReadDateTime(reader, "date_updated")
+                )
+            );
         }
 
         return records;
     }
 
-    private async Task<HashSet<string>> GetAvailableColumnsAsync(CancellationToken cancellationToken)
+    private async Task<HashSet<string>> GetAvailableColumnsAsync(
+        CancellationToken cancellationToken
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -387,12 +413,15 @@ public sealed class NotifyListCompatibilityService
                 columns.Add(reader.GetString(0));
             }
 
-            if (!columns.Contains("Notify_list_code")
+            if (
+                !columns.Contains("Notify_list_code")
                 || !columns.Contains("Notify_list_desc")
-                || !columns.Contains("Notify_email1"))
+                || !columns.Contains("Notify_email1")
+            )
             {
                 throw new InvalidOperationException(
-                    "The required Notify_List legacy columns are not available.");
+                    "The required Notify_List legacy columns are not available."
+                );
             }
 
             return columns;
@@ -406,14 +435,15 @@ public sealed class NotifyListCompatibilityService
         }
     }
 
-    private static string GetActiveFilter(IReadOnlySet<string> columns)
-        => columns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+    private static string GetActiveFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
 
     private static string GetOptionalProjection(
         IReadOnlySet<string> columns,
         string column,
-        string sqlType)
-        => columns.Contains(column)
+        string sqlType
+    ) =>
+        columns.Contains(column)
             ? $"[{column}] AS [{column}]"
             : $"CAST(NULL AS {sqlType}) AS [{column}]";
 
@@ -434,7 +464,8 @@ public sealed class NotifyListCompatibilityService
         string name,
         DbType type,
         object? value,
-        int? size = null)
+        int? size = null
+    )
     {
         var parameter = command.CreateParameter();
         parameter.ParameterName = name;
@@ -454,4 +485,5 @@ public sealed record NotifyListRecord(
     string? Notify_list_desc,
     string? Notify_email1,
     DateTime date_created,
-    DateTime? date_updated);
+    DateTime? date_updated
+);

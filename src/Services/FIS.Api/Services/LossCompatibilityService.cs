@@ -15,17 +15,13 @@ namespace FIS.Api.Services;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "SQL identifiers are fixed allowlisted columns and all values are parameterized.")]
+    Justification = "SQL identifiers are fixed allowlisted columns and all values are parameterized."
+)]
 public sealed class LossCompatibilityService
 {
     private const string TableName = "losses";
 
-    private static readonly string[] RequiredColumns =
-    [
-        "loss_code",
-        "vmf_code",
-        "loss_date"
-    ];
+    private static readonly string[] RequiredColumns = ["loss_code", "vmf_code", "loss_date"];
 
     private readonly FisDbContext _context;
 
@@ -37,7 +33,8 @@ public sealed class LossCompatibilityService
     public async Task<short> CreateAsync(
         LossCaptureValues values,
         int currentUserId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(values);
 
@@ -53,28 +50,32 @@ public sealed class LossCompatibilityService
             "date_created",
             "@dateCreated",
             DbType.DateTime2,
-            now);
+            now
+        );
         AddOptionalValue(
             writeValues,
             availableColumns,
             "created_by_user_code",
             "@createdByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
+            currentUserId > 0 ? currentUserId : null
+        );
         AddOptionalValue(
             writeValues,
             availableColumns,
             "is_deleted",
             "@isDeleted",
             DbType.Boolean,
-            false);
+            false
+        );
 
         return await ExecuteInsertAsync(writeValues, cancellationToken);
     }
 
     private async Task<short> ExecuteInsertAsync(
         IReadOnlyList<WriteValue> values,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -88,7 +89,10 @@ public sealed class LossCompatibilityService
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{TableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[loss_code]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
@@ -105,7 +109,9 @@ public sealed class LossCompatibilityService
         }
     }
 
-    private async Task<HashSet<string>> GetAvailableColumnsAsync(CancellationToken cancellationToken)
+    private async Task<HashSet<string>> GetAvailableColumnsAsync(
+        CancellationToken cancellationToken
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -134,11 +140,14 @@ public sealed class LossCompatibilityService
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"The required loss compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                    $"The required loss compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             return columns;
@@ -152,8 +161,7 @@ public sealed class LossCompatibilityService
         }
     }
 
-    private static List<WriteValue> BuildWriteValues(LossCaptureValues values)
-        =>
+    private static List<WriteValue> BuildWriteValues(LossCaptureValues values) =>
         [
             new("vmf_code", "@vmfCode", DbType.Int32, values.VmfCode),
             new("loss_date", "@lossDate", DbType.DateTime2, values.LossDate),
@@ -165,12 +173,27 @@ public sealed class LossCompatibilityService
             new("Remarks", "@remarks", DbType.String, values.Remarks),
             new("cover_forfeit", "@coverForfeit", DbType.Decimal, values.CoverForfeit),
             new("cancelled", "@cancelled", DbType.Decimal, values.Cancelled),
-            new("report_from_dept", "@reportFromDepartment", DbType.Decimal, values.ReportFromDepartment),
-            new("garaging_authority", "@garagingAuthority", DbType.Decimal, values.GaragingAuthority),
-            new("compensation_order", "@compensationOrder", DbType.Decimal, values.CompensationOrder),
+            new(
+                "report_from_dept",
+                "@reportFromDepartment",
+                DbType.Decimal,
+                values.ReportFromDepartment
+            ),
+            new(
+                "garaging_authority",
+                "@garagingAuthority",
+                DbType.Decimal,
+                values.GaragingAuthority
+            ),
+            new(
+                "compensation_order",
+                "@compensationOrder",
+                DbType.Decimal,
+                values.CompensationOrder
+            ),
             new("prosecute", "@prosecute", DbType.Decimal, values.Prosecute),
             new("Call_Refer", "@callRefer", DbType.Decimal, values.CallRefer),
-            new("Tow_need", "@towNeed", DbType.String, values.TowNeed)
+            new("Tow_need", "@towNeed", DbType.String, values.TowNeed),
         ];
 
     private static void AddOptionalValue(
@@ -179,7 +202,8 @@ public sealed class LossCompatibilityService
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -223,4 +247,5 @@ public sealed record LossCaptureValues(
     decimal CompensationOrder,
     decimal Prosecute,
     decimal? CallRefer,
-    string? TowNeed);
+    string? TowNeed
+);

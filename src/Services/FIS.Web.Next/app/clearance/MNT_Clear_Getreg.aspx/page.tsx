@@ -5,5 +5,7 @@ type LegacyClearanceEntryProps = {
 };
 
 export default function LegacyClearanceEntryPage({ searchParams }: LegacyClearanceEntryProps) {
-  return <ClearanceEntryPage routePath="/clearance/MNT_Clear_Getreg.aspx" searchParams={searchParams} />;
+  return (
+    <ClearanceEntryPage routePath="/clearance/MNT_Clear_Getreg.aspx" searchParams={searchParams} />
+  );
 }

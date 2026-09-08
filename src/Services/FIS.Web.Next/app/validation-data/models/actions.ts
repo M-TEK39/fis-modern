@@ -47,11 +47,20 @@ function getOptionalCode(formData: FormData, key: string) {
   return parsed;
 }
 
-function getRequiredInteger(formData: FormData, key: string, label: string, maxLength: number, minLength = 1, max = 2_147_483_647) {
+function getRequiredInteger(
+  formData: FormData,
+  key: string,
+  label: string,
+  maxLength: number,
+  minLength = 1,
+  max = 2_147_483_647,
+) {
   const value = getText(formData, key);
   if (!value) throw new ModelValidationError(`${label} is required.`);
   if (!/^\d+$/.test(value) || value.length < minLength || value.length > maxLength) {
-    throw new ModelValidationError(`${label} must be a whole number between ${minLength} and ${maxLength} digits.`);
+    throw new ModelValidationError(
+      `${label} must be a whole number between ${minLength} and ${maxLength} digits.`,
+    );
   }
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > max) {
@@ -93,13 +102,15 @@ function getOptionalDecimal(formData: FormData, key: string, label: string) {
 function getModelDescription(formData: FormData) {
   const value = getText(formData, "modelDescription");
   if (!value) throw new ModelValidationError("Model description is required.");
-  if (value.length > 60) throw new ModelValidationError("Model description must be 60 characters or fewer.");
+  if (value.length > 60)
+    throw new ModelValidationError("Model description must be 60 characters or fewer.");
   return value;
 }
 
 function getModelInput(formData: FormData): ModelWriteInput {
   const engineType = getText(formData, "engineType");
-  if (engineType.length > 30) throw new ModelValidationError("Engine type must be 30 characters or fewer.");
+  if (engineType.length > 30)
+    throw new ModelValidationError("Engine type must be 30 characters or fewer.");
 
   const vemmCode = getText(formData, "vemmCode");
   if (vemmCode.length < 7 || vemmCode.length > 20) {
@@ -123,7 +134,14 @@ function getModelInput(formData: FormData): ModelWriteInput {
     engineType: engineType || null,
     engineCapacity: getRequiredInteger(formData, "engineCapacity", "Engine capacity", 5, 1, 32767),
     ratedPower: getRequiredInteger(formData, "ratedPower", "Rated power", 5, 1, 32767),
-    fuelTankCapacity: getRequiredInteger(formData, "fuelTankCapacity", "Fuel tank capacity", 4, 1, 32767),
+    fuelTankCapacity: getRequiredInteger(
+      formData,
+      "fuelTankCapacity",
+      "Fuel tank capacity",
+      4,
+      1,
+      32767,
+    ),
     targetConsumption: getRequiredDecimal(formData, "targetConsumption", "Target consumption"),
     targetTyreLife: getRequiredInteger(formData, "targetTyreLife", "Target tyre life", 5, 3),
     serviceInterval: getRequiredInteger(formData, "serviceInterval", "Service interval", 6),
@@ -131,7 +149,11 @@ function getModelInput(formData: FormData): ModelWriteInput {
     licenceFeeCode: getRequiredCode(formData, "licenceFeeCode", "Licence fee"),
     gvm: getRequiredInteger(formData, "gvm", "GVM", 6, 2),
     transmission,
-    wesbankKilosPerLitre: getOptionalDecimal(formData, "wesbankKilosPerLitre", "Wesbank kilos per litre"),
+    wesbankKilosPerLitre: getOptionalDecimal(
+      formData,
+      "wesbankKilosPerLitre",
+      "Wesbank kilos per litre",
+    ),
   };
 }
 
@@ -142,21 +164,32 @@ function getModelCode(formData: FormData) {
 async function authorizeModelMaintenance() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
   if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return { ok: false as const, message: "You do not have permission to maintain vehicle models." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain vehicle models.",
+    };
   }
   return { ok: true as const };
 }
 
 function apiErrorMessage(error: unknown, operation: string) {
   if (error instanceof ModelApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return `The vehicle model ${operation} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return `The vehicle model ${operation} service is temporarily unavailable. Please try again.`;
     return error.message;
   }
   return `The vehicle model could not be ${operation}. Please try again.`;
@@ -177,9 +210,14 @@ export async function createModelAction(
 
   try {
     const created = await createModel(getModelInput(formData));
-    if (!created) throw new ModelApiError("invalid-response", "The FIS API did not return the created model.");
+    if (!created)
+      throw new ModelApiError("invalid-response", "The FIS API did not return the created model.");
   } catch (error) {
-    return { status: "error", message: error instanceof ModelValidationError ? error.message : apiErrorMessage(error, "created") };
+    return {
+      status: "error",
+      message:
+        error instanceof ModelValidationError ? error.message : apiErrorMessage(error, "created"),
+    };
   }
 
   revalidateModelRoutes();
@@ -197,13 +235,20 @@ export async function updateModelAction(
   try {
     modelCode = getModelCode(formData);
     const updated = await updateModel(modelCode, getModelInput(formData));
-    if (!updated) throw new ModelApiError("invalid-response", "The FIS API did not return the updated model.");
+    if (!updated)
+      throw new ModelApiError("invalid-response", "The FIS API did not return the updated model.");
   } catch (error) {
-    return { status: "error", message: error instanceof ModelValidationError ? error.message : apiErrorMessage(error, "updated") };
+    return {
+      status: "error",
+      message:
+        error instanceof ModelValidationError ? error.message : apiErrorMessage(error, "updated"),
+    };
   }
 
   revalidateModelRoutes();
-  redirect(`/validation-data/models?saved=updated&modelCode=${encodeURIComponent(String(modelCode))}`);
+  redirect(
+    `/validation-data/models?saved=updated&modelCode=${encodeURIComponent(String(modelCode))}`,
+  );
 }
 
 export async function deleteModelAction(formData: FormData) {
@@ -212,26 +257,36 @@ export async function deleteModelAction(formData: FormData) {
   try {
     modelCode = getModelCode(formData);
   } catch (error) {
-    redirect(`/validation-data/models?error=${encodeURIComponent(error instanceof Error ? error.message : "Model code is invalid.")}`);
+    redirect(
+      `/validation-data/models?error=${encodeURIComponent(error instanceof Error ? error.message : "Model code is invalid.")}`,
+    );
   }
   if (!access.ok) {
-    redirect(`/Validation/MNT_Model_Del_Check.aspx?code=${encodeURIComponent(String(modelCode))}&error=${encodeURIComponent(access.message)}`);
+    redirect(
+      `/Validation/MNT_Model_Del_Check.aspx?code=${encodeURIComponent(String(modelCode))}&error=${encodeURIComponent(access.message)}`,
+    );
   }
 
   let dependencies;
   try {
     dependencies = await getModelDeleteCheck(modelCode);
   } catch (error) {
-    redirect(`/Validation/MNT_Model_Del_Check.aspx?code=${modelCode}&error=${encodeURIComponent(apiErrorMessage(error, "deleted"))}`);
+    redirect(
+      `/Validation/MNT_Model_Del_Check.aspx?code=${modelCode}&error=${encodeURIComponent(apiErrorMessage(error, "deleted"))}`,
+    );
   }
   if (!dependencies.canDelete) {
-    redirect(`/Validation/MNT_Model_Del_Check.aspx?code=${modelCode}&error=${encodeURIComponent("This model cannot be deleted while vehicles are linked to it.")}`);
+    redirect(
+      `/Validation/MNT_Model_Del_Check.aspx?code=${modelCode}&error=${encodeURIComponent("This model cannot be deleted while vehicles are linked to it.")}`,
+    );
   }
 
   try {
     await deleteModel(modelCode);
   } catch (error) {
-    redirect(`/Validation/MNT_Model_Del_Check.aspx?code=${modelCode}&error=${encodeURIComponent(apiErrorMessage(error, "deleted"))}`);
+    redirect(
+      `/Validation/MNT_Model_Del_Check.aspx?code=${modelCode}&error=${encodeURIComponent(apiErrorMessage(error, "deleted"))}`,
+    );
   }
 
   revalidateModelRoutes();

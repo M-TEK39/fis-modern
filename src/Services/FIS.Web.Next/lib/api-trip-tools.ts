@@ -14,7 +14,8 @@ export type TripsWithoutRoutesRow = {
   approverName: string | null;
 };
 
-export type TripToolsApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "rejected";
+export type TripToolsApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "rejected";
 
 export class TripToolsApiError extends Error {
   constructor(
@@ -72,7 +73,8 @@ function getCollection(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new TripToolsApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new TripToolsApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -85,19 +87,28 @@ async function requestApi(path: string, init: RequestInit = {}) {
     });
 
     if (response.status === 401 || response.status === 403) {
-      throw new TripToolsApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new TripToolsApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
 
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the error body is not JSON.
       }
 
-      throw new TripToolsApiError(response.status >= 500 ? "unavailable" : "rejected", message, response.status);
+      throw new TripToolsApiError(
+        response.status >= 500 ? "unavailable" : "rejected",
+        message,
+        response.status,
+      );
     }
 
     return response;
@@ -120,18 +131,24 @@ async function readJson(response: Response) {
 function mapRow(value: unknown): TripsWithoutRoutesRow | null {
   if (!isRecord(value)) return null;
   return {
-    tripAuthorityCode: asNumber(getValue(value, "tripAuthorityCode", "TripAuthorityCode", "trip_authority_code")),
+    tripAuthorityCode: asNumber(
+      getValue(value, "tripAuthorityCode", "TripAuthorityCode", "trip_authority_code"),
+    ),
     contractCode: asNumber(getValue(value, "contractCode", "ContractCode", "contract_code")),
     issueDate: asString(getValue(value, "issueDate", "IssueDate", "issue_date")),
     tripReason: asString(getValue(value, "tripReason", "TripReason", "trip_reason")),
-    tripRequestNumber: asString(getValue(value, "tripRequestNumber", "TripRequestNumber", "trip_request_number")),
+    tripRequestNumber: asString(
+      getValue(value, "tripRequestNumber", "TripRequestNumber", "trip_request_number"),
+    ),
     approverName: asString(getValue(value, "approverName", "ApproverName", "approver_name")),
   };
 }
 
 export async function getTripsWithoutRoutes() {
   const response = await requestApi("api/troubleshoot/trips-without-routes");
-  return getCollection(await readJson(response)).map(mapRow).filter((row): row is TripsWithoutRoutesRow => row !== null);
+  return getCollection(await readJson(response))
+    .map(mapRow)
+    .filter((row): row is TripsWithoutRoutesRow => row !== null);
 }
 
 export async function removeTripsWithoutRoutes() {
@@ -141,5 +158,5 @@ export async function removeTripsWithoutRoutes() {
     body: JSON.stringify({}),
   });
   const payload = await readJson(response);
-  return isRecord(payload) ? asNumber(getValue(payload, "removed", "Removed")) ?? 0 : 0;
+  return isRecord(payload) ? (asNumber(getValue(payload, "removed", "Removed")) ?? 0) : 0;
 }

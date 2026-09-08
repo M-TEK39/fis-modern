@@ -6,7 +6,12 @@ import type { LegacyReport } from "@/lib/api-legacy-reports";
 export type ReportQuery = Record<string, string | string[] | undefined>;
 
 export function hasReportsRole(roles: readonly string[]) {
-  return roles.some((role) => role.trim().toLowerCase() === "reports" || role.trim().toLowerCase() === "administrator" || role.trim().toLowerCase() === "admin");
+  return roles.some(
+    (role) =>
+      role.trim().toLowerCase() === "reports" ||
+      role.trim().toLowerCase() === "administrator" ||
+      role.trim().toLowerCase() === "admin",
+  );
 }
 
 export type ReportMenuEntry = {
@@ -18,14 +23,18 @@ export type ReportMenuEntry = {
 
 export function queryValue(query: ReportQuery, key: string) {
   const value = query[key];
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
 export function hasQueryValue(query: ReportQuery, key: string) {
   return queryValue(query, key).trim().length > 0;
 }
 
-export function reportHref(slug: string, key?: string, filters: Record<string, string | undefined> = {}) {
+export function reportHref(
+  slug: string,
+  key?: string,
+  filters: Record<string, string | undefined> = {},
+) {
   const params = new URLSearchParams();
   if (key) params.set("rtype", key);
   params.set("view", "report");
@@ -61,7 +70,9 @@ export function ReportsFrame({
             <h1 id="reports-page-title">{title}</h1>
             <p>{description}</p>
           </div>
-          <Link className="button button-secondary" href={backHref}>{backLabel}</Link>
+          <Link className="button button-secondary" href={backHref}>
+            {backLabel}
+          </Link>
         </header>
         {children}
       </section>
@@ -69,7 +80,9 @@ export function ReportsFrame({
   );
 }
 
-export function AccessRestricted({ message = "Your account needs the legacy Reports permission." }: Readonly<{ message?: string }>) {
+export function AccessRestricted({
+  message = "Your account needs the legacy Reports permission.",
+}: Readonly<{ message?: string }>) {
   return (
     <section className="vehicle-status-card" role="alert">
       <p className="eyebrow">Access restricted</p>
@@ -79,7 +92,9 @@ export function AccessRestricted({ message = "Your account needs the legacy Repo
   );
 }
 
-export function ReportsUnavailable({ message = "The FIS API could not be reached. Retry when it is available." }: Readonly<{ message?: string }>) {
+export function ReportsUnavailable({
+  message = "The FIS API could not be reached. Retry when it is available.",
+}: Readonly<{ message?: string }>) {
   return (
     <section className="vehicle-status-card" role="alert">
       <p className="eyebrow">API unavailable</p>
@@ -104,11 +119,18 @@ export function ReportMenu({
         <h2 className="vehicle-menu-header">Report Menu</h2>
         <div className="vehicle-menu-body">
           {entries.map((entry) => (
-            <div className="vehicle-menu-item" key={`${entry.label}-${entry.key ?? entry.href ?? "entry"}`}>
+            <div
+              className="vehicle-menu-item"
+              key={`${entry.label}-${entry.key ?? entry.href ?? "entry"}`}
+            >
               {entry.href ? (
-                <Link className="vehicle-menu-link" href={entry.href}>{entry.label}</Link>
+                <Link className="vehicle-menu-link" href={entry.href}>
+                  {entry.label}
+                </Link>
               ) : (
-                <Link className="vehicle-menu-link" href={legacyReportHref(slug, entry.key)}>{entry.label}</Link>
+                <Link className="vehicle-menu-link" href={legacyReportHref(slug, entry.key)}>
+                  {entry.label}
+                </Link>
               )}
               {entry.badge ? <span className="vehicle-menu-badge">{entry.badge}</span> : null}
             </div>
@@ -138,10 +160,21 @@ export function ReportFilterForm({
       <div className="form-grid">
         {fields.map((field) => (
           <div className="form-field" key={field.name}>
-            <label className="form-label" htmlFor={`report-${slug}-${field.name}`}>{field.label}</label>
+            <label className="form-label" htmlFor={`report-${slug}-${field.name}`}>
+              {field.label}
+            </label>
             {field.options ? (
-              <select className="form-select" id={`report-${slug}-${field.name}`} name={field.name} defaultValue={queryValue(query, field.name)}>
-                {field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              <select
+                className="form-select"
+                id={`report-${slug}-${field.name}`}
+                name={field.name}
+                defaultValue={queryValue(query, field.name)}
+              >
+                {field.options.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             ) : (
               <input
@@ -157,8 +190,12 @@ export function ReportFilterForm({
         ))}
       </div>
       <div className="button-row">
-        <button className="button button-primary" type="submit">Submit</button>
-        <Link className="button button-secondary" href={`/reports/${slug}`}>Reset</Link>
+        <button className="button button-primary" type="submit">
+          Submit
+        </button>
+        <Link className="button button-secondary" href={`/reports/${slug}`}>
+          Reset
+        </Link>
       </div>
     </form>
   );
@@ -183,26 +220,48 @@ export function ReportResult({
     <section className="vehicle-status-maintenance-panel" aria-labelledby="report-result-title">
       <div className="vehicle-page-header">
         <div>
-          <p className="eyebrow">{report.totalCount} record{report.totalCount === 1 ? "" : "s"}</p>
+          <p className="eyebrow">
+            {report.totalCount} record{report.totalCount === 1 ? "" : "s"}
+          </p>
           <h2 id="report-result-title">{report.title}</h2>
         </div>
         <div className="button-row">
-          <Link className="button button-secondary" href={backHref}>Back to report menu</Link>
-          <Link className="button button-secondary" href="/reports">Reports Menu</Link>
+          <Link className="button button-secondary" href={backHref}>
+            Back to report menu
+          </Link>
+          <Link className="button button-secondary" href="/reports">
+            Reports Menu
+          </Link>
         </div>
       </div>
-      {report.isApproximate && report.approximationReason ? <div className="notice notice-info" role="status">{report.approximationReason}</div> : null}
+      {report.isApproximate && report.approximationReason ? (
+        <div className="notice notice-info" role="status">
+          {report.approximationReason}
+        </div>
+      ) : null}
       {report.rows.length === 0 ? (
-        <div className="vehicle-empty-state"><p>No report rows found for the selected filters.</p></div>
+        <div className="vehicle-empty-state">
+          <p>No report rows found for the selected filters.</p>
+        </div>
       ) : (
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">{report.title}</caption>
-            <thead><tr>{report.columns.map((column) => <th key={column.key} scope="col">{column.header}</th>)}</tr></thead>
+            <thead>
+              <tr>
+                {report.columns.map((column) => (
+                  <th key={column.key} scope="col">
+                    {column.header}
+                  </th>
+                ))}
+              </tr>
+            </thead>
             <tbody>
               {report.rows.map((row, index) => (
                 <tr key={`${report.reportKey}-${index}`}>
-                  {report.columns.map((column) => <td key={column.key}>{row[column.key] ?? "-"}</td>)}
+                  {report.columns.map((column) => (
+                    <td key={column.key}>{row[column.key] ?? "-"}</td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -215,10 +274,23 @@ export function ReportResult({
 
 export const REPORT_MENU_ENTRIES = {
   assetList: [
-    { label: "i) Asset List: All Vehicles in FIS with status New & In-Service (All Departments)", key: "all-departments" },
-    { label: "ii) Asset List: All Vehicles in FIS with status New & In-Service (View by PROVINCE)", key: "by-province" },
-    { label: "iii) Asset List: All Vehicles in FIS with status New & In-Service (View by DEPARTMENT)", key: "by-department" },
-    { label: "iv) Asset List: All Vehicles in FIS with status New & In-Service (View by SITE)", key: "by-site" },
+    {
+      label: "i) Asset List: All Vehicles in FIS with status New & In-Service (All Departments)",
+      key: "all-departments",
+    },
+    {
+      label: "ii) Asset List: All Vehicles in FIS with status New & In-Service (View by PROVINCE)",
+      key: "by-province",
+    },
+    {
+      label:
+        "iii) Asset List: All Vehicles in FIS with status New & In-Service (View by DEPARTMENT)",
+      key: "by-department",
+    },
+    {
+      label: "iv) Asset List: All Vehicles in FIS with status New & In-Service (View by SITE)",
+      key: "by-site",
+    },
   ],
   auditTrail: [
     { label: "1) Audit Trail grouped by Department in a date range", key: "department" },
@@ -228,17 +300,32 @@ export const REPORT_MENU_ENTRIES = {
   contracts: [
     { label: "1) Information On a Vehicle Contracts", key: "vehicle-contract-single" },
     { label: "2) Information On Multiple Vehicle Contracts", key: "vehicle-contract-multiple" },
-    { label: "3) Information On All Vehicles Contracts (Universal Report)", key: "vehicle-contract-universal" },
-    { label: "4) Information On All Contracts That Will Expire By a Specified Date", key: "contracts-expiring-by-date" },
+    {
+      label: "3) Information On All Vehicles Contracts (Universal Report)",
+      key: "vehicle-contract-universal",
+    },
+    {
+      label: "4) Information On All Contracts That Will Expire By a Specified Date",
+      key: "contracts-expiring-by-date",
+    },
     { label: "5) Contract summarized report", key: "contract-summary" },
     { label: "6) Vehicle Trip Authorities per GG or GP Number", key: "trip-authorities-single" },
-    { label: "7) Multiple Vehicle Trip Authorities per GG or GP Number", key: "trip-authorities-multiple" },
-    { label: "8) Vehicle Trip Authorities per Dept, Site or Date", key: "trip-authorities-by-dept-site-date" },
+    {
+      label: "7) Multiple Vehicle Trip Authorities per GG or GP Number",
+      key: "trip-authorities-multiple",
+    },
+    {
+      label: "8) Vehicle Trip Authorities per Dept, Site or Date",
+      key: "trip-authorities-by-dept-site-date",
+    },
     { label: "9) Daily & Monthly Contract check list report", key: "contracts-checklist" },
     { label: "10) Vehicle Contracts with NO distance traveled", key: "contracts-no-distance" },
     { label: "11) Contracts for a Department for period", key: "contracts-per-dept-period" },
     { label: "12) Permanent Section - Contracts Fleet Reports", key: "contracts-fleet-reports" },
-    { label: "Lease Vehicles Split Report for Vehicles not on Contract and those on Contract", key: "lease-nom-split" },
+    {
+      label: "Lease Vehicles Split Report for Vehicles not on Contract and those on Contract",
+      key: "lease-nom-split",
+    },
   ],
   departments: [
     { label: "1) One Department", key: "one-department" },
@@ -247,7 +334,10 @@ export const REPORT_MENU_ENTRIES = {
     { label: "4) All Departments & Sites with contact details", key: "all-dept-site-contact" },
     { label: "5) List of Vehicles on ELS", key: "vehicles-on-els" },
     { label: "6) List of Vehicles on Manual LOGSHEETS", key: "vehicles-on-manual-logs" },
-    { label: "7) Outstanding Logs per Dept: ELS and Manual Logs Combined", key: "outstanding-logs-combined" },
+    {
+      label: "7) Outstanding Logs per Dept: ELS and Manual Logs Combined",
+      key: "outstanding-logs-combined",
+    },
   ],
   licences: [
     { label: "1) Licence Report for a GG Number", key: "gg-number" },
@@ -260,13 +350,22 @@ export const REPORT_MENU_ENTRIES = {
     { label: "8) Licences, for a Dept, with All Sites, for a period", key: "dept-sites-period" },
     { label: "9) Report on Licence EXPIRE DATE", key: "expire-date" },
     { label: "10) Licences fees for a month", key: "month-fees" },
-    { label: "11) Licences of In Service Vehicles, with OLD Expire Dates", key: "old-expire-dates" },
+    {
+      label: "11) Licences of In Service Vehicles, with OLD Expire Dates",
+      key: "old-expire-dates",
+    },
     { label: "12) SAP Information", key: "sap-info" },
     { label: "13) COF Information", key: "cof-info" },
     { label: "14) Table: Make & Model with Licence Fee", key: "make-model-fee" },
-    { label: "15) All Vehicles with Make & Model & Tare & Licence Fee", key: "all-with-model-tare-fee" },
+    {
+      label: "15) All Vehicles with Make & Model & Tare & Licence Fee",
+      key: "all-with-model-tare-fee",
+    },
     { label: "16) Data Workgroup - Report for Each or Group of Vehicle", key: "data-workgroup" },
-    { label: "17) Data Workgroup - Only Latest Report for Each or Group of Vehicle", key: "data-workgroup-latest" },
+    {
+      label: "17) Data Workgroup - Only Latest Report for Each or Group of Vehicle",
+      key: "data-workgroup-latest",
+    },
     { label: "18) Licence Received by GGMT: Receiver Name and Date", key: "received-by-ggmt" },
   ],
   logbooks: [
@@ -277,7 +376,10 @@ export const REPORT_MENU_ENTRIES = {
   logsheets: [
     { label: "1) Log Report On One Vehicle", key: "one-vehicle" },
     { label: "2) Report Per Vehicle - Log Odo Balance", key: "vehicle-odo-balance" },
-    { label: "3) Vehicle report - View: Contracts, ELS & Manual Logs Details in one report", key: "vehicle-contract-els-manual" },
+    {
+      label: "3) Vehicle report - View: Contracts, ELS & Manual Logs Details in one report",
+      key: "vehicle-contract-els-manual",
+    },
     { label: "4) Report Vehicle Details Per Rek num.", key: "vehicle-details-per-rek" },
     { label: "5) All outstanding Logsheets", key: "all-outstanding" },
     { label: "6) Logsheet Report per Department or Site", key: "per-dept-site" },
@@ -287,34 +389,60 @@ export const REPORT_MENU_ENTRIES = {
     { label: "2) Licence fees", key: "licence-fees" },
     { label: "3) Make Model with tariffs", key: "make-model-with-tariffs" },
     { label: "4) Private Taxi Tariffs", key: "private-taxi-tariffs" },
-    { label: "5) List of NOM Vehicles that do not have Tariffs", key: "nom-vehicles-without-tariffs" },
+    {
+      label: "5) List of NOM Vehicles that do not have Tariffs",
+      key: "nom-vehicles-without-tariffs",
+    },
   ],
   vehicles: [
-    { label: "1) Information On A Vehicle BY GG, Registration, Engine or Chassis Number", key: "vehicle-by-number" },
+    {
+      label: "1) Information On A Vehicle BY GG, Registration, Engine or Chassis Number",
+      key: "vehicle-by-number",
+    },
     { label: "2) Information On A Vehicle BY barcode", key: "vehicle-by-barcode" },
     { label: "3) Information On All Vehicles", key: "all-vehicles" },
     { label: "4) Information On Vehicles With A History", key: "vehicles-with-history" },
     { label: "5) Report For Selected Vehicles", key: "selected-vehicles" },
-    { label: "6) Vehicles Older Than 5 Years And Done More Than 120000 km's", key: "older-than-5y-over-120k" },
-    { label: "7) Vehicles Older Than 5 Years And Done More Than 120000 km's WITH km's Travelled for a period", key: "older-than-5y-over-120k-period" },
+    {
+      label: "6) Vehicles Older Than 5 Years And Done More Than 120000 km's",
+      key: "older-than-5y-over-120k",
+    },
+    {
+      label:
+        "7) Vehicles Older Than 5 Years And Done More Than 120000 km's WITH km's Travelled for a period",
+      key: "older-than-5y-over-120k-period",
+    },
     { label: "8) Vehicles With Provincial Numbers", key: "provincial-numbers" },
     { label: "9) Value Of IN SERVICE Vehicles", key: "value-inservice" },
     { label: "10) All IN SERVICE Vehicles per GG Number", key: "inservice-per-gg" },
     { label: "11) All IN SERVICE Vehicles per Department", key: "inservice-per-dept" },
-    { label: "12) All IN SERVICE Vehicles with Departments or Blank (for Wesbank)", key: "inservice-wesbank" },
+    {
+      label: "12) All IN SERVICE Vehicles with Departments or Blank (for Wesbank)",
+      key: "inservice-wesbank",
+    },
     { label: "13) All vehicles with barcodes", key: "all-with-barcodes" },
     { label: "14) All vehicles replaced/not replaced per Department", key: "replaced-per-dept" },
     { label: "15) All LPG Converted Vehicles", key: "lpg-converted" },
     { label: "16) All Extended Service Vehicles", key: "extended-service" },
-    { label: "17) All Vehicles fitted with Extras e.g. Tyre Safety Bands, Netstar", key: "vehicle-extras" },
+    {
+      label: "17) All Vehicles fitted with Extras e.g. Tyre Safety Bands, Netstar",
+      key: "vehicle-extras",
+    },
     { label: "18) Information On Vehicles on ELS or Manual LOGSHEET", key: "vehicles-els-manual" },
     { label: "19) Universal report for selected vehicles", key: "universal-selected" },
   ],
   wesbank: [
     { label: "1) Wesbank Transaction Report for ONE Vehicle", key: "one-vehicle" },
-    { label: "2) Wesbank Transaction Report for ONE Vehicle, for a Period", key: "one-vehicle-period" },
+    {
+      label: "2) Wesbank Transaction Report for ONE Vehicle, for a Period",
+      key: "one-vehicle-period",
+    },
     { label: "3) Wesbank Transaction Report for ONE Dept Site", key: "one-dept-site" },
     { label: "4) Exception Report Overfills", key: "overfills", badge: "Exception" },
-    { label: "5) Exception Multiple Daily Fuel Transactions", key: "multiple-daily-fuels", badge: "Exception" },
+    {
+      label: "5) Exception Multiple Daily Fuel Transactions",
+      key: "multiple-daily-fuels",
+      badge: "Exception",
+    },
   ],
 } as const;

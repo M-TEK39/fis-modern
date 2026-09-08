@@ -42,7 +42,8 @@ export type MerchantRequest = {
   Merchant_Name: string;
 };
 
-export type ClearanceApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "conflict";
+export type ClearanceApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "conflict";
 
 export class ClearanceApiError extends Error {
   constructor(
@@ -158,7 +159,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
     }
 
     if (response.status === 409) {
-      throw new ClearanceApiError("conflict", "The requested change conflicts with existing clearance records.");
+      throw new ClearanceApiError(
+        "conflict",
+        "The requested change conflicts with existing clearance records.",
+      );
     }
 
     if (!response.ok) {
@@ -284,7 +288,10 @@ export async function getClearanceVehicle(vmfCode: number) {
   const response = await requestApi(`api/vehicles/${encodeURIComponent(vmfCode)}`);
   const vehicle = mapVehicle(await readJson(response));
   if (!vehicle) {
-    throw new ClearanceApiError("invalid-response", "The FIS API returned an invalid vehicle record.");
+    throw new ClearanceApiError(
+      "invalid-response",
+      "The FIS API returned an invalid vehicle record.",
+    );
   }
 
   return vehicle;
@@ -302,7 +309,10 @@ export async function getClearance(clearanceCode: number) {
   const response = await requestApi(`api/clearance/${encodeURIComponent(clearanceCode)}`);
   const record = mapClearance(await readJson(response));
   if (!record) {
-    throw new ClearanceApiError("invalid-response", "The FIS API returned an invalid clearance record.");
+    throw new ClearanceApiError(
+      "invalid-response",
+      "The FIS API returned an invalid clearance record.",
+    );
   }
 
   return record;
@@ -317,7 +327,10 @@ export async function getMerchants() {
 }
 
 export async function createClearanceAgainstApi(request: ClearanceRequest) {
-  const response = await requestApi("api/clearance", { method: "POST", body: JSON.stringify(request) });
+  const response = await requestApi("api/clearance", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
   return mapClearance(await readJson(response));
 }
 
@@ -334,7 +347,10 @@ export async function deleteClearanceAgainstApi(clearanceCode: number) {
 }
 
 export async function createMerchantAgainstApi(request: MerchantRequest) {
-  const response = await requestApi("api/merchant", { method: "POST", body: JSON.stringify(request) });
+  const response = await requestApi("api/merchant", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
   return mapMerchant(await readJson(response));
 }
 
@@ -347,10 +363,15 @@ export async function updateMerchantAgainstApi(merchantCode: number, request: Me
 }
 
 export async function getMerchantDeleteCheck(merchantCode: number) {
-  const response = await requestApi(`api/merchant/${encodeURIComponent(merchantCode)}/delete-check`);
+  const response = await requestApi(
+    `api/merchant/${encodeURIComponent(merchantCode)}/delete-check`,
+  );
   const check = mapMerchantDeleteCheck(await readJson(response));
   if (!check) {
-    throw new ClearanceApiError("invalid-response", "The FIS API returned an invalid merchant deletion check.");
+    throw new ClearanceApiError(
+      "invalid-response",
+      "The FIS API returned an invalid merchant deletion check.",
+    );
   }
 
   return check;

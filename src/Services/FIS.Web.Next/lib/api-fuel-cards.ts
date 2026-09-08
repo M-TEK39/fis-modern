@@ -46,10 +46,14 @@ export type FuelCardAllocationReport = {
   recentActivity: FuelCardActivity[];
 };
 
-export type FuelCardApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type FuelCardApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class FuelCardApiError extends Error {
-  constructor(public readonly reason: FuelCardApiErrorReason, message: string) {
+  constructor(
+    public readonly reason: FuelCardApiErrorReason,
+    message: string,
+  ) {
     super(message);
     this.name = "FuelCardApiError";
   }
@@ -105,7 +109,8 @@ function getCollection(payload: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new FuelCardApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new FuelCardApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -121,9 +126,15 @@ async function requestApi(path: string, init: RequestInit = {}) {
       },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) throw new FuelCardApiError("unauthorized", "The FIS access cookie was rejected.");
-    if (response.status === 404) throw new FuelCardApiError("not-found", "The requested fuel card record was not found.");
-    if (!response.ok) throw new FuelCardApiError(response.status >= 500 ? "unavailable" : "invalid-response", `FIS API returned HTTP ${response.status}.`);
+    if (response.status === 401 || response.status === 403)
+      throw new FuelCardApiError("unauthorized", "The FIS access cookie was rejected.");
+    if (response.status === 404)
+      throw new FuelCardApiError("not-found", "The requested fuel card record was not found.");
+    if (!response.ok)
+      throw new FuelCardApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        `FIS API returned HTTP ${response.status}.`,
+      );
     return response;
   } catch (error) {
     if (error instanceof FuelCardApiError) throw error;
@@ -172,17 +183,24 @@ function mapPrivateHireFuelCard(value: unknown): PrivateHireFuelCardRecord | nul
 }
 
 export async function getFuelCardsByVehicle(vmfCode: number) {
-  const records = getCollection(await readJson(await requestApi(`api/FuelCard/vehicle/${encodeURIComponent(vmfCode)}`)))
+  const records = getCollection(
+    await readJson(await requestApi(`api/FuelCard/vehicle/${encodeURIComponent(vmfCode)}`)),
+  )
     .map(mapFuelCard)
     .filter((record): record is FuelCardRecord => record !== null);
   return records;
 }
 
 export async function getFuelCardsByCardNumber(cardNumber: string) {
-  const response = await requestApi("api/FuelCard/delete/search", { method: "POST", body: JSON.stringify({ CardNumber: cardNumber }) });
+  const response = await requestApi("api/FuelCard/delete/search", {
+    method: "POST",
+    body: JSON.stringify({ CardNumber: cardNumber }),
+  });
   const payload = await readJson(response);
   if (!isRecord(payload)) return [];
-  return getCollection(getValue(payload, "fuelCards", "FuelCards")).map(mapFuelCard).filter((record): record is FuelCardRecord => record !== null);
+  return getCollection(getValue(payload, "fuelCards", "FuelCards"))
+    .map(mapFuelCard)
+    .filter((record): record is FuelCardRecord => record !== null);
 }
 
 export async function createFuelCard(input: {
@@ -196,8 +214,16 @@ export async function createFuelCard(input: {
   PetExpire: string;
   LinkGGNum: string | null;
 }) {
-  const record = mapFuelCard(await readJson(await requestApi("api/FuelCard", { method: "POST", body: JSON.stringify(input) })));
-  if (!record) throw new FuelCardApiError("invalid-response", "The FIS API returned an invalid fuel card record.");
+  const record = mapFuelCard(
+    await readJson(
+      await requestApi("api/FuelCard", { method: "POST", body: JSON.stringify(input) }),
+    ),
+  );
+  if (!record)
+    throw new FuelCardApiError(
+      "invalid-response",
+      "The FIS API returned an invalid fuel card record.",
+    );
   return record;
 }
 
@@ -206,7 +232,13 @@ export async function deleteFuelCard(fuelCardCode: number) {
 }
 
 export async function getPrivateHireFuelCardsByRegistration(registrationNumber: string) {
-  const records = getCollection(await readJson(await requestApi(`api/PrivateHireFuelCard/registration/${encodeURIComponent(registrationNumber)}`)))
+  const records = getCollection(
+    await readJson(
+      await requestApi(
+        `api/PrivateHireFuelCard/registration/${encodeURIComponent(registrationNumber)}`,
+      ),
+    ),
+  )
     .map(mapPrivateHireFuelCard)
     .filter((record): record is PrivateHireFuelCardRecord => record !== null);
   return records;
@@ -225,37 +257,62 @@ export async function createPrivateHireFuelCard(input: {
   CardNumber: string | null;
   PanNumber: string | null;
 }) {
-  const record = mapPrivateHireFuelCard(await readJson(await requestApi("api/PrivateHireFuelCard", { method: "POST", body: JSON.stringify(input) })));
-  if (!record) throw new FuelCardApiError("invalid-response", "The FIS API returned an invalid private hire fuel card record.");
+  const record = mapPrivateHireFuelCard(
+    await readJson(
+      await requestApi("api/PrivateHireFuelCard", { method: "POST", body: JSON.stringify(input) }),
+    ),
+  );
+  if (!record)
+    throw new FuelCardApiError(
+      "invalid-response",
+      "The FIS API returned an invalid private hire fuel card record.",
+    );
   return record;
 }
 
 export async function deletePrivateHireFuelCard(fuelCardCode: number) {
-  await requestApi(`api/PrivateHireFuelCard/${encodeURIComponent(fuelCardCode)}`, { method: "DELETE" });
+  await requestApi(`api/PrivateHireFuelCard/${encodeURIComponent(fuelCardCode)}`, {
+    method: "DELETE",
+  });
 }
 
 export async function getFuelCardAllocation(siteCode?: number) {
   const query = siteCode === undefined ? "" : `?siteCode=${encodeURIComponent(siteCode)}`;
-  const payload = await readJson(await requestApi(`api/FleetManagement/reports/fuelcard-allocation${query}`));
-  if (!isRecord(payload)) throw new FuelCardApiError("invalid-response", "The FIS API returned an invalid fuel card report.");
+  const payload = await readJson(
+    await requestApi(`api/FleetManagement/reports/fuelcard-allocation${query}`),
+  );
+  if (!isRecord(payload))
+    throw new FuelCardApiError(
+      "invalid-response",
+      "The FIS API returned an invalid fuel card report.",
+    );
   const report = getValue(payload, "report", "Report");
-  if (!isRecord(report)) throw new FuelCardApiError("invalid-response", "The FIS API returned no fuel card report.");
+  if (!isRecord(report))
+    throw new FuelCardApiError("invalid-response", "The FIS API returned no fuel card report.");
   return {
     totalCards: asNumber(getValue(report, "totalCards", "TotalCards")) ?? 0,
     activeCards: asNumber(getValue(report, "activeCards", "ActiveCards")) ?? 0,
     returnedCards: asNumber(getValue(report, "returnedCards", "ReturnedCards")) ?? 0,
     expiringCards: asNumber(getValue(report, "expiringCards", "ExpiringCards")) ?? 0,
-    statusBreakdown: (getValue(report, "statusBreakdown", "StatusBreakdown") as Record<string, number> | undefined) ?? {},
-    cardsByGarage: (getValue(report, "cardsByGarage", "CardsByGarage") as Record<string, number> | undefined) ?? {},
-    recentActivity: getCollection(getValue(report, "recentActivity", "RecentActivity")).flatMap((value) => {
-      if (!isRecord(value)) return [];
-      return [{
-        cardNumber: asString(getValue(value, "cardNumber", "CardNumber")),
-        vmfCode: asNumber(getValue(value, "vmfCode", "VmfCode")) ?? 0,
-        action: asString(getValue(value, "action", "Action")) ?? "Unknown",
-        date: asString(getValue(value, "date", "Date")) ?? "",
-        receiver: asString(getValue(value, "receiver", "Receiver")) ?? "Unknown",
-      } satisfies FuelCardActivity];
-    }),
+    statusBreakdown:
+      (getValue(report, "statusBreakdown", "StatusBreakdown") as
+        Record<string, number> | undefined) ?? {},
+    cardsByGarage:
+      (getValue(report, "cardsByGarage", "CardsByGarage") as Record<string, number> | undefined) ??
+      {},
+    recentActivity: getCollection(getValue(report, "recentActivity", "RecentActivity")).flatMap(
+      (value) => {
+        if (!isRecord(value)) return [];
+        return [
+          {
+            cardNumber: asString(getValue(value, "cardNumber", "CardNumber")),
+            vmfCode: asNumber(getValue(value, "vmfCode", "VmfCode")) ?? 0,
+            action: asString(getValue(value, "action", "Action")) ?? "Unknown",
+            date: asString(getValue(value, "date", "Date")) ?? "",
+            receiver: asString(getValue(value, "receiver", "Receiver")) ?? "Unknown",
+          } satisfies FuelCardActivity,
+        ];
+      },
+    ),
   } satisfies FuelCardAllocationReport;
 }

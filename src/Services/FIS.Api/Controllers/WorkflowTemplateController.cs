@@ -19,7 +19,8 @@ public class WorkflowTemplateController : BaseApiController
 
     public WorkflowTemplateController(
         IWorkflowTemplateService templateService,
-        ILogger<WorkflowTemplateController> logger)
+        ILogger<WorkflowTemplateController> logger
+    )
     {
         _templateService = templateService;
         _logger = logger;
@@ -39,7 +40,10 @@ public class WorkflowTemplateController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving workflow templates");
-            return StatusCode(500, new { error = "Error retrieving templates", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Error retrieving templates", message = ex.Message }
+            );
         }
     }
 
@@ -60,7 +64,10 @@ public class WorkflowTemplateController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving workflow template {TemplateId}", id);
-            return StatusCode(500, new { error = "Error retrieving template", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Error retrieving template", message = ex.Message }
+            );
         }
     }
 
@@ -78,7 +85,10 @@ public class WorkflowTemplateController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving templates for category {Category}", category);
-            return StatusCode(500, new { error = "Error retrieving templates", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Error retrieving templates", message = ex.Message }
+            );
         }
     }
 
@@ -86,7 +96,9 @@ public class WorkflowTemplateController : BaseApiController
     /// Create new workflow template
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<WorkflowTemplateDto>> Create([FromBody] CreateWorkflowTemplateDto request)
+    public async Task<ActionResult<WorkflowTemplateDto>> Create(
+        [FromBody] CreateWorkflowTemplateDto request
+    )
     {
         try
         {
@@ -94,12 +106,20 @@ public class WorkflowTemplateController : BaseApiController
                 request.TemplateName,
                 request.Category,
                 request.Description,
-                GetCurrentUserId());
+                GetCurrentUserId()
+            );
 
-            _logger.LogInformation("Created workflow template {TemplateId}: {TemplateName}", 
-                template.TemplateID, template.TemplateName);
+            _logger.LogInformation(
+                "Created workflow template {TemplateId}: {TemplateName}",
+                template.TemplateID,
+                template.TemplateName
+            );
 
-            return CreatedAtAction(nameof(GetById), new { id = template.TemplateID }, MapToDto(template));
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = template.TemplateID },
+                MapToDto(template)
+            );
         }
         catch (Exception ex)
         {
@@ -143,29 +163,41 @@ public class WorkflowTemplateController : BaseApiController
     /// Instantiate workflow from template
     /// </summary>
     [HttpPost("{id}/instantiate")]
-    public async Task<ActionResult<WorkflowFromTemplateDto>> Instantiate(int id, [FromBody] InstantiateWorkflowDto request)
+    public async Task<ActionResult<WorkflowFromTemplateDto>> Instantiate(
+        int id,
+        [FromBody] InstantiateWorkflowDto request
+    )
     {
         try
         {
             var workflow = await _templateService.InstantiateFromTemplateAsync(
                 id,
                 request.WorkflowName,
-                GetCurrentUserId());
+                GetCurrentUserId()
+            );
 
-            _logger.LogInformation("Instantiated workflow {WorkflowId} from template {TemplateId}", 
-                workflow.WorkflowID, id);
+            _logger.LogInformation(
+                "Instantiated workflow {WorkflowId} from template {TemplateId}",
+                workflow.WorkflowID,
+                id
+            );
 
-            return Ok(new WorkflowFromTemplateDto
-            {
-                WorkflowID = workflow.WorkflowID,
-                WorkflowName = workflow.WorkflowName,
-                Message = $"Workflow '{workflow.WorkflowName}' created from template"
-            });
+            return Ok(
+                new WorkflowFromTemplateDto
+                {
+                    WorkflowID = workflow.WorkflowID,
+                    WorkflowName = workflow.WorkflowName,
+                    Message = $"Workflow '{workflow.WorkflowName}' created from template",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error instantiating workflow from template {TemplateId}", id);
-            return StatusCode(500, new { error = "Error instantiating workflow", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Error instantiating workflow", message = ex.Message }
+            );
         }
     }
 
@@ -183,7 +215,10 @@ public class WorkflowTemplateController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error exporting template {TemplateId}", id);
-            return StatusCode(500, new { error = "Error exporting template", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Error exporting template", message = ex.Message }
+            );
         }
     }
 
@@ -191,21 +226,36 @@ public class WorkflowTemplateController : BaseApiController
     /// Import template from JSON
     /// </summary>
     [HttpPost("import")]
-    public async Task<ActionResult<WorkflowTemplateDto>> Import([FromBody] ImportTemplateDto request)
+    public async Task<ActionResult<WorkflowTemplateDto>> Import(
+        [FromBody] ImportTemplateDto request
+    )
     {
         try
         {
-            var template = await _templateService.ImportTemplateAsync(request.TemplateJson, GetCurrentUserId());
+            var template = await _templateService.ImportTemplateAsync(
+                request.TemplateJson,
+                GetCurrentUserId()
+            );
 
-            _logger.LogInformation("Imported workflow template {TemplateId}: {TemplateName}", 
-                template.TemplateID, template.TemplateName);
+            _logger.LogInformation(
+                "Imported workflow template {TemplateId}: {TemplateName}",
+                template.TemplateID,
+                template.TemplateName
+            );
 
-            return CreatedAtAction(nameof(GetById), new { id = template.TemplateID }, MapToDto(template));
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = template.TemplateID },
+                MapToDto(template)
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error importing template");
-            return StatusCode(500, new { error = "Error importing template", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Error importing template", message = ex.Message }
+            );
         }
     }
 
@@ -220,7 +270,7 @@ public class WorkflowTemplateController : BaseApiController
             IsActive = template.IsActive,
             Version = template.Version,
             DateCreated = template.date_created,
-            DateUpdated = template.date_updated
+            DateUpdated = template.date_updated,
         };
     }
 }

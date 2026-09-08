@@ -8,89 +8,103 @@ namespace FIS.Core.Application.Interfaces;
 public interface IEmailNotificationService
 {
     #region Simple Email Methods
-    
+
     /// <summary>
     /// Send a simple text email to a single recipient
     /// </summary>
     Task<bool> SendEmailAsync(string to, string subject, string body);
-    
+
     /// <summary>
     /// Send a simple text email to multiple recipients
     /// </summary>
     Task<bool> SendEmailAsync(List<string> to, string subject, string body);
-    
+
     /// <summary>
     /// Send HTML email to a single recipient
     /// </summary>
     Task<bool> SendHtmlEmailAsync(string to, string subject, string htmlBody);
-    
+
     /// <summary>
     /// Send HTML email to multiple recipients
     /// </summary>
     Task<bool> SendHtmlEmailAsync(List<string> to, string subject, string htmlBody);
-    
+
     #endregion
 
     #region Email with Attachments
-    
+
     /// <summary>
     /// Send email with file attachments (e.g., PDF reports)
     /// </summary>
     Task<bool> SendEmailWithAttachmentsAsync(
-        string to, 
-        string subject, 
-        string body, 
-        List<EmailAttachment> attachments);
-    
+        string to,
+        string subject,
+        string body,
+        List<EmailAttachment> attachments
+    );
+
     /// <summary>
     /// Send email with file attachments to multiple recipients
     /// </summary>
     Task<bool> SendEmailWithAttachmentsAsync(
-        List<string> to, 
-        string subject, 
-        string body, 
-        List<EmailAttachment> attachments);
-    
+        List<string> to,
+        string subject,
+        string body,
+        List<EmailAttachment> attachments
+    );
+
     #endregion
 
     #region Fleet-Specific Notifications
-    
+
     /// <summary>
     /// Send vehicle maintenance reminder notification
     /// </summary>
     Task<bool> SendMaintenanceReminderAsync(int vmfCode, string emailAddress, string recipientName);
-    
+
     /// <summary>
     /// Send vehicle licence renewal reminder
     /// </summary>
     Task<bool> SendLicenceReminderAsync(int vmfCode, string emailAddress, string recipientName);
-    
+
     /// <summary>
     /// Send Certificate of Fitness (COF) renewal reminder
     /// </summary>
     Task<bool> SendCofReminderAsync(int vmfCode, string emailAddress, string recipientName);
-    
+
     /// <summary>
     /// Send vehicle report via email (PDF attachment)
     /// </summary>
     Task<bool> SendVehicleReportAsync(int vmfCode, string emailAddress, string recipientName);
-    
+
     /// <summary>
     /// Send contract expiry notification
     /// </summary>
-    Task<bool> SendContractExpiryNotificationAsync(int contractId, string emailAddress, string recipientName);
+    Task<bool> SendContractExpiryNotificationAsync(
+        int contractId,
+        string emailAddress,
+        string recipientName
+    );
 
     /// <summary>
     /// Send notification when a contract is opened (activated).
     /// Notifies the capturer and approver by looking up their email from TS_Users.
     /// </summary>
-    Task<bool> SendContractOpenedNotificationAsync(int contractId, int capturerUserId, int approverUserId);
+    Task<bool> SendContractOpenedNotificationAsync(
+        int contractId,
+        int capturerUserId,
+        int approverUserId
+    );
 
     /// <summary>
     /// Send notification when a contract is closed or cancelled.
     /// Notifies the capturer, approver, and site contact (net_address) by looking up their emails.
     /// </summary>
-    Task<bool> SendContractClosedNotificationAsync(int contractId, int performedByUserId, string closureReason);
+    Task<bool> SendContractClosedNotificationAsync(
+        int contractId,
+        int performedByUserId,
+        string closureReason
+    );
 
     /// <summary>
     /// Send a contract expiry reminder to the site contact (client) and the capturer.
@@ -98,89 +112,92 @@ public interface IEmailNotificationService
     /// The message instructs the client to submit a letter of extension if they wish to keep the vehicle.
     /// </summary>
     Task<bool> SendContractExpiryReminderAsync(int contractId, int daysRemaining);
-    
+
     /// <summary>
     /// Send trip summary report via email
     /// </summary>
     Task<bool> SendTripSummaryReportAsync(
-        int? vmfCode, 
-        DateTime startDate, 
-        DateTime endDate, 
-        string emailAddress, 
-        string recipientName);
-    
+        int? vmfCode,
+        DateTime startDate,
+        DateTime endDate,
+        string emailAddress,
+        string recipientName
+    );
+
     /// <summary>
     /// Send maintenance cost report via email
     /// </summary>
     Task<bool> SendMaintenanceCostReportAsync(
-        int? vmfCode, 
-        DateTime startDate, 
-        DateTime endDate, 
-        string emailAddress, 
-        string recipientName);
-    
+        int? vmfCode,
+        DateTime startDate,
+        DateTime endDate,
+        string emailAddress,
+        string recipientName
+    );
+
     /// <summary>
     /// Send financial report via email (income/billing reports)
     /// </summary>
     Task<bool> SendFinancialReportAsync(
         string reportType,
         int financialYear,
-        string emailAddress, 
-        string recipientName);
-    
+        string emailAddress,
+        string recipientName
+    );
+
     #endregion
 
     #region Bulk Notifications
-    
+
     /// <summary>
     /// Send bulk maintenance reminders for all vehicles due for service
     /// </summary>
     Task<BulkEmailResult> SendBulkMaintenanceRemindersAsync();
-    
+
     /// <summary>
     /// Send bulk licence renewal reminders for all vehicles with licences expiring soon
     /// </summary>
     Task<BulkEmailResult> SendBulkLicenceRemindersAsync();
-    
+
     /// <summary>
     /// Send bulk COF renewal reminders for all vehicles with COF expiring soon
     /// </summary>
     Task<BulkEmailResult> SendBulkCofRemindersAsync();
-    
+
     /// <summary>
     /// Send bulk contract expiry notifications
     /// </summary>
     Task<BulkEmailResult> SendBulkContractExpiryNotificationsAsync();
-    
+
     #endregion
 
     #region Email Templates and Configuration
-    
+
     /// <summary>
     /// Get available email templates
     /// </summary>
     Task<List<EmailTemplate>> GetEmailTemplatesAsync();
-    
+
     /// <summary>
     /// Get specific email template by name
     /// </summary>
     Task<EmailTemplate> GetEmailTemplateAsync(string templateName);
-    
+
     /// <summary>
     /// Create or update email template
     /// </summary>
     Task<bool> SaveEmailTemplateAsync(EmailTemplate template);
-    
+
     /// <summary>
     /// Test email configuration by sending test email
     /// </summary>
     Task<bool> TestEmailConfigurationAsync(string testEmailAddress);
-    
+
     /// <summary>
     /// Get email service status and configuration
     /// </summary>
     Task<EmailServiceStatus> GetEmailServiceStatusAsync();
-    
+
     #endregion
 }
 

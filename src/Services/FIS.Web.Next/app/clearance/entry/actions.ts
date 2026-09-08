@@ -81,15 +81,28 @@ function redirectWithMessage(path: string, key: string, message: string) {
 async function authorizeClearance() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
 
-  if (!session.roles.some((role) => role.localeCompare(CLEARANCE_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
-    return { ok: false as const, message: "You do not have permission to maintain clearance records." };
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(CLEARANCE_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain clearance records.",
+    };
   }
 
   return { ok: true as const };
@@ -201,7 +214,12 @@ export async function deleteClearanceAction(formData: FormData) {
 
   const clearanceCode = Number(getText(formData, "clearanceCode"));
   const vmfCode = Number(getText(formData, "vmfCode"));
-  if (!Number.isInteger(clearanceCode) || clearanceCode <= 0 || !Number.isInteger(vmfCode) || vmfCode <= 0) {
+  if (
+    !Number.isInteger(clearanceCode) ||
+    clearanceCode <= 0 ||
+    !Number.isInteger(vmfCode) ||
+    vmfCode <= 0
+  ) {
     redirectWithMessage(returnPath, "error", "Clearance record is invalid.");
   }
 

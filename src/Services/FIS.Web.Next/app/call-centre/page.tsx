@@ -8,7 +8,9 @@ import { getSession } from "@/lib/session";
 const CALL_CENTRE_ROLE = "Call Centre";
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function AccessRestricted() {
@@ -32,7 +34,9 @@ function ApiUnavailable() {
       </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Call Centre could not be opened.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
         <Link className="button button-primary" href="/call-centre">
           Try again

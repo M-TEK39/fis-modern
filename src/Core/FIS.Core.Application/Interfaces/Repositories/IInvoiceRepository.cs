@@ -52,7 +52,8 @@ public interface IInvoiceRepository
     Task<List<Invoice>> GetByDepartmentAndPeriodAsync(
         int departmentCode,
         DateTime fromDate,
-        DateTime toDate);
+        DateTime toDate
+    );
 
     /// <summary>
     /// Get invoices by department.

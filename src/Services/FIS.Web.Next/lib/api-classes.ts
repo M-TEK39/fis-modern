@@ -22,7 +22,15 @@ export type ClassRecord = {
   isDeleted: boolean;
 };
 
-export type ClassWriteInput = Omit<ClassRecord, "classCode" | "dateCreated" | "dateUpdated" | "createdByUserCode" | "modifiedByUserCode" | "isDeleted">;
+export type ClassWriteInput = Omit<
+  ClassRecord,
+  | "classCode"
+  | "dateCreated"
+  | "dateUpdated"
+  | "createdByUserCode"
+  | "modifiedByUserCode"
+  | "isDeleted"
+>;
 
 export type ClassDeleteCheck = {
   modelCount: number;
@@ -95,17 +103,26 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
     if (response.status === 401 || response.status === 403) {
-      throw new ClassApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new ClassApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the API body is not JSON.
       }
-      throw new ClassApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new ClassApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -149,7 +166,8 @@ function mapClass(value: unknown): ClassRecord | null {
 
 export async function getClasses() {
   const payload = await readJson(await requestApi("api/class"));
-  if (!Array.isArray(payload)) throw new ClassApiError("invalid-response", "The class response was not a list.");
+  if (!Array.isArray(payload))
+    throw new ClassApiError("invalid-response", "The class response was not a list.");
   return payload.map(mapClass).filter((item): item is ClassRecord => item !== null);
 }
 
@@ -158,8 +176,11 @@ export async function getClass(classCode: number) {
 }
 
 export async function getClassDeleteCheck(classCode: number): Promise<ClassDeleteCheck> {
-  const payload = await readJson(await requestApi(`api/class/${encodeURIComponent(classCode)}/delete-check`));
-  if (!isRecord(payload)) throw new ClassApiError("invalid-response", "The class dependency response was invalid.");
+  const payload = await readJson(
+    await requestApi(`api/class/${encodeURIComponent(classCode)}/delete-check`),
+  );
+  if (!isRecord(payload))
+    throw new ClassApiError("invalid-response", "The class dependency response was invalid.");
   return {
     modelCount: asNumber(getValue(payload, "modelCount", "ModelCount")) ?? 0,
     vehicleCount: asNumber(getValue(payload, "vehicleCount", "VehicleCount")) ?? 0,
@@ -181,19 +202,27 @@ function toRequest(input: ClassWriteInput) {
 }
 
 export async function createClass(input: ClassWriteInput) {
-  return mapClass(await readJson(await requestApi("api/class", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(toRequest(input)),
-  })));
+  return mapClass(
+    await readJson(
+      await requestApi("api/class", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(toRequest(input)),
+      }),
+    ),
+  );
 }
 
 export async function updateClass(classCode: number, input: ClassWriteInput) {
-  return mapClass(await readJson(await requestApi(`api/class/${encodeURIComponent(classCode)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ class_code: classCode, ...toRequest(input) }),
-  })));
+  return mapClass(
+    await readJson(
+      await requestApi(`api/class/${encodeURIComponent(classCode)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ class_code: classCode, ...toRequest(input) }),
+      }),
+    ),
+  );
 }
 
 export async function deleteClass(classCode: number) {

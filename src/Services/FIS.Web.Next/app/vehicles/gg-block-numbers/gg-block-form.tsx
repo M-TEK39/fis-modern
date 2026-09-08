@@ -19,7 +19,10 @@ function SubmitButton() {
   );
 }
 
-export default function GgBlockForm({ action, returnPath }: Readonly<{ action: GgBlockAction; returnPath: string }>) {
+export default function GgBlockForm({
+  action,
+  returnPath,
+}: Readonly<{ action: GgBlockAction; returnPath: string }>) {
   const [state, formAction] = useActionState(action, { status: "idle" });
   const [startGgNumber, setStartGgNumber] = useState("");
   const [endGgNumber, setEndGgNumber] = useState("");
@@ -28,7 +31,9 @@ export default function GgBlockForm({ action, returnPath }: Readonly<{ action: G
     <form action={formAction} className="vehicle-create-form">
       <input name="returnPath" type="hidden" value={returnPath} readOnly />
       <div className="form-row">
-        <label className="form-label" htmlFor="startGgNumber">Start GG Block Number</label>
+        <label className="form-label" htmlFor="startGgNumber">
+          Start GG Block Number
+        </label>
         <input
           className="form-input fis-uppercase"
           id="startGgNumber"
@@ -44,7 +49,9 @@ export default function GgBlockForm({ action, returnPath }: Readonly<{ action: G
         />
       </div>
       <div className="form-row">
-        <label className="form-label" htmlFor="endGgNumber">End GG Block Number</label>
+        <label className="form-label" htmlFor="endGgNumber">
+          End GG Block Number
+        </label>
         <input
           className="form-input fis-uppercase"
           id="endGgNumber"
@@ -61,11 +68,23 @@ export default function GgBlockForm({ action, returnPath }: Readonly<{ action: G
       </div>
       <div className="form-actions">
         <SubmitButton />
-        <button className="button button-secondary" type="reset" onClick={() => { setStartGgNumber(""); setEndGgNumber(""); }}>
+        <button
+          className="button button-secondary"
+          type="reset"
+          onClick={() => {
+            setStartGgNumber("");
+            setEndGgNumber("");
+          }}
+        >
           Clear
         </button>
       </div>
-      {state.status === "error" && state.message ? <div className="notice notice-error" role="alert"><span aria-hidden="true">!</span><span>{state.message}</span></div> : null}
+      {state.status === "error" && state.message ? (
+        <div className="notice notice-error" role="alert">
+          <span aria-hidden="true">!</span>
+          <span>{state.message}</span>
+        </div>
+      ) : null}
     </form>
   );
 }

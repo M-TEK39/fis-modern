@@ -23,7 +23,9 @@ function getQueryValue(value: string | string[] | undefined) {
 }
 
 function hasUserAdministrationRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function resultMessage(result: string | undefined) {
@@ -33,17 +35,31 @@ function resultMessage(result: string | undefined) {
     case "forbidden":
       return { tone: "error", text: "You do not have permission to create users." } as const;
     case "invalid":
-      return { tone: "error", text: "Check the required fields and submit the complete legacy profile." } as const;
+      return {
+        tone: "error",
+        text: "Check the required fields and submit the complete legacy profile.",
+      } as const;
     case "rejected":
-      return { tone: "error", text: "The user profile was rejected. Check for an existing username, e-mail, or ID." } as const;
+      return {
+        tone: "error",
+        text: "The user profile was rejected. Check for an existing username, e-mail, or ID.",
+      } as const;
     case "not-found":
       return { tone: "error", text: "The user profile service could not be found." } as const;
     case "unauthorized":
-      return { tone: "error", text: "Your session is no longer authorized. Sign in again." } as const;
+      return {
+        tone: "error",
+        text: "Your session is no longer authorized. Sign in again.",
+      } as const;
     case "unavailable":
-      return { tone: "error", text: "The user profile service is unavailable. Retry when the FIS API is available." } as const;
+      return {
+        tone: "error",
+        text: "The user profile service is unavailable. Retry when the FIS API is available.",
+      } as const;
     default:
-      return result ? { tone: "error", text: "User creation could not be completed." } as const : null;
+      return result
+        ? ({ tone: "error", text: "User creation could not be completed." } as const)
+        : null;
   }
 }
 
@@ -62,16 +78,24 @@ function ApiUnavailable() {
     <section className="vehicle-status-card" role="alert">
       <p className="eyebrow">API unavailable</p>
       <h2>User creation reference data could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
-        <Link className="button button-primary" href="/users/add">Try again</Link>
-        <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Menu</Link>
+        <Link className="button button-primary" href="/users/add">
+          Try again
+        </Link>
+        <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+          Menu
+        </Link>
       </div>
     </section>
   );
 }
 
-export async function UserAdminAddPage({ searchParams }: Readonly<{ searchParams?: SearchParams }> = {}) {
+export async function UserAdminAddPage({
+  searchParams,
+}: Readonly<{ searchParams?: SearchParams }> = {}) {
   await connection();
   const session = await getSession();
 
@@ -80,15 +104,27 @@ export async function UserAdminAddPage({ searchParams }: Readonly<{ searchParams
   }
 
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/users/add" /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath="/users/add" />
+      </main>
+    );
   }
 
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable />
+      </main>
+    );
   }
 
   if (!hasUserAdministrationRole(session.roles)) {
-    return <main className="page-shell vehicle-page-shell"><AccessRestricted /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <AccessRestricted />
+      </main>
+    );
   }
 
   const query = searchParams ? await searchParams : {};
@@ -100,7 +136,9 @@ export async function UserAdminAddPage({ searchParams }: Readonly<{ searchParams
       getUserAdminPositions(),
       getUserAdminUserChoices(),
     ]);
-    const displayName = session.email ?? (session.userAccessCode ? `User ${session.userAccessCode}` : "Authenticated User");
+    const displayName =
+      session.email ??
+      (session.userAccessCode ? `User ${session.userAccessCode}` : "Authenticated User");
 
     return (
       <main className="page-shell vehicle-page-shell">
@@ -111,16 +149,37 @@ export async function UserAdminAddPage({ searchParams }: Readonly<{ searchParams
               <h1 id="user-add-title">Add New User</h1>
               <p>Capture a complete user profile in the established legacy sequence.</p>
             </div>
-            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Menu</Link>
+            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+              Menu
+            </Link>
           </header>
 
-          {message ? <div className={`notice notice-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</div> : null}
-          <UserAddForm action={createUserAdminAction} displayName={displayName} positions={positions} sites={sites} approvers={approvers} />
+          {message ? (
+            <div
+              className={`notice notice-${message.tone}`}
+              role={message.tone === "error" ? "alert" : "status"}
+            >
+              {message.text}
+            </div>
+          ) : null}
+          <UserAddForm
+            action={createUserAdminAction}
+            displayName={displayName}
+            positions={positions}
+            sites={sites}
+            approvers={approvers}
+          />
           <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Back to Menu</Link>
-            <Link className="button button-secondary" href="/home">Home</Link>
+            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+              Back to Menu
+            </Link>
+            <Link className="button button-secondary" href="/home">
+              Home
+            </Link>
             <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">Sign out</button>
+              <button className="button button-secondary" type="submit">
+                Sign out
+              </button>
             </form>
           </div>
         </section>
@@ -128,11 +187,22 @@ export async function UserAdminAddPage({ searchParams }: Readonly<{ searchParams
     );
   } catch (error) {
     if (error instanceof UserAdminApiError && error.reason === "unauthorized") {
-      return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/users/add" /></main>;
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <SessionRecovery returnPath="/users/add" />
+        </main>
+      );
     }
 
-    console.error("FIS user administration create reference data failed", error instanceof Error ? error.message : "unknown error");
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable /></main>;
+    console.error(
+      "FIS user administration create reference data failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable />
+      </main>
+    );
   }
 }
 

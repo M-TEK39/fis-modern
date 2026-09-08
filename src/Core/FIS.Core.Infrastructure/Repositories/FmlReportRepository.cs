@@ -19,7 +19,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "SQL identifiers come only from fixed compatibility allowlists; all user values are parameters.")]
+    Justification = "SQL identifiers come only from fixed compatibility allowlists; all user values are parameters."
+)]
 public sealed class FmlReportRepository : IFmlReportRepository
 {
     private const string VehicleTable = "vehicle_master";
@@ -48,7 +49,7 @@ public sealed class FmlReportRepository : IFmlReportRepository
         "vehicle_status_code",
         "vs_code",
         "year_manufactured",
-        "purchase_amount"
+        "purchase_amount",
     ];
 
     private readonly FisDbContext _context;
@@ -64,36 +65,42 @@ public sealed class FmlReportRepository : IFmlReportRepository
         DateTime? startDate,
         DateTime? endDate,
         int? financialYear,
-        string? vehicleNumber)
-        => WithConnectionAsync((connection, transaction) => QueryMaintenanceHistoryAsync(
-            connection,
-            transaction,
-            startDate,
-            endDate,
-            financialYear,
-            vehicleNumber));
+        string? vehicleNumber
+    ) =>
+        WithConnectionAsync(
+            (connection, transaction) =>
+                QueryMaintenanceHistoryAsync(
+                    connection,
+                    transaction,
+                    startDate,
+                    endDate,
+                    financialYear,
+                    vehicleNumber
+                )
+        );
 
-    public Task<FmlContractsReport> GetContractsExpiringAsync()
-        => WithConnectionAsync((connection, transaction) => QueryContractsAsync(
-            connection,
-            transaction,
-            expired: false));
+    public Task<FmlContractsReport> GetContractsExpiringAsync() =>
+        WithConnectionAsync(
+            (connection, transaction) =>
+                QueryContractsAsync(connection, transaction, expired: false)
+        );
 
-    public Task<FmlContractsReport> GetExpiredOpenContractsAsync()
-        => WithConnectionAsync((connection, transaction) => QueryContractsAsync(
-            connection,
-            transaction,
-            expired: true));
+    public Task<FmlContractsReport> GetExpiredOpenContractsAsync() =>
+        WithConnectionAsync(
+            (connection, transaction) => QueryContractsAsync(connection, transaction, expired: true)
+        );
 
-    public Task<FmlVehiclesNoContractsReport> GetVehiclesNoContractsAsync()
-        => WithConnectionAsync(QueryVehiclesNoContractsAsync);
+    public Task<FmlVehiclesNoContractsReport> GetVehiclesNoContractsAsync() =>
+        WithConnectionAsync(QueryVehiclesNoContractsAsync);
 
-    public Task<FmlOverUtilizedReport> GetOverUtilizedAsync(DateTime? startDate, DateTime? endDate)
-        => WithConnectionAsync((connection, transaction) => QueryOverUtilizedAsync(
-            connection,
-            transaction,
-            startDate,
-            endDate));
+    public Task<FmlOverUtilizedReport> GetOverUtilizedAsync(
+        DateTime? startDate,
+        DateTime? endDate
+    ) =>
+        WithConnectionAsync(
+            (connection, transaction) =>
+                QueryOverUtilizedAsync(connection, transaction, startDate, endDate)
+        );
 
     private async Task<FmlMaintenanceHistoryReport> QueryMaintenanceHistoryAsync(
         DbConnection connection,
@@ -101,7 +108,8 @@ public sealed class FmlReportRepository : IFmlReportRepository
         DateTime? startDate,
         DateTime? endDate,
         int? financialYear,
-        string? vehicleNumber)
+        string? vehicleNumber
+    )
     {
         var range = ResolveDateRange(startDate, endDate, financialYear);
         var search = string.IsNullOrWhiteSpace(vehicleNumber) ? null : vehicleNumber.Trim();
@@ -115,7 +123,8 @@ public sealed class FmlReportRepository : IFmlReportRepository
                 AddParameter(command, "@end_date", DbType.DateTime, range.End);
                 AddParameter(command, "@ggnum", DbType.String, search ?? string.Empty);
                 AddParameter(command, "@fin_year", DbType.Int32, financialYear.GetValueOrDefault());
-            });
+            }
+        );
 
         if (storedProcedureRows is not null)
         {
@@ -124,7 +133,10 @@ public sealed class FmlReportRepository : IFmlReportRepository
                 .Where(record => record is not null)
                 .Cast<FmlMaintenanceHistoryRecord>()
                 .ToList();
-            return new FmlMaintenanceHistoryReport(records, records.Sum(record => record.TotalCostOverDateRange ?? 0m));
+            return new FmlMaintenanceHistoryReport(
+                records,
+                records.Sum(record => record.TotalCostOverDateRange ?? 0m)
+            );
         }
 
         var viewColumns = await GetColumnsAsync(connection, WesbankView, transaction);
@@ -133,11 +145,13 @@ public sealed class FmlReportRepository : IFmlReportRepository
         var statusColumns = await GetColumnsAsync(connection, VehicleStatusTable, transaction);
         var modelColumns = await GetColumnsAsync(connection, ModelTable, transaction);
 
-        if (HasColumns(viewColumns, "vmf_code", "sourcedate", "debit_amount", "cost_category_code") &&
-            HasColumns(vehicleColumns, RequiredVehicleColumns) &&
-            HasColumns(sourceColumns, "vs_code", "name") &&
-            HasColumns(statusColumns, "vehicle_status_code", "status_description") &&
-            HasColumns(modelColumns, "model_code", "model_description"))
+        if (
+            HasColumns(viewColumns, "vmf_code", "sourcedate", "debit_amount", "cost_category_code")
+            && HasColumns(vehicleColumns, RequiredVehicleColumns)
+            && HasColumns(sourceColumns, "vs_code", "name")
+            && HasColumns(statusColumns, "vehicle_status_code", "status_description")
+            && HasColumns(modelColumns, "model_code", "model_description")
+        )
         {
             return await QueryWesbankMaintenanceAsync(
                 connection,
@@ -148,7 +162,8 @@ public sealed class FmlReportRepository : IFmlReportRepository
                 vehicleColumns,
                 sourceColumns,
                 statusColumns,
-                modelColumns);
+                modelColumns
+            );
         }
 
         return await QueryModernMaintenanceAsync(
@@ -160,7 +175,8 @@ public sealed class FmlReportRepository : IFmlReportRepository
             sourceColumns,
             statusColumns,
             modelColumns,
-            await GetColumnsAsync(connection, MaintenanceTable, transaction));
+            await GetColumnsAsync(connection, MaintenanceTable, transaction)
+        );
     }
 
     private async Task<FmlMaintenanceHistoryReport> QueryWesbankMaintenanceAsync(
@@ -172,7 +188,8 @@ public sealed class FmlReportRepository : IFmlReportRepository
         IReadOnlySet<string> vehicleColumns,
         IReadOnlySet<string> sourceColumns,
         IReadOnlySet<string> statusColumns,
-        IReadOnlySet<string> modelColumns)
+        IReadOnlySet<string> modelColumns
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -180,8 +197,20 @@ public sealed class FmlReportRepository : IFmlReportRepository
         AddParameter(command, "@to", DbType.DateTime2, range.End.Date.AddDays(1));
         AddParameter(command, "@search", DbType.String, search);
 
-        var statusDate = GetDateExpression("v", vehicleColumns, "vehicle_status_date", "date_updated", "date_created", "take_on_date");
-        var categoryDescription = GetTextExpression("w", viewColumns, "Cost Category description", "cost_category_description");
+        var statusDate = GetDateExpression(
+            "v",
+            vehicleColumns,
+            "vehicle_status_date",
+            "date_updated",
+            "date_created",
+            "take_on_date"
+        );
+        var categoryDescription = GetTextExpression(
+            "w",
+            viewColumns,
+            "Cost Category description",
+            "cost_category_description"
+        );
         var conditions = new List<string>
         {
             "[w].[cost_category_code] IN (3, 4, 5, 6)",
@@ -192,7 +221,7 @@ public sealed class FmlReportRepository : IFmlReportRepository
             "[v].[vehicle_status_code] IN (1, 2, 4, 5, 10)",
             GetNotDeletedFilter("v", vehicleColumns),
             GetNotDeletedFilter("w", viewColumns),
-            "(@search IS NULL OR [v].[fleet_number] = @search OR [v].[registration_number] = @search)"
+            "(@search IS NULL OR [v].[fleet_number] = @search OR [v].[registration_number] = @search)",
         };
 
         command.CommandText = $"""
@@ -219,18 +248,24 @@ public sealed class FmlReportRepository : IFmlReportRepository
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            records.Add(new FmlMaintenanceHistoryRecord(
-                ReadString(reader, "gg_number"),
-                ReadInt16(reader, "year_manufactured"),
-                ReadString(reader, "model_description"),
-                ReadString(reader, "current_status"),
-                ReadDateTime(reader, "current_status_date"),
-                ReadString(reader, "hired_from"),
-                ReadString(reader, "maintenance_expense_type"),
-                ReadDecimal(reader, "total_cost")));
+            records.Add(
+                new FmlMaintenanceHistoryRecord(
+                    ReadString(reader, "gg_number"),
+                    ReadInt16(reader, "year_manufactured"),
+                    ReadString(reader, "model_description"),
+                    ReadString(reader, "current_status"),
+                    ReadDateTime(reader, "current_status_date"),
+                    ReadString(reader, "hired_from"),
+                    ReadString(reader, "maintenance_expense_type"),
+                    ReadDecimal(reader, "total_cost")
+                )
+            );
         }
 
-        return new FmlMaintenanceHistoryReport(records, records.Sum(record => record.TotalCostOverDateRange ?? 0m));
+        return new FmlMaintenanceHistoryReport(
+            records,
+            records.Sum(record => record.TotalCostOverDateRange ?? 0m)
+        );
     }
 
     private async Task<FmlMaintenanceHistoryReport> QueryModernMaintenanceAsync(
@@ -242,13 +277,22 @@ public sealed class FmlReportRepository : IFmlReportRepository
         IReadOnlySet<string> sourceColumns,
         IReadOnlySet<string> statusColumns,
         IReadOnlySet<string> modelColumns,
-        IReadOnlySet<string> maintenanceColumns)
+        IReadOnlySet<string> maintenanceColumns
+    )
     {
-        if (!HasColumns(maintenanceColumns, "vmf_code", "maintenance_date", "maintenance_type", "total_cost") ||
-            !HasColumns(vehicleColumns, RequiredVehicleColumns) ||
-            !HasColumns(sourceColumns, "vs_code", "name") ||
-            !HasColumns(statusColumns, "vehicle_status_code", "status_description") ||
-            !HasColumns(modelColumns, "model_code", "model_description"))
+        if (
+            !HasColumns(
+                maintenanceColumns,
+                "vmf_code",
+                "maintenance_date",
+                "maintenance_type",
+                "total_cost"
+            )
+            || !HasColumns(vehicleColumns, RequiredVehicleColumns)
+            || !HasColumns(sourceColumns, "vs_code", "name")
+            || !HasColumns(statusColumns, "vehicle_status_code", "status_description")
+            || !HasColumns(modelColumns, "model_code", "model_description")
+        )
         {
             return new FmlMaintenanceHistoryReport([], 0m);
         }
@@ -259,7 +303,14 @@ public sealed class FmlReportRepository : IFmlReportRepository
         AddParameter(command, "@to", DbType.DateTime2, range.End.Date.AddDays(1));
         AddParameter(command, "@search", DbType.String, search);
 
-        var statusDate = GetDateExpression("v", vehicleColumns, "vehicle_status_date", "date_updated", "date_created", "take_on_date");
+        var statusDate = GetDateExpression(
+            "v",
+            vehicleColumns,
+            "vehicle_status_date",
+            "date_updated",
+            "date_created",
+            "take_on_date"
+        );
         var conditions = new List<string>
         {
             "[r].[maintenance_date] >= @from",
@@ -269,7 +320,7 @@ public sealed class FmlReportRepository : IFmlReportRepository
             "[v].[vehicle_status_code] IN (1, 2, 4, 5, 10)",
             GetNotDeletedFilter("r", maintenanceColumns),
             GetNotDeletedFilter("v", vehicleColumns),
-            "(@search IS NULL OR [v].[fleet_number] = @search OR [v].[registration_number] = @search)"
+            "(@search IS NULL OR [v].[fleet_number] = @search OR [v].[registration_number] = @search)",
         };
 
         command.CommandText = $"""
@@ -296,47 +347,64 @@ public sealed class FmlReportRepository : IFmlReportRepository
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            records.Add(new FmlMaintenanceHistoryRecord(
-                ReadString(reader, "gg_number"),
-                ReadInt16(reader, "year_manufactured"),
-                ReadString(reader, "model_description"),
-                ReadString(reader, "current_status"),
-                ReadDateTime(reader, "current_status_date"),
-                ReadString(reader, "hired_from"),
-                ReadString(reader, "maintenance_expense_type"),
-                ReadDecimal(reader, "total_cost")));
+            records.Add(
+                new FmlMaintenanceHistoryRecord(
+                    ReadString(reader, "gg_number"),
+                    ReadInt16(reader, "year_manufactured"),
+                    ReadString(reader, "model_description"),
+                    ReadString(reader, "current_status"),
+                    ReadDateTime(reader, "current_status_date"),
+                    ReadString(reader, "hired_from"),
+                    ReadString(reader, "maintenance_expense_type"),
+                    ReadDecimal(reader, "total_cost")
+                )
+            );
         }
 
-        return new FmlMaintenanceHistoryReport(records, records.Sum(record => record.TotalCostOverDateRange ?? 0m));
+        return new FmlMaintenanceHistoryReport(
+            records,
+            records.Sum(record => record.TotalCostOverDateRange ?? 0m)
+        );
     }
 
     private async Task<FmlContractsReport> QueryContractsAsync(
         DbConnection connection,
         DbTransaction? transaction,
-        bool expired)
+        bool expired
+    )
     {
         var procedure = expired
             ? "DEV_REP_ExpiredFMLContractsStillOpenContractsWithClients"
             : "DEV_REP_FMLContractsExpireInThreeMonths";
-        var storedProcedureRows = await TryExecuteStoredProcedureAsync(connection, transaction, procedure, null);
+        var storedProcedureRows = await TryExecuteStoredProcedureAsync(
+            connection,
+            transaction,
+            procedure,
+            null
+        );
         if (storedProcedureRows is not null)
         {
             var records = storedProcedureRows
                 .Select(MapContractRecord)
                 .Where(record => record is not null)
                 .Cast<FmlContractRecord>()
-                .Select((record, index) => record with { RowNumber = record.RowNumber ?? index + 1 })
+                .Select(
+                    (record, index) => record with { RowNumber = record.RowNumber ?? index + 1 }
+                )
                 .ToList();
             return new FmlContractsReport(records);
         }
 
-        return new FmlContractsReport(await QueryContractFallbackAsync(connection, transaction, expired));
+        return new FmlContractsReport(
+            await QueryContractFallbackAsync(connection, transaction, expired)
+        );
     }
 
     private async Task<IReadOnlyList<FmlContractRecord>> QueryContractFallbackAsync(
         DbConnection connection,
         DbTransaction? transaction,
-        bool expired)
+        bool expired
+    )
     {
         var vehicleColumns = await GetColumnsAsync(connection, VehicleTable, transaction);
         var contractColumns = await GetColumnsAsync(connection, ContractTable, transaction);
@@ -347,13 +415,23 @@ public sealed class FmlReportRepository : IFmlReportRepository
         var tariffColumns = await GetColumnsAsync(connection, LeaseTariffTable, transaction);
         var contractTypeColumns = await GetColumnsAsync(connection, ContractTypeTable, transaction);
 
-        if (!HasColumns(vehicleColumns, RequiredVehicleColumns) ||
-            !HasColumns(contractColumns, "vmf_code", "start_date", "target_return_date", "still_current", "contract_type", "site_code") ||
-            !HasColumns(sourceColumns, "vs_code", "name") ||
-            !HasColumns(typeColumns, "type_code", "type_description") ||
-            !HasColumns(modelColumns, "model_code", "model_description") ||
-            !HasColumns(siteColumns, "site_code", "description") ||
-            !HasColumns(tariffColumns, "vmf_code", "start_date", "end_date", "fixed_tariff"))
+        if (
+            !HasColumns(vehicleColumns, RequiredVehicleColumns)
+            || !HasColumns(
+                contractColumns,
+                "vmf_code",
+                "start_date",
+                "target_return_date",
+                "still_current",
+                "contract_type",
+                "site_code"
+            )
+            || !HasColumns(sourceColumns, "vs_code", "name")
+            || !HasColumns(typeColumns, "type_code", "type_description")
+            || !HasColumns(modelColumns, "model_code", "model_description")
+            || !HasColumns(siteColumns, "site_code", "description")
+            || !HasColumns(tariffColumns, "vmf_code", "start_date", "end_date", "fixed_tariff")
+        )
         {
             return [];
         }
@@ -367,12 +445,18 @@ public sealed class FmlReportRepository : IFmlReportRepository
         var contractTargetPredicate = expired
             ? "[c].[target_return_date] < @today"
             : "[c].[target_return_date] >= @today AND [c].[target_return_date] <= @cutoff";
-        var tariffActivePredicate = tariffColumns.Contains("active") ? "AND [lt].[active] = 1" : string.Empty;
+        var tariffActivePredicate = tariffColumns.Contains("active")
+            ? "AND [lt].[active] = 1"
+            : string.Empty;
         var tariffNotDeleted = GetNotDeletedFilter("lt", tariffColumns);
         var contractTypeJoin = HasColumns(contractTypeColumns, "contract_type", "CT_description")
             ? $"LEFT JOIN [dbo].[{ContractTypeTable}] AS [ct] ON [ct].[contract_type] = [c].[contract_type]"
             : string.Empty;
-        var contractTypeExpression = HasColumns(contractTypeColumns, "contract_type", "CT_description")
+        var contractTypeExpression = HasColumns(
+            contractTypeColumns,
+            "contract_type",
+            "CT_description"
+        )
             ? "COALESCE([ct].[CT_description], [c].[contract_type])"
             : "[c].[contract_type]";
         var siteExpression = siteColumns.Contains("department_number")
@@ -420,20 +504,23 @@ public sealed class FmlReportRepository : IFmlReportRepository
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            records.Add(new FmlContractRecord(
-                records.Count + 1,
-                ReadString(reader, "gg_number"),
-                ReadString(reader, "gp_number"),
-                ReadString(reader, "model"),
-                ReadInt16(reader, "year_model"),
-                ReadString(reader, "hired_from"),
-                ReadString(reader, "hire_type"),
-                ReadString(reader, "still_current"),
-                ReadDateTime(reader, "contract_start_date"),
-                ReadDateTime(reader, "target_return_date"),
-                ReadString(reader, "contract_type"),
-                ReadString(reader, "site_name"),
-                ReadDecimal(reader, "fixed_tariff")));
+            records.Add(
+                new FmlContractRecord(
+                    records.Count + 1,
+                    ReadString(reader, "gg_number"),
+                    ReadString(reader, "gp_number"),
+                    ReadString(reader, "model"),
+                    ReadInt16(reader, "year_model"),
+                    ReadString(reader, "hired_from"),
+                    ReadString(reader, "hire_type"),
+                    ReadString(reader, "still_current"),
+                    ReadDateTime(reader, "contract_start_date"),
+                    ReadDateTime(reader, "target_return_date"),
+                    ReadString(reader, "contract_type"),
+                    ReadString(reader, "site_name"),
+                    ReadDecimal(reader, "fixed_tariff")
+                )
+            );
         }
 
         return records;
@@ -441,26 +528,35 @@ public sealed class FmlReportRepository : IFmlReportRepository
 
     private async Task<FmlVehiclesNoContractsReport> QueryVehiclesNoContractsAsync(
         DbConnection connection,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         var vehicleColumns = await GetColumnsAsync(connection, VehicleTable, transaction);
         var sourceColumns = await GetColumnsAsync(connection, VehicleSourceTable, transaction);
         var statusColumns = await GetColumnsAsync(connection, VehicleStatusTable, transaction);
-        var locationTable = await ResolveTableAsync(connection, [LocationTable, "Locations"], transaction);
-        var locationColumns = locationTable is null ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) : await GetColumnsAsync(connection, locationTable, transaction);
+        var locationTable = await ResolveTableAsync(
+            connection,
+            [LocationTable, "Locations"],
+            transaction
+        );
+        var locationColumns = locationTable is null
+            ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            : await GetColumnsAsync(connection, locationTable, transaction);
         var modelColumns = await GetColumnsAsync(connection, ModelTable, transaction);
         var classColumns = await GetColumnsAsync(connection, ClassTable, transaction);
         var contractColumns = await GetColumnsAsync(connection, ContractTable, transaction);
         var tariffColumns = await GetColumnsAsync(connection, LeaseTariffTable, transaction);
 
-        if (!HasColumns(vehicleColumns, RequiredVehicleColumns) ||
-            !vehicleColumns.Contains("location_code") ||
-            !HasColumns(sourceColumns, "vs_code", "name") ||
-            !HasColumns(statusColumns, "vehicle_status_code", "status_description") ||
-            !HasColumns(locationColumns, "location_code", "description") ||
-            !HasColumns(modelColumns, "model_code", "model_description", "class_code") ||
-            !HasColumns(classColumns, "class_code", "description") ||
-            !HasColumns(contractColumns, "vmf_code"))
+        if (
+            !HasColumns(vehicleColumns, RequiredVehicleColumns)
+            || !vehicleColumns.Contains("location_code")
+            || !HasColumns(sourceColumns, "vs_code", "name")
+            || !HasColumns(statusColumns, "vehicle_status_code", "status_description")
+            || !HasColumns(locationColumns, "location_code", "description")
+            || !HasColumns(modelColumns, "model_code", "model_description", "class_code")
+            || !HasColumns(classColumns, "class_code", "description")
+            || !HasColumns(contractColumns, "vmf_code")
+        )
         {
             return new FmlVehiclesNoContractsReport([]);
         }
@@ -470,8 +566,11 @@ public sealed class FmlReportRepository : IFmlReportRepository
         var tariffJoin = HasColumns(tariffColumns, "vmf_code")
             ? $"LEFT JOIN (SELECT DISTINCT [vmf_code] FROM [dbo].[{LeaseTariffTable}] WHERE {GetNotDeletedFilter(string.Empty, tariffColumns)}) AS [lt] ON [v].[vmf_code] = [lt].[vmf_code]"
             : string.Empty;
-        var tariffPredicate = HasColumns(tariffColumns, "vmf_code") ? "[lt].[vmf_code] IS NULL" : "1 = 1";
-        var notExistsContract = $"NOT EXISTS (SELECT 1 FROM [dbo].[{ContractTable}] AS [c] WHERE [c].[vmf_code] = [v].[vmf_code] AND {GetNotDeletedFilter("c", contractColumns)})";
+        var tariffPredicate = HasColumns(tariffColumns, "vmf_code")
+            ? "[lt].[vmf_code] IS NULL"
+            : "1 = 1";
+        var notExistsContract =
+            $"NOT EXISTS (SELECT 1 FROM [dbo].[{ContractTable}] AS [c] WHERE [c].[vmf_code] = [v].[vmf_code] AND {GetNotDeletedFilter("c", contractColumns)})";
 
         command.CommandText = $"""
             SELECT [v].[fleet_number] AS [gg_number],
@@ -502,17 +601,20 @@ public sealed class FmlReportRepository : IFmlReportRepository
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            records.Add(new FmlVehicleNoContractRecord(
-                records.Count + 1,
-                ReadString(reader, "gg_number"),
-                ReadString(reader, "registration_number"),
-                ReadString(reader, "hired_from"),
-                ReadString(reader, "vehicle_status"),
-                ReadString(reader, "location"),
-                ReadInt16(reader, "year_model"),
-                ReadString(reader, "model_description"),
-                ReadString(reader, "class_description"),
-                ReadDecimal(reader, "purchase_amount")));
+            records.Add(
+                new FmlVehicleNoContractRecord(
+                    records.Count + 1,
+                    ReadString(reader, "gg_number"),
+                    ReadString(reader, "registration_number"),
+                    ReadString(reader, "hired_from"),
+                    ReadString(reader, "vehicle_status"),
+                    ReadString(reader, "location"),
+                    ReadInt16(reader, "year_model"),
+                    ReadString(reader, "model_description"),
+                    ReadString(reader, "class_description"),
+                    ReadDecimal(reader, "purchase_amount")
+                )
+            );
         }
 
         return new FmlVehiclesNoContractsReport(records);
@@ -522,7 +624,8 @@ public sealed class FmlReportRepository : IFmlReportRepository
         DbConnection connection,
         DbTransaction? transaction,
         DateTime? startDate,
-        DateTime? endDate)
+        DateTime? endDate
+    )
     {
         var storedProcedureRows = await TryExecuteStoredProcedureAsync(
             connection,
@@ -532,7 +635,8 @@ public sealed class FmlReportRepository : IFmlReportRepository
             {
                 AddParameter(command, "@start_date", DbType.DateTime, startDate?.Date);
                 AddParameter(command, "@end_date", DbType.DateTime, endDate?.Date);
-            });
+            }
+        );
 
         if (storedProcedureRows is not null)
         {
@@ -540,19 +644,28 @@ public sealed class FmlReportRepository : IFmlReportRepository
                 .Select(MapOverUtilizedRecord)
                 .Where(record => record is not null)
                 .Cast<FmlOverUtilizedRecord>()
-                .Select((record, index) => record with { VehicleCounter = record.VehicleCounter ?? index + 1 })
+                .Select(
+                    (record, index) =>
+                        record with
+                        {
+                            VehicleCounter = record.VehicleCounter ?? index + 1,
+                        }
+                )
                 .ToList();
             return new FmlOverUtilizedReport(records);
         }
 
-        return new FmlOverUtilizedReport(await QueryOverUtilizedFallbackAsync(connection, transaction, startDate, endDate));
+        return new FmlOverUtilizedReport(
+            await QueryOverUtilizedFallbackAsync(connection, transaction, startDate, endDate)
+        );
     }
 
     private async Task<IReadOnlyList<FmlOverUtilizedRecord>> QueryOverUtilizedFallbackAsync(
         DbConnection connection,
         DbTransaction? transaction,
         DateTime? startDate,
-        DateTime? endDate)
+        DateTime? endDate
+    )
     {
         var vehicleColumns = await GetColumnsAsync(connection, VehicleTable, transaction);
         var sourceColumns = await GetColumnsAsync(connection, VehicleSourceTable, transaction);
@@ -561,13 +674,27 @@ public sealed class FmlReportRepository : IFmlReportRepository
         var termsColumns = await GetColumnsAsync(connection, LeaseTermsTable, transaction);
         var kiloColumns = await GetColumnsAsync(connection, VehicleKilosTable, transaction);
 
-        if (!HasColumns(vehicleColumns, RequiredVehicleColumns) ||
-            !HasColumns(sourceColumns, "vs_code", "name") ||
-            !HasColumns(modelColumns, "model_code", "model_description") ||
-            !HasColumns(contractColumns, "vmf_code", "start_date", "still_current") ||
-            !HasColumns(termsColumns, "VehicleContractTermID", "vmf_Code", "AgreedKilos", "AgreedTerms") ||
-            !HasColumns(kiloColumns, "vmf_code", "start_odo", "end_odo") ||
-            !HasAnyColumn(kiloColumns, "Source_Date", "TransactionDate", "date_created", "date_updated"))
+        if (
+            !HasColumns(vehicleColumns, RequiredVehicleColumns)
+            || !HasColumns(sourceColumns, "vs_code", "name")
+            || !HasColumns(modelColumns, "model_code", "model_description")
+            || !HasColumns(contractColumns, "vmf_code", "start_date", "still_current")
+            || !HasColumns(
+                termsColumns,
+                "VehicleContractTermID",
+                "vmf_Code",
+                "AgreedKilos",
+                "AgreedTerms"
+            )
+            || !HasColumns(kiloColumns, "vmf_code", "start_odo", "end_odo")
+            || !HasAnyColumn(
+                kiloColumns,
+                "Source_Date",
+                "TransactionDate",
+                "date_created",
+                "date_updated"
+            )
+        )
         {
             return [];
         }
@@ -580,10 +707,18 @@ public sealed class FmlReportRepository : IFmlReportRepository
         AddParameter(command, "@to", DbType.DateTime2, to.AddDays(1));
         AddParameter(command, "@today", DbType.DateTime2, DateTime.Today);
 
-        var kiloDate = GetDateExpression("k", kiloColumns, "Source_Date", "TransactionDate", "date_created", "date_updated");
+        var kiloDate = GetDateExpression(
+            "k",
+            kiloColumns,
+            "Source_Date",
+            "TransactionDate",
+            "date_created",
+            "date_updated"
+        );
         var kiloStart = GetColumnExpression("k", kiloColumns, "start_odo", "end_odo");
         var kiloEnd = GetColumnExpression("k", kiloColumns, "end_odo", "start_odo");
-        var actualOdo = $"CASE WHEN COALESCE({kiloEnd}, 0) > COALESCE({kiloStart}, 0) THEN COALESCE({kiloEnd}, {kiloStart}) ELSE COALESCE({kiloStart}, {kiloEnd}) END";
+        var actualOdo =
+            $"CASE WHEN COALESCE({kiloEnd}, 0) > COALESCE({kiloStart}, 0) THEN COALESCE({kiloEnd}, {kiloStart}) ELSE COALESCE({kiloStart}, {kiloEnd}) END";
         var agreedOverall = termsColumns.Contains("AgreedOverallKilo")
             ? "[lct].[AgreedOverallKilo]"
             : "CAST([lct].[AgreedKilos] * [lct].[AgreedTerms] AS decimal(19, 4))";
@@ -635,20 +770,23 @@ public sealed class FmlReportRepository : IFmlReportRepository
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            rawRows.Add(new OverUtilizedRawRecord(
-                ReadString(reader, "gg_number"),
-                ReadString(reader, "gp_number"),
-                ReadString(reader, "hired_from"),
-                ReadDecimal(reader, "max_odo_meter"),
-                ReadDecimal(reader, "min_odo_meter"),
-                ReadDecimal(reader, "agreed_kilos"),
-                ReadDecimal(reader, "agreed_overall_kilo"),
-                ReadDecimal(reader, "agreed_terms"),
-                ReadDecimal(reader, "actual_term"),
-                ReadDateTime(reader, "contract_start_date"),
-                ReadInt16(reader, "year_model"),
-                ReadString(reader, "model_description"),
-                ReadDecimal(reader, "purchase_amount")));
+            rawRows.Add(
+                new OverUtilizedRawRecord(
+                    ReadString(reader, "gg_number"),
+                    ReadString(reader, "gp_number"),
+                    ReadString(reader, "hired_from"),
+                    ReadDecimal(reader, "max_odo_meter"),
+                    ReadDecimal(reader, "min_odo_meter"),
+                    ReadDecimal(reader, "agreed_kilos"),
+                    ReadDecimal(reader, "agreed_overall_kilo"),
+                    ReadDecimal(reader, "agreed_terms"),
+                    ReadDecimal(reader, "actual_term"),
+                    ReadDateTime(reader, "contract_start_date"),
+                    ReadInt16(reader, "year_model"),
+                    ReadString(reader, "model_description"),
+                    ReadDecimal(reader, "purchase_amount")
+                )
+            );
         }
 
         return rawRows
@@ -658,10 +796,17 @@ public sealed class FmlReportRepository : IFmlReportRepository
             .ToList();
     }
 
-    private static FmlMaintenanceHistoryRecord? MapMaintenanceRecord(IReadOnlyDictionary<string, object?> row)
+    private static FmlMaintenanceHistoryRecord? MapMaintenanceRecord(
+        IReadOnlyDictionary<string, object?> row
+    )
     {
         var ggNumber = ReadString(row, "GG Number", "gg_number", "fleet_number");
-        var total = ReadDecimal(row, "Total Cost Over Date Range", "total_cost", "TotalCostOverDateRange");
+        var total = ReadDecimal(
+            row,
+            "Total Cost Over Date Range",
+            "total_cost",
+            "TotalCostOverDateRange"
+        );
         if (ggNumber is null && total is null)
         {
             return null;
@@ -675,7 +820,8 @@ public sealed class FmlReportRepository : IFmlReportRepository
             ReadDateTime(row, "Current Status Date", "current_status_date"),
             ReadString(row, "Hired From", "hired_from"),
             ReadString(row, "Maintenance Expense Type", "maintenance_expense_type"),
-            total);
+            total
+        );
     }
 
     private static FmlContractRecord? MapContractRecord(IReadOnlyDictionary<string, object?> row)
@@ -699,10 +845,13 @@ public sealed class FmlReportRepository : IFmlReportRepository
             ReadDateTime(row, "Target Return Date", "target_return_date"),
             ReadString(row, "Contract Type", "contract_type"),
             ReadString(row, "Site Name", "site_name"),
-            ReadDecimal(row, "fixed_tariff", "Fixed Tariff", "fixedTariff"));
+            ReadDecimal(row, "fixed_tariff", "Fixed Tariff", "fixedTariff")
+        );
     }
 
-    private static FmlOverUtilizedRecord? MapOverUtilizedRecord(IReadOnlyDictionary<string, object?> row)
+    private static FmlOverUtilizedRecord? MapOverUtilizedRecord(
+        IReadOnlyDictionary<string, object?> row
+    )
     {
         var ggNumber = ReadString(row, "GG Number", "gg_number", "fleet_number");
         if (ggNumber is null)
@@ -731,14 +880,16 @@ public sealed class FmlReportRepository : IFmlReportRepository
             ReadDateTime(row, "projected_end_date", "ProjectedEndDate"),
             ReadInt16(row, "Year Manufactured", "YearModel", "year_model"),
             ReadString(row, "Model Description", "model_description"),
-            ReadDecimal(row, "Purchase Amount", "purchase_amount"));
+            ReadDecimal(row, "Purchase Amount", "purchase_amount")
+        );
     }
 
     private static FmlOverUtilizedRecord? BuildOverUtilizedRecord(
         OverUtilizedRawRecord row,
         int counter,
         DateTime from,
-        DateTime to)
+        DateTime to
+    )
     {
         if (!row.MaxOdoMeter.HasValue || !row.MinOdoMeter.HasValue)
         {
@@ -746,16 +897,21 @@ public sealed class FmlReportRepository : IFmlReportRepository
         }
 
         var actualKilos = row.MaxOdoMeter.Value - row.MinOdoMeter.Value;
-        var agreedOverall = row.AgreedOverallKilo ??
-            (row.AgreedKilos.HasValue && row.AgreedTerms.HasValue
-                ? row.AgreedKilos.Value * row.AgreedTerms.Value
-                : null);
-        var excess = row.AgreedKilos.HasValue && actualKilos > row.AgreedKilos.Value
-            ? actualKilos - row.AgreedKilos.Value
-            : (decimal?)null;
-        var totalExcess = agreedOverall.HasValue && actualKilos > agreedOverall.Value
-            ? actualKilos - agreedOverall.Value
-            : (decimal?)null;
+        var agreedOverall =
+            row.AgreedOverallKilo
+            ?? (
+                row.AgreedKilos.HasValue && row.AgreedTerms.HasValue
+                    ? row.AgreedKilos.Value * row.AgreedTerms.Value
+                    : null
+            );
+        var excess =
+            row.AgreedKilos.HasValue && actualKilos > row.AgreedKilos.Value
+                ? actualKilos - row.AgreedKilos.Value
+                : (decimal?)null;
+        var totalExcess =
+            agreedOverall.HasValue && actualKilos > agreedOverall.Value
+                ? actualKilos - agreedOverall.Value
+                : (decimal?)null;
         if (!excess.HasValue && !totalExcess.HasValue)
         {
             return null;
@@ -768,8 +924,15 @@ public sealed class FmlReportRepository : IFmlReportRepository
         string? projectedEndMonth = null;
         if (agreedOverall.HasValue && averageMonthly > 0)
         {
-            var projectedMonths = Math.Round(agreedOverall.Value / averageMonthly, 0, MidpointRounding.ToEven);
-            if (projectedMonths < row.AgreedTerms.GetValueOrDefault(decimal.MaxValue) && projectedMonths <= int.MaxValue)
+            var projectedMonths = Math.Round(
+                agreedOverall.Value / averageMonthly,
+                0,
+                MidpointRounding.ToEven
+            );
+            if (
+                projectedMonths < row.AgreedTerms.GetValueOrDefault(decimal.MaxValue)
+                && projectedMonths <= int.MaxValue
+            )
             {
                 projectedEndDate = row.ContractStartDate?.Date.AddMonths((int)projectedMonths);
                 projectedEndMonth = projectedMonths.ToString(CultureInfo.InvariantCulture);
@@ -797,14 +960,16 @@ public sealed class FmlReportRepository : IFmlReportRepository
             projectedEndDate,
             row.YearModel,
             row.ModelDescription,
-            row.PurchaseAmount);
+            row.PurchaseAmount
+        );
     }
 
     private async Task<IReadOnlyList<Dictionary<string, object?>>?> TryExecuteStoredProcedureAsync(
         DbConnection connection,
         DbTransaction? transaction,
         string procedureName,
-        Action<DbCommand>? configure)
+        Action<DbCommand>? configure
+    )
     {
         if (!await ObjectExistsAsync(connection, $"dbo.{procedureName}", transaction))
         {
@@ -826,7 +991,9 @@ public sealed class FmlReportRepository : IFmlReportRepository
                 var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
                 for (var index = 0; index < reader.FieldCount; index++)
                 {
-                    row[reader.GetName(index)] = reader.IsDBNull(index) ? null : reader.GetValue(index);
+                    row[reader.GetName(index)] = reader.IsDBNull(index)
+                        ? null
+                        : reader.GetValue(index);
                 }
 
                 rows.Add(row);
@@ -836,12 +1003,18 @@ public sealed class FmlReportRepository : IFmlReportRepository
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "FML report procedure {ProcedureName} was unavailable; using compatibility query", procedureName);
+            _logger.LogWarning(
+                ex,
+                "FML report procedure {ProcedureName} was unavailable; using compatibility query",
+                procedureName
+            );
             return null;
         }
     }
 
-    private async Task<T> WithConnectionAsync<T>(Func<DbConnection, DbTransaction?, Task<T>> operation)
+    private async Task<T> WithConnectionAsync<T>(
+        Func<DbConnection, DbTransaction?, Task<T>> operation
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -852,7 +1025,10 @@ public sealed class FmlReportRepository : IFmlReportRepository
 
         try
         {
-            return await operation(connection, _context.Database.CurrentTransaction?.GetDbTransaction());
+            return await operation(
+                connection,
+                _context.Database.CurrentTransaction?.GetDbTransaction()
+            );
         }
         finally
         {
@@ -863,19 +1039,25 @@ public sealed class FmlReportRepository : IFmlReportRepository
         }
     }
 
-    private static async Task<bool> ObjectExistsAsync(DbConnection connection, string objectName, DbTransaction? transaction)
+    private static async Task<bool> ObjectExistsAsync(
+        DbConnection connection,
+        string objectName,
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = "SELECT CASE WHEN OBJECT_ID(@objectName) IS NULL THEN 0 ELSE 1 END";
         AddParameter(command, "@objectName", DbType.String, objectName);
-        return Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture) == 1;
+        return Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture)
+            == 1;
     }
 
     private static async Task<string?> ResolveTableAsync(
         DbConnection connection,
         IReadOnlyList<string> candidates,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         foreach (var candidate in candidates)
         {
@@ -891,7 +1073,8 @@ public sealed class FmlReportRepository : IFmlReportRepository
     private static async Task<HashSet<string>> GetColumnsAsync(
         DbConnection connection,
         string tableName,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -913,11 +1096,11 @@ public sealed class FmlReportRepository : IFmlReportRepository
         return columns;
     }
 
-    private static bool HasColumns(IReadOnlySet<string> columns, params string[] required)
-        => required.All(columns.Contains);
+    private static bool HasColumns(IReadOnlySet<string> columns, params string[] required) =>
+        required.All(columns.Contains);
 
-    private static bool HasAnyColumn(IReadOnlySet<string> columns, params string[] candidates)
-        => candidates.Any(columns.Contains);
+    private static bool HasAnyColumn(IReadOnlySet<string> columns, params string[] candidates) =>
+        candidates.Any(columns.Contains);
 
     private static string GetNotDeletedFilter(string alias, IReadOnlySet<string> columns)
     {
@@ -927,7 +1110,11 @@ public sealed class FmlReportRepository : IFmlReportRepository
             : "1 = 1";
     }
 
-    private static string GetDateExpression(string alias, IReadOnlySet<string> columns, params string[] candidates)
+    private static string GetDateExpression(
+        string alias,
+        IReadOnlySet<string> columns,
+        params string[] candidates
+    )
     {
         var expressions = candidates
             .Where(columns.Contains)
@@ -937,17 +1124,27 @@ public sealed class FmlReportRepository : IFmlReportRepository
         {
             0 => "CAST(NULL AS datetime2)",
             1 => expressions[0],
-            _ => $"COALESCE({string.Join(", ", expressions)})"
+            _ => $"COALESCE({string.Join(", ", expressions)})",
         };
     }
 
-    private static string GetTextExpression(string alias, IReadOnlySet<string> columns, params string[] candidates)
+    private static string GetTextExpression(
+        string alias,
+        IReadOnlySet<string> columns,
+        params string[] candidates
+    )
     {
         var column = candidates.FirstOrDefault(columns.Contains);
-        return column is null ? "CAST(NULL AS nvarchar(255))" : GetColumnExpression(alias, columns, column);
+        return column is null
+            ? "CAST(NULL AS nvarchar(255))"
+            : GetColumnExpression(alias, columns, column);
     }
 
-    private static string GetColumnExpression(string alias, IReadOnlySet<string> columns, params string[] candidates)
+    private static string GetColumnExpression(
+        string alias,
+        IReadOnlySet<string> columns,
+        params string[] candidates
+    )
     {
         var column = candidates.FirstOrDefault(columns.Contains);
         if (column is null)
@@ -958,13 +1155,18 @@ public sealed class FmlReportRepository : IFmlReportRepository
         return string.IsNullOrWhiteSpace(alias) ? $"[{column}]" : $"[{alias}].[{column}]";
     }
 
-    private static DateRange ResolveDateRange(DateTime? startDate, DateTime? endDate, int? financialYear)
+    private static DateRange ResolveDateRange(
+        DateTime? startDate,
+        DateTime? endDate,
+        int? financialYear
+    )
     {
         if (financialYear is > 0)
         {
             return new DateRange(
                 new DateTime(financialYear.Value, 4, 1),
-                new DateTime(financialYear.Value + 1, 3, 31));
+                new DateTime(financialYear.Value + 1, 3, 31)
+            );
         }
 
         var start = startDate?.Date ?? new DateTime(1900, 1, 1);
@@ -985,11 +1187,13 @@ public sealed class FmlReportRepository : IFmlReportRepository
         return null;
     }
 
-    private static string? ReadString(IReadOnlyDictionary<string, object?> row, params string[] keys)
-        => GetValue(row, keys)?.ToString()?.Trim() is { Length: > 0 } value ? value : null;
+    private static string? ReadString(
+        IReadOnlyDictionary<string, object?> row,
+        params string[] keys
+    ) => GetValue(row, keys)?.ToString()?.Trim() is { Length: > 0 } value ? value : null;
 
-    private static int? ReadInt32(IReadOnlyDictionary<string, object?> row, params string[] keys)
-        => ToInt32(GetValue(row, keys));
+    private static int? ReadInt32(IReadOnlyDictionary<string, object?> row, params string[] keys) =>
+        ToInt32(GetValue(row, keys));
 
     private static short? ReadInt16(IReadOnlyDictionary<string, object?> row, params string[] keys)
     {
@@ -997,10 +1201,15 @@ public sealed class FmlReportRepository : IFmlReportRepository
         return value.HasValue ? Convert.ToInt16(value.Value, CultureInfo.InvariantCulture) : null;
     }
 
-    private static decimal? ReadDecimal(IReadOnlyDictionary<string, object?> row, params string[] keys)
-        => ToDecimal(GetValue(row, keys));
+    private static decimal? ReadDecimal(
+        IReadOnlyDictionary<string, object?> row,
+        params string[] keys
+    ) => ToDecimal(GetValue(row, keys));
 
-    private static DateTime? ReadDateTime(IReadOnlyDictionary<string, object?> row, params string[] keys)
+    private static DateTime? ReadDateTime(
+        IReadOnlyDictionary<string, object?> row,
+        params string[] keys
+    )
     {
         var value = GetValue(row, keys);
         if (value is DateTime dateTime)
@@ -1008,7 +1217,12 @@ public sealed class FmlReportRepository : IFmlReportRepository
             return dateTime;
         }
 
-        return DateTime.TryParse(value?.ToString(), CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var parsed)
+        return DateTime.TryParse(
+            value?.ToString(),
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AllowWhiteSpaces,
+            out var parsed
+        )
             ? parsed
             : null;
     }
@@ -1020,7 +1234,12 @@ public sealed class FmlReportRepository : IFmlReportRepository
             return null;
         }
 
-        return int.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+        return int.TryParse(
+            Convert.ToString(value, CultureInfo.InvariantCulture),
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var parsed
+        )
             ? parsed
             : null;
     }
@@ -1032,22 +1251,33 @@ public sealed class FmlReportRepository : IFmlReportRepository
             return null;
         }
 
-        return decimal.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+        return decimal.TryParse(
+            Convert.ToString(value, CultureInfo.InvariantCulture),
+            NumberStyles.Any,
+            CultureInfo.InvariantCulture,
+            out var parsed
+        )
             ? parsed
             : null;
     }
 
-    private static string? ReadString(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : reader[column]?.ToString()?.Trim() is { Length: > 0 } value ? value : null;
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null
+        : reader[column]?.ToString()?.Trim() is { Length: > 0 } value ? value
+        : null;
 
-    private static short? ReadInt16(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt16(reader[column], CultureInfo.InvariantCulture);
+    private static short? ReadInt16(DbDataReader reader, string column) =>
+        reader[column] is DBNull
+            ? null
+            : Convert.ToInt16(reader[column], CultureInfo.InvariantCulture);
 
-    private static decimal? ReadDecimal(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : ToDecimal(reader[column]);
+    private static decimal? ReadDecimal(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : ToDecimal(reader[column]);
 
-    private static DateTime? ReadDateTime(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToDateTime(reader[column], CultureInfo.InvariantCulture);
+    private static DateTime? ReadDateTime(DbDataReader reader, string column) =>
+        reader[column] is DBNull
+            ? null
+            : Convert.ToDateTime(reader[column], CultureInfo.InvariantCulture);
 
     private static void AddParameter(DbCommand command, string name, DbType type, object? value)
     {
@@ -1073,5 +1303,6 @@ public sealed class FmlReportRepository : IFmlReportRepository
         DateTime? ContractStartDate,
         short? YearModel,
         string? ModelDescription,
-        decimal? PurchaseAmount);
+        decimal? PurchaseAmount
+    );
 }

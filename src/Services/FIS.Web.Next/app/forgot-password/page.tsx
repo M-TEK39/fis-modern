@@ -22,7 +22,9 @@ function Brand() {
   );
 }
 
-export default async function ForgotPasswordPage({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+export default async function ForgotPasswordPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
   const query = await searchParams;
   const initialIdentifier =
     getQueryValue(query.identifier) ??
@@ -37,14 +39,19 @@ export default async function ForgotPasswordPage({ searchParams }: Readonly<{ se
         <div className="auth-header">
           <p className="eyebrow">Account recovery</p>
           <h1 id="forgot-password-title">Forgot your password?</h1>
-          <p>We will email a secure, one-time password reset link if the account has a registered email address.</p>
+          <p>
+            We will email a secure, one-time password reset link if the account has a registered
+            email address.
+          </p>
         </div>
         <ForgotPasswordForm initialIdentifier={initialIdentifier} />
         <div className="auth-footer">
           <Link className="text-link" href="/login">
             Back to sign in
           </Link>
-          <span className="auth-footnote">For security, the same response is shown whether or not an account exists.</span>
+          <span className="auth-footnote">
+            For security, the same response is shown whether or not an account exists.
+          </span>
         </div>
       </section>
     </main>

@@ -1,6 +1,6 @@
+using FIS.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using FIS.Api.Services;
 
 namespace FIS.Api.Controllers;
 
@@ -14,14 +14,17 @@ public class NotifyListController : BaseApiController
 
     public NotifyListController(
         NotifyListCompatibilityService notifyListService,
-        ILogger<NotifyListController> logger)
+        ILogger<NotifyListController> logger
+    )
     {
         _notifyListService = notifyListService;
         _logger = logger;
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<NotifyListDto>>> GetAll([FromQuery] string? search = null)
+    public async Task<ActionResult<IEnumerable<NotifyListDto>>> GetAll(
+        [FromQuery] string? search = null
+    )
     {
         try
         {
@@ -52,7 +55,9 @@ public class NotifyListController : BaseApiController
     }
 
     [HttpPost]
-    public async Task<ActionResult<NotifyListDto>> Create([FromBody] NotifyListCreateUpdateDto request)
+    public async Task<ActionResult<NotifyListDto>> Create(
+        [FromBody] NotifyListCreateUpdateDto request
+    )
     {
         try
         {
@@ -66,7 +71,8 @@ public class NotifyListController : BaseApiController
                 request.Notify_list_desc?.Trim(),
                 request.Notify_email1?.Trim(),
                 GetCurrentUserIdOrNull(),
-                HttpContext.RequestAborted);
+                HttpContext.RequestAborted
+            );
 
             return item is null
                 ? StatusCode(500, "Error creating notify list record")
@@ -80,7 +86,10 @@ public class NotifyListController : BaseApiController
     }
 
     [HttpPut("{id:int}")]
-    public async Task<ActionResult<NotifyListDto>> Update(int id, [FromBody] NotifyListCreateUpdateDto request)
+    public async Task<ActionResult<NotifyListDto>> Update(
+        int id,
+        [FromBody] NotifyListCreateUpdateDto request
+    )
     {
         try
         {
@@ -95,7 +104,8 @@ public class NotifyListController : BaseApiController
                 request.Notify_list_desc?.Trim(),
                 request.Notify_email1?.Trim(),
                 GetCurrentUserIdOrNull(),
-                HttpContext.RequestAborted);
+                HttpContext.RequestAborted
+            );
 
             return item is null ? NotFound() : Ok(ToDto(item));
         }
@@ -114,7 +124,8 @@ public class NotifyListController : BaseApiController
             var deleted = await _notifyListService.DeleteAsync(
                 id,
                 GetCurrentUserIdOrNull(),
-                HttpContext.RequestAborted);
+                HttpContext.RequestAborted
+            );
             return deleted ? NoContent() : NotFound();
         }
         catch (Exception ex)
@@ -153,14 +164,15 @@ public class NotifyListController : BaseApiController
         return null;
     }
 
-    private static NotifyListDto ToDto(NotifyListRecord item) => new()
-    {
-        Notify_list_code = item.Notify_list_code,
-        Notify_list_desc = item.Notify_list_desc,
-        Notify_email1 = item.Notify_email1,
-        date_created = item.date_created,
-        date_updated = item.date_updated
-    };
+    private static NotifyListDto ToDto(NotifyListRecord item) =>
+        new()
+        {
+            Notify_list_code = item.Notify_list_code,
+            Notify_list_desc = item.Notify_list_desc,
+            Notify_email1 = item.Notify_email1,
+            date_created = item.date_created,
+            date_updated = item.date_updated,
+        };
 }
 
 public class NotifyListDto

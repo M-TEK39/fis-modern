@@ -17,11 +17,7 @@ public sealed class LossTypeRepository : ILossTypeRepository
 {
     private const string TableName = "Loss_type";
 
-    private static readonly string[] RequiredColumns =
-    [
-        "loss_type_code",
-        "loss_description"
-    ];
+    private static readonly string[] RequiredColumns = ["loss_type_code", "loss_description"];
 
     private static readonly string[] OptionalColumns =
     [
@@ -29,7 +25,7 @@ public sealed class LossTypeRepository : ILossTypeRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private readonly FisDbContext _context;
@@ -39,11 +35,13 @@ public sealed class LossTypeRepository : ILossTypeRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<LossType?> GetByIdAsync(short lossTypeCode)
-        => (await QueryAsync(
-            "[loss_type_code] = @lossTypeCode",
-            command => AddParameter(command, "@lossTypeCode", DbType.Int16, lossTypeCode)))
-            .SingleOrDefault();
+    public async Task<LossType?> GetByIdAsync(short lossTypeCode) =>
+        (
+            await QueryAsync(
+                "[loss_type_code] = @lossTypeCode",
+                command => AddParameter(command, "@lossTypeCode", DbType.Int16, lossTypeCode)
+            )
+        ).SingleOrDefault();
 
     public async Task<LossType?> GetByDescriptionAsync(string description)
     {
@@ -52,14 +50,21 @@ public sealed class LossTypeRepository : ILossTypeRepository
             return null;
         }
 
-        return (await QueryAsync(
-            "LOWER(RTRIM([loss_description])) = @description",
-            command => AddParameter(command, "@description", DbType.String, description.Trim().ToLowerInvariant())))
-            .SingleOrDefault();
+        return (
+            await QueryAsync(
+                "LOWER(RTRIM([loss_description])) = @description",
+                command =>
+                    AddParameter(
+                        command,
+                        "@description",
+                        DbType.String,
+                        description.Trim().ToLowerInvariant()
+                    )
+            )
+        ).SingleOrDefault();
     }
 
-    public async Task<IEnumerable<LossType>> GetAllAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<LossType>> GetAllAsync() => await QueryAsync();
 
     public async Task<IEnumerable<LossType>> SearchAsync(string searchTerm)
     {
@@ -70,13 +75,21 @@ public sealed class LossTypeRepository : ILossTypeRepository
 
         return await QueryAsync(
             "LOWER(COALESCE([loss_description], '')) LIKE @searchTerm",
-            command => AddParameter(command, "@searchTerm", DbType.String, $"%{searchTerm.Trim().ToLowerInvariant()}%"));
+            command =>
+                AddParameter(
+                    command,
+                    "@searchTerm",
+                    DbType.String,
+                    $"%{searchTerm.Trim().ToLowerInvariant()}%"
+                )
+        );
     }
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The dependency query uses only fixed compatibility columns and table names; the loss type code is parameterized.")]
+        Justification = "The dependency query uses only fixed compatibility columns and table names; the loss type code is parameterized."
+    )]
     public async Task<LossTypeDeleteCheck> GetDeleteCheckAsync(short lossTypeCode)
     {
         var connection = _context.Database.GetDbConnection();
@@ -90,10 +103,15 @@ public sealed class LossTypeRepository : ILossTypeRepository
         {
             var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var lossColumns = await GetTableColumnsAsync(connection, "dbo", "losses", transaction);
-            var vehicleColumns = await GetTableColumnsAsync(connection, "dbo", "vehicle_master", transaction);
+            var vehicleColumns = await GetTableColumnsAsync(
+                connection,
+                "dbo",
+                "vehicle_master",
+                transaction
+            );
             var canInspectDependencies =
-                new[] { "loss_type_code", "vmf_code" }.All(lossColumns.Contains) &&
-                new[] { "vmf_code", "fleet_number" }.All(vehicleColumns.Contains);
+                new[] { "loss_type_code", "vmf_code" }.All(lossColumns.Contains)
+                && new[] { "vmf_code", "fleet_number" }.All(vehicleColumns.Contains);
 
             if (!canInspectDependencies)
             {
@@ -106,7 +124,7 @@ public sealed class LossTypeRepository : ILossTypeRepository
             {
                 GetColumnProjection(vehicleColumns, "fleet_number", "vehicle"),
                 GetColumnProjection(lossColumns, "loss_date", "loss"),
-                GetColumnProjection(lossColumns, "loss_reference", "loss")
+                GetColumnProjection(lossColumns, "loss_reference", "loss"),
             };
             var activeLossPredicate = lossColumns.Contains("is_deleted")
                 ? " AND ([loss].[is_deleted] = 0 OR [loss].[is_deleted] IS NULL)"
@@ -139,10 +157,13 @@ public sealed class LossTypeRepository : ILossTypeRepository
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
-                dependencies.Add(new LossTypeDeleteDependency(
-                    ReadString(reader, "fleet_number"),
-                    ReadDateTime(reader, "loss_date"),
-                    ReadString(reader, "loss_reference")));
+                dependencies.Add(
+                    new LossTypeDeleteDependency(
+                        ReadString(reader, "fleet_number"),
+                        ReadDateTime(reader, "loss_date"),
+                        ReadString(reader, "loss_reference")
+                    )
+                );
             }
 
             return new LossTypeDeleteCheck(dependencies.Count, dependencies);
@@ -176,28 +197,32 @@ public sealed class LossTypeRepository : ILossTypeRepository
     {
         ArgumentNullException.ThrowIfNull(lossType);
 
-        var existing = await FindByIdAsync(lossType.loss_type_code)
-            ?? throw new InvalidOperationException($"LossType with loss_type_code {lossType.loss_type_code} not found");
+        var existing =
+            await FindByIdAsync(lossType.loss_type_code)
+            ?? throw new InvalidOperationException(
+                $"LossType with loss_type_code {lossType.loss_type_code} not found"
+            );
         var now = DateTime.UtcNow;
 
         lossType.date_created = existing.Type.date_created;
         lossType.created_by_user_code = existing.Type.created_by_user_code;
         lossType.date_updated = now;
-        lossType.modified_by_user_code = currentUserId > 0
-            ? currentUserId
-            : existing.Type.modified_by_user_code;
+        lossType.modified_by_user_code =
+            currentUserId > 0 ? currentUserId : existing.Type.modified_by_user_code;
         lossType.is_deleted = existing.Type.is_deleted;
 
         await ExecuteUpdateAsync(
             existing.Columns,
             lossType.loss_type_code,
-            BuildValues(lossType, existing.Columns, includeCreateAudit: false));
+            BuildValues(lossType, existing.Columns, includeCreateAudit: false)
+        );
     }
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The delete statement uses the fixed Loss_type table and a parameterized loss type code.")]
+        Justification = "The delete statement uses the fixed Loss_type table and a parameterized loss type code."
+    )]
     public async Task DeleteAsync(short lossTypeCode, int currentUserId)
     {
         var existing = await FindByIdAsync(lossTypeCode);
@@ -231,14 +256,21 @@ public sealed class LossTypeRepository : ILossTypeRepository
                 if (availableColumns.Contains("modified_by_user_code"))
                 {
                     updates.Add("[modified_by_user_code] = @modifiedByUserCode");
-                    AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                    AddParameter(
+                        command,
+                        "@modifiedByUserCode",
+                        DbType.Int32,
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
-                command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", updates)} WHERE [loss_type_code] = @lossTypeCode";
+                command.CommandText =
+                    $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", updates)} WHERE [loss_type_code] = @lossTypeCode";
             }
             else
             {
-                command.CommandText = $"DELETE FROM [dbo].[{TableName}] WHERE [loss_type_code] = @lossTypeCode";
+                command.CommandText =
+                    $"DELETE FROM [dbo].[{TableName}] WHERE [loss_type_code] = @lossTypeCode";
             }
 
             AddParameter(command, "@lossTypeCode", DbType.Int16, lossTypeCode);
@@ -256,30 +288,47 @@ public sealed class LossTypeRepository : ILossTypeRepository
     private async Task<(LossType Type, HashSet<string> Columns)?> FindByIdAsync(short lossTypeCode)
     {
         var columns = await GetAvailableColumnsAsync();
-        var result = (await QueryAsync(
-            columns,
-            "[loss_type_code] = @lossTypeCode",
-            command => AddParameter(command, "@lossTypeCode", DbType.Int16, lossTypeCode)))
-            .SingleOrDefault();
+        var result = (
+            await QueryAsync(
+                columns,
+                "[loss_type_code] = @lossTypeCode",
+                command => AddParameter(command, "@lossTypeCode", DbType.Int16, lossTypeCode)
+            )
+        ).SingleOrDefault();
         return result is null ? null : (result, columns);
     }
 
     private static List<WriteValue> BuildValues(
         LossType lossType,
         IReadOnlySet<string> availableColumns,
-        bool includeCreateAudit = true)
+        bool includeCreateAudit = true
+    )
     {
         var values = new List<WriteValue>
         {
             new("loss_description", "@description", DbType.String, lossType.loss_description),
             new("date_updated", "@dateUpdated", DbType.DateTime2, lossType.date_updated),
-            new("modified_by_user_code", "@modifiedByUserCode", DbType.Int32, lossType.modified_by_user_code)
+            new(
+                "modified_by_user_code",
+                "@modifiedByUserCode",
+                DbType.Int32,
+                lossType.modified_by_user_code
+            ),
         };
 
         if (includeCreateAudit)
         {
-            values.Add(new("date_created", "@dateCreated", DbType.DateTime2, lossType.date_created));
-            values.Add(new("created_by_user_code", "@createdByUserCode", DbType.Int32, lossType.created_by_user_code));
+            values.Add(
+                new("date_created", "@dateCreated", DbType.DateTime2, lossType.date_created)
+            );
+            values.Add(
+                new(
+                    "created_by_user_code",
+                    "@createdByUserCode",
+                    DbType.Int32,
+                    lossType.created_by_user_code
+                )
+            );
             values.Add(new("is_deleted", "@isDeleted", DbType.Boolean, false));
         }
 
@@ -289,20 +338,23 @@ public sealed class LossTypeRepository : ILossTypeRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and table name use only fixed compatibility columns; predicates and values are parameterized.")]
+        Justification = "The SELECT list and table name use only fixed compatibility columns; predicates and values are parameterized."
+    )]
     private async Task<List<LossType>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null)
-        => await QueryAsync(await GetAvailableColumnsAsync(), predicate, configure);
+        Action<DbCommand>? configure = null
+    ) => await QueryAsync(await GetAvailableColumnsAsync(), predicate, configure);
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and table name use only fixed compatibility columns; predicates and values are parameterized.")]
+        Justification = "The SELECT list and table name use only fixed compatibility columns; predicates and values are parameterized."
+    )]
     private async Task<List<LossType>> QueryAsync(
         IReadOnlySet<string> availableColumns,
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -317,7 +369,11 @@ public sealed class LossTypeRepository : ILossTypeRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = RequiredColumns
                 .Select(column => $"[{column}] AS [{column}]")
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
                 .ToArray();
             var conditions = new List<string> { GetNotDeletedFilter(availableColumns) };
             if (!string.IsNullOrWhiteSpace(predicate))
@@ -325,7 +381,8 @@ public sealed class LossTypeRepository : ILossTypeRepository
                 conditions.Add(predicate);
             }
 
-            command.CommandText = $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [loss_description], [loss_type_code]";
+            command.CommandText =
+                $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [loss_description], [loss_type_code]";
             configure?.Invoke(command);
 
             var results = new List<LossType>();
@@ -349,7 +406,8 @@ public sealed class LossTypeRepository : ILossTypeRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement uses the fixed Loss_type table and parameterized values.")]
+        Justification = "The INSERT statement uses the fixed Loss_type table and parameterized values."
+    )]
     private async Task<short> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -363,7 +421,8 @@ public sealed class LossTypeRepository : ILossTypeRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[loss_type_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+            command.CommandText =
+                $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[loss_type_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
             AddParameters(command, values);
             return Convert.ToInt16(await command.ExecuteScalarAsync());
         }
@@ -379,11 +438,13 @@ public sealed class LossTypeRepository : ILossTypeRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement uses the fixed Loss_type table and parameterized values.")]
+        Justification = "The UPDATE statement uses the fixed Loss_type table and parameterized values."
+    )]
     private async Task ExecuteUpdateAsync(
         IReadOnlySet<string> availableColumns,
         short lossTypeCode,
-        IReadOnlyList<WriteValue> values)
+        IReadOnlyList<WriteValue> values
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -396,7 +457,8 @@ public sealed class LossTypeRepository : ILossTypeRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [loss_type_code] = @lossTypeCode";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [loss_type_code] = @lossTypeCode";
             AddParameters(command, values);
             AddParameter(command, "@lossTypeCode", DbType.Int16, lossTypeCode);
             await command.ExecuteNonQueryAsync();
@@ -425,11 +487,14 @@ public sealed class LossTypeRepository : ILossTypeRepository
                 connection,
                 "dbo",
                 TableName,
-                _context.Database.CurrentTransaction?.GetDbTransaction());
+                _context.Database.CurrentTransaction?.GetDbTransaction()
+            );
             var missing = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
             if (missing.Length > 0)
             {
-                throw new InvalidOperationException($"The Loss_type table is missing required columns: {string.Join(", ", missing)}");
+                throw new InvalidOperationException(
+                    $"The Loss_type table is missing required columns: {string.Join(", ", missing)}"
+                );
             }
 
             return columns;
@@ -443,8 +508,8 @@ public sealed class LossTypeRepository : ILossTypeRepository
         }
     }
 
-    private static LossType MapLossType(DbDataReader reader)
-        => new()
+    private static LossType MapLossType(DbDataReader reader) =>
+        new()
         {
             loss_type_code = ReadInt16(reader, "loss_type_code") ?? 0,
             loss_description = ReadString(reader, "loss_description"),
@@ -452,7 +517,7 @@ public sealed class LossTypeRepository : ILossTypeRepository
             date_updated = ReadDateTime(reader, "date_updated"),
             created_by_user_code = ReadInt32(reader, "created_by_user_code"),
             modified_by_user_code = ReadInt32(reader, "modified_by_user_code"),
-            is_deleted = ReadBoolean(reader, "is_deleted") ?? false
+            is_deleted = ReadBoolean(reader, "is_deleted") ?? false,
         };
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
@@ -467,12 +532,16 @@ public sealed class LossTypeRepository : ILossTypeRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetColumnProjection(IReadOnlySet<string> columns, string column, string alias)
+    private static string GetColumnProjection(
+        IReadOnlySet<string> columns,
+        string column,
+        string alias
+    )
     {
         if (columns.Contains(column))
         {
@@ -482,19 +551,20 @@ public sealed class LossTypeRepository : ILossTypeRepository
         var sqlType = column switch
         {
             "loss_date" => "datetime2",
-            _ => "varchar(255)"
+            _ => "varchar(255)",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetNotDeletedFilter(IReadOnlySet<string> columns)
-        => columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
+    private static string GetNotDeletedFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
 
     private static async Task<HashSet<string>> GetTableColumnsAsync(
         DbConnection connection,
         string schema,
         string table,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -534,20 +604,20 @@ public sealed class LossTypeRepository : ILossTypeRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string? ReadString(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToString(reader[column])?.TrimEnd();
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToString(reader[column])?.TrimEnd();
 
-    private static short? ReadInt16(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
+    private static short? ReadInt16(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
 
-    private static int? ReadInt32(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
+    private static int? ReadInt32(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
 
-    private static DateTime? ReadDateTime(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
+    private static DateTime? ReadDateTime(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
 
-    private static bool? ReadBoolean(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToBoolean(reader[column]);
+    private static bool? ReadBoolean(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToBoolean(reader[column]);
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 }

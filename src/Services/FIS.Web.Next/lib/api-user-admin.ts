@@ -211,7 +211,9 @@ function mapProfile(value: unknown): UserAdminProfile | null {
     return null;
   }
 
-  const userAccessCode = asNumber(getValue(value, "userAccessCode", "UserAccessCode", "user_access_code"));
+  const userAccessCode = asNumber(
+    getValue(value, "userAccessCode", "UserAccessCode", "user_access_code"),
+  );
   if (userAccessCode === null) {
     return null;
   }
@@ -228,12 +230,20 @@ function mapProfile(value: unknown): UserAdminProfile | null {
     positionCode: asNumber(getValue(value, "positionCode", "PositionCode", "Position_Code")),
     positionName: asString(getValue(value, "positionName", "PositionName", "position_name")),
     persalNumber: asNumber(getValue(value, "persalNumber", "PersalNumber", "Persal_Number")),
-    contractNumber: asNumber(getValue(value, "contractNumber", "ContractNumber", "Contract_Number")),
+    contractNumber: asNumber(
+      getValue(value, "contractNumber", "ContractNumber", "Contract_Number"),
+    ),
     saIdNumber: asNumber(getValue(value, "saIdNumber", "SaIdNumber", "sa_id_number")),
-    passportNumber: asNumber(getValue(value, "passportNumber", "PassportNumber", "passport_number")),
-    cellphoneNumber: asNumber(getValue(value, "cellphoneNumber", "CellphoneNumber", "Cellphone_Number")),
+    passportNumber: asNumber(
+      getValue(value, "passportNumber", "PassportNumber", "passport_number"),
+    ),
+    cellphoneNumber: asNumber(
+      getValue(value, "cellphoneNumber", "CellphoneNumber", "Cellphone_Number"),
+    ),
     faxNumber: asNumber(getValue(value, "faxNumber", "FaxNumber", "Fax_Number")),
-    approverCodeAtGfleet: asNumber(getValue(value, "approverCodeAtGfleet", "ApproverCodeAtGfleet", "approver_code_at_gfleet")),
+    approverCodeAtGfleet: asNumber(
+      getValue(value, "approverCodeAtGfleet", "ApproverCodeAtGfleet", "approver_code_at_gfleet"),
+    ),
     userStatus: asString(getValue(value, "userStatus", "UserStatus", "user_status")),
     accessLevel: asNumber(getValue(value, "accessLevel", "AccessLevel")) ?? 0,
     userActive: asBoolean(getValue(value, "userActive", "UserActive", "user_active")),
@@ -242,7 +252,9 @@ function mapProfile(value: unknown): UserAdminProfile | null {
 }
 
 export async function getUserAdminProfiles(alphabet: string) {
-  const response = await requestApi(`api/userprofile/administration?alphabet=${encodeURIComponent(alphabet)}`);
+  const response = await requestApi(
+    `api/userprofile/administration?alphabet=${encodeURIComponent(alphabet)}`,
+  );
   const profiles = getCollection(await readJson(response))
     .map(mapProfile)
     .filter((profile): profile is UserAdminProfile => profile !== null);
@@ -278,8 +290,12 @@ export async function getUserAdminSites(): Promise<UserAdminSite[]> {
       }
 
       const siteCode = asNumber(getValue(value, "siteCode", "SiteCode", "site_code", "Site_code"));
-      const description = asString(getValue(value, "description", "Description", "siteDescription", "site_description"));
-      return siteCode !== null && description ? { siteCode, description } satisfies UserAdminSite : null;
+      const description = asString(
+        getValue(value, "description", "Description", "siteDescription", "site_description"),
+      );
+      return siteCode !== null && description
+        ? ({ siteCode, description } satisfies UserAdminSite)
+        : null;
     })
     .filter((site): site is UserAdminSite => site !== null)
     .sort((left, right) => left.description.localeCompare(right.description));
@@ -293,9 +309,15 @@ export async function getUserAdminPositions(): Promise<UserAdminPosition[]> {
         return null;
       }
 
-      const positionCode = asNumber(getValue(value, "positionCode", "PositionCode", "position_code"));
-      const positionName = asString(getValue(value, "positionName", "PositionName", "position_name"));
-      return positionCode !== null && positionName ? { positionCode, positionName } satisfies UserAdminPosition : null;
+      const positionCode = asNumber(
+        getValue(value, "positionCode", "PositionCode", "position_code"),
+      );
+      const positionName = asString(
+        getValue(value, "positionName", "PositionName", "position_name"),
+      );
+      return positionCode !== null && positionName
+        ? ({ positionCode, positionName } satisfies UserAdminPosition)
+        : null;
     })
     .filter((position): position is UserAdminPosition => position !== null)
     .sort((left, right) => left.positionName.localeCompare(right.positionName));
@@ -325,17 +347,27 @@ async function runUserAdminProfileMutation(
     if (error instanceof UserAdminApiError) {
       return {
         ok: false,
-        reason: error.status === 404 ? "not-found" : error.status === 400 || error.status === 409 ? "rejected" : error.reason,
+        reason:
+          error.status === 404
+            ? "not-found"
+            : error.status === 400 || error.status === 409
+              ? "rejected"
+              : error.reason,
         message: error.message,
       };
     }
 
-    console.error("FIS API user profile mutation failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS API user profile mutation failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { ok: false, reason: "unavailable" };
   }
 }
 
-export async function createUserAdminProfile(input: UserAdminProfileInput): Promise<UserAdminMutationResult> {
+export async function createUserAdminProfile(
+  input: UserAdminProfileInput,
+): Promise<UserAdminMutationResult> {
   try {
     const response = await requestApi("api/userprofile", {
       method: "POST",
@@ -368,12 +400,20 @@ export async function createUserAdminProfile(input: UserAdminProfileInput): Prom
     if (error instanceof UserAdminApiError) {
       return {
         ok: false,
-        reason: error.status === 404 ? "not-found" : error.status === 400 || error.status === 409 ? "rejected" : error.reason,
+        reason:
+          error.status === 404
+            ? "not-found"
+            : error.status === 400 || error.status === 409
+              ? "rejected"
+              : error.reason,
         message: error.message,
       };
     }
 
-    console.error("FIS API user profile creation failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS API user profile creation failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { ok: false, reason: "unavailable" };
   }
 }
@@ -382,29 +422,36 @@ export async function updateUserAdminProfile(
   userAccessCode: number,
   input: Omit<UserAdminProfileInput, "userName">,
 ): Promise<UserAdminMutationResult> {
-  return runUserAdminProfileMutation(`api/userprofile/${encodeURIComponent(userAccessCode)}`, "PUT", {
-    firstName: input.firstName,
-    lastName: input.lastName,
-    email: input.email,
-    telephone: input.telephone,
-    siteCode: input.siteCode,
-    positionCode: input.positionCode,
-    persalNumber: input.persalNumber,
-    contractNumber: input.contractNumber,
-    saIdNumber: input.saIdNumber,
-    passportNumber: input.passportNumber,
-    cellphoneNumber: input.cellphoneNumber,
-    faxNumber: input.faxNumber,
-    approverCodeAtGfleet: input.approverCodeAtGfleet,
-    accessLevel: input.accessLevel,
-  });
+  return runUserAdminProfileMutation(
+    `api/userprofile/${encodeURIComponent(userAccessCode)}`,
+    "PUT",
+    {
+      firstName: input.firstName,
+      lastName: input.lastName,
+      email: input.email,
+      telephone: input.telephone,
+      siteCode: input.siteCode,
+      positionCode: input.positionCode,
+      persalNumber: input.persalNumber,
+      contractNumber: input.contractNumber,
+      saIdNumber: input.saIdNumber,
+      passportNumber: input.passportNumber,
+      cellphoneNumber: input.cellphoneNumber,
+      faxNumber: input.faxNumber,
+      approverCodeAtGfleet: input.approverCodeAtGfleet,
+      accessLevel: input.accessLevel,
+    },
+  );
 }
 
 export async function resetUserLogin(username: string): Promise<UserAdminMutationResult> {
   return runUserAdminMutation("api/auth/reset-login", { username });
 }
 
-async function runUserAdminMutation(path: string, requestPayload: JsonRecord): Promise<UserAdminMutationResult> {
+async function runUserAdminMutation(
+  path: string,
+  requestPayload: JsonRecord,
+): Promise<UserAdminMutationResult> {
   try {
     const response = await requestApi(path, {
       method: "POST",
@@ -427,12 +474,20 @@ async function runUserAdminMutation(path: string, requestPayload: JsonRecord): P
     if (error instanceof UserAdminApiError) {
       return {
         ok: false,
-        reason: error.status === 404 ? "not-found" : error.status === 400 || error.status === 409 ? "rejected" : error.reason,
+        reason:
+          error.status === 404
+            ? "not-found"
+            : error.status === 400 || error.status === 409
+              ? "rejected"
+              : error.reason,
         message: error.message,
       };
     }
 
-    console.error("FIS API user administration mutation failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS API user administration mutation failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { ok: false, reason: "unavailable" };
   }
 }
@@ -441,7 +496,9 @@ export async function deactivateUser(username: string): Promise<UserAdminMutatio
   return runUserAdminMutation("api/auth/deactivate-user", { username });
 }
 
-export async function deactivateExpiredPassword(username: string): Promise<UserAdminMutationResult> {
+export async function deactivateExpiredPassword(
+  username: string,
+): Promise<UserAdminMutationResult> {
   return runUserAdminMutation("api/auth/deactivate-expired", { username });
 }
 
@@ -449,6 +506,9 @@ export async function activateUser(username: string): Promise<UserAdminMutationR
   return runUserAdminMutation("api/auth/activate-user", { username });
 }
 
-export async function forceUserPassword(username: string, newPassword: string): Promise<UserAdminMutationResult> {
+export async function forceUserPassword(
+  username: string,
+  newPassword: string,
+): Promise<UserAdminMutationResult> {
   return runUserAdminMutation("api/auth/force-password", { username, newPassword });
 }

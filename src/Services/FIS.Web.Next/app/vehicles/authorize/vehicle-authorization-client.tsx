@@ -83,7 +83,11 @@ function canReviewVehicle(vehicle: VehicleAuthorization, currentUserAccessCode?:
   return !isCurrentUserCapturer(vehicle, currentUserAccessCode);
 }
 
-function Pagination({ page, totalPages, onPageChange }: Readonly<{
+function Pagination({
+  page,
+  totalPages,
+  onPageChange,
+}: Readonly<{
   page: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -207,9 +211,17 @@ function QueueTable({
                         <td>-</td>
                         <td>-</td>
                         <td>{valueOrDash(vehicle.fleetNotes)}</td>
-                        <td><span className="vehicle-badge badge-error">{valueOrDash(vehicle.authorityStatus)}</span></td>
                         <td>
-                          <button className="button button-secondary button-small" type="button" onClick={() => onReview(vehicle)}>
+                          <span className="vehicle-badge badge-error">
+                            {valueOrDash(vehicle.authorityStatus)}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className="button button-secondary button-small"
+                            type="button"
+                            onClick={() => onReview(vehicle)}
+                          >
                             Review
                           </button>
                         </td>
@@ -230,7 +242,11 @@ function QueueTable({
                         <td>{formatAmount(vehicle.purchaseAmount)}</td>
                         <td>{valueOrDash(vehicle.purchaseFrom)}</td>
                         <td>-</td>
-                        <td><span className="vehicle-badge badge-warning">{valueOrDash(vehicle.authorityStatus)}</span></td>
+                        <td>
+                          <span className="vehicle-badge badge-warning">
+                            {valueOrDash(vehicle.authorityStatus)}
+                          </span>
+                        </td>
                         <td>
                           <button
                             className={`button ${canReview ? "button-primary" : "button-secondary"} button-small`}
@@ -249,14 +265,22 @@ function QueueTable({
                       <td>{valueOrDash(vehicle.chassisNumber)}</td>
                       <td>{vehicle.vmfCode ?? "-"}</td>
                       <td>{valueOrDash(vehicle.modelDescription)}</td>
-                        <td>{getYear(vehicle.yearManufactured ?? vehicle.purchaseDate)}</td>
+                      <td>{getYear(vehicle.yearManufactured ?? vehicle.purchaseDate)}</td>
                       <td>{valueOrDash(vehicle.engineNumber)}</td>
                       <td>-</td>
                       <td>-</td>
                       <td>{valueOrDash(vehicle.fleetNotes)}</td>
-                      <td><span className="vehicle-badge badge-success">{valueOrDash(vehicle.authorityStatus)}</span></td>
                       <td>
-                        <button className="button button-secondary button-small" type="button" onClick={() => onReview(vehicle)}>
+                        <span className="vehicle-badge badge-success">
+                          {valueOrDash(vehicle.authorityStatus)}
+                        </span>
+                      </td>
+                      <td>
+                        <button
+                          className="button button-secondary button-small"
+                          type="button"
+                          onClick={() => onReview(vehicle)}
+                        >
                           View
                         </button>
                       </td>
@@ -328,7 +352,11 @@ function ReviewModal({
 
     if (!comment.trim()) {
       event.preventDefault();
-      setFormError(intent === "comment" ? "Comment cannot be empty." : "Please supply a comment before continuing.");
+      setFormError(
+        intent === "comment"
+          ? "Comment cannot be empty."
+          : "Please supply a comment before continuing.",
+      );
       return;
     }
 
@@ -342,26 +370,35 @@ function ReviewModal({
   }
 
   return (
-    <dialog ref={dialogRef} className="vehicle-review-backdrop" aria-labelledby="vehicle-review-title" onCancel={(event) => {
-      event.preventDefault();
-      if (!pending) {
-        onClose();
-      }
-    }} onMouseDown={(event) => {
-      if (event.target === event.currentTarget && !pending) {
-        onClose();
-      }
-    }}>
-      <section
-        className="vehicle-review-dialog"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
+    <dialog
+      ref={dialogRef}
+      className="vehicle-review-backdrop"
+      aria-labelledby="vehicle-review-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!pending) {
+          onClose();
+        }
+      }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !pending) {
+          onClose();
+        }
+      }}
+    >
+      <section className="vehicle-review-dialog" onMouseDown={(event) => event.stopPropagation()}>
         <header className="vehicle-review-header">
           <div>
             <p className="eyebrow">Vehicle authorization review</p>
             <h2 id="vehicle-review-title">Captured Vehicle Master Information</h2>
           </div>
-          <button className="vehicle-review-close" type="button" aria-label="Close review" onClick={onClose} disabled={pending}>
+          <button
+            className="vehicle-review-close"
+            type="button"
+            aria-label="Close review"
+            onClick={onClose}
+            disabled={pending}
+          >
             ×
           </button>
         </header>
@@ -384,13 +421,26 @@ function ReviewModal({
         )}
 
         <dl className="vehicle-review-grid">
-          <SummaryField label="Current GG Number" value={valueOrDash(vehicle.fleetNumber) === "-" ? "Allocated on authorization" : vehicle.fleetNumber!} />
+          <SummaryField
+            label="Current GG Number"
+            value={
+              valueOrDash(vehicle.fleetNumber) === "-"
+                ? "Allocated on authorization"
+                : vehicle.fleetNumber!
+            }
+          />
           <SummaryField label="Status" value={valueOrDash(vehicle.authorityStatus)} />
           <SummaryField label="Make & Model" value={valueOrDash(vehicle.modelDescription)} />
-          <SummaryField label="Year Manufactured" value={getYear(vehicle.yearManufactured ?? vehicle.purchaseDate)} />
+          <SummaryField
+            label="Year Manufactured"
+            value={getYear(vehicle.yearManufactured ?? vehicle.purchaseDate)}
+          />
           <SummaryField label="VIN/Chassis Number" value={valueOrDash(vehicle.chassisNumber)} />
           <SummaryField label="Engine Number" value={valueOrDash(vehicle.engineNumber)} />
-          <SummaryField label="GP Number" value={valueOrDash(vehicle.gpNumber ?? vehicle.registrationNumber)} />
+          <SummaryField
+            label="GP Number"
+            value={valueOrDash(vehicle.gpNumber ?? vehicle.registrationNumber)}
+          />
           <SummaryField label="Location Code" value={vehicle.locationCode?.toString() ?? "-"} />
           <SummaryField label="Hire Type Code" value={vehicle.typeCode?.toString() ?? "-"} />
           <SummaryField label="Hired From Code" value={vehicle.vsCode?.toString() ?? "-"} />
@@ -408,10 +458,16 @@ function ReviewModal({
           </div>
           <div className="vehicle-summary-field vehicle-summary-field-wide">
             <dt>Damage Details</dt>
-            <dd>{[vehicle.damageStatus, vehicle.damagesComment].filter(Boolean).join(" — ") || "-"}</dd>
+            <dd>
+              {[vehicle.damageStatus, vehicle.damagesComment].filter(Boolean).join(" — ") || "-"}
+            </dd>
           </div>
-          {vehicle.rejectionReason ? <SummaryField label="Latest Rejection Reason" value={vehicle.rejectionReason} /> : null}
-          {vehicle.authorizationComment ? <SummaryField label="Latest Reviewer Comment" value={vehicle.authorizationComment} /> : null}
+          {vehicle.rejectionReason ? (
+            <SummaryField label="Latest Rejection Reason" value={vehicle.rejectionReason} />
+          ) : null}
+          {vehicle.authorizationComment ? (
+            <SummaryField label="Latest Reviewer Comment" value={vehicle.authorizationComment} />
+          ) : null}
         </dl>
 
         {actionable ? (
@@ -423,9 +479,15 @@ function ReviewModal({
                 <span>{actionState.message}</span>
               </div>
             ) : null}
-            {formError ? <div className="notice notice-error" role="alert">{formError}</div> : null}
+            {formError ? (
+              <div className="notice notice-error" role="alert">
+                {formError}
+              </div>
+            ) : null}
             <div className="field">
-              <label htmlFor="vehicle-authorizer-comment">Authorizer&apos;s Comment <span aria-hidden="true">*</span></label>
+              <label htmlFor="vehicle-authorizer-comment">
+                Authorizer&apos;s Comment <span aria-hidden="true">*</span>
+              </label>
               <textarea
                 id="vehicle-authorizer-comment"
                 name="comment"
@@ -446,16 +508,39 @@ function ReviewModal({
               />
             </div>
             <div className="vehicle-create-actions">
-              <button className="button button-secondary" type="button" onClick={onClose} disabled={pending}>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={onClose}
+                disabled={pending}
+              >
                 Close
               </button>
-              <button className="button button-secondary" type="submit" name="intent" value="comment" disabled={pending}>
+              <button
+                className="button button-secondary"
+                type="submit"
+                name="intent"
+                value="comment"
+                disabled={pending}
+              >
                 {pending ? "Saving..." : "Add Comment"}
               </button>
-              <button className="button button-primary" type="submit" name="intent" value="approve" disabled={pending}>
+              <button
+                className="button button-primary"
+                type="submit"
+                name="intent"
+                value="approve"
+                disabled={pending}
+              >
                 {pending ? "Saving..." : "Approve"}
               </button>
-              <button className="button button-danger" type="submit" name="intent" value="reject" disabled={pending}>
+              <button
+                className="button button-danger"
+                type="submit"
+                name="intent"
+                value="reject"
+                disabled={pending}
+              >
                 {pending ? "Saving..." : "Reject"}
               </button>
             </div>
@@ -466,7 +551,12 @@ function ReviewModal({
               <dt>Authorizer&apos;s Comment</dt>
               <dd>{valueOrDash(vehicle.authorizationComment)}</dd>
             </div>
-            <button className="button button-secondary" type="button" onClick={onClose} disabled={pending}>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={onClose}
+              disabled={pending}
+            >
               Close
             </button>
           </div>
@@ -490,7 +580,10 @@ export default function VehicleAuthorizationClient({
   const [authorizedPage, setAuthorizedPage] = useState(1);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleAuthorization | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [actionState, formAction, pending] = useActionState(vehicleAuthorizationAction, initialActionState);
+  const [actionState, formAction, pending] = useActionState(
+    vehicleAuthorizationAction,
+    initialActionState,
+  );
 
   const authorizedVehicles = showAllAuthorized ? queues.authorized : queues.authorized.slice(0, 25);
 
@@ -528,12 +621,18 @@ export default function VehicleAuthorizationClient({
       ) : null}
 
       <div className="vehicle-authorization-toolbar">
-        <p className="muted-copy">Authorization actions are recorded against the existing vehicle inception workflow.</p>
+        <p className="muted-copy">
+          Authorization actions are recorded against the existing vehicle inception workflow.
+        </p>
         <div className="vehicle-overview-controls">
-          <button className="button button-secondary" type="button" onClick={() => {
-            setShowAllAuthorized((value) => !value);
-            setAuthorizedPage(1);
-          }}>
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={() => {
+              setShowAllAuthorized((value) => !value);
+              setAuthorizedPage(1);
+            }}
+          >
             {showAllAuthorized ? "Show Grouped" : "View All"}
           </button>
           <Link className="button button-secondary" href="/vehicles">

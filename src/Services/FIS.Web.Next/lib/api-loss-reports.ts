@@ -62,7 +62,8 @@ function asString(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new LossReportApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new LossReportApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -80,7 +81,11 @@ async function requestApi(path: string, init: RequestInit = {}) {
     });
 
     if (response.status === 401 || response.status === 403) {
-      throw new LossReportApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new LossReportApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
 
     if (!response.ok) {
@@ -94,7 +99,11 @@ async function requestApi(path: string, init: RequestInit = {}) {
         // Keep the status-based message when the API has no JSON body.
       }
 
-      throw new LossReportApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new LossReportApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
 
     return response;
@@ -153,11 +162,16 @@ function toPayload(filters: LossReportFilters) {
   };
 }
 
-export async function getLossReport(mode: LossReportMode, filters: LossReportFilters = {}): Promise<LossReport> {
-  const payload = await readJson(await requestApi(pathForMode(mode), {
-    method: "POST",
-    body: JSON.stringify(toPayload(filters)),
-  }));
+export async function getLossReport(
+  mode: LossReportMode,
+  filters: LossReportFilters = {},
+): Promise<LossReport> {
+  const payload = await readJson(
+    await requestApi(pathForMode(mode), {
+      method: "POST",
+      body: JSON.stringify(toPayload(filters)),
+    }),
+  );
   const rows = getRows(payload)
     .map(mapRow)
     .filter((row): row is Record<string, string | null> => row !== null);

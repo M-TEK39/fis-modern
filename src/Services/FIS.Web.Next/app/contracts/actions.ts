@@ -57,7 +57,11 @@ function getOptionalDate(formData: FormData, key: string, label: string) {
 
   const [year, month, day] = value.split("-").map(Number);
   const parsed = new Date(Date.UTC(year, month - 1, day));
-  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
     throw new ContractValidationError(`${label} is invalid.`);
   }
   return `${value}T00:00:00.000Z`;
@@ -71,7 +75,8 @@ function getRequiredDate(formData: FormData, key: string, label: string) {
 
 function getOptionalText(formData: FormData, key: string, label: string, maxLength: number) {
   const value = getText(formData, key);
-  if (value.length > maxLength) throw new ContractValidationError(`${label} must be ${maxLength} characters or fewer.`);
+  if (value.length > maxLength)
+    throw new ContractValidationError(`${label} must be ${maxLength} characters or fewer.`);
   return value || null;
 }
 
@@ -80,62 +85,99 @@ function getBoolean(formData: FormData, key: string) {
 }
 
 function hasContractAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  if (roles.some((role) => ["contracts", "contract", "admin", "administrator"].includes(role.trim().toLowerCase()))) {
+  if (
+    roles.some((role) =>
+      ["contracts", "contract", "admin", "administrator"].includes(role.trim().toLowerCase()),
+    )
+  ) {
     return true;
   }
 
   try {
-    return accessLevel ? (BigInt(accessLevel) & CONTRACT_PERMISSION) === CONTRACT_PERMISSION : false;
+    return accessLevel
+      ? (BigInt(accessLevel) & CONTRACT_PERMISSION) === CONTRACT_PERMISSION
+      : false;
   } catch {
     return false;
   }
 }
 
 function hasContractApproverRole(roles: readonly string[]) {
-  return roles.some((role) => ["contracts approver", "contracts_approver", "back dating contract (approver)", "admin", "administrator"].includes(role.trim().toLowerCase()));
+  return roles.some((role) =>
+    [
+      "contracts approver",
+      "contracts_approver",
+      "back dating contract (approver)",
+      "admin",
+      "administrator",
+    ].includes(role.trim().toLowerCase()),
+  );
 }
 
 function hasContractLoadAndManageRole(roles: readonly string[]) {
-  return roles.some((role) => [
-    "contract (load and manage)",
-    "contracts (load and manage)",
-    "contract_load_and_manage",
-    "contracts_load_and_manage",
-    "admin",
-    "administrator",
-  ].includes(role.trim().toLowerCase()));
+  return roles.some((role) =>
+    [
+      "contract (load and manage)",
+      "contracts (load and manage)",
+      "contract_load_and_manage",
+      "contracts_load_and_manage",
+      "admin",
+      "administrator",
+    ].includes(role.trim().toLowerCase()),
+  );
 }
 
 function hasContractCancelAndCloseRole(roles: readonly string[]) {
-  return roles.some((role) => [
-    "contract (cancel and close)",
-    "contracts (cancel and close)",
-    "contract_cancel_and_close",
-    "contracts_cancel_and_close",
-    "admin",
-    "administrator",
-  ].includes(role.trim().toLowerCase()));
+  return roles.some((role) =>
+    [
+      "contract (cancel and close)",
+      "contracts (cancel and close)",
+      "contract_cancel_and_close",
+      "contracts_cancel_and_close",
+      "admin",
+      "administrator",
+    ].includes(role.trim().toLowerCase()),
+  );
 }
 
 function hasContractHistoryBackdatingRole(roles: readonly string[]) {
-  return roles.some((role) => ["contract history back dating", "contract_history_backdating", "admin", "administrator"].includes(role.trim().toLowerCase()));
+  return roles.some((role) =>
+    [
+      "contract history back dating",
+      "contract_history_backdating",
+      "admin",
+      "administrator",
+    ].includes(role.trim().toLowerCase()),
+  );
 }
 
 async function authorizeContract() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
   if (!hasContractAccess(session.accessLevel, session.roles)) {
-    return { ok: false as const, message: "You do not have permission to maintain vehicle contracts." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain vehicle contracts.",
+    };
   }
   return { ok: true as const };
 }
 
-async function authorizeContractRole(roleCheck: (roles: readonly string[]) => boolean, message: string) {
+async function authorizeContractRole(
+  roleCheck: (roles: readonly string[]) => boolean,
+  message: string,
+) {
   const access = await authorizeContract();
   if (!access.ok) return access;
 
@@ -149,16 +191,21 @@ async function authorizeContractRole(roleCheck: (roles: readonly string[]) => bo
 
 function apiErrorMessage(error: unknown, operation: string) {
   if (error instanceof ContractApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return `The contract ${operation} service is temporarily unavailable. Please try again.`;
-    if (error.reason === "not-found") return "The contract record was not found. Return to the Contracts menu and try again.";
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return `The contract ${operation} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "not-found")
+      return "The contract record was not found. Return to the Contracts menu and try again.";
     return error.message;
   }
   return `The contract could not be ${operation}. Please try again.`;
 }
 
 function redirectError(returnPath: string, message: string) {
-  redirect(`${returnPath}${returnPath.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  redirect(
+    `${returnPath}${returnPath.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`,
+  );
 }
 
 function buildHireRequest(formData: FormData): HireContractRequest {
@@ -201,7 +248,10 @@ export async function hireContractAction(formData: FormData) {
   try {
     await hireContractAgainstApi(buildHireRequest(formData));
   } catch (error) {
-    redirectError(returnPath, error instanceof ContractValidationError ? error.message : apiErrorMessage(error, "captured"));
+    redirectError(
+      returnPath,
+      error instanceof ContractValidationError ? error.message : apiErrorMessage(error, "captured"),
+    );
   }
 
   revalidatePath("/contracts");
@@ -218,7 +268,10 @@ export async function editContractAction(formData: FormData) {
   try {
     await editContractAgainstApi(contractId, buildEditRequest(formData));
   } catch (error) {
-    redirectError(returnPath, error instanceof ContractValidationError ? error.message : apiErrorMessage(error, "updated"));
+    redirectError(
+      returnPath,
+      error instanceof ContractValidationError ? error.message : apiErrorMessage(error, "updated"),
+    );
   }
 
   revalidatePath("/contracts");
@@ -247,7 +300,10 @@ export async function createReliefContractAction(formData: FormData) {
       Reason: getOptionalText(formData, "reason", "Reason", 1000) ?? "Assign as relief vehicle",
     });
   } catch (error) {
-    redirectError(returnPath, error instanceof ContractValidationError ? error.message : apiErrorMessage(error, "created"));
+    redirectError(
+      returnPath,
+      error instanceof ContractValidationError ? error.message : apiErrorMessage(error, "created"),
+    );
   }
 
   revalidatePath("/contracts");
@@ -259,7 +315,10 @@ export async function createReliefContractAction(formData: FormData) {
 
 export async function updateContractHistoryAction(formData: FormData) {
   const contractId = getContractId(formData);
-  const returnPath = getReturnPath(formData, `/contracts/backdating-history?contractId=${contractId}`);
+  const returnPath = getReturnPath(
+    formData,
+    `/contracts/backdating-history?contractId=${contractId}`,
+  );
   const access = await authorizeContractRole(
     hasContractHistoryBackdatingRole,
     "You do not have permission to backdate contract history.",
@@ -274,7 +333,10 @@ export async function updateContractHistoryAction(formData: FormData) {
       EndOdometer: getInteger(formData, "endOdometer", "End odometer"),
     });
   } catch (error) {
-    redirectError(returnPath, error instanceof ContractValidationError ? error.message : apiErrorMessage(error, "updated"));
+    redirectError(
+      returnPath,
+      error instanceof ContractValidationError ? error.message : apiErrorMessage(error, "updated"),
+    );
   }
 
   revalidatePath("/contracts");
@@ -324,37 +386,61 @@ export async function runContractAction(formData: FormData) {
         operation = "recalled";
         break;
       case "approve":
-        await postContractAction(`api/contracts/${contractId}/approve`, { ApprovalNotes: getOptionalText(formData, "approvalNotes", "Approval notes", 1000) });
+        await postContractAction(`api/contracts/${contractId}/approve`, {
+          ApprovalNotes: getOptionalText(formData, "approvalNotes", "Approval notes", 1000),
+        });
         operation = "approved";
         break;
       case "approve-activate":
-        await postContractAction(`api/contracts/${contractId}/approve-activate`, { ApprovalNotes: getOptionalText(formData, "approvalNotes", "Approval notes", 1000) });
+        await postContractAction(`api/contracts/${contractId}/approve-activate`, {
+          ApprovalNotes: getOptionalText(formData, "approvalNotes", "Approval notes", 1000),
+        });
         operation = "activated";
         break;
       case "decline-correction":
-        await postContractAction(`api/contracts/${contractId}/decline-correction`, { DeclineReason: getOptionalText(formData, "declineReason", "Decline reason", 1000) ?? "Correction required." });
+        await postContractAction(`api/contracts/${contractId}/decline-correction`, {
+          DeclineReason:
+            getOptionalText(formData, "declineReason", "Decline reason", 1000) ??
+            "Correction required.",
+        });
         operation = "returned for correction";
         break;
       case "decline":
-        await postContractAction(`api/contracts/${contractId}/decline`, { DeclineReason: getOptionalText(formData, "declineReason", "Decline reason", 1000) ?? "Declined." });
+        await postContractAction(`api/contracts/${contractId}/decline`, {
+          DeclineReason:
+            getOptionalText(formData, "declineReason", "Decline reason", 1000) ?? "Declined.",
+        });
         operation = "declined";
         break;
       case "cancel":
-        await postContractAction(`api/contracts/${contractId}/cancel`, { CancellationReason: getOptionalText(formData, "cancellationReason", "Cancellation reason", 1000) });
+        await postContractAction(`api/contracts/${contractId}/cancel`, {
+          CancellationReason: getOptionalText(
+            formData,
+            "cancellationReason",
+            "Cancellation reason",
+            1000,
+          ),
+        });
         operation = "cancelled";
         break;
       case "extend":
-        await extendContractAgainstApi(contractId, getRequiredDate(formData, "newTargetReturnDate", "New target return date"));
+        await extendContractAgainstApi(
+          contractId,
+          getRequiredDate(formData, "newTargetReturnDate", "New target return date"),
+        );
         operation = "extended";
         break;
       case "reassign": {
         const newSiteCode = getRequiredInteger(formData, "newSiteCode", "Destination site");
-        if (newSiteCode <= 0) throw new ContractValidationError("Destination site must be a positive whole number.");
+        if (newSiteCode <= 0)
+          throw new ContractValidationError("Destination site must be a positive whole number.");
         await reassignContractAgainstApi(contractId, {
           NewSiteCode: newSiteCode,
           StartDate: getRequiredDate(formData, "reassignStartDate", "Effective start date"),
           StartOdometer: getRequiredInteger(formData, "reassignStartOdometer", "Start odometer"),
-          Reason: getOptionalText(formData, "reassignReason", "Reassignment reason", 1000) ?? "Reassigned from contract detail.",
+          Reason:
+            getOptionalText(formData, "reassignReason", "Reassignment reason", 1000) ??
+            "Reassigned from contract detail.",
         });
         operation = "reassigned";
         break;
@@ -377,11 +463,16 @@ export async function runContractAction(formData: FormData) {
         throw new ContractValidationError("The requested contract action is not supported.");
     }
   } catch (error) {
-    redirectError(returnPath, error instanceof ContractValidationError ? error.message : apiErrorMessage(error, operation));
+    redirectError(
+      returnPath,
+      error instanceof ContractValidationError ? error.message : apiErrorMessage(error, operation),
+    );
   }
 
   revalidatePath("/contracts");
   revalidatePath("/contracts/maintenance");
   revalidatePath("/contracts/detail");
-  redirect(`${returnPath}${returnPath.includes("?") ? "&" : "?"}success=${encodeURIComponent(operation)}`);
+  redirect(
+    `${returnPath}${returnPath.includes("?") ? "&" : "?"}success=${encodeURIComponent(operation)}`,
+  );
 }

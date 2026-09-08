@@ -20,21 +20,32 @@ type RecoveredVehicleActionResult = {
 };
 
 function hasDemoVehicleRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare("Demo Vehicles", undefined, { sensitivity: "base" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare("Demo Vehicles", undefined, { sensitivity: "base" }) === 0,
+  );
 }
 
 async function authorizeRecoveredVehicle() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
 
   if (!hasDemoVehicleRole(session.roles)) {
-    return { ok: false as const, message: "You do not have permission to update recovered vehicles." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to update recovered vehicles.",
+    };
   }
 
   return { ok: true as const };
@@ -74,7 +85,9 @@ function apiErrorMessage(error: unknown, fallback: string) {
   return error.message || fallback;
 }
 
-export async function searchRecoveredVehiclesAction(formData: FormData): Promise<RecoveredVehicleActionResult> {
+export async function searchRecoveredVehiclesAction(
+  formData: FormData,
+): Promise<RecoveredVehicleActionResult> {
   const access = await authorizeRecoveredVehicle();
   if (!access.ok) {
     return { status: "error", message: access.message };
@@ -96,12 +109,20 @@ export async function searchRecoveredVehiclesAction(formData: FormData): Promise
       matches: await getRecoveredVehicleSearch(search, mode),
     };
   } catch (error) {
-    console.error("FIS recovered vehicle search failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: apiErrorMessage(error, "The recovered vehicle search could not be completed.") };
+    console.error(
+      "FIS recovered vehicle search failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message: apiErrorMessage(error, "The recovered vehicle search could not be completed."),
+    };
   }
 }
 
-export async function loadRecoveredVehicleAction(formData: FormData): Promise<RecoveredVehicleActionResult> {
+export async function loadRecoveredVehicleAction(
+  formData: FormData,
+): Promise<RecoveredVehicleActionResult> {
   const access = await authorizeRecoveredVehicle();
   if (!access.ok) {
     return { status: "error", message: access.message };
@@ -115,8 +136,14 @@ export async function loadRecoveredVehicleAction(formData: FormData): Promise<Re
   try {
     return { status: "success", details: await getRecoveredVehicleDetails(vmfCode) };
   } catch (error) {
-    console.error("FIS recovered vehicle load failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: apiErrorMessage(error, "The recovered vehicle could not be loaded.") };
+    console.error(
+      "FIS recovered vehicle load failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message: apiErrorMessage(error, "The recovered vehicle could not be loaded."),
+    };
   }
 }
 
@@ -141,12 +168,14 @@ function isValidDateOnly(value: string) {
 
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day;
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
 }
 
-export async function saveRecoveredVehicleAction(formData: FormData): Promise<RecoveredVehicleActionResult> {
+export async function saveRecoveredVehicleAction(
+  formData: FormData,
+): Promise<RecoveredVehicleActionResult> {
   const access = await authorizeRecoveredVehicle();
   if (!access.ok) {
     return { status: "error", message: access.message };
@@ -162,19 +191,35 @@ export async function saveRecoveredVehicleAction(formData: FormData): Promise<Re
   }
 
   if (!isValidRecoveredFleetNumber(recoveredFleetNumber)) {
-    return { status: "error", message: "The recovered GG number must start with G and contain a valid numeric suffix." };
+    return {
+      status: "error",
+      message: "The recovered GG number must start with G and contain a valid numeric suffix.",
+    };
   }
 
   if (!isValidDateOnly(dateChanged)) {
     return { status: "error", message: "Enter a valid date changed value." };
   }
 
-  if (!Number.isInteger(newStatusCode) || newStatusCode < 1 || newStatusCode > 12 || newStatusCode === 4) {
-    return { status: "error", message: "Choose a valid non-stolen status for the recovered vehicle." };
+  if (
+    !Number.isInteger(newStatusCode) ||
+    newStatusCode < 1 ||
+    newStatusCode > 12 ||
+    newStatusCode === 4
+  ) {
+    return {
+      status: "error",
+      message: "Choose a valid non-stolen status for the recovered vehicle.",
+    };
   }
 
   try {
-    const result = await updateRecoveredVehicle({ vmfCode, recoveredFleetNumber, dateChanged, newStatusCode });
+    const result = await updateRecoveredVehicle({
+      vmfCode,
+      recoveredFleetNumber,
+      dateChanged,
+      newStatusCode,
+    });
     return {
       status: "success",
       message: `Recovered vehicle created with VMF code ${result.newVmfCode}.`,
@@ -182,7 +227,13 @@ export async function saveRecoveredVehicleAction(formData: FormData): Promise<Re
       newVmfCode: result.newVmfCode,
     };
   } catch (error) {
-    console.error("FIS recovered vehicle update failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: apiErrorMessage(error, "The recovered vehicle could not be updated.") };
+    console.error(
+      "FIS recovered vehicle update failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message: apiErrorMessage(error, "The recovered vehicle could not be updated."),
+    };
   }
 }

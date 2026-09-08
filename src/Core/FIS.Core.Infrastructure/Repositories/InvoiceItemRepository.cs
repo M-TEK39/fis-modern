@@ -25,8 +25,8 @@ public class InvoiceItemRepository : IInvoiceItemRepository
     /// <returns>Invoice item if found</returns>
     public async Task<InvoiceItem?> GetByIdAsync(int id)
     {
-        return await _context.InvoiceItems
-            .Include(ii => ii.Invoice)
+        return await _context
+            .InvoiceItems.Include(ii => ii.Invoice)
             .FirstOrDefaultAsync(ii => ii.item_code == id);
     }
 
@@ -36,8 +36,8 @@ public class InvoiceItemRepository : IInvoiceItemRepository
     /// <returns>List of all invoice items</returns>
     public async Task<List<InvoiceItem>> GetAllAsync()
     {
-        return await _context.InvoiceItems
-            .Include(ii => ii.Invoice)
+        return await _context
+            .InvoiceItems.Include(ii => ii.Invoice)
             .OrderBy(ii => ii.invoice_code)
             .ThenBy(ii => ii.item_code)
             .ToListAsync();
@@ -70,7 +70,9 @@ public class InvoiceItemRepository : IInvoiceItemRepository
 
         var existing = await _context.InvoiceItems.FindAsync(invoiceItem.item_code);
         if (existing == null)
-            throw new InvalidOperationException($"InvoiceItem with item_code {invoiceItem.item_code} not found");
+            throw new InvalidOperationException(
+                $"InvoiceItem with item_code {invoiceItem.item_code} not found"
+            );
 
         _context.Entry(existing).CurrentValues.SetValues(invoiceItem);
         await _context.SaveChangesAsync();
@@ -89,8 +91,8 @@ public class InvoiceItemRepository : IInvoiceItemRepository
             return false;
 
         // Soft delete instead of hard delete
-                invoiceItem.is_deleted = true;
-                invoiceItem.date_updated = DateTime.UtcNow;
+        invoiceItem.is_deleted = true;
+        invoiceItem.date_updated = DateTime.UtcNow;
         await _context.SaveChangesAsync();
         return true;
     }
@@ -102,8 +104,8 @@ public class InvoiceItemRepository : IInvoiceItemRepository
     /// <returns>List of invoice items</returns>
     public async Task<List<InvoiceItem>> GetByInvoiceIdAsync(int invoiceCode)
     {
-        return await _context.InvoiceItems
-            .Where(ii => ii.invoice_code == invoiceCode)
+        return await _context
+            .InvoiceItems.Where(ii => ii.invoice_code == invoiceCode)
             .OrderBy(ii => ii.item_code)
             .ToListAsync();
     }
@@ -119,16 +121,19 @@ public class InvoiceItemRepository : IInvoiceItemRepository
     public async Task<List<InvoiceItem>> GetByContractTypeAndPeriodAsync(
         string contractType,
         DateTime fromDate,
-        DateTime toDate)
+        DateTime toDate
+    )
     {
         var fromMonthCode = (short)(fromDate.Year * 100 + fromDate.Month);
         var toMonthCode = (short)(toDate.Year * 100 + toDate.Month);
-        
-        return await _context.InvoiceItems
-            .Include(ii => ii.Invoice)
-            .Where(ii => ii.contract_type == contractType &&
-                        ii.Invoice!.posting_month_code >= fromMonthCode &&
-                        ii.Invoice!.posting_month_code <= toMonthCode)
+
+        return await _context
+            .InvoiceItems.Include(ii => ii.Invoice)
+            .Where(ii =>
+                ii.contract_type == contractType
+                && ii.Invoice!.posting_month_code >= fromMonthCode
+                && ii.Invoice!.posting_month_code <= toMonthCode
+            )
             .OrderByDescending(ii => ii.Invoice!.posting_month_code)
             .ToListAsync();
     }
@@ -143,10 +148,11 @@ public class InvoiceItemRepository : IInvoiceItemRepository
     public async Task<List<InvoiceItem>> GetByVehicleAndPeriodAsync(
         int vmfCode,
         DateTime fromDate,
-        DateTime toDate)
+        DateTime toDate
+    )
     {
-        return await _context.InvoiceItems
-            .Include(ii => ii.Invoice)
+        return await _context
+            .InvoiceItems.Include(ii => ii.Invoice)
             .Where(ii => ii.vmf_code == vmfCode)
             .OrderByDescending(ii => ii.Invoice!.posting_month_code)
             .ToListAsync();
@@ -163,16 +169,19 @@ public class InvoiceItemRepository : IInvoiceItemRepository
     public async Task<List<InvoiceItem>> GetByTypeAndPeriodAsync(
         string contractType,
         DateTime fromDate,
-        DateTime toDate)
+        DateTime toDate
+    )
     {
         var fromMonthCode = (short)(fromDate.Year * 100 + fromDate.Month);
         var toMonthCode = (short)(toDate.Year * 100 + toDate.Month);
-        
-        return await _context.InvoiceItems
-            .Include(ii => ii.Invoice)
-            .Where(ii => ii.contract_type == contractType &&
-                        ii.Invoice!.posting_month_code >= fromMonthCode &&
-                        ii.Invoice!.posting_month_code <= toMonthCode)
+
+        return await _context
+            .InvoiceItems.Include(ii => ii.Invoice)
+            .Where(ii =>
+                ii.contract_type == contractType
+                && ii.Invoice!.posting_month_code >= fromMonthCode
+                && ii.Invoice!.posting_month_code <= toMonthCode
+            )
             .OrderByDescending(ii => ii.Invoice!.posting_month_code)
             .ToListAsync();
     }
@@ -184,8 +193,8 @@ public class InvoiceItemRepository : IInvoiceItemRepository
     /// <returns>Number of items deleted</returns>
     public async Task<int> DeleteByInvoiceIdAsync(int invoiceCode)
     {
-        var items = await _context.InvoiceItems
-            .Where(ii => ii.invoice_code == invoiceCode)
+        var items = await _context
+            .InvoiceItems.Where(ii => ii.invoice_code == invoiceCode)
             .ToListAsync();
 
         _context.InvoiceItems.RemoveRange(items);
@@ -203,18 +212,23 @@ public class InvoiceItemRepository : IInvoiceItemRepository
     public async Task<InvoiceItemSummary> GetSummaryByDepartmentAsync(
         int departmentCode,
         DateTime fromDate,
-        DateTime toDate)
+        DateTime toDate
+    )
     {
-        var items = await _context.InvoiceItems
-            .Include(ii => ii.Invoice)
+        var items = await _context
+            .InvoiceItems.Include(ii => ii.Invoice)
             .Where(ii => ii.Invoice!.department_code == departmentCode)
             .ToListAsync();
 
         // Filter by converted month codes since invoice table only has posting_month_code
         var fromMonthCode = (short)(fromDate.Year * 100 + fromDate.Month);
         var toMonthCode = (short)(toDate.Year * 100 + toDate.Month);
-        items = items.Where(ii => ii.Invoice!.posting_month_code >= fromMonthCode &&
-                                  ii.Invoice.posting_month_code <= toMonthCode).ToList();
+        items = items
+            .Where(ii =>
+                ii.Invoice!.posting_month_code >= fromMonthCode
+                && ii.Invoice.posting_month_code <= toMonthCode
+            )
+            .ToList();
 
         var summary = new InvoiceItemSummary
         {
@@ -223,9 +237,11 @@ public class InvoiceItemRepository : IInvoiceItemRepository
             ToDate = toDate,
             TotalFixedAmount = items.Sum(ii => ii.fixed_tariff_amount),
             TotalKilometerAmount = items.Sum(ii => ii.odo_tariff_amount),
-            TotalAmount = items.Sum(ii => ii.fixed_tariff_amount + ii.odo_tariff_amount + (ii.variable_cost ?? 0)),
+            TotalAmount = items.Sum(ii =>
+                ii.fixed_tariff_amount + ii.odo_tariff_amount + (ii.variable_cost ?? 0)
+            ),
             ItemCount = items.Count(),
-            ContractCount = items.Select(ii => ii.contract_type).Distinct().Count()
+            ContractCount = items.Select(ii => ii.contract_type).Distinct().Count(),
         };
 
         return summary;

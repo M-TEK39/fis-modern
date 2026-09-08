@@ -22,7 +22,8 @@ export type GgBlockHistoryPage = {
   totalPages: number;
 };
 
-export type GgBlockApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "conflict";
+export type GgBlockApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "conflict";
 
 export class GgBlockApiError extends Error {
   constructor(
@@ -121,7 +122,9 @@ async function requestApi(path: string, init: RequestInit = {}) {
     if (!response.ok) {
       throw new GgBlockApiError(
         response.status >= 500 ? "unavailable" : "invalid-response",
-        response.status >= 500 ? "The GG block service is unavailable." : `FIS API returned HTTP ${response.status}.`,
+        response.status >= 500
+          ? "The GG block service is unavailable."
+          : `FIS API returned HTTP ${response.status}.`,
       );
     }
 
@@ -160,8 +163,13 @@ function mapHistoryRecord(value: unknown): GgBlockHistoryRecord | null {
   };
 }
 
-export async function getGgBlockHistory(page: number, pageSize: number): Promise<GgBlockHistoryPage> {
-  const response = await requestApi(`api/vehicle-inception/gg-blocks?page=${page}&pageSize=${pageSize}`);
+export async function getGgBlockHistory(
+  page: number,
+  pageSize: number,
+): Promise<GgBlockHistoryPage> {
+  const response = await requestApi(
+    `api/vehicle-inception/gg-blocks?page=${page}&pageSize=${pageSize}`,
+  );
   let payload: unknown;
   try {
     payload = await response.json();
@@ -170,7 +178,10 @@ export async function getGgBlockHistory(page: number, pageSize: number): Promise
   }
 
   if (!isRecord(payload) || !Array.isArray(payload.items)) {
-    throw new GgBlockApiError("invalid-response", "The FIS API returned an invalid GG block history response.");
+    throw new GgBlockApiError(
+      "invalid-response",
+      "The FIS API returned an invalid GG block history response.",
+    );
   }
 
   const mappedItems = payload.items
@@ -180,8 +191,16 @@ export async function getGgBlockHistory(page: number, pageSize: number): Promise
   const parsedPageSize = asNumber(getValue(payload, "pageSize"));
   const totalRecords = asNumber(getValue(payload, "totalRecords"));
   const totalPages = asNumber(getValue(payload, "totalPages"));
-  if (parsedPage === null || parsedPageSize === null || totalRecords === null || totalPages === null) {
-    throw new GgBlockApiError("invalid-response", "The FIS API returned incomplete GG block history metadata.");
+  if (
+    parsedPage === null ||
+    parsedPageSize === null ||
+    totalRecords === null ||
+    totalPages === null
+  ) {
+    throw new GgBlockApiError(
+      "invalid-response",
+      "The FIS API returned incomplete GG block history metadata.",
+    );
   }
 
   return {

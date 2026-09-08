@@ -31,7 +31,8 @@ export type MissingCertificateVehicle = CertificateVehicle & {
   locationCode: number;
 };
 
-export type LicenseCertificateApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type LicenseCertificateApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class LicenseCertificateApiError extends Error {
   constructor(
@@ -75,7 +76,8 @@ function asNumber(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookie = await getForwardedAuthCookieHeader();
-  if (!cookie) throw new LicenseCertificateApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookie)
+    throw new LicenseCertificateApiError("unauthorized", "No FIS access cookie is available.");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   try {
@@ -85,17 +87,32 @@ async function requestApi(path: string, init: RequestInit = {}) {
       headers: { accept: "application/json", cookie, ...init.headers },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) throw new LicenseCertificateApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
-    if (response.status === 404) throw new LicenseCertificateApiError("not-found", "The selected licence certificate was not found.", response.status);
+    if (response.status === 401 || response.status === 403)
+      throw new LicenseCertificateApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
+    if (response.status === 404)
+      throw new LicenseCertificateApiError(
+        "not-found",
+        "The selected licence certificate was not found.",
+        response.status,
+      );
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(valueOf(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(valueOf(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status message when the API has no JSON error body.
       }
-      throw new LicenseCertificateApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new LicenseCertificateApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -110,7 +127,10 @@ async function readJson(response: Response) {
   try {
     return (await response.json()) as unknown;
   } catch {
-    throw new LicenseCertificateApiError("invalid-response", "The FIS API returned invalid certificate JSON.");
+    throw new LicenseCertificateApiError(
+      "invalid-response",
+      "The FIS API returned invalid certificate JSON.",
+    );
   }
 }
 
@@ -158,30 +178,42 @@ function listPayload(payload: unknown, ...keys: string[]) {
 
 export async function getLicenseCertificates() {
   const payload = await readJson(await requestApi("api/licence-certificates"));
-  return listPayload(payload, "documents", "data", "items").map(mapCertificate).filter((item): item is LicenseCertificateRecord => item !== null);
+  return listPayload(payload, "documents", "data", "items")
+    .map(mapCertificate)
+    .filter((item): item is LicenseCertificateRecord => item !== null);
 }
 
 export async function getLicenseCertificatesForVehicle(vmfCode: number) {
-  const payload = await readJson(await requestApi(`api/licence-certificates/vehicle/${encodeURIComponent(vmfCode)}`));
-  return listPayload(payload, "documents", "data", "items").map(mapCertificate).filter((item): item is LicenseCertificateRecord => item !== null);
+  const payload = await readJson(
+    await requestApi(`api/licence-certificates/vehicle/${encodeURIComponent(vmfCode)}`),
+  );
+  return listPayload(payload, "documents", "data", "items")
+    .map(mapCertificate)
+    .filter((item): item is LicenseCertificateRecord => item !== null);
 }
 
 export async function searchLicenseCertificateVehicles(searchTerm: string) {
-  const payload = await readJson(await requestApi(`api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm)}`));
-  return listPayload(payload, "data", "items", "results").map(mapVehicle).filter((item): item is CertificateVehicle => item !== null);
+  const payload = await readJson(
+    await requestApi(`api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm)}`),
+  );
+  return listPayload(payload, "data", "items", "results")
+    .map(mapVehicle)
+    .filter((item): item is CertificateVehicle => item !== null);
 }
 
 export async function getVehiclesMissingLicenseCertificates(location?: "jhb" | "pta") {
   const query = location ? `?location=${location}` : "";
   const payload = await readJson(await requestApi(`api/licence-certificates/missing${query}`));
   return {
-    location: isRecord(payload) ? asString(valueOf(payload, "location")) ?? "all" : "all",
+    location: isRecord(payload) ? (asString(valueOf(payload, "location")) ?? "all") : "all",
     vehicles: listPayload(payload, "vehicles", "data", "items").flatMap((value) => {
       if (!isRecord(value)) return [];
       const vehicle = mapVehicle(value);
       const locationCode = asNumber(valueOf(value, "location_code", "locationCode"));
       const number = asNumber(valueOf(value, "number"));
-      return vehicle && locationCode !== null && number !== null ? [{ ...vehicle, locationCode, number }] : [];
+      return vehicle && locationCode !== null && number !== null
+        ? [{ ...vehicle, locationCode, number }]
+        : [];
     }),
   };
 }
@@ -190,10 +222,23 @@ export async function uploadLicenseCertificate(vmfCode: number, formData: FormDa
   await requestApi("api/licence-certificates", { method: "POST", body: formData });
 }
 
-export async function deleteLicenseCertificate(source: string, documentKey: string, vmfCode: number) {
-  await requestApi(`api/licence-certificates/${encodeURIComponent(source)}/${encodeURIComponent(documentKey)}?vmfCode=${encodeURIComponent(vmfCode)}`, { method: "DELETE" });
+export async function deleteLicenseCertificate(
+  source: string,
+  documentKey: string,
+  vmfCode: number,
+) {
+  await requestApi(
+    `api/licence-certificates/${encodeURIComponent(source)}/${encodeURIComponent(documentKey)}?vmfCode=${encodeURIComponent(vmfCode)}`,
+    { method: "DELETE" },
+  );
 }
 
-export async function downloadLicenseCertificate(source: string, documentKey: string, vmfCode: number) {
-  return requestApi(`api/licence-certificates/${encodeURIComponent(source)}/${encodeURIComponent(documentKey)}/file?vmfCode=${encodeURIComponent(vmfCode)}`);
+export async function downloadLicenseCertificate(
+  source: string,
+  documentKey: string,
+  vmfCode: number,
+) {
+  return requestApi(
+    `api/licence-certificates/${encodeURIComponent(source)}/${encodeURIComponent(documentKey)}/file?vmfCode=${encodeURIComponent(vmfCode)}`,
+  );
 }

@@ -47,14 +47,17 @@ function apiResult(error: unknown) {
           ? "not-found"
           : error.reason === "rejected"
             ? "rejected"
-          : "error";
+            : "error";
   }
 
   return "error";
 }
 
 function values(formData: FormData, name: string) {
-  return formData.getAll(name).filter((value): value is string => typeof value === "string").map((value) => value.trim());
+  return formData
+    .getAll(name)
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim());
 }
 
 function dateValue(value: string) {
@@ -119,7 +122,10 @@ export async function createTripAuthorityAction(formData: FormData) {
     const approvers = await getUserAdminUserChoices();
     approver = approvers.find((candidate) => candidate.userAccessCode === approverCode);
   } catch (error) {
-    console.error("FIS trip approver lookup failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS trip approver lookup failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     redirect(createResultPath(formData, "unavailable"));
   }
 
@@ -129,7 +135,11 @@ export async function createTripAuthorityAction(formData: FormData) {
 
   const driverCodes = values(formData, "driverCode").map(positiveInteger);
   const driverPrimary = values(formData, "driverPrimary");
-  if (driverCodes.length === 0 || driverCodes.some((code) => code === null) || new Set(driverCodes).size !== driverCodes.length) {
+  if (
+    driverCodes.length === 0 ||
+    driverCodes.some((code) => code === null) ||
+    new Set(driverCodes).size !== driverCodes.length
+  ) {
     redirect(createResultPath(formData, "missing-driver"));
   }
 
@@ -144,7 +154,19 @@ export async function createTripAuthorityAction(formData: FormData) {
   const routeProjects = values(formData, "routeProjectNumber");
   const routeFunds = values(formData, "routeFundCode");
   const routeCount = routeStarts.length;
-  if (routeCount === 0 || [routeEnds, routeStartLocations, routeEndLocations, routeDistances, routeResponsibilities, routeObjectives, routeProjects, routeFunds].some((items) => items.length !== routeCount)) {
+  if (
+    routeCount === 0 ||
+    [
+      routeEnds,
+      routeStartLocations,
+      routeEndLocations,
+      routeDistances,
+      routeResponsibilities,
+      routeObjectives,
+      routeProjects,
+      routeFunds,
+    ].some((items) => items.length !== routeCount)
+  ) {
     redirect(createResultPath(formData, "missing-route"));
   }
 
@@ -153,9 +175,19 @@ export async function createTripAuthorityAction(formData: FormData) {
     const startDate = dateValue(routeStarts[index] ?? "");
     const endDate = dateValue(routeEnds[index] ?? "");
     const estimatedDistanceText = routeDistances[index] ?? "";
-    const estimatedDistance = estimatedDistanceText ? nonNegativeInteger(estimatedDistanceText) : null;
-    if (!startDate || !endDate || startDate > endDate || estimatedDistanceText && estimatedDistance === null ||
-        !routeResponsibilities[index] || !routeObjectives[index] || !routeProjects[index] || !routeFunds[index]) {
+    const estimatedDistance = estimatedDistanceText
+      ? nonNegativeInteger(estimatedDistanceText)
+      : null;
+    if (
+      !startDate ||
+      !endDate ||
+      startDate > endDate ||
+      (estimatedDistanceText && estimatedDistance === null) ||
+      !routeResponsibilities[index] ||
+      !routeObjectives[index] ||
+      !routeProjects[index] ||
+      !routeFunds[index]
+    ) {
       redirect(createResultPath(formData, "validation"));
     }
 
@@ -174,9 +206,16 @@ export async function createTripAuthorityAction(formData: FormData) {
 
   let selectedDrivers;
   try {
-    selectedDrivers = await Promise.all(driverCodes.map((code) => code === null ? Promise.resolve(null) : getDriverManagementSiteDriver(code)));
+    selectedDrivers = await Promise.all(
+      driverCodes.map((code) =>
+        code === null ? Promise.resolve(null) : getDriverManagementSiteDriver(code),
+      ),
+    );
   } catch (error) {
-    console.error("FIS trip driver lookup failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS trip driver lookup failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     redirect(createResultPath(formData, "unavailable"));
   }
 
@@ -184,11 +223,17 @@ export async function createTripAuthorityAction(formData: FormData) {
     redirect(createResultPath(formData, "invalid-driver"));
   }
 
-  const selectedDriverRequests = selectedDrivers.map((driver, index) => selectedDriverRequest(driver!, driverPrimary[index] === "true"));
-  const expiryDate = routes.reduce((latest, route) => route.endDate > latest ? route.endDate : latest, routes[0]?.endDate ?? "");
+  const selectedDriverRequests = selectedDrivers.map((driver, index) =>
+    selectedDriverRequest(driver!, driverPrimary[index] === "true"),
+  );
+  const expiryDate = routes.reduce(
+    (latest, route) => (route.endDate > latest ? route.endDate : latest),
+    routes[0]?.endDate ?? "",
+  );
   const request: CreateTripAuthorityRequest = {
     contractCode,
-    approverName: approver.userName || `${approver.firstName ?? ""} ${approver.lastName ?? ""}`.trim(),
+    approverName:
+      approver.userName || `${approver.firstName ?? ""} ${approver.lastName ?? ""}`.trim(),
     approverRank: approver.positionName || "Approver",
     approverTelephone: approver.telephone,
     expiryDate,
@@ -228,7 +273,10 @@ export async function closeTripAuthorityAction(formData: FormData) {
     .filter((value): value is string => typeof value === "string")
     .map(positiveInteger);
 
-  if (routeCodes.some((routeCode) => routeCode === null) || new Set(routeCodes).size !== routeCodes.length) {
+  if (
+    routeCodes.some((routeCode) => routeCode === null) ||
+    new Set(routeCodes).size !== routeCodes.length
+  ) {
     redirect(resultPath(tripId, "validation"));
   }
 
@@ -246,7 +294,9 @@ export async function closeTripAuthorityAction(formData: FormData) {
   try {
     await closeTripAuthority(tripId, {
       endOdometer,
-      routes: routes.filter((route): route is { routeCode: number; endOdometer: number } => route !== null),
+      routes: routes.filter(
+        (route): route is { routeCode: number; endOdometer: number } => route !== null,
+      ),
     });
   } catch (error) {
     redirect(resultPath(tripId, apiResult(error)));
@@ -257,7 +307,10 @@ export async function closeTripAuthorityAction(formData: FormData) {
   revalidatePath(RETURN_PATH);
 
   if (intent === "renew") {
-    const params = new URLSearchParams({ mode: "Renew", contractCode: textValue(formData, "contractCode") });
+    const params = new URLSearchParams({
+      mode: "Renew",
+      contractCode: textValue(formData, "contractCode"),
+    });
     const vmfCode = positiveInteger(textValue(formData, "vmfCode"));
     if (vmfCode !== null) params.set("vmfCode", String(vmfCode));
     redirect(`/trips/create?${params.toString()}`);

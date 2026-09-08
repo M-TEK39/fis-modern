@@ -37,14 +37,20 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
 }
 
 function getReturnPath(value: string) {
-  return ALLOWED_RETURN_PATHS.find((path) => path.toLowerCase() === value.toLowerCase()) ?? ALLOWED_RETURN_PATHS[0];
+  return (
+    ALLOWED_RETURN_PATHS.find((path) => path.toLowerCase() === value.toLowerCase()) ??
+    ALLOWED_RETURN_PATHS[0]
+  );
 }
 
 function errorState(message: string): VehicleSourceActionState {
@@ -79,7 +85,10 @@ export async function saveVehicleSourceAction(
   }
 
   const sourceCode = rawSourceCode ? Number(rawSourceCode) : null;
-  if (sourceCode !== null && (!Number.isInteger(sourceCode) || sourceCode < 0 || sourceCode > 255)) {
+  if (
+    sourceCode !== null &&
+    (!Number.isInteger(sourceCode) || sourceCode < 0 || sourceCode > 255)
+  ) {
     return errorState("The selected vehicle source is invalid.");
   }
 
@@ -110,17 +119,24 @@ export async function saveVehicleSourceAction(
       }
 
       if (error.reason === "not-found") {
-        return errorState("The selected vehicle source no longer exists. Reload the list and try again.");
+        return errorState(
+          "The selected vehicle source no longer exists. Reload the list and try again.",
+        );
       }
 
       if (error.reason === "unavailable") {
-        return errorState("The vehicle source service is temporarily unavailable. Please try again.");
+        return errorState(
+          "The vehicle source service is temporarily unavailable. Please try again.",
+        );
       }
 
       return errorState(error.message);
     }
 
-    console.error("FIS vehicle source save failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle source save failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return errorState("The vehicle source could not be saved. Please try again.");
   }
 

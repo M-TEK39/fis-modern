@@ -1,3 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function LegacyTrackingMenu() { redirect("/tracking"); }
+export default function LegacyTrackingMenu() {
+  redirect("/tracking");
+}

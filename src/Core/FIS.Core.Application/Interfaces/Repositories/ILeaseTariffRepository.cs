@@ -80,7 +80,10 @@ public interface ILeaseTariffRepository
     /// Imports a validated tariff file using the legacy staging/procedure
     /// workflow when it is available, or a compatible direct insert otherwise.
     /// </summary>
-    Task<LeaseTariffImportResult> ImportAsync(IReadOnlyList<LeaseTariffImportRow> rows, int currentUserId);
+    Task<LeaseTariffImportResult> ImportAsync(
+        IReadOnlyList<LeaseTariffImportRow> rows,
+        int currentUserId
+    );
 }
 
 public sealed record LeaseTariffImportRow(
@@ -90,6 +93,7 @@ public sealed record LeaseTariffImportRow(
     DateTime StartDate,
     DateTime EndDate,
     decimal FixedTariff,
-    decimal? ExcessKiloTariff);
+    decimal? ExcessKiloTariff
+);
 
 public sealed record LeaseTariffImportResult(int Imported, int Failed);

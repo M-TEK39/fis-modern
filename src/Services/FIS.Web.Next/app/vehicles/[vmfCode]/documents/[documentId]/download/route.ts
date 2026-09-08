@@ -33,10 +33,14 @@ export async function GET(_request: Request, { params }: DocumentDownloadRoutePr
     return new Response(response.body, { status: response.status, headers });
   } catch (error) {
     if (error instanceof VehicleDocumentApiError) {
-      const status = error.reason === "unauthorized" ? 401 : error.reason === "not-found" ? 404 : 503;
+      const status =
+        error.reason === "unauthorized" ? 401 : error.reason === "not-found" ? 404 : 503;
       return NextResponse.json({ message: error.message }, { status });
     }
 
-    return NextResponse.json({ message: "The vehicle document could not be downloaded." }, { status: 503 });
+    return NextResponse.json(
+      { message: "The vehicle document could not be downloaded." },
+      { status: 503 },
+    );
   }
 }

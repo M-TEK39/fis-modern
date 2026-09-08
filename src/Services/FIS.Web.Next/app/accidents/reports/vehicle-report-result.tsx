@@ -95,7 +95,9 @@ export default function VehicleReportResult({
       </div>
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
-          <caption className="sr-only">Detailed accident report for record {row.accidentCode}</caption>
+          <caption className="sr-only">
+            Detailed accident report for record {row.accidentCode}
+          </caption>
           <tbody>
             {reportFields(row, includeAccidentCategory).map(([label, value]) => (
               <tr key={label}>

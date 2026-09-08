@@ -23,7 +23,12 @@ function getText(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function getNumber(formData: FormData, key: string, label: string, options: { required?: boolean; min?: number } = {}) {
+function getNumber(
+  formData: FormData,
+  key: string,
+  label: string,
+  options: { required?: boolean; min?: number } = {},
+) {
   const value = getText(formData, key);
   if (!value && !options.required) return null;
   const parsed = Number(value);
@@ -38,14 +43,16 @@ function getDecimal(formData: FormData, key: string, label: string) {
   const value = getText(formData, key);
   if (!value) return null;
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) throw new PrivateHireValidationError(`${label} must be a zero or greater amount.`);
+  if (!Number.isFinite(parsed) || parsed < 0)
+    throw new PrivateHireValidationError(`${label} must be a zero or greater amount.`);
   return parsed;
 }
 
 function getDate(formData: FormData, key: string, label: string, required = false) {
   const value = getText(formData, key);
   if (!value && !required) return null;
-  if (!value || Number.isNaN(Date.parse(value))) throw new PrivateHireValidationError(`${label} must be a valid date.`);
+  if (!value || Number.isNaN(Date.parse(value)))
+    throw new PrivateHireValidationError(`${label} must be a valid date.`);
   return `${value}T00:00:00`;
 }
 
@@ -55,23 +62,42 @@ function getReturnPath(formData: FormData, fallback: string) {
 }
 
 function redirectWithMessage(path: string, key: string, message: string): never {
-  redirect(`${path}${path.includes("?") ? "&" : "?"}${new URLSearchParams({ [key]: message }).toString()}`);
+  redirect(
+    `${path}${path.includes("?") ? "&" : "?"}${new URLSearchParams({ [key]: message }).toString()}`,
+  );
 }
 
 async function authorizePrivateHire() {
   const session = await getSession();
-  if (session.status === "unavailable") return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
-  if (session.status !== "authenticated") return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
-  if (!session.roles.some((role) => role.localeCompare(PRIVATE_HIRE_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
-    return { ok: false as const, message: "You do not have permission to maintain Private Hire Vehicles." };
+  if (session.status === "unavailable")
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
+  if (session.status !== "authenticated")
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(PRIVATE_HIRE_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain Private Hire Vehicles.",
+    };
   }
   return { ok: true as const };
 }
 
 function apiErrorMessage(error: unknown, subject: string) {
   if (error instanceof PrivateHireApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return `The Private Hire ${subject} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return `The Private Hire ${subject} service is temporarily unavailable. Please try again.`;
     if (error.reason === "not-found") return `The ${subject} record was not found.`;
   }
   return `${subject[0].toUpperCase()}${subject.slice(1)} operation failed. Please try again.`;
@@ -81,7 +107,10 @@ function vehicleInput(formData: FormData) {
   const registrationNumber = getText(formData, "registrationNumber");
   const modelCode = getNumber(formData, "modelCode", "Model code", { required: true, min: 1 });
   const siteCode = getNumber(formData, "siteCode", "Site code", { required: true, min: 1 });
-  const contractorId = getNumber(formData, "contractorId", "Contractor", { required: true, min: 1 });
+  const contractorId = getNumber(formData, "contractorId", "Contractor", {
+    required: true,
+    min: 1,
+  });
   if (!registrationNumber) throw new PrivateHireValidationError("Registration number is required.");
   return {
     registrationNumber,
@@ -99,7 +128,8 @@ function vehicleInput(formData: FormData) {
     fuelCard: getText(formData, "fuelCard") || null,
     fuelCardReceiver: getText(formData, "fuelCardReceiver") || null,
     takeOnDate: getDate(formData, "takeOnDate", "Take-on date", true),
-    takeOnOdo: getNumber(formData, "takeOnOdo", "Take-on odometer", { required: true, min: 0 }) ?? 0,
+    takeOnOdo:
+      getNumber(formData, "takeOnOdo", "Take-on odometer", { required: true, min: 0 }) ?? 0,
     returnDate: getDate(formData, "returnDate", "Return date"),
     returnOdo: getNumber(formData, "returnOdo", "Return odometer", { required: true, min: 0 }) ?? 0,
     kmTariff: getDecimal(formData, "kmTariff", "Kilometre tariff"),
@@ -140,9 +170,21 @@ export async function savePrivateHireVehicleAction(formData: FormData) {
     else await updatePrivateHireVehicle(phvCode, input);
     revalidatePath("/private-hire");
     revalidatePath("/private-hire/maintenance");
-    redirectWithMessage(returnPath, "saved", phvCode === null ? "Private Hire vehicle added successfully." : "Private Hire vehicle updated successfully.");
+    redirectWithMessage(
+      returnPath,
+      "saved",
+      phvCode === null
+        ? "Private Hire vehicle added successfully."
+        : "Private Hire vehicle updated successfully.",
+    );
   } catch (error) {
-    redirectWithMessage(returnPath, "error", error instanceof PrivateHireValidationError ? error.message : apiErrorMessage(error, "vehicle"));
+    redirectWithMessage(
+      returnPath,
+      "error",
+      error instanceof PrivateHireValidationError
+        ? error.message
+        : apiErrorMessage(error, "vehicle"),
+    );
   }
 }
 
@@ -157,7 +199,13 @@ export async function deletePrivateHireVehicleAction(formData: FormData) {
     revalidatePath("/private-hire/maintenance");
     redirectWithMessage(returnPath, "deleted", "Private Hire vehicle deleted successfully.");
   } catch (error) {
-    redirectWithMessage(returnPath, "error", error instanceof PrivateHireValidationError ? error.message : apiErrorMessage(error, "vehicle"));
+    redirectWithMessage(
+      returnPath,
+      "error",
+      error instanceof PrivateHireValidationError
+        ? error.message
+        : apiErrorMessage(error, "vehicle"),
+    );
   }
 }
 
@@ -173,9 +221,21 @@ export async function savePrivateHireContractorAction(formData: FormData) {
     revalidatePath("/private-hire");
     revalidatePath("/private-hire/maintenance");
     revalidatePath("/private-hire/reports/contractors");
-    redirectWithMessage(returnPath, "saved", contractorId === null ? "Private Hire contractor added successfully." : "Private Hire contractor updated successfully.");
+    redirectWithMessage(
+      returnPath,
+      "saved",
+      contractorId === null
+        ? "Private Hire contractor added successfully."
+        : "Private Hire contractor updated successfully.",
+    );
   } catch (error) {
-    redirectWithMessage(returnPath, "error", error instanceof PrivateHireValidationError ? error.message : apiErrorMessage(error, "contractor"));
+    redirectWithMessage(
+      returnPath,
+      "error",
+      error instanceof PrivateHireValidationError
+        ? error.message
+        : apiErrorMessage(error, "contractor"),
+    );
   }
 }
 
@@ -184,13 +244,22 @@ export async function deletePrivateHireContractorAction(formData: FormData) {
   const access = await authorizePrivateHire();
   if (!access.ok) redirectWithMessage(returnPath, "error", access.message);
   try {
-    const contractorId = getNumber(formData, "contractorId", "Contractor", { required: true, min: 1 });
+    const contractorId = getNumber(formData, "contractorId", "Contractor", {
+      required: true,
+      min: 1,
+    });
     await deletePrivateHireContractor(contractorId ?? 0);
     revalidatePath("/private-hire");
     revalidatePath("/private-hire/maintenance");
     revalidatePath("/private-hire/reports/contractors");
     redirectWithMessage(returnPath, "deleted", "Private Hire contractor deleted successfully.");
   } catch (error) {
-    redirectWithMessage(returnPath, "error", error instanceof PrivateHireValidationError ? error.message : apiErrorMessage(error, "contractor"));
+    redirectWithMessage(
+      returnPath,
+      "error",
+      error instanceof PrivateHireValidationError
+        ? error.message
+        : apiErrorMessage(error, "contractor"),
+    );
   }
 }

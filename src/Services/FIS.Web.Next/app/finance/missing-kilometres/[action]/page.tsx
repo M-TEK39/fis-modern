@@ -2,9 +2,20 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
-import { FinanceFrame, FinanceRestricted, FinanceUnavailable, hasFinanceRole } from "@/app/finance/_components";
+import {
+  FinanceFrame,
+  FinanceRestricted,
+  FinanceUnavailable,
+  hasFinanceRole,
+} from "@/app/finance/_components";
 import { FinanceReportTable } from "@/app/finance/report-table";
-import { FinanceApiError, getFinanceDepartments, getFinanceProvinces, getFinanceYears, type FinanceOption } from "@/lib/api-finance";
+import {
+  FinanceApiError,
+  getFinanceDepartments,
+  getFinanceProvinces,
+  getFinanceYears,
+  type FinanceOption,
+} from "@/lib/api-finance";
 import { getMissingKilometresFinanceReport, type FinanceReport } from "@/lib/api-finance-reports";
 import { getSession } from "@/lib/session";
 
@@ -13,35 +24,60 @@ import { closeMissingKilometresAction } from "../actions";
 type Query = Record<string, string | string[] | undefined>;
 type Props = Readonly<{ params: Promise<{ action: string }>; searchParams: Promise<Query> }>;
 
-const ACTIONS = ["fuel-consumption", "no-kilos-consuming-fuel", "kilo-gaps-pdf", "kilo-gaps-xls", "close-gaps"] as const;
+const ACTIONS = [
+  "fuel-consumption",
+  "no-kilos-consuming-fuel",
+  "kilo-gaps-pdf",
+  "kilo-gaps-xls",
+  "close-gaps",
+] as const;
 type MissingKilometresAction = (typeof ACTIONS)[number];
 
 function queryValue(query: Query, name: string) {
   const value = query[name];
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
 function titleFor(action: string) {
-  return ({
-    "fuel-consumption": "Missing Kilometres from Fuel Consumption",
-    "no-kilos-consuming-fuel": "Vehicles with No Kilos but Consumed Fuel",
-    "kilo-gaps-pdf": "Missing Kilometres Report (PDF)",
-    "kilo-gaps-xls": "Missing Kilometres Report (Excel)",
-    "close-gaps": "Automatically Capture Missing Kilometres",
-  } as Record<string, string>)[action] ?? "Missing Kilometres";
+  return (
+    (
+      {
+        "fuel-consumption": "Missing Kilometres from Fuel Consumption",
+        "no-kilos-consuming-fuel": "Vehicles with No Kilos but Consumed Fuel",
+        "kilo-gaps-pdf": "Missing Kilometres Report (PDF)",
+        "kilo-gaps-xls": "Missing Kilometres Report (Excel)",
+        "close-gaps": "Automatically Capture Missing Kilometres",
+      } as Record<string, string>
+    )[action] ?? "Missing Kilometres"
+  );
 }
 
 function descriptionFor(action: string) {
-  if (action === "close-gaps") return "Close eligible kilometre gaps using the existing Finance workflow.";
+  if (action === "close-gaps")
+    return "Close eligible kilometre gaps using the existing Finance workflow.";
   return "Missing-kilometres reporting with the existing Finance filters and database rules.";
 }
 
 function optionList(options: FinanceOption[], emptyLabel: string) {
-  return <><option value="">{emptyLabel}</option>{options.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</>;
+  return (
+    <>
+      <option value="">{emptyLabel}</option>
+      {options.map((item) => (
+        <option key={item.value} value={item.value}>
+          {item.label}
+        </option>
+      ))}
+    </>
+  );
 }
 
 function outputHref(action: "kilo-gaps-pdf" | "kilo-gaps-xls", financialYear: string) {
-  const params = new URLSearchParams({ kind: "missing-kilometres", action, financialYear, format: action === "kilo-gaps-xls" ? "excel" : "html" });
+  const params = new URLSearchParams({
+    kind: "missing-kilometres",
+    action,
+    financialYear,
+    format: action === "kilo-gaps-xls" ? "excel" : "html",
+  });
   return `/finance/reports/output?${params.toString()}`;
 }
 
@@ -53,19 +89,35 @@ export default async function MissingKilometresPage({ params, searchParams }: Pr
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
-  if (session.status !== "authenticated") return <FinanceFrame title="Missing Kilometres" description="Missing-kilometres reporting."><FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." /></FinanceFrame>;
-  if (!hasFinanceRole(session.roles)) return <FinanceFrame title="Missing Kilometres" description="Missing-kilometres reporting."><FinanceRestricted /></FinanceFrame>;
+  if (session.status !== "authenticated")
+    return (
+      <FinanceFrame title="Missing Kilometres" description="Missing-kilometres reporting.">
+        <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
+      </FinanceFrame>
+    );
+  if (!hasFinanceRole(session.roles))
+    return (
+      <FinanceFrame title="Missing Kilometres" description="Missing-kilometres reporting.">
+        <FinanceRestricted />
+      </FinanceFrame>
+    );
 
   const { action } = await params;
   const normalizedAction = action.trim().toLowerCase();
   const query = await searchParams;
   const validAction = ACTIONS.includes(normalizedAction as MissingKilometresAction);
-  const dateRange = normalizedAction === "fuel-consumption" || normalizedAction === "no-kilos-consuming-fuel";
-  const financialYearAction = normalizedAction === "kilo-gaps-pdf" || normalizedAction === "kilo-gaps-xls" || normalizedAction === "close-gaps";
+  const dateRange =
+    normalizedAction === "fuel-consumption" || normalizedAction === "no-kilos-consuming-fuel";
+  const financialYearAction =
+    normalizedAction === "kilo-gaps-pdf" ||
+    normalizedAction === "kilo-gaps-xls" ||
+    normalizedAction === "close-gaps";
   let departments: FinanceOption[] = [];
   let provinces: FinanceOption[] = [];
   let years: FinanceOption[] = [];
-  let error: string | null = validAction ? null : "The requested missing-kilometres action is not available.";
+  let error: string | null = validAction
+    ? null
+    : "The requested missing-kilometres action is not available.";
   try {
     const lookups: Promise<unknown>[] = [];
     if (normalizedAction === "fuel-consumption") {
@@ -80,12 +132,16 @@ export default async function MissingKilometresPage({ params, searchParams }: Pr
     }
     if (financialYearAction) years = values[index] as FinanceOption[];
   } catch (caught) {
-    error = caught instanceof FinanceApiError ? caught.message : "Missing-kilometres lookup data could not be loaded.";
+    error =
+      caught instanceof FinanceApiError
+        ? caught.message
+        : "Missing-kilometres lookup data could not be loaded.";
   }
 
   const submitted = queryValue(query, "run") === "1";
   const financialYear = queryValue(query, "financialYear");
-  const reportable = normalizedAction === "fuel-consumption" || normalizedAction === "no-kilos-consuming-fuel";
+  const reportable =
+    normalizedAction === "fuel-consumption" || normalizedAction === "no-kilos-consuming-fuel";
   let report: FinanceReport | null = null;
   let output: string | null = null;
   if (submitted && validAction) {
@@ -97,12 +153,23 @@ export default async function MissingKilometresPage({ params, searchParams }: Pr
     } else if (reportable) {
       const startDate = queryValue(query, "startDate");
       const endDate = queryValue(query, "endDate");
-      if (!startDate || !endDate) error = "Select both a start date and an end date before generating the report.";
+      if (!startDate || !endDate)
+        error = "Select both a start date and an end date before generating the report.";
       else {
         try {
-          report = await getMissingKilometresFinanceReport({ mode: normalizedAction, departmentCode: queryValue(query, "departmentCode"), provinceCode: queryValue(query, "provinceCode"), excludeUnposted: checked(query, "excludeUnposted"), startDate, endDate });
+          report = await getMissingKilometresFinanceReport({
+            mode: normalizedAction,
+            departmentCode: queryValue(query, "departmentCode"),
+            provinceCode: queryValue(query, "provinceCode"),
+            excludeUnposted: checked(query, "excludeUnposted"),
+            startDate,
+            endDate,
+          });
         } catch (caught) {
-          error = caught instanceof FinanceApiError ? caught.message : "The missing-kilometres report could not be generated.";
+          error =
+            caught instanceof FinanceApiError
+              ? caught.message
+              : "The missing-kilometres report could not be generated.";
         }
       }
     }
@@ -111,11 +178,175 @@ export default async function MissingKilometresPage({ params, searchParams }: Pr
   const result = queryValue(query, "result");
   const message = queryValue(query, "message");
   const mutationError = result === "error" || result === "forbidden";
-  return <FinanceFrame title={titleFor(normalizedAction)} description={descriptionFor(normalizedAction)}>
-    {error ? <div className="notice notice-error" role="alert">{error}</div> : null}
-    {message ? <div className={`notice ${mutationError ? "notice-error" : "notice-success"}`} role={mutationError ? "alert" : "status"}>{message}</div> : null}
-    {normalizedAction === "close-gaps" ? <form className="vehicle-status-maintenance-panel" action={closeMissingKilometresAction}><div className="form-grid"><div className="form-field"><label className="form-label" htmlFor="missing-kilometres-year">Financial Year</label><select className="form-select" id="missing-kilometres-year" name="financialYear" defaultValue={financialYear} required>{optionList(years, "Select Financial Year")}</select></div></div><div className="button-row"><button className="button button-primary" type="submit">Close Kilometre Gaps</button><Link className="button button-secondary" href="/finance">Finance Menu</Link></div></form> : <form className="vehicle-status-maintenance-panel" method="get"><input name="run" type="hidden" value="1" /><div className="form-grid">{normalizedAction === "fuel-consumption" ? <><div className="form-field"><label className="form-label" htmlFor="missing-kilometres-department">Department (optional)</label><select className="form-select" id="missing-kilometres-department" name="departmentCode" defaultValue={queryValue(query, "departmentCode")}>{optionList(departments, "Select Department")}</select></div><div className="form-field"><label className="form-label" htmlFor="missing-kilometres-province">Province (optional)</label><select className="form-select" id="missing-kilometres-province" name="provinceCode" defaultValue={queryValue(query, "provinceCode")}>{optionList(provinces, "Select Province")}</select></div></> : null}{financialYearAction ? <div className="form-field"><label className="form-label" htmlFor="missing-kilometres-year">Financial Year</label><select className="form-select" id="missing-kilometres-year" name="financialYear" defaultValue={financialYear} required>{optionList(years, "Select Financial Year")}</select></div> : null}{dateRange ? <><div className="form-field"><label className="form-label" htmlFor="missing-kilometres-start">Start Date</label><input className="form-input" id="missing-kilometres-start" name="startDate" type="date" defaultValue={queryValue(query, "startDate")} required /></div><div className="form-field"><label className="form-label" htmlFor="missing-kilometres-end">End Date</label><input className="form-input" id="missing-kilometres-end" name="endDate" type="date" defaultValue={queryValue(query, "endDate")} required /></div></> : null}{normalizedAction === "fuel-consumption" ? <div className="form-field"><label className="form-checkbox" htmlFor="missing-kilometres-exclude"><input id="missing-kilometres-exclude" name="excludeUnposted" type="checkbox" value="1" defaultChecked={checked(query, "excludeUnposted")} /> Exclude Unposted</label></div> : null}</div><div className="button-row"><button className="button button-primary" type="submit">{financialYearAction ? "Prepare Report" : "Generate Report"}</button><Link className="button button-secondary" href="/finance">Finance Menu</Link></div></form>}
-    {output ? <section className="vehicle-status-maintenance-panel" aria-labelledby="missing-kilometres-output"><h2 id="missing-kilometres-output">Report ready</h2><p className="muted-copy">The report is generated on the authenticated server path.</p><a className="button button-primary" href={output} target="_blank" rel="noreferrer">{normalizedAction === "kilo-gaps-xls" ? "Download Excel report" : "Open printable report"}</a></section> : null}
-    {report ? <FinanceReportTable report={report} basePath={`/finance/missing-kilometres/${normalizedAction}`} query={query} page={Number(queryValue(query, "page")) || 1} /> : null}
-  </FinanceFrame>;
+  return (
+    <FinanceFrame title={titleFor(normalizedAction)} description={descriptionFor(normalizedAction)}>
+      {error ? (
+        <div className="notice notice-error" role="alert">
+          {error}
+        </div>
+      ) : null}
+      {message ? (
+        <div
+          className={`notice ${mutationError ? "notice-error" : "notice-success"}`}
+          role={mutationError ? "alert" : "status"}
+        >
+          {message}
+        </div>
+      ) : null}
+      {normalizedAction === "close-gaps" ? (
+        <form className="vehicle-status-maintenance-panel" action={closeMissingKilometresAction}>
+          <div className="form-grid">
+            <div className="form-field">
+              <label className="form-label" htmlFor="missing-kilometres-year">
+                Financial Year
+              </label>
+              <select
+                className="form-select"
+                id="missing-kilometres-year"
+                name="financialYear"
+                defaultValue={financialYear}
+                required
+              >
+                {optionList(years, "Select Financial Year")}
+              </select>
+            </div>
+          </div>
+          <div className="button-row">
+            <button className="button button-primary" type="submit">
+              Close Kilometre Gaps
+            </button>
+            <Link className="button button-secondary" href="/finance">
+              Finance Menu
+            </Link>
+          </div>
+        </form>
+      ) : (
+        <form className="vehicle-status-maintenance-panel" method="get">
+          <input name="run" type="hidden" value="1" />
+          <div className="form-grid">
+            {normalizedAction === "fuel-consumption" ? (
+              <>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="missing-kilometres-department">
+                    Department (optional)
+                  </label>
+                  <select
+                    className="form-select"
+                    id="missing-kilometres-department"
+                    name="departmentCode"
+                    defaultValue={queryValue(query, "departmentCode")}
+                  >
+                    {optionList(departments, "Select Department")}
+                  </select>
+                </div>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="missing-kilometres-province">
+                    Province (optional)
+                  </label>
+                  <select
+                    className="form-select"
+                    id="missing-kilometres-province"
+                    name="provinceCode"
+                    defaultValue={queryValue(query, "provinceCode")}
+                  >
+                    {optionList(provinces, "Select Province")}
+                  </select>
+                </div>
+              </>
+            ) : null}
+            {financialYearAction ? (
+              <div className="form-field">
+                <label className="form-label" htmlFor="missing-kilometres-year">
+                  Financial Year
+                </label>
+                <select
+                  className="form-select"
+                  id="missing-kilometres-year"
+                  name="financialYear"
+                  defaultValue={financialYear}
+                  required
+                >
+                  {optionList(years, "Select Financial Year")}
+                </select>
+              </div>
+            ) : null}
+            {dateRange ? (
+              <>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="missing-kilometres-start">
+                    Start Date
+                  </label>
+                  <input
+                    className="form-input"
+                    id="missing-kilometres-start"
+                    name="startDate"
+                    type="date"
+                    defaultValue={queryValue(query, "startDate")}
+                    required
+                  />
+                </div>
+                <div className="form-field">
+                  <label className="form-label" htmlFor="missing-kilometres-end">
+                    End Date
+                  </label>
+                  <input
+                    className="form-input"
+                    id="missing-kilometres-end"
+                    name="endDate"
+                    type="date"
+                    defaultValue={queryValue(query, "endDate")}
+                    required
+                  />
+                </div>
+              </>
+            ) : null}
+            {normalizedAction === "fuel-consumption" ? (
+              <div className="form-field">
+                <label className="form-checkbox" htmlFor="missing-kilometres-exclude">
+                  <input
+                    id="missing-kilometres-exclude"
+                    name="excludeUnposted"
+                    type="checkbox"
+                    value="1"
+                    defaultChecked={checked(query, "excludeUnposted")}
+                  />{" "}
+                  Exclude Unposted
+                </label>
+              </div>
+            ) : null}
+          </div>
+          <div className="button-row">
+            <button className="button button-primary" type="submit">
+              {financialYearAction ? "Prepare Report" : "Generate Report"}
+            </button>
+            <Link className="button button-secondary" href="/finance">
+              Finance Menu
+            </Link>
+          </div>
+        </form>
+      )}
+      {output ? (
+        <section
+          className="vehicle-status-maintenance-panel"
+          aria-labelledby="missing-kilometres-output"
+        >
+          <h2 id="missing-kilometres-output">Report ready</h2>
+          <p className="muted-copy">The report is generated on the authenticated server path.</p>
+          <a className="button button-primary" href={output} target="_blank" rel="noreferrer">
+            {normalizedAction === "kilo-gaps-xls"
+              ? "Download Excel report"
+              : "Open printable report"}
+          </a>
+        </section>
+      ) : null}
+      {report ? (
+        <FinanceReportTable
+          report={report}
+          basePath={`/finance/missing-kilometres/${normalizedAction}`}
+          query={query}
+          page={Number(queryValue(query, "page")) || 1}
+        />
+      ) : null}
+    </FinanceFrame>
+  );
 }

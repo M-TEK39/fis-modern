@@ -40,7 +40,10 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -48,7 +51,9 @@ function hasVehicleManagementPermission(accessLevel?: string) {
 
 function hasVehicleStatusRole(roles: readonly string[]) {
   return VEHICLE_STATUS_ROLES.some((role) =>
-    roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0),
+    roles.some(
+      (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+    ),
   );
 }
 
@@ -81,7 +86,9 @@ function ApiUnavailable() {
       </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Vehicle status information could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
         <Link className="button button-primary" href="/vehicles/status-maintenance">
           Try again
@@ -98,9 +105,7 @@ function queryInitialVehicle(searchParams: Awaited<StatusMaintenancePageProps["s
   const rawVmfCode = getQueryValue(searchParams.vmfCode)?.trim() || "";
   const parsedVmfCode = Number(rawVmfCode);
   const rawGgNumber =
-    getQueryValue(searchParams.GGNumber)?.trim() ||
-    getQueryValue(searchParams.GGnum)?.trim() ||
-    "";
+    getQueryValue(searchParams.GGNumber)?.trim() || getQueryValue(searchParams.GGnum)?.trim() || "";
 
   return {
     vmfCode: Number.isInteger(parsedVmfCode) && parsedVmfCode > 0 ? parsedVmfCode : null,
@@ -122,7 +127,8 @@ async function resolveInitialVehicle(
 
   const matches = await searchVehiclesForStatus(ggNumber);
   const exact = matches.find(
-    (vehicle) => vehicle.fleetNumber?.localeCompare(ggNumber, undefined, { sensitivity: "accent" }) === 0,
+    (vehicle) =>
+      vehicle.fleetNumber?.localeCompare(ggNumber, undefined, { sensitivity: "accent" }) === 0,
   );
   const vehicle = exact || matches[0];
   return vehicle ? getVehicleForStatus(vehicle.vmfCode) : null;
@@ -152,7 +158,10 @@ export default async function StatusMaintenancePage({ searchParams }: StatusMain
     );
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel) || !hasVehicleStatusRole(session.roles)) {
+  if (
+    !hasVehicleManagementPermission(session.accessLevel) ||
+    !hasVehicleStatusRole(session.roles)
+  ) {
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />
@@ -204,7 +213,10 @@ export default async function StatusMaintenancePage({ searchParams }: StatusMain
 
   return (
     <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card vehicle-status-maintenance-card" aria-labelledby="vehicle-status-title">
+      <section
+        className="vehicle-card vehicle-status-maintenance-card"
+        aria-labelledby="vehicle-status-title"
+      >
         <header className="vehicle-page-header">
           <div>
             <p className="eyebrow">Vehicle master maintenance</p>

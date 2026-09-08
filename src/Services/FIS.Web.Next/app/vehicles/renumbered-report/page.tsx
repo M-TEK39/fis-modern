@@ -3,7 +3,11 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
 import SessionRecovery from "@/app/home/session-recovery";
-import { getRenumberedVehicleReport, VehicleApiError, type RenumberedVehicleReportRow } from "@/lib/api-vehicles";
+import {
+  getRenumberedVehicleReport,
+  VehicleApiError,
+  type RenumberedVehicleReportRow,
+} from "@/lib/api-vehicles";
 import { getSession } from "@/lib/session";
 
 const PAGE_SIZE = 12;
@@ -18,7 +22,9 @@ function getQueryValue(value: string | string[] | undefined) {
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function valueOrDash(value: string | null) {
@@ -50,7 +56,9 @@ function ApiUnavailable() {
       </div>
       <p className="eyebrow">API unavailable</p>
       <h2>The renumbered vehicle report could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
         <Link className="button button-primary" href="/vehicles/renumbered-report">
           Try again
@@ -82,7 +90,9 @@ function ReportTable({ rows }: Readonly<{ rows: RenumberedVehicleReportRow[] }>)
             <tr key={`${row.oldVmfCode}-${row.newFleetNumber ?? "replacement"}`}>
               <td>{index + 1}</td>
               <td>
-                <Link href={`/vehicles/recovered?GGnum=${encodeURIComponent(row.oldFleetNumber ?? "")}`}>
+                <Link
+                  href={`/vehicles/recovered?GGnum=${encodeURIComponent(row.oldFleetNumber ?? "")}`}
+                >
                   {valueOrDash(row.oldFleetNumber)}
                 </Link>
               </td>
@@ -98,8 +108,13 @@ function ReportTable({ rows }: Readonly<{ rows: RenumberedVehicleReportRow[] }>)
   );
 }
 
-function Pagination({ page, totalPages, routePath }: Readonly<{ page: number; totalPages: number; routePath: string }>) {
-  const pageHref = (nextPage: number) => (nextPage === 1 ? routePath : `${routePath}?page=${nextPage}`);
+function Pagination({
+  page,
+  totalPages,
+  routePath,
+}: Readonly<{ page: number; totalPages: number; routePath: string }>) {
+  const pageHref = (nextPage: number) =>
+    nextPage === 1 ? routePath : `${routePath}?page=${nextPage}`;
 
   if (totalPages <= 1) {
     return null;
@@ -108,7 +123,10 @@ function Pagination({ page, totalPages, routePath }: Readonly<{ page: number; to
   return (
     <nav className="vehicle-pagination" aria-label="Renumbered vehicle report pagination">
       {page <= 1 ? (
-        <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
           Previous
         </span>
       ) : (
@@ -120,7 +138,10 @@ function Pagination({ page, totalPages, routePath }: Readonly<{ page: number; to
         Page {page} of {totalPages}
       </span>
       {page >= totalPages ? (
-        <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
           Next
         </span>
       ) : (
@@ -132,7 +153,10 @@ function Pagination({ page, totalPages, routePath }: Readonly<{ page: number; to
   );
 }
 
-export default async function RenumberedReportPage({ searchParams, routePath = "/vehicles/renumbered-report" }: RenumberedReportPageProps) {
+export default async function RenumberedReportPage({
+  searchParams,
+  routePath = "/vehicles/renumbered-report",
+}: RenumberedReportPageProps) {
   await connection();
   const session = await getSession();
 
@@ -176,7 +200,10 @@ export default async function RenumberedReportPage({ searchParams, routePath = "
       );
     }
 
-    console.error("FIS renumbered vehicle report request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS renumbered vehicle report request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return (
       <main className="page-shell vehicle-page-shell">
         <ApiUnavailable />
@@ -187,7 +214,9 @@ export default async function RenumberedReportPage({ searchParams, routePath = "
   const query = await searchParams;
   const requestedPage = Number.parseInt(getQueryValue(query.page) ?? "1", 10);
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const page = Number.isFinite(requestedPage) ? Math.min(Math.max(requestedPage, 1), totalPages) : 1;
+  const page = Number.isFinite(requestedPage)
+    ? Math.min(Math.max(requestedPage, 1), totalPages)
+    : 1;
   const visibleRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (

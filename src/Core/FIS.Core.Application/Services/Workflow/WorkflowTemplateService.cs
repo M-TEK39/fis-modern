@@ -1,8 +1,8 @@
+using System.Text.Json;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Interfaces.Workflow;
 using FIS.Core.Domain.Entities.System;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace FIS.Core.Application.Services.Workflow;
 
@@ -20,7 +20,8 @@ public class WorkflowTemplateService : IWorkflowTemplateService
         IWorkflowTemplateRepository templateRepository,
         IWorkflowRepository workflowRepository,
         IStepRepository stepRepository,
-        ILogger<WorkflowTemplateService> logger)
+        ILogger<WorkflowTemplateService> logger
+    )
     {
         _templateRepository = templateRepository;
         _workflowRepository = workflowRepository;
@@ -28,7 +29,12 @@ public class WorkflowTemplateService : IWorkflowTemplateService
         _logger = logger;
     }
 
-    public async Task<WorkflowTemplate> CreateTemplateAsync(string templateName, string category, string? description, int userId)
+    public async Task<WorkflowTemplate> CreateTemplateAsync(
+        string templateName,
+        string category,
+        string? description,
+        int userId
+    )
     {
         var template = new WorkflowTemplate
         {
@@ -36,13 +42,17 @@ public class WorkflowTemplateService : IWorkflowTemplateService
             Category = category,
             Description = description,
             IsActive = true,
-            Version = 1
+            Version = 1,
         };
 
         return await _templateRepository.CreateAsync(template, userId);
     }
 
-    public async Task<Domain.Entities.System.Workflow> InstantiateFromTemplateAsync(int templateId, string workflowName, int userId)
+    public async Task<Domain.Entities.System.Workflow> InstantiateFromTemplateAsync(
+        int templateId,
+        string workflowName,
+        int userId
+    )
     {
         var template = await _templateRepository.GetByIdAsync(templateId);
         if (template == null)
@@ -59,13 +69,16 @@ public class WorkflowTemplateService : IWorkflowTemplateService
         var workflow = new Domain.Entities.System.Workflow
         {
             WorkflowName = workflowName,
-            AlwaysExecute = false
+            AlwaysExecute = false,
         };
 
         workflow = await _workflowRepository.CreateAsync(workflow, userId);
 
-        _logger.LogInformation("Instantiated workflow {WorkflowId} from template {TemplateId}", 
-            workflow.WorkflowID, templateId);
+        _logger.LogInformation(
+            "Instantiated workflow {WorkflowId} from template {TemplateId}",
+            workflow.WorkflowID,
+            templateId
+        );
 
         // If template has step data, create steps
         if (!string.IsNullOrWhiteSpace(template.TemplateData))
@@ -109,7 +122,7 @@ public class WorkflowTemplateService : IWorkflowTemplateService
         var options = new JsonSerializerOptions
         {
             WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         };
 
         var exportData = new
@@ -119,7 +132,7 @@ public class WorkflowTemplateService : IWorkflowTemplateService
             template.Description,
             template.IsActive,
             template.Version,
-            template.TemplateData
+            template.TemplateData,
         };
 
         return JsonSerializer.Serialize(exportData, options);
@@ -127,12 +140,12 @@ public class WorkflowTemplateService : IWorkflowTemplateService
 
     public async Task<WorkflowTemplate> ImportTemplateAsync(string templateJson, int userId)
     {
-        var options = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
-        var importData = JsonSerializer.Deserialize<WorkflowTemplateImportData>(templateJson, options);
+        var importData = JsonSerializer.Deserialize<WorkflowTemplateImportData>(
+            templateJson,
+            options
+        );
         if (importData == null)
         {
             throw new InvalidOperationException("Invalid template JSON");
@@ -145,7 +158,7 @@ public class WorkflowTemplateService : IWorkflowTemplateService
             Description = importData.Description,
             IsActive = importData.IsActive,
             Version = importData.Version,
-            TemplateData = importData.TemplateData
+            TemplateData = importData.TemplateData,
         };
 
         return await _templateRepository.CreateAsync(template, userId);
@@ -155,10 +168,7 @@ public class WorkflowTemplateService : IWorkflowTemplateService
     {
         try
         {
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
             var steps = JsonSerializer.Deserialize<List<StepTemplateData>>(templateData, options);
             if (steps == null || !steps.Any())
@@ -175,18 +185,25 @@ public class WorkflowTemplateService : IWorkflowTemplateService
                     StepOrder = stepData.Order,
                     StepTypeID = stepData.TypeId,
                     HandlerType = stepData.HandlerType,
-                    StepParameters = stepData.Parameters
+                    StepParameters = stepData.Parameters,
                 };
 
                 await _stepRepository.CreateAsync(step, userId);
             }
 
-            _logger.LogInformation("Created {Count} steps for workflow {WorkflowId} from template data", 
-                steps.Count, workflowId);
+            _logger.LogInformation(
+                "Created {Count} steps for workflow {WorkflowId} from template data",
+                steps.Count,
+                workflowId
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating steps from template data for workflow {WorkflowId}", workflowId);
+            _logger.LogError(
+                ex,
+                "Error creating steps from template data for workflow {WorkflowId}",
+                workflowId
+            );
             throw;
         }
     }

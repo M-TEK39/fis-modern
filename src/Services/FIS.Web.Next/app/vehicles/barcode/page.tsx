@@ -4,7 +4,10 @@ import { redirect } from "next/navigation";
 
 import { logoutAction } from "@/app/actions/auth";
 import VehicleBarcodeClient from "@/app/vehicles/barcode/barcode-client";
-import { searchVehicleBarcodeAction, updateVehicleBarcodeAction } from "@/app/vehicles/barcode/actions";
+import {
+  searchVehicleBarcodeAction,
+  updateVehicleBarcodeAction,
+} from "@/app/vehicles/barcode/actions";
 import SessionRecovery from "@/app/home/session-recovery";
 import { getSession } from "@/lib/session";
 
@@ -20,17 +23,27 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
 }
 
 function StatusCard({ title, message }: Readonly<{ title: string; message: string }>) {
-  return <section className="vehicle-status-card" role="alert"><p className="eyebrow">{title}</p><h2>{message}</h2></section>;
+  return (
+    <section className="vehicle-status-card" role="alert">
+      <p className="eyebrow">{title}</p>
+      <h2>{message}</h2>
+    </section>
+  );
 }
 
-export default async function VehicleBarcodePage({ routePath = "/vehicles/barcode" }: VehicleBarcodePageProps) {
+export default async function VehicleBarcodePage({
+  routePath = "/vehicles/barcode",
+}: VehicleBarcodePageProps) {
   await connection();
   const session = await getSession();
 
@@ -39,15 +52,30 @@ export default async function VehicleBarcodePage({ routePath = "/vehicles/barcod
   }
 
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={routePath} /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath={routePath} />
+      </main>
+    );
   }
 
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><StatusCard title="API unavailable" message="The vehicle barcode service is unavailable." /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <StatusCard title="API unavailable" message="The vehicle barcode service is unavailable." />
+      </main>
+    );
   }
 
   if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return <main className="page-shell vehicle-page-shell"><StatusCard title="Access restricted" message="You do not have permission to maintain vehicle barcodes." /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <StatusCard
+          title="Access restricted"
+          message="You do not have permission to maintain vehicle barcodes."
+        />
+      </main>
+    );
   }
 
   return (
@@ -59,12 +87,23 @@ export default async function VehicleBarcodePage({ routePath = "/vehicles/barcod
             <h1 id="vehicle-barcode-title">Add / Edit Vehicle Barcode</h1>
             <p>Search a vehicle by GG or GP number and update its legacy barcode.</p>
           </div>
-          <Link className="button button-secondary" href="/vehicles">Vehicle Master</Link>
+          <Link className="button button-secondary" href="/vehicles">
+            Vehicle Master
+          </Link>
         </header>
-        <VehicleBarcodeClient searchAction={searchVehicleBarcodeAction} updateAction={updateVehicleBarcodeAction} />
+        <VehicleBarcodeClient
+          searchAction={searchVehicleBarcodeAction}
+          updateAction={updateVehicleBarcodeAction}
+        />
         <div className="vehicle-footer-actions">
-          <Link className="button button-secondary" href="/vehicles">Back to Vehicle Master</Link>
-          <form action={logoutAction}><button className="button button-secondary" type="submit">Sign out</button></form>
+          <Link className="button button-secondary" href="/vehicles">
+            Back to Vehicle Master
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
         </div>
       </section>
     </main>

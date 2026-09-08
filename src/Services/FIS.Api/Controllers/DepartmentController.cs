@@ -86,7 +86,10 @@ public class DepartmentController : BaseApiController
     private readonly IDepartmentRepository _departmentRepository;
     private readonly ILogger<DepartmentController> _logger;
 
-    public DepartmentController(IDepartmentRepository departmentRepository, ILogger<DepartmentController> logger)
+    public DepartmentController(
+        IDepartmentRepository departmentRepository,
+        ILogger<DepartmentController> logger
+    )
     {
         _departmentRepository = departmentRepository;
         _logger = logger;
@@ -137,7 +140,7 @@ public class DepartmentController : BaseApiController
                 DateUpdated = d.date_updated,
                 UserAccessCode = d.user_access_code,
                 ModifiedByUserCode = d.modified_by_user_code,
-                Comments = d.comments
+                Comments = d.comments,
             });
             return Ok(departmentDtos);
         }
@@ -196,7 +199,7 @@ public class DepartmentController : BaseApiController
                 DateUpdated = department.date_updated,
                 UserAccessCode = department.user_access_code,
                 ModifiedByUserCode = department.modified_by_user_code,
-                Comments = department.comments
+                Comments = department.comments,
             };
 
             return Ok(departmentDto);
@@ -214,43 +217,45 @@ public class DepartmentController : BaseApiController
         try
         {
             var departments = await _departmentRepository.GetActiveDepartmentsAsync();
-            return Ok(departments.Select(d => new DepartmentDto
-            {
-                DepartmentCode = d.department_code,
-                CompanyCode = d.company_code,
-                Description = d.description,
-                ResponsiblePerson = d.res_person,
-                Address1 = d.address1,
-                Address2 = d.address2,
-                Address3 = d.address3,
-                PostalCode = d.postal_code,
-                Telephone = d.telephone,
-                Fax = d.fax,
-                NetAddress = d.net_address,
-                DepartmentNumber = d.Department_number,
-                CellNumber = d.cell_number,
-                Notes = d.notes,
-                DepartmentAbbr = d.department_abbr,
-                BasInstallationCode = d.bas_installation_code,
-                DeptActive = d.dept_active,
-                CloEmail = d.clo_email,
-                Telephone2 = d.telephone2,
-                Fax2 = d.fax2,
-                FinancialSystemCode = d.financial_system_code,
-                FinancialSystemActive = d.financial_system_active,
-                FinancialSystemActivateDate = d.financial_system_activate_date,
-                DefaultSite = d.default_site,
-                ExportIsActive = d.export_is_active,
-                DateLastExported = d.date_last_exported,
-                ServiceKilometres = d.Service_Kilometres,
-                ServiceYears = d.Service_Years,
-                OverheadPercentage = d.Overhead_Percentage,
-                DateCreated = d.date_created,
-                DateUpdated = d.date_updated,
-                UserAccessCode = d.user_access_code,
-                ModifiedByUserCode = d.modified_by_user_code,
-                Comments = d.comments
-            }));
+            return Ok(
+                departments.Select(d => new DepartmentDto
+                {
+                    DepartmentCode = d.department_code,
+                    CompanyCode = d.company_code,
+                    Description = d.description,
+                    ResponsiblePerson = d.res_person,
+                    Address1 = d.address1,
+                    Address2 = d.address2,
+                    Address3 = d.address3,
+                    PostalCode = d.postal_code,
+                    Telephone = d.telephone,
+                    Fax = d.fax,
+                    NetAddress = d.net_address,
+                    DepartmentNumber = d.Department_number,
+                    CellNumber = d.cell_number,
+                    Notes = d.notes,
+                    DepartmentAbbr = d.department_abbr,
+                    BasInstallationCode = d.bas_installation_code,
+                    DeptActive = d.dept_active,
+                    CloEmail = d.clo_email,
+                    Telephone2 = d.telephone2,
+                    Fax2 = d.fax2,
+                    FinancialSystemCode = d.financial_system_code,
+                    FinancialSystemActive = d.financial_system_active,
+                    FinancialSystemActivateDate = d.financial_system_activate_date,
+                    DefaultSite = d.default_site,
+                    ExportIsActive = d.export_is_active,
+                    DateLastExported = d.date_last_exported,
+                    ServiceKilometres = d.Service_Kilometres,
+                    ServiceYears = d.Service_Years,
+                    OverheadPercentage = d.Overhead_Percentage,
+                    DateCreated = d.date_created,
+                    DateUpdated = d.date_updated,
+                    UserAccessCode = d.user_access_code,
+                    ModifiedByUserCode = d.modified_by_user_code,
+                    Comments = d.comments,
+                })
+            );
         }
         catch (Exception ex)
         {
@@ -280,7 +285,9 @@ public class DepartmentController : BaseApiController
     }
 
     [HttpGet("company/{companyCode}")]
-    public async Task<ActionResult<IEnumerable<DepartmentDto>>> GetDepartmentsByCompany(int companyCode)
+    public async Task<ActionResult<IEnumerable<DepartmentDto>>> GetDepartmentsByCompany(
+        int companyCode
+    )
     {
         try
         {
@@ -322,19 +329,25 @@ public class DepartmentController : BaseApiController
                 DateUpdated = d.date_updated,
                 UserAccessCode = d.user_access_code,
                 ModifiedByUserCode = d.modified_by_user_code,
-                Comments = d.comments
+                Comments = d.comments,
             });
             return Ok(departmentDtos);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving departments for company {CompanyCode}", companyCode);
+            _logger.LogError(
+                ex,
+                "Error retrieving departments for company {CompanyCode}",
+                companyCode
+            );
             return StatusCode(500, "Internal server error");
         }
     }
 
     [HttpGet("search")]
-    public async Task<ActionResult<IEnumerable<DepartmentDto>>> SearchDepartments([FromQuery] string searchTerm)
+    public async Task<ActionResult<IEnumerable<DepartmentDto>>> SearchDepartments(
+        [FromQuery] string searchTerm
+    )
     {
         try
         {
@@ -376,7 +389,7 @@ public class DepartmentController : BaseApiController
                 DateUpdated = d.date_updated,
                 UserAccessCode = d.user_access_code,
                 ModifiedByUserCode = d.modified_by_user_code,
-                Comments = d.comments
+                Comments = d.comments,
             });
             return Ok(departmentDtos);
         }
@@ -388,7 +401,9 @@ public class DepartmentController : BaseApiController
     }
 
     [HttpPost]
-    public async Task<ActionResult<DepartmentDto>> CreateDepartment([FromBody] CreateDepartmentDto createDepartmentDto)
+    public async Task<ActionResult<DepartmentDto>> CreateDepartment(
+        [FromBody] CreateDepartmentDto createDepartmentDto
+    )
     {
         try
         {
@@ -398,7 +413,10 @@ public class DepartmentController : BaseApiController
             {
                 // The legacy add screen always writes company_code = 1 when
                 // the caller does not provide a company value.
-                company_code = createDepartmentDto.CompanyCode == 0 ? (short)1 : createDepartmentDto.CompanyCode,
+                company_code =
+                    createDepartmentDto.CompanyCode == 0
+                        ? (short)1
+                        : createDepartmentDto.CompanyCode,
                 description = createDepartmentDto.Description,
                 res_person = createDepartmentDto.ResponsiblePerson,
                 address1 = createDepartmentDto.Address1,
@@ -425,12 +443,20 @@ public class DepartmentController : BaseApiController
                 Service_Kilometres = createDepartmentDto.ServiceKilometres,
                 Service_Years = createDepartmentDto.ServiceYears,
                 Overhead_Percentage = createDepartmentDto.OverheadPercentage,
-                user_access_code = createDepartmentDto.UserAccessCode ??
-                    (currentUserId > 0 && currentUserId <= short.MaxValue ? (short)currentUserId : null),
-                comments = createDepartmentDto.Comments
+                user_access_code =
+                    createDepartmentDto.UserAccessCode
+                    ?? (
+                        currentUserId > 0 && currentUserId <= short.MaxValue
+                            ? (short)currentUserId
+                            : null
+                    ),
+                comments = createDepartmentDto.Comments,
             };
 
-            var createdDepartment = await _departmentRepository.CreateAsync(department, currentUserId);
+            var createdDepartment = await _departmentRepository.CreateAsync(
+                department,
+                currentUserId
+            );
 
             var departmentDto = new DepartmentDto
             {
@@ -467,10 +493,14 @@ public class DepartmentController : BaseApiController
                 DateUpdated = createdDepartment.date_updated,
                 UserAccessCode = createdDepartment.user_access_code,
                 ModifiedByUserCode = createdDepartment.modified_by_user_code,
-                Comments = createdDepartment.comments
+                Comments = createdDepartment.comments,
             };
 
-            return CreatedAtAction(nameof(GetDepartment), new { id = createdDepartment.department_code }, departmentDto);
+            return CreatedAtAction(
+                nameof(GetDepartment),
+                new { id = createdDepartment.department_code },
+                departmentDto
+            );
         }
         catch (Exception ex)
         {
@@ -480,7 +510,10 @@ public class DepartmentController : BaseApiController
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<DepartmentDto>> UpdateDepartment(int id, [FromBody] UpdateDepartmentDto updateDepartmentDto)
+    public async Task<ActionResult<DepartmentDto>> UpdateDepartment(
+        int id,
+        [FromBody] UpdateDepartmentDto updateDepartmentDto
+    )
     {
         try
         {
@@ -492,18 +525,24 @@ public class DepartmentController : BaseApiController
                 return NotFound();
             }
 
-            if (existingDepartment.dept_active && !updateDepartmentDto.DeptActive &&
-                await _departmentRepository.HasActiveContractsAsync(id))
+            if (
+                existingDepartment.dept_active
+                && !updateDepartmentDto.DeptActive
+                && await _departmentRepository.HasActiveContractsAsync(id)
+            )
             {
-                return Conflict(new
-                {
-                    message = "This department cannot be deactivated while active vehicle contracts are assigned to it."
-                });
+                return Conflict(
+                    new
+                    {
+                        message = "This department cannot be deactivated while active vehicle contracts are assigned to it.",
+                    }
+                );
             }
 
-            existingDepartment.company_code = updateDepartmentDto.CompanyCode == 0
-                ? existingDepartment.company_code
-                : updateDepartmentDto.CompanyCode;
+            existingDepartment.company_code =
+                updateDepartmentDto.CompanyCode == 0
+                    ? existingDepartment.company_code
+                    : updateDepartmentDto.CompanyCode;
             existingDepartment.description = updateDepartmentDto.Description;
             existingDepartment.res_person = updateDepartmentDto.ResponsiblePerson;
             existingDepartment.address1 = updateDepartmentDto.Address1;
@@ -524,7 +563,8 @@ public class DepartmentController : BaseApiController
             existingDepartment.fax2 = updateDepartmentDto.Fax2;
             existingDepartment.financial_system_code = updateDepartmentDto.FinancialSystemCode;
             existingDepartment.financial_system_active = updateDepartmentDto.FinancialSystemActive;
-            existingDepartment.financial_system_activate_date = updateDepartmentDto.FinancialSystemActivateDate;
+            existingDepartment.financial_system_activate_date =
+                updateDepartmentDto.FinancialSystemActivateDate;
             existingDepartment.default_site = updateDepartmentDto.DefaultSite;
             existingDepartment.export_is_active = updateDepartmentDto.ExportIsActive;
             existingDepartment.Service_Kilometres = updateDepartmentDto.ServiceKilometres;
@@ -573,7 +613,7 @@ public class DepartmentController : BaseApiController
                 DateUpdated = existingDepartment.date_updated,
                 UserAccessCode = existingDepartment.user_access_code,
                 ModifiedByUserCode = existingDepartment.modified_by_user_code,
-                Comments = existingDepartment.comments
+                Comments = existingDepartment.comments,
             };
 
             return Ok(departmentDto);
@@ -601,12 +641,14 @@ public class DepartmentController : BaseApiController
             var deleteCheck = await _departmentRepository.GetDeleteCheckAsync(id);
             if (!deleteCheck.CanDelete)
             {
-                return Conflict(new
-                {
-                    message = "This department cannot be deleted until its sites are removed and its logsheets are rectified.",
-                    siteCount = deleteCheck.SiteCount,
-                    logsheetCount = deleteCheck.LogsheetCount
-                });
+                return Conflict(
+                    new
+                    {
+                        message = "This department cannot be deleted until its sites are removed and its logsheets are rectified.",
+                        siteCount = deleteCheck.SiteCount,
+                        logsheetCount = deleteCheck.LogsheetCount,
+                    }
+                );
             }
 
             await _departmentRepository.DeleteAsync(id, currentUserId);

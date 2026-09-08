@@ -19,11 +19,7 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
 {
     private const string TableName = "driver_licence";
 
-    private static readonly string[] RequiredColumns =
-    [
-        "licence_code",
-        "description"
-    ];
+    private static readonly string[] RequiredColumns = ["licence_code", "description"];
 
     private static readonly string[] OptionalColumns =
     [
@@ -31,7 +27,7 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private readonly FisDbContext _context;
@@ -41,11 +37,13 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<DriverLicence?> GetByIdAsync(short licenceCode)
-        => (await QueryAsync(
-            "[licence_code] = @licenceCode",
-            command => AddParameter(command, "@licenceCode", DbType.Int16, licenceCode)))
-            .SingleOrDefault();
+    public async Task<DriverLicence?> GetByIdAsync(short licenceCode) =>
+        (
+            await QueryAsync(
+                "[licence_code] = @licenceCode",
+                command => AddParameter(command, "@licenceCode", DbType.Int16, licenceCode)
+            )
+        ).SingleOrDefault();
 
     public async Task<DriverLicence?> GetByDescriptionAsync(string description)
     {
@@ -54,14 +52,21 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
             return null;
         }
 
-        return (await QueryAsync(
-            "LOWER([description]) = @description",
-            command => AddParameter(command, "@description", DbType.String, description.Trim().ToLowerInvariant())))
-            .SingleOrDefault();
+        return (
+            await QueryAsync(
+                "LOWER([description]) = @description",
+                command =>
+                    AddParameter(
+                        command,
+                        "@description",
+                        DbType.String,
+                        description.Trim().ToLowerInvariant()
+                    )
+            )
+        ).SingleOrDefault();
     }
 
-    public async Task<IEnumerable<DriverLicence>> GetAllAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<DriverLicence>> GetAllAsync() => await QueryAsync();
 
     public async Task<IEnumerable<DriverLicence>> SearchAsync(string searchTerm)
     {
@@ -72,7 +77,14 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
 
         return await QueryAsync(
             "LOWER(COALESCE([description], '')) LIKE @searchTerm",
-            command => AddParameter(command, "@searchTerm", DbType.String, $"%{searchTerm.Trim().ToLowerInvariant()}%"));
+            command =>
+                AddParameter(
+                    command,
+                    "@searchTerm",
+                    DbType.String,
+                    $"%{searchTerm.Trim().ToLowerInvariant()}%"
+                )
+        );
     }
 
     public async Task<DriverLicenceDeleteCheck> GetDeleteCheckAsync(short licenceCode)
@@ -92,7 +104,8 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
                     connection,
                     "SELECT COUNT(1) FROM [dbo].[model] WHERE [licence_code] = @licenceCode",
                     licenceCode,
-                    transaction)
+                    transaction
+                )
                 : 0;
 
             return new DriverLicenceDeleteCheck(modelCount);
@@ -118,7 +131,10 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
         driverLicence.modified_by_user_code = currentUserId > 0 ? currentUserId : null;
         driverLicence.is_deleted = false;
 
-        driverLicence.licence_code = await ExecuteInsertAsync(source, BuildValues(driverLicence, source.Columns));
+        driverLicence.licence_code = await ExecuteInsertAsync(
+            source,
+            BuildValues(driverLicence, source.Columns)
+        );
         return driverLicence;
     }
 
@@ -126,27 +142,31 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
     {
         ArgumentNullException.ThrowIfNull(driverLicence);
 
-        var existing = await FindByIdAsync(driverLicence.licence_code)
-            ?? throw new InvalidOperationException($"DriverLicence with licence_code {driverLicence.licence_code} not found");
+        var existing =
+            await FindByIdAsync(driverLicence.licence_code)
+            ?? throw new InvalidOperationException(
+                $"DriverLicence with licence_code {driverLicence.licence_code} not found"
+            );
         var now = DateTime.UtcNow;
         driverLicence.date_created = existing.Licence.date_created;
         driverLicence.created_by_user_code = existing.Licence.created_by_user_code;
         driverLicence.date_updated = now;
-        driverLicence.modified_by_user_code = currentUserId > 0
-            ? currentUserId
-            : existing.Licence.modified_by_user_code;
+        driverLicence.modified_by_user_code =
+            currentUserId > 0 ? currentUserId : existing.Licence.modified_by_user_code;
         driverLicence.is_deleted = existing.Licence.is_deleted;
 
         await ExecuteUpdateAsync(
             existing.Source,
             driverLicence.licence_code,
-            BuildValues(driverLicence, existing.Source.Columns, includeCreateAudit: false));
+            BuildValues(driverLicence, existing.Source.Columns, includeCreateAudit: false)
+        );
     }
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The delete statement uses the fixed driver licence table and the licence code is parameterized.")]
+        Justification = "The delete statement uses the fixed driver licence table and the licence code is parameterized."
+    )]
     public async Task DeleteAsync(short licenceCode, int currentUserId)
     {
         var existing = await FindByIdAsync(licenceCode);
@@ -169,14 +189,24 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
             if (existing.Value.Source.Columns.Contains("is_deleted"))
             {
                 var assignments = new List<string> { "[is_deleted] = @isDeleted" };
-                var values = new List<WriteValue> { new("is_deleted", "@isDeleted", DbType.Boolean, true) };
-                AddOptionalAuditValues(existing.Value.Source.Columns, assignments, values, currentUserId);
-                command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [licence_code] = @licenceCode";
+                var values = new List<WriteValue>
+                {
+                    new("is_deleted", "@isDeleted", DbType.Boolean, true),
+                };
+                AddOptionalAuditValues(
+                    existing.Value.Source.Columns,
+                    assignments,
+                    values,
+                    currentUserId
+                );
+                command.CommandText =
+                    $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [licence_code] = @licenceCode";
                 AddParameters(command, values);
             }
             else
             {
-                command.CommandText = $"DELETE FROM [dbo].[{TableName}] WHERE [licence_code] = @licenceCode";
+                command.CommandText =
+                    $"DELETE FROM [dbo].[{TableName}] WHERE [licence_code] = @licenceCode";
             }
 
             AddParameter(command, "@licenceCode", DbType.Int16, licenceCode);
@@ -191,14 +221,18 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
         }
     }
 
-    private async Task<(DriverLicence Licence, TableSource Source)?> FindByIdAsync(short licenceCode)
+    private async Task<(DriverLicence Licence, TableSource Source)?> FindByIdAsync(
+        short licenceCode
+    )
     {
         var source = await GetSourceAsync();
-        var result = (await QueryAsync(
-            source,
-            "[licence_code] = @licenceCode",
-            command => AddParameter(command, "@licenceCode", DbType.Int16, licenceCode)))
-            .SingleOrDefault();
+        var result = (
+            await QueryAsync(
+                source,
+                "[licence_code] = @licenceCode",
+                command => AddParameter(command, "@licenceCode", DbType.Int16, licenceCode)
+            )
+        ).SingleOrDefault();
 
         return result is null ? null : (result, source);
     }
@@ -241,7 +275,9 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
             var missing = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
             if (missing.Length > 0)
             {
-                throw new InvalidOperationException($"The driver licence table is missing required columns: {string.Join(", ", missing)}");
+                throw new InvalidOperationException(
+                    $"The driver licence table is missing required columns: {string.Join(", ", missing)}"
+                );
             }
 
             return new TableSource(columns);
@@ -258,20 +294,23 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and table name are composed only from fixed compatibility columns; predicates and values are parameterized.")]
+        Justification = "The SELECT list and table name are composed only from fixed compatibility columns; predicates and values are parameterized."
+    )]
     private async Task<List<DriverLicence>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null)
-        => await QueryAsync(await GetSourceAsync(), predicate, configure);
+        Action<DbCommand>? configure = null
+    ) => await QueryAsync(await GetSourceAsync(), predicate, configure);
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and table name are composed only from fixed compatibility columns; predicates and values are parameterized.")]
+        Justification = "The SELECT list and table name are composed only from fixed compatibility columns; predicates and values are parameterized."
+    )]
     private async Task<List<DriverLicence>> QueryAsync(
         TableSource source,
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -286,7 +325,9 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = RequiredColumns
                 .Select(column => $"[{column}] AS [{column}]")
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(source.Columns, column)))
+                .Concat(
+                    OptionalColumns.Select(column => GetOptionalProjection(source.Columns, column))
+                )
                 .ToArray();
             var conditions = new List<string> { GetNotDeletedFilter(source.Columns) };
             if (!string.IsNullOrWhiteSpace(predicate))
@@ -294,7 +335,8 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
                 conditions.Add(predicate);
             }
 
-            command.CommandText = $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [description], [licence_code]";
+            command.CommandText =
+                $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [description], [licence_code]";
             configure?.Invoke(command);
 
             var results = new List<DriverLicence>();
@@ -318,8 +360,12 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement uses the fixed driver licence table and parameterized values.")]
-    private async Task<short> ExecuteInsertAsync(TableSource source, IReadOnlyList<WriteValue> values)
+        Justification = "The INSERT statement uses the fixed driver licence table and parameterized values."
+    )]
+    private async Task<short> ExecuteInsertAsync(
+        TableSource source,
+        IReadOnlyList<WriteValue> values
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -332,7 +378,8 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[licence_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+            command.CommandText =
+                $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[licence_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
             AddParameters(command, values);
             return Convert.ToInt16(await command.ExecuteScalarAsync());
         }
@@ -348,8 +395,13 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement uses the fixed driver licence table and parameterized values.")]
-    private async Task ExecuteUpdateAsync(TableSource source, short licenceCode, IReadOnlyList<WriteValue> values)
+        Justification = "The UPDATE statement uses the fixed driver licence table and parameterized values."
+    )]
+    private async Task ExecuteUpdateAsync(
+        TableSource source,
+        short licenceCode,
+        IReadOnlyList<WriteValue> values
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -362,7 +414,8 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [licence_code] = @licenceCode";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [licence_code] = @licenceCode";
             AddParameters(command, values);
             AddParameter(command, "@licenceCode", DbType.Int16, licenceCode);
             await command.ExecuteNonQueryAsync();
@@ -379,19 +432,34 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
     private static List<WriteValue> BuildValues(
         DriverLicence driverLicence,
         IReadOnlySet<string> availableColumns,
-        bool includeCreateAudit = true)
+        bool includeCreateAudit = true
+    )
     {
         var values = new List<WriteValue>
         {
             new("description", "@description", DbType.String, driverLicence.description),
             new("date_updated", "@dateUpdated", DbType.DateTime2, driverLicence.date_updated),
-            new("modified_by_user_code", "@modifiedByUserCode", DbType.Int32, driverLicence.modified_by_user_code)
+            new(
+                "modified_by_user_code",
+                "@modifiedByUserCode",
+                DbType.Int32,
+                driverLicence.modified_by_user_code
+            ),
         };
 
         if (includeCreateAudit)
         {
-            values.Add(new("date_created", "@dateCreated", DbType.DateTime2, driverLicence.date_created));
-            values.Add(new("created_by_user_code", "@createdByUserCode", DbType.Int32, driverLicence.created_by_user_code));
+            values.Add(
+                new("date_created", "@dateCreated", DbType.DateTime2, driverLicence.date_created)
+            );
+            values.Add(
+                new(
+                    "created_by_user_code",
+                    "@createdByUserCode",
+                    DbType.Int32,
+                    driverLicence.created_by_user_code
+                )
+            );
             values.Add(new("is_deleted", "@isDeleted", DbType.Boolean, false));
         }
 
@@ -402,23 +470,33 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
         IReadOnlySet<string> availableColumns,
         ICollection<string> assignments,
         ICollection<WriteValue> values,
-        int currentUserId)
+        int currentUserId
+    )
     {
         if (availableColumns.Contains("date_updated"))
         {
             assignments.Add("[date_updated] = @dateUpdated");
-            values.Add(new WriteValue("date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow));
+            values.Add(
+                new WriteValue("date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow)
+            );
         }
 
         if (availableColumns.Contains("modified_by_user_code"))
         {
             assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-            values.Add(new WriteValue("modified_by_user_code", "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null));
+            values.Add(
+                new WriteValue(
+                    "modified_by_user_code",
+                    "@modifiedByUserCode",
+                    DbType.Int32,
+                    currentUserId > 0 ? currentUserId : null
+                )
+            );
         }
     }
 
-    private static DriverLicence MapDriverLicence(DbDataReader reader)
-        => new()
+    private static DriverLicence MapDriverLicence(DbDataReader reader) =>
+        new()
         {
             licence_code = ReadInt16(reader, "licence_code") ?? 0,
             description = ReadString(reader, "description"),
@@ -426,7 +504,7 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
             date_updated = ReadDateTime(reader, "date_updated"),
             created_by_user_code = ReadInt32(reader, "created_by_user_code"),
             modified_by_user_code = ReadInt32(reader, "modified_by_user_code"),
-            is_deleted = ReadBoolean(reader, "is_deleted") ?? false
+            is_deleted = ReadBoolean(reader, "is_deleted") ?? false,
         };
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
@@ -441,13 +519,13 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetNotDeletedFilter(IReadOnlySet<string> columns)
-        => columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
+    private static string GetNotDeletedFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
 
     private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)
     {
@@ -469,12 +547,14 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The helper is called with a fixed repository statement and the licence code is parameterized.")]
+        Justification = "The helper is called with a fixed repository statement and the licence code is parameterized."
+    )]
     private static async Task<int> CountAsync(
         DbConnection connection,
         string sql,
         short licenceCode,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -487,7 +567,8 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
         DbConnection connection,
         string schema,
         string table,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -502,21 +583,22 @@ public sealed class DriverLicenceRepository : IDriverLicenceRepository
         return Convert.ToInt32(await command.ExecuteScalarAsync()) > 0;
     }
 
-    private static string? ReadString(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToString(reader[column])?.TrimEnd();
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToString(reader[column])?.TrimEnd();
 
-    private static short? ReadInt16(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
+    private static short? ReadInt16(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
 
-    private static int? ReadInt32(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
+    private static int? ReadInt32(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
 
-    private static DateTime? ReadDateTime(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
+    private static DateTime? ReadDateTime(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
 
-    private static bool? ReadBoolean(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToBoolean(reader[column]);
+    private static bool? ReadBoolean(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToBoolean(reader[column]);
 
     private sealed record TableSource(HashSet<string> Columns);
+
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 }

@@ -51,7 +51,11 @@ export type ThirdPartyVehicle = {
   chassisNumber: string | null;
 };
 
-export type ThirdPartyClassRequirement = { classId: number; className: string | null; requiredCount: number | null };
+export type ThirdPartyClassRequirement = {
+  classId: number;
+  className: string | null;
+  requiredCount: number | null;
+};
 export type ThirdPartyAllocation = {
   allocationId: number;
   projectId: number;
@@ -103,10 +107,15 @@ export type ThirdPartyAllocationInput = {
   quantity?: number;
 };
 
-export type ThirdPartyApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type ThirdPartyApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class ThirdPartyApiError extends Error {
-  constructor(public readonly reason: ThirdPartyApiErrorReason, message: string, public readonly status?: number) {
+  constructor(
+    public readonly reason: ThirdPartyApiErrorReason,
+    message: string,
+    public readonly status?: number,
+  ) {
     super(message);
     this.name = "ThirdPartyApiError";
   }
@@ -144,7 +153,8 @@ function asNumber(value: unknown) {
 function asBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") return ["true", "1", "yes", "y"].includes(value.trim().toLowerCase());
+  if (typeof value === "string")
+    return ["true", "1", "yes", "y"].includes(value.trim().toLowerCase());
   return null;
 }
 
@@ -174,17 +184,32 @@ async function requestApi(path: string, init: RequestInit = {}) {
       },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) throw new ThirdPartyApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
-    if (response.status === 404) throw new ThirdPartyApiError("not-found", "The requested third-party record was not found.", response.status);
+    if (response.status === 401 || response.status === 403)
+      throw new ThirdPartyApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
+    if (response.status === 404)
+      throw new ThirdPartyApiError(
+        "not-found",
+        "The requested third-party record was not found.",
+        response.status,
+      );
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error", "title")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error", "title")) ?? message;
       } catch {
         // Preserve the status message when the API response is not JSON.
       }
-      throw new ThirdPartyApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new ThirdPartyApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -218,7 +243,9 @@ function mapSupplier(value: unknown): ThirdPartySupplier | null {
     email: asString(getValue(value, "email", "email_address")),
     contactPerson: asString(getValue(value, "contact_person", "contactPerson")),
     notes: asString(getValue(value, "notes", "Note", "note")),
-    serviceCode: asString(getValue(value, "service_code", "serviceCode", "supplier_type", "type_code")),
+    serviceCode: asString(
+      getValue(value, "service_code", "serviceCode", "supplier_type", "type_code"),
+    ),
     active: asBoolean(getValue(value, "active", "is_active", "supplierActive")),
   };
 }
@@ -229,12 +256,16 @@ function mapProject(value: unknown): ThirdPartyProject | null {
   if (projectId === null) return null;
   return {
     projectId,
-    departmentCode: asNumber(getValue(value, "department_code", "departmentCode", "DepartmentCode")),
+    departmentCode: asNumber(
+      getValue(value, "department_code", "departmentCode", "DepartmentCode"),
+    ),
     siteCode: asNumber(getValue(value, "site_code", "siteCode", "SiteCode")),
     description: asString(getValue(value, "description", "Project_Description")),
     startDate: asString(getValue(value, "start_date", "Project_Start_Date")),
     endDate: asString(getValue(value, "end_date", "Project_End_Date")),
-    responsiblePerson: asString(getValue(value, "responsible_person", "Project_Responsible_Person")),
+    responsiblePerson: asString(
+      getValue(value, "responsible_person", "Project_Responsible_Person"),
+    ),
     responsibleAddress: asString(getValue(value, "rp_physical_address", "RP_Physical_Address")),
     responsiblePostalAddress: asString(getValue(value, "rp_postal_address", "RP_Postal_Address")),
     responsibleTel: asString(getValue(value, "rp_tel", "RP_TelNumber")),
@@ -249,13 +280,27 @@ function mapProject(value: unknown): ThirdPartyProject | null {
 
 function mapVehicle(value: unknown): ThirdPartyVehicle | null {
   if (!isRecord(value)) return null;
-  const vehicleId = asNumber(getValue(value, "vehicle_id", "vehicleId", "Third_Party_Vehicle_ID", "vmf_code"));
+  const vehicleId = asNumber(
+    getValue(value, "vehicle_id", "vehicleId", "Third_Party_Vehicle_ID", "vmf_code"),
+  );
   if (vehicleId === null) return null;
   return {
     vehicleId,
-    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber", "RegistrationNumber")),
-    modelDescription: asString(getValue(value, "model_description", "modelDescription", "model_desc", "Third_Party_Model_ID")),
-    modelYear: asString(getValue(value, "model_year", "modelYear", "ModelYear", "year_manufactured")),
+    registrationNumber: asString(
+      getValue(value, "registration_number", "registrationNumber", "RegistrationNumber"),
+    ),
+    modelDescription: asString(
+      getValue(
+        value,
+        "model_description",
+        "modelDescription",
+        "model_desc",
+        "Third_Party_Model_ID",
+      ),
+    ),
+    modelYear: asString(
+      getValue(value, "model_year", "modelYear", "ModelYear", "year_manufactured"),
+    ),
     chassisNumber: asString(getValue(value, "chassis_number", "chassisNumber", "ChassisNumber")),
   };
 }
@@ -264,12 +309,18 @@ function mapRequirement(value: unknown): ThirdPartyClassRequirement | null {
   if (!isRecord(value)) return null;
   const classId = asNumber(getValue(value, "class_id", "classId"));
   if (classId === null) return null;
-  return { classId, className: asString(getValue(value, "class_name", "className")), requiredCount: asNumber(getValue(value, "required_count", "requiredCount")) };
+  return {
+    classId,
+    className: asString(getValue(value, "class_name", "className")),
+    requiredCount: asNumber(getValue(value, "required_count", "requiredCount")),
+  };
 }
 
 function mapAllocation(value: unknown): ThirdPartyAllocation | null {
   if (!isRecord(value)) return null;
-  const allocationId = asNumber(getValue(value, "allocation_id", "allocationId", "Third_Party_Vehicle_AllocationsID"));
+  const allocationId = asNumber(
+    getValue(value, "allocation_id", "allocationId", "Third_Party_Vehicle_AllocationsID"),
+  );
   const projectId = asNumber(getValue(value, "project_id", "projectId", "Third_Party_ProjectID"));
   if (allocationId === null || projectId === null) return null;
   return {
@@ -283,20 +334,33 @@ function mapAllocation(value: unknown): ThirdPartyAllocation | null {
 }
 
 export async function getThirdPartySuppliers() {
-  return collection(await readJson(await requestApi("api/thirdparty/suppliers"))).map(mapSupplier).filter((item): item is ThirdPartySupplier => item !== null);
+  return collection(await readJson(await requestApi("api/thirdparty/suppliers")))
+    .map(mapSupplier)
+    .filter((item): item is ThirdPartySupplier => item !== null);
 }
 
 export async function getThirdPartySupplier(supplierId: number) {
-  return mapSupplier(await readJson(await requestApi(`api/thirdparty/suppliers/${encodeURIComponent(supplierId)}`)));
+  return mapSupplier(
+    await readJson(await requestApi(`api/thirdparty/suppliers/${encodeURIComponent(supplierId)}`)),
+  );
 }
 
-export async function saveThirdPartySupplier(supplierId: number | null, input: ThirdPartySupplierInput) {
-  const response = await requestApi(supplierId === null ? "api/thirdparty/suppliers" : `api/thirdparty/suppliers/${encodeURIComponent(supplierId)}`, {
-    method: supplierId === null ? "POST" : "PUT",
-    body: JSON.stringify(input),
-  });
+export async function saveThirdPartySupplier(
+  supplierId: number | null,
+  input: ThirdPartySupplierInput,
+) {
+  const response = await requestApi(
+    supplierId === null
+      ? "api/thirdparty/suppliers"
+      : `api/thirdparty/suppliers/${encodeURIComponent(supplierId)}`,
+    {
+      method: supplierId === null ? "POST" : "PUT",
+      body: JSON.stringify(input),
+    },
+  );
   const record = mapSupplier(await readJson(response));
-  if (!record) throw new ThirdPartyApiError("invalid-response", "The FIS API returned an invalid supplier.");
+  if (!record)
+    throw new ThirdPartyApiError("invalid-response", "The FIS API returned an invalid supplier.");
   return record;
 }
 
@@ -312,21 +376,37 @@ export async function getThirdPartyServices() {
 }
 
 export async function getThirdPartyProjects(departmentCode?: number) {
-  const path = departmentCode === undefined ? "api/thirdparty/projects" : `api/thirdparty/projects/department/${encodeURIComponent(departmentCode)}`;
-  return collection(await readJson(await requestApi(path))).map(mapProject).filter((item): item is ThirdPartyProject => item !== null);
+  const path =
+    departmentCode === undefined
+      ? "api/thirdparty/projects"
+      : `api/thirdparty/projects/department/${encodeURIComponent(departmentCode)}`;
+  return collection(await readJson(await requestApi(path)))
+    .map(mapProject)
+    .filter((item): item is ThirdPartyProject => item !== null);
 }
 
 export async function getThirdPartyProject(projectId: number) {
-  return mapProject(await readJson(await requestApi(`api/thirdparty/projects/${encodeURIComponent(projectId)}`)));
+  return mapProject(
+    await readJson(await requestApi(`api/thirdparty/projects/${encodeURIComponent(projectId)}`)),
+  );
 }
 
-export async function saveThirdPartyProject(projectId: number | null, input: ThirdPartyProjectInput) {
-  const response = await requestApi(projectId === null ? "api/thirdparty/projects" : `api/thirdparty/projects/${encodeURIComponent(projectId)}`, {
-    method: projectId === null ? "POST" : "PUT",
-    body: JSON.stringify(input),
-  });
+export async function saveThirdPartyProject(
+  projectId: number | null,
+  input: ThirdPartyProjectInput,
+) {
+  const response = await requestApi(
+    projectId === null
+      ? "api/thirdparty/projects"
+      : `api/thirdparty/projects/${encodeURIComponent(projectId)}`,
+    {
+      method: projectId === null ? "POST" : "PUT",
+      body: JSON.stringify(input),
+    },
+  );
   const record = mapProject(await readJson(response));
-  if (!record) throw new ThirdPartyApiError("invalid-response", "The FIS API returned an invalid project.");
+  if (!record)
+    throw new ThirdPartyApiError("invalid-response", "The FIS API returned an invalid project.");
   return record;
 }
 
@@ -335,39 +415,74 @@ export async function getThirdPartyDepartments() {
     .map((value): ThirdPartyDepartment | null => {
       if (!isRecord(value)) return null;
       const departmentCode = asNumber(getValue(value, "department_code", "departmentCode"));
-      return departmentCode === null ? null : { departmentCode, description: asString(getValue(value, "description", "department_description")) };
+      return departmentCode === null
+        ? null
+        : {
+            departmentCode,
+            description: asString(getValue(value, "description", "department_description")),
+          };
     })
     .filter((item): item is ThirdPartyDepartment => item !== null);
 }
 
 export async function getThirdPartySites(departmentCode: number) {
-  return collection(await readJson(await requestApi(`api/thirdparty/sites/${encodeURIComponent(departmentCode)}`)))
+  return collection(
+    await readJson(await requestApi(`api/thirdparty/sites/${encodeURIComponent(departmentCode)}`)),
+  )
     .map((value): ThirdPartySite | null => {
       if (!isRecord(value)) return null;
       const siteCode = asNumber(getValue(value, "site_code", "Site_code", "siteCode"));
-      return siteCode === null ? null : { siteCode, description: asString(getValue(value, "description", "Description")) };
+      return siteCode === null
+        ? null
+        : { siteCode, description: asString(getValue(value, "description", "Description")) };
     })
     .filter((item): item is ThirdPartySite => item !== null);
 }
 
 export async function getThirdPartyVehicles(supplierId: number) {
-  return collection(await readJson(await requestApi(`api/thirdparty/vehicles/${encodeURIComponent(supplierId)}`))).map(mapVehicle).filter((item): item is ThirdPartyVehicle => item !== null);
+  return collection(
+    await readJson(await requestApi(`api/thirdparty/vehicles/${encodeURIComponent(supplierId)}`)),
+  )
+    .map(mapVehicle)
+    .filter((item): item is ThirdPartyVehicle => item !== null);
 }
 
 export async function getThirdPartyRequirements(projectId: number) {
-  return collection(await readJson(await requestApi(`api/thirdparty/projects/${encodeURIComponent(projectId)}/requirements`))).map(mapRequirement).filter((item): item is ThirdPartyClassRequirement => item !== null);
+  return collection(
+    await readJson(
+      await requestApi(`api/thirdparty/projects/${encodeURIComponent(projectId)}/requirements`),
+    ),
+  )
+    .map(mapRequirement)
+    .filter((item): item is ThirdPartyClassRequirement => item !== null);
 }
 
 export async function getThirdPartyAllocations(projectId: number) {
-  return collection(await readJson(await requestApi(`api/thirdparty/allocations/project/${encodeURIComponent(projectId)}`))).map(mapAllocation).filter((item): item is ThirdPartyAllocation => item !== null);
+  return collection(
+    await readJson(
+      await requestApi(`api/thirdparty/allocations/project/${encodeURIComponent(projectId)}`),
+    ),
+  )
+    .map(mapAllocation)
+    .filter((item): item is ThirdPartyAllocation => item !== null);
 }
 
 export async function createThirdPartyAllocation(input: ThirdPartyAllocationInput) {
-  const record = mapAllocation(await readJson(await requestApi("api/thirdparty/allocations", { method: "POST", body: JSON.stringify(input) })));
-  if (!record) throw new ThirdPartyApiError("invalid-response", "The FIS API returned an invalid allocation.");
+  const record = mapAllocation(
+    await readJson(
+      await requestApi("api/thirdparty/allocations", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    ),
+  );
+  if (!record)
+    throw new ThirdPartyApiError("invalid-response", "The FIS API returned an invalid allocation.");
   return record;
 }
 
 export async function deleteThirdPartyAllocation(allocationId: number) {
-  await requestApi(`api/thirdparty/allocations/${encodeURIComponent(allocationId)}`, { method: "DELETE" });
+  await requestApi(`api/thirdparty/allocations/${encodeURIComponent(allocationId)}`, {
+    method: "DELETE",
+  });
 }

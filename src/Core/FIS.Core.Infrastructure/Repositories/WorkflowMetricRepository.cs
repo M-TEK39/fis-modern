@@ -16,40 +16,45 @@ public class WorkflowMetricRepository : IWorkflowMetricRepository
 
     public async Task<WorkflowMetric?> GetByIdAsync(int metricId)
     {
-        return await _context.WorkflowMetrics
-            .Include(m => m.Workflow)
+        return await _context
+            .WorkflowMetrics.Include(m => m.Workflow)
             .Include(m => m.BottleneckStep)
             .FirstOrDefaultAsync(m => m.MetricID == metricId && !m.is_deleted);
     }
 
     public async Task<IEnumerable<WorkflowMetric>> GetAllAsync()
     {
-        return await _context.WorkflowMetrics
-            .Where(m => !m.is_deleted)
+        return await _context
+            .WorkflowMetrics.Where(m => !m.is_deleted)
             .OrderByDescending(m => m.MetricDate)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowMetric>> GetByWorkflowIdAsync(int workflowId)
     {
-        return await _context.WorkflowMetrics
-            .Where(m => m.WorkflowID == workflowId && !m.is_deleted)
+        return await _context
+            .WorkflowMetrics.Where(m => m.WorkflowID == workflowId && !m.is_deleted)
             .OrderByDescending(m => m.MetricDate)
             .ToListAsync();
     }
 
-    public async Task<IEnumerable<WorkflowMetric>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)
+    public async Task<IEnumerable<WorkflowMetric>> GetByDateRangeAsync(
+        DateTime startDate,
+        DateTime endDate
+    )
     {
-        return await _context.WorkflowMetrics
-            .Where(m => m.MetricDate >= startDate && m.MetricDate <= endDate && !m.is_deleted)
+        return await _context
+            .WorkflowMetrics.Where(m =>
+                m.MetricDate >= startDate && m.MetricDate <= endDate && !m.is_deleted
+            )
             .OrderBy(m => m.MetricDate)
             .ToListAsync();
     }
 
     public async Task<WorkflowMetric?> GetLatestMetricAsync(int workflowId)
     {
-        return await _context.WorkflowMetrics
-            .Where(m => m.WorkflowID == workflowId && !m.is_deleted)
+        return await _context
+            .WorkflowMetrics.Where(m => m.WorkflowID == workflowId && !m.is_deleted)
             .OrderByDescending(m => m.MetricDate)
             .FirstOrDefaultAsync();
     }
@@ -68,8 +73,9 @@ public class WorkflowMetricRepository : IWorkflowMetricRepository
 
     public async Task UpdateAsync(WorkflowMetric metric, int currentUserId)
     {
-        var existing = await _context.WorkflowMetrics
-            .FirstOrDefaultAsync(m => m.MetricID == metric.MetricID);
+        var existing = await _context.WorkflowMetrics.FirstOrDefaultAsync(m =>
+            m.MetricID == metric.MetricID
+        );
 
         if (existing == null)
             throw new InvalidOperationException($"WorkflowMetric {metric.MetricID} not found");

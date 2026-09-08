@@ -60,7 +60,11 @@ function MenuItem({ href, children }: Readonly<{ href: string; children: React.R
   );
 }
 
-export default function VehicleMasterClient({ pageData, routePath, menu }: VehicleMasterClientProps) {
+export default function VehicleMasterClient({
+  pageData,
+  routePath,
+  menu,
+}: VehicleMasterClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<OverviewFilter>("");
@@ -110,9 +114,13 @@ export default function VehicleMasterClient({ pageData, routePath, menu }: Vehic
         </MenuTile>
 
         <MenuTile title="Vehicle Master Maintenance">
-          {menu.canCaptureInception ? <MenuItem href="/vehicles/create">1) Add New Vehicle</MenuItem> : null}
+          {menu.canCaptureInception ? (
+            <MenuItem href="/vehicles/create">1) Add New Vehicle</MenuItem>
+          ) : null}
           {menu.canAuthorizeInception ? (
-            <MenuItem href="/vehicles/authorize">1) Authorize Captured Vehicle Information</MenuItem>
+            <MenuItem href="/vehicles/authorize">
+              1) Authorize Captured Vehicle Information
+            </MenuItem>
           ) : null}
           {menu.canMaintainVehicleMaster ? (
             <>
@@ -134,7 +142,9 @@ export default function VehicleMasterClient({ pageData, routePath, menu }: Vehic
           <>
             <MenuTile title="Stolen & Recovered Vehicles">
               <MenuItem href="/vehicles/recovered">1) Update Recovered GG</MenuItem>
-              <MenuItem href="/vehicles/renumbered-report">2) Report All Renumbered vehicles</MenuItem>
+              <MenuItem href="/vehicles/renumbered-report">
+                2) Report All Renumbered vehicles
+              </MenuItem>
             </MenuTile>
             <MenuTile title="Demo Vehicles">
               <MenuItem href="/vehicles/demo/add">1) Add a Demo Vehicle</MenuItem>
@@ -190,7 +200,12 @@ export default function VehicleMasterClient({ pageData, routePath, menu }: Vehic
             onChange={(event) => setSearchTerm(event.target.value)}
           />
           {searchTerm ? (
-            <button className="vehicle-search-clear" type="button" onClick={() => setSearchTerm("")} aria-label="Clear search">
+            <button
+              className="vehicle-search-clear"
+              type="button"
+              onClick={() => setSearchTerm("")}
+              aria-label="Clear search"
+            >
               ×
             </button>
           ) : null}
@@ -232,7 +247,9 @@ export default function VehicleMasterClient({ pageData, routePath, menu }: Vehic
                         <td>{valueOrDash(vehicle.modelName)}</td>
                         <td>{valueOrDash(vehicle.statusDescription)}</td>
                         <td>
-                          <span className={`vehicle-badge ${contract.badgeClass}`}>{contract.label}</span>
+                          <span className={`vehicle-badge ${contract.badgeClass}`}>
+                            {contract.label}
+                          </span>
                         </td>
                         <td>{contract.targetReturnDate || "-"}</td>
                       </tr>
@@ -244,7 +261,10 @@ export default function VehicleMasterClient({ pageData, routePath, menu }: Vehic
 
             <nav className="vehicle-pagination" aria-label="Vehicle snapshot pagination">
               {pageData.page <= 1 ? (
-                <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
                   Previous
                 </span>
               ) : (
@@ -256,7 +276,10 @@ export default function VehicleMasterClient({ pageData, routePath, menu }: Vehic
                 Page {pageData.page} of {pageData.totalPages}
               </span>
               {pageData.page >= pageData.totalPages ? (
-                <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
                   Next
                 </span>
               ) : (

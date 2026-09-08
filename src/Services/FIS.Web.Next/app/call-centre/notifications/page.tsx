@@ -2,7 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
-import { deleteNotifyListAction, saveNotifyListAction } from "@/app/call-centre/notifications/actions";
+import {
+  deleteNotifyListAction,
+  saveNotifyListAction,
+} from "@/app/call-centre/notifications/actions";
 import SessionRecovery from "@/app/home/session-recovery";
 import {
   getNotifyList,
@@ -29,10 +32,17 @@ function getPositiveInt(value: string | undefined) {
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
-function buildHref(searchTerm: string, page?: number, mode?: "add" | "edit" | "delete", code?: number) {
+function buildHref(
+  searchTerm: string,
+  page?: number,
+  mode?: "add" | "edit" | "delete",
+  code?: number,
+) {
   const params = new URLSearchParams();
   if (searchTerm) {
     params.set("q", searchTerm);
@@ -57,7 +67,9 @@ function buildHref(searchTerm: string, page?: number, mode?: "add" | "edit" | "d
 function AccessRestricted() {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">Access restricted</p>
       <h2>You do not have permission to maintain notification sections.</h2>
       <p className="muted-copy">This page requires the Call Centre role.</p>
@@ -68,25 +80,40 @@ function AccessRestricted() {
 function ApiUnavailable() {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Notification sections could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
-        <Link className="button button-primary" href="/call-centre/notifications">Try again</Link>
-        <Link className="button button-secondary" href="/login">Sign in</Link>
+        <Link className="button button-primary" href="/call-centre/notifications">
+          Try again
+        </Link>
+        <Link className="button button-secondary" href="/login">
+          Sign in
+        </Link>
       </div>
     </section>
   );
 }
 
-function NotifyListEditor({ item, searchTerm }: Readonly<{ item: NotifyListRecord | null; searchTerm: string }>) {
+function NotifyListEditor({
+  item,
+  searchTerm,
+}: Readonly<{ item: NotifyListRecord | null; searchTerm: string }>) {
   return (
     <section className="vehicle-form-section" aria-labelledby="notification-editor-title">
       <div className="vehicle-form-section-header">
         <div>
-          <p className="eyebrow">{item ? "Existing notification section" : "New notification section"}</p>
-          <h2 id="notification-editor-title">{item ? "Edit Notification Section" : "Add Notification Section"}</h2>
+          <p className="eyebrow">
+            {item ? "Existing notification section" : "New notification section"}
+          </p>
+          <h2 id="notification-editor-title">
+            {item ? "Edit Notification Section" : "Add Notification Section"}
+          </h2>
         </div>
       </div>
       <form action={saveNotifyListAction} className="form-stack">
@@ -113,15 +140,22 @@ function NotifyListEditor({ item, searchTerm }: Readonly<{ item: NotifyListRecor
           />
         </div>
         <div className="button-row">
-          <button className="button button-primary" type="submit">{item ? "Update" : "Add"}</button>
-          <Link className="button button-secondary" href={buildHref(searchTerm)}>Cancel</Link>
+          <button className="button button-primary" type="submit">
+            {item ? "Update" : "Add"}
+          </button>
+          <Link className="button button-secondary" href={buildHref(searchTerm)}>
+            Cancel
+          </Link>
         </div>
       </form>
     </section>
   );
 }
 
-function DeleteConfirmation({ item, searchTerm }: Readonly<{ item: NotifyListRecord; searchTerm: string }>) {
+function DeleteConfirmation({
+  item,
+  searchTerm,
+}: Readonly<{ item: NotifyListRecord; searchTerm: string }>) {
   return (
     <section className="vehicle-form-section" aria-labelledby="notification-delete-title">
       <div className="vehicle-form-section-header">
@@ -130,20 +164,31 @@ function DeleteConfirmation({ item, searchTerm }: Readonly<{ item: NotifyListRec
           <h2 id="notification-delete-title">Delete Notification Section?</h2>
         </div>
       </div>
-      <p>Delete <strong>{item.description ?? "this notification section"}</strong>?</p>
+      <p>
+        Delete <strong>{item.description ?? "this notification section"}</strong>?
+      </p>
       <form action={deleteNotifyListAction}>
         <input name="code" type="hidden" value={item.code} />
         <input name="search" type="hidden" value={searchTerm} />
         <div className="button-row">
-          <button className="button button-danger" type="submit">Delete</button>
-          <Link className="button button-secondary" href={buildHref(searchTerm)}>Cancel</Link>
+          <button className="button button-danger" type="submit">
+            Delete
+          </button>
+          <Link className="button button-secondary" href={buildHref(searchTerm)}>
+            Cancel
+          </Link>
         </div>
       </form>
     </section>
   );
 }
 
-function NotifyListTable({ items, searchTerm, page, pageCount }: Readonly<{
+function NotifyListTable({
+  items,
+  searchTerm,
+  page,
+  pageCount,
+}: Readonly<{
   items: NotifyListRecord[];
   searchTerm: string;
   page: number;
@@ -152,8 +197,14 @@ function NotifyListTable({ items, searchTerm, page, pageCount }: Readonly<{
   if (items.length === 0) {
     return (
       <div className="vehicle-empty-state">
-        <p id="notification-list-title" className="eyebrow">No notification sections found</p>
-        <p>{searchTerm ? `No records matched “${searchTerm}”.` : "No notification sections are available."}</p>
+        <p id="notification-list-title" className="eyebrow">
+          No notification sections found
+        </p>
+        <p>
+          {searchTerm
+            ? `No records matched “${searchTerm}”.`
+            : "No notification sections are available."}
+        </p>
       </div>
     );
   }
@@ -163,7 +214,9 @@ function NotifyListTable({ items, searchTerm, page, pageCount }: Readonly<{
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">Notification directory</p>
-          <h2 id="notification-list-title">{items.length === 1 ? "1 record" : `${items.length} records`}</h2>
+          <h2 id="notification-list-title">
+            {items.length === 1 ? "1 record" : `${items.length} records`}
+          </h2>
         </div>
       </div>
       <div className="vehicle-table-wrapper">
@@ -183,10 +236,16 @@ function NotifyListTable({ items, searchTerm, page, pageCount }: Readonly<{
                 <td>{item.email ?? "-"}</td>
                 <td>
                   <div className="button-row">
-                    <Link className="button button-secondary button-small" href={buildHref(searchTerm, page, "edit", item.code)}>
+                    <Link
+                      className="button button-secondary button-small"
+                      href={buildHref(searchTerm, page, "edit", item.code)}
+                    >
                       Edit
                     </Link>
-                    <Link className="button button-danger button-small" href={buildHref(searchTerm, page, "delete", item.code)}>
+                    <Link
+                      className="button button-danger button-small"
+                      href={buildHref(searchTerm, page, "delete", item.code)}
+                    >
                       Delete
                     </Link>
                   </div>
@@ -199,15 +258,31 @@ function NotifyListTable({ items, searchTerm, page, pageCount }: Readonly<{
       {pageCount > 1 ? (
         <nav className="vehicle-pagination" aria-label="Notification section pages">
           {page > 1 ? (
-            <Link className="vehicle-pagination-button" href={buildHref(searchTerm, page - 1)}>Previous</Link>
+            <Link className="vehicle-pagination-button" href={buildHref(searchTerm, page - 1)}>
+              Previous
+            </Link>
           ) : (
-            <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">Previous</span>
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Previous
+            </span>
           )}
-          <span className="vehicle-pagination-meta">Page {page} of {pageCount}</span>
+          <span className="vehicle-pagination-meta">
+            Page {page} of {pageCount}
+          </span>
           {page < pageCount ? (
-            <Link className="vehicle-pagination-button" href={buildHref(searchTerm, page + 1)}>Next</Link>
+            <Link className="vehicle-pagination-button" href={buildHref(searchTerm, page + 1)}>
+              Next
+            </Link>
           ) : (
-            <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">Next</span>
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Next
+            </span>
           )}
         </nav>
       ) : null}
@@ -224,15 +299,27 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
   }
 
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/call-centre/notifications" /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath="/call-centre/notifications" />
+      </main>
+    );
   }
 
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable />
+      </main>
+    );
   }
 
   if (!hasRole(session.roles, CALL_CENTRE_ROLE)) {
-    return <main className="page-shell vehicle-page-shell"><AccessRestricted /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <AccessRestricted />
+      </main>
+    );
   }
 
   const query = await searchParams;
@@ -253,11 +340,22 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
     selectedItem = loadedSelectedItem;
   } catch (error) {
     if (error instanceof NotifyListApiError && error.reason === "unauthorized") {
-      return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/call-centre/notifications" /></main>;
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <SessionRecovery returnPath="/call-centre/notifications" />
+        </main>
+      );
     }
 
-    console.error("FIS notification list request failed", error instanceof Error ? error.message : "unknown error");
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable /></main>;
+    console.error(
+      "FIS notification list request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable />
+      </main>
+    );
   }
 
   const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
@@ -281,15 +379,35 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
             <p>Maintain the notification sections used by call centre communications.</p>
           </div>
           <div className="button-row">
-            <Link className="button button-secondary" href="/call-centre">Call Centre Menu</Link>
-            <Link className="button button-primary" href={buildHref(searchTerm, page, "add")}>Add Section</Link>
+            <Link className="button button-secondary" href="/call-centre">
+              Call Centre Menu
+            </Link>
+            <Link className="button button-primary" href={buildHref(searchTerm, page, "add")}>
+              Add Section
+            </Link>
           </div>
         </header>
 
-        {saved ? <div className="notice notice-success" role="status">Notification section saved successfully.</div> : null}
-        {updated ? <div className="notice notice-success" role="status">Notification section updated successfully.</div> : null}
-        {deleted ? <div className="notice notice-success" role="status">Notification section deleted successfully.</div> : null}
-        {errorMessage ? <div className="notice notice-error" role="alert">{errorMessage}</div> : null}
+        {saved ? (
+          <div className="notice notice-success" role="status">
+            Notification section saved successfully.
+          </div>
+        ) : null}
+        {updated ? (
+          <div className="notice notice-success" role="status">
+            Notification section updated successfully.
+          </div>
+        ) : null}
+        {deleted ? (
+          <div className="notice notice-success" role="status">
+            Notification section deleted successfully.
+          </div>
+        ) : null}
+        {errorMessage ? (
+          <div className="notice notice-error" role="alert">
+            {errorMessage}
+          </div>
+        ) : null}
 
         <form action="/call-centre/notifications" className="vehicle-create-form" method="get">
           <div className="field">
@@ -297,20 +415,37 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
             <input id="notification-search" name="q" defaultValue={searchTerm} maxLength={240} />
           </div>
           <div className="button-row">
-            <button className="button button-primary" type="submit">Submit</button>
-            {searchTerm ? <Link className="button button-secondary" href="/call-centre/notifications">Clear</Link> : null}
+            <button className="button button-primary" type="submit">
+              Submit
+            </button>
+            {searchTerm ? (
+              <Link className="button button-secondary" href="/call-centre/notifications">
+                Clear
+              </Link>
+            ) : null}
           </div>
         </form>
 
         {isAdd ? <NotifyListEditor item={null} searchTerm={searchTerm} /> : null}
-        {modeIsEdit && selectedItem ? <NotifyListEditor item={selectedItem} searchTerm={searchTerm} /> : null}
-        {modeIsDelete && selectedItem ? <DeleteConfirmation item={selectedItem} searchTerm={searchTerm} /> : null}
+        {modeIsEdit && selectedItem ? (
+          <NotifyListEditor item={selectedItem} searchTerm={searchTerm} />
+        ) : null}
+        {modeIsDelete && selectedItem ? (
+          <DeleteConfirmation item={selectedItem} searchTerm={searchTerm} />
+        ) : null}
         {selectedMissing ? (
-          <div className="notice notice-error" role="alert">The requested notification section was not found.</div>
+          <div className="notice notice-error" role="alert">
+            The requested notification section was not found.
+          </div>
         ) : null}
 
         <section className="vehicle-form-section" aria-labelledby="notification-list-title">
-          <NotifyListTable items={pageItems} searchTerm={searchTerm} page={page} pageCount={pageCount} />
+          <NotifyListTable
+            items={pageItems}
+            searchTerm={searchTerm}
+            page={page}
+            pageCount={pageCount}
+          />
         </section>
       </section>
     </main>

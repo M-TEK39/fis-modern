@@ -16,7 +16,8 @@ public class ThirdPartyAllocationRepository : IThirdPartyAllocationRepository
 
     public async Task<ThirdPartyAllocation?> GetByIdAsync(int allocationId)
     {
-        return await _context.Set<ThirdPartyAllocation>()
+        return await _context
+            .Set<ThirdPartyAllocation>()
             .Include(a => a.Project)
             .Include(a => a.Supplier)
             .Include(a => a.Vehicle)
@@ -25,7 +26,8 @@ public class ThirdPartyAllocationRepository : IThirdPartyAllocationRepository
 
     public async Task<IEnumerable<ThirdPartyAllocation>> GetByProjectAsync(int projectId)
     {
-        return await _context.Set<ThirdPartyAllocation>()
+        return await _context
+            .Set<ThirdPartyAllocation>()
             .Include(a => a.Supplier)
             .Include(a => a.Vehicle)
             .Where(a => a.project_id == projectId && !a.is_deleted)
@@ -33,7 +35,10 @@ public class ThirdPartyAllocationRepository : IThirdPartyAllocationRepository
             .ToListAsync();
     }
 
-    public async Task<ThirdPartyAllocation> CreateAsync(ThirdPartyAllocation allocation, int currentUserId)
+    public async Task<ThirdPartyAllocation> CreateAsync(
+        ThirdPartyAllocation allocation,
+        int currentUserId
+    )
     {
         allocation.date_created = DateTime.UtcNow;
         allocation.created_by_user_code = currentUserId;
@@ -46,8 +51,10 @@ public class ThirdPartyAllocationRepository : IThirdPartyAllocationRepository
 
     public async Task DeleteAsync(int allocationId, int currentUserId)
     {
-        var allocation = await _context.Set<ThirdPartyAllocation>()
-            .FirstOrDefaultAsync(a => a.allocation_id == allocationId)
+        var allocation =
+            await _context
+                .Set<ThirdPartyAllocation>()
+                .FirstOrDefaultAsync(a => a.allocation_id == allocationId)
             ?? throw new KeyNotFoundException($"Allocation {allocationId} not found");
 
         // Soft delete

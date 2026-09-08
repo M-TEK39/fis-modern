@@ -107,7 +107,8 @@ function mapBooking(value: unknown): BookingRecord | null {
     endDate: asString(getValue(value, "end_date", "endDate", "EndDate")),
     classCode: asNumber(getValue(value, "class_code", "classCode", "ClassCode")) ?? 0,
     userId: asNumber(getValue(value, "user_id", "userId", "UserId")) ?? 0,
-    bookingDate: asString(getValue(value, "booking_date", "bookingDate", "BookingDate")) ?? startDate,
+    bookingDate:
+      asString(getValue(value, "booking_date", "bookingDate", "BookingDate")) ?? startDate,
     telephone: asString(getValue(value, "telephone", "Telephone")),
     collected: asNumber(getValue(value, "collected", "Collected")),
     locationCode: asNumber(getValue(value, "location_code", "locationCode", "LocationCode")) ?? 0,
@@ -116,8 +117,12 @@ function mapBooking(value: unknown): BookingRecord | null {
     notes: asString(getValue(value, "notes", "Notes")),
     dateCreated: asString(getValue(value, "date_created", "dateCreated", "DateCreated")),
     dateUpdated: asString(getValue(value, "date_updated", "dateUpdated", "DateUpdated")),
-    createdByUserCode: asNumber(getValue(value, "created_by_user_code", "createdByUserCode", "CreatedByUserCode")),
-    modifiedByUserCode: asNumber(getValue(value, "modified_by_user_code", "modifiedByUserCode", "ModifiedByUserCode")),
+    createdByUserCode: asNumber(
+      getValue(value, "created_by_user_code", "createdByUserCode", "CreatedByUserCode"),
+    ),
+    modifiedByUserCode: asNumber(
+      getValue(value, "modified_by_user_code", "modifiedByUserCode", "ModifiedByUserCode"),
+    ),
     isDeleted: asBoolean(getValue(value, "is_deleted", "isDeleted", "IsDeleted")),
   };
 }
@@ -178,9 +183,14 @@ async function readJson(response: Response) {
 
 export async function getBooking(bookingId: number) {
   try {
-    const booking = mapBooking(await readJson(await requestApi(`api/Booking/${encodeURIComponent(bookingId)}`)));
+    const booking = mapBooking(
+      await readJson(await requestApi(`api/Booking/${encodeURIComponent(bookingId)}`)),
+    );
     if (!booking) {
-      throw new BookingApiError("invalid-response", "The FIS API returned an invalid booking record.");
+      throw new BookingApiError(
+        "invalid-response",
+        "The FIS API returned an invalid booking record.",
+      );
     }
 
     return booking;
@@ -191,24 +201,38 @@ export async function getBooking(bookingId: number) {
 }
 
 export async function createBooking(request: BookingRequest) {
-  const booking = mapBooking(await readJson(await requestApi("api/Booking", {
-    method: "POST",
-    body: JSON.stringify(request),
-  })));
+  const booking = mapBooking(
+    await readJson(
+      await requestApi("api/Booking", {
+        method: "POST",
+        body: JSON.stringify(request),
+      }),
+    ),
+  );
   if (!booking) {
-    throw new BookingApiError("invalid-response", "The FIS API returned an invalid created booking record.");
+    throw new BookingApiError(
+      "invalid-response",
+      "The FIS API returned an invalid created booking record.",
+    );
   }
 
   return booking;
 }
 
 export async function updateBooking(bookingId: number, request: BookingRequest) {
-  const booking = mapBooking(await readJson(await requestApi(`api/Booking/${encodeURIComponent(bookingId)}`, {
-    method: "PUT",
-    body: JSON.stringify({ ...request, booking_id: bookingId }),
-  })));
+  const booking = mapBooking(
+    await readJson(
+      await requestApi(`api/Booking/${encodeURIComponent(bookingId)}`, {
+        method: "PUT",
+        body: JSON.stringify({ ...request, booking_id: bookingId }),
+      }),
+    ),
+  );
   if (!booking) {
-    throw new BookingApiError("invalid-response", "The FIS API returned an invalid updated booking record.");
+    throw new BookingApiError(
+      "invalid-response",
+      "The FIS API returned an invalid updated booking record.",
+    );
   }
 
   return booking;

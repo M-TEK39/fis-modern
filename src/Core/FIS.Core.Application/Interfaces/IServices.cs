@@ -1,5 +1,5 @@
-using FIS.Core.Domain.Entities;
 using FIS.Core.Application.DTOs;
+using FIS.Core.Domain.Entities;
 
 namespace FIS.Core.Application.Interfaces;
 
@@ -24,7 +24,11 @@ public interface IVehicleService
 public interface IDuplicatePreventionService
 {
     Task<bool> CanCreateContractAsync(int vmfCode, DateTime startDate);
-    Task<IEnumerable<Contract>> FindConflictingContractsAsync(int vmfCode, DateTime startDate, DateTime? endDate = null);
+    Task<IEnumerable<Contract>> FindConflictingContractsAsync(
+        int vmfCode,
+        DateTime startDate,
+        DateTime? endDate = null
+    );
     Task<bool> HasActiveContractAsync(int vmfCode);
     Task<Contract?> GetActiveContractAsync(int vmfCode);
 }

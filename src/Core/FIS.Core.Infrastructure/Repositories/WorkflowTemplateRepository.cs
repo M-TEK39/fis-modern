@@ -14,7 +14,10 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
     private readonly FisDbContext _context;
     private readonly ILogger<WorkflowTemplateRepository> _logger;
 
-    public WorkflowTemplateRepository(FisDbContext context, ILogger<WorkflowTemplateRepository> logger)
+    public WorkflowTemplateRepository(
+        FisDbContext context,
+        ILogger<WorkflowTemplateRepository> logger
+    )
     {
         _context = context;
         _logger = logger;
@@ -22,13 +25,15 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
 
     public async Task<WorkflowTemplate?> GetByIdAsync(int templateId)
     {
-        return await _context.Set<WorkflowTemplate>()
+        return await _context
+            .Set<WorkflowTemplate>()
             .FirstOrDefaultAsync(t => t.TemplateID == templateId && !t.is_deleted);
     }
 
     public async Task<IEnumerable<WorkflowTemplate>> GetAllAsync()
     {
-        return await _context.Set<WorkflowTemplate>()
+        return await _context
+            .Set<WorkflowTemplate>()
             .Where(t => !t.is_deleted)
             .OrderBy(t => t.Category)
             .ThenBy(t => t.TemplateName)
@@ -37,7 +42,8 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
 
     public async Task<IEnumerable<WorkflowTemplate>> GetActiveTemplatesAsync()
     {
-        return await _context.Set<WorkflowTemplate>()
+        return await _context
+            .Set<WorkflowTemplate>()
             .Where(t => !t.is_deleted && t.IsActive)
             .OrderBy(t => t.Category)
             .ThenBy(t => t.TemplateName)
@@ -46,7 +52,8 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
 
     public async Task<IEnumerable<WorkflowTemplate>> GetByCategoryAsync(string category)
     {
-        return await _context.Set<WorkflowTemplate>()
+        return await _context
+            .Set<WorkflowTemplate>()
             .Where(t => !t.is_deleted && t.IsActive && t.Category == category)
             .OrderBy(t => t.TemplateName)
             .ToListAsync();
@@ -61,15 +68,19 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
         _context.Set<WorkflowTemplate>().Add(template);
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Created workflow template {TemplateId}: {TemplateName}", 
-            template.TemplateID, template.TemplateName);
+        _logger.LogInformation(
+            "Created workflow template {TemplateId}: {TemplateName}",
+            template.TemplateID,
+            template.TemplateName
+        );
 
         return template;
     }
 
     public async Task UpdateAsync(WorkflowTemplate template, int currentUserId)
     {
-        var existingTemplate = await _context.Set<WorkflowTemplate>()
+        var existingTemplate = await _context
+            .Set<WorkflowTemplate>()
             .FirstOrDefaultAsync(t => t.TemplateID == template.TemplateID);
 
         if (existingTemplate == null)
@@ -84,13 +95,17 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
 
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Updated workflow template {TemplateId}: {TemplateName}", 
-            template.TemplateID, template.TemplateName);
+        _logger.LogInformation(
+            "Updated workflow template {TemplateId}: {TemplateName}",
+            template.TemplateID,
+            template.TemplateName
+        );
     }
 
     public async Task DeleteAsync(int templateId, int currentUserId)
     {
-        var template = await _context.Set<WorkflowTemplate>()
+        var template = await _context
+            .Set<WorkflowTemplate>()
             .FirstOrDefaultAsync(t => t.TemplateID == templateId);
 
         if (template == null)
@@ -105,7 +120,10 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
 
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Deleted (soft) workflow template {TemplateId}: {TemplateName}", 
-            templateId, template.TemplateName);
+        _logger.LogInformation(
+            "Deleted (soft) workflow template {TemplateId}: {TemplateName}",
+            templateId,
+            template.TemplateName
+        );
     }
 }

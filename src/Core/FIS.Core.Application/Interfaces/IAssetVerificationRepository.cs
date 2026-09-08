@@ -1,5 +1,7 @@
 using FIS.Core.Domain.Entities;
+
 namespace FIS.Core.Application.Interfaces;
+
 public interface IAssetVerificationRepository
 {
     Task<AssetVerification?> GetByIdAsync(int verificationCode);

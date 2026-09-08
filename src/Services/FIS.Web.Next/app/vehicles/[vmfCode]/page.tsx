@@ -5,7 +5,11 @@ import { connection } from "next/server";
 import { logoutAction } from "@/app/actions/auth";
 import SessionRecovery from "@/app/home/session-recovery";
 import VehicleDetailClient from "@/app/vehicles/[vmfCode]/vehicle-detail-client";
-import { getVehicleDocuments, VehicleDocumentApiError, type VehicleDocumentRecord } from "@/lib/api-vehicle-documents";
+import {
+  getVehicleDocuments,
+  VehicleDocumentApiError,
+  type VehicleDocumentRecord,
+} from "@/lib/api-vehicle-documents";
 import { getVehicleForEdit, VehicleEditApiError } from "@/lib/api-vehicle-edit";
 import { getSession } from "@/lib/session";
 
@@ -21,7 +25,10 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -32,7 +39,9 @@ function AccessRestricted() {
     <section className="vehicle-status-card" role="alert">
       <p className="eyebrow">Access restricted</p>
       <h2>You do not have permission to view Vehicle Master records.</h2>
-      <Link className="button button-secondary" href="/vehicles">Back to Vehicle Master</Link>
+      <Link className="button button-secondary" href="/vehicles">
+        Back to Vehicle Master
+      </Link>
     </section>
   );
 }
@@ -42,10 +51,16 @@ function ApiUnavailable() {
     <section className="vehicle-status-card" role="alert">
       <p className="eyebrow">API unavailable</p>
       <h2>The vehicle record could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
-        <Link className="button button-primary" href="/vehicles">Try again</Link>
-        <Link className="button button-secondary" href="/login">Sign in</Link>
+        <Link className="button button-primary" href="/vehicles">
+          Try again
+        </Link>
+        <Link className="button button-secondary" href="/login">
+          Sign in
+        </Link>
       </div>
     </section>
   );
@@ -56,7 +71,9 @@ function VehicleNotFound() {
     <section className="vehicle-status-card" role="alert">
       <p className="eyebrow">Vehicle not found</p>
       <h2>That vehicle record could not be found.</h2>
-      <Link className="button button-secondary" href="/vehicles">Back to Vehicle Master</Link>
+      <Link className="button button-secondary" href="/vehicles">
+        Back to Vehicle Master
+      </Link>
     </section>
   );
 }
@@ -103,7 +120,10 @@ export default async function VehicleDetailPage({ params }: VehicleDetailPagePro
       );
     }
 
-    console.error("FIS vehicle detail request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle detail request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return (
       <main className="page-shell vehicle-page-shell">
         <ApiUnavailable />
@@ -121,22 +141,31 @@ export default async function VehicleDetailPage({ params }: VehicleDetailPagePro
     }
 
     documentsUnavailable = true;
-    console.error("FIS vehicle document request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle document request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
   }
 
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="vehicle-detail-title">
-        <h1 id="vehicle-detail-title" className="sr-only">Vehicle details</h1>
+        <h1 id="vehicle-detail-title" className="sr-only">
+          Vehicle details
+        </h1>
         <VehicleDetailClient
           vehicle={vehicle}
           documents={documents}
           documentsUnavailable={documentsUnavailable}
         />
         <div className="vehicle-footer-actions">
-          <Link className="button button-secondary" href="/home">Home</Link>
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
           <form action={logoutAction}>
-            <button className="button button-secondary" type="submit">Sign out</button>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
           </form>
         </div>
       </section>

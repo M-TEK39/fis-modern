@@ -37,14 +37,21 @@ function redirectWithError(message: string, searchTerm = ""): never {
 async function authorizeCallCentre(searchTerm: string) {
   const session = await getSession();
   if (session.status === "unavailable") {
-    redirectWithError("The sign-in service is temporarily unavailable. Please try again.", searchTerm);
+    redirectWithError(
+      "The sign-in service is temporarily unavailable. Please try again.",
+      searchTerm,
+    );
   }
 
   if (session.status !== "authenticated") {
     redirectWithError("Your session has expired. Sign in again before continuing.", searchTerm);
   }
 
-  if (!session.roles.some((role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
     redirectWithError("You do not have permission to maintain notification sections.", searchTerm);
   }
 }

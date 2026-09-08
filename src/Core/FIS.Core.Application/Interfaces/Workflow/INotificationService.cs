@@ -10,12 +10,20 @@ public interface INotificationService
     /// <summary>
     /// Send notification for a workflow event
     /// </summary>
-    Task SendWorkflowNotificationAsync(int workflowId, string eventType, Dictionary<string, object> contextData);
+    Task SendWorkflowNotificationAsync(
+        int workflowId,
+        string eventType,
+        Dictionary<string, object> contextData
+    );
 
     /// <summary>
     /// Send notification for a step event
     /// </summary>
-    Task SendStepNotificationAsync(int stepId, string eventType, Dictionary<string, object> contextData);
+    Task SendStepNotificationAsync(
+        int stepId,
+        string eventType,
+        Dictionary<string, object> contextData
+    );
 
     /// <summary>
     /// Process pending notifications (for batch processing)

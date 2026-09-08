@@ -35,7 +35,7 @@ public sealed class DepartmentRepository : IDepartmentRepository
         "cell_number",
         "notes",
         "dept_active",
-        "user_access_code"
+        "user_access_code",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -59,7 +59,7 @@ public sealed class DepartmentRepository : IDepartmentRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private readonly FisDbContext _context;
@@ -69,11 +69,13 @@ public sealed class DepartmentRepository : IDepartmentRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Department?> GetByIdAsync(int departmentCode)
-        => (await QueryAsync(
-            "[department_code] = @departmentCode",
-            command => AddParameter(command, "@departmentCode", DbType.Int32, departmentCode)))
-            .SingleOrDefault();
+    public async Task<Department?> GetByIdAsync(int departmentCode) =>
+        (
+            await QueryAsync(
+                "[department_code] = @departmentCode",
+                command => AddParameter(command, "@departmentCode", DbType.Int32, departmentCode)
+            )
+        ).SingleOrDefault();
 
     public async Task<Department?> GetByNameAsync(string departmentName)
     {
@@ -82,22 +84,24 @@ public sealed class DepartmentRepository : IDepartmentRepository
             return null;
         }
 
-        return (await QueryAsync(
-            "[description] = @description",
-            command => AddParameter(command, "@description", DbType.String, departmentName)))
-            .SingleOrDefault();
+        return (
+            await QueryAsync(
+                "[description] = @description",
+                command => AddParameter(command, "@description", DbType.String, departmentName)
+            )
+        ).SingleOrDefault();
     }
 
-    public async Task<IEnumerable<Department>> GetAllAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<Department>> GetAllAsync() => await QueryAsync();
 
-    public async Task<IEnumerable<Department>> GetActiveDepartmentsAsync()
-        => await QueryAsync("[dept_active] = 1");
+    public async Task<IEnumerable<Department>> GetActiveDepartmentsAsync() =>
+        await QueryAsync("[dept_active] = 1");
 
-    public async Task<IEnumerable<Department>> GetByCompanyAsync(int companyCode)
-        => await QueryAsync(
+    public async Task<IEnumerable<Department>> GetByCompanyAsync(int companyCode) =>
+        await QueryAsync(
             "[company_code] = @companyCode",
-            command => AddParameter(command, "@companyCode", DbType.Int32, companyCode));
+            command => AddParameter(command, "@companyCode", DbType.Int32, companyCode)
+        );
 
     public async Task<IEnumerable<Department>> SearchDepartmentsAsync(string searchTerm)
     {
@@ -113,7 +117,14 @@ public sealed class DepartmentRepository : IDepartmentRepository
 
         return await QueryAsync(
             searchPredicate,
-            command => AddParameter(command, "@search", DbType.String, $"%{searchTerm.Trim().ToLowerInvariant()}%"));
+            command =>
+                AddParameter(
+                    command,
+                    "@search",
+                    DbType.String,
+                    $"%{searchTerm.Trim().ToLowerInvariant()}%"
+                )
+        );
     }
 
     public async Task<DepartmentDeleteCheck> GetDeleteCheckAsync(int departmentCode)
@@ -132,7 +143,8 @@ public sealed class DepartmentRepository : IDepartmentRepository
                 connection,
                 "SELECT COUNT(1) FROM [dbo].[site] WHERE [Depatrment_code] = @departmentCode",
                 departmentCode,
-                transaction);
+                transaction
+            );
 
             var logsheetCount = await TableExistsAsync(connection, "dbo", "logsheets", transaction)
                 ? await CountAsync(
@@ -144,7 +156,8 @@ public sealed class DepartmentRepository : IDepartmentRepository
                     WHERE s.[Depatrment_code] = @departmentCode
                     """,
                     departmentCode,
-                    transaction)
+                    transaction
+                )
                 : 0;
 
             return new DepartmentDeleteCheck(siteCount, logsheetCount);
@@ -170,23 +183,26 @@ public sealed class DepartmentRepository : IDepartmentRepository
         try
         {
             var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            if (!await TableExistsAsync(connection, "dbo", "contract", transaction) ||
-                !await TableExistsAsync(connection, "dbo", "site", transaction))
+            if (
+                !await TableExistsAsync(connection, "dbo", "contract", transaction)
+                || !await TableExistsAsync(connection, "dbo", "site", transaction)
+            )
             {
                 return false;
             }
 
             return await CountAsync(
-                connection,
-                """
-                SELECT COUNT(1)
-                FROM [dbo].[contract] AS c
-                INNER JOIN [dbo].[site] AS s ON s.[Site_code] = c.[site_code]
-                WHERE c.[still_current] = 'Y'
-                  AND s.[Depatrment_code] = @departmentCode
-                """,
-                departmentCode,
-                transaction) > 0;
+                    connection,
+                    """
+                    SELECT COUNT(1)
+                    FROM [dbo].[contract] AS c
+                    INNER JOIN [dbo].[site] AS s ON s.[Site_code] = c.[site_code]
+                    WHERE c.[still_current] = 'Y'
+                      AND s.[Depatrment_code] = @departmentCode
+                    """,
+                    departmentCode,
+                    transaction
+                ) > 0;
         }
         finally
         {
@@ -204,7 +220,14 @@ public sealed class DepartmentRepository : IDepartmentRepository
         var availableColumns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
         var values = BuildCommonWriteValues(department);
-        AddOptionalWriteValues(values, availableColumns, department, currentUserId, now, isCreate: true);
+        AddOptionalWriteValues(
+            values,
+            availableColumns,
+            department,
+            currentUserId,
+            now,
+            isCreate: true
+        );
 
         department.date_created = now;
         department.created_by_user_code = currentUserId > 0 ? currentUserId : null;
@@ -217,12 +240,22 @@ public sealed class DepartmentRepository : IDepartmentRepository
     {
         ArgumentNullException.ThrowIfNull(department);
 
-        var existing = await GetByIdAsync(department.department_code)
-            ?? throw new InvalidOperationException($"Department with department_code {department.department_code} not found");
+        var existing =
+            await GetByIdAsync(department.department_code)
+            ?? throw new InvalidOperationException(
+                $"Department with department_code {department.department_code} not found"
+            );
         var availableColumns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
         var values = BuildCommonWriteValues(department);
-        AddOptionalWriteValues(values, availableColumns, department, currentUserId, now, isCreate: false);
+        AddOptionalWriteValues(
+            values,
+            availableColumns,
+            department,
+            currentUserId,
+            now,
+            isCreate: false
+        );
 
         IDbContextTransaction? transaction = null;
         if (_context.Database.CurrentTransaction is null)
@@ -232,7 +265,13 @@ public sealed class DepartmentRepository : IDepartmentRepository
 
         try
         {
-            if (!string.Equals(existing.res_person?.Trim(), department.res_person?.Trim(), StringComparison.Ordinal))
+            if (
+                !string.Equals(
+                    existing.res_person?.Trim(),
+                    department.res_person?.Trim(),
+                    StringComparison.Ordinal
+                )
+            )
             {
                 await AddResponsiblePersonHistoryAsync(existing, department);
             }
@@ -275,7 +314,8 @@ public sealed class DepartmentRepository : IDepartmentRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The DELETE or soft-delete statement is selected from fixed compatibility branches and the department code is parameterized.")]
+        Justification = "The DELETE or soft-delete statement is selected from fixed compatibility branches and the department code is parameterized."
+    )]
     public async Task DeleteAsync(int departmentCode, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -304,14 +344,21 @@ public sealed class DepartmentRepository : IDepartmentRepository
                 if (availableColumns.Contains("modified_by_user_code"))
                 {
                     assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-                    AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                    AddParameter(
+                        command,
+                        "@modifiedByUserCode",
+                        DbType.Int32,
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
-                command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [department_code] = @departmentCode";
+                command.CommandText =
+                    $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [department_code] = @departmentCode";
             }
             else
             {
-                command.CommandText = $"DELETE FROM [dbo].[{TableName}] WHERE [department_code] = @departmentCode";
+                command.CommandText =
+                    $"DELETE FROM [dbo].[{TableName}] WHERE [department_code] = @departmentCode";
             }
 
             AddParameter(command, "@departmentCode", DbType.Int32, departmentCode);
@@ -329,10 +376,12 @@ public sealed class DepartmentRepository : IDepartmentRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list is composed only from fixed legacy columns and the allowlisted runtime optional columns; predicates and values are parameterized.")]
+        Justification = "The SELECT list is composed only from fixed legacy columns and the allowlisted runtime optional columns; predicates and values are parameterized."
+    )]
     private async Task<List<Department>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
@@ -348,7 +397,11 @@ public sealed class DepartmentRepository : IDepartmentRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = RequiredColumns
                 .Select(column => $"[{column}] AS [{column}]")
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
                 .ToArray();
             var conditions = new List<string> { GetNotDeletedFilter(availableColumns) };
             if (!string.IsNullOrWhiteSpace(predicate))
@@ -356,7 +409,8 @@ public sealed class DepartmentRepository : IDepartmentRepository
                 conditions.Add(predicate);
             }
 
-            command.CommandText = $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [description], [department_code]";
+            command.CommandText =
+                $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [description], [department_code]";
             configure?.Invoke(command);
 
             var results = new List<Department>();
@@ -380,7 +434,8 @@ public sealed class DepartmentRepository : IDepartmentRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed from fixed legacy columns and allowlisted optional columns; all values are parameters.")]
+        Justification = "The INSERT statement is composed from fixed legacy columns and allowlisted optional columns; all values are parameters."
+    )]
     private async Task<short> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -394,7 +449,8 @@ public sealed class DepartmentRepository : IDepartmentRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[department_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+            command.CommandText =
+                $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[department_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
             AddParameters(command, values);
             return Convert.ToInt16(await command.ExecuteScalarAsync());
         }
@@ -410,7 +466,8 @@ public sealed class DepartmentRepository : IDepartmentRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed from fixed legacy columns and allowlisted optional columns; all values are parameters.")]
+        Justification = "The UPDATE statement is composed from fixed legacy columns and allowlisted optional columns; all values are parameters."
+    )]
     private async Task ExecuteUpdateAsync(int departmentCode, IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -424,7 +481,8 @@ public sealed class DepartmentRepository : IDepartmentRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [department_code] = @departmentCode";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [department_code] = @departmentCode";
             AddParameters(command, values);
             AddParameter(command, "@departmentCode", DbType.Int32, departmentCode);
             await command.ExecuteNonQueryAsync();
@@ -464,7 +522,11 @@ public sealed class DepartmentRepository : IDepartmentRepository
         await command.ExecuteNonQueryAsync();
     }
 
-    private async Task AddDepartmentStatusAuditAsync(Department existing, Department updated, int currentUserId)
+    private async Task AddDepartmentStatusAuditAsync(
+        Department existing,
+        Department updated,
+        int currentUserId
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
@@ -482,7 +544,12 @@ public sealed class DepartmentRepository : IDepartmentRepository
                 (@departmentCode, @updatedByUserCode, @notes, @actionDate, @departmentActive, @createdByUserCode, @dateDepartmentCreated)
             """;
         AddParameter(command, "@departmentCode", DbType.Int32, existing.department_code);
-        AddParameter(command, "@updatedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddParameter(
+            command,
+            "@updatedByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddParameter(command, "@notes", DbType.String, updated.notes);
         AddParameter(command, "@actionDate", DbType.DateTime2, DateTime.UtcNow);
         AddParameter(command, "@departmentActive", DbType.Boolean, updated.dept_active);
@@ -520,10 +587,14 @@ public sealed class DepartmentRepository : IDepartmentRepository
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
-                throw new InvalidOperationException($"The required department compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                throw new InvalidOperationException(
+                    $"The required department compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             return columns;
@@ -537,8 +608,7 @@ public sealed class DepartmentRepository : IDepartmentRepository
         }
     }
 
-    private static List<WriteValue> BuildCommonWriteValues(Department department)
-        =>
+    private static List<WriteValue> BuildCommonWriteValues(Department department) =>
         [
             new("company_code", "@companyCode", DbType.Int16, department.company_code),
             new("description", "@description", DbType.String, department.description),
@@ -550,11 +620,16 @@ public sealed class DepartmentRepository : IDepartmentRepository
             new("telephone", "@telephone", DbType.String, department.telephone),
             new("fax", "@fax", DbType.String, department.fax),
             new("net_address", "@netAddress", DbType.String, department.net_address),
-            new("Department_number", "@departmentNumber", DbType.String, department.Department_number),
+            new(
+                "Department_number",
+                "@departmentNumber",
+                DbType.String,
+                department.Department_number
+            ),
             new("cell_number", "@cellNumber", DbType.String, department.cell_number),
             new("notes", "@notes", DbType.String, department.notes),
             new("dept_active", "@departmentActive", DbType.Boolean, department.dept_active),
-            new("user_access_code", "@userAccessCode", DbType.Int16, department.user_access_code)
+            new("user_access_code", "@userAccessCode", DbType.Int16, department.user_access_code),
         ];
 
     private static void AddOptionalWriteValues(
@@ -563,34 +638,168 @@ public sealed class DepartmentRepository : IDepartmentRepository
         Department department,
         int currentUserId,
         DateTime now,
-        bool isCreate)
+        bool isCreate
+    )
     {
-        AddOptionalValue(values, availableColumns, "department_abbr", "@departmentAbbr", DbType.String, department.department_abbr);
-        AddOptionalValue(values, availableColumns, "bas_installation_code", "@basInstallationCode", DbType.String, department.bas_installation_code);
-        AddOptionalValue(values, availableColumns, "clo_email", "@cloEmail", DbType.String, department.clo_email);
-        AddOptionalValue(values, availableColumns, "telephone2", "@telephone2", DbType.String, department.telephone2);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "department_abbr",
+            "@departmentAbbr",
+            DbType.String,
+            department.department_abbr
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "bas_installation_code",
+            "@basInstallationCode",
+            DbType.String,
+            department.bas_installation_code
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "clo_email",
+            "@cloEmail",
+            DbType.String,
+            department.clo_email
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "telephone2",
+            "@telephone2",
+            DbType.String,
+            department.telephone2
+        );
         AddOptionalValue(values, availableColumns, "fax2", "@fax2", DbType.String, department.fax2);
-        AddOptionalValue(values, availableColumns, "financial_system_code", "@financialSystemCode", DbType.Byte, department.financial_system_code);
-        AddOptionalValue(values, availableColumns, "financial_system_active", "@financialSystemActive", DbType.Boolean, department.financial_system_active);
-        AddOptionalValue(values, availableColumns, "financial_system_activate_date", "@financialSystemActivateDate", DbType.DateTime2, department.financial_system_activate_date);
-        AddOptionalValue(values, availableColumns, "default_site", "@defaultSite", DbType.Int16, department.default_site);
-        AddOptionalValue(values, availableColumns, "export_is_active", "@exportIsActive", DbType.Boolean, department.export_is_active);
-        AddOptionalValue(values, availableColumns, "Service_Kilometres", "@serviceKilometres", DbType.Int32, department.Service_Kilometres);
-        AddOptionalValue(values, availableColumns, "Service_Years", "@serviceYears", DbType.Byte, department.Service_Years);
-        AddOptionalValue(values, availableColumns, "Overhead_Percentage", "@overheadPercentage", DbType.Decimal, department.Overhead_Percentage);
-        AddOptionalValue(values, availableColumns, "comments", "@comments", DbType.String, department.comments);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "financial_system_code",
+            "@financialSystemCode",
+            DbType.Byte,
+            department.financial_system_code
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "financial_system_active",
+            "@financialSystemActive",
+            DbType.Boolean,
+            department.financial_system_active
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "financial_system_activate_date",
+            "@financialSystemActivateDate",
+            DbType.DateTime2,
+            department.financial_system_activate_date
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "default_site",
+            "@defaultSite",
+            DbType.Int16,
+            department.default_site
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "export_is_active",
+            "@exportIsActive",
+            DbType.Boolean,
+            department.export_is_active
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Service_Kilometres",
+            "@serviceKilometres",
+            DbType.Int32,
+            department.Service_Kilometres
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Service_Years",
+            "@serviceYears",
+            DbType.Byte,
+            department.Service_Years
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Overhead_Percentage",
+            "@overheadPercentage",
+            DbType.Decimal,
+            department.Overhead_Percentage
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "comments",
+            "@comments",
+            DbType.String,
+            department.comments
+        );
 
         if (isCreate)
         {
-            AddOptionalValue(values, availableColumns, "date_created", "@dateCreated", DbType.DateTime2, now);
-            AddOptionalValue(values, availableColumns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
-            AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+            AddOptionalValue(
+                values,
+                availableColumns,
+                "date_created",
+                "@dateCreated",
+                DbType.DateTime2,
+                now
+            );
+            AddOptionalValue(
+                values,
+                availableColumns,
+                "created_by_user_code",
+                "@createdByUserCode",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
+            AddOptionalValue(
+                values,
+                availableColumns,
+                "is_deleted",
+                "@isDeleted",
+                DbType.Boolean,
+                false
+            );
         }
         else
         {
-            AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
-            AddOptionalValue(values, availableColumns, "modified_by_user_code", "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
-            AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, department.is_deleted);
+            AddOptionalValue(
+                values,
+                availableColumns,
+                "date_updated",
+                "@dateUpdated",
+                DbType.DateTime2,
+                now
+            );
+            AddOptionalValue(
+                values,
+                availableColumns,
+                "modified_by_user_code",
+                "@modifiedByUserCode",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
+            AddOptionalValue(
+                values,
+                availableColumns,
+                "is_deleted",
+                "@isDeleted",
+                DbType.Boolean,
+                department.is_deleted
+            );
         }
     }
 
@@ -600,7 +809,8 @@ public sealed class DepartmentRepository : IDepartmentRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -625,8 +835,11 @@ public sealed class DepartmentRepository : IDepartmentRepository
         command.Parameters.Add(parameter);
     }
 
-    private static Department MapDepartment(DbDataReader reader, IReadOnlySet<string> availableColumns)
-        => new()
+    private static Department MapDepartment(
+        DbDataReader reader,
+        IReadOnlySet<string> availableColumns
+    ) =>
+        new()
         {
             department_code = ReadInt16(reader, "department_code") ?? 0,
             company_code = ReadInt16(reader, "company_code") ?? 0,
@@ -645,25 +858,57 @@ public sealed class DepartmentRepository : IDepartmentRepository
             dept_active = ReadBoolean(reader, "dept_active") ?? false,
             user_access_code = ReadInt16(reader, "user_access_code"),
             department_abbr = ReadStringIfAvailable(reader, availableColumns, "department_abbr"),
-            bas_installation_code = ReadStringIfAvailable(reader, availableColumns, "bas_installation_code"),
+            bas_installation_code = ReadStringIfAvailable(
+                reader,
+                availableColumns,
+                "bas_installation_code"
+            ),
             clo_email = ReadStringIfAvailable(reader, availableColumns, "clo_email"),
             telephone2 = ReadStringIfAvailable(reader, availableColumns, "telephone2"),
             fax2 = ReadStringIfAvailable(reader, availableColumns, "fax2"),
-            financial_system_code = ReadByteIfAvailable(reader, availableColumns, "financial_system_code"),
-            financial_system_active = ReadBooleanIfAvailable(reader, availableColumns, "financial_system_active"),
-            financial_system_activate_date = ReadDateTimeIfAvailable(reader, availableColumns, "financial_system_activate_date"),
+            financial_system_code = ReadByteIfAvailable(
+                reader,
+                availableColumns,
+                "financial_system_code"
+            ),
+            financial_system_active = ReadBooleanIfAvailable(
+                reader,
+                availableColumns,
+                "financial_system_active"
+            ),
+            financial_system_activate_date = ReadDateTimeIfAvailable(
+                reader,
+                availableColumns,
+                "financial_system_activate_date"
+            ),
             default_site = ReadInt16IfAvailable(reader, availableColumns, "default_site"),
             export_is_active = ReadBooleanIfAvailable(reader, availableColumns, "export_is_active"),
-            date_last_exported = ReadDateTimeIfAvailable(reader, availableColumns, "date_last_exported"),
-            Service_Kilometres = ReadInt32IfAvailable(reader, availableColumns, "Service_Kilometres") ?? 0,
+            date_last_exported = ReadDateTimeIfAvailable(
+                reader,
+                availableColumns,
+                "date_last_exported"
+            ),
+            Service_Kilometres =
+                ReadInt32IfAvailable(reader, availableColumns, "Service_Kilometres") ?? 0,
             Service_Years = ReadByteIfAvailable(reader, availableColumns, "Service_Years") ?? 0,
-            Overhead_Percentage = ReadDecimalIfAvailable(reader, availableColumns, "Overhead_Percentage") ?? 0,
+            Overhead_Percentage =
+                ReadDecimalIfAvailable(reader, availableColumns, "Overhead_Percentage") ?? 0,
             comments = ReadStringIfAvailable(reader, availableColumns, "comments"),
-            date_created = ReadDateTimeIfAvailable(reader, availableColumns, "date_created") ?? DateTime.MinValue,
+            date_created =
+                ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
+                ?? DateTime.MinValue,
             date_updated = ReadDateTimeIfAvailable(reader, availableColumns, "date_updated"),
-            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
-            modified_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "modified_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "created_by_user_code"
+            ),
+            modified_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "modified_by_user_code"
+            ),
+            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false,
         };
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
@@ -677,28 +922,33 @@ public sealed class DepartmentRepository : IDepartmentRepository
         {
             "financial_system_code" or "Service_Years" => "tinyint",
             "financial_system_active" or "export_is_active" or "is_deleted" => "bit",
-            "financial_system_activate_date" or "date_last_exported" or "date_created" or "date_updated" => "datetime2",
+            "financial_system_activate_date"
+            or "date_last_exported"
+            or "date_created"
+            or "date_updated" => "datetime2",
             "default_site" => "smallint",
             "Service_Kilometres" => "int",
             "Overhead_Percentage" => "decimal(18, 2)",
             "created_by_user_code" or "modified_by_user_code" => "int",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetNotDeletedFilter(IReadOnlySet<string> columns)
-        => columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
+    private static string GetNotDeletedFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The count query is selected from fixed repository statements and the department code is parameterized.")]
+        Justification = "The count query is selected from fixed repository statements and the department code is parameterized."
+    )]
     private static async Task<int> CountAsync(
         DbConnection connection,
         string sql,
         int departmentCode,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -711,7 +961,8 @@ public sealed class DepartmentRepository : IDepartmentRepository
         DbConnection connection,
         string schema,
         string table,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -731,11 +982,16 @@ public sealed class DepartmentRepository : IDepartmentRepository
     private static string? ReadString(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
     }
 
-    private static string? ReadStringIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) ? ReadString(reader, column) : null;
+    private static string? ReadStringIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) => columns.Contains(column) ? ReadString(reader, column) : null;
 
     private static short? ReadInt16(DbDataReader reader, string column)
     {
@@ -743,10 +999,17 @@ public sealed class DepartmentRepository : IDepartmentRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToInt16(reader.GetValue(ordinal));
     }
 
-    private static short? ReadInt16IfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) ? ReadInt16(reader, column) : null;
+    private static short? ReadInt16IfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) => columns.Contains(column) ? ReadInt16(reader, column) : null;
 
-    private static int? ReadInt32IfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+    private static int? ReadInt32IfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    )
     {
         if (!columns.Contains(column))
         {
@@ -757,7 +1020,11 @@ public sealed class DepartmentRepository : IDepartmentRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToInt32(reader.GetValue(ordinal));
     }
 
-    private static byte? ReadByteIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+    private static byte? ReadByteIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    )
     {
         if (!columns.Contains(column))
         {
@@ -774,10 +1041,17 @@ public sealed class DepartmentRepository : IDepartmentRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToBoolean(reader.GetValue(ordinal));
     }
 
-    private static bool? ReadBooleanIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) ? ReadBoolean(reader, column) : null;
+    private static bool? ReadBooleanIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) => columns.Contains(column) ? ReadBoolean(reader, column) : null;
 
-    private static DateTime? ReadDateTimeIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+    private static DateTime? ReadDateTimeIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    )
     {
         if (!columns.Contains(column))
         {
@@ -788,7 +1062,11 @@ public sealed class DepartmentRepository : IDepartmentRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToDateTime(reader.GetValue(ordinal));
     }
 
-    private static decimal? ReadDecimalIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+    private static decimal? ReadDecimalIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    )
     {
         if (!columns.Contains(column))
         {

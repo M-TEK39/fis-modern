@@ -13,13 +13,13 @@ using FIS.Core.Infrastructure.Repositories;
 using FIS.Core.Infrastructure.Services;
 using FIS.Data.SqlServer;
 using FIS.Data.SqlServer.Interceptors;
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using SendGrid;
-using Hangfire;
-using Hangfire.SqlServer;
 
 var builder = WebApplication.CreateBuilder(args);
 var dotEnvRawValues = Env.NoEnvVars().TraversePath().Load();
@@ -45,27 +45,31 @@ builder.Services.AddControllers();
 // Configure CORS for network access
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowNetwork", policy =>
-    {
-        policy.WithOrigins(
-            // Localhost (backward compatibility)
-            "http://localhost:5268",
-            "https://localhost:7259",
-            "http://localhost:5010",
-            "https://localhost:7188",
-            // Network IP access (10.0.0.104)
-            "http://10.0.0.104:5268",
-            "https://10.0.0.104:7259",
-            "http://10.0.0.104:5010",
-            "https://10.0.0.104:7188",
-            // Production domains via Cloudflare Tunnel
-            "https://fis.irisgroup.co.za",
-            "https://admin.irisgroup.co.za"
-        )
-        .AllowAnyMethod()
-        .AllowAnyHeader()
-        .AllowCredentials();
-    });
+    options.AddPolicy(
+        "AllowNetwork",
+        policy =>
+        {
+            policy
+                .WithOrigins(
+                    // Localhost (backward compatibility)
+                    "http://localhost:5268",
+                    "https://localhost:7259",
+                    "http://localhost:5010",
+                    "https://localhost:7188",
+                    // Network IP access (10.0.0.104)
+                    "http://10.0.0.104:5268",
+                    "https://10.0.0.104:7259",
+                    "http://10.0.0.104:5010",
+                    "https://10.0.0.104:7188",
+                    // Production domains via Cloudflare Tunnel
+                    "https://fis.irisgroup.co.za",
+                    "https://admin.irisgroup.co.za"
+                )
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials();
+        }
+    );
 });
 
 // Configure rate limiting
@@ -81,26 +85,34 @@ builder.Services.AddSingleton<AuditInterceptor>();
 // Configure Entity Framework
 var connectionString = SqlServerConnectionStringHelper.Resolve(
     builder.Configuration.GetConnectionString("Default"),
-    builder.Environment.IsDevelopment());
-builder.Services.AddDbContext<FisDbContext>((serviceProvider, options) =>
-{
-    options.UseSqlServer(connectionString);
-    options.AddInterceptors(serviceProvider.GetRequiredService<AuditInterceptor>());
-});
+    builder.Environment.IsDevelopment()
+);
+builder.Services.AddDbContext<FisDbContext>(
+    (serviceProvider, options) =>
+    {
+        options.UseSqlServer(connectionString);
+        options.AddInterceptors(serviceProvider.GetRequiredService<AuditInterceptor>());
+    }
+);
 
 // Configure Hangfire for background jobs (Phase 5 - Analytics)
-builder.Services.AddHangfire(configuration => configuration
-    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-    .UseSimpleAssemblyNameTypeSerializer()
-    .UseRecommendedSerializerSettings()
-    .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
-    {
-        CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
-        SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
-        QueuePollInterval = TimeSpan.Zero,
-        UseRecommendedIsolationLevel = true,
-        DisableGlobalLocks = true
-    }));
+builder.Services.AddHangfire(configuration =>
+    configuration
+        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+        .UseSimpleAssemblyNameTypeSerializer()
+        .UseRecommendedSerializerSettings()
+        .UseSqlServerStorage(
+            connectionString,
+            new SqlServerStorageOptions
+            {
+                CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                QueuePollInterval = TimeSpan.Zero,
+                UseRecommendedIsolationLevel = true,
+                DisableGlobalLocks = true,
+            }
+        )
+);
 
 builder.Services.AddHangfireServer();
 
@@ -120,28 +132,34 @@ builder.Services.AddSwaggerGen(options =>
     );
 
     // Add cookie authentication note to Swagger
-    options.AddSecurityDefinition("CookieAuth", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-    {
-        Description = "Session authentication uses HttpOnly cookies FIS_Access_Token and FIS_Refresh_Token.",
-        Name = "Cookie",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Cookie,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey
-    });
-
-    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-    {
+    options.AddSecurityDefinition(
+        "CookieAuth",
+        new Microsoft.OpenApi.Models.OpenApiSecurityScheme
         {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-            {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
-                {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id = "CookieAuth"
-                }
-            },
-            Array.Empty<string>()
+            Description =
+                "Session authentication uses HttpOnly cookies FIS_Access_Token and FIS_Refresh_Token.",
+            Name = "Cookie",
+            In = Microsoft.OpenApi.Models.ParameterLocation.Cookie,
+            Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
         }
-    });
+    );
+
+    options.AddSecurityRequirement(
+        new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+        {
+            {
+                new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                {
+                    Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                    {
+                        Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                        Id = "CookieAuth",
+                    },
+                },
+                Array.Empty<string>()
+            },
+        }
+    );
 });
 
 builder.Services.AddSingleton<ISessionTokenStore, SqlSessionTokenStore>();
@@ -154,17 +172,22 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
-var authenticationBuilder = builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = SessionCookieAuthenticationHandler.SchemeName;
-    options.DefaultChallengeScheme = SessionCookieAuthenticationHandler.SchemeName;
-}).AddScheme<AuthenticationSchemeOptions, SessionCookieAuthenticationHandler>(
-    SessionCookieAuthenticationHandler.SchemeName,
-    _ => { });
+var authenticationBuilder = builder
+    .Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = SessionCookieAuthenticationHandler.SchemeName;
+        options.DefaultChallengeScheme = SessionCookieAuthenticationHandler.SchemeName;
+    })
+    .AddScheme<AuthenticationSchemeOptions, SessionCookieAuthenticationHandler>(
+        SessionCookieAuthenticationHandler.SchemeName,
+        _ => { }
+    );
 
-if (!string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientId"])
+if (
+    !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientId"])
     && !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:TenantId"])
-    && !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientSecret"]))
+    && !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientSecret"])
+)
 {
     authenticationBuilder.AddMicrosoftIdentityWebApp(
         options =>
@@ -180,7 +203,8 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientId"])
             cookieOptions.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         },
         openIdConnectScheme: MicrosoftAuthenticationDefaults.OpenIdConnectScheme,
-        cookieScheme: MicrosoftAuthenticationDefaults.CookieScheme);
+        cookieScheme: MicrosoftAuthenticationDefaults.CookieScheme
+    );
 }
 
 builder.Services.AddAuthorization();
@@ -289,6 +313,7 @@ builder.Services.AddScoped<ITaxiLogNoteRepository, TaxiLogNoteRepository>();
 builder.Services.AddScoped<ITaxiWhiteLogRepository, TaxiWhiteLogRepository>();
 builder.Services.AddScoped<IContractorTaxiClassRepository, ContractorTaxiClassRepository>();
 builder.Services.AddScoped<ITowingRepository, TowingRepository>();
+
 // TripAuthorityRepository removed - conflicts with existing Trip entity
 builder.Services.AddScoped<IVehicleOrderRepository, VehicleOrderRepository>();
 builder.Services.AddScoped<IVehiclePhotoRepository, VehiclePhotoRepository>();
@@ -323,38 +348,79 @@ builder.Services.AddScoped<INotificationTemplateRepository, NotificationTemplate
 builder.Services.AddScoped<INotificationLogRepository, NotificationLogRepository>();
 
 // Workflow System services (Step Handlers & Execution - Phase 1)
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IWorkflowExecutionService, FIS.Core.Application.Services.Workflow.WorkflowExecutionService>();
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandlerFactory, FIS.Core.Application.Services.Workflow.StepHandlerFactory>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.IWorkflowExecutionService,
+    FIS.Core.Application.Services.Workflow.WorkflowExecutionService
+>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.IStepHandlerFactory,
+    FIS.Core.Application.Services.Workflow.StepHandlerFactory
+>();
 
 // Workflow Template service (Phase 2)
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IWorkflowTemplateService, FIS.Core.Application.Services.Workflow.WorkflowTemplateService>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.IWorkflowTemplateService,
+    FIS.Core.Application.Services.Workflow.WorkflowTemplateService
+>();
 
 // Condition Evaluator service (Phase 3)
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IConditionEvaluator, FIS.Core.Application.Services.Workflow.ConditionEvaluator>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.IConditionEvaluator,
+    FIS.Core.Application.Services.Workflow.ConditionEvaluator
+>();
 
 // Notification services (Phase 4)
 builder.Services.AddScoped<SendGrid.ISendGridClient>(sp =>
 {
-    var apiKey = builder.Configuration["SendGrid:ApiKey"] ?? throw new InvalidOperationException("SendGrid API key not configured");
+    var apiKey =
+        builder.Configuration["SendGrid:ApiKey"]
+        ?? throw new InvalidOperationException("SendGrid API key not configured");
     return new SendGrid.SendGridClient(apiKey);
 });
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IEmailService, FIS.Core.Application.Services.Workflow.SendGridEmailService>();
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.INotificationService, FIS.Core.Application.Services.Workflow.NotificationService>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.IEmailService,
+    FIS.Core.Application.Services.Workflow.SendGridEmailService
+>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.INotificationService,
+    FIS.Core.Application.Services.Workflow.NotificationService
+>();
 
 // Analytics repositories (Phase 5)
 builder.Services.AddScoped<IStepExecutionHistoryRepository, StepExecutionHistoryRepository>();
 builder.Services.AddScoped<IWorkflowMetricRepository, WorkflowMetricRepository>();
-builder.Services.AddScoped<IWorkflowExecutionSummaryRepository, WorkflowExecutionSummaryRepository>();
+builder.Services.AddScoped<
+    IWorkflowExecutionSummaryRepository,
+    WorkflowExecutionSummaryRepository
+>();
 
 // Analytics service (Phase 5)
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IAnalyticsService, FIS.Core.Application.Services.Workflow.AnalyticsService>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.IAnalyticsService,
+    FIS.Core.Application.Services.Workflow.AnalyticsService
+>();
 
 // Register step handlers
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandler, FIS.Core.Application.Services.Workflow.Handlers.EmailNotificationHandler>();
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandler, FIS.Core.Application.Services.Workflow.Handlers.ApprovalHandler>();
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandler, FIS.Core.Application.Services.Workflow.Handlers.DataValidationHandler>();
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandler, FIS.Core.Application.Services.Workflow.Handlers.WebhookHandler>();
-builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandler, FIS.Core.Application.Services.Workflow.Handlers.DelayHandler>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.IStepHandler,
+    FIS.Core.Application.Services.Workflow.Handlers.EmailNotificationHandler
+>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.IStepHandler,
+    FIS.Core.Application.Services.Workflow.Handlers.ApprovalHandler
+>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.IStepHandler,
+    FIS.Core.Application.Services.Workflow.Handlers.DataValidationHandler
+>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.IStepHandler,
+    FIS.Core.Application.Services.Workflow.Handlers.WebhookHandler
+>();
+builder.Services.AddScoped<
+    FIS.Core.Application.Interfaces.Workflow.IStepHandler,
+    FIS.Core.Application.Services.Workflow.Handlers.DelayHandler
+>();
 
 // Add HttpClient for WebhookHandler
 builder.Services.AddHttpClient();
@@ -408,10 +474,13 @@ if (app.Environment.IsDevelopment())
     });
 
     // Hangfire Dashboard (Development only)
-    app.UseHangfireDashboard("/hangfire", new DashboardOptions
-    {
-        Authorization = new[] { new HangfireDashboardAuthorizationFilter() }
-    });
+    app.UseHangfireDashboard(
+        "/hangfire",
+        new DashboardOptions
+        {
+            Authorization = new[] { new HangfireDashboardAuthorizationFilter() },
+        }
+    );
 }
 
 // MUST come first: respect X-Forwarded-Proto from nginx so Request.IsHttps is correct behind the reverse proxy
@@ -444,7 +513,8 @@ var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>(
 recurringJobManager.AddOrUpdate<WorkflowMetricsJob>(
     "generate-daily-workflow-metrics",
     job => job.GenerateDailyMetricsAsync(),
-    "0 2 * * *"); // Cron: Daily at 2:00 AM
+    "0 2 * * *"
+); // Cron: Daily at 2:00 AM
 
 // Contract expiry reminders (runs at 7 AM daily)
 // Sends emails at 90, 60, 30, 14, and 7 days before target_return_date
@@ -452,7 +522,8 @@ recurringJobManager.AddOrUpdate<WorkflowMetricsJob>(
 recurringJobManager.AddOrUpdate<ContractExpiryReminderJob>(
     "contract-expiry-reminders",
     job => job.RunAsync(),
-    "0 7 * * *"); // Cron: Daily at 7:00 AM
+    "0 7 * * *"
+); // Cron: Daily at 7:00 AM
 
 // Monthly billing (runs on the 1st of each month at 06:00)
 // Bills all still_current = 'Y' contracts from Charged_Until → today.
@@ -460,7 +531,8 @@ recurringJobManager.AddOrUpdate<ContractExpiryReminderJob>(
 recurringJobManager.AddOrUpdate<MonthlyBillingJob>(
     "monthly-contract-billing",
     job => job.RunAsync(),
-    "0 6 1 * *"); // Cron: 1st of each month at 06:00
+    "0 6 1 * *"
+); // Cron: 1st of each month at 06:00
 
 // Financial year rollover (runs at 00:05 on 1 April every year)
 // Creates the next financial_year record (FY = year it ends in).
@@ -469,6 +541,7 @@ recurringJobManager.AddOrUpdate<MonthlyBillingJob>(
 recurringJobManager.AddOrUpdate<FinancialYearRolloverJob>(
     "financial-year-rollover",
     job => job.RunAsync(),
-    "5 0 1 4 *"); // Cron: 00:05 on 1 April each year
+    "5 0 1 4 *"
+); // Cron: 00:05 on 1 April each year
 
 app.Run();

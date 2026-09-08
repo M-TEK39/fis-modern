@@ -7,6 +7,7 @@ namespace FIS.Api.DTOs
     {
         public short make_code { get; set; }
         public string make_description { get; set; } = string.Empty;
+
         // Audit fields
         public DateTime date_created { get; set; }
         public DateTime? date_updated { get; set; }
@@ -45,6 +46,7 @@ namespace FIS.Api.DTOs
         public int? gvm { get; set; }
         public string? transmission { get; set; }
         public decimal? wesbank_kilos_per_litre { get; set; }
+
         // Audit fields
         public DateTime date_created { get; set; }
         public DateTime? date_updated { get; set; }
@@ -60,6 +62,7 @@ namespace FIS.Api.DTOs
     {
         public short type_code { get; set; }
         public string type_description { get; set; } = string.Empty;
+
         // Audit fields
         public DateTime date_created { get; set; }
         public DateTime? date_updated { get; set; }
@@ -82,6 +85,7 @@ namespace FIS.Api.DTOs
         public decimal? odometer_life { get; set; }
         public short? appreciate_percent { get; set; }
         public decimal? replacement_cost { get; set; }
+
         // Audit fields
         public DateTime date_created { get; set; }
         public DateTime? date_updated { get; set; }
@@ -119,6 +123,7 @@ namespace FIS.Api.DTOs
         public short department_code { get; set; }
         public string department_description { get; set; } = string.Empty;
         public string res_person { get; set; } = string.Empty;
+
         // Audit fields
         public DateTime date_created { get; set; }
         public DateTime? date_updated { get; set; }
@@ -180,6 +185,7 @@ namespace FIS.Api.DTOs
         public int vmf_code { get; set; }
         public string? fleet_number { get; set; }
         public string? registration_number { get; set; }
+
         // Snapshotted licence values at time of supersession
         public DateTime? licence_due_date { get; set; }
         public string? lic_register_number { get; set; }
@@ -193,6 +199,7 @@ namespace FIS.Api.DTOs
         public string? Licence_receiver_tel { get; set; }
         public short? Licence_receiver_site { get; set; }
         public DateTime? Licence_date_taken { get; set; }
+
         // Metadata
         public DateTime captured_at { get; set; }
         public int? captured_by_user_code { get; set; }

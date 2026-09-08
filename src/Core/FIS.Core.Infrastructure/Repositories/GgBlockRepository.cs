@@ -27,7 +27,7 @@ public sealed class GgBlockRepository : IGgBlockRepository
         "Creation_Date",
         "Created_By_User_Code",
         "Vch_Start_Reg",
-        "Vch_End_Reg"
+        "Vch_End_Reg",
     ];
 
     private static readonly string[] RequiredNumberColumns =
@@ -35,10 +35,13 @@ public sealed class GgBlockRepository : IGgBlockRepository
         "Block_ID",
         "Creation_Date",
         "Created_By_User_Code",
-        "GG_Number"
+        "GG_Number",
     ];
 
-    private static readonly Regex GgNumberPattern = new("^[A-Z]{3}[0-9]{3}G$", RegexOptions.CultureInvariant);
+    private static readonly Regex GgNumberPattern = new(
+        "^[A-Z]{3}[0-9]{3}G$",
+        RegexOptions.CultureInvariant
+    );
 
     private readonly FisDbContext _context;
 
@@ -78,10 +81,7 @@ public sealed class GgBlockRepository : IGgBlockRepository
             var totalRecords = ordered.Length;
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
             page = Math.Min(page, totalPages);
-            var items = ordered
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToArray();
+            var items = ordered.Skip((page - 1) * pageSize).Take(pageSize).ToArray();
 
             return new GgBlockHistoryPage(items, page, pageSize, totalRecords);
         }
@@ -94,18 +94,29 @@ public sealed class GgBlockRepository : IGgBlockRepository
         }
     }
 
-    public async Task<GgBlockHistoryRecord> CreateAsync(string startGgNumber, string endGgNumber, int currentUserId)
+    public async Task<GgBlockHistoryRecord> CreateAsync(
+        string startGgNumber,
+        string endGgNumber,
+        int currentUserId
+    )
     {
         var (startPrefix, startNumber, startSuffix) = ParseGgNumber(startGgNumber);
         var (endPrefix, endNumber, endSuffix) = ParseGgNumber(endGgNumber);
-        if (!string.Equals(startPrefix, endPrefix, StringComparison.Ordinal) || startSuffix != endSuffix)
+        if (
+            !string.Equals(startPrefix, endPrefix, StringComparison.Ordinal)
+            || startSuffix != endSuffix
+        )
         {
-            throw new ArgumentException("The start and end GG numbers must use the same prefix and suffix.");
+            throw new ArgumentException(
+                "The start and end GG numbers must use the same prefix and suffix."
+            );
         }
 
         if (endNumber <= startNumber)
         {
-            throw new ArgumentException("The end GG number must be greater than the start GG number.");
+            throw new ArgumentException(
+                "The end GG number must be greater than the start GG number."
+            );
         }
 
         var connection = _context.Database.GetDbConnection();
@@ -115,20 +126,29 @@ public sealed class GgBlockRepository : IGgBlockRepository
             await connection.OpenAsync();
         }
 
-        await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var transaction = await connection.BeginTransactionAsync(
+            IsolationLevel.Serializable
+        );
         try
         {
             var blockTables = await GetUsableBlockTablesAsync(connection, transaction);
             EnsureBlockTableAvailable(blockTables);
-            var numberColumns = await GetAvailableColumnsAsync(connection, NumberTableName, transaction);
+            var numberColumns = await GetAvailableColumnsAsync(
+                connection,
+                NumberTableName,
+                transaction
+            );
             EnsureRequiredColumns(numberColumns, RequiredNumberColumns, NumberTableName);
 
-            if (await HasOverlappingRangeAsync(
+            if (
+                await HasOverlappingRangeAsync(
                     connection,
                     transaction,
                     blockTables,
                     startGgNumber.Trim().ToUpperInvariant(),
-                    endGgNumber.Trim().ToUpperInvariant()))
+                    endGgNumber.Trim().ToUpperInvariant()
+                )
+            )
             {
                 throw new GgBlockRangeConflictException();
             }
@@ -142,7 +162,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
                 startGgNumber.Trim().ToUpperInvariant(),
                 endGgNumber.Trim().ToUpperInvariant(),
                 currentUserId,
-                now);
+                now
+            );
 
             await InsertGeneratedNumbersAsync(
                 connection,
@@ -154,7 +175,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
                 endNumber,
                 startSuffix.ToString(),
                 currentUserId,
-                now);
+                now
+            );
 
             await transaction.CommitAsync();
 
@@ -163,7 +185,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
                 currentUserId > 0 ? $"User {currentUserId}" : "Current User",
                 now,
                 startGgNumber.Trim().ToUpperInvariant(),
-                endGgNumber.Trim().ToUpperInvariant());
+                endGgNumber.Trim().ToUpperInvariant()
+            );
         }
         catch
         {
@@ -182,13 +205,15 @@ public sealed class GgBlockRepository : IGgBlockRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The table name and optional filter are selected from fixed compatibility values; there is no user-controlled SQL identifier and no unparameterized value.")]
+        Justification = "The table name and optional filter are selected from fixed compatibility values; there is no user-controlled SQL identifier and no unparameterized value."
+    )]
     private static async Task ReadHistoryAsync(
         DbConnection connection,
         DbTransaction? transaction,
         BlockTable table,
         IReadOnlySet<string>? userProfileColumns,
-        ICollection<GgBlockHistoryRecord> history)
+        ICollection<GgBlockHistoryRecord> history
+    )
     {
         var capturedBy = userProfileColumns is not null
             ? "COALESCE(NULLIF(LTRIM(RTRIM((SELECT TOP (1) CONVERT(nvarchar(255), u.[name]) FROM [dbo].[user_access_old1] AS u WHERE u.[user_access_code] = b.[Created_By_User_Code]))), ''), CONVERT(nvarchar(50), b.[Created_By_User_Code]))"
@@ -213,25 +238,30 @@ public sealed class GgBlockRepository : IGgBlockRepository
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            history.Add(new GgBlockHistoryRecord(
-                Convert.ToInt16(reader["Block_ID"]),
-                ReadString(reader, "CapturedBy") ?? "-",
-                ReadDateTime(reader, "Creation_Date"),
-                ReadString(reader, "Vch_Start_Reg") ?? "-",
-                ReadString(reader, "Vch_End_Reg") ?? "-"));
+            history.Add(
+                new GgBlockHistoryRecord(
+                    Convert.ToInt16(reader["Block_ID"]),
+                    ReadString(reader, "CapturedBy") ?? "-",
+                    ReadDateTime(reader, "Creation_Date"),
+                    ReadString(reader, "Vch_Start_Reg") ?? "-",
+                    ReadString(reader, "Vch_End_Reg") ?? "-"
+                )
+            );
         }
     }
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The table name and optional filter are selected from fixed compatibility values; range values are parameterized.")]
+        Justification = "The table name and optional filter are selected from fixed compatibility values; range values are parameterized."
+    )]
     private static async Task<bool> HasOverlappingRangeAsync(
         DbConnection connection,
         DbTransaction transaction,
         IReadOnlyList<BlockTable> blockTables,
         string startGgNumber,
-        string endGgNumber)
+        string endGgNumber
+    )
     {
         foreach (var table in blockTables)
         {
@@ -262,7 +292,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The table name is selected from fixed compatibility candidates and all values are parameters.")]
+        Justification = "The table name is selected from fixed compatibility candidates and all values are parameters."
+    )]
     private static async Task<short> InsertBlockAsync(
         DbConnection connection,
         DbTransaction transaction,
@@ -270,24 +301,47 @@ public sealed class GgBlockRepository : IGgBlockRepository
         string startGgNumber,
         string endGgNumber,
         int currentUserId,
-        DateTime now)
+        DateTime now
+    )
     {
         var values = new List<WriteValue>
         {
             new("Creation_Date", "@creationDate", DbType.DateTime2, now),
             new("Created_By_User_Code", "@createdByUserCode", DbType.Int32, currentUserId),
             new("Vch_Start_Reg", "@startGgNumber", DbType.String, startGgNumber),
-            new("Vch_End_Reg", "@endGgNumber", DbType.String, endGgNumber)
+            new("Vch_End_Reg", "@endGgNumber", DbType.String, endGgNumber),
         };
 
-        AddOptionalValue(values, table.Columns, "Modified_User_Code", "@modifiedUserCode", DbType.Int32, currentUserId);
-        AddOptionalValue(values, table.Columns, "audit_date_created", "@auditDateCreated", DbType.DateTime2, now);
-        AddOptionalValue(values, table.Columns, "audit_created_by_user_code", "@auditCreatedByUserCode", DbType.Int32, currentUserId);
+        AddOptionalValue(
+            values,
+            table.Columns,
+            "Modified_User_Code",
+            "@modifiedUserCode",
+            DbType.Int32,
+            currentUserId
+        );
+        AddOptionalValue(
+            values,
+            table.Columns,
+            "audit_date_created",
+            "@auditDateCreated",
+            DbType.DateTime2,
+            now
+        );
+        AddOptionalValue(
+            values,
+            table.Columns,
+            "audit_created_by_user_code",
+            "@auditCreatedByUserCode",
+            DbType.Int32,
+            currentUserId
+        );
         AddOptionalValue(values, table.Columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"INSERT INTO [dbo].[{table.Name}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[Block_ID] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+        command.CommandText =
+            $"INSERT INTO [dbo].[{table.Name}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[Block_ID] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
         AddParameters(command, values);
         return Convert.ToInt16(await command.ExecuteScalarAsync());
     }
@@ -295,7 +349,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The table name and optional columns are selected from fixed compatibility values and all values are parameters.")]
+        Justification = "The table name and optional columns are selected from fixed compatibility values and all values are parameters."
+    )]
     private static async Task InsertGeneratedNumbersAsync(
         DbConnection connection,
         DbTransaction transaction,
@@ -306,26 +361,48 @@ public sealed class GgBlockRepository : IGgBlockRepository
         int endNumber,
         string suffix,
         int currentUserId,
-        DateTime now)
+        DateTime now
+    )
     {
         var columns = new List<string>
         {
             "[Block_ID]",
             "[Creation_Date]",
             "[Created_By_User_Code]",
-            "[GG_Number]"
+            "[GG_Number]",
         };
         var selections = new List<string>
         {
             "@blockId",
             "@creationDate",
             "@createdByUserCode",
-            "CONCAT(@prefix, RIGHT('000' + CONVERT(varchar(3), Number), 3), @suffix)"
+            "CONCAT(@prefix, RIGHT('000' + CONVERT(varchar(3), Number), 3), @suffix)",
         };
 
-        AddOptionalInsertSelection(numberColumns, "audit_date_created", "[audit_date_created]", "@auditDateCreated", columns, selections);
-        AddOptionalInsertSelection(numberColumns, "audit_created_by_user_code", "[audit_created_by_user_code]", "@auditCreatedByUserCode", columns, selections);
-        AddOptionalInsertSelection(numberColumns, "is_deleted", "[is_deleted]", "@isDeleted", columns, selections);
+        AddOptionalInsertSelection(
+            numberColumns,
+            "audit_date_created",
+            "[audit_date_created]",
+            "@auditDateCreated",
+            columns,
+            selections
+        );
+        AddOptionalInsertSelection(
+            numberColumns,
+            "audit_created_by_user_code",
+            "[audit_created_by_user_code]",
+            "@auditCreatedByUserCode",
+            columns,
+            selections
+        );
+        AddOptionalInsertSelection(
+            numberColumns,
+            "is_deleted",
+            "[is_deleted]",
+            "@isDeleted",
+            columns,
+            selections
+        );
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -374,7 +451,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
         string sqlColumn,
         string selection,
         ICollection<string> columns,
-        ICollection<string> selections)
+        ICollection<string> selections
+    )
     {
         if (!availableColumns.Contains(column))
         {
@@ -385,7 +463,10 @@ public sealed class GgBlockRepository : IGgBlockRepository
         selections.Add(selection);
     }
 
-    private static async Task<List<BlockTable>> GetUsableBlockTablesAsync(DbConnection connection, DbTransaction? transaction)
+    private static async Task<List<BlockTable>> GetUsableBlockTablesAsync(
+        DbConnection connection,
+        DbTransaction? transaction
+    )
     {
         var tables = new List<BlockTable>();
         foreach (var tableName in new[] { ModernTableName, LegacyTableName })
@@ -403,7 +484,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
     private static async Task<HashSet<string>> GetAvailableColumnsAsync(
         DbConnection connection,
         string tableName,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -428,7 +510,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
 
     private static async Task<HashSet<string>?> GetOptionalUserProfileColumnsAsync(
         DbConnection connection,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         var columns = await GetAvailableColumnsAsync(connection, UserProfileTableName, transaction);
         return columns.Contains("name") && columns.Contains("user_access_code") ? columns : null;
@@ -442,12 +525,20 @@ public sealed class GgBlockRepository : IGgBlockRepository
         }
     }
 
-    private static void EnsureRequiredColumns(IReadOnlySet<string> availableColumns, IEnumerable<string> requiredColumns, string tableName)
+    private static void EnsureRequiredColumns(
+        IReadOnlySet<string> availableColumns,
+        IEnumerable<string> requiredColumns,
+        string tableName
+    )
     {
-        var missingColumns = requiredColumns.Where(column => !availableColumns.Contains(column)).ToArray();
+        var missingColumns = requiredColumns
+            .Where(column => !availableColumns.Contains(column))
+            .ToArray();
         if (missingColumns.Length > 0)
         {
-            throw new InvalidOperationException($"The required GG block compatibility columns are not available in {tableName}: {string.Join(", ", missingColumns)}");
+            throw new InvalidOperationException(
+                $"The required GG block compatibility columns are not available in {tableName}: {string.Join(", ", missingColumns)}"
+            );
         }
     }
 
@@ -468,7 +559,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (columns.Contains(column))
         {
@@ -493,11 +585,11 @@ public sealed class GgBlockRepository : IGgBlockRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string? ReadString(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : reader[column]?.ToString()?.Trim();
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : reader[column]?.ToString()?.Trim();
 
-    private static DateTime? ReadDateTime(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
+    private static DateTime? ReadDateTime(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
 
     private sealed record BlockTable(string Name, HashSet<string> Columns);
 

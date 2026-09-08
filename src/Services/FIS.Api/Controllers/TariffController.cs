@@ -23,9 +23,12 @@ public class TariffController : BaseApiController
     public TariffController(
         ITariffCalculationService tariffCalculationService,
         FisDbContext context,
-        ILogger<TariffController> logger)
+        ILogger<TariffController> logger
+    )
     {
-        _tariffCalculationService = tariffCalculationService ?? throw new ArgumentNullException(nameof(tariffCalculationService));
+        _tariffCalculationService =
+            tariffCalculationService
+            ?? throw new ArgumentNullException(nameof(tariffCalculationService));
         _context = context;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -44,18 +47,26 @@ public class TariffController : BaseApiController
     public async Task<ActionResult<TariffResult>> GetContractTariff(
         int contractCode,
         [FromQuery] DateTime? checkDate = null,
-        [FromQuery] string tariffType = "Fixed")
+        [FromQuery] string tariffType = "Fixed"
+    )
     {
         try
         {
             var date = checkDate ?? DateTime.Now;
             var type = tariffType.ToLower() == "kilos" ? TariffType.Kilos : TariffType.Fixed;
 
-            _logger.LogInformation("Getting tariff for contract {ContractCode}, date {Date}, type {Type}",
-                contractCode, date, type);
+            _logger.LogInformation(
+                "Getting tariff for contract {ContractCode}, date {Date}, type {Type}",
+                contractCode,
+                date,
+                type
+            );
 
             var result = await _tariffCalculationService.GetVehicleTariffAsync(
-                contractCode, date, type);
+                contractCode,
+                date,
+                type
+            );
 
             if (result.Status != TariffStatus.Valid && result.Amount < 0)
             {
@@ -66,7 +77,11 @@ public class TariffController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating tariff for contract {ContractCode}", contractCode);
+            _logger.LogError(
+                ex,
+                "Error calculating tariff for contract {ContractCode}",
+                contractCode
+            );
             return StatusCode(500, new { error = "Internal server error", message = ex.Message });
         }
     }
@@ -81,7 +96,8 @@ public class TariffController : BaseApiController
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<TariffResult>> CalculateTariff(
-        [FromBody] TariffCalculationRequest request)
+        [FromBody] TariffCalculationRequest request
+    )
     {
         try
         {
@@ -102,7 +118,8 @@ public class TariffController : BaseApiController
                 request.DepartmentCode,
                 request.ContractType,
                 request.CheckDate,
-                request.TariffType);
+                request.TariffType
+            );
 
             return Ok(result);
         }
@@ -120,10 +137,18 @@ public class TariffController : BaseApiController
     [ProducesResponseType(typeof(bool), StatusCodes.Status200OK)]
     public ActionResult<bool> CheckGGMTInternal(
         [FromQuery] short siteCode,
-        [FromQuery] int departmentCode)
+        [FromQuery] int departmentCode
+    )
     {
         var isInternal = _tariffCalculationService.IsGGMTInternal(siteCode, departmentCode);
-        return Ok(new { siteCode, departmentCode, isInternal });
+        return Ok(
+            new
+            {
+                siteCode,
+                departmentCode,
+                isInternal,
+            }
+        );
     }
 
     /// <summary>
@@ -162,68 +187,81 @@ public class TariffController : BaseApiController
     {
         try
         {
-            var vehicle = await _context.Vehicles
-                .Include(v => v.Model)
+            var vehicle = await _context
+                .Vehicles.Include(v => v.Model)
                 .FirstOrDefaultAsync(v => v.vmf_code == vmfCode);
 
             if (vehicle == null)
                 return NotFound(new { error = $"Vehicle {vmfCode} not found" });
 
             if (vehicle.Model == null)
-                return Ok(new
-                {
-                    vmf_code = vmfCode,
-                    fleet_number = vehicle.fleet_number,
-                    year_manufactured = vehicle.year_manufactured,
-                    class_code = (short?)null,
-                    tariff = (object?)null,
-                    note = "No model linked to vehicle — cannot resolve tariff class"
-                });
+                return Ok(
+                    new
+                    {
+                        vmf_code = vmfCode,
+                        fleet_number = vehicle.fleet_number,
+                        year_manufactured = vehicle.year_manufactured,
+                        class_code = (short?)null,
+                        tariff = (object?)null,
+                        note = "No model linked to vehicle — cannot resolve tariff class",
+                    }
+                );
 
             var classCode = vehicle.Model.class_code;
             var today = DateTime.Today;
 
             // Find the currently effective, approved tariff for this vehicle class
-            var tariff = await _context.Tariffs
-                .Where(t =>
-                    t.class_code == classCode &&
-                    t.tariff_approval_status == 2 && // Approved
-                    !t.is_deleted &&
-                    t.effective_start_date <= today &&
-                    (t.effective_end_date == null || t.effective_end_date >= today))
+            var tariff = await _context
+                .Tariffs.Where(t =>
+                    t.class_code == classCode
+                    && t.tariff_approval_status == 2
+                    && // Approved
+                    !t.is_deleted
+                    && t.effective_start_date <= today
+                    && (t.effective_end_date == null || t.effective_end_date >= today)
+                )
                 .OrderByDescending(t => t.effective_start_date)
                 .FirstOrDefaultAsync();
 
-            return Ok(new
-            {
-                vmf_code = vmfCode,
-                fleet_number = vehicle.fleet_number,
-                registration = vehicle.registration_number,
-                year_manufactured = vehicle.year_manufactured,
-                model_code = vehicle.model_code,
-                class_code = classCode,
-                tariff = tariff == null ? null : new
+            return Ok(
+                new
                 {
-                    tariff_code = tariff.tariff_code,
-                    class_code = tariff.class_code,
-                    year_manufactured = tariff.year_manufactured,
-                    monthly_fixed_amount = tariff.monthly_fixed_amount,
-                    monthly_odo_amount = tariff.monthly_odo_amount,
-                    daily_fixed_amount = tariff.daily_fixed_amount,
-                    hourly_fixed_amount = tariff.hourly_fixed_amount,
-                    fuel_kilo_tariff = tariff.fuel_kilo_tariff,
-                    effective_start_date = tariff.effective_start_date.ToString("yyyy-MM-dd"),
-                    effective_end_date = tariff.effective_end_date?.ToString("yyyy-MM-dd"),
-                },
-                note = tariff == null
-                    ? $"No approved tariff found for class {classCode} effective today"
-                    : "Current approved tariff returned"
-            });
+                    vmf_code = vmfCode,
+                    fleet_number = vehicle.fleet_number,
+                    registration = vehicle.registration_number,
+                    year_manufactured = vehicle.year_manufactured,
+                    model_code = vehicle.model_code,
+                    class_code = classCode,
+                    tariff = tariff == null
+                        ? null
+                        : new
+                        {
+                            tariff_code = tariff.tariff_code,
+                            class_code = tariff.class_code,
+                            year_manufactured = tariff.year_manufactured,
+                            monthly_fixed_amount = tariff.monthly_fixed_amount,
+                            monthly_odo_amount = tariff.monthly_odo_amount,
+                            daily_fixed_amount = tariff.daily_fixed_amount,
+                            hourly_fixed_amount = tariff.hourly_fixed_amount,
+                            fuel_kilo_tariff = tariff.fuel_kilo_tariff,
+                            effective_start_date = tariff.effective_start_date.ToString(
+                                "yyyy-MM-dd"
+                            ),
+                            effective_end_date = tariff.effective_end_date?.ToString("yyyy-MM-dd"),
+                        },
+                    note = tariff == null
+                        ? $"No approved tariff found for class {classCode} effective today"
+                        : "Current approved tariff returned",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error previewing tariff for vehicle {VmfCode}", vmfCode);
-            return StatusCode(500, new { error = "Failed to preview tariff", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to preview tariff", message = ex.Message }
+            );
         }
     }
 }

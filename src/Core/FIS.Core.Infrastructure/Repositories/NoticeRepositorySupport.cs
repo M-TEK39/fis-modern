@@ -7,13 +7,15 @@ namespace FIS.Core.Infrastructure.Repositories;
 
 internal static class NoticeRepositorySupport
 {
-    public static DbTransaction? GetCurrentTransaction(Microsoft.EntityFrameworkCore.DbContext context)
-        => context.Database.CurrentTransaction?.GetDbTransaction();
+    public static DbTransaction? GetCurrentTransaction(
+        Microsoft.EntityFrameworkCore.DbContext context
+    ) => context.Database.CurrentTransaction?.GetDbTransaction();
 
     public static async Task<HashSet<string>> GetColumnsAsync(
         DbConnection connection,
         DbTransaction? transaction,
-        string tableName)
+        string tableName
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -45,8 +47,8 @@ internal static class NoticeRepositorySupport
         command.Parameters.Add(parameter);
     }
 
-    public static void AddStringParameter(DbCommand command, string name, object? value)
-        => AddParameter(command, name, DbType.String, value);
+    public static void AddStringParameter(DbCommand command, string name, object? value) =>
+        AddParameter(command, name, DbType.String, value);
 
     public static int? ReadInt32(DbDataReader reader, params string[] names)
     {
@@ -56,8 +58,8 @@ internal static class NoticeRepositorySupport
             : Convert.ToInt32(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
     }
 
-    public static int? ReadInt32IfAvailable(DbDataReader reader, string name)
-        => ReadInt32(reader, name);
+    public static int? ReadInt32IfAvailable(DbDataReader reader, string name) =>
+        ReadInt32(reader, name);
 
     public static DateTime? ReadDateTime(DbDataReader reader, params string[] names)
     {
@@ -78,37 +80,54 @@ internal static class NoticeRepositorySupport
     public static bool ReadBoolean(DbDataReader reader, string name)
     {
         var ordinal = FindOrdinal(reader, name);
-        return ordinal >= 0 && !reader.IsDBNull(ordinal) && Convert.ToBoolean(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
+        return ordinal >= 0
+            && !reader.IsDBNull(ordinal)
+            && Convert.ToBoolean(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
     }
 
     public static bool HasModernSchema(
         IReadOnlySet<string> noticeColumns,
-        IReadOnlySet<string> scheduleColumns)
-        => RequiredNoticeColumns.All(noticeColumns.Contains)
-            && RequiredScheduleColumns.All(scheduleColumns.Contains);
+        IReadOnlySet<string> scheduleColumns
+    ) =>
+        RequiredNoticeColumns.All(noticeColumns.Contains)
+        && RequiredScheduleColumns.All(scheduleColumns.Contains);
 
     public static async Task<NoticeSchema> GetSchemaAsync(
         DbConnection connection,
-        DbTransaction? transaction)
-        => new(
+        DbTransaction? transaction
+    ) =>
+        new(
             await GetColumnsAsync(connection, transaction, "Notices"),
-            await GetColumnsAsync(connection, transaction, "NoticeSchedule"));
+            await GetColumnsAsync(connection, transaction, "NoticeSchedule")
+        );
 
     internal sealed record NoticeSchema(
         HashSet<string> NoticeColumns,
-        HashSet<string> ScheduleColumns)
+        HashSet<string> ScheduleColumns
+    )
     {
         public bool IsModern => HasModernSchema(NoticeColumns, ScheduleColumns);
     }
 
     private static readonly string[] RequiredNoticeColumns =
     [
-        "notice_id", "notice_date", "notice_from", "notice_title", "notice_body", "notice_person", "notice_person_title"
+        "notice_id",
+        "notice_date",
+        "notice_from",
+        "notice_title",
+        "notice_body",
+        "notice_person",
+        "notice_person_title",
     ];
 
     private static readonly string[] RequiredScheduleColumns =
     [
-        "notice_schedule_id", "notice_id", "title_field", "start_date", "end_date", "sort_order"
+        "notice_schedule_id",
+        "notice_id",
+        "title_field",
+        "start_date",
+        "end_date",
+        "sort_order",
     ];
 
     private static int FindOrdinal(DbDataReader reader, params string[] names)

@@ -2,11 +2,20 @@
 
 import { useFormStatus } from "react-dom";
 
-function ActionButton({ operation, children }: Readonly<{ operation: string; children: React.ReactNode }>) {
+function ActionButton({
+  operation,
+  children,
+}: Readonly<{ operation: string; children: React.ReactNode }>) {
   const { pending } = useFormStatus();
 
   return (
-    <button className="button button-secondary" type="submit" name="operation" value={operation} disabled={pending}>
+    <button
+      className="button button-secondary"
+      type="submit"
+      name="operation"
+      value={operation}
+      disabled={pending}
+    >
       {children}
     </button>
   );
@@ -41,7 +50,10 @@ export default function DeactivateUserForm({
         <ActionButton operation="deactivate">De-Activate User</ActionButton>
         <ActionButton operation="deactivate-expired">De-ActivateUser Expired Password</ActionButton>
         <ActionButton operation="activate">Activate User</ActionButton>
-        <a className="button button-secondary" href={`/UserAdmin/UserAdmin.aspx?Alphabet=${encodeURIComponent(alphabet)}`}>
+        <a
+          className="button button-secondary"
+          href={`/UserAdmin/UserAdmin.aspx?Alphabet=${encodeURIComponent(alphabet)}`}
+        >
           Back
         </a>
       </div>

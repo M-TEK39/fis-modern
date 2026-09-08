@@ -1,19 +1,19 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
 using System.Data;
 using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Interfaces.Auth;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.SqlServer;
-using FIS.Api.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -41,7 +41,8 @@ public class AuthController : ControllerBase
         ISessionTokenStore sessionTokenStore,
         IEmailNotificationService emailNotificationService,
         IPasswordService passwordService,
-        LegacyCredentialCompatibilityService legacyCredentialCompatibility)
+        LegacyCredentialCompatibilityService legacyCredentialCompatibility
+    )
     {
         _configuration = configuration;
         _context = context;
@@ -65,7 +66,10 @@ public class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+        if (
+            string.IsNullOrWhiteSpace(request.Username)
+            || string.IsNullOrWhiteSpace(request.Password)
+        )
         {
             return BadRequest(new { error = "Username and password are required" });
         }
@@ -84,35 +88,52 @@ public class AuthController : ControllerBase
 
         if (credential is not null && !credential.is_active)
         {
-            _logger.LogWarning("Login failed: inactive credential for user {UserAccessCode}", profile.UserAccessCode);
+            _logger.LogWarning(
+                "Login failed: inactive credential for user {UserAccessCode}",
+                profile.UserAccessCode
+            );
             return Unauthorized(new { error = "Invalid username or password" });
         }
 
         if (profile.UserAccessOld is { user_active: false })
         {
-            _logger.LogWarning("Login failed: inactive legacy profile for user {UserAccessCode}", profile.UserAccessCode);
+            _logger.LogWarning(
+                "Login failed: inactive legacy profile for user {UserAccessCode}",
+                profile.UserAccessCode
+            );
             return Unauthorized(new { error = "Invalid username or password" });
         }
 
         var usingModernPassword = !string.IsNullOrWhiteSpace(credential?.password_hash);
-        var storedPassword = usingModernPassword ? credential!.password_hash : profile.UserAccessOld?.password;
+        var storedPassword = usingModernPassword
+            ? credential!.password_hash
+            : profile.UserAccessOld?.password;
         if (string.IsNullOrWhiteSpace(storedPassword))
         {
-            _logger.LogWarning("Login failed: no credential for user {UserAccessCode}", profile.UserAccessCode);
+            _logger.LogWarning(
+                "Login failed: no credential for user {UserAccessCode}",
+                profile.UserAccessCode
+            );
             return Unauthorized(new { error = "Invalid username or password" });
         }
 
         // Account lockout check
-        if (credential?.account_locked_until.HasValue == true && credential.account_locked_until.Value > DateTime.UtcNow)
+        if (
+            credential?.account_locked_until.HasValue == true
+            && credential.account_locked_until.Value > DateTime.UtcNow
+        )
         {
-            return Unauthorized(new { error = "Account is temporarily locked. Please try again later." });
+            return Unauthorized(
+                new { error = "Account is temporarily locked. Please try again later." }
+            );
         }
 
         // Verify password
         var passwordValid = VerifyStoredPassword(
             request.Password,
             storedPassword,
-            allowLegacyPlaintext: !usingModernPassword);
+            allowLegacyPlaintext: !usingModernPassword
+        );
         if (!passwordValid)
         {
             if (credential is not null)
@@ -125,12 +146,16 @@ public class AuthController : ControllerBase
 
             if (profile.UserAccessOld is not null)
             {
-                profile.UserAccessOld.Retry = (short)Math.Min(short.MaxValue, (profile.UserAccessOld.Retry ?? 0) + 1);
+                profile.UserAccessOld.Retry = (short)
+                    Math.Min(short.MaxValue, (profile.UserAccessOld.Retry ?? 0) + 1);
                 _context.UserAccessOlds.Update(profile.UserAccessOld);
             }
 
             await _context.SaveChangesAsync();
-            _logger.LogWarning("Login failed: wrong password for user {UserAccessCode}", profile.UserAccessCode);
+            _logger.LogWarning(
+                "Login failed: wrong password for user {UserAccessCode}",
+                profile.UserAccessCode
+            );
             return Unauthorized(new { error = "Invalid username or password" });
         }
 
@@ -157,21 +182,35 @@ public class AuthController : ControllerBase
         // compatibility state and does not force-expire an otherwise valid user.
         bool passwordExpired = false;
         int daysRemaining = int.MaxValue;
-        var enforceExpiry = bool.TryParse(_configuration["JwtSettings:EnforcePasswordExpiry"], out var enforceFlag) && enforceFlag;
+        var enforceExpiry =
+            bool.TryParse(_configuration["JwtSettings:EnforcePasswordExpiry"], out var enforceFlag)
+            && enforceFlag;
 
         if (enforceExpiry)
         {
             var fallbackExpiryDays = GetPasswordExpiryDays();
 
-            if (credential?.password_expiry_date.HasValue == true && credential.password_expiry_date.Value > new DateTime(2000, 1, 1))
+            if (
+                credential?.password_expiry_date.HasValue == true
+                && credential.password_expiry_date.Value > new DateTime(2000, 1, 1)
+            )
             {
                 passwordExpired = DateTime.UtcNow > credential.password_expiry_date.Value;
-                daysRemaining = Math.Max(0, (int)(credential.password_expiry_date.Value - DateTime.UtcNow).TotalDays);
+                daysRemaining = Math.Max(
+                    0,
+                    (int)(credential.password_expiry_date.Value - DateTime.UtcNow).TotalDays
+                );
             }
-            else if (profile.UserAccessOld?.PWD_Expires.HasValue == true && profile.UserAccessOld.PWD_Expires.Value > new DateTime(2000, 1, 1))
+            else if (
+                profile.UserAccessOld?.PWD_Expires.HasValue == true
+                && profile.UserAccessOld.PWD_Expires.Value > new DateTime(2000, 1, 1)
+            )
             {
                 passwordExpired = DateTime.UtcNow > profile.UserAccessOld.PWD_Expires.Value;
-                daysRemaining = Math.Max(0, (int)(profile.UserAccessOld.PWD_Expires.Value - DateTime.UtcNow).TotalDays);
+                daysRemaining = Math.Max(
+                    0,
+                    (int)(profile.UserAccessOld.PWD_Expires.Value - DateTime.UtcNow).TotalDays
+                );
             }
             else if (credential?.last_password_change > new DateTime(2000, 1, 1))
             {
@@ -184,32 +223,49 @@ public class AuthController : ControllerBase
 
         var accessLevel = profile.UserAccessOld?.AccessLevel ?? 0L;
 
-        var grantedRoles = LegacyRoleMap.RolesForAccessLevel(accessLevel)
+        var grantedRoles = LegacyRoleMap
+            .RolesForAccessLevel(accessLevel)
             .Concat(await TryGetLegacyNamedRolesAsync(profile.ResolvedUsername))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         _logger.LogInformation(
             "Login: user_access_code={UserAccessCode} access_level={AccessLevel} roles={Roles}",
-            profile.UserAccessCode, accessLevel, string.Join(",", grantedRoles));
+            profile.UserAccessCode,
+            accessLevel,
+            string.Join(",", grantedRoles)
+        );
 
         var email = profile.User?.email ?? profile.UserAccessOld?.E_Mail ?? request.Username.Trim();
-        var authClaims = BuildAuthClaims(profile.UserAccessCode, email, accessLevel, passwordExpired, grantedRoles);
+        var authClaims = BuildAuthClaims(
+            profile.UserAccessCode,
+            email,
+            accessLevel,
+            passwordExpired,
+            grantedRoles
+        );
         var tokens = _sessionTokenStore.IssueTokens(authClaims);
 
-        WriteAuthCookies(tokens.AccessToken, tokens.AccessExpiresAt, tokens.RefreshToken, tokens.RefreshExpiresAt);
+        WriteAuthCookies(
+            tokens.AccessToken,
+            tokens.AccessExpiresAt,
+            tokens.RefreshToken,
+            tokens.RefreshExpiresAt
+        );
 
-        return Ok(new LoginResponse
-        {
-            Token = tokens.AccessToken,
-            ExpiresAt = tokens.AccessExpiresAt.UtcDateTime,
-            UserAccessCode = profile.UserAccessCode,
-            Email = profile.User?.email ?? profile.UserAccessOld?.E_Mail,
-            PasswordExpired = passwordExpired,
-            PasswordExpiresIn = daysRemaining,
-            Message = passwordExpired
-                ? "Password has expired. Please change your password to continue."
-                : "Login successful"
-        });
+        return Ok(
+            new LoginResponse
+            {
+                Token = tokens.AccessToken,
+                ExpiresAt = tokens.AccessExpiresAt.UtcDateTime,
+                UserAccessCode = profile.UserAccessCode,
+                Email = profile.User?.email ?? profile.UserAccessOld?.E_Mail,
+                PasswordExpired = passwordExpired,
+                PasswordExpiresIn = daysRemaining,
+                Message = passwordExpired
+                    ? "Password has expired. Please change your password to continue."
+                    : "Login successful",
+            }
+        );
     }
 
     /// <summary>
@@ -222,7 +278,10 @@ public class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public ActionResult<LoginResponse> RefreshToken()
     {
-        if (!Request.Cookies.TryGetValue(RefreshTokenCookieName, out var refreshToken) || string.IsNullOrWhiteSpace(refreshToken))
+        if (
+            !Request.Cookies.TryGetValue(RefreshTokenCookieName, out var refreshToken)
+            || string.IsNullOrWhiteSpace(refreshToken)
+        )
         {
             return Unauthorized(new { error = "Refresh token cookie is missing." });
         }
@@ -236,21 +295,27 @@ public class AuthController : ControllerBase
             refreshedTokens.AccessToken,
             refreshedTokens.AccessExpiresAt,
             refreshedTokens.RefreshToken,
-            refreshedTokens.RefreshExpiresAt);
+            refreshedTokens.RefreshExpiresAt
+        );
 
-        var userAccessCode = int.TryParse(claims.FirstOrDefault(c => c.Type == "user_access_code")?.Value, out var parsedUserCode)
+        var userAccessCode = int.TryParse(
+            claims.FirstOrDefault(c => c.Type == "user_access_code")?.Value,
+            out var parsedUserCode
+        )
             ? parsedUserCode
             : 0;
         var emailClaim = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
 
-        return Ok(new LoginResponse
-        {
-            Token = refreshedTokens.AccessToken,
-            ExpiresAt = refreshedTokens.AccessExpiresAt.UtcDateTime,
-            UserAccessCode = userAccessCode,
-            Email = emailClaim,
-            Message = "Token refreshed successfully"
-        });
+        return Ok(
+            new LoginResponse
+            {
+                Token = refreshedTokens.AccessToken,
+                ExpiresAt = refreshedTokens.AccessExpiresAt.UtcDateTime,
+                UserAccessCode = userAccessCode,
+                Email = emailClaim,
+                Message = "Token refreshed successfully",
+            }
+        );
     }
 
     /// <summary>
@@ -263,7 +328,12 @@ public class AuthController : ControllerBase
         var userAccessCode = User.FindFirst("user_access_code")?.Value;
         _logger.LogInformation("User {UserAccessCode} logged out", userAccessCode);
 
-        if (Request.Cookies.TryGetValue(SessionCookieAuthenticationHandler.AccessCookieName, out var accessToken))
+        if (
+            Request.Cookies.TryGetValue(
+                SessionCookieAuthenticationHandler.AccessCookieName,
+                out var accessToken
+            )
+        )
         {
             _sessionTokenStore.RevokeByAccessToken(accessToken);
         }
@@ -286,16 +356,16 @@ public class AuthController : ControllerBase
     [Authorize]
     public ActionResult<object> ValidateToken()
     {
-        var claims = User.Claims
-            .Select(c => new { type = c.Type, value = c.Value })
-            .ToArray();
+        var claims = User.Claims.Select(c => new { type = c.Type, value = c.Value }).ToArray();
 
-        return Ok(new
-        {
-            valid = true,
-            authType = User.Identity?.AuthenticationType,
-            claims
-        });
+        return Ok(
+            new
+            {
+                valid = true,
+                authType = User.Identity?.AuthenticationType,
+                claims,
+            }
+        );
     }
 
     /// <summary>
@@ -303,60 +373,89 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("change-password")]
     [Authorize]
-    public async Task<ActionResult<ChangePasswordResponse>> ChangePassword([FromBody] ChangePasswordRequest request)
+    public async Task<ActionResult<ChangePasswordResponse>> ChangePassword(
+        [FromBody] ChangePasswordRequest request
+    )
     {
         try
         {
             if (!_passwordService.IsPasswordStrong(request.NewPassword, out var passwordError))
             {
-                return BadRequest(new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = passwordError
-                });
+                return BadRequest(
+                    new ChangePasswordResponse { Success = false, Message = passwordError }
+                );
             }
 
             if (request.NewPassword != request.ConfirmNewPassword)
             {
-                return BadRequest(new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = "New passwords do not match"
-                });
+                return BadRequest(
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "New passwords do not match",
+                    }
+                );
             }
 
             var profile = await ResolveUserProfileAsync(request.Username);
             if (profile == null)
             {
-                return NotFound(new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = "User not found"
-                });
+                return NotFound(
+                    new ChangePasswordResponse { Success = false, Message = "User not found" }
+                );
             }
 
             if (!CanChangePasswordFor(profile.UserAccessCode))
             {
-                return StatusCode(StatusCodes.Status403Forbidden, new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = "You can only change your own password."
-                });
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "You can only change your own password.",
+                    }
+                );
             }
 
             var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
             var credential = modernCredentialLookup.Credential;
             var usingModernPassword = !string.IsNullOrWhiteSpace(credential?.password_hash);
-            var storedPassword = usingModernPassword ? credential!.password_hash : profile.UserAccessOld?.password;
+            var storedPassword = usingModernPassword
+                ? credential!.password_hash
+                : profile.UserAccessOld?.password;
 
             if (credential is not null && !credential.is_active)
-                return BadRequest(new ChangePasswordResponse { Success = false, Message = "No active credential record found for this user" });
+                return BadRequest(
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "No active credential record found for this user",
+                    }
+                );
 
             if (string.IsNullOrWhiteSpace(storedPassword))
-                return BadRequest(new ChangePasswordResponse { Success = false, Message = "No credential record found for this user" });
+                return BadRequest(
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "No credential record found for this user",
+                    }
+                );
 
-            if (!VerifyStoredPassword(request.CurrentPassword, storedPassword, allowLegacyPlaintext: !usingModernPassword))
-                return BadRequest(new ChangePasswordResponse { Success = false, Message = "Current password is incorrect" });
+            if (
+                !VerifyStoredPassword(
+                    request.CurrentPassword,
+                    storedPassword,
+                    allowLegacyPlaintext: !usingModernPassword
+                )
+            )
+                return BadRequest(
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "Current password is incorrect",
+                    }
+                );
 
             var changedByRaw = User.FindFirst("user_access_code")?.Value;
             int.TryParse(changedByRaw, out int changedBy);
@@ -379,22 +478,25 @@ public class AuthController : ControllerBase
 
             _logger.LogInformation(
                 "Password changed successfully for user {Username} by user_access_code {ChangedBy}",
-                request.Username, changedBy);
+                request.Username,
+                changedBy
+            );
 
-            return Ok(new ChangePasswordResponse
-            {
-                Success = true,
-                Message = "Password changed successfully"
-            });
+            return Ok(
+                new ChangePasswordResponse
+                {
+                    Success = true,
+                    Message = "Password changed successfully",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error changing password for user {Username}", request.Username);
-            return StatusCode(500, new ChangePasswordResponse
-            {
-                Success = false,
-                Message = "Error changing password"
-            });
+            return StatusCode(
+                500,
+                new ChangePasswordResponse { Success = false, Message = "Error changing password" }
+            );
         }
     }
 
@@ -403,7 +505,9 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("change-password-question")]
     [Authorize]
-    public async Task<ActionResult<ChangePasswordResponse>> ChangePasswordQuestion([FromBody] ChangePasswordQuestionRequest request)
+    public async Task<ActionResult<ChangePasswordResponse>> ChangePasswordQuestion(
+        [FromBody] ChangePasswordQuestionRequest request
+    )
     {
         if (User.Identity?.IsAuthenticated != true)
         {
@@ -414,89 +518,113 @@ public class AuthController : ControllerBase
         {
             if (!_passwordService.IsPasswordStrong(request.NewPassword, out var passwordError))
             {
-                return BadRequest(new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = passwordError
-                });
+                return BadRequest(
+                    new ChangePasswordResponse { Success = false, Message = passwordError }
+                );
             }
 
             if (request.NewPassword != request.ConfirmNewPassword)
             {
-                return BadRequest(new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = "New passwords do not match"
-                });
+                return BadRequest(
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "New passwords do not match",
+                    }
+                );
             }
 
             var profile = await ResolveUserProfileAsync(request.Username);
             if (profile is null)
             {
-                return NotFound(new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = "User not found"
-                });
+                return NotFound(
+                    new ChangePasswordResponse { Success = false, Message = "User not found" }
+                );
             }
 
             if (!CanChangePasswordFor(profile.UserAccessCode))
             {
-                return StatusCode(StatusCodes.Status403Forbidden, new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = "You are not allowed to change this user's password."
-                });
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "You are not allowed to change this user's password.",
+                    }
+                );
             }
 
-            if (string.IsNullOrWhiteSpace(request.SecurityQuestion) ||
-                request.SecurityQuestion.Equals("Select Question...", StringComparison.OrdinalIgnoreCase))
+            if (
+                string.IsNullOrWhiteSpace(request.SecurityQuestion)
+                || request.SecurityQuestion.Equals(
+                    "Select Question...",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
-                return BadRequest(new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = "Security question is required"
-                });
+                return BadRequest(
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "Security question is required",
+                    }
+                );
             }
 
             if (string.IsNullOrWhiteSpace(request.SecurityAnswer))
             {
-                return BadRequest(new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = "Security answer is required"
-                });
+                return BadRequest(
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "Security answer is required",
+                    }
+                );
             }
 
             var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
             var credential = modernCredentialLookup.Credential;
             var usingModernPassword = !string.IsNullOrWhiteSpace(credential?.password_hash);
-            var storedPassword = usingModernPassword ? credential!.password_hash : profile.UserAccessOld?.password;
+            var storedPassword = usingModernPassword
+                ? credential!.password_hash
+                : profile.UserAccessOld?.password;
             if (credential is not null && !credential.is_active)
             {
-                return BadRequest(new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = "No active credential record found for this user"
-                });
+                return BadRequest(
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "No active credential record found for this user",
+                    }
+                );
             }
 
             if (string.IsNullOrWhiteSpace(storedPassword))
             {
-                return BadRequest(new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = "No credential record found for this user"
-                });
+                return BadRequest(
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "No credential record found for this user",
+                    }
+                );
             }
 
-            if (!VerifyStoredPassword(request.OldPassword, storedPassword, allowLegacyPlaintext: !usingModernPassword))
+            if (
+                !VerifyStoredPassword(
+                    request.OldPassword,
+                    storedPassword,
+                    allowLegacyPlaintext: !usingModernPassword
+                )
+            )
             {
-                return BadRequest(new ChangePasswordResponse
-                {
-                    Success = false,
-                    Message = "Current password is incorrect"
-                });
+                return BadRequest(
+                    new ChangePasswordResponse
+                    {
+                        Success = false,
+                        Message = "Current password is incorrect",
+                    }
+                );
             }
 
             var actorUserCode = GetActorUserCode();
@@ -513,7 +641,8 @@ public class AuthController : ControllerBase
                 credential.account_locked_until = null;
                 credential.password_reset_token = SerializeSecurityQuestionPayload(
                     request.SecurityQuestion.Trim(),
-                    HashSecurityAnswer(request.SecurityAnswer));
+                    HashSecurityAnswer(request.SecurityAnswer)
+                );
                 credential.password_reset_token_expiry = null;
                 _context.LegacyUserCredentials.Update(credential);
             }
@@ -537,20 +666,29 @@ public class AuthController : ControllerBase
             ApplyLegacyPasswordChange(profile.UserAccessOld, request.NewPassword, now);
             await SaveChangesWithOptionalCredentialAsync(credential);
 
-            return Ok(new ChangePasswordResponse
-            {
-                Success = true,
-                Message = "Password and security question changed successfully"
-            });
+            return Ok(
+                new ChangePasswordResponse
+                {
+                    Success = true,
+                    Message = "Password and security question changed successfully",
+                }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error changing password/question for user {Username}", request.Username);
-            return StatusCode(500, new ChangePasswordResponse
-            {
-                Success = false,
-                Message = "Error changing password and security question"
-            });
+            _logger.LogError(
+                ex,
+                "Error changing password/question for user {Username}",
+                request.Username
+            );
+            return StatusCode(
+                500,
+                new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "Error changing password and security question",
+                }
+            );
         }
     }
 
@@ -559,7 +697,9 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("reset-login")]
     [Authorize(Roles = "User Administration")]
-    public async Task<ActionResult<UserAdminResponse>> ResetLogin([FromBody] ResetLoginRequest request)
+    public async Task<ActionResult<UserAdminResponse>> ResetLogin(
+        [FromBody] ResetLoginRequest request
+    )
     {
         if (User.Identity?.IsAuthenticated != true)
         {
@@ -576,11 +716,9 @@ public class AuthController : ControllerBase
             var profile = await ResolveUserProfileAsync(request.Username);
             if (profile is null)
             {
-                return NotFound(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "User not found"
-                });
+                return NotFound(
+                    new UserAdminResponse { Success = false, Message = "User not found" }
+                );
             }
 
             var now = DateTime.UtcNow;
@@ -608,20 +746,17 @@ public class AuthController : ControllerBase
 
             await _context.SaveChangesAsync();
 
-            return Ok(new UserAdminResponse
-            {
-                Success = true,
-                Message = "Login reset successfully"
-            });
+            return Ok(
+                new UserAdminResponse { Success = true, Message = "Login reset successfully" }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error resetting login for user {Username}", request.Username);
-            return StatusCode(500, new UserAdminResponse
-            {
-                Success = false,
-                Message = "Error resetting login"
-            });
+            return StatusCode(
+                500,
+                new UserAdminResponse { Success = false, Message = "Error resetting login" }
+            );
         }
     }
 
@@ -630,7 +765,9 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("force-password")]
     [Authorize]
-    public async Task<ActionResult<UserAdminResponse>> ForcePassword([FromBody] ForcePasswordRequest request)
+    public async Task<ActionResult<UserAdminResponse>> ForcePassword(
+        [FromBody] ForcePasswordRequest request
+    )
     {
         if (User.Identity?.IsAuthenticated != true)
         {
@@ -647,29 +784,23 @@ public class AuthController : ControllerBase
             var profile = await ResolveUserProfileAsync(request.Username);
             if (profile is null)
             {
-                return NotFound(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "User not found"
-                });
+                return NotFound(
+                    new UserAdminResponse { Success = false, Message = "User not found" }
+                );
             }
 
             if (string.IsNullOrWhiteSpace(request.NewPassword))
             {
-                return BadRequest(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "New password is required"
-                });
+                return BadRequest(
+                    new UserAdminResponse { Success = false, Message = "New password is required" }
+                );
             }
 
             if (!_passwordService.IsPasswordStrong(request.NewPassword, out var passwordError))
             {
-                return BadRequest(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = passwordError
-                });
+                return BadRequest(
+                    new UserAdminResponse { Success = false, Message = passwordError }
+                );
             }
 
             var now = DateTime.UtcNow;
@@ -688,12 +819,13 @@ public class AuthController : ControllerBase
                     password_expiry_date = GetPasswordExpiryDate(now),
                     password_reset_token = SerializeSecurityQuestionPayload(
                         DefaultSecurityQuestion,
-                        HashSecurityAnswer(profile.ResolvedUsername)),
+                        HashSecurityAnswer(profile.ResolvedUsername)
+                    ),
                     changed_by_user_code = actorUserCode > 0 ? actorUserCode : null,
                     created_date = now,
                     modified_date = now,
                     is_active = true,
-                    failed_login_attempts = 0
+                    failed_login_attempts = 0,
                 };
                 _context.LegacyUserCredentials.Add(credential);
             }
@@ -712,7 +844,8 @@ public class AuthController : ControllerBase
 
                     credential.password_reset_token = SerializeSecurityQuestionPayload(
                         DefaultSecurityQuestion,
-                        HashSecurityAnswer(profile.ResolvedUsername));
+                        HashSecurityAnswer(profile.ResolvedUsername)
+                    );
                     credential.password_reset_token_expiry = null;
 
                     _context.LegacyUserCredentials.Update(credential);
@@ -723,20 +856,21 @@ public class AuthController : ControllerBase
 
             await SaveChangesWithOptionalCredentialAsync(credential);
 
-            return Ok(new UserAdminResponse
-            {
-                Success = true,
-                Message = $"Password changed successfully for user {request.Username}"
-            });
+            return Ok(
+                new UserAdminResponse
+                {
+                    Success = true,
+                    Message = $"Password changed successfully for user {request.Username}",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error forcing password for user {Username}", request.Username);
-            return StatusCode(500, new UserAdminResponse
-            {
-                Success = false,
-                Message = "Error changing password"
-            });
+            return StatusCode(
+                500,
+                new UserAdminResponse { Success = false, Message = "Error changing password" }
+            );
         }
     }
 
@@ -745,9 +879,12 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("forgot-password/start")]
     [AllowAnonymous]
-    public async Task<ActionResult<UserAdminResponse>> ForgotPasswordStart([FromBody] ForgotPasswordStartRequest request)
+    public async Task<ActionResult<UserAdminResponse>> ForgotPasswordStart(
+        [FromBody] ForgotPasswordStartRequest request
+    )
     {
-        const string genericMessage = "If an account with a registered email address exists, a password reset link has been sent.";
+        const string genericMessage =
+            "If an account with a registered email address exists, a password reset link has been sent.";
 
         try
         {
@@ -769,34 +906,46 @@ public class AuthController : ControllerBase
             {
                 _logger.LogInformation(
                     "Legacy_User_Credentials is not present; using the legacy user_access_old1 password reset path for user_access_code {UserAccessCode}",
-                    profile.UserAccessCode);
+                    profile.UserAccessCode
+                );
             }
 
             if (!TryGetPasswordResetBaseUrl(out var passwordResetBaseUrl))
             {
                 _logger.LogError("Password reset base URL is not configured.");
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "Password reset is temporarily unavailable. Please contact support."
-                });
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new UserAdminResponse
+                    {
+                        Success = false,
+                        Message =
+                            "Password reset is temporarily unavailable. Please contact support.",
+                    }
+                );
             }
 
             var tokenExpiry = DateTime.UtcNow.Add(GetPasswordResetTokenLifetime());
             string rawToken;
             if (credential == null)
             {
-                if (!TryCreateLegacyPasswordResetToken(
+                if (
+                    !TryCreateLegacyPasswordResetToken(
                         profile.UserAccessCode,
                         DateTime.UtcNow,
                         tokenExpiry,
-                        out rawToken))
+                        out rawToken
+                    )
+                )
                 {
-                    return StatusCode(StatusCodes.Status503ServiceUnavailable, new UserAdminResponse
-                    {
-                        Success = false,
-                        Message = "Password reset is temporarily unavailable. Please contact support."
-                    });
+                    return StatusCode(
+                        StatusCodes.Status503ServiceUnavailable,
+                        new UserAdminResponse
+                        {
+                            Success = false,
+                            Message =
+                                "Password reset is temporarily unavailable. Please contact support.",
+                        }
+                    );
                 }
             }
             else
@@ -809,7 +958,8 @@ public class AuthController : ControllerBase
                 await SaveChangesWithOptionalCredentialAsync(modernCredentialLookup.Credential);
             }
 
-            var resetUrl = $"{passwordResetBaseUrl}/reset-password?token={Uri.EscapeDataString(rawToken)}";
+            var resetUrl =
+                $"{passwordResetBaseUrl}/reset-password?token={Uri.EscapeDataString(rawToken)}";
             var displayName = ResolveProfileDisplayName(profile);
             var htmlBody = $"""
                 <h2>Password reset request</h2>
@@ -821,7 +971,11 @@ public class AuthController : ControllerBase
                 <p>Fleet Information System</p>
                 """;
 
-            var emailSent = await _emailNotificationService.SendHtmlEmailAsync(emailAddress, "Fleet Information System password reset", htmlBody);
+            var emailSent = await _emailNotificationService.SendHtmlEmailAsync(
+                emailAddress,
+                "Fleet Information System password reset",
+                htmlBody
+            );
             if (!emailSent)
             {
                 if (credential != null)
@@ -833,28 +987,39 @@ public class AuthController : ControllerBase
                     await _context.SaveChangesAsync();
                 }
 
-                _logger.LogError("Password reset email could not be sent for user_access_code {UserAccessCode}", profile.UserAccessCode);
-                return StatusCode(StatusCodes.Status503ServiceUnavailable, new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "Password reset is temporarily unavailable. Please contact support."
-                });
+                _logger.LogError(
+                    "Password reset email could not be sent for user_access_code {UserAccessCode}",
+                    profile.UserAccessCode
+                );
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new UserAdminResponse
+                    {
+                        Success = false,
+                        Message =
+                            "Password reset is temporarily unavailable. Please contact support.",
+                    }
+                );
             }
 
             _logger.LogInformation(
                 "Password reset email sent for user_access_code {UserAccessCode} using {ResetStorage}",
                 profile.UserAccessCode,
-                credential == null ? "legacy user_access_old1 password" : "Legacy_User_Credentials");
+                credential == null ? "legacy user_access_old1 password" : "Legacy_User_Credentials"
+            );
             return Ok(new UserAdminResponse { Success = true, Message = genericMessage });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error starting forgot password flow");
-            return StatusCode(StatusCodes.Status500InternalServerError, new UserAdminResponse
-            {
-                Success = false,
-                Message = "Password reset is temporarily unavailable. Please contact support."
-            });
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "Password reset is temporarily unavailable. Please contact support.",
+                }
+            );
         }
     }
 
@@ -863,75 +1028,97 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("forgot-password/confirm")]
     [AllowAnonymous]
-    public async Task<ActionResult<UserAdminResponse>> ForgotPasswordConfirm([FromBody] ForgotPasswordConfirmRequest request)
+    public async Task<ActionResult<UserAdminResponse>> ForgotPasswordConfirm(
+        [FromBody] ForgotPasswordConfirmRequest request
+    )
     {
         try
         {
             if (string.IsNullOrWhiteSpace(request.Token))
             {
-                return BadRequest(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "The password reset link is invalid or has expired."
-                });
+                return BadRequest(
+                    new UserAdminResponse
+                    {
+                        Success = false,
+                        Message = "The password reset link is invalid or has expired.",
+                    }
+                );
             }
 
             if (request.NewPassword != request.ConfirmNewPassword)
             {
-                return BadRequest(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "New passwords do not match."
-                });
+                return BadRequest(
+                    new UserAdminResponse
+                    {
+                        Success = false,
+                        Message = "New passwords do not match.",
+                    }
+                );
             }
 
             if (!_passwordService.IsPasswordStrong(request.NewPassword, out var passwordError))
             {
-                return BadRequest(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = passwordError
-                });
+                return BadRequest(
+                    new UserAdminResponse { Success = false, Message = passwordError }
+                );
             }
 
             var now = DateTime.UtcNow;
 
-            if (TryReadLegacyPasswordResetToken(
+            if (
+                TryReadLegacyPasswordResetToken(
                     request.Token,
                     out var legacyUserAccessCode,
                     out var legacyIssuedAtUtc,
-                    out var legacyTokenExpiryUtc))
+                    out var legacyTokenExpiryUtc
+                )
+            )
             {
                 if (legacyTokenExpiryUtc <= now)
                 {
-                    return BadRequest(new UserAdminResponse
-                    {
-                        Success = false,
-                        Message = "The password reset link is invalid or has expired."
-                    });
+                    return BadRequest(
+                        new UserAdminResponse
+                        {
+                            Success = false,
+                            Message = "The password reset link is invalid or has expired.",
+                        }
+                    );
                 }
 
-                var legacyUser = await _context.UserAccessOlds
-                    .FirstOrDefaultAsync(u => u.user_access_code == legacyUserAccessCode);
-                if (legacyUser == null
-                    || (legacyUser.date_updated.HasValue
-                        && legacyUser.date_updated.Value >= legacyIssuedAtUtc))
+                var legacyUser = await _context.UserAccessOlds.FirstOrDefaultAsync(u =>
+                    u.user_access_code == legacyUserAccessCode
+                );
+                if (
+                    legacyUser == null
+                    || (
+                        legacyUser.date_updated.HasValue
+                        && legacyUser.date_updated.Value >= legacyIssuedAtUtc
+                    )
+                )
                 {
-                    return BadRequest(new UserAdminResponse
-                    {
-                        Success = false,
-                        Message = "The password reset link is invalid or has expired."
-                    });
+                    return BadRequest(
+                        new UserAdminResponse
+                        {
+                            Success = false,
+                            Message = "The password reset link is invalid or has expired.",
+                        }
+                    );
                 }
 
                 ApplyLegacyPasswordChange(legacyUser, request.NewPassword, now);
 
-                var modernCredentialLookup = await TryGetModernCredentialAsync(legacyUserAccessCode);
+                var modernCredentialLookup = await TryGetModernCredentialAsync(
+                    legacyUserAccessCode
+                );
                 if (modernCredentialLookup.Credential is not null)
                 {
-                    modernCredentialLookup.Credential.password_hash = _passwordService.HashPassword(request.NewPassword);
+                    modernCredentialLookup.Credential.password_hash = _passwordService.HashPassword(
+                        request.NewPassword
+                    );
                     modernCredentialLookup.Credential.last_password_change = now;
-                    modernCredentialLookup.Credential.password_expiry_date = GetPasswordExpiryDate(now);
+                    modernCredentialLookup.Credential.password_expiry_date = GetPasswordExpiryDate(
+                        now
+                    );
                     modernCredentialLookup.Credential.failed_login_attempts = 0;
                     modernCredentialLookup.Credential.account_locked_until = null;
                     modernCredentialLookup.Credential.password_reset_token = null;
@@ -942,39 +1129,49 @@ public class AuthController : ControllerBase
                 }
                 await SaveChangesWithOptionalCredentialAsync(modernCredentialLookup.Credential);
 
-                return Ok(new UserAdminResponse
-                {
-                    Success = true,
-                    Message = "Password reset successfully. You can now sign in with your new password."
-                });
+                return Ok(
+                    new UserAdminResponse
+                    {
+                        Success = true,
+                        Message =
+                            "Password reset successfully. You can now sign in with your new password.",
+                    }
+                );
             }
 
             var tokenHash = HashPasswordResetToken(request.Token);
-            await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            await using var transaction = await _context.Database.BeginTransactionAsync(
+                System.Data.IsolationLevel.Serializable
+            );
             LegacyUserCredential? credential;
             try
             {
-                credential = await _context.LegacyUserCredentials
-                    .FirstOrDefaultAsync(c => c.is_active
-                        && c.password_reset_token == tokenHash
-                        && c.password_reset_token_expiry.HasValue
-                        && c.password_reset_token_expiry.Value > now);
+                credential = await _context.LegacyUserCredentials.FirstOrDefaultAsync(c =>
+                    c.is_active
+                    && c.password_reset_token == tokenHash
+                    && c.password_reset_token_expiry.HasValue
+                    && c.password_reset_token_expiry.Value > now
+                );
             }
             catch (SqlException ex) when (IsMissingSchemaObject(ex))
             {
-                return BadRequest(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "The password reset link is invalid or has expired."
-                });
+                return BadRequest(
+                    new UserAdminResponse
+                    {
+                        Success = false,
+                        Message = "The password reset link is invalid or has expired.",
+                    }
+                );
             }
             if (credential == null)
             {
-                return BadRequest(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "The password reset link is invalid or has expired."
-                });
+                return BadRequest(
+                    new UserAdminResponse
+                    {
+                        Success = false,
+                        Message = "The password reset link is invalid or has expired.",
+                    }
+                );
             }
 
             await _legacyCredentialCompatibility.HydrateAsync(credential);
@@ -990,8 +1187,9 @@ public class AuthController : ControllerBase
             credential.is_active = true;
             _context.LegacyUserCredentials.Update(credential);
 
-            var userAccessOld = await _context.UserAccessOlds
-                .FirstOrDefaultAsync(u => u.user_access_code == credential.user_access_code);
+            var userAccessOld = await _context.UserAccessOlds.FirstOrDefaultAsync(u =>
+                u.user_access_code == credential.user_access_code
+            );
             if (userAccessOld != null)
             {
                 ApplyLegacyPasswordChange(userAccessOld, request.NewPassword, now);
@@ -1000,20 +1198,22 @@ public class AuthController : ControllerBase
             await SaveChangesWithOptionalCredentialAsync(credential);
             await transaction.CommitAsync();
 
-            return Ok(new UserAdminResponse
-            {
-                Success = true,
-                Message = "Password reset successfully. You can now sign in with your new password."
-            });
+            return Ok(
+                new UserAdminResponse
+                {
+                    Success = true,
+                    Message =
+                        "Password reset successfully. You can now sign in with your new password.",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error completing forgot password flow");
-            return StatusCode(500, new UserAdminResponse
-            {
-                Success = false,
-                Message = "Error resetting password"
-            });
+            return StatusCode(
+                500,
+                new UserAdminResponse { Success = false, Message = "Error resetting password" }
+            );
         }
     }
 
@@ -1022,7 +1222,9 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("activate-user")]
     [Authorize]
-    public async Task<ActionResult<UserAdminResponse>> ActivateUser([FromBody] ActivateUserRequest request)
+    public async Task<ActionResult<UserAdminResponse>> ActivateUser(
+        [FromBody] ActivateUserRequest request
+    )
     {
         if (User.Identity?.IsAuthenticated != true)
         {
@@ -1039,11 +1241,9 @@ public class AuthController : ControllerBase
             var profile = await ResolveUserProfileAsync(request.Username);
             if (profile is null)
             {
-                return NotFound(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "User not found"
-                });
+                return NotFound(
+                    new UserAdminResponse { Success = false, Message = "User not found" }
+                );
             }
 
             var now = DateTime.UtcNow;
@@ -1070,20 +1270,21 @@ public class AuthController : ControllerBase
 
             await _context.SaveChangesAsync();
 
-            return Ok(new UserAdminResponse
-            {
-                Success = true,
-                Message = $"User {request.Username} activated successfully"
-            });
+            return Ok(
+                new UserAdminResponse
+                {
+                    Success = true,
+                    Message = $"User {request.Username} activated successfully",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error activating user {Username}", request.Username);
-            return StatusCode(500, new UserAdminResponse
-            {
-                Success = false,
-                Message = "Error activating user"
-            });
+            return StatusCode(
+                500,
+                new UserAdminResponse { Success = false, Message = "Error activating user" }
+            );
         }
     }
 
@@ -1092,7 +1293,9 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("deactivate-user")]
     [Authorize]
-    public async Task<ActionResult<UserAdminResponse>> DeactivateUser([FromBody] DeactivateExpiredPasswordRequest request)
+    public async Task<ActionResult<UserAdminResponse>> DeactivateUser(
+        [FromBody] DeactivateExpiredPasswordRequest request
+    )
     {
         if (User.Identity?.IsAuthenticated != true)
         {
@@ -1109,11 +1312,9 @@ public class AuthController : ControllerBase
             var profile = await ResolveUserProfileAsync(request.Username);
             if (profile is null)
             {
-                return NotFound(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "User not found"
-                });
+                return NotFound(
+                    new UserAdminResponse { Success = false, Message = "User not found" }
+                );
             }
 
             var now = DateTime.UtcNow;
@@ -1137,20 +1338,21 @@ public class AuthController : ControllerBase
 
             await _context.SaveChangesAsync();
 
-            return Ok(new UserAdminResponse
-            {
-                Success = true,
-                Message = $"User {request.Username} deactivated successfully"
-            });
+            return Ok(
+                new UserAdminResponse
+                {
+                    Success = true,
+                    Message = $"User {request.Username} deactivated successfully",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deactivating user {Username}", request.Username);
-            return StatusCode(500, new UserAdminResponse
-            {
-                Success = false,
-                Message = "Error deactivating user"
-            });
+            return StatusCode(
+                500,
+                new UserAdminResponse { Success = false, Message = "Error deactivating user" }
+            );
         }
     }
 
@@ -1159,7 +1361,9 @@ public class AuthController : ControllerBase
     /// </summary>
     [HttpPost("deactivate-expired")]
     [Authorize]
-    public async Task<ActionResult<UserAdminResponse>> DeactivateExpiredPassword([FromBody] DeactivateExpiredPasswordRequest request)
+    public async Task<ActionResult<UserAdminResponse>> DeactivateExpiredPassword(
+        [FromBody] DeactivateExpiredPasswordRequest request
+    )
     {
         if (User.Identity?.IsAuthenticated != true)
         {
@@ -1176,26 +1380,28 @@ public class AuthController : ControllerBase
             var profile = await ResolveUserProfileAsync(request.Username);
             if (profile is null)
             {
-                return NotFound(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = "User not found"
-                });
+                return NotFound(
+                    new UserAdminResponse { Success = false, Message = "User not found" }
+                );
             }
 
             var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
             var credential = modernCredentialLookup.Credential;
-            var baselineDate = profile.UserAccessOld?.last_log_on
+            var baselineDate =
+                profile.UserAccessOld?.last_log_on
                 ?? credential?.last_password_change
                 ?? DateTime.UtcNow;
 
             if (baselineDate.AddDays(30) >= DateTime.UtcNow)
             {
-                return BadRequest(new UserAdminResponse
-                {
-                    Success = false,
-                    Message = $"The user account for {request.Username} cannot be deactivated. The password is still valid."
-                });
+                return BadRequest(
+                    new UserAdminResponse
+                    {
+                        Success = false,
+                        Message =
+                            $"The user account for {request.Username} cannot be deactivated. The password is still valid.",
+                    }
+                );
             }
 
             var now = DateTime.UtcNow;
@@ -1217,20 +1423,21 @@ public class AuthController : ControllerBase
 
             await _context.SaveChangesAsync();
 
-            return Ok(new UserAdminResponse
-            {
-                Success = true,
-                Message = $"User {request.Username} deactivated successfully"
-            });
+            return Ok(
+                new UserAdminResponse
+                {
+                    Success = true,
+                    Message = $"User {request.Username} deactivated successfully",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deactivating user {Username}", request.Username);
-            return StatusCode(500, new UserAdminResponse
-            {
-                Success = false,
-                Message = "Error deactivating user"
-            });
+            return StatusCode(
+                500,
+                new UserAdminResponse { Success = false, Message = "Error deactivating user" }
+            );
         }
     }
 
@@ -1242,8 +1449,9 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var credential = await _context.LegacyUserCredentials
-                .FirstOrDefaultAsync(c => c.user_access_code == userAccessCode);
+            var credential = await _context.LegacyUserCredentials.FirstOrDefaultAsync(c =>
+                c.user_access_code == userAccessCode
+            );
 
             if (credential is not null)
             {
@@ -1256,7 +1464,8 @@ public class AuthController : ControllerBase
         {
             _logger.LogInformation(
                 "Expanded credential store is unavailable; using legacy user_access_old1 for user_access_code {UserAccessCode}",
-                userAccessCode);
+                userAccessCode
+            );
             return new ModernCredentialLookup(false, null);
         }
     }
@@ -1274,8 +1483,9 @@ public class AuthController : ControllerBase
     {
         try
         {
-            return await _context.Users
-                .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
+            return await _context.Users.FirstOrDefaultAsync(u =>
+                u.user_access_code == userAccessCode
+            );
         }
         catch (SqlException ex) when (IsMissingSchemaObject(ex))
         {
@@ -1287,8 +1497,9 @@ public class AuthController : ControllerBase
     {
         try
         {
-            return await _context.Users
-                .FirstOrDefaultAsync(u => u.email != null && u.email.ToLower() == email);
+            return await _context.Users.FirstOrDefaultAsync(u =>
+                u.email != null && u.email.ToLower() == email
+            );
         }
         catch (SqlException ex) when (IsMissingSchemaObject(ex))
         {
@@ -1300,8 +1511,9 @@ public class AuthController : ControllerBase
     {
         try
         {
-            return await _context.UserAccessOlds
-                .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
+            return await _context.UserAccessOlds.FirstOrDefaultAsync(u =>
+                u.user_access_code == userAccessCode
+            );
         }
         catch (SqlException ex) when (IsMissingSchemaObject(ex))
         {
@@ -1309,15 +1521,19 @@ public class AuthController : ControllerBase
         }
     }
 
-    private async Task<UserAccessOld?> TryGetLegacyProfileByIdentifierAsync(string normalizedIdentifier)
+    private async Task<UserAccessOld?> TryGetLegacyProfileByIdentifierAsync(
+        string normalizedIdentifier
+    )
     {
         try
         {
-            return await _context.UserAccessOlds
-                .FirstOrDefaultAsync(u => (
-                    (u.name != null && u.name.ToLower() == normalizedIdentifier) ||
-                    (u.E_Mail != null && u.E_Mail.ToLower() == normalizedIdentifier) ||
-                    (u.FirstName != null && u.FirstName.ToLower() == normalizedIdentifier)));
+            return await _context.UserAccessOlds.FirstOrDefaultAsync(u =>
+                (
+                    (u.name != null && u.name.ToLower() == normalizedIdentifier)
+                    || (u.E_Mail != null && u.E_Mail.ToLower() == normalizedIdentifier)
+                    || (u.FirstName != null && u.FirstName.ToLower() == normalizedIdentifier)
+                )
+            );
         }
         catch (SqlException ex) when (IsMissingSchemaObject(ex))
         {
@@ -1338,7 +1554,8 @@ public class AuthController : ControllerBase
             var suppliedHash = HashLegacyPassword(password);
             return CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(suppliedHash),
-                Encoding.UTF8.GetBytes(normalizedHash.ToUpperInvariant()));
+                Encoding.UTF8.GetBytes(normalizedHash.ToUpperInvariant())
+            );
         }
 
         return allowLegacyPlaintext
@@ -1362,7 +1579,11 @@ public class AuthController : ControllerBase
         return Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(password)));
     }
 
-    private void ApplyLegacyPasswordChange(UserAccessOld? legacyUser, string newPassword, DateTime now)
+    private void ApplyLegacyPasswordChange(
+        UserAccessOld? legacyUser,
+        string newPassword,
+        DateTime now
+    )
     {
         if (legacyUser is null)
         {
@@ -1439,7 +1660,8 @@ public class AuthController : ControllerBase
         {
             _logger.LogInformation(
                 "Legacy ASP.NET role tables are unavailable; continuing with access-level role claims for {Username}",
-                username);
+                username
+            );
             return [];
         }
         finally
@@ -1483,7 +1705,9 @@ public class AuthController : ControllerBase
 
                 if (user != null)
                 {
-                    userAccessOld = await TryGetLegacyProfileByCodeAsync((short)user.user_access_code);
+                    userAccessOld = await TryGetLegacyProfileByCodeAsync(
+                        (short)user.user_access_code
+                    );
                 }
             }
         }
@@ -1494,9 +1718,7 @@ public class AuthController : ControllerBase
         }
 
         var userAccessCode = userAccessOld?.user_access_code ?? (short)(user!.user_access_code);
-        var resolvedUsername = userAccessOld?.name
-            ?? user?.email
-            ?? username;
+        var resolvedUsername = userAccessOld?.name ?? user?.email ?? username;
 
         return new ResolvedUserProfile((int)userAccessCode, resolvedUsername, userAccessOld, user);
     }
@@ -1515,8 +1737,7 @@ public class AuthController : ControllerBase
             return false;
         }
 
-        return actorUserAccessCode == targetUserAccessCode
-            || User.IsInRole("User Administration");
+        return actorUserAccessCode == targetUserAccessCode || User.IsInRole("User Administration");
     }
 
     private static string HashSecurityAnswer(string answer)
@@ -1528,10 +1749,7 @@ public class AuthController : ControllerBase
     private static string GeneratePasswordResetToken()
     {
         var tokenBytes = RandomNumberGenerator.GetBytes(32);
-        return Convert.ToBase64String(tokenBytes)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
+        return Convert.ToBase64String(tokenBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
     private static string HashPasswordResetToken(string token)
@@ -1543,24 +1761,33 @@ public class AuthController : ControllerBase
         int userAccessCode,
         DateTime issuedAtUtc,
         DateTime expiresAtUtc,
-        out string token)
+        out string token
+    )
     {
         token = string.Empty;
         var signingKey = GetPasswordResetSigningKey();
         if (signingKey == null)
         {
-            _logger.LogError("Cannot create a legacy password reset token because JwtSettings:SecretKey is not configured.");
+            _logger.LogError(
+                "Cannot create a legacy password reset token because JwtSettings:SecretKey is not configured."
+            );
             return false;
         }
 
-        var header = Base64UrlEncode(Encoding.UTF8.GetBytes("{\"alg\":\"HS256\",\"typ\":\"FIS-PRT\"}"));
-        var payload = Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(new LegacyPasswordResetTokenPayload
-        {
-            Purpose = "password-reset",
-            UserAccessCode = userAccessCode,
-            IssuedAtUnixSeconds = new DateTimeOffset(issuedAtUtc).ToUnixTimeSeconds(),
-            ExpiresAtUnixSeconds = new DateTimeOffset(expiresAtUtc).ToUnixTimeSeconds()
-        }));
+        var header = Base64UrlEncode(
+            Encoding.UTF8.GetBytes("{\"alg\":\"HS256\",\"typ\":\"FIS-PRT\"}")
+        );
+        var payload = Base64UrlEncode(
+            JsonSerializer.SerializeToUtf8Bytes(
+                new LegacyPasswordResetTokenPayload
+                {
+                    Purpose = "password-reset",
+                    UserAccessCode = userAccessCode,
+                    IssuedAtUnixSeconds = new DateTimeOffset(issuedAtUtc).ToUnixTimeSeconds(),
+                    ExpiresAtUnixSeconds = new DateTimeOffset(expiresAtUtc).ToUnixTimeSeconds(),
+                }
+            )
+        );
         var signingInput = $"{header}.{payload}";
         var signature = HMACSHA256.HashData(signingKey, Encoding.UTF8.GetBytes(signingInput));
         token = $"{signingInput}.{Base64UrlEncode(signature)}";
@@ -1571,7 +1798,8 @@ public class AuthController : ControllerBase
         string token,
         out int userAccessCode,
         out DateTime issuedAtUtc,
-        out DateTime expiresAtUtc)
+        out DateTime expiresAtUtc
+    )
     {
         userAccessCode = 0;
         issuedAtUtc = default;
@@ -1584,7 +1812,11 @@ public class AuthController : ControllerBase
         }
 
         var parts = token.Split('.', StringSplitOptions.None);
-        if (parts.Length != 3 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+        if (
+            parts.Length != 3
+            || string.IsNullOrWhiteSpace(parts[0])
+            || string.IsNullOrWhiteSpace(parts[1])
+        )
         {
             return false;
         }
@@ -1592,26 +1824,37 @@ public class AuthController : ControllerBase
         try
         {
             var signingInput = $"{parts[0]}.{parts[1]}";
-            var expectedSignature = HMACSHA256.HashData(signingKey, Encoding.UTF8.GetBytes(signingInput));
+            var expectedSignature = HMACSHA256.HashData(
+                signingKey,
+                Encoding.UTF8.GetBytes(signingInput)
+            );
             var suppliedSignature = Base64UrlDecode(parts[2]);
             if (!CryptographicOperations.FixedTimeEquals(expectedSignature, suppliedSignature))
             {
                 return false;
             }
 
-            var payload = JsonSerializer.Deserialize<LegacyPasswordResetTokenPayload>(Base64UrlDecode(parts[1]));
-            if (payload == null
+            var payload = JsonSerializer.Deserialize<LegacyPasswordResetTokenPayload>(
+                Base64UrlDecode(parts[1])
+            );
+            if (
+                payload == null
                 || !string.Equals(payload.Purpose, "password-reset", StringComparison.Ordinal)
                 || payload.UserAccessCode <= 0
                 || payload.IssuedAtUnixSeconds <= 0
-                || payload.ExpiresAtUnixSeconds <= payload.IssuedAtUnixSeconds)
+                || payload.ExpiresAtUnixSeconds <= payload.IssuedAtUnixSeconds
+            )
             {
                 return false;
             }
 
             userAccessCode = payload.UserAccessCode;
-            issuedAtUtc = DateTimeOffset.FromUnixTimeSeconds(payload.IssuedAtUnixSeconds).UtcDateTime;
-            expiresAtUtc = DateTimeOffset.FromUnixTimeSeconds(payload.ExpiresAtUnixSeconds).UtcDateTime;
+            issuedAtUtc = DateTimeOffset
+                .FromUnixTimeSeconds(payload.IssuedAtUnixSeconds)
+                .UtcDateTime;
+            expiresAtUtc = DateTimeOffset
+                .FromUnixTimeSeconds(payload.ExpiresAtUnixSeconds)
+                .UtcDateTime;
             return true;
         }
         catch (FormatException)
@@ -1631,17 +1874,12 @@ public class AuthController : ControllerBase
     private byte[]? GetPasswordResetSigningKey()
     {
         var secretKey = _configuration["JwtSettings:SecretKey"]?.Trim();
-        return string.IsNullOrWhiteSpace(secretKey)
-            ? null
-            : Encoding.UTF8.GetBytes(secretKey);
+        return string.IsNullOrWhiteSpace(secretKey) ? null : Encoding.UTF8.GetBytes(secretKey);
     }
 
     private static string Base64UrlEncode(byte[] bytes)
     {
-        return Convert.ToBase64String(bytes)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
+        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
     private static byte[] Base64UrlDecode(string value)
@@ -1653,7 +1891,8 @@ public class AuthController : ControllerBase
 
     private TimeSpan GetPasswordResetTokenLifetime()
     {
-        var configuredMinutes = _configuration.GetValue<int?>("EmailSettings:PasswordResetTokenLifetimeMinutes") ?? 30;
+        var configuredMinutes =
+            _configuration.GetValue<int?>("EmailSettings:PasswordResetTokenLifetimeMinutes") ?? 30;
         return TimeSpan.FromMinutes(Math.Clamp(configuredMinutes, 5, 1440));
     }
 
@@ -1670,7 +1909,9 @@ public class AuthController : ControllerBase
 
     private bool TryGetPasswordResetBaseUrl(out string baseUrl)
     {
-        baseUrl = (_configuration["EmailSettings:PasswordResetBaseUrl"] ?? string.Empty).TrimEnd('/');
+        baseUrl = (_configuration["EmailSettings:PasswordResetBaseUrl"] ?? string.Empty).TrimEnd(
+            '/'
+        );
         return Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri)
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
             && string.IsNullOrWhiteSpace(uri.Query)
@@ -1688,19 +1929,19 @@ public class AuthController : ControllerBase
     {
         var fullName = string.Join(
             " ",
-            new[] { profile.UserAccessOld?.FirstName, profile.UserAccessOld?.LastName }
-                .Where(value => !string.IsNullOrWhiteSpace(value)));
+            new[] { profile.UserAccessOld?.FirstName, profile.UserAccessOld?.LastName }.Where(
+                value => !string.IsNullOrWhiteSpace(value)
+            )
+        );
 
         return string.IsNullOrWhiteSpace(fullName) ? profile.ResolvedUsername : fullName;
     }
 
     private static string SerializeSecurityQuestionPayload(string question, string answerHash)
     {
-        return JsonSerializer.Serialize(new SecurityQuestionPayload
-        {
-            Question = question,
-            AnswerHash = answerHash
-        });
+        return JsonSerializer.Serialize(
+            new SecurityQuestionPayload { Question = question, AnswerHash = answerHash }
+        );
     }
 
     private static readonly string RefreshTokenCookieName = "FIS_Refresh_Token";
@@ -1710,7 +1951,8 @@ public class AuthController : ControllerBase
         string email,
         long accessLevel = 0,
         bool passwordExpired = false,
-        IEnumerable<string>? additionalRoles = null)
+        IEnumerable<string>? additionalRoles = null
+    )
     {
         var claims = new List<Claim>
         {
@@ -1718,13 +1960,16 @@ public class AuthController : ControllerBase
             new Claim(ClaimTypes.Email, email),
             new Claim(ClaimTypes.Name, email),
             new Claim("password_change_required", passwordExpired.ToString().ToLowerInvariant()),
-            new Claim("access_level", accessLevel.ToString())
+            new Claim("access_level", accessLevel.ToString()),
         };
 
         // Derive named legacy role claims from the bitmask so pages using IsInRole() work
-        foreach (var role in LegacyRoleMap.RolesForAccessLevel(accessLevel)
-            .Concat(additionalRoles ?? [])
-            .Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (
+            var role in LegacyRoleMap
+                .RolesForAccessLevel(accessLevel)
+                .Concat(additionalRoles ?? [])
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+        )
         {
             claims.Add(new Claim(ClaimTypes.Role, role));
         }
@@ -1745,38 +1990,39 @@ public class AuthController : ControllerBase
         // role name (as checked by pages) -> required permission bit
         private static readonly (string Role, long Bit)[] Map =
         [
-            ("Vehicle Master",          BitVehicleManagement),
-            ("Asset Verification",      BitVehicleManagement),
-            ("Accidents",               BitVehicleManagement),
-            ("Call Centre",             BitVehicleManagement),
-            ("Fines",                   BitVehicleManagement),
-            ("Licence",                 BitVehicleManagement),
-            ("Losses",                  BitVehicleManagement),
-            ("Tracking",                BitVehicleManagement),
-            ("Towing",                  BitVehicleManagement),
-            ("Trip Authorities",        BitVehicleManagement),
-            ("Private Hire Vehicles",   BitVehicleManagement),
-            ("Taxis",                   BitVehicleManagement),
-            ("Clearance",               BitVehicleManagement),
-            ("Contracts",               BitContractManagement),
-            ("User Administration",     BitUserAdministration),
-            ("Reports",                 BitReports),
-            ("Management Reports",      BitReports),
-            ("Logbooks",                BitReports),
-            ("Logsheets",               BitReports),
-            ("Monitor",                 BitReports),
-            ("Fuelcards",               BitFinancial),
-            ("Auction",                 BitFinancial),
+            ("Vehicle Master", BitVehicleManagement),
+            ("Asset Verification", BitVehicleManagement),
+            ("Accidents", BitVehicleManagement),
+            ("Call Centre", BitVehicleManagement),
+            ("Fines", BitVehicleManagement),
+            ("Licence", BitVehicleManagement),
+            ("Losses", BitVehicleManagement),
+            ("Tracking", BitVehicleManagement),
+            ("Towing", BitVehicleManagement),
+            ("Trip Authorities", BitVehicleManagement),
+            ("Private Hire Vehicles", BitVehicleManagement),
+            ("Taxis", BitVehicleManagement),
+            ("Clearance", BitVehicleManagement),
+            ("Contracts", BitContractManagement),
+            ("User Administration", BitUserAdministration),
+            ("Reports", BitReports),
+            ("Management Reports", BitReports),
+            ("Logbooks", BitReports),
+            ("Logsheets", BitReports),
+            ("Monitor", BitReports),
+            ("Fuelcards", BitFinancial),
+            ("Auction", BitFinancial),
             ("Financial Data (All Departments)", BitFinancial),
-            ("Financial Data (Own Department)",  BitFinancial),
-            ("Financial Reports",       BitFinancial),
-            ("Workshop",                BitWorkshop),
-            ("Trouble Shooting",        BitWorkshop),
+            ("Financial Data (Own Department)", BitFinancial),
+            ("Financial Reports", BitFinancial),
+            ("Workshop", BitWorkshop),
+            ("Trouble Shooting", BitWorkshop),
         ];
 
         public static IEnumerable<string> RolesForAccessLevel(long accessLevel)
         {
-            if (accessLevel <= 0) return Array.Empty<string>();
+            if (accessLevel <= 0)
+                return Array.Empty<string>();
             return Map.Where(m => (accessLevel & m.Bit) == m.Bit).Select(m => m.Role);
         }
     }
@@ -1785,7 +2031,8 @@ public class AuthController : ControllerBase
         string accessToken,
         DateTimeOffset accessExpiresAt,
         string refreshToken,
-        DateTimeOffset refreshExpiresAt)
+        DateTimeOffset refreshExpiresAt
+    )
     {
         var isHttps = Request.IsHttps;
 
@@ -1799,8 +2046,9 @@ public class AuthController : ControllerBase
                 SameSite = SameSiteMode.Lax,
                 Expires = accessExpiresAt,
                 Path = "/",
-                IsEssential = true
-            });
+                IsEssential = true,
+            }
+        );
 
         Response.Cookies.Append(
             RefreshTokenCookieName,
@@ -1812,12 +2060,23 @@ public class AuthController : ControllerBase
                 SameSite = SameSiteMode.Lax,
                 Expires = refreshExpiresAt,
                 Path = "/",
-                IsEssential = true
-            });
+                IsEssential = true,
+            }
+        );
     }
 
-    private sealed record ModernCredentialLookup(bool StoreAvailable, LegacyUserCredential? Credential);
-    private sealed record ResolvedUserProfile(int UserAccessCode, string ResolvedUsername, UserAccessOld? UserAccessOld, User? User);
+    private sealed record ModernCredentialLookup(
+        bool StoreAvailable,
+        LegacyUserCredential? Credential
+    );
+
+    private sealed record ResolvedUserProfile(
+        int UserAccessCode,
+        string ResolvedUsername,
+        UserAccessOld? UserAccessOld,
+        User? User
+    );
+
     private sealed class SecurityQuestionPayload
     {
         public string Question { get; set; } = string.Empty;
@@ -1910,13 +2169,19 @@ public class LoginResponse
 public class ChangePasswordRequest
 {
     public string Username { get; set; } = string.Empty;
+
     /// <summary>Current (old) password — required to verify identity before changing.</summary>
     public string CurrentPassword { get; set; } = string.Empty;
+
     /// <summary>Kept for backwards compat — maps to CurrentPassword if provided.</summary>
     public string OldPassword
     {
         get => CurrentPassword;
-        set { if (!string.IsNullOrEmpty(value)) CurrentPassword = value; }
+        set
+        {
+            if (!string.IsNullOrEmpty(value))
+                CurrentPassword = value;
+        }
     }
     public string NewPassword { get; set; } = string.Empty;
     public string ConfirmNewPassword { get; set; } = string.Empty;

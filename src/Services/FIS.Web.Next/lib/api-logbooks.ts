@@ -37,10 +37,14 @@ export type LogbookWriteInput = {
   date_created?: string | null;
 };
 
-export type LogbookApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type LogbookApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class LogbookApiError extends Error {
-  constructor(public readonly reason: LogbookApiErrorReason, message: string) {
+  constructor(
+    public readonly reason: LogbookApiErrorReason,
+    message: string,
+  ) {
     super(message);
     this.name = "LogbookApiError";
   }
@@ -94,7 +98,8 @@ function getCollection(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new LogbookApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new LogbookApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -113,8 +118,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
     if (response.status === 401 || response.status === 403) {
       throw new LogbookApiError("unauthorized", "The FIS access cookie was rejected.");
     }
-    if (response.status === 404) throw new LogbookApiError("not-found", "The logbook was not found.");
-    if (!response.ok) throw new LogbookApiError("invalid-response", `FIS API returned HTTP ${response.status}.`);
+    if (response.status === 404)
+      throw new LogbookApiError("not-found", "The logbook was not found.");
+    if (!response.ok)
+      throw new LogbookApiError("invalid-response", `FIS API returned HTTP ${response.status}.`);
     return response;
   } catch (error) {
     if (error instanceof LogbookApiError) throw error;
@@ -144,13 +151,21 @@ function mapLogbook(value: unknown): LogbookRecord | null {
   return {
     logbookCode,
     vmfCode: asNumber(getValue(value, "vmf_code", "vmfCode")),
-    ggNumber: asString(getValue(value, "fleet_number", "fleetNumber")) ?? asString(vehicleRecord && getValue(vehicleRecord, "fleet_number", "fleetNumber")),
-    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")) ?? asString(vehicleRecord && getValue(vehicleRecord, "registration_number", "registrationNumber")),
+    ggNumber:
+      asString(getValue(value, "fleet_number", "fleetNumber")) ??
+      asString(vehicleRecord && getValue(vehicleRecord, "fleet_number", "fleetNumber")),
+    registrationNumber:
+      asString(getValue(value, "registration_number", "registrationNumber")) ??
+      asString(
+        vehicleRecord && getValue(vehicleRecord, "registration_number", "registrationNumber"),
+      ),
     beginNumber: asString(getValue(value, "begin_num", "beginNum")),
     endNumber: asString(getValue(value, "end_num", "endNum")),
     handoutDate: asString(getValue(value, "handout_date", "handoutDate")),
     siteCode: asNumber(getValue(value, "site_code", "siteCode")),
-    siteDescription: asString(getValue(value, "site_description", "siteDescription")) ?? asString(siteRecord && getValue(siteRecord, "description", "Description")),
+    siteDescription:
+      asString(getValue(value, "site_description", "siteDescription")) ??
+      asString(siteRecord && getValue(siteRecord, "description", "Description")),
     receiverName: asString(getValue(value, "lb_receiver_name", "receiverName", "lbReceiverName")),
     telephoneNumber: asString(getValue(value, "lb_tel_num", "telephoneNumber", "lbTelNum")),
     comment: asString(getValue(value, "lb_comment", "comment")),
@@ -177,20 +192,38 @@ export async function getLogbooks() {
 }
 
 export async function getLogbook(logbookCode: number) {
-  const record = mapLogbook(await readJson(await requestApi(`api/logbook/${encodeURIComponent(logbookCode)}`)));
-  if (!record) throw new LogbookApiError("invalid-response", "The FIS API returned an invalid logbook.");
+  const record = mapLogbook(
+    await readJson(await requestApi(`api/logbook/${encodeURIComponent(logbookCode)}`)),
+  );
+  if (!record)
+    throw new LogbookApiError("invalid-response", "The FIS API returned an invalid logbook.");
   return record;
 }
 
 export async function createLogbook(input: LogbookWriteInput) {
   const record = mapLogbook(await readJson(await mutate("api/logbook", "POST", input)));
-  if (!record) throw new LogbookApiError("invalid-response", "The FIS API returned an invalid created logbook.");
+  if (!record)
+    throw new LogbookApiError(
+      "invalid-response",
+      "The FIS API returned an invalid created logbook.",
+    );
   return record;
 }
 
 export async function updateLogbook(logbookCode: number, input: LogbookWriteInput) {
-  const record = mapLogbook(await readJson(await mutate(`api/logbook/${encodeURIComponent(logbookCode)}`, "PUT", { logbookcode: logbookCode, ...input })));
-  if (!record) throw new LogbookApiError("invalid-response", "The FIS API returned an invalid updated logbook.");
+  const record = mapLogbook(
+    await readJson(
+      await mutate(`api/logbook/${encodeURIComponent(logbookCode)}`, "PUT", {
+        logbookcode: logbookCode,
+        ...input,
+      }),
+    ),
+  );
+  if (!record)
+    throw new LogbookApiError(
+      "invalid-response",
+      "The FIS API returned an invalid updated logbook.",
+    );
   return record;
 }
 

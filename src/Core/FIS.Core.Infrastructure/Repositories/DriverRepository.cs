@@ -27,9 +27,9 @@ public class DriverRepository : IDriverRepository
         if (!int.TryParse(driverId, out int driverCode))
             return null;
 
-        return await _context.Drivers
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(d => d.site_driver_code == driverCode);
+        return await _context
+            .Drivers.Where(x => !x.is_deleted)
+            .FirstOrDefaultAsync(d => d.site_driver_code == driverCode);
     }
 
     /// <summary>
@@ -40,9 +40,9 @@ public class DriverRepository : IDriverRepository
         if (string.IsNullOrEmpty(licenceNumber))
             return null;
 
-        return await _context.Drivers
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(d => d.driver_licence_number == licenceNumber);
+        return await _context
+            .Drivers.Where(x => !x.is_deleted)
+            .FirstOrDefaultAsync(d => d.driver_licence_number == licenceNumber);
     }
 
     /// <summary>
@@ -50,8 +50,8 @@ public class DriverRepository : IDriverRepository
     /// </summary>
     public async Task<IEnumerable<Driver>> GetActiveDriversAsync()
     {
-        return await _context.Drivers
-            .Where(d => d.driver_active && !d.is_deleted)
+        return await _context
+            .Drivers.Where(d => d.driver_active && !d.is_deleted)
             .OrderBy(d => d.driver_surname)
             .ThenBy(d => d.driver_firstname)
             .ToListAsync();
@@ -66,13 +66,23 @@ public class DriverRepository : IDriverRepository
             return await GetActiveDriversAsync();
 
         var search = searchTerm.ToLower();
-        return await _context.Drivers
-            .Where(d => !d.is_deleted &&
-                       ((d.driver_surname != null && d.driver_surname.ToLower().Contains(search)) ||
-                        (d.driver_firstname != null && d.driver_firstname.ToLower().Contains(search)) ||
-                        (d.driver_licence_number != null && d.driver_licence_number.ToLower().Contains(search)) ||
-                        (d.driver_persalnumber != null && d.driver_persalnumber.ToLower().Contains(search)) ||
-                        (d.driver_SA_id != null && d.driver_SA_id.ToLower().Contains(search))))
+        return await _context
+            .Drivers.Where(d =>
+                !d.is_deleted
+                && (
+                    (d.driver_surname != null && d.driver_surname.ToLower().Contains(search))
+                    || (d.driver_firstname != null && d.driver_firstname.ToLower().Contains(search))
+                    || (
+                        d.driver_licence_number != null
+                        && d.driver_licence_number.ToLower().Contains(search)
+                    )
+                    || (
+                        d.driver_persalnumber != null
+                        && d.driver_persalnumber.ToLower().Contains(search)
+                    )
+                    || (d.driver_SA_id != null && d.driver_SA_id.ToLower().Contains(search))
+                )
+            )
             .OrderBy(d => d.driver_surname)
             .ThenBy(d => d.driver_firstname)
             .ToListAsync();
@@ -87,12 +97,12 @@ public class DriverRepository : IDriverRepository
             throw new ArgumentNullException(nameof(driver));
 
         // Auto-populate audit fields
-            driver.date_created = DateTime.UtcNow;
-            driver.is_deleted = false;
-            
-            _context.Drivers.Add(driver);
+        driver.date_created = DateTime.UtcNow;
+        driver.is_deleted = false;
+
+        _context.Drivers.Add(driver);
         await _context.SaveChangesAsync();
-        
+
         return driver;
     }
 
@@ -106,7 +116,9 @@ public class DriverRepository : IDriverRepository
 
         var existing = await _context.Drivers.FindAsync(driver.site_driver_code);
         if (existing == null)
-            throw new InvalidOperationException($"Driver with site_driver_code {driver.site_driver_code} not found");
+            throw new InvalidOperationException(
+                $"Driver with site_driver_code {driver.site_driver_code} not found"
+            );
 
         _context.Entry(existing).CurrentValues.SetValues(driver);
         await _context.SaveChangesAsync();

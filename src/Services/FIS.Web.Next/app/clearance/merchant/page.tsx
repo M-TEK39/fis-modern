@@ -31,7 +31,9 @@ function getQueryInt(value: string | undefined) {
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function valueOrDash(value: string | number | null | undefined) {
@@ -55,7 +57,9 @@ function ApiUnavailable() {
       </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Merchant information could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
         <Link className="button button-primary" href="/clearance/merchant">
           Try again
@@ -135,7 +139,10 @@ function MerchantList({ merchants }: Readonly<{ merchants: MerchantRecord[] }>) 
                   <td>{valueOrDash(merchant.merchantName)}</td>
                   <td>
                     <div className="button-row">
-                      <Link className="button button-secondary button-small" href={`/clearance/merchant?merchantCode=${merchant.merchantCode}`}>
+                      <Link
+                        className="button button-secondary button-small"
+                        href={`/clearance/merchant?merchantCode=${merchant.merchantCode}`}
+                      >
                         Edit
                       </Link>
                       <Link
@@ -204,7 +211,10 @@ export default async function ClearanceMerchantPage({
       );
     }
 
-    console.error("FIS merchant request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS merchant request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return (
       <main className="page-shell vehicle-page-shell">
         <ApiUnavailable />
@@ -213,17 +223,24 @@ export default async function ClearanceMerchantPage({
   }
 
   const query = await searchParams;
-  const selectedCode = getQueryInt(getQueryValue(query.merchantCode) ?? getQueryValue(query.cmbMerchant) ?? getQueryValue(query.code));
-  const selectedMerchant = selectedCode ? merchants.find((merchant) => merchant.merchantCode === selectedCode) ?? null : null;
+  const selectedCode = getQueryInt(
+    getQueryValue(query.merchantCode) ??
+      getQueryValue(query.cmbMerchant) ??
+      getQueryValue(query.code),
+  );
+  const selectedMerchant = selectedCode
+    ? (merchants.find((merchant) => merchant.merchantCode === selectedCode) ?? null)
+    : null;
   let deleteCheck: MerchantDeleteCheck | null = null;
   let deleteCheckError: string | null = null;
   if (deletionMode && selectedCode) {
     try {
       deleteCheck = await getMerchantDeleteCheck(selectedCode);
     } catch (error) {
-      deleteCheckError = error instanceof ClearanceApiError && error.reason === "unavailable"
-        ? "The merchant deletion check is temporarily unavailable. Please try again."
-        : "The merchant deletion check could not be loaded.";
+      deleteCheckError =
+        error instanceof ClearanceApiError && error.reason === "unavailable"
+          ? "The merchant deletion check is temporarily unavailable. Please try again."
+          : "The merchant deletion check could not be loaded.";
     }
   }
   const saved = getQueryValue(query.saved) === "1";
@@ -245,10 +262,26 @@ export default async function ClearanceMerchantPage({
           </Link>
         </header>
 
-        {saved ? <div className="notice notice-success" role="status">Merchant saved successfully.</div> : null}
-        {updated ? <div className="notice notice-success" role="status">Merchant updated successfully.</div> : null}
-        {deleted ? <div className="notice notice-success" role="status">Merchant deleted successfully.</div> : null}
-        {errorMessage ? <div className="notice notice-error" role="alert">{errorMessage}</div> : null}
+        {saved ? (
+          <div className="notice notice-success" role="status">
+            Merchant saved successfully.
+          </div>
+        ) : null}
+        {updated ? (
+          <div className="notice notice-success" role="status">
+            Merchant updated successfully.
+          </div>
+        ) : null}
+        {deleted ? (
+          <div className="notice notice-success" role="status">
+            Merchant deleted successfully.
+          </div>
+        ) : null}
+        {errorMessage ? (
+          <div className="notice notice-error" role="alert">
+            {errorMessage}
+          </div>
+        ) : null}
 
         {deletionMode ? (
           <MerchantDeleteCheckView
@@ -306,8 +339,8 @@ function MerchantDeleteCheckView({
         <p className="eyebrow">Clearances for merchant</p>
         <h2>{valueOrDash(check.merchantName ?? merchant.merchantName)}</h2>
         <p>
-          {check.clearanceCount} clearance record{check.clearanceCount === 1 ? " is" : "s are"} linked to this merchant.
-          Change the merchant on those clearances before deleting it.
+          {check.clearanceCount} clearance record{check.clearanceCount === 1 ? " is" : "s are"}{" "}
+          linked to this merchant. Change the merchant on those clearances before deleting it.
         </p>
         <Link className="button button-secondary" href="/clearance/merchant">
           Return to Merchant Maintenance
@@ -319,7 +352,9 @@ function MerchantDeleteCheckView({
   return (
     <section className="vehicle-status-maintenance-panel" aria-labelledby="merchant-delete-title">
       <p className="eyebrow">No clearances found</p>
-      <h2 id="merchant-delete-title">Delete {valueOrDash(check.merchantName ?? merchant.merchantName)}?</h2>
+      <h2 id="merchant-delete-title">
+        Delete {valueOrDash(check.merchantName ?? merchant.merchantName)}?
+      </h2>
       <p>No clearance records are linked to this merchant. It is safe to delete.</p>
       <form action={deleteMerchantAction}>
         <input name="returnPath" type="hidden" value="/clearance/merchant" />

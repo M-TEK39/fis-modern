@@ -15,7 +15,8 @@ public sealed class FuelCardManagementService
 
     public FuelCardManagementService(
         IFuelCardRepository fuelCardRepository,
-        IVehicleRepository vehicleRepository)
+        IVehicleRepository vehicleRepository
+    )
     {
         _fuelCardRepository = fuelCardRepository;
         _vehicleRepository = vehicleRepository;
@@ -26,16 +27,23 @@ public sealed class FuelCardManagementService
         string receiverName,
         string receiverTel,
         int siteCode,
-        int currentUserId = 0)
+        int currentUserId = 0
+    )
     {
-        var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode)
+        var vehicle =
+            await _vehicleRepository.GetByIdAsync(vmfCode)
             ?? throw new InvalidOperationException($"Vehicle with VMF code {vmfCode} not found");
 
-        var existingCard = (await _fuelCardRepository.GetFuelCardsByVehicleAsync(vmfCode))
-            .FirstOrDefault(card => string.Equals(card.ExpReason?.Trim(), "In Service", StringComparison.OrdinalIgnoreCase));
+        var existingCard = (
+            await _fuelCardRepository.GetFuelCardsByVehicleAsync(vmfCode)
+        ).FirstOrDefault(card =>
+            string.Equals(card.ExpReason?.Trim(), "In Service", StringComparison.OrdinalIgnoreCase)
+        );
         if (existingCard is not null)
         {
-            throw new InvalidOperationException($"Vehicle {vmfCode} already has an active fuel card");
+            throw new InvalidOperationException(
+                $"Vehicle {vmfCode} already has an active fuel card"
+            );
         }
 
         var now = DateTime.Now;
@@ -54,24 +62,36 @@ public sealed class FuelCardManagementService
             Status_date = now,
             Petrecsite = (short)siteCode,
             Petprint = "Y",
-            Garage = "P"
+            Garage = "P",
         };
 
         return await _fuelCardRepository.CreateAsync(fuelCard, currentUserId);
     }
 
-    public async Task<bool> ReturnFuelCardAsync(int fuelCardCode, string reason, int currentUserId = 0)
+    public async Task<bool> ReturnFuelCardAsync(
+        int fuelCardCode,
+        string reason,
+        int currentUserId = 0
+    )
     {
         var fuelCard = await _fuelCardRepository.GetByIdAsync(fuelCardCode);
-        if (fuelCard is null) return false;
+        if (fuelCard is null)
+            return false;
 
         var validReasons = new[]
         {
-            "Card to Bank", "Card to GG", "Withdrawn", "Sold", "Privatised", "Hijacked"
+            "Card to Bank",
+            "Card to GG",
+            "Withdrawn",
+            "Sold",
+            "Privatised",
+            "Hijacked",
         };
         if (!validReasons.Contains(reason, StringComparer.OrdinalIgnoreCase))
         {
-            throw new ArgumentException($"Invalid return reason. Must be one of: {string.Join(", ", validReasons)}");
+            throw new ArgumentException(
+                $"Invalid return reason. Must be one of: {string.Join(", ", validReasons)}"
+            );
         }
 
         fuelCard.ExpReason = reason;
@@ -92,22 +112,43 @@ public sealed class FuelCardManagementService
             : fuelCards.ToList();
 
         var statusGroups = filteredCards
-            .GroupBy(card => string.IsNullOrWhiteSpace(card.ExpReason) ? "Unknown" : card.ExpReason.Trim())
+            .GroupBy(card =>
+                string.IsNullOrWhiteSpace(card.ExpReason) ? "Unknown" : card.ExpReason.Trim()
+            )
             .ToDictionary(group => group.Key, group => group.Count());
 
         return new FuelCardAllocationReport
         {
             TotalCards = filteredCards.Count,
-            ActiveCards = filteredCards.Count(card => string.Equals(card.ExpReason?.Trim(), "In Service", StringComparison.OrdinalIgnoreCase)),
-            ReturnedCards = filteredCards.Count(card => !string.Equals(card.ExpReason?.Trim(), "In Service", StringComparison.OrdinalIgnoreCase)),
+            ActiveCards = filteredCards.Count(card =>
+                string.Equals(
+                    card.ExpReason?.Trim(),
+                    "In Service",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            ),
+            ReturnedCards = filteredCards.Count(card =>
+                !string.Equals(
+                    card.ExpReason?.Trim(),
+                    "In Service",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            ),
             StatusBreakdown = statusGroups,
             CardsByGarage = filteredCards
-                .GroupBy(card => string.IsNullOrWhiteSpace(card.Garage) ? "Unknown" : card.Garage.Trim())
+                .GroupBy(card =>
+                    string.IsNullOrWhiteSpace(card.Garage) ? "Unknown" : card.Garage.Trim()
+                )
                 .ToDictionary(group => group.Key, group => group.Count()),
             ExpiringCards = filteredCards.Count(card =>
                 card.PetExpire.HasValue
                 && card.PetExpire.Value <= DateTime.Now.AddMonths(3)
-                && string.Equals(card.ExpReason?.Trim(), "In Service", StringComparison.OrdinalIgnoreCase)),
+                && string.Equals(
+                    card.ExpReason?.Trim(),
+                    "In Service",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            ),
             RecentActivity = filteredCards
                 .Where(card => card.Status_date.HasValue)
                 .OrderByDescending(card => card.Status_date)
@@ -118,9 +159,9 @@ public sealed class FuelCardManagementService
                     VmfCode = card.vmf_code ?? 0,
                     Action = card.ExpReason ?? "Unknown",
                     Date = card.Status_date ?? DateTime.MinValue,
-                    Receiver = card.PetReceiver ?? "Unknown"
+                    Receiver = card.PetReceiver ?? "Unknown",
                 })
-                .ToList()
+                .ToList(),
         };
     }
 }

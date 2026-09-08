@@ -20,23 +20,23 @@ public class VehicleTariffRepository : IVehicleTariffRepository
 
     public async Task<VehicleTariff?> GetByIdAsync(int vehicleTariffCode)
     {
-        return await _context.VehicleTariffs
-            .Where(t => t.vehicle_tariff_code == vehicleTariffCode)
+        return await _context
+            .VehicleTariffs.Where(t => t.vehicle_tariff_code == vehicleTariffCode)
             .FirstOrDefaultAsync();
     }
 
     public async Task<VehicleTariff?> GetCurrentTariffForVehicleAsync(int vmfCode)
     {
-        return await _context.VehicleTariffs
-            .Where(t => t.vmf_code == vmfCode && t.end_date == null)
+        return await _context
+            .VehicleTariffs.Where(t => t.vmf_code == vmfCode && t.end_date == null)
             .OrderByDescending(t => t.start_date)
             .FirstOrDefaultAsync();
     }
 
     public async Task<IEnumerable<VehicleTariff>> GetTariffHistoryForVehicleAsync(int vmfCode)
     {
-        return await _context.VehicleTariffs
-            .Where(t => t.vmf_code == vmfCode)
+        return await _context
+            .VehicleTariffs.Where(t => t.vmf_code == vmfCode)
             .OrderByDescending(t => t.start_date)
             .ToListAsync();
     }
@@ -49,19 +49,25 @@ public class VehicleTariffRepository : IVehicleTariffRepository
         _context.VehicleTariffs.Add(tariff);
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Created vehicle tariff {TariffCode} for vehicle {VmfCode}",
-            tariff.vehicle_tariff_code, tariff.vmf_code);
+        _logger.LogInformation(
+            "Created vehicle tariff {TariffCode} for vehicle {VmfCode}",
+            tariff.vehicle_tariff_code,
+            tariff.vmf_code
+        );
 
         return tariff;
     }
 
     public async Task UpdateAsync(VehicleTariff tariff)
     {
-        var existing = await _context.VehicleTariffs
-            .FirstOrDefaultAsync(t => t.vehicle_tariff_code == tariff.vehicle_tariff_code);
+        var existing = await _context.VehicleTariffs.FirstOrDefaultAsync(t =>
+            t.vehicle_tariff_code == tariff.vehicle_tariff_code
+        );
 
         if (existing == null)
-            throw new KeyNotFoundException($"Vehicle tariff {tariff.vehicle_tariff_code} not found");
+            throw new KeyNotFoundException(
+                $"Vehicle tariff {tariff.vehicle_tariff_code} not found"
+            );
 
         existing.start_date = tariff.start_date;
         existing.end_date = tariff.end_date;
@@ -97,16 +103,19 @@ public class VehicleTariffRepository : IVehicleTariffRepository
 
         await _context.SaveChangesAsync();
 
-        _logger.LogInformation("Updated vehicle tariff {TariffCode} for vehicle {VmfCode}",
-            tariff.vehicle_tariff_code, tariff.vmf_code);
+        _logger.LogInformation(
+            "Updated vehicle tariff {TariffCode} for vehicle {VmfCode}",
+            tariff.vehicle_tariff_code,
+            tariff.vmf_code
+        );
     }
 
     public async Task RecalculateTariffAsync(int vmfCode)
     {
         _logger.LogInformation("Recalculating tariff for vehicle {VmfCode}", vmfCode);
 
-        var vehicle = await _context.Vehicles
-            .Include(v => v.Model)
+        var vehicle = await _context
+            .Vehicles.Include(v => v.Model)
             .FirstOrDefaultAsync(v => v.vmf_code == vmfCode);
 
         if (vehicle == null)
@@ -119,7 +128,10 @@ public class VehicleTariffRepository : IVehicleTariffRepository
 
         if (currentTariff == null)
         {
-            _logger.LogInformation("No existing tariff found for vehicle {VmfCode}, creating new tariff", vmfCode);
+            _logger.LogInformation(
+                "No existing tariff found for vehicle {VmfCode}, creating new tariff",
+                vmfCode
+            );
 
             currentTariff = new VehicleTariff
             {
@@ -135,7 +147,7 @@ public class VehicleTariffRepository : IVehicleTariffRepository
                 kilometer_life = 150000,
                 months_life = 48,
                 calculation_date = DateTime.UtcNow,
-                date_created = DateTime.UtcNow
+                date_created = DateTime.UtcNow,
             };
 
             await CreateAsync(currentTariff);
@@ -168,7 +180,8 @@ public class VehicleTariffRepository : IVehicleTariffRepository
         tariff.overhead_payment = purchaseAmount * (decimal)overheadUnitFactor;
 
         var adjustmentAmount = tariff.adjustment_amount ?? 0m;
-        tariff.vehicle_fixed_tariff = tariff.capital_payment + tariff.overhead_payment + adjustmentAmount;
+        tariff.vehicle_fixed_tariff =
+            tariff.capital_payment + tariff.overhead_payment + adjustmentAmount;
 
         tariff.overhead_kilometer_amount = (tariff.overhead_payment * 12) / kilometerLife;
 
@@ -178,7 +191,7 @@ public class VehicleTariffRepository : IVehicleTariffRepository
             <= 200000 => 0.55m,
             <= 300000 => 0.70m,
             <= 500000 => 0.90m,
-            _ => 1.20m
+            _ => 1.20m,
         };
         tariff.maintenance_kilometer_amount = maintenancePerKm;
 
@@ -186,9 +199,9 @@ public class VehicleTariffRepository : IVehicleTariffRepository
         tariff.fuel_kilo_tariff = fuelPerKm;
 
         tariff.vehicle_kilometer_tariff =
-            tariff.overhead_kilometer_amount +
-            tariff.maintenance_kilometer_amount +
-            tariff.fuel_kilo_tariff;
+            tariff.overhead_kilometer_amount
+            + tariff.maintenance_kilometer_amount
+            + tariff.fuel_kilo_tariff;
 
         tariff.vehicle_fixed_tariff_pool = tariff.vehicle_fixed_tariff;
         tariff.class_fixed_tariff = tariff.vehicle_fixed_tariff;
@@ -201,15 +214,17 @@ public class VehicleTariffRepository : IVehicleTariffRepository
         }
 
         tariff.calculation_date = DateTime.UtcNow;
-        tariff.comment = $"Recalculated on {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}. " +
-                         $"Purchase: R{purchaseAmount:N2}, Residual: {tariff.residual_percentage}%, " +
-                         $"Interest: {tariff.annual_interest_percentage}%, Life: {monthsLife}m/{kilometerLife}km";
+        tariff.comment =
+            $"Recalculated on {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}. "
+            + $"Purchase: R{purchaseAmount:N2}, Residual: {tariff.residual_percentage}%, "
+            + $"Interest: {tariff.annual_interest_percentage}%, Life: {monthsLife}m/{kilometerLife}km";
 
         _logger.LogInformation(
             "Calculated tariff for vehicle {VmfCode}: Fixed=R{Fixed:N2}/month, Variable=R{Variable:N2}/km",
             tariff.vmf_code,
             tariff.vehicle_fixed_tariff,
-            tariff.vehicle_kilometer_tariff);
+            tariff.vehicle_kilometer_tariff
+        );
 
         await Task.CompletedTask;
     }

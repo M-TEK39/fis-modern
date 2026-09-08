@@ -35,7 +35,9 @@ function getQueryInt(value: string | undefined) {
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function valueOrDash(value: string | number | null | undefined) {
@@ -50,7 +52,10 @@ function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
 }
 
-function VehicleSearch({ searchType, searchTerm }: Readonly<{ searchType: "GG" | "GP"; searchTerm: string }>) {
+function VehicleSearch({
+  searchType,
+  searchTerm,
+}: Readonly<{ searchType: "GG" | "GP"; searchTerm: string }>) {
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
       <fieldset className="vehicle-search-options">
@@ -91,7 +96,11 @@ function ClearanceForm({
   vehicle,
   merchants,
   record,
-}: Readonly<{ vehicle: ClearanceVehicle; merchants: MerchantRecord[]; record: ClearanceRecord | null }>) {
+}: Readonly<{
+  vehicle: ClearanceVehicle;
+  merchants: MerchantRecord[];
+  record: ClearanceRecord | null;
+}>) {
   const isEdit = record !== null;
 
   return (
@@ -102,7 +111,9 @@ function ClearanceForm({
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">{isEdit ? "Existing record" : "New record"}</p>
-          <h2>{isEdit ? "Edit Clearance" : `Add Clearance for ${valueOrDash(vehicle.fleetNumber)}`}</h2>
+          <h2>
+            {isEdit ? "Edit Clearance" : `Add Clearance for ${valueOrDash(vehicle.fleetNumber)}`}
+          </h2>
         </div>
       </div>
       <div className="form-grid">
@@ -137,7 +148,12 @@ function ClearanceForm({
           <label className="form-label" htmlFor="clearance-merchant">
             Merchant
           </label>
-          <select className="form-select" id="clearance-merchant" name="merchantCode" defaultValue={record?.merchantCode ?? ""}>
+          <select
+            className="form-select"
+            id="clearance-merchant"
+            name="merchantCode"
+            defaultValue={record?.merchantCode ?? ""}
+          >
             <option value="">Select...</option>
             {merchants.map((merchant) => (
               <option key={merchant.merchantCode} value={merchant.merchantCode}>
@@ -209,7 +225,9 @@ function ClearanceHistory({
     <section className="vehicle-status-maintenance-panel" aria-labelledby="clearance-history-title">
       <div className="vehicle-form-section-header">
         <div>
-          <p className="eyebrow">{valueOrDash(vehicle.fleetNumber)} / {valueOrDash(vehicle.registrationNumber)}</p>
+          <p className="eyebrow">
+            {valueOrDash(vehicle.fleetNumber)} / {valueOrDash(vehicle.registrationNumber)}
+          </p>
           <h2 id="clearance-history-title">Previous Clearance Records</h2>
         </div>
       </div>
@@ -259,23 +277,34 @@ function ClearanceHistory({
   );
 }
 
-function DeleteConfirmation({ record, vehicle }: Readonly<{ record: ClearanceRecord; vehicle: ClearanceVehicle }>) {
+function DeleteConfirmation({
+  record,
+  vehicle,
+}: Readonly<{ record: ClearanceRecord; vehicle: ClearanceVehicle }>) {
   return (
     <section className="vehicle-status-maintenance-panel" aria-labelledby="clearance-delete-title">
       <p className="eyebrow">Confirm action</p>
       <h2 id="clearance-delete-title">Delete Clearance {valueOrDash(record.clearanceNumber)}?</h2>
       <p>
-        This removes the clearance record for {valueOrDash(vehicle.fleetNumber)} dated {formatDate(record.clearanceDate)}.
+        This removes the clearance record for {valueOrDash(vehicle.fleetNumber)} dated{" "}
+        {formatDate(record.clearanceDate)}.
       </p>
       <form action={deleteClearanceAction}>
-        <input name="returnPath" type="hidden" value={`/clearance/entry?vmfCode=${vehicle.vmfCode}`} />
+        <input
+          name="returnPath"
+          type="hidden"
+          value={`/clearance/entry?vmfCode=${vehicle.vmfCode}`}
+        />
         <input name="clearanceCode" type="hidden" value={record.clearanceCode} />
         <input name="vmfCode" type="hidden" value={vehicle.vmfCode} />
         <div className="button-row">
           <button className="button button-danger" type="submit">
             Delete
           </button>
-          <Link className="button button-secondary" href={`/clearance/entry?vmfCode=${vehicle.vmfCode}`}>
+          <Link
+            className="button button-secondary"
+            href={`/clearance/entry?vmfCode=${vehicle.vmfCode}`}
+          >
             Cancel
           </Link>
         </div>
@@ -296,7 +325,11 @@ function NotFoundState({ searchTerm }: Readonly<{ searchTerm: string }>) {
   return (
     <div className="vehicle-empty-state">
       <p className="eyebrow">Vehicle not found</p>
-      <p>{searchTerm ? `No vehicle matched “${searchTerm}”.` : "The requested vehicle or clearance was not found."}</p>
+      <p>
+        {searchTerm
+          ? `No vehicle matched “${searchTerm}”.`
+          : "The requested vehicle or clearance was not found."}
+      </p>
     </div>
   );
 }
@@ -309,7 +342,9 @@ function ApiUnavailable() {
       </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Clearance information could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
         <Link className="button button-primary" href="/clearance/entry">
           Try again
@@ -362,11 +397,15 @@ export default async function ClearanceEntryPage({
   }
 
   const query = await searchParams;
-  const searchType = getQueryValue(query.type) === "GP" || getQueryValue(query.Radio1) === "Radiogp" ? "GP" : "GG";
+  const searchType =
+    getQueryValue(query.type) === "GP" || getQueryValue(query.Radio1) === "Radiogp" ? "GP" : "GG";
   const searchTerm = (getQueryValue(query.q) ?? getQueryValue(query.txtGGNum) ?? "").trim();
-  const code = getQueryInt(getQueryValue(query.code) ?? getQueryValue(query.Code) ?? getQueryValue(query.deleteCode));
+  const code = getQueryInt(
+    getQueryValue(query.code) ?? getQueryValue(query.Code) ?? getQueryValue(query.deleteCode),
+  );
   const vmfCode = getQueryInt(getQueryValue(query.vmfCode) ?? getQueryValue(query.vmf_code));
-  const action = forcedAction ?? (getQueryValue(query.deleteCode) ? "delete" : code ? "edit" : null);
+  const action =
+    forcedAction ?? (getQueryValue(query.deleteCode) ? "delete" : code ? "edit" : null);
 
   let vehicle: ClearanceVehicle | null = null;
   let records: ClearanceRecord[] = [];
@@ -397,7 +436,10 @@ export default async function ClearanceEntryPage({
       }
 
       if (vehicle) {
-        [records, merchants] = await Promise.all([getClearancesForVehicle(vehicle.vmfCode), getMerchants()]);
+        [records, merchants] = await Promise.all([
+          getClearancesForVehicle(vehicle.vmfCode),
+          getMerchants(),
+        ]);
       }
     }
   } catch (error) {
@@ -412,7 +454,10 @@ export default async function ClearanceEntryPage({
     if (error instanceof ClearanceApiError && error.reason === "not-found") {
       vehicle = null;
     } else {
-      console.error("FIS clearance request failed", error instanceof Error ? error.message : "unknown error");
+      console.error(
+        "FIS clearance request failed",
+        error instanceof Error ? error.message : "unknown error",
+      );
       return (
         <main className="page-shell vehicle-page-shell">
           <ApiUnavailable />
@@ -448,9 +493,15 @@ export default async function ClearanceEntryPage({
         <VehicleSearch searchType={searchType} searchTerm={searchTerm} />
 
         {searchTerm && !vehicle ? <NotFoundState searchTerm={searchTerm} /> : null}
-        {vehicle && action === "delete" && record ? <DeleteConfirmation record={record} vehicle={vehicle} /> : null}
-        {vehicle && action !== "delete" ? <ClearanceHistory records={records} vehicle={vehicle} /> : null}
-        {vehicle && action !== "delete" ? <ClearanceForm vehicle={vehicle} merchants={merchants} record={record} /> : null}
+        {vehicle && action === "delete" && record ? (
+          <DeleteConfirmation record={record} vehicle={vehicle} />
+        ) : null}
+        {vehicle && action !== "delete" ? (
+          <ClearanceHistory records={records} vehicle={vehicle} />
+        ) : null}
+        {vehicle && action !== "delete" ? (
+          <ClearanceForm vehicle={vehicle} merchants={merchants} record={record} />
+        ) : null}
         {code && !record ? <NotFoundState searchTerm="" /> : null}
       </section>
     </main>

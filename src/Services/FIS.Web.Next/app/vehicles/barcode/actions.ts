@@ -34,7 +34,10 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -44,15 +47,24 @@ async function authorizeBarcodeMaintenance() {
   const session = await getSession();
 
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
 
   if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return { ok: false as const, message: "You do not have permission to maintain vehicle barcodes." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain vehicle barcodes.",
+    };
   }
 
   return { ok: true as const };
@@ -60,9 +72,12 @@ async function authorizeBarcodeMaintenance() {
 
 function apiErrorMessage(error: unknown, operation: "search" | "update") {
   if (error instanceof VehicleBarcodeApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "not-found") return "The selected vehicle could not be found. Search again.";
-    if (error.reason === "unavailable") return `The vehicle barcode ${operation} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "not-found")
+      return "The selected vehicle could not be found. Search again.";
+    if (error.reason === "unavailable")
+      return `The vehicle barcode ${operation} service is temporarily unavailable. Please try again.`;
     return error.message;
   }
 
@@ -94,8 +109,10 @@ export async function searchVehicleBarcodeAction(
       .toSorted((left, right) => {
         const leftValue = searchMode === "GP" ? left.registrationNumber : left.fleetNumber;
         const rightValue = searchMode === "GP" ? right.registrationNumber : right.fleetNumber;
-        const leftExact = leftValue?.trim().localeCompare(searchTerm, undefined, { sensitivity: "accent" }) === 0;
-        const rightExact = rightValue?.trim().localeCompare(searchTerm, undefined, { sensitivity: "accent" }) === 0;
+        const leftExact =
+          leftValue?.trim().localeCompare(searchTerm, undefined, { sensitivity: "accent" }) === 0;
+        const rightExact =
+          rightValue?.trim().localeCompare(searchTerm, undefined, { sensitivity: "accent" }) === 0;
         return Number(rightExact) - Number(leftExact) || left.vmfCode - right.vmfCode;
       });
 
@@ -103,7 +120,10 @@ export async function searchVehicleBarcodeAction(
       ? { status: "success", results }
       : { status: "success", message: "No matching vehicles found.", results: [] };
   } catch (error) {
-    console.error("FIS vehicle barcode search failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle barcode search failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "error", message: apiErrorMessage(error, "search"), results: [] };
   }
 }
@@ -131,7 +151,10 @@ export async function updateVehicleBarcodeAction(
     await updateVehicleBarcode(vmfCode, barcode);
     return { status: "success", message: "Vehicle barcode updated successfully." };
   } catch (error) {
-    console.error("FIS vehicle barcode update failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle barcode update failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "error", message: apiErrorMessage(error, "update") };
   }
 }

@@ -6,9 +6,24 @@ const API_TIMEOUT_MS = 8_000;
 type JsonRecord = Record<string, unknown>;
 
 export const LICENSE_REPORT_MODES = [
-  "gg-number", "gp-number", "register-number", "engine-number", "chassis-number", "site", "all",
-  "dept-period", "expire-date", "month-fees", "old-expire", "sap", "cof", "model-fees", "gg-model-fees",
-  "workgroup", "workgroup-latest", "ggmt-received",
+  "gg-number",
+  "gp-number",
+  "register-number",
+  "engine-number",
+  "chassis-number",
+  "site",
+  "all",
+  "dept-period",
+  "expire-date",
+  "month-fees",
+  "old-expire",
+  "sap",
+  "cof",
+  "model-fees",
+  "gg-model-fees",
+  "workgroup",
+  "workgroup-latest",
+  "ggmt-received",
 ] as const;
 
 export type LicenseReportMode = (typeof LICENSE_REPORT_MODES)[number];
@@ -56,13 +71,15 @@ function valueOf(record: JsonRecord, ...keys: string[]) {
 
 function asString(value: unknown) {
   if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean")
+    return String(value);
   return null;
 }
 
 async function requestApi(mode: LicenseReportMode, body: Record<string, unknown>) {
   const cookie = await getForwardedAuthCookieHeader();
-  if (!cookie) throw new LicenseReportApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookie)
+    throw new LicenseReportApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -81,16 +98,23 @@ async function requestApi(mode: LicenseReportMode, body: Record<string, unknown>
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(valueOf(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(valueOf(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status message when the API has no JSON error body.
       }
-      throw new LicenseReportApiError(response.status >= 500 ? "unavailable" : "invalid-response", message);
+      throw new LicenseReportApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+      );
     }
     try {
       return (await response.json()) as unknown;
     } catch {
-      throw new LicenseReportApiError("invalid-response", "The FIS API returned invalid report JSON.");
+      throw new LicenseReportApiError(
+        "invalid-response",
+        "The FIS API returned invalid report JSON.",
+      );
     }
   } catch (error) {
     if (error instanceof LicenseReportApiError) throw error;
@@ -109,7 +133,10 @@ function reportRows(payload: unknown) {
   return [];
 }
 
-export async function getLicenseReport(mode: LicenseReportMode, filters: LicenseReportFilters = {}): Promise<LicenseReport> {
+export async function getLicenseReport(
+  mode: LicenseReportMode,
+  filters: LicenseReportFilters = {},
+): Promise<LicenseReport> {
   const payload = await requestApi(mode, {
     search: filters.search,
     mode: filters.searchMode,
@@ -123,6 +150,8 @@ export async function getLicenseReport(mode: LicenseReportMode, filters: License
   });
   const rows = reportRows(payload)
     .filter(isRecord)
-    .map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, asString(value)])));
+    .map((row) =>
+      Object.fromEntries(Object.entries(row).map(([key, value]) => [key, asString(value)])),
+    );
   return { columns: rows.length > 0 ? Object.keys(rows[0]) : [], rows };
 }

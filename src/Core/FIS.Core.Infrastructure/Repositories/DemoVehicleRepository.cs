@@ -16,7 +16,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "Table and column identifiers come from fixed compatibility allowlists; submitted values are parameters.")]
+    Justification = "Table and column identifiers come from fixed compatibility allowlists; submitted values are parameters."
+)]
 public sealed class DemoVehicleRepository : IDemoVehicleRepository
 {
     private const string TableName = "Demo_vehicles";
@@ -34,7 +35,7 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         "tank",
         "colour",
         "engine_number",
-        "chassis_number"
+        "chassis_number",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -43,7 +44,7 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private readonly FisDbContext _context;
@@ -59,7 +60,10 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         return await QueryAsync(schema);
     }
 
-    public async Task<IReadOnlyList<DemoVehicleRecord>> SearchAsync(string searchTerm, bool byRegistration)
+    public async Task<IReadOnlyList<DemoVehicleRecord>> SearchAsync(
+        string searchTerm,
+        bool byRegistration
+    )
     {
         if (string.IsNullOrWhiteSpace(searchTerm))
         {
@@ -97,7 +101,10 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
             {
                 transaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable);
                 var nextCode = await GetNextCodeAsync(connection, transaction);
-                values.Insert(0, new WriteValue("demo_vehicle_code", "@demoVehicleCode", DbType.Int16, nextCode));
+                values.Insert(
+                    0,
+                    new WriteValue("demo_vehicle_code", "@demoVehicleCode", DbType.Int16, nextCode)
+                );
                 await ExecuteInsertWithoutOutputAsync(connection, transaction, values);
                 await transaction.CommitAsync();
                 committed = true;
@@ -130,14 +137,20 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         }
     }
 
-    public async Task<DemoVehicleRecord> UpdateAsync(int demoVehicleCode, DemoVehicleInput input, int currentUserId)
+    public async Task<DemoVehicleRecord> UpdateAsync(
+        int demoVehicleCode,
+        DemoVehicleInput input,
+        int currentUserId
+    )
     {
         ArgumentNullException.ThrowIfNull(input);
 
         var schema = await GetSchemaAsync();
         if (await GetByIdAsync(demoVehicleCode) is null)
         {
-            throw new KeyNotFoundException($"Demo vehicle with code {demoVehicleCode} was not found.");
+            throw new KeyNotFoundException(
+                $"Demo vehicle with code {demoVehicleCode} was not found."
+            );
         }
 
         var values = BuildValues(input, schema.Columns, currentUserId, includeCreateAudit: false);
@@ -152,12 +165,15 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [demo_vehicle_code] = @demoVehicleCode AND {GetNotDeletedFilter(string.Empty, schema.Columns)}";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [demo_vehicle_code] = @demoVehicleCode AND {GetNotDeletedFilter(string.Empty, schema.Columns)}";
             AddParameters(command, values);
             AddParameter(command, "@demoVehicleCode", DbType.Int32, demoVehicleCode);
             if (await command.ExecuteNonQueryAsync() == 0)
             {
-                throw new KeyNotFoundException($"Demo vehicle with code {demoVehicleCode} was not found.");
+                throw new KeyNotFoundException(
+                    $"Demo vehicle with code {demoVehicleCode} was not found."
+                );
             }
         }
         finally
@@ -198,20 +214,29 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
                 if (schema.Columns.Contains("modified_by_user_code"))
                 {
                     assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-                    AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                    AddParameter(
+                        command,
+                        "@modifiedByUserCode",
+                        DbType.Int32,
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
-                command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [demo_vehicle_code] = @demoVehicleCode AND {GetNotDeletedFilter(string.Empty, schema.Columns)}";
+                command.CommandText =
+                    $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [demo_vehicle_code] = @demoVehicleCode AND {GetNotDeletedFilter(string.Empty, schema.Columns)}";
             }
             else
             {
-                command.CommandText = $"DELETE FROM [dbo].[{TableName}] WHERE [demo_vehicle_code] = @demoVehicleCode";
+                command.CommandText =
+                    $"DELETE FROM [dbo].[{TableName}] WHERE [demo_vehicle_code] = @demoVehicleCode";
             }
 
             AddParameter(command, "@demoVehicleCode", DbType.Int32, demoVehicleCode);
             if (await command.ExecuteNonQueryAsync() == 0)
             {
-                throw new KeyNotFoundException($"Demo vehicle with code {demoVehicleCode} was not found.");
+                throw new KeyNotFoundException(
+                    $"Demo vehicle with code {demoVehicleCode} was not found."
+                );
             }
         }
         finally
@@ -235,22 +260,29 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         try
         {
             var columns = await GetColumnsAsync(connection, TableName);
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
-                throw new InvalidOperationException($"The required Demo_vehicles compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                throw new InvalidOperationException(
+                    $"The required Demo_vehicles compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             var siteColumns = await GetColumnsAsync(connection, SiteTableName);
-            var hasSiteDescription = siteColumns.Contains("site_code") && siteColumns.Contains("description");
+            var hasSiteDescription =
+                siteColumns.Contains("site_code") && siteColumns.Contains("description");
             var identityCommand = connection.CreateCommand();
-            identityCommand.CommandText = $"SELECT COLUMNPROPERTY(OBJECT_ID(N'[dbo].[{TableName}]'), N'demo_vehicle_code', 'IsIdentity')";
+            identityCommand.CommandText =
+                $"SELECT COLUMNPROPERTY(OBJECT_ID(N'[dbo].[{TableName}]'), N'demo_vehicle_code', 'IsIdentity')";
             var identityValue = await identityCommand.ExecuteScalarAsync();
             return new DemoVehicleSchema(
                 columns,
                 Convert.ToInt32(identityValue) == 1,
                 hasSiteDescription,
-                siteColumns);
+                siteColumns
+            );
         }
         finally
         {
@@ -261,7 +293,10 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         }
     }
 
-    private static async Task<HashSet<string>> GetColumnsAsync(DbConnection connection, string tableName)
+    private static async Task<HashSet<string>> GetColumnsAsync(
+        DbConnection connection,
+        string tableName
+    )
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -283,21 +318,27 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         return columns;
     }
 
-    private async Task<List<DemoVehicleRecord>> QueryAsync(DemoVehicleSchema schema)
-        => await QueryAsync(schema, null, false, null);
+    private async Task<List<DemoVehicleRecord>> QueryAsync(DemoVehicleSchema schema) =>
+        await QueryAsync(schema, null, false, null);
 
-    private async Task<List<DemoVehicleRecord>> QueryAsync(DemoVehicleSchema schema, int? demoVehicleCode)
-        => await QueryAsync(schema, null, false, demoVehicleCode);
+    private async Task<List<DemoVehicleRecord>> QueryAsync(
+        DemoVehicleSchema schema,
+        int? demoVehicleCode
+    ) => await QueryAsync(schema, null, false, demoVehicleCode);
 
-    private async Task<List<DemoVehicleRecord>> QueryAsync(DemoVehicleSchema schema, string? searchTerm, bool byRegistration)
-        => await QueryAsync(schema, searchTerm, byRegistration, null);
+    private async Task<List<DemoVehicleRecord>> QueryAsync(
+        DemoVehicleSchema schema,
+        string? searchTerm,
+        bool byRegistration
+    ) => await QueryAsync(schema, searchTerm, byRegistration, null);
 
     private async Task<List<DemoVehicleRecord>> QueryAsync(
         DemoVehicleSchema schema,
         string? searchTerm,
         bool byRegistration,
         int? demoVehicleCode,
-        bool _ = true)
+        bool _ = true
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -322,7 +363,12 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
             {
                 var searchColumn = byRegistration ? "reg_number" : "gg_number";
                 conditions.Add($"LOWER(COALESCE(d.[{searchColumn}], '')) LIKE @search");
-                AddParameter(command, "@search", DbType.String, $"%{searchTerm.ToLowerInvariant()}%");
+                AddParameter(
+                    command,
+                    "@search",
+                    DbType.String,
+                    $"%{searchTerm.ToLowerInvariant()}%"
+                );
             }
 
             if (demoVehicleCode.HasValue)
@@ -331,11 +377,19 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
                 AddParameter(command, "@demoVehicleCode", DbType.Int32, demoVehicleCode.Value);
             }
 
-            var projection = string.Join(", ",
-                RequiredColumns.Select(column => $"d.[{column}] AS [{column}]")
+            var projection = string.Join(
+                ", ",
+                RequiredColumns
+                    .Select(column => $"d.[{column}] AS [{column}]")
                     .Append(siteProjection)
-                    .Concat(OptionalColumns.Select(column => GetOptionalProjection("d", schema.Columns, column))));
-            command.CommandText = $"SELECT {projection} FROM [dbo].[{TableName}] AS d {siteJoin} WHERE {string.Join(" AND ", conditions)} ORDER BY COALESCE(d.[gg_number], ''), d.[demo_vehicle_code]";
+                    .Concat(
+                        OptionalColumns.Select(column =>
+                            GetOptionalProjection("d", schema.Columns, column)
+                        )
+                    )
+            );
+            command.CommandText =
+                $"SELECT {projection} FROM [dbo].[{TableName}] AS d {siteJoin} WHERE {string.Join(" AND ", conditions)} ORDER BY COALESCE(d.[gg_number], ''), d.[demo_vehicle_code]";
 
             var results = new List<DemoVehicleRecord>();
             await using var reader = await command.ExecuteReaderAsync();
@@ -359,7 +413,8 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         DemoVehicleInput input,
         IReadOnlySet<string> columns,
         int currentUserId,
-        bool includeCreateAudit)
+        bool includeCreateAudit
+    )
     {
         var values = new List<WriteValue>
         {
@@ -372,47 +427,89 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
             new("colour", "@colour", DbType.String, input.Colour),
             new("tank", "@tank", DbType.Int16, input.Tank),
             new("engine_number", "@engineNumber", DbType.String, input.EngineNumber),
-            new("chassis_number", "@chassisNumber", DbType.String, input.ChassisNumber)
+            new("chassis_number", "@chassisNumber", DbType.String, input.ChassisNumber),
         };
 
         if (includeCreateAudit)
         {
-            AddOptionalValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
-            AddOptionalValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+            AddOptionalValue(
+                values,
+                columns,
+                "date_created",
+                "@dateCreated",
+                DbType.DateTime2,
+                DateTime.UtcNow
+            );
+            AddOptionalValue(
+                values,
+                columns,
+                "created_by_user_code",
+                "@createdByUserCode",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
             AddOptionalValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
         }
         else
         {
-            AddOptionalValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-            AddOptionalValue(values, columns, "modified_by_user_code", "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+            AddOptionalValue(
+                values,
+                columns,
+                "date_updated",
+                "@dateUpdated",
+                DbType.DateTime2,
+                DateTime.UtcNow
+            );
+            AddOptionalValue(
+                values,
+                columns,
+                "modified_by_user_code",
+                "@modifiedByUserCode",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
         }
 
         return values;
     }
 
-    private static async Task<int> ExecuteInsertAsync(DbConnection connection, DbTransaction? transaction, IReadOnlyList<WriteValue> values)
+    private static async Task<int> ExecuteInsertAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        IReadOnlyList<WriteValue> values
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[demo_vehicle_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+        command.CommandText =
+            $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[demo_vehicle_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
         AddParameters(command, values);
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
-    private static async Task ExecuteInsertWithoutOutputAsync(DbConnection connection, DbTransaction transaction, IReadOnlyList<WriteValue> values)
+    private static async Task ExecuteInsertWithoutOutputAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        IReadOnlyList<WriteValue> values
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+        command.CommandText =
+            $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
         AddParameters(command, values);
         await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task<int> GetNextCodeAsync(DbConnection connection, DbTransaction transaction)
+    private static async Task<int> GetNextCodeAsync(
+        DbConnection connection,
+        DbTransaction transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"SELECT COALESCE(MAX(CAST([demo_vehicle_code] AS int)), 0) + 1 FROM [dbo].[{TableName}] WITH (UPDLOCK, HOLDLOCK)";
+        command.CommandText =
+            $"SELECT COALESCE(MAX(CAST([demo_vehicle_code] AS int)), 0) + 1 FROM [dbo].[{TableName}] WITH (UPDLOCK, HOLDLOCK)";
         var nextCode = Convert.ToInt32(await command.ExecuteScalarAsync());
         if (nextCode > short.MaxValue)
         {
@@ -422,7 +519,11 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         return nextCode;
     }
 
-    private static string GetOptionalProjection(string alias, IReadOnlySet<string> columns, string column)
+    private static string GetOptionalProjection(
+        string alias,
+        IReadOnlySet<string> columns,
+        string column
+    )
     {
         if (columns.Contains(column))
         {
@@ -434,7 +535,7 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "nvarchar(255)"
+            _ => "nvarchar(255)",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
@@ -450,8 +551,8 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         return $"({prefix}[is_deleted] = 0 OR {prefix}[is_deleted] IS NULL)";
     }
 
-    private static DemoVehicleRecord MapRecord(DbDataReader reader)
-        => new(
+    private static DemoVehicleRecord MapRecord(DbDataReader reader) =>
+        new(
             ReadInt32(reader, "demo_vehicle_code") ?? 0,
             ReadString(reader, "gg_number"),
             ReadString(reader, "reg_number"),
@@ -467,9 +568,17 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
             ReadDateTime(reader, "date_created"),
             ReadDateTime(reader, "date_updated"),
             ReadInt32(reader, "created_by_user_code"),
-            ReadInt32(reader, "modified_by_user_code"));
+            ReadInt32(reader, "modified_by_user_code")
+        );
 
-    private static void AddOptionalValue(ICollection<WriteValue> values, IReadOnlySet<string> columns, string column, string parameter, DbType type, object? value)
+    private static void AddOptionalValue(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        string column,
+        string parameter,
+        DbType type,
+        object? value
+    )
     {
         if (columns.Contains(column))
         {
@@ -494,23 +603,24 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string? ReadString(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : reader[column]?.ToString();
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : reader[column]?.ToString();
 
-    private static int? ReadInt32(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
+    private static int? ReadInt32(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
 
-    private static short? ReadInt16(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
+    private static short? ReadInt16(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
 
-    private static DateTime? ReadDateTime(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
+    private static DateTime? ReadDateTime(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
 
     private sealed record DemoVehicleSchema(
         IReadOnlySet<string> Columns,
         bool IsIdentity,
         bool HasSiteDescription,
-        IReadOnlySet<string> SiteColumns);
+        IReadOnlySet<string> SiteColumns
+    );
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 }

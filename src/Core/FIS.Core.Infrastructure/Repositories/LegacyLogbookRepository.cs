@@ -18,15 +18,23 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "SQL identifiers come only from fixed compatibility projections and all submitted values are parameters.")]
+    Justification = "SQL identifiers come only from fixed compatibility projections and all submitted values are parameters."
+)]
 internal sealed class LegacyLogbookRepository : ILogbookRepository
 {
     private const string TableName = "logbook";
 
     private static readonly string[] RequiredColumns =
     [
-        "logbookcode", "vmf_code", "begin_num", "end_num", "handout_date",
-        "site_code", "lb_receiver_name", "lb_tel_num", "lb_comment"
+        "logbookcode",
+        "vmf_code",
+        "begin_num",
+        "end_num",
+        "handout_date",
+        "site_code",
+        "lb_receiver_name",
+        "lb_tel_num",
+        "lb_comment",
     ];
 
     private readonly FisDbContext _context;
@@ -36,24 +44,27 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Logbook?> GetByIdAsync(short logbookCode)
-        => (await QueryAsync(
-            columns => "l.[logbookcode] = @logbookCode",
-            command => AddParameter(command, "@logbookCode", DbType.Int16, logbookCode)))
-            .SingleOrDefault();
+    public async Task<Logbook?> GetByIdAsync(short logbookCode) =>
+        (
+            await QueryAsync(
+                columns => "l.[logbookcode] = @logbookCode",
+                command => AddParameter(command, "@logbookCode", DbType.Int16, logbookCode)
+            )
+        ).SingleOrDefault();
 
-    public Task<IEnumerable<Logbook>> GetAllAsync()
-        => QueryAsEnumerableAsync();
+    public Task<IEnumerable<Logbook>> GetAllAsync() => QueryAsEnumerableAsync();
 
-    public async Task<IEnumerable<Logbook>> GetByVehicleAsync(int vmfCode)
-        => await QueryAsync(
+    public async Task<IEnumerable<Logbook>> GetByVehicleAsync(int vmfCode) =>
+        await QueryAsync(
             _ => "l.[vmf_code] = @vmfCode",
-            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode));
+            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
+        );
 
-    public async Task<IEnumerable<Logbook>> GetBySiteAsync(short siteCode)
-        => await QueryAsync(
+    public async Task<IEnumerable<Logbook>> GetBySiteAsync(short siteCode) =>
+        await QueryAsync(
             _ => "l.[site_code] = @siteCode",
-            command => AddParameter(command, "@siteCode", DbType.Int16, siteCode));
+            command => AddParameter(command, "@siteCode", DbType.Int16, siteCode)
+        );
 
     public async Task<Logbook> CreateAsync(Logbook logbook, int currentUserId)
     {
@@ -64,24 +75,90 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
         AddValue(values, columns, "vmf_code", "@vmfCode", DbType.Int32, logbook.vmf_code, true);
         AddValue(values, columns, "begin_num", "@beginNum", DbType.String, logbook.begin_num, true);
         AddValue(values, columns, "end_num", "@endNum", DbType.String, logbook.end_num, true);
-        AddValue(values, columns, "handout_date", "@handoutDate", DbType.DateTime, logbook.handout_date, true);
+        AddValue(
+            values,
+            columns,
+            "handout_date",
+            "@handoutDate",
+            DbType.DateTime,
+            logbook.handout_date,
+            true
+        );
         AddValue(values, columns, "site_code", "@siteCode", DbType.Int16, logbook.site_code, true);
-        AddValue(values, columns, "lb_receiver_name", "@receiverName", DbType.String, logbook.lb_receiver_name, true);
-        AddValue(values, columns, "lb_tel_num", "@telephone", DbType.String, logbook.lb_tel_num, true);
-        AddValue(values, columns, "lb_comment", "@comment", DbType.String, logbook.lb_comment, true);
-        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow, true);
-        AddValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow, false);
-        AddValue(values, columns, "created_by_user_code", "@createdBy", DbType.Int32, UserIdOrNull(currentUserId), false);
-        AddValue(values, columns, "modified_by_user_code", "@modifiedBy", DbType.Int32, UserIdOrNull(currentUserId), false);
+        AddValue(
+            values,
+            columns,
+            "lb_receiver_name",
+            "@receiverName",
+            DbType.String,
+            logbook.lb_receiver_name,
+            true
+        );
+        AddValue(
+            values,
+            columns,
+            "lb_tel_num",
+            "@telephone",
+            DbType.String,
+            logbook.lb_tel_num,
+            true
+        );
+        AddValue(
+            values,
+            columns,
+            "lb_comment",
+            "@comment",
+            DbType.String,
+            logbook.lb_comment,
+            true
+        );
+        AddValue(
+            values,
+            columns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            DateTime.UtcNow,
+            true
+        );
+        AddValue(
+            values,
+            columns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            DateTime.UtcNow,
+            false
+        );
+        AddValue(
+            values,
+            columns,
+            "created_by_user_code",
+            "@createdBy",
+            DbType.Int32,
+            UserIdOrNull(currentUserId),
+            false
+        );
+        AddValue(
+            values,
+            columns,
+            "modified_by_user_code",
+            "@modifiedBy",
+            DbType.Int32,
+            UserIdOrNull(currentUserId),
+            false
+        );
         AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false, true);
 
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
-        command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[logbookcode] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+        command.CommandText =
+            $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[logbookcode] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
         AddParameters(command, values);
         var id = Convert.ToInt16(await command.ExecuteScalarAsync());
-        return await GetByIdAsync(id) ?? throw new InvalidOperationException("Created logbook could not be read.");
+        return await GetByIdAsync(id)
+            ?? throw new InvalidOperationException("Created logbook could not be read.");
     }
 
     public async Task<Logbook> UpdateAsync(Logbook logbook, int currentUserId)
@@ -93,17 +170,67 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
         AddValue(values, columns, "vmf_code", "@vmfCode", DbType.Int32, logbook.vmf_code, true);
         AddValue(values, columns, "begin_num", "@beginNum", DbType.String, logbook.begin_num, true);
         AddValue(values, columns, "end_num", "@endNum", DbType.String, logbook.end_num, true);
-        AddValue(values, columns, "handout_date", "@handoutDate", DbType.DateTime, logbook.handout_date, true);
+        AddValue(
+            values,
+            columns,
+            "handout_date",
+            "@handoutDate",
+            DbType.DateTime,
+            logbook.handout_date,
+            true
+        );
         AddValue(values, columns, "site_code", "@siteCode", DbType.Int16, logbook.site_code, true);
-        AddValue(values, columns, "lb_receiver_name", "@receiverName", DbType.String, logbook.lb_receiver_name, true);
-        AddValue(values, columns, "lb_tel_num", "@telephone", DbType.String, logbook.lb_tel_num, true);
-        AddValue(values, columns, "lb_comment", "@comment", DbType.String, logbook.lb_comment, true);
-        AddValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow, false);
-        AddValue(values, columns, "modified_by_user_code", "@modifiedBy", DbType.Int32, UserIdOrNull(currentUserId), false);
+        AddValue(
+            values,
+            columns,
+            "lb_receiver_name",
+            "@receiverName",
+            DbType.String,
+            logbook.lb_receiver_name,
+            true
+        );
+        AddValue(
+            values,
+            columns,
+            "lb_tel_num",
+            "@telephone",
+            DbType.String,
+            logbook.lb_tel_num,
+            true
+        );
+        AddValue(
+            values,
+            columns,
+            "lb_comment",
+            "@comment",
+            DbType.String,
+            logbook.lb_comment,
+            true
+        );
+        AddValue(
+            values,
+            columns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            DateTime.UtcNow,
+            false
+        );
+        AddValue(
+            values,
+            columns,
+            "modified_by_user_code",
+            "@modifiedBy",
+            DbType.Int32,
+            UserIdOrNull(currentUserId),
+            false
+        );
 
         await ExecuteUpdateAsync(logbook.logbookcode, columns, values);
         return await GetByIdAsync(logbook.logbookcode)
-            ?? throw new KeyNotFoundException($"Logbook not found with code: {logbook.logbookcode}");
+            ?? throw new KeyNotFoundException(
+                $"Logbook not found with code: {logbook.logbookcode}"
+            );
     }
 
     public async Task DeleteAsync(short logbookCode, int currentUserId)
@@ -129,12 +256,14 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
                 AddParameter(command, "@modifiedBy", DbType.Int32, UserIdOrNull(currentUserId));
             }
 
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [logbookcode] = @logbookCode";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [logbookcode] = @logbookCode";
         }
         else
         {
             // The original maintenance flow deleted the handout row.
-            command.CommandText = $"DELETE FROM [dbo].[{TableName}] WHERE [logbookcode] = @logbookCode";
+            command.CommandText =
+                $"DELETE FROM [dbo].[{TableName}] WHERE [logbookcode] = @logbookCode";
         }
 
         AddParameter(command, "@logbookCode", DbType.Int16, logbookCode);
@@ -142,12 +271,12 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
             throw new KeyNotFoundException($"Logbook not found with code: {logbookCode}");
     }
 
-    private async Task<IEnumerable<Logbook>> QueryAsEnumerableAsync()
-        => await QueryAsync();
+    private async Task<IEnumerable<Logbook>> QueryAsEnumerableAsync() => await QueryAsync();
 
     private async Task<List<Logbook>> QueryAsync(
         Func<IReadOnlyDictionary<string, ColumnInfo>, string?>? predicateFactory = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var columns = await GetAvailableColumnsAsync();
         await using var scope = await OpenConnectionAsync();
@@ -156,8 +285,10 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
 
         var conditions = new List<string>();
         var predicate = predicateFactory?.Invoke(columns);
-        if (!string.IsNullOrWhiteSpace(predicate)) conditions.Add($"({predicate})");
-        if (columns.ContainsKey("is_deleted")) conditions.Add("ISNULL(l.[is_deleted], 0) = 0");
+        if (!string.IsNullOrWhiteSpace(predicate))
+            conditions.Add($"({predicate})");
+        if (columns.ContainsKey("is_deleted"))
+            conditions.Add("ISNULL(l.[is_deleted], 0) = 0");
 
         command.CommandText = $"""
             SELECT
@@ -172,17 +303,24 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
 
         var results = new List<Logbook>();
         await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync()) results.Add(Map(reader));
+        while (await reader.ReadAsync())
+            results.Add(Map(reader));
         return results;
     }
 
-    private async Task ExecuteUpdateAsync(short logbookCode, IReadOnlyDictionary<string, ColumnInfo> columns, IReadOnlyCollection<WriteValue> values)
+    private async Task ExecuteUpdateAsync(
+        short logbookCode,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        IReadOnlyCollection<WriteValue> values
+    )
     {
-        if (values.Count == 0) return;
+        if (values.Count == 0)
+            return;
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
-        command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [logbookcode] = @logbookCode";
+        command.CommandText =
+            $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [logbookcode] = @logbookCode";
         AddParameters(command, values);
         AddParameter(command, "@logbookCode", DbType.Int16, logbookCode);
         if (await command.ExecuteNonQueryAsync() == 0)
@@ -194,47 +332,58 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
-        command.CommandText = "SELECT [COLUMN_NAME], [DATA_TYPE] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table";
+        command.CommandText =
+            "SELECT [COLUMN_NAME], [DATA_TYPE] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table";
         AddParameter(command, "@schema", DbType.String, "dbo");
         AddParameter(command, "@table", DbType.String, TableName);
 
         var columns = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
         await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync()) columns[reader.GetString(0)] = new ColumnInfo(reader.GetString(0), reader.GetString(1));
+        while (await reader.ReadAsync())
+            columns[reader.GetString(0)] = new ColumnInfo(reader.GetString(0), reader.GetString(1));
         if (RequiredColumns.Any(column => !columns.ContainsKey(column)))
-            throw new InvalidOperationException("The logbook compatibility table is missing required legacy columns.");
+            throw new InvalidOperationException(
+                "The logbook compatibility table is missing required legacy columns."
+            );
         return columns;
     }
 
-    private static string BuildProjection(IReadOnlyDictionary<string, ColumnInfo> columns)
-        => string.Join(",\n                ",
-        [
-            "l.[logbookcode] AS [logbookcode]",
-            "l.[vmf_code] AS [vmf_code]",
-            "l.[begin_num] AS [begin_num]",
-            "l.[end_num] AS [end_num]",
-            "l.[handout_date] AS [handout_date]",
-            "l.[site_code] AS [site_code]",
-            "l.[lb_receiver_name] AS [lb_receiver_name]",
-            "l.[lb_tel_num] AS [lb_tel_num]",
-            "l.[lb_comment] AS [lb_comment]",
-            "v.[fleet_number] AS [fleet_number]",
-            "v.[registration_number] AS [registration_number]",
-            "s.[description] AS [site_description]",
-            DateCreatedExpression(columns) + " AS [date_created]",
-            OptionalExpression(columns, "date_updated", "datetime2") + " AS [date_updated]",
-            OptionalExpression(columns, "created_by_user_code", "int") + " AS [created_by_user_code]",
-            OptionalExpression(columns, "modified_by_user_code", "int") + " AS [modified_by_user_code]",
-            OptionalExpression(columns, "is_deleted", "bit") + " AS [is_deleted]"
-        ]);
+    private static string BuildProjection(IReadOnlyDictionary<string, ColumnInfo> columns) =>
+        string.Join(
+            ",\n                ",
+            [
+                "l.[logbookcode] AS [logbookcode]",
+                "l.[vmf_code] AS [vmf_code]",
+                "l.[begin_num] AS [begin_num]",
+                "l.[end_num] AS [end_num]",
+                "l.[handout_date] AS [handout_date]",
+                "l.[site_code] AS [site_code]",
+                "l.[lb_receiver_name] AS [lb_receiver_name]",
+                "l.[lb_tel_num] AS [lb_tel_num]",
+                "l.[lb_comment] AS [lb_comment]",
+                "v.[fleet_number] AS [fleet_number]",
+                "v.[registration_number] AS [registration_number]",
+                "s.[description] AS [site_description]",
+                DateCreatedExpression(columns) + " AS [date_created]",
+                OptionalExpression(columns, "date_updated", "datetime2") + " AS [date_updated]",
+                OptionalExpression(columns, "created_by_user_code", "int")
+                    + " AS [created_by_user_code]",
+                OptionalExpression(columns, "modified_by_user_code", "int")
+                    + " AS [modified_by_user_code]",
+                OptionalExpression(columns, "is_deleted", "bit") + " AS [is_deleted]",
+            ]
+        );
 
-    private static string DateCreatedExpression(IReadOnlyDictionary<string, ColumnInfo> columns)
-        => columns.ContainsKey("date_created")
+    private static string DateCreatedExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
+        columns.ContainsKey("date_created")
             ? "l.[date_created]"
             : "COALESCE(l.[handout_date], CONVERT(datetime2, '19000101', 112))";
 
-    private static string OptionalExpression(IReadOnlyDictionary<string, ColumnInfo> columns, string column, string sqlType)
-        => columns.ContainsKey(column) ? $"l.[{column}]" : $"CAST(NULL AS {sqlType})";
+    private static string OptionalExpression(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string sqlType
+    ) => columns.ContainsKey(column) ? $"l.[{column}]" : $"CAST(NULL AS {sqlType})";
 
     private static Logbook Map(DbDataReader reader)
     {
@@ -260,21 +409,19 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
             created_by_user_code = ReadInt(reader, "created_by_user_code"),
             modified_by_user_code = ReadInt(reader, "modified_by_user_code"),
             is_deleted = ReadBool(reader, "is_deleted"),
-            Vehicle = vmfCode.HasValue || fleetNumber is not null || registrationNumber is not null
-                ? new Vehicle
-                {
-                    vmf_code = vmfCode ?? 0,
-                    fleet_number = fleetNumber,
-                    registration_number = registrationNumber
-                }
-                : null,
-            Site = siteCode.HasValue || siteDescription is not null
-                ? new Site
-                {
-                    Site_code = siteCode ?? 0,
-                    description = siteDescription
-                }
-                : null
+            Vehicle =
+                vmfCode.HasValue || fleetNumber is not null || registrationNumber is not null
+                    ? new Vehicle
+                    {
+                        vmf_code = vmfCode ?? 0,
+                        fleet_number = fleetNumber,
+                        registration_number = registrationNumber,
+                    }
+                    : null,
+            Site =
+                siteCode.HasValue || siteDescription is not null
+                    ? new Site { Site_code = siteCode ?? 0, description = siteDescription }
+                    : null,
         };
     }
 
@@ -282,22 +429,34 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose) await connection.OpenAsync();
+        if (shouldClose)
+            await connection.OpenAsync();
         return new ConnectionScope(connection, shouldClose);
     }
 
-    private DbTransaction? CurrentTransaction => _context.Database.CurrentTransaction?.GetDbTransaction();
+    private DbTransaction? CurrentTransaction =>
+        _context.Database.CurrentTransaction?.GetDbTransaction();
 
     private static int? UserIdOrNull(int value) => value > 0 ? value : null;
 
-    private static void AddValue(ICollection<WriteValue> values, IReadOnlyDictionary<string, ColumnInfo> columns, string column, string parameter, DbType type, object? value, bool includeNull)
+    private static void AddValue(
+        ICollection<WriteValue> values,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string parameter,
+        DbType type,
+        object? value,
+        bool includeNull
+    )
     {
-        if (columns.ContainsKey(column) && (includeNull || value is not null)) values.Add(new WriteValue(column, parameter, type, value));
+        if (columns.ContainsKey(column) && (includeNull || value is not null))
+            values.Add(new WriteValue(column, parameter, type, value));
     }
 
     private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)
     {
-        foreach (var value in values) AddParameter(command, value.Parameter, value.Type, value.Value);
+        foreach (var value in values)
+            AddParameter(command, value.Parameter, value.Type, value.Value);
     }
 
     private static void AddParameter(DbCommand command, string name, DbType type, object? value)
@@ -309,31 +468,34 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string? ReadString(DbDataReader reader, string name)
-        => reader.IsDBNull(reader.GetOrdinal(name)) ? null : Convert.ToString(reader[name]);
+    private static string? ReadString(DbDataReader reader, string name) =>
+        reader.IsDBNull(reader.GetOrdinal(name)) ? null : Convert.ToString(reader[name]);
 
-    private static int? ReadInt(DbDataReader reader, string name)
-        => reader.IsDBNull(reader.GetOrdinal(name)) ? null : Convert.ToInt32(reader[name]);
+    private static int? ReadInt(DbDataReader reader, string name) =>
+        reader.IsDBNull(reader.GetOrdinal(name)) ? null : Convert.ToInt32(reader[name]);
 
-    private static short? ReadShort(DbDataReader reader, string name)
-        => reader.IsDBNull(reader.GetOrdinal(name)) ? null : Convert.ToInt16(reader[name]);
+    private static short? ReadShort(DbDataReader reader, string name) =>
+        reader.IsDBNull(reader.GetOrdinal(name)) ? null : Convert.ToInt16(reader[name]);
 
-    private static DateTime? ReadDate(DbDataReader reader, string name)
-        => reader.IsDBNull(reader.GetOrdinal(name)) ? null : Convert.ToDateTime(reader[name]);
+    private static DateTime? ReadDate(DbDataReader reader, string name) =>
+        reader.IsDBNull(reader.GetOrdinal(name)) ? null : Convert.ToDateTime(reader[name]);
 
-    private static bool ReadBool(DbDataReader reader, string name)
-        => !reader.IsDBNull(reader.GetOrdinal(name)) && Convert.ToBoolean(reader[name]);
+    private static bool ReadBool(DbDataReader reader, string name) =>
+        !reader.IsDBNull(reader.GetOrdinal(name)) && Convert.ToBoolean(reader[name]);
 
     private sealed record ColumnInfo(string Name, string DataType = "");
+
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 
-    private sealed class ConnectionScope(DbConnection connection, bool shouldClose) : IAsyncDisposable
+    private sealed class ConnectionScope(DbConnection connection, bool shouldClose)
+        : IAsyncDisposable
     {
         public DbConnection Connection { get; } = connection;
 
         public async ValueTask DisposeAsync()
         {
-            if (shouldClose) await Connection.CloseAsync();
+            if (shouldClose)
+                await Connection.CloseAsync();
         }
     }
 }

@@ -55,6 +55,4 @@ public class VehicleDamage
     // Navigation properties for audit trail
     [ForeignKey("created_by_user_code")]
     public virtual User? CreatedByUser { get; set; }
-
-    
 }

@@ -32,7 +32,12 @@ function getText(formData: FormData, key: string) {
 
 function getInteger(formData: FormData, key: string, label: string): number;
 function getInteger(formData: FormData, key: string, label: string, required: false): number | null;
-function getInteger(formData: FormData, key: string, label: string, required = true): number | null {
+function getInteger(
+  formData: FormData,
+  key: string,
+  label: string,
+  required = true,
+): number | null {
   const value = getText(formData, key);
   if (!value && !required) {
     return null;
@@ -51,7 +56,9 @@ function getInteger(formData: FormData, key: string, label: string, required = t
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function hasVehicleManagementPermission(accessLevel?: string) {
@@ -60,7 +67,10 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -70,15 +80,24 @@ async function authorizeStatusMaintenance() {
   const session = await getSession();
 
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
 
   if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return { ok: false as const, message: "You do not have permission to maintain vehicle statuses." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain vehicle statuses.",
+    };
   }
 
   if (!VEHICLE_STATUS_ROLES.some((role) => hasRole(session.roles, role))) {
@@ -144,8 +163,10 @@ export async function searchVehicleStatusAction(
       .toSorted((left, right) => {
         const leftValue = searchMode === "GP" ? left.registrationNumber : left.fleetNumber;
         const rightValue = searchMode === "GP" ? right.registrationNumber : right.fleetNumber;
-        const leftExact = leftValue?.trim().localeCompare(searchTerm, undefined, { sensitivity: "accent" }) === 0;
-        const rightExact = rightValue?.trim().localeCompare(searchTerm, undefined, { sensitivity: "accent" }) === 0;
+        const leftExact =
+          leftValue?.trim().localeCompare(searchTerm, undefined, { sensitivity: "accent" }) === 0;
+        const rightExact =
+          rightValue?.trim().localeCompare(searchTerm, undefined, { sensitivity: "accent" }) === 0;
         return Number(rightExact) - Number(leftExact) || left.vmfCode - right.vmfCode;
       });
 
@@ -157,7 +178,10 @@ export async function searchVehicleStatusAction(
       return { status: "error", message: searchErrorMessage(error), results: [] };
     }
 
-    console.error("FIS vehicle status search failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle status search failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "error", message: "Vehicle search failed. Please try again.", results: [] };
   }
 }
@@ -204,7 +228,9 @@ export async function changeVehicleStatusAction(
     }
 
     if (newStatusCode === currentStatusCode) {
-      throw new VehicleStatusValidationError("Select a status different from the current vehicle status.");
+      throw new VehicleStatusValidationError(
+        "Select a status different from the current vehicle status.",
+      );
     }
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate)) {
@@ -221,12 +247,16 @@ export async function changeVehicleStatusAction(
     }
 
     if (newStatusCode === STOLEN_STATUS_CODE && (siteCode === null || siteCode <= 0)) {
-      throw new VehicleStatusValidationError("Book Under Site is required when marking a vehicle as Stolen.");
+      throw new VehicleStatusValidationError(
+        "Book Under Site is required when marking a vehicle as Stolen.",
+      );
     }
 
     if (newStatusCode === SOLD_STATUS_CODE) {
       if (!soldAmount || !soldDate || !soldTo) {
-        throw new VehicleStatusValidationError("Sold Amount, Sold Date, and Sold To are required for Sold status.");
+        throw new VehicleStatusValidationError(
+          "Sold Amount, Sold Date, and Sold To are required for Sold status.",
+        );
       }
 
       throw new VehicleStatusValidationError(
@@ -258,7 +288,10 @@ export async function changeVehicleStatusAction(
       return { status: "error", message: statusErrorMessage(error) };
     }
 
-    console.error("FIS vehicle status update failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle status update failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "error", message: "Vehicle status update failed. Please try again." };
   }
 

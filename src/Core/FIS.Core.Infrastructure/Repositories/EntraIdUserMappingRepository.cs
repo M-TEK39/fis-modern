@@ -20,22 +20,21 @@ public class EntraIdUserMappingRepository : IEntraIdUserMappingRepository
 
     public async Task<EntraIdUserMapping?> GetByEntraObjectIdAsync(string entraObjectId)
     {
-        return await _context.EntraIdUserMappings
-            .Include(m => m.User)
+        return await _context
+            .EntraIdUserMappings.Include(m => m.User)
             .FirstOrDefaultAsync(m => m.entra_object_id == entraObjectId);
     }
 
     public async Task<EntraIdUserMapping?> GetByUserAccessCodeAsync(int userAccessCode)
     {
-        return await _context.EntraIdUserMappings
-            .Include(m => m.User)
+        return await _context
+            .EntraIdUserMappings.Include(m => m.User)
             .FirstOrDefaultAsync(m => m.user_access_code == userAccessCode);
     }
 
     public async Task<EntraIdUserMapping> CreateAsync(EntraIdUserMapping mapping, int currentUserId)
     {
-            
-            _context.EntraIdUserMappings.Add(mapping);
+        _context.EntraIdUserMappings.Add(mapping);
         await _context.SaveChangesAsync();
         return mapping;
     }
@@ -47,7 +46,9 @@ public class EntraIdUserMappingRepository : IEntraIdUserMappingRepository
 
         var existing = await _context.EntraIdUserMappings.FindAsync(mapping.mapping_id);
         if (existing == null)
-            throw new InvalidOperationException($"EntraIdUserMapping with mapping_id {mapping.mapping_id} not found");
+            throw new InvalidOperationException(
+                $"EntraIdUserMapping with mapping_id {mapping.mapping_id} not found"
+            );
 
         _context.Entry(existing).CurrentValues.SetValues(mapping);
         await _context.SaveChangesAsync();
@@ -65,14 +66,11 @@ public class EntraIdUserMappingRepository : IEntraIdUserMappingRepository
 
     public async Task<bool> ExistsAsync(string entraObjectId)
     {
-        return await _context.EntraIdUserMappings
-            .AnyAsync(m => m.entra_object_id == entraObjectId);
+        return await _context.EntraIdUserMappings.AnyAsync(m => m.entra_object_id == entraObjectId);
     }
 
     public async Task<IEnumerable<EntraIdUserMapping>> GetAllAsync()
     {
-        return await _context.EntraIdUserMappings
-            .Include(m => m.User)
-            .ToListAsync();
+        return await _context.EntraIdUserMappings.Include(m => m.User).ToListAsync();
     }
 }

@@ -9,7 +9,9 @@ const VEHICLE_MANAGEMENT_PERMISSION = 1;
 const INCEPTION_ROLES = ["vehicle inception capturer", "vehicle inception authorizer"];
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function hasVehicleManagementPermission(accessLevel?: string) {
@@ -18,7 +20,10 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -64,9 +69,14 @@ export default async function PreCaptureNewVehicleEntry() {
 
   const hasAuthorizerRole = hasRole(session.roles, "vehicle inception authorizer");
   const hasCapturerRole = hasRole(session.roles, "vehicle inception capturer");
-  const hasExplicitInceptionRole = session.roles.some((role) => INCEPTION_ROLES.some((candidate) => hasRole([role], candidate)));
+  const hasExplicitInceptionRole = session.roles.some((role) =>
+    INCEPTION_ROLES.some((candidate) => hasRole([role], candidate)),
+  );
 
-  if (hasAuthorizerRole || (!hasExplicitInceptionRole && hasVehicleManagementPermission(session.accessLevel))) {
+  if (
+    hasAuthorizerRole ||
+    (!hasExplicitInceptionRole && hasVehicleManagementPermission(session.accessLevel))
+  ) {
     redirect("/vehicles/authorize");
   }
 

@@ -16,48 +16,48 @@ public class WorkflowExecutionSummaryRepository : IWorkflowExecutionSummaryRepos
 
     public async Task<WorkflowExecutionSummary?> GetByIdAsync(int summaryId)
     {
-        return await _context.WorkflowExecutionSummaries
-            .Include(s => s.Workflow)
+        return await _context
+            .WorkflowExecutionSummaries.Include(s => s.Workflow)
             .Include(s => s.Status)
             .FirstOrDefaultAsync(s => s.SummaryID == summaryId && !s.is_deleted);
     }
 
     public async Task<IEnumerable<WorkflowExecutionSummary>> GetAllAsync()
     {
-        return await _context.WorkflowExecutionSummaries
-            .Where(s => !s.is_deleted)
+        return await _context
+            .WorkflowExecutionSummaries.Where(s => !s.is_deleted)
             .OrderByDescending(s => s.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowExecutionSummary>> GetByWorkflowIdAsync(int workflowId)
     {
-        return await _context.WorkflowExecutionSummaries
-            .Where(s => s.WorkflowID == workflowId && !s.is_deleted)
+        return await _context
+            .WorkflowExecutionSummaries.Where(s => s.WorkflowID == workflowId && !s.is_deleted)
             .OrderByDescending(s => s.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowExecutionSummary>> GetByStatusAsync(string status)
     {
-        return await _context.WorkflowExecutionSummaries
-            .Where(s => s.ExecutionStatus == status && !s.is_deleted)
+        return await _context
+            .WorkflowExecutionSummaries.Where(s => s.ExecutionStatus == status && !s.is_deleted)
             .OrderByDescending(s => s.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowExecutionSummary>> GetActiveExecutionsAsync()
     {
-        return await _context.WorkflowExecutionSummaries
-            .Where(s => s.ExecutionStatus == "Running" && !s.is_deleted)
+        return await _context
+            .WorkflowExecutionSummaries.Where(s => s.ExecutionStatus == "Running" && !s.is_deleted)
             .OrderBy(s => s.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowExecutionSummary>> GetRecentExecutionsAsync(int count)
     {
-        return await _context.WorkflowExecutionSummaries
-            .Where(s => !s.is_deleted)
+        return await _context
+            .WorkflowExecutionSummaries.Where(s => !s.is_deleted)
             .OrderByDescending(s => s.StartedAt)
             .Take(count)
             .ToListAsync();
@@ -76,11 +76,14 @@ public class WorkflowExecutionSummaryRepository : IWorkflowExecutionSummaryRepos
 
     public async Task UpdateAsync(WorkflowExecutionSummary summary)
     {
-        var existing = await _context.WorkflowExecutionSummaries
-            .FirstOrDefaultAsync(s => s.SummaryID == summary.SummaryID);
+        var existing = await _context.WorkflowExecutionSummaries.FirstOrDefaultAsync(s =>
+            s.SummaryID == summary.SummaryID
+        );
 
         if (existing == null)
-            throw new InvalidOperationException($"WorkflowExecutionSummary {summary.SummaryID} not found");
+            throw new InvalidOperationException(
+                $"WorkflowExecutionSummary {summary.SummaryID} not found"
+            );
 
         _context.Entry(existing).CurrentValues.SetValues(summary);
         existing.date_updated = DateTime.UtcNow;

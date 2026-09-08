@@ -16,7 +16,10 @@ public interface IStepHandler
     /// <param name="parameters">Step-specific parameters as dictionary</param>
     /// <param name="context">Workflow execution context</param>
     /// <returns>Execution result with success status and optional data</returns>
-    Task<StepExecutionResult> ExecuteAsync(Dictionary<string, object> parameters, WorkflowExecutionContext context);
+    Task<StepExecutionResult> ExecuteAsync(
+        Dictionary<string, object> parameters,
+        WorkflowExecutionContext context
+    );
 
     /// <summary>
     /// Validates if the provided parameters are valid for this handler
@@ -37,13 +40,16 @@ public class StepExecutionResult
     public Exception? Exception { get; set; }
     public DateTime ExecutionTime { get; set; } = DateTime.UtcNow;
 
-    public static StepExecutionResult SuccessResult(string? message = null, Dictionary<string, object>? outputData = null)
+    public static StepExecutionResult SuccessResult(
+        string? message = null,
+        Dictionary<string, object>? outputData = null
+    )
     {
         return new StepExecutionResult
         {
             Success = true,
             Message = message ?? "Step executed successfully",
-            OutputData = outputData
+            OutputData = outputData,
         };
     }
 
@@ -53,7 +59,7 @@ public class StepExecutionResult
         {
             Success = false,
             Message = message,
-            Exception = exception
+            Exception = exception,
         };
     }
 }
@@ -87,11 +93,7 @@ public class ValidationResult
 
     public static ValidationResult Failure(params string[] errors)
     {
-        return new ValidationResult
-        {
-            IsValid = false,
-            Errors = new List<string>(errors)
-        };
+        return new ValidationResult { IsValid = false, Errors = new List<string>(errors) };
     }
 
     public void AddError(string error)

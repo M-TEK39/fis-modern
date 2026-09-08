@@ -26,7 +26,8 @@ public class JournalDetailRepository : IJournalDetailRepository
     {
         try
         {
-            return await _context.Set<JournalDetail>()
+            return await _context
+                .Set<JournalDetail>()
                 .Include(j => j.Vehicle)
                 .Include(j => j.Site)
                 .Include(j => j.Department)
@@ -34,7 +35,11 @@ public class JournalDetailRepository : IJournalDetailRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting journal detail by ID: {JournalDetailId}", journalDetailId);
+            _logger.LogError(
+                ex,
+                "Error getting journal detail by ID: {JournalDetailId}",
+                journalDetailId
+            );
             throw;
         }
     }
@@ -43,7 +48,8 @@ public class JournalDetailRepository : IJournalDetailRepository
     {
         try
         {
-            return await _context.Set<JournalDetail>()
+            return await _context
+                .Set<JournalDetail>()
                 .Include(j => j.Vehicle)
                 .Include(j => j.Site)
                 .Include(j => j.Department)
@@ -51,7 +57,11 @@ public class JournalDetailRepository : IJournalDetailRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting journal detail by code: {JournalDetailCode}", journalDetailCode);
+            _logger.LogError(
+                ex,
+                "Error getting journal detail by code: {JournalDetailCode}",
+                journalDetailCode
+            );
             throw;
         }
     }
@@ -60,7 +70,8 @@ public class JournalDetailRepository : IJournalDetailRepository
     {
         try
         {
-            return await _context.Set<JournalDetail>()
+            return await _context
+                .Set<JournalDetail>()
                 .Where(j => j.vmf_code == vmfCode)
                 .Include(j => j.Vehicle)
                 .Include(j => j.Site)
@@ -79,7 +90,8 @@ public class JournalDetailRepository : IJournalDetailRepository
     {
         try
         {
-            return await _context.Set<JournalDetail>()
+            return await _context
+                .Set<JournalDetail>()
                 .Where(j => j.site_code == siteCode)
                 .Include(j => j.Vehicle)
                 .Include(j => j.Site)
@@ -98,7 +110,8 @@ public class JournalDetailRepository : IJournalDetailRepository
     {
         try
         {
-            return await _context.Set<JournalDetail>()
+            return await _context
+                .Set<JournalDetail>()
                 .Where(j => j.department_code == departmentCode)
                 .Include(j => j.Vehicle)
                 .Include(j => j.Site)
@@ -108,16 +121,24 @@ public class JournalDetailRepository : IJournalDetailRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting journal details for department: {DepartmentCode}", departmentCode);
+            _logger.LogError(
+                ex,
+                "Error getting journal details for department: {DepartmentCode}",
+                departmentCode
+            );
             throw;
         }
     }
 
-    public async Task<IEnumerable<JournalDetail>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)
+    public async Task<IEnumerable<JournalDetail>> GetByDateRangeAsync(
+        DateTime startDate,
+        DateTime endDate
+    )
     {
         try
         {
-            return await _context.Set<JournalDetail>()
+            return await _context
+                .Set<JournalDetail>()
                 .Where(j => j.journal_detail_date >= startDate && j.journal_detail_date <= endDate)
                 .Include(j => j.Vehicle)
                 .Include(j => j.Site)
@@ -127,7 +148,12 @@ public class JournalDetailRepository : IJournalDetailRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting journal details for date range: {StartDate} to {EndDate}", startDate, endDate);
+            _logger.LogError(
+                ex,
+                "Error getting journal details for date range: {StartDate} to {EndDate}",
+                startDate,
+                endDate
+            );
             throw;
         }
     }
@@ -136,7 +162,8 @@ public class JournalDetailRepository : IJournalDetailRepository
     {
         try
         {
-            return await _context.Set<JournalDetail>()
+            return await _context
+                .Set<JournalDetail>()
                 .Where(j => j.journal_detail_financial_year == financialYear)
                 .Include(j => j.Vehicle)
                 .Include(j => j.Site)
@@ -146,16 +173,23 @@ public class JournalDetailRepository : IJournalDetailRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting journal details for financial year: {FinancialYear}", financialYear);
+            _logger.LogError(
+                ex,
+                "Error getting journal details for financial year: {FinancialYear}",
+                financialYear
+            );
             throw;
         }
     }
 
-    public async Task<IEnumerable<JournalDetail>> GetReversalsForJournalAsync(Guid journalDetailCode)
+    public async Task<IEnumerable<JournalDetail>> GetReversalsForJournalAsync(
+        Guid journalDetailCode
+    )
     {
         try
         {
-            return await _context.Set<JournalDetail>()
+            return await _context
+                .Set<JournalDetail>()
                 .Where(j => j.journal_detail_reversalof == journalDetailCode)
                 .Include(j => j.Vehicle)
                 .Include(j => j.Site)
@@ -165,7 +199,11 @@ public class JournalDetailRepository : IJournalDetailRepository
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting reversals for journal: {JournalDetailCode}", journalDetailCode);
+            _logger.LogError(
+                ex,
+                "Error getting reversals for journal: {JournalDetailCode}",
+                journalDetailCode
+            );
             throw;
         }
     }
@@ -187,7 +225,10 @@ public class JournalDetailRepository : IJournalDetailRepository
             _context.Set<JournalDetail>().Add(journalDetail);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Created journal detail: {JournalDetailCode}", journalDetail.journal_detail_code);
+            _logger.LogInformation(
+                "Created journal detail: {JournalDetailCode}",
+                journalDetail.journal_detail_code
+            );
 
             return journalDetail;
         }
@@ -205,19 +246,30 @@ public class JournalDetailRepository : IJournalDetailRepository
             if (journalDetail == null)
                 throw new ArgumentNullException(nameof(journalDetail));
 
-            var existing = await _context.Set<JournalDetail>().FindAsync(journalDetail.journal_detail_id);
+            var existing = await _context
+                .Set<JournalDetail>()
+                .FindAsync(journalDetail.journal_detail_id);
             if (existing == null)
-                throw new InvalidOperationException($"JournalDetail with journal_detail_id {journalDetail.journal_detail_id} not found");
+                throw new InvalidOperationException(
+                    $"JournalDetail with journal_detail_id {journalDetail.journal_detail_id} not found"
+                );
 
             journalDetail.journal_detail_date_updated = DateTime.Now;
             _context.Entry(existing).CurrentValues.SetValues(journalDetail);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Updated journal detail: {JournalDetailCode}", journalDetail.journal_detail_code);
+            _logger.LogInformation(
+                "Updated journal detail: {JournalDetailCode}",
+                journalDetail.journal_detail_code
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating journal detail: {JournalDetailId}", journalDetail.journal_detail_id);
+            _logger.LogError(
+                ex,
+                "Error updating journal detail: {JournalDetailId}",
+                journalDetail.journal_detail_id
+            );
             throw;
         }
     }
@@ -232,12 +284,19 @@ public class JournalDetailRepository : IJournalDetailRepository
                 _context.Set<JournalDetail>().Remove(journalDetail);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Deleted journal detail: {JournalDetailId}", journalDetailId);
+                _logger.LogInformation(
+                    "Deleted journal detail: {JournalDetailId}",
+                    journalDetailId
+                );
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting journal detail: {JournalDetailId}", journalDetailId);
+            _logger.LogError(
+                ex,
+                "Error deleting journal detail: {JournalDetailId}",
+                journalDetailId
+            );
             throw;
         }
     }

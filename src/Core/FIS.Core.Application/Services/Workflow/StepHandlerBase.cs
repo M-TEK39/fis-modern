@@ -23,20 +23,31 @@ public abstract class StepHandlerBase : IStepHandler
     /// <summary>
     /// Executes the step with retry logic and error handling
     /// </summary>
-    public async Task<StepExecutionResult> ExecuteAsync(Dictionary<string, object> parameters, WorkflowExecutionContext context)
+    public async Task<StepExecutionResult> ExecuteAsync(
+        Dictionary<string, object> parameters,
+        WorkflowExecutionContext context
+    )
     {
         try
         {
-            Logger.LogInformation("Executing step handler {HandlerType} for Step {StepID}", HandlerType, context.StepID);
+            Logger.LogInformation(
+                "Executing step handler {HandlerType} for Step {StepID}",
+                HandlerType,
+                context.StepID
+            );
 
             // Validate parameters first
             var validationResult = await ValidateParametersAsync(parameters);
             if (!validationResult.IsValid)
             {
-                Logger.LogWarning("Parameter validation failed for {HandlerType}: {Errors}",
-                    HandlerType, string.Join(", ", validationResult.Errors));
+                Logger.LogWarning(
+                    "Parameter validation failed for {HandlerType}: {Errors}",
+                    HandlerType,
+                    string.Join(", ", validationResult.Errors)
+                );
                 return StepExecutionResult.FailureResult(
-                    $"Parameter validation failed: {string.Join(", ", validationResult.Errors)}");
+                    $"Parameter validation failed: {string.Join(", ", validationResult.Errors)}"
+                );
             }
 
             // Execute the handler-specific logic
@@ -44,21 +55,32 @@ public abstract class StepHandlerBase : IStepHandler
 
             if (result.Success)
             {
-                Logger.LogInformation("Step handler {HandlerType} executed successfully for Step {StepID}",
-                    HandlerType, context.StepID);
+                Logger.LogInformation(
+                    "Step handler {HandlerType} executed successfully for Step {StepID}",
+                    HandlerType,
+                    context.StepID
+                );
             }
             else
             {
-                Logger.LogWarning("Step handler {HandlerType} failed for Step {StepID}: {Message}",
-                    HandlerType, context.StepID, result.Message);
+                Logger.LogWarning(
+                    "Step handler {HandlerType} failed for Step {StepID}: {Message}",
+                    HandlerType,
+                    context.StepID,
+                    result.Message
+                );
             }
 
             return result;
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Error executing step handler {HandlerType} for Step {StepID}",
-                HandlerType, context.StepID);
+            Logger.LogError(
+                ex,
+                "Error executing step handler {HandlerType} for Step {StepID}",
+                HandlerType,
+                context.StepID
+            );
             return StepExecutionResult.FailureResult($"Handler execution failed: {ex.Message}", ex);
         }
     }
@@ -68,12 +90,15 @@ public abstract class StepHandlerBase : IStepHandler
     /// </summary>
     protected abstract Task<StepExecutionResult> ExecuteInternalAsync(
         Dictionary<string, object> parameters,
-        WorkflowExecutionContext context);
+        WorkflowExecutionContext context
+    );
 
     /// <summary>
     /// Validates parameters - override in derived classes for specific validation
     /// </summary>
-    public virtual Task<Interfaces.Workflow.ValidationResult> ValidateParametersAsync(Dictionary<string, object> parameters)
+    public virtual Task<Interfaces.Workflow.ValidationResult> ValidateParametersAsync(
+        Dictionary<string, object> parameters
+    )
     {
         return Task.FromResult(Interfaces.Workflow.ValidationResult.Success());
     }
@@ -101,14 +126,21 @@ public abstract class StepHandlerBase : IStepHandler
         }
         catch (Exception ex)
         {
-            throw new ArgumentException($"Parameter '{key}' cannot be converted to type {typeof(T).Name}", ex);
+            throw new ArgumentException(
+                $"Parameter '{key}' cannot be converted to type {typeof(T).Name}",
+                ex
+            );
         }
     }
 
     /// <summary>
     /// Helper method to get an optional parameter with default value
     /// </summary>
-    protected T? GetOptionalParameter<T>(Dictionary<string, object> parameters, string key, T? defaultValue = default)
+    protected T? GetOptionalParameter<T>(
+        Dictionary<string, object> parameters,
+        string key,
+        T? defaultValue = default
+    )
     {
         if (!parameters.ContainsKey(key))
         {

@@ -22,12 +22,16 @@ public class TripService : ITripService
         IContractRepository contractRepository,
         IVehicleRepository vehicleRepository,
         ICurrentUserContext currentUserContext,
-        ILogger<TripService> logger)
+        ILogger<TripService> logger
+    )
     {
         _tripRepository = tripRepository ?? throw new ArgumentNullException(nameof(tripRepository));
-        _contractRepository = contractRepository ?? throw new ArgumentNullException(nameof(contractRepository));
-        _vehicleRepository = vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
-        _currentUserContext = currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
+        _contractRepository =
+            contractRepository ?? throw new ArgumentNullException(nameof(contractRepository));
+        _vehicleRepository =
+            vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
+        _currentUserContext =
+            currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -39,7 +43,10 @@ public class TripService : ITripService
     {
         try
         {
-            _logger.LogInformation("Creating trip authority for contract: {ContractCode}", trip.contract_code);
+            _logger.LogInformation(
+                "Creating trip authority for contract: {ContractCode}",
+                trip.contract_code
+            );
 
             // Validate trip creation
             var isValid = await ValidateTripCreationAsync(trip);
@@ -55,19 +62,33 @@ public class TripService : ITripService
             // If no expiry date set and it's monthly, set expiry to end of month
             if (!trip.expiry_date.HasValue && trip.Trip_Is_Monthly)
             {
-                trip.expiry_date = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.DaysInMonth(DateTime.Now.Year, DateTime.Now.Month));
+                trip.expiry_date = new DateTime(
+                    DateTime.Now.Year,
+                    DateTime.Now.Month,
+                    DateTime.DaysInMonth(DateTime.Now.Year, DateTime.Now.Month)
+                );
             }
 
-            var createdTrip = await _tripRepository.CreateAsync(trip, _currentUserContext.GetCurrentUserIdOrDefault());
+            var createdTrip = await _tripRepository.CreateAsync(
+                trip,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Trip authority created: {TripAuthorityCode} for contract {ContractCode}",
-                createdTrip.trip_authority_code, createdTrip.contract_code);
+            _logger.LogInformation(
+                "Trip authority created: {TripAuthorityCode} for contract {ContractCode}",
+                createdTrip.trip_authority_code,
+                createdTrip.contract_code
+            );
 
             return createdTrip;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating trip authority for contract: {ContractCode}", trip.contract_code);
+            _logger.LogError(
+                ex,
+                "Error creating trip authority for contract: {ContractCode}",
+                trip.contract_code
+            );
             throw;
         }
     }
@@ -76,7 +97,8 @@ public class TripService : ITripService
         Trip trip,
         IReadOnlyList<TripAuthorityDriverInput> drivers,
         IReadOnlyList<TripAuthorityPassengerInput> passengers,
-        IReadOnlyList<TripAuthorityRouteInput> routes)
+        IReadOnlyList<TripAuthorityRouteInput> routes
+    )
     {
         ArgumentNullException.ThrowIfNull(trip);
         ArgumentNullException.ThrowIfNull(drivers);
@@ -100,25 +122,37 @@ public class TripService : ITripService
 
         if (routes.Any(route => route.StartDate > route.EndDate))
         {
-            throw new ArgumentException("A route arrival date cannot be before its departure date.", nameof(routes));
+            throw new ArgumentException(
+                "A route arrival date cannot be before its departure date.",
+                nameof(routes)
+            );
         }
 
-        if (routes.Any(route => string.IsNullOrWhiteSpace(route.ResponsibilityCode) ||
-                                string.IsNullOrWhiteSpace(route.ObjectiveCode) ||
-                                string.IsNullOrWhiteSpace(route.ProjectNumber) ||
-                                string.IsNullOrWhiteSpace(route.FundCode)))
+        if (
+            routes.Any(route =>
+                string.IsNullOrWhiteSpace(route.ResponsibilityCode)
+                || string.IsNullOrWhiteSpace(route.ObjectiveCode)
+                || string.IsNullOrWhiteSpace(route.ProjectNumber)
+                || string.IsNullOrWhiteSpace(route.FundCode)
+            )
+        )
         {
             throw new ArgumentException(
                 "Responsibility, Objective, Project, and Fund are required for every route.",
-                nameof(routes));
+                nameof(routes)
+            );
         }
 
         if (routes.Any(route => route.EstimatedDistance is < 0))
         {
-            throw new ArgumentException("Estimated route distance cannot be negative.", nameof(routes));
+            throw new ArgumentException(
+                "Estimated route distance cannot be negative.",
+                nameof(routes)
+            );
         }
 
-        var contract = await _contractRepository.GetByIdAsync(trip.contract_code)
+        var contract =
+            await _contractRepository.GetByIdAsync(trip.contract_code)
             ?? throw new InvalidOperationException($"Contract {trip.contract_code} was not found");
 
         if (!await ValidateTripCreationAsync(trip))
@@ -138,23 +172,24 @@ public class TripService : ITripService
         var normalizedRoutes = routes
             .Select(route => route with { StartOdometer = contract.start_odometer })
             .ToArray();
-        var normalizedPassengers = passengers.Count > 0
-            ? passengers
-            : [new TripAuthorityPassengerInput("None")];
+        var normalizedPassengers =
+            passengers.Count > 0 ? passengers : [new TripAuthorityPassengerInput("None")];
 
         var createdTrip = await _tripRepository.CreateAuthorityAsync(
             trip,
             drivers,
             normalizedPassengers,
             normalizedRoutes,
-            _currentUserContext.GetCurrentUserIdOrDefault());
+            _currentUserContext.GetCurrentUserIdOrDefault()
+        );
 
         _logger.LogInformation(
             "Trip authority {TripAuthorityCode} created with {DriverCount} drivers, {PassengerCount} passengers, and {RouteCount} routes",
             createdTrip.trip_authority_code,
             drivers.Count,
             normalizedPassengers.Count,
-            normalizedRoutes.Length);
+            normalizedRoutes.Length
+        );
 
         return createdTrip;
     }
@@ -167,7 +202,10 @@ public class TripService : ITripService
     {
         try
         {
-            _logger.LogInformation("Updating trip authority: {TripAuthorityCode}", trip.trip_authority_code);
+            _logger.LogInformation(
+                "Updating trip authority: {TripAuthorityCode}",
+                trip.trip_authority_code
+            );
 
             // Check if trip is locked
             var existingTrip = await _tripRepository.GetByIdAsync(trip.trip_authority_code);
@@ -178,29 +216,51 @@ public class TripService : ITripService
 
             if (existingTrip.locked_for_transfer)
             {
-                _logger.LogWarning("Cannot update trip {TripAuthorityCode} - locked for transfer", trip.trip_authority_code);
-                throw new InvalidOperationException($"Trip {trip.trip_authority_code} is locked for transfer and cannot be modified");
+                _logger.LogWarning(
+                    "Cannot update trip {TripAuthorityCode} - locked for transfer",
+                    trip.trip_authority_code
+                );
+                throw new InvalidOperationException(
+                    $"Trip {trip.trip_authority_code} is locked for transfer and cannot be modified"
+                );
             }
 
-            await _tripRepository.UpdateAsync(trip, _currentUserContext.GetCurrentUserIdOrDefault());
+            await _tripRepository.UpdateAsync(
+                trip,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Trip authority updated: {TripAuthorityCode}", trip.trip_authority_code);
+            _logger.LogInformation(
+                "Trip authority updated: {TripAuthorityCode}",
+                trip.trip_authority_code
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating trip authority: {TripAuthorityCode}", trip.trip_authority_code);
+            _logger.LogError(
+                ex,
+                "Error updating trip authority: {TripAuthorityCode}",
+                trip.trip_authority_code
+            );
             throw;
         }
     }
 
-    public async Task CloseTripAsync(int tripAuthorityCode, IReadOnlyList<TripAuthorityRouteUpdate> routes, int? endOdometer = null)
+    public async Task CloseTripAsync(
+        int tripAuthorityCode,
+        IReadOnlyList<TripAuthorityRouteUpdate> routes,
+        int? endOdometer = null
+    )
     {
-        var details = await _tripRepository.GetDetailsAsync(tripAuthorityCode)
+        var details =
+            await _tripRepository.GetDetailsAsync(tripAuthorityCode)
             ?? throw new InvalidOperationException($"Trip {tripAuthorityCode} not found");
 
         if (details.Trip.locked_for_transfer)
         {
-            throw new InvalidOperationException($"Trip {tripAuthorityCode} is locked for transfer and cannot be modified");
+            throw new InvalidOperationException(
+                $"Trip {tripAuthorityCode} is locked for transfer and cannot be modified"
+            );
         }
 
         var submittedByCode = routes.ToDictionary(route => route.RouteCode);
@@ -209,9 +269,15 @@ public class TripService : ITripService
             throw new InvalidOperationException("The trip has no persisted routes to close");
         }
 
-        if (routes.Any(route => !details.Routes.Any(existing => existing.RouteCode == route.RouteCode)))
+        if (
+            routes.Any(route =>
+                !details.Routes.Any(existing => existing.RouteCode == route.RouteCode)
+            )
+        )
         {
-            throw new InvalidOperationException("One or more submitted routes do not belong to this trip");
+            throw new InvalidOperationException(
+                "One or more submitted routes do not belong to this trip"
+            );
         }
 
         var validatedRoutes = new List<TripAuthorityRouteUpdate>(details.Routes.Count);
@@ -221,43 +287,54 @@ public class TripService : ITripService
         {
             if (!submittedByCode.TryGetValue(route.RouteCode, out var submitted))
             {
-                throw new InvalidOperationException($"End odometer is required for route {route.RouteCode}");
+                throw new InvalidOperationException(
+                    $"End odometer is required for route {route.RouteCode}"
+                );
             }
 
             var startOdometer = route.StartOdometer ?? previousEndOdometer;
             if (startOdometer.HasValue && submitted.EndOdometer < startOdometer.Value)
             {
                 throw new InvalidOperationException(
-                    $"The end odometer for route {route.RouteCode} must be greater than or equal to {startOdometer.Value}");
+                    $"The end odometer for route {route.RouteCode} must be greater than or equal to {startOdometer.Value}"
+                );
             }
 
             var distance = (long)submitted.EndOdometer - (startOdometer ?? submitted.EndOdometer);
             if (distance < 0 || distance > 25_000)
             {
                 throw new InvalidOperationException(
-                    $"The distance for route {route.RouteCode} must be between 0 and 25000 kilometres");
+                    $"The distance for route {route.RouteCode} must be between 0 and 25000 kilometres"
+                );
             }
 
-            if (string.IsNullOrWhiteSpace(route.ResponsibilityCode) ||
-                string.IsNullOrWhiteSpace(route.ObjectiveCode) ||
-                string.IsNullOrWhiteSpace(route.ProjectNumber) ||
-                string.IsNullOrWhiteSpace(route.FundCode))
+            if (
+                string.IsNullOrWhiteSpace(route.ResponsibilityCode)
+                || string.IsNullOrWhiteSpace(route.ObjectiveCode)
+                || string.IsNullOrWhiteSpace(route.ProjectNumber)
+                || string.IsNullOrWhiteSpace(route.FundCode)
+            )
             {
                 throw new InvalidOperationException(
-                    $"Responsibility, Objective, Project, and Fund are required before closing route {route.RouteCode}");
+                    $"Responsibility, Objective, Project, and Fund are required before closing route {route.RouteCode}"
+                );
             }
 
-            validatedRoutes.Add(new TripAuthorityRouteUpdate(route.RouteCode, submitted.EndOdometer, (int)distance));
+            validatedRoutes.Add(
+                new TripAuthorityRouteUpdate(route.RouteCode, submitted.EndOdometer, (int)distance)
+            );
             previousEndOdometer = submitted.EndOdometer;
             maxEndOdometer = Math.Max(maxEndOdometer, submitted.EndOdometer);
         }
 
-        details.Trip.end_odo_meter = maxEndOdometer > 0 ? maxEndOdometer : details.Trip.end_odo_meter;
+        details.Trip.end_odo_meter =
+            maxEndOdometer > 0 ? maxEndOdometer : details.Trip.end_odo_meter;
         await _tripRepository.CloseAsync(
             tripAuthorityCode,
             validatedRoutes,
             details.Trip.end_odo_meter,
-            _currentUserContext.GetCurrentUserIdOrDefault());
+            _currentUserContext.GetCurrentUserIdOrDefault()
+        );
     }
 
     /// <summary>
@@ -302,7 +379,10 @@ public class TripService : ITripService
     /// <summary>
     /// Get trips by date range
     /// </summary>
-    public async Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(DateTime startDate, DateTime endDate)
+    public async Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(
+        DateTime startDate,
+        DateTime endDate
+    )
     {
         return await _tripRepository.GetTripsByDateRangeAsync(startDate, endDate);
     }
@@ -316,20 +396,33 @@ public class TripService : ITripService
     {
         try
         {
-            _logger.LogInformation("Checking for open trip authorities on contract: {ContractCode}", contractCode);
+            _logger.LogInformation(
+                "Checking for open trip authorities on contract: {ContractCode}",
+                contractCode
+            );
 
             var trips = await _tripRepository.GetTripsByContractAsync(contractCode);
 
             // Check if any trips have expiry_date > DateTime.Now
-            var hasOpenTrips = trips.Any(t => t.expiry_date.HasValue && t.expiry_date.Value > DateTime.Now);
+            var hasOpenTrips = trips.Any(t =>
+                t.expiry_date.HasValue && t.expiry_date.Value > DateTime.Now
+            );
 
-            _logger.LogInformation("Contract {ContractCode} has open trips: {HasOpenTrips}", contractCode, hasOpenTrips);
+            _logger.LogInformation(
+                "Contract {ContractCode} has open trips: {HasOpenTrips}",
+                contractCode,
+                hasOpenTrips
+            );
 
             return hasOpenTrips;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking open trip authorities for contract: {ContractCode}", contractCode);
+            _logger.LogError(
+                ex,
+                "Error checking open trip authorities for contract: {ContractCode}",
+                contractCode
+            );
             throw;
         }
     }
@@ -349,7 +442,11 @@ public class TripService : ITripService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting open trip authorities for contract: {ContractCode}", contractCode);
+            _logger.LogError(
+                ex,
+                "Error getting open trip authorities for contract: {ContractCode}",
+                contractCode
+            );
             throw;
         }
     }
@@ -379,7 +476,9 @@ public class TripService : ITripService
             var allTrips = await _tripRepository.GetAllAsync();
 
             // Filter for expired trips
-            return allTrips.Where(t => t.expiry_date.HasValue && t.expiry_date.Value < DateTime.Now);
+            return allTrips.Where(t =>
+                t.expiry_date.HasValue && t.expiry_date.Value < DateTime.Now
+            );
         }
         catch (Exception ex)
         {
@@ -414,7 +513,10 @@ public class TripService : ITripService
     {
         try
         {
-            _logger.LogInformation("Validating trip creation for contract: {ContractCode}", trip.contract_code);
+            _logger.LogInformation(
+                "Validating trip creation for contract: {ContractCode}",
+                trip.contract_code
+            );
 
             // 1. Validate contract exists and is active
             var contract = await _contractRepository.GetByIdAsync(trip.contract_code);
@@ -459,12 +561,19 @@ public class TripService : ITripService
                 return false;
             }
 
-            _logger.LogInformation("Trip validation passed for contract: {ContractCode}", trip.contract_code);
+            _logger.LogInformation(
+                "Trip validation passed for contract: {ContractCode}",
+                trip.contract_code
+            );
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating trip creation for contract: {ContractCode}", trip.contract_code);
+            _logger.LogError(
+                ex,
+                "Error validating trip creation for contract: {ContractCode}",
+                trip.contract_code
+            );
             return false;
         }
     }
@@ -477,7 +586,10 @@ public class TripService : ITripService
     {
         try
         {
-            _logger.LogInformation("Locking trip {TripAuthorityCode} for transfer", tripAuthorityCode);
+            _logger.LogInformation(
+                "Locking trip {TripAuthorityCode} for transfer",
+                tripAuthorityCode
+            );
 
             var trip = await _tripRepository.GetByIdAsync(tripAuthorityCode);
             if (trip == null)
@@ -486,13 +598,23 @@ public class TripService : ITripService
             }
 
             trip.locked_for_transfer = true;
-            await _tripRepository.UpdateAsync(trip, _currentUserContext.GetCurrentUserIdOrDefault());
+            await _tripRepository.UpdateAsync(
+                trip,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Trip {TripAuthorityCode} locked for transfer", tripAuthorityCode);
+            _logger.LogInformation(
+                "Trip {TripAuthorityCode} locked for transfer",
+                tripAuthorityCode
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error locking trip {TripAuthorityCode} for transfer", tripAuthorityCode);
+            _logger.LogError(
+                ex,
+                "Error locking trip {TripAuthorityCode} for transfer",
+                tripAuthorityCode
+            );
             throw;
         }
     }
@@ -504,7 +626,10 @@ public class TripService : ITripService
     {
         try
         {
-            _logger.LogInformation("Unlocking trip {TripAuthorityCode} from transfer", tripAuthorityCode);
+            _logger.LogInformation(
+                "Unlocking trip {TripAuthorityCode} from transfer",
+                tripAuthorityCode
+            );
 
             var trip = await _tripRepository.GetByIdAsync(tripAuthorityCode);
             if (trip == null)
@@ -513,13 +638,23 @@ public class TripService : ITripService
             }
 
             trip.locked_for_transfer = false;
-            await _tripRepository.UpdateAsync(trip, _currentUserContext.GetCurrentUserIdOrDefault());
+            await _tripRepository.UpdateAsync(
+                trip,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Trip {TripAuthorityCode} unlocked from transfer", tripAuthorityCode);
+            _logger.LogInformation(
+                "Trip {TripAuthorityCode} unlocked from transfer",
+                tripAuthorityCode
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error unlocking trip {TripAuthorityCode} from transfer", tripAuthorityCode);
+            _logger.LogError(
+                ex,
+                "Error unlocking trip {TripAuthorityCode} from transfer",
+                tripAuthorityCode
+            );
             throw;
         }
     }
@@ -532,7 +667,10 @@ public class TripService : ITripService
     {
         try
         {
-            _logger.LogInformation("Deleting trip authority: {TripAuthorityCode}", tripAuthorityCode);
+            _logger.LogInformation(
+                "Deleting trip authority: {TripAuthorityCode}",
+                tripAuthorityCode
+            );
 
             var trip = await _tripRepository.GetByIdAsync(tripAuthorityCode);
             if (trip == null)
@@ -543,17 +681,32 @@ public class TripService : ITripService
             // Check if trip is locked
             if (trip.locked_for_transfer)
             {
-                _logger.LogWarning("Cannot delete trip {TripAuthorityCode} - locked for transfer", tripAuthorityCode);
-                throw new InvalidOperationException($"Trip {tripAuthorityCode} is locked for transfer and cannot be deleted");
+                _logger.LogWarning(
+                    "Cannot delete trip {TripAuthorityCode} - locked for transfer",
+                    tripAuthorityCode
+                );
+                throw new InvalidOperationException(
+                    $"Trip {tripAuthorityCode} is locked for transfer and cannot be deleted"
+                );
             }
 
-            await _tripRepository.DeleteAsync(tripAuthorityCode, _currentUserContext.GetCurrentUserIdOrDefault());
+            await _tripRepository.DeleteAsync(
+                tripAuthorityCode,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Trip authority deleted: {TripAuthorityCode}", tripAuthorityCode);
+            _logger.LogInformation(
+                "Trip authority deleted: {TripAuthorityCode}",
+                tripAuthorityCode
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting trip authority: {TripAuthorityCode}", tripAuthorityCode);
+            _logger.LogError(
+                ex,
+                "Error deleting trip authority: {TripAuthorityCode}",
+                tripAuthorityCode
+            );
             throw;
         }
     }
@@ -566,8 +719,11 @@ public class TripService : ITripService
     {
         try
         {
-            _logger.LogInformation("Extending trip {TripAuthorityCode} expiry to {NewExpiryDate}",
-                tripAuthorityCode, newExpiryDate);
+            _logger.LogInformation(
+                "Extending trip {TripAuthorityCode} expiry to {NewExpiryDate}",
+                tripAuthorityCode,
+                newExpiryDate
+            );
 
             var trip = await _tripRepository.GetByIdAsync(tripAuthorityCode);
             if (trip == null)
@@ -578,30 +734,48 @@ public class TripService : ITripService
             // Check if trip is locked
             if (trip.locked_for_transfer)
             {
-                throw new InvalidOperationException($"Trip {tripAuthorityCode} is locked for transfer and cannot be extended");
+                throw new InvalidOperationException(
+                    $"Trip {tripAuthorityCode} is locked for transfer and cannot be extended"
+                );
             }
 
             // Validate new expiry date is in the future
             if (newExpiryDate < DateTime.Now)
             {
-                throw new ArgumentException("New expiry date must be in the future", nameof(newExpiryDate));
+                throw new ArgumentException(
+                    "New expiry date must be in the future",
+                    nameof(newExpiryDate)
+                );
             }
 
             // Validate new expiry date is after current expiry date (if set)
             if (trip.expiry_date.HasValue && newExpiryDate < trip.expiry_date.Value)
             {
-                throw new ArgumentException("New expiry date must be after current expiry date", nameof(newExpiryDate));
+                throw new ArgumentException(
+                    "New expiry date must be after current expiry date",
+                    nameof(newExpiryDate)
+                );
             }
 
             trip.expiry_date = newExpiryDate;
-            await _tripRepository.UpdateAsync(trip, _currentUserContext.GetCurrentUserIdOrDefault());
+            await _tripRepository.UpdateAsync(
+                trip,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Trip {TripAuthorityCode} expiry extended to {NewExpiryDate}",
-                tripAuthorityCode, newExpiryDate);
+            _logger.LogInformation(
+                "Trip {TripAuthorityCode} expiry extended to {NewExpiryDate}",
+                tripAuthorityCode,
+                newExpiryDate
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error extending trip {TripAuthorityCode} expiry", tripAuthorityCode);
+            _logger.LogError(
+                ex,
+                "Error extending trip {TripAuthorityCode} expiry",
+                tripAuthorityCode
+            );
             throw;
         }
     }
@@ -628,8 +802,11 @@ public class TripService : ITripService
     {
         try
         {
-            _logger.LogInformation("Validating odometer reading {OdometerReading} for trip {TripAuthorityCode}",
-                odometerReading, tripAuthorityCode);
+            _logger.LogInformation(
+                "Validating odometer reading {OdometerReading} for trip {TripAuthorityCode}",
+                odometerReading,
+                tripAuthorityCode
+            );
 
             var trip = await _tripRepository.GetByIdAsync(tripAuthorityCode);
             if (trip == null)
@@ -649,15 +826,21 @@ public class TripService : ITripService
             // Validate odometer is within contract range
             if (odometerReading < contract.start_odometer)
             {
-                _logger.LogWarning("Odometer reading {OdometerReading} is less than contract start odometer {StartOdometer}",
-                    odometerReading, contract.start_odometer);
+                _logger.LogWarning(
+                    "Odometer reading {OdometerReading} is less than contract start odometer {StartOdometer}",
+                    odometerReading,
+                    contract.start_odometer
+                );
                 return false;
             }
 
             if (contract.end_odometer > 0 && odometerReading > contract.end_odometer)
             {
-                _logger.LogWarning("Odometer reading {OdometerReading} exceeds contract end odometer {EndOdometer}",
-                    odometerReading, contract.end_odometer);
+                _logger.LogWarning(
+                    "Odometer reading {OdometerReading} exceeds contract end odometer {EndOdometer}",
+                    odometerReading,
+                    contract.end_odometer
+                );
                 return false;
             }
 
@@ -665,7 +848,11 @@ public class TripService : ITripService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating odometer reading for trip {TripAuthorityCode}", tripAuthorityCode);
+            _logger.LogError(
+                ex,
+                "Error validating odometer reading for trip {TripAuthorityCode}",
+                tripAuthorityCode
+            );
             return false;
         }
     }

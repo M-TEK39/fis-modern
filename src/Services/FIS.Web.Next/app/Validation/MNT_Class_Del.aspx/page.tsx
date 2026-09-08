@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
-type ClassDeletePageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+type ClassDeletePageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
 function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;

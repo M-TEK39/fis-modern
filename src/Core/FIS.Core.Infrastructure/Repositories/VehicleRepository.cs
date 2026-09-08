@@ -1,9 +1,9 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
-using System.ComponentModel.DataAnnotations.Schema;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
@@ -21,7 +21,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "SQL identifiers come only from fixed compatibility allowlists; all submitted values are parameters.")]
+    Justification = "SQL identifiers come only from fixed compatibility allowlists; all submitted values are parameters."
+)]
 public sealed class VehicleRepository : IVehicleRepository
 {
     private const string VehicleTableName = "vehicle_master";
@@ -29,24 +30,109 @@ public sealed class VehicleRepository : IVehicleRepository
 
     private static readonly string[] LegacyColumns =
     [
-        "vmf_code", "model_code", "type_code", "vehicle_status_code", "location_code", "fleet_number",
-        "registration_number", "take_on_date", "take_on_odo", "current_odo", "odo_adjustment", "derived_odo",
-        "odo_update_date", "engine_number_1", "chassis_number", "tare", "gvm", "year_manufactured",
-        "optional_extras", "licence_due_date", "additional_fuel_tank", "average_consumption", "fuel_card_number",
-        "fuel_card_date", "purchase_date", "purchase_amount", "book_value", "book_value_date", "maint_card_number",
-        "maint_card_exdate", "purchased_from", "sold_to", "sold_date", "sold_amount", "service_last_done",
-        "service_last_odo", "cof_last_done", "cof_required", "cof_number", "operator_card_number",
-        "monthly_overhead", "colour", "tow_hitch", "canopy", "Cof_amount", "Licence_receiver",
-        "Licence_receiver_id", "Licence_receiver_tel", "Licence_receiver_site", "Licence_date_taken", "highest_km",
-        "fuel_ltd", "fuel_ytd", "fuel_3month_average", "oil_ltd", "oil_ytd", "oil_3month_average", "maint_ltd",
-        "maint_ytd", "maint_3month_average", "repairs_ltd", "repairs_ytd", "repairs_3month_average", "tyres_ltd",
-        "tyres_ytd", "tyres_3month_average", "accident_ltd", "accident_ytd", "accident_3month_average", "toll_ltd",
-        "toll_ytd", "toll_3month_average", "other_ltd", "other_ytd", "other_3month_average", "km_ltd", "km_ytd",
-        "km_3month_average", "lic_register_number", "lic_registration_doc", "licence_comments", "default_site",
-        "previos_gg_number", "followup_gg_number", "vehicle_status_date", "renumbered_to", "barcode",
-        "user_access_code", "captured_date", "reserved", "LPG", "extended_service", "destroyed_date",
-        "destroyed_amount", "destroyed_receipt", "previos_gg_number_2", "date_First_Regist", "vs_code",
-        "invoice_number", "RelieveVehicle", "initial_site_code", "veh_site_code", "temp_vmf_code"
+        "vmf_code",
+        "model_code",
+        "type_code",
+        "vehicle_status_code",
+        "location_code",
+        "fleet_number",
+        "registration_number",
+        "take_on_date",
+        "take_on_odo",
+        "current_odo",
+        "odo_adjustment",
+        "derived_odo",
+        "odo_update_date",
+        "engine_number_1",
+        "chassis_number",
+        "tare",
+        "gvm",
+        "year_manufactured",
+        "optional_extras",
+        "licence_due_date",
+        "additional_fuel_tank",
+        "average_consumption",
+        "fuel_card_number",
+        "fuel_card_date",
+        "purchase_date",
+        "purchase_amount",
+        "book_value",
+        "book_value_date",
+        "maint_card_number",
+        "maint_card_exdate",
+        "purchased_from",
+        "sold_to",
+        "sold_date",
+        "sold_amount",
+        "service_last_done",
+        "service_last_odo",
+        "cof_last_done",
+        "cof_required",
+        "cof_number",
+        "operator_card_number",
+        "monthly_overhead",
+        "colour",
+        "tow_hitch",
+        "canopy",
+        "Cof_amount",
+        "Licence_receiver",
+        "Licence_receiver_id",
+        "Licence_receiver_tel",
+        "Licence_receiver_site",
+        "Licence_date_taken",
+        "highest_km",
+        "fuel_ltd",
+        "fuel_ytd",
+        "fuel_3month_average",
+        "oil_ltd",
+        "oil_ytd",
+        "oil_3month_average",
+        "maint_ltd",
+        "maint_ytd",
+        "maint_3month_average",
+        "repairs_ltd",
+        "repairs_ytd",
+        "repairs_3month_average",
+        "tyres_ltd",
+        "tyres_ytd",
+        "tyres_3month_average",
+        "accident_ltd",
+        "accident_ytd",
+        "accident_3month_average",
+        "toll_ltd",
+        "toll_ytd",
+        "toll_3month_average",
+        "other_ltd",
+        "other_ytd",
+        "other_3month_average",
+        "km_ltd",
+        "km_ytd",
+        "km_3month_average",
+        "lic_register_number",
+        "lic_registration_doc",
+        "licence_comments",
+        "default_site",
+        "previos_gg_number",
+        "followup_gg_number",
+        "vehicle_status_date",
+        "renumbered_to",
+        "barcode",
+        "user_access_code",
+        "captured_date",
+        "reserved",
+        "LPG",
+        "extended_service",
+        "destroyed_date",
+        "destroyed_amount",
+        "destroyed_receipt",
+        "previos_gg_number_2",
+        "date_First_Regist",
+        "vs_code",
+        "invoice_number",
+        "RelieveVehicle",
+        "initial_site_code",
+        "veh_site_code",
+        "temp_vmf_code",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -58,7 +144,7 @@ public sealed class VehicleRepository : IVehicleRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private static readonly string[] RequiredColumns =
@@ -72,14 +158,14 @@ public sealed class VehicleRepository : IVehicleRepository
         "registration_number",
         "take_on_date",
         "take_on_odo",
-        "current_odo"
+        "current_odo",
     ];
 
     private static readonly string[] RequiredModelColumns =
     [
         "model_code",
         "make_code",
-        "model_description"
+        "model_description",
     ];
 
     private static readonly IReadOnlyDictionary<string, PropertyInfo> VehicleProperties =
@@ -88,10 +174,14 @@ public sealed class VehicleRepository : IVehicleRepository
             .Select(property => new
             {
                 Property = property,
-                Column = property.GetCustomAttribute<ColumnAttribute>()?.Name
+                Column = property.GetCustomAttribute<ColumnAttribute>()?.Name,
             })
             .Where(item => !string.IsNullOrWhiteSpace(item.Column))
-            .ToDictionary(item => item.Column!, item => item.Property, StringComparer.OrdinalIgnoreCase);
+            .ToDictionary(
+                item => item.Column!,
+                item => item.Property,
+                StringComparer.OrdinalIgnoreCase
+            );
 
     private readonly FisDbContext _context;
 
@@ -103,11 +193,13 @@ public sealed class VehicleRepository : IVehicleRepository
     public async Task<Vehicle?> GetByIdAsync(int vmfCode)
     {
         var availableColumns = await GetAvailableColumnsAsync();
-        return (await QueryAsync(
+        return (
+            await QueryAsync(
                 $"WHERE [v].[vmf_code] = @vmfCode AND {GetActiveFilter("v", availableColumns)}",
                 command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode),
-                availableColumns))
-            .SingleOrDefault();
+                availableColumns
+            )
+        ).SingleOrDefault();
     }
 
     public async Task<Vehicle?> GetByFleetNumberAsync(string fleetNumber)
@@ -118,11 +210,13 @@ public sealed class VehicleRepository : IVehicleRepository
         }
 
         var availableColumns = await GetAvailableColumnsAsync();
-        return (await QueryAsync(
-            $"WHERE [v].[fleet_number] = @fleetNumber AND {GetActiveFilter("v", availableColumns)}",
-            command => AddParameter(command, "@fleetNumber", DbType.String, fleetNumber),
-            availableColumns))
-            .SingleOrDefault();
+        return (
+            await QueryAsync(
+                $"WHERE [v].[fleet_number] = @fleetNumber AND {GetActiveFilter("v", availableColumns)}",
+                command => AddParameter(command, "@fleetNumber", DbType.String, fleetNumber),
+                availableColumns
+            )
+        ).SingleOrDefault();
     }
 
     public async Task<Vehicle?> GetByRegistrationNumberAsync(string registrationNumber)
@@ -133,11 +227,14 @@ public sealed class VehicleRepository : IVehicleRepository
         }
 
         var availableColumns = await GetAvailableColumnsAsync();
-        return (await QueryAsync(
-            $"WHERE [v].[registration_number] = @registrationNumber AND {GetActiveFilter("v", availableColumns)}",
-            command => AddParameter(command, "@registrationNumber", DbType.String, registrationNumber),
-            availableColumns))
-            .SingleOrDefault();
+        return (
+            await QueryAsync(
+                $"WHERE [v].[registration_number] = @registrationNumber AND {GetActiveFilter("v", availableColumns)}",
+                command =>
+                    AddParameter(command, "@registrationNumber", DbType.String, registrationNumber),
+                availableColumns
+            )
+        ).SingleOrDefault();
     }
 
     public async Task<IEnumerable<Vehicle>> GetActiveVehiclesAsync()
@@ -145,14 +242,15 @@ public sealed class VehicleRepository : IVehicleRepository
         var availableColumns = await GetAvailableColumnsAsync();
         return await QueryAsync(
             $"WHERE [v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)} ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]",
-            knownColumns: availableColumns);
+            knownColumns: availableColumns
+        );
     }
 
-    public async Task<IEnumerable<Vehicle>> GetAvailableVehiclesAsync()
-        => await GetActiveVehiclesAsync();
+    public async Task<IEnumerable<Vehicle>> GetAvailableVehiclesAsync() =>
+        await GetActiveVehiclesAsync();
 
-    public async Task<IEnumerable<Vehicle>> GetAllAsync()
-        => await QueryAsync("ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]");
+    public async Task<IEnumerable<Vehicle>> GetAllAsync() =>
+        await QueryAsync("ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]");
 
     public async Task<IEnumerable<Vehicle>> SearchVehiclesAsync(string searchTerm)
     {
@@ -164,17 +262,21 @@ public sealed class VehicleRepository : IVehicleRepository
         var availableColumns = await GetAvailableColumnsAsync();
         var term = $"%{searchTerm.Trim().ToLowerInvariant()}%";
         return await QueryAsync(
-            "WHERE (" + string.Join(
-                " OR ",
-                [
-                    "LOWER(COALESCE([v].[fleet_number], '')) LIKE @searchTerm",
-                    "LOWER(COALESCE([v].[registration_number], '')) LIKE @searchTerm",
-                    "LOWER(COALESCE([v].[chassis_number], '')) LIKE @searchTerm",
-                    "LOWER(COALESCE([v].[engine_number_1], '')) LIKE @searchTerm",
-                    "LOWER(COALESCE([v].[invoice_number], '')) LIKE @searchTerm"
-                ]) + ") ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]",
+            "WHERE ("
+                + string.Join(
+                    " OR ",
+                    [
+                        "LOWER(COALESCE([v].[fleet_number], '')) LIKE @searchTerm",
+                        "LOWER(COALESCE([v].[registration_number], '')) LIKE @searchTerm",
+                        "LOWER(COALESCE([v].[chassis_number], '')) LIKE @searchTerm",
+                        "LOWER(COALESCE([v].[engine_number_1], '')) LIKE @searchTerm",
+                        "LOWER(COALESCE([v].[invoice_number], '')) LIKE @searchTerm",
+                    ]
+                )
+                + ") ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]",
             command => AddParameter(command, "@searchTerm", DbType.String, term),
-            availableColumns);
+            availableColumns
+        );
     }
 
     public async Task<IEnumerable<Vehicle>> GetByInvoiceNumberAsync(string invoiceNumber)
@@ -188,7 +290,8 @@ public sealed class VehicleRepository : IVehicleRepository
         return await QueryAsync(
             $"WHERE [v].[invoice_number] = @invoiceNumber AND {GetActiveFilter("v", availableColumns)} ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]",
             command => AddParameter(command, "@invoiceNumber", DbType.String, invoiceNumber),
-            availableColumns);
+            availableColumns
+        );
     }
 
     public async Task<Vehicle> CreateAsync(Vehicle vehicle, int currentUserId)
@@ -214,12 +317,18 @@ public sealed class VehicleRepository : IVehicleRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{VehicleTableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{VehicleTableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[vmf_code]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
             AddParameters(command, values);
-            vehicle.vmf_code = Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+            vehicle.vmf_code = Convert.ToInt32(
+                await command.ExecuteScalarAsync(),
+                CultureInfo.InvariantCulture
+            );
             return vehicle;
         }
         finally
@@ -236,8 +345,11 @@ public sealed class VehicleRepository : IVehicleRepository
         ArgumentNullException.ThrowIfNull(vehicle);
 
         var availableColumns = await GetAvailableColumnsAsync();
-        _ = await GetByIdIncludingDeletedAsync(vehicle.vmf_code, availableColumns)
-            ?? throw new InvalidOperationException($"Vehicle with vmf_code {vehicle.vmf_code} not found");
+        _ =
+            await GetByIdIncludingDeletedAsync(vehicle.vmf_code, availableColumns)
+            ?? throw new InvalidOperationException(
+                $"Vehicle with vmf_code {vehicle.vmf_code} not found"
+            );
         var values = BuildWriteValues(vehicle, availableColumns, includeKey: false);
         if (values.Count == 0)
         {
@@ -257,7 +369,10 @@ public sealed class VehicleRepository : IVehicleRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{VehicleTableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [vmf_code] = @vmfCode
                 """;
             AddParameters(command, values);
@@ -273,30 +388,110 @@ public sealed class VehicleRepository : IVehicleRepository
         }
     }
 
-    public async Task UpdateLicenceFieldsAsync(int vmfCode, VehicleLicenceUpdate update, int currentUserId)
+    public async Task UpdateLicenceFieldsAsync(
+        int vmfCode,
+        VehicleLicenceUpdate update,
+        int currentUserId
+    )
     {
         ArgumentNullException.ThrowIfNull(update);
 
         var availableColumns = await GetAvailableColumnsAsync();
         var values = new List<WriteValue>();
-        AddColumnValue(values, availableColumns, "licence_due_date", DbType.DateTime2, update.LicenceDueDate);
-        AddColumnValue(values, availableColumns, "lic_register_number", DbType.String, update.LicenceRegisterNumber);
-        AddColumnValue(values, availableColumns, "lic_registration_doc", DbType.String, update.LicenceRegistrationDocument);
+        AddColumnValue(
+            values,
+            availableColumns,
+            "licence_due_date",
+            DbType.DateTime2,
+            update.LicenceDueDate
+        );
+        AddColumnValue(
+            values,
+            availableColumns,
+            "lic_register_number",
+            DbType.String,
+            update.LicenceRegisterNumber
+        );
+        AddColumnValue(
+            values,
+            availableColumns,
+            "lic_registration_doc",
+            DbType.String,
+            update.LicenceRegistrationDocument
+        );
         AddColumnValue(values, availableColumns, "tare", DbType.Int32, update.Tare);
-        AddColumnValue(values, availableColumns, "Licence_receiver", DbType.String, update.LicenceReceiver);
-        AddColumnValue(values, availableColumns, "Licence_receiver_id", DbType.String, update.LicenceReceiverId);
-        AddColumnValue(values, availableColumns, "Licence_receiver_tel", DbType.String, update.LicenceReceiverTelephone);
-        AddColumnValue(values, availableColumns, "Licence_receiver_site", DbType.Int16, update.LicenceReceiverSite);
-        AddColumnValue(values, availableColumns, "Licence_date_taken", DbType.DateTime2, update.LicenceDateTaken);
+        AddColumnValue(
+            values,
+            availableColumns,
+            "Licence_receiver",
+            DbType.String,
+            update.LicenceReceiver
+        );
+        AddColumnValue(
+            values,
+            availableColumns,
+            "Licence_receiver_id",
+            DbType.String,
+            update.LicenceReceiverId
+        );
+        AddColumnValue(
+            values,
+            availableColumns,
+            "Licence_receiver_tel",
+            DbType.String,
+            update.LicenceReceiverTelephone
+        );
+        AddColumnValue(
+            values,
+            availableColumns,
+            "Licence_receiver_site",
+            DbType.Int16,
+            update.LicenceReceiverSite
+        );
+        AddColumnValue(
+            values,
+            availableColumns,
+            "Licence_date_taken",
+            DbType.DateTime2,
+            update.LicenceDateTaken
+        );
         AddColumnValue(values, availableColumns, "cof_required", DbType.String, update.CofRequired);
-        AddColumnValue(values, availableColumns, "cof_last_done", DbType.DateTime2, update.CofLastDone);
-        AddColumnValue(values, availableColumns, "licence_comments", DbType.String, update.LicenceComments);
-        AddColumnValue(values, availableColumns, "date_updated", DbType.DateTime2, DateTime.UtcNow, includeNull: false);
-        AddColumnValue(values, availableColumns, "modified_by_user_code", DbType.Int32, currentUserId > 0 ? currentUserId : null, includeNull: false);
+        AddColumnValue(
+            values,
+            availableColumns,
+            "cof_last_done",
+            DbType.DateTime2,
+            update.CofLastDone
+        );
+        AddColumnValue(
+            values,
+            availableColumns,
+            "licence_comments",
+            DbType.String,
+            update.LicenceComments
+        );
+        AddColumnValue(
+            values,
+            availableColumns,
+            "date_updated",
+            DbType.DateTime2,
+            DateTime.UtcNow,
+            includeNull: false
+        );
+        AddColumnValue(
+            values,
+            availableColumns,
+            "modified_by_user_code",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null,
+            includeNull: false
+        );
 
         if (values.Count == 0)
         {
-            throw new InvalidOperationException("The vehicle_master table has no licence fields available for update.");
+            throw new InvalidOperationException(
+                "The vehicle_master table has no licence fields available for update."
+            );
         }
 
         var connection = _context.Database.GetDbConnection();
@@ -312,7 +507,10 @@ public sealed class VehicleRepository : IVehicleRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{VehicleTableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [vmf_code] = @vmfCode
                 AND {GetActiveFilter("", availableColumns)}
                 """;
@@ -335,7 +533,10 @@ public sealed class VehicleRepository : IVehicleRepository
     public async Task AddLicenceReceiveNoteAsync(int vmfCode, string username, int currentUserId)
     {
         var columns = await GetTableColumnsAsync("fleet_notes");
-        if (!columns.Contains("vmf_code") || (!columns.Contains("notes") && !columns.Contains("fleet_note")))
+        if (
+            !columns.Contains("vmf_code")
+            || (!columns.Contains("notes") && !columns.Contains("fleet_note"))
+        )
         {
             return;
         }
@@ -346,11 +547,46 @@ public sealed class VehicleRepository : IVehicleRepository
             new("vmf_code", "@vmfCode", DbType.Int32, vmfCode),
             new(noteColumn, "@note", DbType.String, $"Licence Receive: {username}"),
         };
-        AddOptionalColumnValue(values, columns, "update_date", "@updateDate", DbType.DateTime2, DateTime.UtcNow);
-        AddOptionalColumnValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
-        AddOptionalColumnValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-        AddOptionalColumnValue(values, columns, "created_by_user_code", "@createdBy", DbType.Int32, currentUserId > 0 ? currentUserId : null);
-        AddOptionalColumnValue(values, columns, "modified_by_user_code", "@modifiedBy", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddOptionalColumnValue(
+            values,
+            columns,
+            "update_date",
+            "@updateDate",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddOptionalColumnValue(
+            values,
+            columns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddOptionalColumnValue(
+            values,
+            columns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddOptionalColumnValue(
+            values,
+            columns,
+            "created_by_user_code",
+            "@createdBy",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalColumnValue(
+            values,
+            columns,
+            "modified_by_user_code",
+            "@modifiedBy",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddOptionalColumnValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
 
         var connection = _context.Database.GetDbConnection();
@@ -364,7 +600,8 @@ public sealed class VehicleRepository : IVehicleRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"INSERT INTO [dbo].[fleet_notes] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+            command.CommandText =
+                $"INSERT INTO [dbo].[fleet_notes] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
             AddParameters(command, values);
             await command.ExecuteNonQueryAsync();
         }
@@ -407,7 +644,8 @@ public sealed class VehicleRepository : IVehicleRepository
                         command,
                         "@modifiedByUserCode",
                         DbType.Int32,
-                        currentUserId > 0 ? currentUserId : null);
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
                 command.CommandText = $"""
@@ -439,17 +677,23 @@ public sealed class VehicleRepository : IVehicleRepository
         }
     }
 
-    private async Task<Vehicle?> GetByIdIncludingDeletedAsync(int vmfCode, IReadOnlySet<string> availableColumns)
-        => (await QueryAsync(
-            "WHERE [v].[vmf_code] = @vmfCode",
-            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode),
-            availableColumns))
-            .SingleOrDefault();
+    private async Task<Vehicle?> GetByIdIncludingDeletedAsync(
+        int vmfCode,
+        IReadOnlySet<string> availableColumns
+    ) =>
+        (
+            await QueryAsync(
+                "WHERE [v].[vmf_code] = @vmfCode",
+                command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode),
+                availableColumns
+            )
+        ).SingleOrDefault();
 
     private async Task<List<Vehicle>> QueryAsync(
         string? predicate = null,
         Action<DbCommand>? configure = null,
-        IReadOnlySet<string>? knownColumns = null)
+        IReadOnlySet<string>? knownColumns = null
+    )
     {
         var availableColumns = knownColumns ?? await GetAvailableColumnsAsync();
         var modelColumns = await GetTableColumnsAsync(ModelTableName);
@@ -463,12 +707,12 @@ public sealed class VehicleRepository : IVehicleRepository
             ? $"LEFT JOIN [dbo].[{ModelTableName}] AS [m] ON [m].[model_code] = [v].[model_code]"
             : string.Empty;
         var normalizedPredicate = predicate?.Trim();
-        var whereClause = string.IsNullOrWhiteSpace(normalizedPredicate)
-            ? string.Empty
+        var whereClause =
+            string.IsNullOrWhiteSpace(normalizedPredicate) ? string.Empty
             : normalizedPredicate.StartsWith("WHERE ", StringComparison.OrdinalIgnoreCase)
-                || normalizedPredicate.StartsWith("ORDER BY ", StringComparison.OrdinalIgnoreCase)
+            || normalizedPredicate.StartsWith("ORDER BY ", StringComparison.OrdinalIgnoreCase)
                 ? normalizedPredicate
-                : $"WHERE {normalizedPredicate}";
+            : $"WHERE {normalizedPredicate}";
 
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -514,7 +758,8 @@ public sealed class VehicleRepository : IVehicleRepository
         if (missingColumns.Length > 0)
         {
             throw new InvalidOperationException(
-                $"The required vehicle_master compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                $"The required vehicle_master compatibility columns are not available: {string.Join(", ", missingColumns)}"
+            );
         }
 
         return columns;
@@ -576,7 +821,10 @@ public sealed class VehicleRepository : IVehicleRepository
                 continue;
             }
 
-            property.SetValue(vehicle, ConvertValue(reader.GetValue(ordinal), property.PropertyType));
+            property.SetValue(
+                vehicle,
+                ConvertValue(reader.GetValue(ordinal), property.PropertyType)
+            );
         }
 
         var modelCode = ReadInt16(reader, "model_model_code");
@@ -587,7 +835,7 @@ public sealed class VehicleRepository : IVehicleRepository
             {
                 model_code = modelCode.Value,
                 make_code = makeCode.Value,
-                model_description = ReadString(reader, "model_description") ?? string.Empty
+                model_description = ReadString(reader, "model_description") ?? string.Empty,
             };
         }
 
@@ -597,7 +845,8 @@ public sealed class VehicleRepository : IVehicleRepository
     private static List<WriteValue> BuildWriteValues(
         Vehicle vehicle,
         IReadOnlySet<string> availableColumns,
-        bool includeKey)
+        bool includeKey
+    )
     {
         var values = new List<WriteValue>();
         foreach (var column in LegacyColumns.Concat(OptionalColumns))
@@ -607,16 +856,22 @@ public sealed class VehicleRepository : IVehicleRepository
                 continue;
             }
 
-            if (!availableColumns.Contains(column) || !VehicleProperties.TryGetValue(column, out var property))
+            if (
+                !availableColumns.Contains(column)
+                || !VehicleProperties.TryGetValue(column, out var property)
+            )
             {
                 continue;
             }
 
-            values.Add(new WriteValue(
-                column,
-                $"@vehicle_{values.Count}",
-                GetDbType(property.PropertyType),
-                property.GetValue(vehicle)));
+            values.Add(
+                new WriteValue(
+                    column,
+                    $"@vehicle_{values.Count}",
+                    GetDbType(property.PropertyType),
+                    property.GetValue(vehicle)
+                )
+            );
         }
 
         return values;
@@ -628,7 +883,8 @@ public sealed class VehicleRepository : IVehicleRepository
         string column,
         DbType type,
         object? value,
-        bool includeNull = true)
+        bool includeNull = true
+    )
     {
         if (!availableColumns.Contains(column) || (!includeNull && value is null))
         {
@@ -644,7 +900,8 @@ public sealed class VehicleRepository : IVehicleRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -669,8 +926,12 @@ public sealed class VehicleRepository : IVehicleRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string GetColumnProjection(string alias, string column, IReadOnlySet<string> availableColumns)
-        => availableColumns.Contains(column)
+    private static string GetColumnProjection(
+        string alias,
+        string column,
+        IReadOnlySet<string> availableColumns
+    ) =>
+        availableColumns.Contains(column)
             ? $"[{alias}].[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
 
@@ -682,7 +943,7 @@ public sealed class VehicleRepository : IVehicleRepository
             [
                 "[m].[model_code] AS [model_model_code]",
                 "[m].[make_code] AS [model_make_code]",
-                "[m].[model_description] AS [model_description]"
+                "[m].[model_description] AS [model_description]",
             ];
         }
 
@@ -690,11 +951,14 @@ public sealed class VehicleRepository : IVehicleRepository
         [
             "CAST(NULL AS smallint) AS [model_model_code]",
             "CAST(NULL AS smallint) AS [model_make_code]",
-            "CAST(NULL AS varchar(100)) AS [model_description]"
+            "CAST(NULL AS varchar(100)) AS [model_description]",
         ];
     }
 
-    private static string GetActiveFilter(string alias, IReadOnlySet<string>? availableColumns = null)
+    private static string GetActiveFilter(
+        string alias,
+        IReadOnlySet<string>? availableColumns = null
+    )
     {
         if (availableColumns is null || availableColumns.Contains("is_deleted"))
         {
@@ -707,29 +971,84 @@ public sealed class VehicleRepository : IVehicleRepository
         return "1 = 1";
     }
 
-    private static string GetSqlType(string column)
-        => column switch
+    private static string GetSqlType(string column) =>
+        column switch
         {
-            "vmf_code" or "take_on_odo" or "current_odo" or "odo_adjustment" or "tare" or "additional_fuel_tank"
-                or "service_last_odo" or "km_ltd" or "km_ytd" or "km_3month_average" or "user_access_code"
-                or "temp_vmf_code" => "int",
-            "model_code" or "type_code" or "vehicle_status_code" or "location_code" or "year_manufactured"
-                or "Licence_receiver_site" or "default_site" or "initial_site_code" or "veh_site_code" or "supplier_id" => "smallint",
+            "vmf_code"
+            or "take_on_odo"
+            or "current_odo"
+            or "odo_adjustment"
+            or "tare"
+            or "additional_fuel_tank"
+            or "service_last_odo"
+            or "km_ltd"
+            or "km_ytd"
+            or "km_3month_average"
+            or "user_access_code"
+            or "temp_vmf_code" => "int",
+            "model_code"
+            or "type_code"
+            or "vehicle_status_code"
+            or "location_code"
+            or "year_manufactured"
+            or "Licence_receiver_site"
+            or "default_site"
+            or "initial_site_code"
+            or "veh_site_code"
+            or "supplier_id" => "smallint",
             "vs_code" => "tinyint",
             "LPG" or "RelieveVehicle" or "is_deleted" => "bit",
-            "date_created" or "date_updated" or "take_on_date" or "odo_update_date" or "licence_due_date"
-                or "fuel_card_date" or "purchase_date" or "book_value_date" or "maint_card_exdate" or "sold_date"
-                or "service_last_done" or "cof_last_done" or "Licence_date_taken" or "vehicle_status_date"
-                or "captured_date" or "destroyed_date" or "date_First_Regist" => "datetime2",
+            "date_created"
+            or "date_updated"
+            or "take_on_date"
+            or "odo_update_date"
+            or "licence_due_date"
+            or "fuel_card_date"
+            or "purchase_date"
+            or "book_value_date"
+            or "maint_card_exdate"
+            or "sold_date"
+            or "service_last_done"
+            or "cof_last_done"
+            or "Licence_date_taken"
+            or "vehicle_status_date"
+            or "captured_date"
+            or "destroyed_date"
+            or "date_First_Regist" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
-            "average_consumption" or "purchase_amount" or "book_value" or "sold_amount" or "monthly_overhead"
-                or "Cof_amount" or "highest_km" or "fuel_ltd" or "fuel_ytd" or "fuel_3month_average" or "oil_ltd"
-                or "oil_ytd" or "oil_3month_average" or "maint_ltd" or "maint_ytd" or "maint_3month_average"
-                or "repairs_ltd" or "repairs_ytd" or "repairs_3month_average" or "tyres_ltd" or "tyres_ytd"
-                or "tyres_3month_average" or "accident_ltd" or "accident_ytd" or "accident_3month_average"
-                or "toll_ltd" or "toll_ytd" or "toll_3month_average" or "other_ltd" or "other_ytd"
-                or "other_3month_average" or "destroyed_amount" => "decimal(18, 4)",
-            _ => "varchar(500)"
+            "average_consumption"
+            or "purchase_amount"
+            or "book_value"
+            or "sold_amount"
+            or "monthly_overhead"
+            or "Cof_amount"
+            or "highest_km"
+            or "fuel_ltd"
+            or "fuel_ytd"
+            or "fuel_3month_average"
+            or "oil_ltd"
+            or "oil_ytd"
+            or "oil_3month_average"
+            or "maint_ltd"
+            or "maint_ytd"
+            or "maint_3month_average"
+            or "repairs_ltd"
+            or "repairs_ytd"
+            or "repairs_3month_average"
+            or "tyres_ltd"
+            or "tyres_ytd"
+            or "tyres_3month_average"
+            or "accident_ltd"
+            or "accident_ytd"
+            or "accident_3month_average"
+            or "toll_ltd"
+            or "toll_ytd"
+            or "toll_3month_average"
+            or "other_ltd"
+            or "other_ytd"
+            or "other_3month_average"
+            or "destroyed_amount" => "decimal(18, 4)",
+            _ => "varchar(500)",
         };
 
     private static DbType GetDbType(Type propertyType)
@@ -744,7 +1063,9 @@ public sealed class VehicleRepository : IVehicleRepository
             TypeCode.Decimal => DbType.Decimal,
             TypeCode.DateTime => DbType.DateTime2,
             TypeCode.String => DbType.String,
-            _ => throw new InvalidOperationException($"Unsupported vehicle property type: {propertyType}")
+            _ => throw new InvalidOperationException(
+                $"Unsupported vehicle property type: {propertyType}"
+            ),
         };
     }
 
@@ -757,13 +1078,17 @@ public sealed class VehicleRepository : IVehicleRepository
     private static short? ReadInt16(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : Convert.ToInt16(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToInt16(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
     }
 
     private static string? ReadString(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture)?.TrimEnd();
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture)?.TrimEnd();
     }
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);

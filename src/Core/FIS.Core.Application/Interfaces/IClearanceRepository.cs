@@ -15,7 +15,8 @@ namespace FIS.Core.Application.Interfaces
         Task<IReadOnlyList<ClearanceReportRow>> GetUniversalReportAsync(
             DateTime? startDate,
             DateTime? endDate,
-            int? merchantCode);
+            int? merchantCode
+        );
         Task<Clearance> CreateAsync(Clearance clearance, int currentUserId);
         Task<Clearance> UpdateAsync(Clearance clearance, int currentUserId);
         Task DeleteAsync(int clearanceCode, int currentUserId);

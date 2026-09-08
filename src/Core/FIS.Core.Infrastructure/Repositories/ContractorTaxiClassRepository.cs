@@ -17,24 +17,44 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "SQL identifiers come only from fixed compatibility allowlists; this read path has no user-controlled SQL fragments.")]
+    Justification = "SQL identifiers come only from fixed compatibility allowlists; this read path has no user-controlled SQL fragments."
+)]
 public sealed class ContractorTaxiClassRepository : IContractorTaxiClassRepository
 {
     private const string TableName = "Contractor_taxi_class";
 
     private static readonly string[] BusinessColumns =
     [
-        "contractor_id", "description", "km_tariff", "driver_per_hour", "daily_tariff",
-        "half_day_tariff", "tariff_type", "tariff_date", "model_code", "km_tariff_bus", "active",
-        "tariff_end_date", "normalhours_start_time", "normalhours_end_time",
-        "midweekovertime_start_time", "midweekovertime_end_time", "holidayhours_start_time",
-        "holidayhours_end_time"
+        "contractor_id",
+        "description",
+        "km_tariff",
+        "driver_per_hour",
+        "daily_tariff",
+        "half_day_tariff",
+        "tariff_type",
+        "tariff_date",
+        "model_code",
+        "km_tariff_bus",
+        "active",
+        "tariff_end_date",
+        "normalhours_start_time",
+        "normalhours_end_time",
+        "midweekovertime_start_time",
+        "midweekovertime_end_time",
+        "holidayhours_start_time",
+        "holidayhours_end_time",
     ];
 
     private static readonly string[] RequiredColumns = ["class_id", "contractor_id", "description"];
 
     private static readonly string[] AuditColumns =
-    ["date_created", "date_updated", "created_by_user_code", "modified_by_user_code", "is_deleted"];
+    [
+        "date_created",
+        "date_updated",
+        "created_by_user_code",
+        "modified_by_user_code",
+        "is_deleted",
+    ];
 
     private readonly FisDbContext _context;
 
@@ -50,11 +70,18 @@ public sealed class ContractorTaxiClassRepository : IContractorTaxiClassReposito
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
         command.CommandText = $"""
-            SELECT {string.Join(", ", BusinessColumns.Concat(AuditColumns).Select(column => GetProjection(columns, column)))},
+            SELECT {string.Join(
+                ", ",
+                BusinessColumns.Concat(AuditColumns).Select(column =>
+                    GetProjection(columns, column)
+                )
+            )},
                    [{columns["class_id"].Name}] AS [class_id]
             FROM [dbo].[{TableName}]
             WHERE {GetActiveFilter(columns)}
-            ORDER BY [{columns["contractor_id"].Name}], [{columns["description"].Name}], [{columns["class_id"].Name}]
+            ORDER BY [{columns["contractor_id"].Name}], [{columns["description"].Name}], [{columns[
+                "class_id"
+            ].Name}]
             """;
 
         var results = new List<ContractorTaxiClass>();
@@ -89,14 +116,16 @@ public sealed class ContractorTaxiClassRepository : IContractorTaxiClassReposito
 
         foreach (var required in RequiredColumns.Where(column => !columns.ContainsKey(column)))
         {
-            throw new InvalidOperationException($"The required {TableName} compatibility column {required} is not available.");
+            throw new InvalidOperationException(
+                $"The required {TableName} compatibility column {required} is not available."
+            );
         }
 
         return columns;
     }
 
-    private static ContractorTaxiClass Map(DbDataReader reader)
-        => new()
+    private static ContractorTaxiClass Map(DbDataReader reader) =>
+        new()
         {
             class_id = ReadInt16(reader, "class_id") ?? 0,
             contractor_id = ReadInt16(reader, "contractor_id") ?? 0,
@@ -121,34 +150,47 @@ public sealed class ContractorTaxiClassRepository : IContractorTaxiClassReposito
             date_updated = ReadDateTime(reader, "date_updated"),
             created_by_user_code = ReadInt32(reader, "created_by_user_code"),
             modified_by_user_code = ReadInt32(reader, "modified_by_user_code"),
-            is_deleted = ReadBoolean(reader, "is_deleted") ?? false
+            is_deleted = ReadBoolean(reader, "is_deleted") ?? false,
         };
 
-    private static string GetActiveFilter(IReadOnlyDictionary<string, ColumnInfo> columns)
-        => columns.ContainsKey("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+    private static string GetActiveFilter(IReadOnlyDictionary<string, ColumnInfo> columns) =>
+        columns.ContainsKey("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
 
-    private static string GetProjection(IReadOnlyDictionary<string, ColumnInfo> columns, string column)
-        => columns.ContainsKey(column)
+    private static string GetProjection(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column
+    ) =>
+        columns.ContainsKey(column)
             ? $"[{columns[column].Name}] AS [{column}]"
             : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
 
-    private static string GetSqlType(string column)
-        => column switch
+    private static string GetSqlType(string column) =>
+        column switch
         {
             "contractor_id" or "model_code" or "class_id" => "smallint",
-            "km_tariff" or "driver_per_hour" or "daily_tariff" or "half_day_tariff" or "km_tariff_bus" => "decimal(18, 4)",
+            "km_tariff"
+            or "driver_per_hour"
+            or "daily_tariff"
+            or "half_day_tariff"
+            or "km_tariff_bus" => "decimal(18, 4)",
             "tariff_date" or "tariff_end_date" or "date_created" or "date_updated" => "datetime2",
-            "normalhours_start_time" or "normalhours_end_time" or "midweekovertime_start_time" or "midweekovertime_end_time"
-                or "holidayhours_start_time" or "holidayhours_end_time" => "time",
+            "normalhours_start_time"
+            or "normalhours_end_time"
+            or "midweekovertime_start_time"
+            or "midweekovertime_end_time"
+            or "holidayhours_start_time"
+            or "holidayhours_end_time" => "time",
             "active" or "is_deleted" => "bit",
             "created_by_user_code" or "modified_by_user_code" => "int",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
 
     private static string? ReadString(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
     }
 
     private static short? ReadInt16(DbDataReader reader, string column)
@@ -172,21 +214,23 @@ public sealed class ContractorTaxiClassRepository : IContractorTaxiClassReposito
     private static DateTime? ReadDateTime(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        if (reader.IsDBNull(ordinal)) return null;
+        if (reader.IsDBNull(ordinal))
+            return null;
         var value = reader.GetValue(ordinal);
         return value switch
         {
             DateTime dateTime => dateTime,
             DateTimeOffset dateTimeOffset => dateTimeOffset.DateTime,
             _ when DateTime.TryParse(Convert.ToString(value), out var parsed) => parsed,
-            _ => null
+            _ => null,
         };
     }
 
     private static TimeSpan? ReadTimeSpan(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        if (reader.IsDBNull(ordinal)) return null;
+        if (reader.IsDBNull(ordinal))
+            return null;
         var value = reader.GetValue(ordinal);
         return value switch
         {
@@ -194,7 +238,7 @@ public sealed class ContractorTaxiClassRepository : IContractorTaxiClassReposito
             DateTime dateTime => dateTime.TimeOfDay,
             DateTimeOffset dateTimeOffset => dateTimeOffset.TimeOfDay,
             _ when TimeSpan.TryParse(Convert.ToString(value), out var parsed) => parsed,
-            _ => null
+            _ => null,
         };
     }
 
@@ -208,7 +252,8 @@ public sealed class ContractorTaxiClassRepository : IContractorTaxiClassReposito
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose) await connection.OpenAsync();
+        if (shouldClose)
+            await connection.OpenAsync();
         return new ConnectionScope(connection, shouldClose);
     }
 
@@ -236,7 +281,8 @@ public sealed class ContractorTaxiClassRepository : IContractorTaxiClassReposito
 
         public async ValueTask DisposeAsync()
         {
-            if (_shouldClose) await Connection.CloseAsync();
+            if (_shouldClose)
+                await Connection.CloseAsync();
         }
     }
 }

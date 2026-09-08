@@ -25,16 +25,22 @@ function getAccidentId(value: string | undefined) {
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function ApiUnavailable() {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">API unavailable</p>
       <h2>The accident record could not be loaded.</h2>
-      <Link className="button button-primary" href="/accidents/garage/delete">Return to search</Link>
+      <Link className="button button-primary" href="/accidents/garage/delete">
+        Return to search
+      </Link>
     </section>
   );
 }
@@ -42,10 +48,14 @@ function ApiUnavailable() {
 function AccidentNotFound() {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">Accident not found</p>
       <h2>That accident record could not be found.</h2>
-      <Link className="button button-secondary" href="/accidents/garage/delete">Return to search</Link>
+      <Link className="button button-secondary" href="/accidents/garage/delete">
+        Return to search
+      </Link>
     </section>
   );
 }
@@ -67,7 +77,9 @@ async function GarageDeleteConfirmContent({ searchParams }: GarageDeleteConfirmP
   if (!hasRole(session.roles, ACCIDENTS_ROLE)) {
     return (
       <section className="vehicle-status-card" role="alert">
-        <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+        <div className="status-icon status-icon-error" aria-hidden="true">
+          !
+        </div>
         <p className="eyebrow">Access restricted</p>
         <h2>You do not have permission to delete garage accidents.</h2>
       </section>
@@ -90,39 +102,61 @@ async function GarageDeleteConfirmContent({ searchParams }: GarageDeleteConfirmP
             <h1 id="garage-delete-confirm-title">Delete accident #{accident.accidentCode}</h1>
             <p>Review the supported record details before confirming deletion.</p>
           </div>
-          <Link className="button button-secondary" href="/accidents/garage/delete">Back to Search</Link>
+          <Link className="button button-secondary" href="/accidents/garage/delete">
+            Back to Search
+          </Link>
         </header>
         <GarageDeleteConfirm accident={accident} />
         <div className="vehicle-footer-actions">
-          <Link className="button button-secondary" href="/accidents">Menu</Link>
-          <Link className="button button-secondary" href="/home">Home</Link>
+          <Link className="button button-secondary" href="/accidents">
+            Menu
+          </Link>
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
           <form action={logoutAction}>
-            <button className="button button-secondary" type="submit">Sign out</button>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
           </form>
         </div>
       </>
     );
   } catch (error) {
     if (error instanceof AccidentApiError && error.reason === "unauthorized") {
-      return <SessionRecovery returnPath={`/accidents/garage/delete/confirm?accidentId=${accidentId}`} />;
+      return (
+        <SessionRecovery returnPath={`/accidents/garage/delete/confirm?accidentId=${accidentId}`} />
+      );
     }
 
     if (error instanceof AccidentApiError && error.reason === "not-found") {
       return <AccidentNotFound />;
     }
 
-    console.error("FIS garage accident delete detail request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS garage accident delete detail request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return <ApiUnavailable />;
   }
 }
 
-export default async function GarageDeleteConfirmPage({ searchParams }: GarageDeleteConfirmPageProps) {
+export default async function GarageDeleteConfirmPage({
+  searchParams,
+}: GarageDeleteConfirmPageProps) {
   await connection();
 
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="garage-delete-confirm-title">
-        <Suspense fallback={<div className="loading-card" aria-busy="true"><span className="spinner" aria-hidden="true" /><p>Loading accident details...</p></div>}>
+        <Suspense
+          fallback={
+            <div className="loading-card" aria-busy="true">
+              <span className="spinner" aria-hidden="true" />
+              <p>Loading accident details...</p>
+            </div>
+          }
+        >
           <GarageDeleteConfirmContent searchParams={searchParams} />
         </Suspense>
       </section>

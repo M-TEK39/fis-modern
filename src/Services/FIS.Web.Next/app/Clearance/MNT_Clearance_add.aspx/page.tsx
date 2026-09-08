@@ -5,5 +5,7 @@ type LegacyClearanceAddProps = {
 };
 
 export default function LegacyClearanceAddPage({ searchParams }: LegacyClearanceAddProps) {
-  return <ClearanceEntryPage routePath="/Clearance/MNT_Clearance_add.aspx" searchParams={searchParams} />;
+  return (
+    <ClearanceEntryPage routePath="/Clearance/MNT_Clearance_add.aspx" searchParams={searchParams} />
+  );
 }

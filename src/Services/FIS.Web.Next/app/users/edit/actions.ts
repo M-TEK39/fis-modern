@@ -15,7 +15,9 @@ const INT32_MAX = 2_147_483_647;
 class UserFormValidationError extends Error {}
 
 function hasUserAdministrationRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function getText(formData: FormData, name: string) {
@@ -106,7 +108,12 @@ function resultPath(username: string, alphabet: string, result: string) {
   return `${RETURN_PATH}?${new URLSearchParams({ Username: username, Alphabet: alphabet, result }).toString()}`;
 }
 
-function buildUpdateRequest(formData: FormData): { userAccessCode: number; username: string; alphabet: string; input: Omit<UserAdminProfileInput, "userName"> } {
+function buildUpdateRequest(formData: FormData): {
+  userAccessCode: number;
+  username: string;
+  alphabet: string;
+  input: Omit<UserAdminProfileInput, "userName">;
+} {
   const username = getRequiredText(formData, "username", "Username", 255);
   const alphabet = getAlphabet(getText(formData, "alphabet"));
   const userAccessCode = getRequiredInteger(formData, "userAccessCode", "User access code");
@@ -138,7 +145,11 @@ function buildUpdateRequest(formData: FormData): { userAccessCode: number; usern
     throw new UserFormValidationError("ID must be a valid whole number.");
   }
 
-  const approverCodeAtGfleet = getRequiredInteger(formData, "approverCodeAtGfleet", "Client Approver Name");
+  const approverCodeAtGfleet = getRequiredInteger(
+    formData,
+    "approverCodeAtGfleet",
+    "Client Approver Name",
+  );
   if (approverCodeAtGfleet <= 0) {
     throw new UserFormValidationError("Client Approver Name is required.");
   }
@@ -186,7 +197,13 @@ export async function updateUserAdminAction(formData: FormData) {
   }
 
   if (session.status !== "authenticated") {
-    redirect(resultPath(request.username, request.alphabet, session.status === "expired" ? "unauthorized" : "unavailable"));
+    redirect(
+      resultPath(
+        request.username,
+        request.alphabet,
+        session.status === "expired" ? "unauthorized" : "unavailable",
+      ),
+    );
   }
 
   if (!hasUserAdministrationRole(session.roles)) {

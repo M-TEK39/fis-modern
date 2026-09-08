@@ -5,5 +5,7 @@ type LegacyMerchantMenuProps = {
 };
 
 export default function LegacyMerchantMenuPage({ searchParams }: LegacyMerchantMenuProps) {
-  return <ClearanceMerchantPage routePath="/clearance/MNT_Merchant.aspx" searchParams={searchParams} />;
+  return (
+    <ClearanceMerchantPage routePath="/clearance/MNT_Merchant.aspx" searchParams={searchParams} />
+  );
 }

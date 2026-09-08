@@ -36,7 +36,9 @@ function copyQueryValue(
 export default async function ReportsAuctionPage({ searchParams }: LegacyAuctionReportsPageProps) {
   const query = await searchParams;
   const reportType = first(query.rtype)?.trim().toLowerCase();
-  const mode = reportType ? LEGACY_REPORT_MODES[reportType as keyof typeof LEGACY_REPORT_MODES] : undefined;
+  const mode = reportType
+    ? LEGACY_REPORT_MODES[reportType as keyof typeof LEGACY_REPORT_MODES]
+    : undefined;
 
   if (first(query.view)?.toLowerCase() === "report" && mode) {
     const target = new URLSearchParams({ run: "1" });

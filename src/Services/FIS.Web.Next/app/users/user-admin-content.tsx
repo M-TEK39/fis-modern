@@ -3,7 +3,11 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
-import { UserAdminApiError, getUserAdminProfiles, type UserAdminProfile } from "@/lib/api-user-admin";
+import {
+  UserAdminApiError,
+  getUserAdminProfiles,
+  type UserAdminProfile,
+} from "@/lib/api-user-admin";
 import { getSession } from "@/lib/session";
 
 const USER_ADMIN_ROLE = "User Administration";
@@ -16,7 +20,9 @@ function getQueryValue(value: string | string[] | undefined) {
 }
 
 function hasUserAdministrationRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 const LEGACY_SETTINGS_REDIRECTS: Readonly<Record<string, string>> = {
@@ -43,7 +49,9 @@ function valueOrDash(value: string | number | null | undefined) {
 function AccessRestricted() {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">Access restricted</p>
       <h2>You do not have permission to access User Administration.</h2>
       <p className="muted-copy">This menu requires the User Administration role.</p>
@@ -54,20 +62,32 @@ function AccessRestricted() {
 function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">API unavailable</p>
       <h2>User Administration could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
-        <Link className="button button-primary" href={routePath}>Try again</Link>
-        <Link className="button button-secondary" href="/login">Sign in</Link>
+        <Link className="button button-primary" href={routePath}>
+          Try again
+        </Link>
+        <Link className="button button-secondary" href="/login">
+          Sign in
+        </Link>
       </div>
     </section>
   );
 }
 
 function MenuLink({ href, children }: Readonly<{ href: string; children: React.ReactNode }>) {
-  return <Link className="vehicle-menu-link" href={href}>{children}</Link>;
+  return (
+    <Link className="vehicle-menu-link" href={href}>
+      {children}
+    </Link>
+  );
 }
 
 function getLegacySettingsRedirect(query: Record<string, string | string[] | undefined>) {
@@ -97,13 +117,25 @@ export async function UserAdminMenuPage({
 
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/UserAdmin/UserAdminMenu.aspx" /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath="/UserAdmin/UserAdminMenu.aspx" />
+      </main>
+    );
   }
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable routePath="/UserAdmin/UserAdminMenu.aspx" /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable routePath="/UserAdmin/UserAdminMenu.aspx" />
+      </main>
+    );
   }
   if (!hasUserAdministrationRole(session.roles)) {
-    return <main className="page-shell vehicle-page-shell"><AccessRestricted /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <AccessRestricted />
+      </main>
+    );
   }
 
   const query = searchParams ? await searchParams : {};
@@ -119,7 +151,9 @@ export async function UserAdminMenuPage({
             <h1 id="user-admin-title">User Admin Menu</h1>
             <p>Manage user profiles and account access using the established FIS sequence.</p>
           </div>
-          <Link className="button button-secondary" href="/home">Home</Link>
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
         </header>
 
         <div className="vehicle-menu-tiles">
@@ -131,7 +165,9 @@ export async function UserAdminMenuPage({
               <MenuLink href="/users/reset-login">3) Reset User Password Counter</MenuLink>
               <MenuLink href="/users/deactivate">4) Delete (or De-Activate) User</MenuLink>
               <MenuLink href="/UserAdmin/UserAdmin.aspx?Alphabet=A">5) View User Details</MenuLink>
-              <MenuLink href="/change-password-question">6) Change Password and Password Question</MenuLink>
+              <MenuLink href="/change-password-question">
+                6) Change Password and Password Question
+              </MenuLink>
               <MenuLink href="/users/force-password-change">7) Force Password Change</MenuLink>
             </div>
           </section>
@@ -184,10 +220,38 @@ function UserRows({ users, alphabet }: Readonly<{ users: UserAdminProfile[]; alp
         <tbody>
           {users.map((user) => (
             <tr key={user.userAccessCode}>
-              <td><Link className="button button-secondary button-small" href={userActionHref("/users/edit", user, alphabet)}>Edit</Link></td>
-              <td><Link className="button button-secondary button-small" href={userActionHref("/users/deactivate", user, alphabet)}>Open</Link></td>
-              <td><Link className="button button-secondary button-small" href={userActionHref("/users/reset-login", user, alphabet)}>Reset</Link></td>
-              <td><Link className="button button-secondary button-small" href={userActionHref("/users/admin/forgot-password", user, alphabet)}>Reset</Link></td>
+              <td>
+                <Link
+                  className="button button-secondary button-small"
+                  href={userActionHref("/users/edit", user, alphabet)}
+                >
+                  Edit
+                </Link>
+              </td>
+              <td>
+                <Link
+                  className="button button-secondary button-small"
+                  href={userActionHref("/users/deactivate", user, alphabet)}
+                >
+                  Open
+                </Link>
+              </td>
+              <td>
+                <Link
+                  className="button button-secondary button-small"
+                  href={userActionHref("/users/reset-login", user, alphabet)}
+                >
+                  Reset
+                </Link>
+              </td>
+              <td>
+                <Link
+                  className="button button-secondary button-small"
+                  href={userActionHref("/users/admin/forgot-password", user, alphabet)}
+                >
+                  Reset
+                </Link>
+              </td>
               <td>{valueOrDash(user.lastName)}</td>
               <td>{valueOrDash(user.firstName)}</td>
               <td>{valueOrDash(user.userName)}</td>
@@ -212,17 +276,31 @@ export async function UserAdminListPage({
 
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={routePath} /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath={routePath} />
+      </main>
+    );
   }
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable routePath={routePath} /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable routePath={routePath} />
+      </main>
+    );
   }
   if (!hasUserAdministrationRole(session.roles)) {
-    return <main className="page-shell vehicle-page-shell"><AccessRestricted /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <AccessRestricted />
+      </main>
+    );
   }
 
   const query = await searchParams;
-  const alphabet = normalizeAlphabet(getQueryValue(query.Alphabet) ?? getQueryValue(query.alphabet));
+  const alphabet = normalizeAlphabet(
+    getQueryValue(query.Alphabet) ?? getQueryValue(query.alphabet),
+  );
 
   try {
     const users = await getUserAdminProfiles(alphabet);
@@ -235,7 +313,9 @@ export async function UserAdminListPage({
               <h1 id="user-list-title">View Users&apos; Details</h1>
               <p>View active users by the first character of their last name.</p>
             </div>
-            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Menu</Link>
+            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+              Menu
+            </Link>
           </header>
 
           <section className="vehicle-overview" aria-labelledby="alphabet-filter-title">
@@ -244,13 +324,19 @@ export async function UserAdminListPage({
                 <p className="eyebrow">Alphabetical filter</p>
                 <h2 id="alphabet-filter-title">Selected character: {alphabet}</h2>
               </div>
-              <Link className="button button-primary" href="/users/add">Add a New User</Link>
+              <Link className="button button-primary" href="/users/add">
+                Add a New User
+              </Link>
             </div>
             <nav className="vehicle-menu-body" aria-label="Filter users by last-name initial">
               <div className="button-row">
                 {ALPHABET.map((letter) => (
                   <Link
-                    className={letter === alphabet ? "button button-primary button-small" : "button button-secondary button-small"}
+                    className={
+                      letter === alphabet
+                        ? "button button-primary button-small"
+                        : "button button-secondary button-small"
+                    }
                     href={alphabetHref(letter)}
                     key={letter}
                     aria-current={letter === alphabet ? "page" : undefined}
@@ -260,7 +346,9 @@ export async function UserAdminListPage({
                 ))}
               </div>
             </nav>
-            <p className="muted-copy">View users by clicking on a character. Showing {users.length} active user(s).</p>
+            <p className="muted-copy">
+              View users by clicking on a character. Showing {users.length} active user(s).
+            </p>
           </section>
 
           <section className="vehicle-overview" aria-labelledby="user-list-results-title">
@@ -274,18 +362,33 @@ export async function UserAdminListPage({
           </section>
 
           <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">Home</Link>
-            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Back to Menu</Link>
+            <Link className="button button-secondary" href="/home">
+              Home
+            </Link>
+            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+              Back to Menu
+            </Link>
           </div>
         </section>
       </main>
     );
   } catch (error) {
     if (error instanceof UserAdminApiError && error.reason === "unauthorized") {
-      return <main className="page-shell vehicle-page-shell"><AccessRestricted /></main>;
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <AccessRestricted />
+        </main>
+      );
     }
 
-    console.error("FIS user administration lookup failed", error instanceof Error ? error.message : "unknown error");
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable routePath={routePath} /></main>;
+    console.error(
+      "FIS user administration lookup failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable routePath={routePath} />
+      </main>
+    );
   }
 }

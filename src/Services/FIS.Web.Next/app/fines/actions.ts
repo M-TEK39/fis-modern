@@ -42,7 +42,11 @@ function getRequiredDate(formData: FormData, key: string, label: string) {
 
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
     throw new FineValidationError(`${label} is invalid.`);
   }
 
@@ -57,7 +61,12 @@ function getOptionalDate(formData: FormData, key: string, label: string) {
 
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
     throw new FineValidationError(`${label} is invalid.`);
   }
 
@@ -103,17 +112,25 @@ function getOptionalAmount(formData: FormData) {
 }
 
 function hasReportsRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 async function authorizeReports() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
 
   if (!hasReportsRole(session.roles)) {
@@ -170,13 +187,21 @@ function buildFineRequest(formData: FormData): FineRequest {
     Fine_amount: getOptionalAmount(formData),
     Appear_date: getOptionalDate(formData, "appearDate", "Court appearance date"),
     Receive_gg_date: getOptionalDate(formData, "receiveGgDate", "Date received at GMT"),
-    Notify_dept_date: getOptionalDate(formData, "notifyDeptDate", "Date of notification to department"),
+    Notify_dept_date: getOptionalDate(
+      formData,
+      "notifyDeptDate",
+      "Date of notification to department",
+    ),
     Site_code: getOptionalSmallInteger(formData, "siteCode", "Site"),
     Offence_name: getOptionalText(formData, "offenceName", "Name of offender", 20),
     Fine_pay_date: getOptionalDate(formData, "finePayDate", "Date fine paid"),
     Withdraw_date: getOptionalDate(formData, "withdrawDate", "Date withdrawn"),
     Pay_due_date: getOptionalDate(formData, "payDueDate", "Payment due date"),
-    Issuer_notify_date: getOptionalDate(formData, "issuerNotifyDate", "Date of notification to issuer"),
+    Issuer_notify_date: getOptionalDate(
+      formData,
+      "issuerNotifyDate",
+      "Date of notification to issuer",
+    ),
     Dept_person_name: getOptionalText(formData, "deptPersonName", "Responsible person name", 25),
     Dept_person_id: getOptionalText(formData, "deptPersonId", "Responsible person ID", 13),
     Document_type: getOptionalText(formData, "documentType", "Document type", 20),
@@ -194,7 +219,10 @@ export async function saveFineAction(formData: FormData) {
   try {
     request = buildFineRequest(formData);
   } catch (error) {
-    redirectFineError(error instanceof FineValidationError ? error.message : "The fine form is invalid.", formData);
+    redirectFineError(
+      error instanceof FineValidationError ? error.message : "The fine form is invalid.",
+      formData,
+    );
   }
 
   const rawFineCode = getText(formData, "fineCode");
@@ -210,13 +238,18 @@ export async function saveFineAction(formData: FormData) {
       await updateFineAgainstApi(fineCode, request!);
     }
   } catch (error) {
-    redirectFineError(fineApiErrorMessage(error, fineCode === null ? "captured" : "updated"), formData);
+    redirectFineError(
+      fineApiErrorMessage(error, fineCode === null ? "captured" : "updated"),
+      formData,
+    );
   }
 
   revalidatePath("/fines");
   revalidatePath("/fines/maintenance");
   const query = getFineReturnQuery(formData);
-  redirect(`/fines/maintenance?${query ? `${query}&` : ""}${fineCode === null ? "saved=1" : "updated=1"}`);
+  redirect(
+    `/fines/maintenance?${query ? `${query}&` : ""}${fineCode === null ? "saved=1" : "updated=1"}`,
+  );
 }
 
 export async function deleteFineAction(formData: FormData) {
@@ -299,7 +332,10 @@ export async function saveTrafficDeptAction(formData: FormData) {
   try {
     request = buildTrafficDeptRequest(formData);
   } catch (error) {
-    redirectTrafficError(formData, error instanceof FineValidationError ? error.message : "The form is invalid.");
+    redirectTrafficError(
+      formData,
+      error instanceof FineValidationError ? error.message : "The form is invalid.",
+    );
   }
 
   const rawCode = getText(formData, "trafficDeptCode");
@@ -315,7 +351,10 @@ export async function saveTrafficDeptAction(formData: FormData) {
       await updateTrafficDeptAgainstApi(code, request!);
     }
   } catch (error) {
-    redirectTrafficError(formData, trafficApiErrorMessage(error, code === null ? "created" : "updated"));
+    redirectTrafficError(
+      formData,
+      trafficApiErrorMessage(error, code === null ? "created" : "updated"),
+    );
   }
 
   revalidatePath("/fines");

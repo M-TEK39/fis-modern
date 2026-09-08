@@ -38,7 +38,8 @@ function valuesFromProfile(profile: UserAdminProfile): EditableValues {
     passportNumber: profile.passportNumber === null ? "" : String(profile.passportNumber),
     cellphoneNumber: profile.cellphoneNumber === null ? "" : String(profile.cellphoneNumber),
     faxNumber: profile.faxNumber === null ? "" : String(profile.faxNumber),
-    approverCodeAtGfleet: profile.approverCodeAtGfleet === null ? "" : String(profile.approverCodeAtGfleet),
+    approverCodeAtGfleet:
+      profile.approverCodeAtGfleet === null ? "" : String(profile.approverCodeAtGfleet),
   };
 }
 
@@ -70,7 +71,10 @@ function SubmitButton() {
 }
 
 function approverLabel(approver: UserAdminProfile) {
-  const name = [approver.firstName, approver.lastName].filter(Boolean).join(" ") || approver.userName || approver.email;
+  const name =
+    [approver.firstName, approver.lastName].filter(Boolean).join(" ") ||
+    approver.userName ||
+    approver.email;
   return `${name || "Unknown"} (${approver.userAccessCode})`;
 }
 
@@ -101,14 +105,19 @@ export default function UserEditForm({
   const currentApproverIsListed = siteApprovers.some(
     (approver) => String(approver.userAccessCode) === values.approverCodeAtGfleet,
   );
-  const hasExistingApproverOption = profile.approverCodeAtGfleet !== null && values.siteCode === String(profile.siteCode);
+  const hasExistingApproverOption =
+    profile.approverCodeAtGfleet !== null && values.siteCode === String(profile.siteCode);
 
   function updateValue(key: keyof EditableValues, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
   }
 
   function togglePermission(permissionBit: number) {
-    setAccessLevel((current) => (current & permissionBit) === permissionBit ? current & ~permissionBit : current | permissionBit);
+    setAccessLevel((current) =>
+      (current & permissionBit) === permissionBit
+        ? current & ~permissionBit
+        : current | permissionBit,
+    );
   }
 
   function resetForm() {
@@ -125,8 +134,8 @@ export default function UserEditForm({
       <div className="notice notice-info" role="note">
         <span aria-hidden="true">i</span>
         <span>
-          Changes are written to the existing <code>user_access_old1</code> profile, including the legacy approver and
-          access-level values.
+          Changes are written to the existing <code>user_access_old1</code> profile, including the
+          legacy approver and access-level values.
         </span>
       </div>
 
@@ -143,10 +152,26 @@ export default function UserEditForm({
             <input id="edit-user-name" type="text" value={profile.userName ?? ""} readOnly />
           </Field>
           <Field id="firstName" label="First Name" required>
-            <input id="firstName" name="firstName" type="text" maxLength={255} value={values.firstName} required onChange={(event) => updateValue("firstName", event.target.value)} />
+            <input
+              id="firstName"
+              name="firstName"
+              type="text"
+              maxLength={255}
+              value={values.firstName}
+              required
+              onChange={(event) => updateValue("firstName", event.target.value)}
+            />
           </Field>
           <Field id="lastName" label="Last Name" required>
-            <input id="lastName" name="lastName" type="text" maxLength={255} value={values.lastName} required onChange={(event) => updateValue("lastName", event.target.value)} />
+            <input
+              id="lastName"
+              name="lastName"
+              type="text"
+              maxLength={255}
+              value={values.lastName}
+              required
+              onChange={(event) => updateValue("lastName", event.target.value)}
+            />
           </Field>
           <Field id="siteCode" label="Site" required>
             <select
@@ -168,7 +193,13 @@ export default function UserEditForm({
             </select>
           </Field>
           <Field id="positionCode" label="Position" required>
-            <select id="positionCode" name="positionCode" value={values.positionCode} required onChange={(event) => updateValue("positionCode", event.target.value)}>
+            <select
+              id="positionCode"
+              name="positionCode"
+              value={values.positionCode}
+              required
+              onChange={(event) => updateValue("positionCode", event.target.value)}
+            >
               <option value="">Select position...</option>
               {positions.map((position) => (
                 <option key={position.positionCode} value={position.positionCode}>
@@ -178,44 +209,110 @@ export default function UserEditForm({
             </select>
           </Field>
           <Field id="persalNumber" label="Persal">
-            <input id="persalNumber" name="persalNumber" type="number" inputMode="numeric" value={values.persalNumber} onChange={(event) => updateValue("persalNumber", event.target.value)} />
+            <input
+              id="persalNumber"
+              name="persalNumber"
+              type="number"
+              inputMode="numeric"
+              value={values.persalNumber}
+              onChange={(event) => updateValue("persalNumber", event.target.value)}
+            />
           </Field>
           <Field id="contractNumber" label="Contract Number">
-            <input id="contractNumber" name="contractNumber" type="number" inputMode="numeric" value={values.contractNumber} onChange={(event) => updateValue("contractNumber", event.target.value)} />
+            <input
+              id="contractNumber"
+              name="contractNumber"
+              type="number"
+              inputMode="numeric"
+              value={values.contractNumber}
+              onChange={(event) => updateValue("contractNumber", event.target.value)}
+            />
             <p className="muted-copy">Use when no Persal number is available.</p>
           </Field>
           <Field id="saIdNumber" label="ID" required>
-            <input id="saIdNumber" name="saIdNumber" type="number" inputMode="numeric" value={values.saIdNumber} required onChange={(event) => updateValue("saIdNumber", event.target.value)} />
+            <input
+              id="saIdNumber"
+              name="saIdNumber"
+              type="number"
+              inputMode="numeric"
+              value={values.saIdNumber}
+              required
+              onChange={(event) => updateValue("saIdNumber", event.target.value)}
+            />
           </Field>
           <Field id="passportNumber" label="Passport Number">
-            <input id="passportNumber" name="passportNumber" type="number" inputMode="numeric" value={values.passportNumber} onChange={(event) => updateValue("passportNumber", event.target.value)} />
+            <input
+              id="passportNumber"
+              name="passportNumber"
+              type="number"
+              inputMode="numeric"
+              value={values.passportNumber}
+              onChange={(event) => updateValue("passportNumber", event.target.value)}
+            />
             <p className="muted-copy">Use when no SA ID is available.</p>
           </Field>
           <Field id="email" label="E-mail" required>
-            <input id="email" name="email" type="email" maxLength={255} value={values.email} required onChange={(event) => updateValue("email", event.target.value)} />
+            <input
+              id="email"
+              name="email"
+              type="email"
+              maxLength={255}
+              value={values.email}
+              required
+              onChange={(event) => updateValue("email", event.target.value)}
+            />
           </Field>
           <Field id="telephone" label="Tel">
-            <input id="telephone" name="telephone" type="text" maxLength={50} value={values.telephone} onChange={(event) => updateValue("telephone", event.target.value)} />
+            <input
+              id="telephone"
+              name="telephone"
+              type="text"
+              maxLength={50}
+              value={values.telephone}
+              onChange={(event) => updateValue("telephone", event.target.value)}
+            />
           </Field>
           <Field id="faxNumber" label="Fax">
-            <input id="faxNumber" name="faxNumber" type="number" inputMode="numeric" value={values.faxNumber} onChange={(event) => updateValue("faxNumber", event.target.value)} />
+            <input
+              id="faxNumber"
+              name="faxNumber"
+              type="number"
+              inputMode="numeric"
+              value={values.faxNumber}
+              onChange={(event) => updateValue("faxNumber", event.target.value)}
+            />
             <p className="muted-copy">Optional.</p>
           </Field>
           <Field id="cellphoneNumber" label="Cell">
-            <input id="cellphoneNumber" name="cellphoneNumber" type="number" inputMode="numeric" value={values.cellphoneNumber} onChange={(event) => updateValue("cellphoneNumber", event.target.value)} />
+            <input
+              id="cellphoneNumber"
+              name="cellphoneNumber"
+              type="number"
+              inputMode="numeric"
+              value={values.cellphoneNumber}
+              onChange={(event) => updateValue("cellphoneNumber", event.target.value)}
+            />
           </Field>
           <Field id="approverCodeAtGfleet" label="Client Approver Name" required>
             <select
               id="approverCodeAtGfleet"
               name="approverCodeAtGfleet"
               value={values.approverCodeAtGfleet}
-              disabled={!values.siteCode || (siteApprovers.length === 0 && !hasExistingApproverOption)}
+              disabled={
+                !values.siteCode || (siteApprovers.length === 0 && !hasExistingApproverOption)
+              }
               required
               onChange={(event) => updateValue("approverCodeAtGfleet", event.target.value)}
             >
-              <option value="">{values.siteCode ? "Select an approver..." : "Select site first..."}</option>
-              {!currentApproverIsListed && profile.approverCodeAtGfleet !== null && values.siteCode === String(profile.siteCode) ? (
-                <option value={profile.approverCodeAtGfleet}>Existing approver ({profile.approverCodeAtGfleet})</option>
+              <option value="">
+                {values.siteCode ? "Select an approver..." : "Select site first..."}
+              </option>
+              {!currentApproverIsListed &&
+              profile.approverCodeAtGfleet !== null &&
+              values.siteCode === String(profile.siteCode) ? (
+                <option value={profile.approverCodeAtGfleet}>
+                  Existing approver ({profile.approverCodeAtGfleet})
+                </option>
               ) : null}
               {siteApprovers.map((approver) => (
                 <option key={approver.userAccessCode} value={approver.userAccessCode}>
@@ -228,7 +325,9 @@ export default function UserEditForm({
             <input id="displayName" type="text" value={displayName} readOnly />
           </Field>
         </div>
-        <p className="muted-copy">At least one of Persal or Contract Number, and at least one of Tel or Cell, is required.</p>
+        <p className="muted-copy">
+          At least one of Persal or Contract Number, and at least one of Tel or Cell, is required.
+        </p>
       </section>
 
       <section className="vehicle-form-section" aria-labelledby="user-edit-access-title">
@@ -255,8 +354,12 @@ export default function UserEditForm({
       </section>
 
       <div className="vehicle-create-actions">
-        <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Cancel</Link>
-        <button className="button button-secondary" type="reset">Reset Changes</button>
+        <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+          Cancel
+        </Link>
+        <button className="button button-secondary" type="reset">
+          Reset Changes
+        </button>
         <SubmitButton />
       </div>
     </form>

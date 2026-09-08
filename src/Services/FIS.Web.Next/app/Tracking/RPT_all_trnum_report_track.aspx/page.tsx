@@ -1,3 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function LegacyTrackingAllDeviceReport() { redirect("/tracking/reports/all-device"); }
+export default function LegacyTrackingAllDeviceReport() {
+  redirect("/tracking/reports/all-device");
+}

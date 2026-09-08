@@ -17,7 +17,8 @@ public class LossController : BaseApiController
     public LossController(
         ILossRepository repository,
         IVehicleRepository vehicleRepository,
-        ILogger<LossController> logger)
+        ILogger<LossController> logger
+    )
     {
         _repository = repository;
         _vehicleRepository = vehicleRepository;
@@ -27,21 +28,37 @@ public class LossController : BaseApiController
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Loss>>> GetAll()
     {
-        try { return Ok(await _repository.GetAllAsync()); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            return Ok(await _repository.GetAllAsync());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<Loss>> GetById(short id)
     {
-        try { var item = await _repository.GetByIdAsync(id); return item == null ? NotFound() : Ok(item); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            var item = await _repository.GetByIdAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpGet("vehicle/{identifier}")]
     public async Task<ActionResult<IEnumerable<Loss>>> GetByVehicleIdentifier(
         string identifier,
-        [FromQuery] string? mode)
+        [FromQuery] string? mode
+    )
     {
         if (string.IsNullOrWhiteSpace(identifier))
         {
@@ -52,16 +69,21 @@ public class LossController : BaseApiController
         {
             var normalizedIdentifier = identifier.Trim();
             var normalizedMode = mode?.Trim().ToUpperInvariant();
-            var vehicle = normalizedMode == "GP"
-                ? await _vehicleRepository.GetByRegistrationNumberAsync(normalizedIdentifier)
-                : await _vehicleRepository.GetByFleetNumberAsync(normalizedIdentifier);
+            var vehicle =
+                normalizedMode == "GP"
+                    ? await _vehicleRepository.GetByRegistrationNumberAsync(normalizedIdentifier)
+                    : await _vehicleRepository.GetByFleetNumberAsync(normalizedIdentifier);
             return vehicle is null
                 ? Ok(Array.Empty<Loss>())
                 : Ok(await _repository.GetByVehicleAsync(vehicle.vmf_code));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving losses for vehicle identifier {Identifier}", identifier);
+            _logger.LogError(
+                ex,
+                "Error retrieving losses for vehicle identifier {Identifier}",
+                identifier
+            );
             return StatusCode(500);
         }
     }
@@ -88,21 +110,46 @@ public class LossController : BaseApiController
     [HttpPost]
     public async Task<ActionResult<Loss>> Create([FromBody] Loss item)
     {
-        try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.loss_code }, created); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            var created = await _repository.CreateAsync(item, GetCurrentUserId());
+            return CreatedAtAction(nameof(GetById), new { id = created.loss_code }, created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpPut("{id}")]
     public async Task<ActionResult<Loss>> Update(short id, [FromBody] Loss item)
     {
-        try { if (id != item.loss_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            if (id != item.loss_code)
+                return BadRequest();
+            return Ok(await _repository.UpdateAsync(item, GetCurrentUserId()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(short id)
     {
-        try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            await _repository.DeleteAsync(id, GetCurrentUserId());
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 }

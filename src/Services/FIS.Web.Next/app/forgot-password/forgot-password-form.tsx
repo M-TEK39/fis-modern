@@ -17,8 +17,15 @@ function SubmitButton() {
   );
 }
 
-export default function ForgotPasswordForm({ initialIdentifier = "" }: { initialIdentifier?: string }) {
-  const [state, formAction] = useActionState<ForgotPasswordActionState, FormData>(forgotPasswordAction, initialState);
+export default function ForgotPasswordForm({
+  initialIdentifier = "",
+}: {
+  initialIdentifier?: string;
+}) {
+  const [state, formAction] = useActionState<ForgotPasswordActionState, FormData>(
+    forgotPasswordAction,
+    initialState,
+  );
 
   return (
     <form action={formAction} className="form-stack" noValidate>

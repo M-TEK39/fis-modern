@@ -57,7 +57,11 @@ function SubmitButton() {
 }
 
 function FieldError({ message }: Readonly<{ message?: string }>) {
-  return message ? <span className="muted-copy" role="alert">{message}</span> : null;
+  return message ? (
+    <span className="muted-copy" role="alert">
+      {message}
+    </span>
+  ) : null;
 }
 
 export default function VehicleEditFormClient({
@@ -83,17 +87,22 @@ export default function VehicleEditFormClient({
   }
 
   const models = referenceData.models;
-  const modelIsListed = vehicle.modelCode !== null && models.some((model) => model.code === vehicle.modelCode);
+  const modelIsListed =
+    vehicle.modelCode !== null && models.some((model) => model.code === vehicle.modelCode);
   const statusIsListed =
-    vehicle.vehicleStatusCode !== null && referenceData.statuses.some((status) => status.code === vehicle.vehicleStatusCode);
+    vehicle.vehicleStatusCode !== null &&
+    referenceData.statuses.some((status) => status.code === vehicle.vehicleStatusCode);
   const locationIsListed =
-    vehicle.locationCode !== null && referenceData.locations.some((location) => location.code === vehicle.locationCode);
+    vehicle.locationCode !== null &&
+    referenceData.locations.some((location) => location.code === vehicle.locationCode);
 
   return (
     <div className="vehicle-create-form">
       <div className="notice notice-info" role="note">
         <span aria-hidden="true">i</span>
-        <span>Only fields persisted by the current Vehicle API are available on this edit form.</span>
+        <span>
+          Only fields persisted by the current Vehicle API are available on this edit form.
+        </span>
       </div>
 
       {state.status === "error" && state.message ? (
@@ -125,7 +134,13 @@ export default function VehicleEditFormClient({
 
           <div className="vehicle-create-grid">
             <Field id="fleetNumberDisplay" label="Current GG number">
-              <input id="fleetNumberDisplay" type="text" value={vehicle.fleetNumber} readOnly aria-readonly="true" />
+              <input
+                id="fleetNumberDisplay"
+                type="text"
+                value={vehicle.fleetNumber}
+                readOnly
+                aria-readonly="true"
+              />
             </Field>
 
             <Field id="registrationNumber" label="Current GP number" required>
@@ -149,7 +164,9 @@ export default function VehicleEditFormClient({
                 defaultValue={inputValue(vehicle.modelCode)}
                 required
                 onChange={(event) => {
-                  const selected = models.find((model) => model.code === Number(event.target.value));
+                  const selected = models.find(
+                    (model) => model.code === Number(event.target.value),
+                  );
                   if (selected?.typeCode !== null && selected?.typeCode !== undefined) {
                     setTypeCode(String(selected.typeCode));
                   }
@@ -157,7 +174,9 @@ export default function VehicleEditFormClient({
               >
                 <option value="">Select model...</option>
                 {!modelIsListed && vehicle.modelCode !== null ? (
-                  <option value={vehicle.modelCode}>{optionLabel(vehicle.modelCode, "Current model")}</option>
+                  <option value={vehicle.modelCode}>
+                    {optionLabel(vehicle.modelCode, "Current model")}
+                  </option>
                 ) : null}
                 {models.map((model) => (
                   <option key={model.code} value={model.code}>
@@ -168,10 +187,19 @@ export default function VehicleEditFormClient({
             </Field>
 
             <Field id="typeCode" label="Type" required>
-              <select id="typeCode" name="typeCode" value={typeCode} onChange={(event) => setTypeCode(event.target.value)} required>
+              <select
+                id="typeCode"
+                name="typeCode"
+                value={typeCode}
+                onChange={(event) => setTypeCode(event.target.value)}
+                required
+              >
                 <option value="">Select type...</option>
-                {!referenceData.types.some((type) => String(type.code) === typeCode) && vehicle.typeCode !== null ? (
-                  <option value={vehicle.typeCode}>{optionLabel(vehicle.typeCode, "Current type")}</option>
+                {!referenceData.types.some((type) => String(type.code) === typeCode) &&
+                vehicle.typeCode !== null ? (
+                  <option value={vehicle.typeCode}>
+                    {optionLabel(vehicle.typeCode, "Current type")}
+                  </option>
                 ) : null}
                 {referenceData.types.map((type) => (
                   <option key={type.code} value={type.code}>
@@ -235,10 +263,17 @@ export default function VehicleEditFormClient({
 
           <div className="vehicle-create-grid">
             <Field id="locationCode" label="Location" required>
-              <select id="locationCode" name="locationCode" defaultValue={inputValue(vehicle.locationCode)} required>
+              <select
+                id="locationCode"
+                name="locationCode"
+                defaultValue={inputValue(vehicle.locationCode)}
+                required
+              >
                 <option value="">Select location...</option>
                 {!locationIsListed && vehicle.locationCode !== null ? (
-                  <option value={vehicle.locationCode}>{optionLabel(vehicle.locationCode, "Current location")}</option>
+                  <option value={vehicle.locationCode}>
+                    {optionLabel(vehicle.locationCode, "Current location")}
+                  </option>
                 ) : null}
                 {referenceData.locations.map((location) => (
                   <option key={location.code} value={location.code}>
@@ -249,10 +284,17 @@ export default function VehicleEditFormClient({
             </Field>
 
             <Field id="vehicleStatusCode" label="Status" required>
-              <select id="vehicleStatusCode" name="statusCode" defaultValue={inputValue(vehicle.vehicleStatusCode)} required>
+              <select
+                id="vehicleStatusCode"
+                name="statusCode"
+                defaultValue={inputValue(vehicle.vehicleStatusCode)}
+                required
+              >
                 <option value="">Select status...</option>
                 {!statusIsListed && vehicle.vehicleStatusCode !== null ? (
-                  <option value={vehicle.vehicleStatusCode}>{optionLabel(vehicle.vehicleStatusCode, "Current status")}</option>
+                  <option value={vehicle.vehicleStatusCode}>
+                    {optionLabel(vehicle.vehicleStatusCode, "Current status")}
+                  </option>
                 ) : null}
                 {referenceData.statuses.map((status) => (
                   <option key={status.code} value={status.code}>
@@ -298,11 +340,26 @@ export default function VehicleEditFormClient({
             </Field>
 
             <Field id="tare" label="Tare (kg)" required>
-              <input id="tare" name="tare" type="number" min={0} step={1} defaultValue={inputValue(vehicle.tare)} required />
+              <input
+                id="tare"
+                name="tare"
+                type="number"
+                min={0}
+                step={1}
+                defaultValue={inputValue(vehicle.tare)}
+                required
+              />
             </Field>
 
             <Field id="gvm" label="GVM (kg)">
-              <input id="gvm" name="gvm" type="number" min={0} step={1} defaultValue={inputValue(vehicle.gvm)} />
+              <input
+                id="gvm"
+                name="gvm"
+                type="number"
+                min={0}
+                step={1}
+                defaultValue={inputValue(vehicle.gvm)}
+              />
             </Field>
           </div>
         </section>

@@ -89,7 +89,12 @@ export default function GarageEditForm({ accident, sites, accidentTypes }: Garag
         </div>
         <div className="vehicle-create-grid">
           <Field id="vehicleLabel" label="Vehicle">
-            <input id="vehicleLabel" type="text" value={`${vehicleLabel(accident)} (${accident.vmfCode})`} readOnly />
+            <input
+              id="vehicleLabel"
+              type="text"
+              value={`${vehicleLabel(accident)} (${accident.vmfCode})`}
+              readOnly
+            />
           </Field>
           <Field id="ggReference" label="GG reference">
             <input id="ggReference" type="text" value={accident.ggReference ?? ""} readOnly />
@@ -124,7 +129,12 @@ export default function GarageEditForm({ accident, sites, accidentTypes }: Garag
             />
           </Field>
           <Field id="occurenceTime" label="Accident time">
-            <input id="occurenceTime" name="occurenceTime" type="time" defaultValue={timeInputValue(accident.occurenceTime)} />
+            <input
+              id="occurenceTime"
+              name="occurenceTime"
+              type="time"
+              defaultValue={timeInputValue(accident.occurenceTime)}
+            />
           </Field>
         </div>
       </section>
@@ -148,7 +158,13 @@ export default function GarageEditForm({ accident, sites, accidentTypes }: Garag
             />
           </Field>
           <Field id="driverName" label="GG driver name">
-            <input id="driverName" name="driverName" type="text" maxLength={25} defaultValue={accident.driverName ?? ""} />
+            <input
+              id="driverName"
+              name="driverName"
+              type="text"
+              maxLength={25}
+              defaultValue={accident.driverName ?? ""}
+            />
           </Field>
           <Field id="driverEmployNumber" label="Driver ID number">
             <input
@@ -172,16 +188,19 @@ export default function GarageEditForm({ accident, sites, accidentTypes }: Garag
         </div>
         <div className="vehicle-create-grid">
           <Field id="hqReference" label="HQ reference">
-            <input id="hqReference" name="hqReference" type="text" maxLength={20} defaultValue={accident.hqReference ?? ""} readOnly />
+            <input
+              id="hqReference"
+              name="hqReference"
+              type="text"
+              maxLength={20}
+              defaultValue={accident.hqReference ?? ""}
+              readOnly
+            />
           </Field>
         </div>
       </section>
 
-      <GarageLegacyFields
-        values={accident}
-        sites={sites}
-        accidentTypes={accidentTypes}
-      />
+      <GarageLegacyFields values={accident} sites={sites} accidentTypes={accidentTypes} />
 
       <section className="vehicle-form-section" aria-labelledby="garage-edit-claims-title">
         <div className="vehicle-form-section-header">

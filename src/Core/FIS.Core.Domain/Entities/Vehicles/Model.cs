@@ -185,5 +185,6 @@ public class Model
     public short ModelCode => model_code;
     public string ModelDescription => model_description;
     public string Name => model_description;
-    public string FullName => Make != null ? $"{Make.make_description} {model_description}" : model_description;
+    public string FullName =>
+        Make != null ? $"{Make.make_description} {model_description}" : model_description;
 }

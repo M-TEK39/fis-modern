@@ -14,9 +14,7 @@ public class ExtraCodeController : BaseApiController
     private readonly ILogger<ExtraCodeController> _logger;
     private readonly IExtraCodeRepository _repository;
 
-    public ExtraCodeController(
-        ILogger<ExtraCodeController> logger,
-        IExtraCodeRepository repository)
+    public ExtraCodeController(ILogger<ExtraCodeController> logger, IExtraCodeRepository repository)
     {
         _logger = logger;
         _repository = repository;
@@ -83,14 +81,21 @@ public class ExtraCodeController : BaseApiController
                 return BadRequest(new { message = validationError });
             }
 
-            var created = await _repository.CreateAsync(new ExtraCode
-            {
-                extra_description = request.Description!.Trim(),
-                category_type_code = request.CategoryTypeCode,
-                specific = request.Specific,
-                Additional = request.Additional
-            }, GetCurrentUserId());
-            return CreatedAtAction(nameof(GetByCode), new { code = created.extra_code }, MapToDto(created));
+            var created = await _repository.CreateAsync(
+                new ExtraCode
+                {
+                    extra_description = request.Description!.Trim(),
+                    category_type_code = request.CategoryTypeCode,
+                    specific = request.Specific,
+                    Additional = request.Additional,
+                },
+                GetCurrentUserId()
+            );
+            return CreatedAtAction(
+                nameof(GetByCode),
+                new { code = created.extra_code },
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -100,7 +105,10 @@ public class ExtraCodeController : BaseApiController
     }
 
     [HttpPut("{code:int}")]
-    public async Task<ActionResult<ExtraCodeDto>> Update(short code, [FromBody] UpdateExtraCodeDto request)
+    public async Task<ActionResult<ExtraCodeDto>> Update(
+        short code,
+        [FromBody] UpdateExtraCodeDto request
+    )
     {
         try
         {
@@ -148,17 +156,25 @@ public class ExtraCodeController : BaseApiController
             var deleteCheck = await _repository.GetDeleteCheckAsync(code);
             if (!deleteCheck.CheckAvailable)
             {
-                return StatusCode(503, new { message = "Extra dependencies could not be verified, so the extra was not deleted." });
+                return StatusCode(
+                    503,
+                    new
+                    {
+                        message = "Extra dependencies could not be verified, so the extra was not deleted.",
+                    }
+                );
             }
 
             if (!deleteCheck.CanDelete)
             {
-                return Conflict(new
-                {
-                    message = "Remove this extra from the linked vehicle data before deleting it.",
-                    vehicleCount = deleteCheck.VehicleCount,
-                    fleetNumbers = deleteCheck.FleetNumbers
-                });
+                return Conflict(
+                    new
+                    {
+                        message = "Remove this extra from the linked vehicle data before deleting it.",
+                        vehicleCount = deleteCheck.VehicleCount,
+                        fleetNumbers = deleteCheck.FleetNumbers,
+                    }
+                );
             }
 
             await _repository.DeleteAsync(code, GetCurrentUserId());
@@ -171,8 +187,8 @@ public class ExtraCodeController : BaseApiController
         }
     }
 
-    private static ExtraCodeDto MapToDto(ExtraCode code)
-        => new()
+    private static ExtraCodeDto MapToDto(ExtraCode code) =>
+        new()
         {
             ExtraCode = code.extra_code,
             Description = code.extra_description,
@@ -183,11 +199,11 @@ public class ExtraCodeController : BaseApiController
             DateUpdated = code.date_updated,
             CreatedByUserCode = code.created_by_user_code,
             ModifiedByUserCode = code.modified_by_user_code,
-            IsDeleted = code.is_deleted
+            IsDeleted = code.is_deleted,
         };
 
-    private static string? ValidateDescription(string? description)
-        => string.IsNullOrWhiteSpace(description) || description.Trim().Length > 50
+    private static string? ValidateDescription(string? description) =>
+        string.IsNullOrWhiteSpace(description) || description.Trim().Length > 50
             ? "Extra description is required and must be 50 characters or fewer."
             : null;
 }
@@ -243,6 +259,4 @@ public class CreateExtraCodeDto
     public int? Additional { get; set; }
 }
 
-public class UpdateExtraCodeDto : CreateExtraCodeDto
-{
-}
+public class UpdateExtraCodeDto : CreateExtraCodeDto { }

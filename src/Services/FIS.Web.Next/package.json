@@ -7,6 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "build:safe": "next build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
@@ -19,6 +21,7 @@
     "@types/node": "22.15.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
+    "prettier": "3.9.6",
     "typescript": "^6.0.3"
   }
 }

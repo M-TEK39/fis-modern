@@ -26,7 +26,9 @@ function getText(formData: FormData, key: string) {
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function hasVehicleManagementPermission(accessLevel?: string) {
@@ -35,7 +37,10 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -49,20 +54,34 @@ async function authorizeAction() {
   const session = await getSession();
 
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
 
   if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return { ok: false as const, message: "You do not have permission to authorize captured vehicles." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to authorize captured vehicles.",
+    };
   }
 
-  const canAuthorize = hasRole(session.roles, "vehicle inception authorizer") || !hasExplicitInceptionRole(session.roles);
+  const canAuthorize =
+    hasRole(session.roles, "vehicle inception authorizer") ||
+    !hasExplicitInceptionRole(session.roles);
   if (!canAuthorize) {
-    return { ok: false as const, message: "You do not have permission to authorize captured vehicles." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to authorize captured vehicles.",
+    };
   }
 
   return { ok: true as const };
@@ -104,7 +123,10 @@ export async function vehicleAuthorizationAction(
   if (!comment) {
     return {
       status: "error",
-      message: intent === "comment" ? "Comment cannot be empty." : "Please supply a comment before continuing.",
+      message:
+        intent === "comment"
+          ? "Comment cannot be empty."
+          : "Please supply a comment before continuing.",
     };
   }
 

@@ -17,11 +17,7 @@ public class MerchantRepository : IMerchantRepository
 {
     private const string TableName = "Merchant";
 
-    private static readonly string[] LegacyColumns =
-    [
-        "Merchant_code",
-        "Merchant_Name"
-    ];
+    private static readonly string[] LegacyColumns = ["Merchant_code", "Merchant_Name"];
 
     private static readonly string[] OptionalColumns =
     [
@@ -29,14 +25,10 @@ public class MerchantRepository : IMerchantRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
-    private static readonly string[] RequiredColumns =
-    [
-        "Merchant_code",
-        "Merchant_Name"
-    ];
+    private static readonly string[] RequiredColumns = ["Merchant_code", "Merchant_Name"];
 
     private readonly FisDbContext _context;
 
@@ -45,14 +37,15 @@ public class MerchantRepository : IMerchantRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<MerchantReference?> GetByIdAsync(int merchantCode)
-        => (await QueryAsync(
-            "[Merchant_code] = @merchantCode",
-            command => AddParameter(command, "@merchantCode", DbType.Int32, merchantCode)))
-            .SingleOrDefault();
+    public async Task<MerchantReference?> GetByIdAsync(int merchantCode) =>
+        (
+            await QueryAsync(
+                "[Merchant_code] = @merchantCode",
+                command => AddParameter(command, "@merchantCode", DbType.Int32, merchantCode)
+            )
+        ).SingleOrDefault();
 
-    public async Task<IEnumerable<MerchantReference>> GetAllAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<MerchantReference>> GetAllAsync() => await QueryAsync();
 
     public async Task<int> CountClearancesAsync(int merchantCode)
     {
@@ -91,19 +84,34 @@ public class MerchantRepository : IMerchantRepository
         var availableColumns = await GetAvailableColumnsAsync();
         var values = new List<WriteValue>
         {
-            new("Merchant_Name", "@merchantName", DbType.String, merchant.Merchant_name)
+            new("Merchant_Name", "@merchantName", DbType.String, merchant.Merchant_name),
         };
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_created", "@dateCreated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "created_by_user_code",
             "@createdByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            false
+        );
 
         merchant.Merchant_code = await ExecuteInsertAsync(values);
         merchant.date_created = now;
@@ -116,23 +124,32 @@ public class MerchantRepository : IMerchantRepository
     {
         ArgumentNullException.ThrowIfNull(merchant);
 
-        var existing = await GetByIdAsync(merchant.Merchant_code)
+        var existing =
+            await GetByIdAsync(merchant.Merchant_code)
             ?? throw new KeyNotFoundException($"Merchant {merchant.Merchant_code} not found");
         var availableColumns = await GetAvailableColumnsAsync();
         var values = new List<WriteValue>
         {
-            new("Merchant_Name", "@merchantName", DbType.String, merchant.Merchant_name)
+            new("Merchant_Name", "@merchantName", DbType.String, merchant.Merchant_name),
         };
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "modified_by_user_code",
             "@modifiedByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
+            currentUserId > 0 ? currentUserId : null
+        );
 
         await ExecuteUpdateAsync(merchant.Merchant_code, values, availableColumns);
         merchant.date_created = existing.date_created;
@@ -146,7 +163,8 @@ public class MerchantRepository : IMerchantRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "DeleteAsync selects between fixed legacy SQL statements and uses a parameter for the record identifier.")]
+        Justification = "DeleteAsync selects between fixed legacy SQL statements and uses a parameter for the record identifier."
+    )]
     public async Task DeleteAsync(int merchantCode, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -177,7 +195,8 @@ public class MerchantRepository : IMerchantRepository
                         command,
                         "@modifiedByUserCode",
                         DbType.Int32,
-                        currentUserId > 0 ? currentUserId : null);
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
                 command.CommandText = $"""
@@ -210,10 +229,12 @@ public class MerchantRepository : IMerchantRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters.")]
+        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters."
+    )]
     private async Task<List<MerchantReference>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
@@ -229,7 +250,11 @@ public class MerchantRepository : IMerchantRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = LegacyColumns
                 .Select(column => GetColumnProjection(availableColumns, column))
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
                 .ToArray();
             var conditions = new List<string>();
             if (!string.IsNullOrWhiteSpace(predicate))
@@ -267,7 +292,8 @@ public class MerchantRepository : IMerchantRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The INSERT statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task<int> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -282,7 +308,10 @@ public class MerchantRepository : IMerchantRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{TableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[Merchant_code]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
@@ -301,11 +330,13 @@ public class MerchantRepository : IMerchantRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The UPDATE statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task ExecuteUpdateAsync(
         int merchantCode,
         IReadOnlyList<WriteValue> values,
-        IReadOnlySet<string> availableColumns)
+        IReadOnlySet<string> availableColumns
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -320,7 +351,10 @@ public class MerchantRepository : IMerchantRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{TableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [Merchant_code] = @merchantCode
                   AND {GetActiveFilter(null, availableColumns)}
                 """;
@@ -366,11 +400,14 @@ public class MerchantRepository : IMerchantRepository
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"The required Merchant compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                    $"The required Merchant compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             return columns;
@@ -386,16 +423,27 @@ public class MerchantRepository : IMerchantRepository
 
     private static MerchantReference MapMerchant(
         DbDataReader reader,
-        IReadOnlySet<string> availableColumns)
-        => new()
+        IReadOnlySet<string> availableColumns
+    ) =>
+        new()
         {
             Merchant_code = ReadInt32(reader, "Merchant_code") ?? 0,
             Merchant_name = ReadString(reader, "Merchant_Name"),
-            date_created = ReadDateTimeIfAvailable(reader, availableColumns, "date_created") ?? DateTime.MinValue,
+            date_created =
+                ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
+                ?? DateTime.MinValue,
             date_updated = ReadDateTimeIfAvailable(reader, availableColumns, "date_updated"),
-            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
-            modified_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "modified_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "created_by_user_code"
+            ),
+            modified_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "modified_by_user_code"
+            ),
+            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false,
         };
 
     private static void AddOptionalValue(
@@ -404,7 +452,8 @@ public class MerchantRepository : IMerchantRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -449,27 +498,29 @@ public class MerchantRepository : IMerchantRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "sql_variant"
+            _ => "sql_variant",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetColumnProjection(IReadOnlySet<string> columns, string column)
-        => columns.Contains(column)
+    private static string GetColumnProjection(IReadOnlySet<string> columns, string column) =>
+        columns.Contains(column)
             ? $"[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetLegacySqlType(column)}) AS [{column}]";
 
-    private static string GetLegacySqlType(string column)
-        => column switch
+    private static string GetLegacySqlType(string column) =>
+        column switch
         {
             "Merchant_code" => "int",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
 
     private static string? ReadString(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
     }
 
     private static DateTime? ReadDateTime(DbDataReader reader, string column)
@@ -481,8 +532,8 @@ public class MerchantRepository : IMerchantRepository
     private static DateTime? ReadDateTimeIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadDateTime(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadDateTime(reader, column) : null;
 
     private static int? ReadInt32(DbDataReader reader, string column)
     {
@@ -493,13 +544,14 @@ public class MerchantRepository : IMerchantRepository
     private static int? ReadInt32IfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadInt32(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadInt32(reader, column) : null;
 
     private static bool? ReadBooleanIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
+        string column
+    )
     {
         if (!columns.Contains(column))
         {

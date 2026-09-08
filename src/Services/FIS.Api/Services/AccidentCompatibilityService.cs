@@ -14,16 +14,13 @@ namespace FIS.Api.Services;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "SQL identifiers are fixed allowlisted columns and all values are parameterized.")]
+    Justification = "SQL identifiers are fixed allowlisted columns and all values are parameterized."
+)]
 public sealed class AccidentCompatibilityService
 {
     private const string TableName = "accident";
 
-    private static readonly string[] RequiredColumns =
-    [
-        "accident_code",
-        "vmf_code"
-    ];
+    private static readonly string[] RequiredColumns = ["accident_code", "vmf_code"];
 
     private readonly FisDbContext _context;
 
@@ -35,7 +32,8 @@ public sealed class AccidentCompatibilityService
     public async Task<int> CreateAsync(
         AccidentCaptureValues values,
         int currentUserId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(values);
 
@@ -51,21 +49,24 @@ public sealed class AccidentCompatibilityService
             "date_created",
             "@dateCreated",
             DbType.DateTime2,
-            now);
+            now
+        );
         AddOptionalValue(
             writeValues,
             availableColumns,
             "created_by_user_code",
             "@createdByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
+            currentUserId > 0 ? currentUserId : null
+        );
         AddOptionalValue(
             writeValues,
             availableColumns,
             "is_deleted",
             "@isDeleted",
             DbType.Boolean,
-            false);
+            false
+        );
 
         var accidentCode = await ExecuteInsertAsync(writeValues, cancellationToken);
         return accidentCode;
@@ -73,7 +74,8 @@ public sealed class AccidentCompatibilityService
 
     private async Task<int> ExecuteInsertAsync(
         IReadOnlyList<WriteValue> values,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -87,7 +89,10 @@ public sealed class AccidentCompatibilityService
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{TableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[accident_code]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
@@ -105,7 +110,9 @@ public sealed class AccidentCompatibilityService
         }
     }
 
-    private async Task<HashSet<string>> GetAvailableColumnsAsync(CancellationToken cancellationToken)
+    private async Task<HashSet<string>> GetAvailableColumnsAsync(
+        CancellationToken cancellationToken
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -134,11 +141,14 @@ public sealed class AccidentCompatibilityService
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"The required accident compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                    $"The required accident compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             return columns;
@@ -152,8 +162,7 @@ public sealed class AccidentCompatibilityService
         }
     }
 
-    private static List<WriteValue> BuildWriteValues(AccidentCaptureValues values)
-        =>
+    private static List<WriteValue> BuildWriteValues(AccidentCaptureValues values) =>
         [
             new("vmf_code", "@vmfCode", DbType.Int32, values.VmfCode),
             new("Call_Refer", "@callRefer", DbType.Decimal, values.CallRefer),
@@ -164,24 +173,39 @@ public sealed class AccidentCompatibilityService
             new("occurence_time", "@occurenceTime", DbType.DateTime2, values.OccurenceTime),
             new("description", "@description", DbType.String, values.Description),
             new("driver_name", "@driverName", DbType.String, values.DriverName),
-            new("driver_employ_number", "@driverEmployNumber", DbType.String, values.DriverEmployNumber),
+            new(
+                "driver_employ_number",
+                "@driverEmployNumber",
+                DbType.String,
+                values.DriverEmployNumber
+            ),
             new("driver_telno", "@driverTelno", DbType.String, values.DriverTelno),
             new("driver_site_code", "@driverSiteCode", DbType.Int16, values.DriverSiteCode),
             new("transoffic_name", "@transofficName", DbType.String, values.TransportOfficerName),
             new("transoffic_tel", "@transofficTel", DbType.String, values.TransportOfficerTel),
             new("death", "@death", DbType.String, values.Death),
             new("injured", "@injured", DbType.String, values.Injured),
-            new("third_party_regno", "@thirdPartyRegno", DbType.String, values.ThirdPartyRegistration),
+            new(
+                "third_party_regno",
+                "@thirdPartyRegno",
+                DbType.String,
+                values.ThirdPartyRegistration
+            ),
             new("third_party_owner", "@thirdPartyOwner", DbType.String, values.ThirdPartyOwner),
             new("third_party_tel", "@thirdPartyTel", DbType.String, values.ThirdPartyTelephone),
-            new("damage_description", "@damageDescription", DbType.String, values.DamageDescription),
+            new(
+                "damage_description",
+                "@damageDescription",
+                DbType.String,
+                values.DamageDescription
+            ),
             new("date_updated", "@dateUpdated", DbType.DateTime2, values.DateUpdated),
             new("notes", "@notes", DbType.String, values.Notes),
             new("acc_type_code", "@accTypeCode", DbType.Int16, values.AccidentTypeCode),
             new("flag_gg_hq", "@flagGgHq", DbType.String, values.FlagGgHq),
             new("flag_gg_hq_date", "@flagGgHqDate", DbType.DateTime2, values.FlagGgHqDate),
             new("occurence_place", "@occurencePlace", DbType.String, values.OccurencePlace),
-            new("Tow_need", "@towNeed", DbType.String, values.TowNeed)
+            new("Tow_need", "@towNeed", DbType.String, values.TowNeed),
         ];
 
     private static void AddOptionalValue(
@@ -190,7 +214,8 @@ public sealed class AccidentCompatibilityService
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -243,4 +268,5 @@ public sealed record AccidentCaptureValues(
     string? FlagGgHq,
     DateTime FlagGgHqDate,
     string? OccurencePlace,
-    string? TowNeed);
+    string? TowNeed
+);

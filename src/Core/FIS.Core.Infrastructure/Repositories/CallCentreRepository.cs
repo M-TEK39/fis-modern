@@ -58,7 +58,7 @@ public class CallCentreRepository : ICallCentreRepository
         "CRO_Remarks",
         "Incident_Remarks",
         "Notify_list_code",
-        "call_closed"
+        "call_closed",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -67,14 +67,10 @@ public class CallCentreRepository : ICallCentreRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
-    private static readonly string[] RequiredColumns =
-    [
-        "Call_centre_code",
-        "vmf_code"
-    ];
+    private static readonly string[] RequiredColumns = ["Call_centre_code", "vmf_code"];
 
     private readonly FisDbContext _context;
 
@@ -85,10 +81,12 @@ public class CallCentreRepository : ICallCentreRepository
 
     public async Task<CallCentre?> GetByIdAsync(short callCentreCode)
     {
-        return (await QueryAsync(
-            "WHERE [Call_centre_code] = @callCentreCode",
-            command => AddParameter(command, "@callCentreCode", DbType.Int16, callCentreCode)))
-            .SingleOrDefault();
+        return (
+            await QueryAsync(
+                "WHERE [Call_centre_code] = @callCentreCode",
+                command => AddParameter(command, "@callCentreCode", DbType.Int16, callCentreCode)
+            )
+        ).SingleOrDefault();
     }
 
     public async Task<IEnumerable<CallCentre>> GetAllAsync()
@@ -100,10 +98,14 @@ public class CallCentreRepository : ICallCentreRepository
     {
         return await QueryAsync(
             "WHERE [vmf_code] = @vmfCode",
-            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode));
+            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
+        );
     }
 
-    public async Task<IEnumerable<CallCentre>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)
+    public async Task<IEnumerable<CallCentre>> GetByDateRangeAsync(
+        DateTime startDate,
+        DateTime endDate
+    )
     {
         return await QueryAsync(
             "WHERE [Call_date] >= @startDate AND [Call_date] <= @endDate",
@@ -111,7 +113,8 @@ public class CallCentreRepository : ICallCentreRepository
             {
                 AddParameter(command, "@startDate", DbType.Date, startDate.Date);
                 AddParameter(command, "@endDate", DbType.Date, endDate.Date);
-            });
+            }
+        );
     }
 
     public async Task<CallCentre> CreateAsync(CallCentre callCentre, int currentUserId)
@@ -124,15 +127,30 @@ public class CallCentreRepository : ICallCentreRepository
             .ToList();
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_created", "@dateCreated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "created_by_user_code",
             "@createdByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            false
+        );
 
         var callCentreCode = await ExecuteInsertAsync(values);
         callCentre.Call_centre_code = callCentreCode;
@@ -150,7 +168,8 @@ public class CallCentreRepository : ICallCentreRepository
         if (existing == null)
         {
             throw new InvalidOperationException(
-                $"CallCentre with Call_centre_code {callCentre.Call_centre_code} not found");
+                $"CallCentre with Call_centre_code {callCentre.Call_centre_code} not found"
+            );
         }
 
         var availableColumns = await GetAvailableColumnsAsync();
@@ -159,15 +178,30 @@ public class CallCentreRepository : ICallCentreRepository
             .ToList();
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "modified_by_user_code",
             "@modifiedByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, callCentre.is_deleted);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            callCentre.is_deleted
+        );
 
         await ExecuteUpdateAsync(callCentre.Call_centre_code, values, availableColumns);
         callCentre.date_created = existing.date_created;
@@ -180,7 +214,8 @@ public class CallCentreRepository : ICallCentreRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "DeleteAsync selects between fixed legacy SQL statements and uses a parameter for the record identifier.")]
+        Justification = "DeleteAsync selects between fixed legacy SQL statements and uses a parameter for the record identifier."
+    )]
     public async Task DeleteAsync(short callCentreCode, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -211,7 +246,8 @@ public class CallCentreRepository : ICallCentreRepository
                         command,
                         "@modifiedByUserCode",
                         DbType.Int32,
-                        currentUserId > 0 ? currentUserId : null);
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
                 command.CommandText = $"""
@@ -244,10 +280,12 @@ public class CallCentreRepository : ICallCentreRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters.")]
+        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters."
+    )]
     private async Task<List<CallCentre>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
@@ -263,7 +301,11 @@ public class CallCentreRepository : ICallCentreRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = LegacyColumns
                 .Select(column => GetColumnProjection(availableColumns, column))
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
                 .ToArray();
             var whereClause = string.IsNullOrWhiteSpace(predicate)
                 ? $"WHERE {GetActiveFilter(availableColumns)}"
@@ -298,7 +340,8 @@ public class CallCentreRepository : ICallCentreRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The INSERT statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task<short> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -313,7 +356,10 @@ public class CallCentreRepository : ICallCentreRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{TableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[Call_centre_code]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
@@ -332,11 +378,13 @@ public class CallCentreRepository : ICallCentreRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The UPDATE statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task ExecuteUpdateAsync(
         short callCentreCode,
         IReadOnlyList<WriteValue> values,
-        IReadOnlySet<string> availableColumns)
+        IReadOnlySet<string> availableColumns
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -351,7 +399,10 @@ public class CallCentreRepository : ICallCentreRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{TableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [Call_centre_code] = @callCentreCode
                 AND {GetActiveFilter(availableColumns)}
                 """;
@@ -397,11 +448,14 @@ public class CallCentreRepository : ICallCentreRepository
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"The required Call_centre compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                    $"The required Call_centre compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             return columns;
@@ -415,7 +469,10 @@ public class CallCentreRepository : ICallCentreRepository
         }
     }
 
-    private static CallCentre MapCallCentre(DbDataReader reader, IReadOnlySet<string> availableColumns)
+    private static CallCentre MapCallCentre(
+        DbDataReader reader,
+        IReadOnlySet<string> availableColumns
+    )
     {
         var callDate = ReadDateTime(reader, "Call_date");
         var incidentDate = ReadDateTime(reader, "Incident_date");
@@ -459,14 +516,23 @@ public class CallCentreRepository : ICallCentreRepository
             Incident_Remarks = ReadString(reader, "Incident_Remarks"),
             Notify_list_code = ReadInt32(reader, "Notify_list_code"),
             call_closed = ReadString(reader, "call_closed"),
-            date_created = ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
+            date_created =
+                ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
                 ?? callDate
                 ?? incidentDate
                 ?? DateTime.MinValue,
             date_updated = ReadDateTimeIfAvailable(reader, availableColumns, "date_updated"),
-            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
-            modified_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "modified_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "created_by_user_code"
+            ),
+            modified_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "modified_by_user_code"
+            ),
+            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false,
         };
     }
 
@@ -488,7 +554,12 @@ public class CallCentreRepository : ICallCentreRepository
             new("Driver_persalno", "@driverPersalno", DbType.String, callCentre.Driver_persalno),
             new("Driver_Licno", "@driverLicno", DbType.String, callCentre.Driver_Licno),
             new("GG_number", "@ggNumber", DbType.String, callCentre.GG_number),
-            new("Driver_base_station", "@driverBaseStation", DbType.String, callCentre.Driver_base_station),
+            new(
+                "Driver_base_station",
+                "@driverBaseStation",
+                DbType.String,
+                callCentre.Driver_base_station
+            ),
             new("Driver_Site", "@driverSite", DbType.Int16, callCentre.Driver_Site),
             new("Driver_tel", "@driverTel", DbType.String, callCentre.Driver_tel),
             new("Driver_cell", "@driverCell", DbType.String, callCentre.Driver_cell),
@@ -499,7 +570,12 @@ public class CallCentreRepository : ICallCentreRepository
             new("Incident_date", "@incidentDate", DbType.Date, callCentre.Incident_date?.Date),
             new("Incident_time", "@incidentTime", DbType.DateTime2, callCentre.Incident_time),
             new("Caller_tel", "@callerTel", DbType.String, callCentre.Caller_tel),
-            new("TrOfficer_name", "@transportOfficerName", DbType.String, callCentre.TrOfficer_name),
+            new(
+                "TrOfficer_name",
+                "@transportOfficerName",
+                DbType.String,
+                callCentre.TrOfficer_name
+            ),
             new("TrOfficer_tel", "@transportOfficerTel", DbType.String, callCentre.TrOfficer_tel),
             new("TrOfficer_Site", "@transportOfficerSite", DbType.Int16, callCentre.TrOfficer_Site),
             new("Incident_town", "@incidentTown", DbType.String, callCentre.Incident_town),
@@ -512,7 +588,7 @@ public class CallCentreRepository : ICallCentreRepository
             new("CRO_Remarks", "@croRemarks", DbType.String, callCentre.CRO_Remarks),
             new("Incident_Remarks", "@incidentRemarks", DbType.String, callCentre.Incident_Remarks),
             new("Notify_list_code", "@notifyListCode", DbType.Int32, callCentre.Notify_list_code),
-            new("call_closed", "@callClosed", DbType.String, callCentre.call_closed)
+            new("call_closed", "@callClosed", DbType.String, callCentre.call_closed),
         ];
     }
 
@@ -522,7 +598,8 @@ public class CallCentreRepository : ICallCentreRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -547,8 +624,8 @@ public class CallCentreRepository : ICallCentreRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string GetActiveFilter(IReadOnlySet<string> availableColumns)
-        => availableColumns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+    private static string GetActiveFilter(IReadOnlySet<string> availableColumns) =>
+        availableColumns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
     {
@@ -562,7 +639,7 @@ public class CallCentreRepository : ICallCentreRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "sql_variant"
+            _ => "sql_variant",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
@@ -577,15 +654,18 @@ public class CallCentreRepository : ICallCentreRepository
         return $"CAST(NULL AS {GetLegacySqlType(column)}) AS [{column}]";
     }
 
-    private static string GetLegacySqlType(string column)
-        => column switch
+    private static string GetLegacySqlType(string column) =>
+        column switch
         {
-            "Call_centre_code" or "User_access_code" or "Driver_Site" or "TrOfficer_Site" or "Counter"
-                => "smallint",
+            "Call_centre_code"
+            or "User_access_code"
+            or "Driver_Site"
+            or "TrOfficer_Site"
+            or "Counter" => "smallint",
             "vmf_code" or "Notify_list_code" => "int",
             "Call_time" or "Incident_time" => "time",
             "Call_date" or "Incident_date" => "date",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
 
     private static string? ReadString(DbDataReader reader, string column)
@@ -603,8 +683,8 @@ public class CallCentreRepository : ICallCentreRepository
     private static DateTime? ReadDateTimeIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadDateTime(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadDateTime(reader, column) : null;
 
     private static DateTime? ReadTime(DbDataReader reader, string column)
     {
@@ -619,7 +699,7 @@ public class CallCentreRepository : ICallCentreRepository
         {
             TimeSpan time => DateTime.MinValue.Add(time),
             DateTime dateTime => DateTime.MinValue.Add(dateTime.TimeOfDay),
-            _ => DateTime.MinValue.Add(TimeSpan.Parse(Convert.ToString(value)!))
+            _ => DateTime.MinValue.Add(TimeSpan.Parse(Convert.ToString(value)!)),
         };
     }
 
@@ -632,8 +712,8 @@ public class CallCentreRepository : ICallCentreRepository
     private static int? ReadInt32IfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadInt32(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadInt32(reader, column) : null;
 
     private static short? ReadInt16(DbDataReader reader, string column)
     {
@@ -644,13 +724,14 @@ public class CallCentreRepository : ICallCentreRepository
     private static short? ReadInt16IfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadInt16(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadInt16(reader, column) : null;
 
     private static bool? ReadBooleanIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
+        string column
+    )
     {
         if (!columns.Contains(column))
         {

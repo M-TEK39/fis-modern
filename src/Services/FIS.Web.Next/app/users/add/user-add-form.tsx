@@ -36,7 +36,10 @@ function SubmitButton() {
 }
 
 function approverLabel(approver: UserAdminProfile) {
-  const name = [approver.firstName, approver.lastName].filter(Boolean).join(" ") || approver.userName || approver.email;
+  const name =
+    [approver.firstName, approver.lastName].filter(Boolean).join(" ") ||
+    approver.userName ||
+    approver.email;
   return `${name || "Unknown"} (${approver.userAccessCode})`;
 }
 
@@ -60,17 +63,14 @@ export default function UserAddForm({
   );
 
   return (
-    <form
-      action={action}
-      className="vehicle-create-form"
-      onReset={() => setSelectedSiteCode("")}
-    >
+    <form action={action} className="vehicle-create-form" onReset={() => setSelectedSiteCode("")}>
       <div className="notice notice-info" role="note">
         <span aria-hidden="true">i</span>
         <span>
-          This form writes the complete supported legacy user profile to <code>user_access_old1</code>. The access
-          choices use the existing legacy permission bitmask; items in the same module group therefore grant the same
-          effective access as the current FIS sign-in contract.
+          This form writes the complete supported legacy user profile to{" "}
+          <code>user_access_old1</code>. The access choices use the existing legacy permission
+          bitmask; items in the same module group therefore grant the same effective access as the
+          current FIS sign-in contract.
         </span>
       </div>
 
@@ -84,10 +84,24 @@ export default function UserAddForm({
         </div>
         <div className="vehicle-create-grid">
           <Field id="userName" label="User Name" required>
-            <input id="userName" name="userName" type="text" maxLength={255} autoComplete="username" required />
+            <input
+              id="userName"
+              name="userName"
+              type="text"
+              maxLength={255}
+              autoComplete="username"
+              required
+            />
           </Field>
           <Field id="email" label="E-mail" required>
-            <input id="email" name="email" type="email" maxLength={255} autoComplete="email" required />
+            <input
+              id="email"
+              name="email"
+              type="email"
+              maxLength={255}
+              autoComplete="email"
+              required
+            />
           </Field>
         </div>
       </section>
@@ -101,10 +115,24 @@ export default function UserAddForm({
         </div>
         <div className="vehicle-create-grid">
           <Field id="firstName" label="First Name" required>
-            <input id="firstName" name="firstName" type="text" maxLength={255} autoComplete="given-name" required />
+            <input
+              id="firstName"
+              name="firstName"
+              type="text"
+              maxLength={255}
+              autoComplete="given-name"
+              required
+            />
           </Field>
           <Field id="lastName" label="Last Name" required>
-            <input id="lastName" name="lastName" type="text" maxLength={255} autoComplete="family-name" required />
+            <input
+              id="lastName"
+              name="lastName"
+              type="text"
+              maxLength={255}
+              autoComplete="family-name"
+              required
+            />
           </Field>
           <Field id="siteCode" label="Site" required>
             <select
@@ -154,7 +182,13 @@ export default function UserAddForm({
             <p className="muted-copy">Optional.</p>
           </Field>
           <Field id="cellphoneNumber" label="Cell">
-            <input id="cellphoneNumber" name="cellphoneNumber" type="number" inputMode="numeric" autoComplete="tel" />
+            <input
+              id="cellphoneNumber"
+              name="cellphoneNumber"
+              type="number"
+              inputMode="numeric"
+              autoComplete="tel"
+            />
           </Field>
           <Field id="approverCodeAtGfleet" label="Client Approver Name" required>
             <select
@@ -178,7 +212,9 @@ export default function UserAddForm({
             <input id="displayName" type="text" value={displayName} readOnly />
           </Field>
         </div>
-        <p className="muted-copy">At least one of Persal or Contract Number, and at least one of Tel or Cell, is required.</p>
+        <p className="muted-copy">
+          At least one of Persal or Contract Number, and at least one of Tel or Cell, is required.
+        </p>
       </section>
 
       <section className="vehicle-form-section" aria-labelledby="user-access-title">

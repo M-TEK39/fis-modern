@@ -34,11 +34,16 @@ export default function AdminForgotPasswordForm({
           autoComplete="username"
           required
         />
-        <p className="muted-copy">The reset link is sent only to the email address registered for the account.</p>
+        <p className="muted-copy">
+          The reset link is sent only to the email address registered for the account.
+        </p>
       </div>
       <div className="button-row">
         <SubmitButton />
-        <a className="button button-secondary" href={`/UserAdmin/UserAdmin.aspx?Alphabet=${encodeURIComponent(alphabet)}`}>
+        <a
+          className="button button-secondary"
+          href={`/UserAdmin/UserAdmin.aspx?Alphabet=${encodeURIComponent(alphabet)}`}
+        >
           Back to Users
         </a>
       </div>

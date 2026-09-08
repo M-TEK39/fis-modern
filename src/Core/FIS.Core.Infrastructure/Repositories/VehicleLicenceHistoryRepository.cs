@@ -1,9 +1,9 @@
+using System.Data;
+using System.Data.Common;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
-using System.Data;
-using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FIS.Core.Infrastructure.Repositories;
@@ -59,8 +59,8 @@ public class VehicleLicenceHistoryRepository : IVehicleLicenceHistoryRepository
             return [];
         }
 
-        return await _context.VehicleLicenceHistories
-            .Include(h => h.CapturedByUser)
+        return await _context
+            .VehicleLicenceHistories.Include(h => h.CapturedByUser)
             .Where(h => h.vmf_code == vmfCode)
             .OrderByDescending(h => h.captured_at)
             .ToListAsync();
@@ -73,8 +73,8 @@ public class VehicleLicenceHistoryRepository : IVehicleLicenceHistoryRepository
             return null;
         }
 
-        return await _context.VehicleLicenceHistories
-            .Include(h => h.CapturedByUser)
+        return await _context
+            .VehicleLicenceHistories.Include(h => h.CapturedByUser)
             .Where(h => h.vmf_code == vmfCode)
             .OrderByDescending(h => h.captured_at)
             .FirstOrDefaultAsync();

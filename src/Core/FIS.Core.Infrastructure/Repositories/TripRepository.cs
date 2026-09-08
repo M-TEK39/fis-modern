@@ -18,7 +18,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "SQL identifiers come only from fixed compatibility allowlists; submitted values are parameters.")]
+    Justification = "SQL identifiers come only from fixed compatibility allowlists; submitted values are parameters."
+)]
 public sealed class TripRepository : ITripRepository
 {
     private const string TableName = "trip_authorities";
@@ -32,19 +33,38 @@ public sealed class TripRepository : ITripRepository
 
     private static readonly string[] RequiredColumns =
     [
-        "trip_authority_code", "contract_code", "approver_name", "approver_rank", "approver_tel",
-        "end_odo_meter", "expiry_date", "trip_reason", "trip_request_number", "issue_date",
-        "trip_type_code", "trip_incident_type_code", "user_access_code", "locked_for_transfer",
-        "Trip_Is_Monthly"
+        "trip_authority_code",
+        "contract_code",
+        "approver_name",
+        "approver_rank",
+        "approver_tel",
+        "end_odo_meter",
+        "expiry_date",
+        "trip_reason",
+        "trip_request_number",
+        "issue_date",
+        "trip_type_code",
+        "trip_incident_type_code",
+        "user_access_code",
+        "locked_for_transfer",
+        "Trip_Is_Monthly",
     ];
 
     private static readonly string[] OptionalColumns =
     [
-        "date_created", "date_updated", "created_by_user_code", "modified_by_user_code", "is_deleted"
+        "date_created",
+        "date_updated",
+        "created_by_user_code",
+        "modified_by_user_code",
+        "is_deleted",
     ];
 
     private static readonly string[] RequiredContractColumns =
-    ["contract_code", "vmf_code", "site_code"];
+    [
+        "contract_code",
+        "vmf_code",
+        "site_code",
+    ];
 
     private readonly FisDbContext _context;
 
@@ -53,12 +73,15 @@ public sealed class TripRepository : ITripRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Trip?> GetByIdAsync(int tripId)
-        => (await QueryAsync(
-            "[t].[trip_authority_code] = @tripId",
-            command => AddParameter(command, "@tripId", DbType.Int32, tripId),
-            includeDeleted: false,
-            take: 1)).SingleOrDefault();
+    public async Task<Trip?> GetByIdAsync(int tripId) =>
+        (
+            await QueryAsync(
+                "[t].[trip_authority_code] = @tripId",
+                command => AddParameter(command, "@tripId", DbType.Int32, tripId),
+                includeDeleted: false,
+                take: 1
+            )
+        ).SingleOrDefault();
 
     public async Task<TripAuthorityDetails?> GetDetailsAsync(int tripId)
     {
@@ -74,15 +97,29 @@ public sealed class TripRepository : ITripRepository
         return new TripAuthorityDetails(trip, drivers, passengers, routes);
     }
 
-    public async Task<IEnumerable<Trip>> GetAllAsync()
-        => await QueryAsync(orderBy: "[t].[issue_date] DESC, [t].[trip_authority_code] DESC");
+    public async Task<IEnumerable<Trip>> GetAllAsync() =>
+        await QueryAsync(orderBy: "[t].[issue_date] DESC, [t].[trip_authority_code] DESC");
 
     public async Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync()
     {
         var contractColumns = await GetTableColumnsAsync(ContractTableName);
         var vehicleColumns = await GetTableColumnsAsync(VehicleTableName);
-        var requiredContractColumns = new[] { "contract_code", "vmf_code", "site_code", "still_current", "contract_type" };
-        var requiredVehicleColumns = new[] { "vmf_code", "vehicle_status_code", "fleet_number", "registration_number", "licence_due_date" };
+        var requiredContractColumns = new[]
+        {
+            "contract_code",
+            "vmf_code",
+            "site_code",
+            "still_current",
+            "contract_type",
+        };
+        var requiredVehicleColumns = new[]
+        {
+            "vmf_code",
+            "vehicle_status_code",
+            "fleet_number",
+            "registration_number",
+            "licence_due_date",
+        };
 
         var missingColumns = requiredContractColumns
             .Where(column => !contractColumns.Contains(column))
@@ -91,12 +128,15 @@ public sealed class TripRepository : ITripRepository
         if (missingColumns.Length > 0)
         {
             throw new InvalidOperationException(
-                $"The required Trip Authority vehicle compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                $"The required Trip Authority vehicle compatibility columns are not available: {string.Join(", ", missingColumns)}"
+            );
         }
 
         var modelColumns = await GetTableColumnsAsync(ModelTableName);
         var makeColumns = await GetTableColumnsAsync(MakeTableName);
-        var hasModelProjection = new[] { "model_code", "make_code", "model_description" }.All(modelColumns.Contains);
+        var hasModelProjection = new[] { "model_code", "make_code", "model_description" }.All(
+            modelColumns.Contains
+        );
         var hasMakeProjection = new[] { "make_code", "make_description" }.All(makeColumns.Contains);
 
         var projection = new List<string>
@@ -113,24 +153,28 @@ public sealed class TripRepository : ITripRepository
                 : "CAST(NULL AS varchar(250)) AS [model_description]",
             hasMakeProjection && hasModelProjection
                 ? "[mk].[make_description] AS [make_description]"
-                : "CAST(NULL AS varchar(250)) AS [make_description]"
+                : "CAST(NULL AS varchar(250)) AS [make_description]",
         };
 
         var joins = new List<string>();
         if (hasModelProjection)
         {
-            joins.Add($"LEFT JOIN [dbo].[{ModelTableName}] AS [m] ON [m].[model_code] = [v].[model_code]");
+            joins.Add(
+                $"LEFT JOIN [dbo].[{ModelTableName}] AS [m] ON [m].[model_code] = [v].[model_code]"
+            );
         }
 
         if (hasMakeProjection && hasModelProjection)
         {
-            joins.Add($"LEFT JOIN [dbo].[{MakeTableName}] AS [mk] ON [mk].[make_code] = [m].[make_code]");
+            joins.Add(
+                $"LEFT JOIN [dbo].[{MakeTableName}] AS [mk] ON [mk].[make_code] = [m].[make_code]"
+            );
         }
 
         var conditions = new List<string>
         {
             "[c].[still_current] = 'Y'",
-            "[v].[vehicle_status_code] > 0"
+            "[v].[vehicle_status_code] > 0",
         };
         if (contractColumns.Contains("is_deleted"))
         {
@@ -166,16 +210,19 @@ public sealed class TripRepository : ITripRepository
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
-                results.Add(new TripAuthorityVehicle(
-                    ReadInt32(reader, "vmf_code") ?? 0,
-                    ReadInt32(reader, "contract_code") ?? 0,
-                    ReadInt16(reader, "site_code") ?? 0,
-                    ReadString(reader, "fleet_number"),
-                    ReadString(reader, "registration_number"),
-                    ReadDateTime(reader, "licence_due_date"),
-                    ReadString(reader, "make_description"),
-                    ReadString(reader, "model_description"),
-                    ReadString(reader, "contract_type")));
+                results.Add(
+                    new TripAuthorityVehicle(
+                        ReadInt32(reader, "vmf_code") ?? 0,
+                        ReadInt32(reader, "contract_code") ?? 0,
+                        ReadInt16(reader, "site_code") ?? 0,
+                        ReadString(reader, "fleet_number"),
+                        ReadString(reader, "registration_number"),
+                        ReadDateTime(reader, "licence_due_date"),
+                        ReadString(reader, "make_description"),
+                        ReadString(reader, "model_description"),
+                        ReadString(reader, "contract_type")
+                    )
+                );
             }
 
             return results;
@@ -189,10 +236,11 @@ public sealed class TripRepository : ITripRepository
         }
     }
 
-    public async Task<IEnumerable<Trip>> GetTripsByContractAsync(int contractCode)
-        => await QueryAsync(
+    public async Task<IEnumerable<Trip>> GetTripsByContractAsync(int contractCode) =>
+        await QueryAsync(
             "[t].[contract_code] = @contractCode",
-            command => AddParameter(command, "@contractCode", DbType.Int32, contractCode));
+            command => AddParameter(command, "@contractCode", DbType.Int32, contractCode)
+        );
 
     public async Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode)
     {
@@ -205,7 +253,8 @@ public sealed class TripRepository : ITripRepository
         return await QueryAsync(
             "[c].[vmf_code] = @vmfCode",
             command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode),
-            contractJoin: true);
+            contractJoin: true
+        );
     }
 
     public async Task<IEnumerable<Trip>> GetTripsByDriverAsync(string driverId)
@@ -221,11 +270,10 @@ public sealed class TripRepository : ITripRepository
             return [];
         }
 
-        var driverColumn = contractColumns.Contains("site_driver_code")
-            ? "[c].[site_driver_code] = @driverId"
-            : contractColumns.Contains("Driver_id")
-                ? "[c].[Driver_id] = @driverId"
-                : null;
+        var driverColumn =
+            contractColumns.Contains("site_driver_code") ? "[c].[site_driver_code] = @driverId"
+            : contractColumns.Contains("Driver_id") ? "[c].[Driver_id] = @driverId"
+            : null;
         if (driverColumn is null)
         {
             return [];
@@ -234,17 +282,22 @@ public sealed class TripRepository : ITripRepository
         return await QueryAsync(
             driverColumn,
             command => AddParameter(command, "@driverId", DbType.String, driverId.Trim()),
-            contractJoin: true);
+            contractJoin: true
+        );
     }
 
-    public async Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(DateTime startDate, DateTime endDate)
-        => await QueryAsync(
+    public async Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(
+        DateTime startDate,
+        DateTime endDate
+    ) =>
+        await QueryAsync(
             "[t].[issue_date] >= @startDate AND [t].[issue_date] <= @endDate",
             command =>
             {
                 AddParameter(command, "@startDate", DbType.DateTime, startDate);
                 AddParameter(command, "@endDate", DbType.DateTime, endDate);
-            });
+            }
+        );
 
     public async Task<Trip> CreateAsync(Trip trip, int currentUserId)
     {
@@ -258,7 +311,12 @@ public sealed class TripRepository : ITripRepository
         trip.modified_by_user_code = currentUserId > 0 ? currentUserId : null;
         trip.is_deleted = false;
 
-        var values = BuildValues(trip, availableColumns, includeKey: false, includeCreateAudit: true);
+        var values = BuildValues(
+            trip,
+            availableColumns,
+            includeKey: false,
+            includeCreateAudit: true
+        );
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)
@@ -271,7 +329,10 @@ public sealed class TripRepository : ITripRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{TableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[trip_authority_code]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
@@ -293,7 +354,8 @@ public sealed class TripRepository : ITripRepository
         IReadOnlyList<TripAuthorityDriverInput> drivers,
         IReadOnlyList<TripAuthorityPassengerInput> passengers,
         IReadOnlyList<TripAuthorityRouteInput> routes,
-        int currentUserId)
+        int currentUserId
+    )
     {
         ArgumentNullException.ThrowIfNull(trip);
         ArgumentNullException.ThrowIfNull(drivers);
@@ -304,7 +366,8 @@ public sealed class TripRepository : ITripRepository
         if (driverTable is null)
         {
             throw new InvalidOperationException(
-                "Neither trip_driver nor trip_drivers contains the required legacy trip-driver columns.");
+                "Neither trip_driver nor trip_drivers contains the required legacy trip-driver columns."
+            );
         }
 
         var passengerColumns = await GetTableColumnsAsync(TripPassengerTableName);
@@ -313,7 +376,8 @@ public sealed class TripRepository : ITripRepository
         if (!requiredRouteColumns.All(routeColumns.Contains))
         {
             throw new InvalidOperationException(
-                "The route_details compatibility columns are not available for creating a trip authority.");
+                "The route_details compatibility columns are not available for creating a trip authority."
+            );
         }
 
         var existingTransaction = _context.Database.CurrentTransaction;
@@ -326,24 +390,43 @@ public sealed class TripRepository : ITripRepository
             var createdTrip = await CreateAsync(trip, currentUserId);
             foreach (var driver in drivers)
             {
-                await InsertTripDriverAsync(driverTable, driver, createdTrip.trip_authority_code, currentUserId);
+                await InsertTripDriverAsync(
+                    driverTable,
+                    driver,
+                    createdTrip.trip_authority_code,
+                    currentUserId
+                );
             }
 
             // Some later databases contain the lookup-shaped trip_passengers
             // table without the legacy trip_authority_code relationship. Do
             // not create orphan rows in that shape; the client-era table is
             // written when its relationship is available.
-            if (new[] { "trip_passenger_name", "trip_authority_code" }.All(passengerColumns.Contains))
+            if (
+                new[] { "trip_passenger_name", "trip_authority_code" }.All(
+                    passengerColumns.Contains
+                )
+            )
             {
                 foreach (var passenger in passengers)
                 {
-                    await InsertTripPassengerAsync(passenger, createdTrip.trip_authority_code, passengerColumns, currentUserId);
+                    await InsertTripPassengerAsync(
+                        passenger,
+                        createdTrip.trip_authority_code,
+                        passengerColumns,
+                        currentUserId
+                    );
                 }
             }
 
             foreach (var route in routes)
             {
-                await InsertRouteDetailAsync(route, createdTrip.trip_authority_code, routeColumns, currentUserId);
+                await InsertRouteDetailAsync(
+                    route,
+                    createdTrip.trip_authority_code,
+                    routeColumns,
+                    currentUserId
+                );
             }
 
             if (transaction is not null)
@@ -375,17 +458,26 @@ public sealed class TripRepository : ITripRepository
     {
         ArgumentNullException.ThrowIfNull(trip);
 
-        var existing = await GetByIdAsync(trip.trip_authority_code)
-            ?? throw new InvalidOperationException($"Trip with trip_authority_code {trip.trip_authority_code} not found");
+        var existing =
+            await GetByIdAsync(trip.trip_authority_code)
+            ?? throw new InvalidOperationException(
+                $"Trip with trip_authority_code {trip.trip_authority_code} not found"
+            );
         var availableColumns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
         trip.date_created = existing.date_created;
         trip.created_by_user_code = existing.created_by_user_code;
         trip.date_updated = now;
-        trip.modified_by_user_code = currentUserId > 0 ? currentUserId : existing.modified_by_user_code;
+        trip.modified_by_user_code =
+            currentUserId > 0 ? currentUserId : existing.modified_by_user_code;
         trip.is_deleted = existing.is_deleted;
 
-        var values = BuildValues(trip, availableColumns, includeKey: false, includeCreateAudit: false);
+        var values = BuildValues(
+            trip,
+            availableColumns,
+            includeKey: false,
+            includeCreateAudit: false
+        );
         if (values.Count == 0)
         {
             return;
@@ -404,7 +496,10 @@ public sealed class TripRepository : ITripRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{TableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [trip_authority_code] = @tripId
                 """;
             AddParameters(command, values);
@@ -424,16 +519,23 @@ public sealed class TripRepository : ITripRepository
         int tripId,
         IReadOnlyList<TripAuthorityRouteUpdate> routes,
         int? endOdometer,
-        int currentUserId)
+        int currentUserId
+    )
     {
         var routeColumns = await GetTableColumnsAsync(RouteDetailTableName);
         if (routes.Count > 0)
         {
-            var requiredRouteColumns = new[] { "route_code", "trip_authority_code", "end_odo_meter" };
+            var requiredRouteColumns = new[]
+            {
+                "route_code",
+                "trip_authority_code",
+                "end_odo_meter",
+            };
             if (!requiredRouteColumns.All(routeColumns.Contains))
             {
                 throw new InvalidOperationException(
-                    "The route_details compatibility columns are not available for closing this trip");
+                    "The route_details compatibility columns are not available for closing this trip"
+                );
             }
         }
 
@@ -464,31 +566,40 @@ public sealed class TripRepository : ITripRepository
                 if (routeColumns.Contains("modified_by_user_code"))
                 {
                     updates.Add("[modified_by_user_code] = @modifiedByUserCode");
-                    AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                    AddParameter(
+                        command,
+                        "@modifiedByUserCode",
+                        DbType.Int32,
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
                 var conditions = new List<string>
                 {
                     "[route_code] = @routeCode",
-                    "[trip_authority_code] = @tripId"
+                    "[trip_authority_code] = @tripId",
                 };
                 if (routeColumns.Contains("is_deleted"))
                 {
                     conditions.Add("ISNULL([is_deleted], 0) = 0");
                 }
 
-                command.CommandText = $"UPDATE [dbo].[{RouteDetailTableName}] SET {string.Join(", ", updates)} WHERE {string.Join(" AND ", conditions)}";
+                command.CommandText =
+                    $"UPDATE [dbo].[{RouteDetailTableName}] SET {string.Join(", ", updates)} WHERE {string.Join(" AND ", conditions)}";
                 AddParameter(command, "@endOdometer", DbType.Int32, route.EndOdometer);
                 AddParameter(command, "@routeCode", DbType.Int32, route.RouteCode);
                 AddParameter(command, "@tripId", DbType.Int32, tripId);
                 var affected = await command.ExecuteNonQueryAsync();
                 if (affected != 1)
                 {
-                    throw new InvalidOperationException($"Route {route.RouteCode} was not found for trip {tripId}");
+                    throw new InvalidOperationException(
+                        $"Route {route.RouteCode} was not found for trip {tripId}"
+                    );
                 }
             }
 
-            var trip = await GetByIdAsync(tripId)
+            var trip =
+                await GetByIdAsync(tripId)
                 ?? throw new InvalidOperationException($"Trip {tripId} not found");
             if (endOdometer.HasValue)
             {
@@ -546,14 +657,21 @@ public sealed class TripRepository : ITripRepository
                 if (availableColumns.Contains("modified_by_user_code"))
                 {
                     updates.Add("[modified_by_user_code] = @modifiedByUserCode");
-                    AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                    AddParameter(
+                        command,
+                        "@modifiedByUserCode",
+                        DbType.Int32,
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
-                command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", updates)} WHERE [trip_authority_code] = @tripId";
+                command.CommandText =
+                    $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", updates)} WHERE [trip_authority_code] = @tripId";
             }
             else
             {
-                command.CommandText = $"DELETE FROM [dbo].[{TableName}] WHERE [trip_authority_code] = @tripId";
+                command.CommandText =
+                    $"DELETE FROM [dbo].[{TableName}] WHERE [trip_authority_code] = @tripId";
             }
 
             AddParameter(command, "@tripId", DbType.Int32, tripId);
@@ -572,7 +690,10 @@ public sealed class TripRepository : ITripRepository
     {
         var requiredColumns = new[]
         {
-            "trip_driver_name", "trip_driver_id", "trip_authority_code", "trip_driver_primary"
+            "trip_driver_name",
+            "trip_driver_id",
+            "trip_authority_code",
+            "trip_driver_primary",
         };
 
         foreach (var tableName in TripDriverTableNames)
@@ -591,28 +712,141 @@ public sealed class TripRepository : ITripRepository
         string tableName,
         TripAuthorityDriverInput driver,
         int tripAuthorityCode,
-        int currentUserId)
+        int currentUserId
+    )
     {
         var columns = await GetTableColumnsAsync(tableName);
         var values = new List<WriteValue>();
-        AddValue(values, columns, "trip_authority_code", "@tripAuthorityCode", DbType.Int32, tripAuthorityCode);
-        AddValue(values, columns, "trip_driver_name", "@tripDriverName", DbType.String, driver.Name);
-        AddValue(values, columns, "trip_driver_id", "@tripDriverId", DbType.String, driver.IdentityNumber);
-        AddValue(values, columns, "trip_driver_primary", "@tripDriverPrimary", DbType.Boolean, driver.IsPrimary);
+        AddValue(
+            values,
+            columns,
+            "trip_authority_code",
+            "@tripAuthorityCode",
+            DbType.Int32,
+            tripAuthorityCode
+        );
+        AddValue(
+            values,
+            columns,
+            "trip_driver_name",
+            "@tripDriverName",
+            DbType.String,
+            driver.Name
+        );
+        AddValue(
+            values,
+            columns,
+            "trip_driver_id",
+            "@tripDriverId",
+            DbType.String,
+            driver.IdentityNumber
+        );
+        AddValue(
+            values,
+            columns,
+            "trip_driver_primary",
+            "@tripDriverPrimary",
+            DbType.Boolean,
+            driver.IsPrimary
+        );
         AddValue(values, columns, "site_code", "@siteCode", DbType.Int32, driver.SiteCode);
-        AddValue(values, columns, "driver_licence_type_id", "@licenceTypeCode", DbType.Int32, driver.LicenceTypeCode);
-        AddValue(values, columns, "driver_passportnumber", "@passportNumber", DbType.String, driver.PassportNumber);
-        AddValue(values, columns, "driver_persalnumber", "@persalNumber", DbType.String, driver.PersalNumber);
-        AddValue(values, columns, "driver_contractnumber", "@contractNumber", DbType.String, driver.ContractNumber);
-        AddValue(values, columns, "driver_licence_number", "@licenceNumber", DbType.String, driver.LicenceNumber);
-        AddValue(values, columns, "driver_licence_issuedate", "@licenceIssueDate", DbType.DateTime, driver.LicenceIssueDate);
-        AddValue(values, columns, "driver_licence_lastVerifiedDate", "@licenceLastVerifiedDate", DbType.DateTime, driver.LicenceLastVerifiedDate);
+        AddValue(
+            values,
+            columns,
+            "driver_licence_type_id",
+            "@licenceTypeCode",
+            DbType.Int32,
+            driver.LicenceTypeCode
+        );
+        AddValue(
+            values,
+            columns,
+            "driver_passportnumber",
+            "@passportNumber",
+            DbType.String,
+            driver.PassportNumber
+        );
+        AddValue(
+            values,
+            columns,
+            "driver_persalnumber",
+            "@persalNumber",
+            DbType.String,
+            driver.PersalNumber
+        );
+        AddValue(
+            values,
+            columns,
+            "driver_contractnumber",
+            "@contractNumber",
+            DbType.String,
+            driver.ContractNumber
+        );
+        AddValue(
+            values,
+            columns,
+            "driver_licence_number",
+            "@licenceNumber",
+            DbType.String,
+            driver.LicenceNumber
+        );
+        AddValue(
+            values,
+            columns,
+            "driver_licence_issuedate",
+            "@licenceIssueDate",
+            DbType.DateTime,
+            driver.LicenceIssueDate
+        );
+        AddValue(
+            values,
+            columns,
+            "driver_licence_lastVerifiedDate",
+            "@licenceLastVerifiedDate",
+            DbType.DateTime,
+            driver.LicenceLastVerifiedDate
+        );
         AddValue(values, columns, "driver_hasPDP", "@hasPdp", DbType.Boolean, driver.HasPdp);
-        AddValue(values, columns, "driver_PDP_ExpiryDate", "@pdpExpiryDate", DbType.DateTime, driver.PdpExpiryDate);
-        AddValue(values, columns, "driver_licence_ExpiryDate", "@licenceExpiryDate", DbType.DateTime, driver.LicenceExpiryDate);
-        AddValue(values, columns, "driver_active", "@driverActive", DbType.Boolean, driver.IsActive);
-        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
-        AddValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddValue(
+            values,
+            columns,
+            "driver_PDP_ExpiryDate",
+            "@pdpExpiryDate",
+            DbType.DateTime,
+            driver.PdpExpiryDate
+        );
+        AddValue(
+            values,
+            columns,
+            "driver_licence_ExpiryDate",
+            "@licenceExpiryDate",
+            DbType.DateTime,
+            driver.LicenceExpiryDate
+        );
+        AddValue(
+            values,
+            columns,
+            "driver_active",
+            "@driverActive",
+            DbType.Boolean,
+            driver.IsActive
+        );
+        AddValue(
+            values,
+            columns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddValue(
+            values,
+            columns,
+            "created_by_user_code",
+            "@createdByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
 
         await ExecuteInsertAsync(tableName, values);
@@ -622,13 +856,42 @@ public sealed class TripRepository : ITripRepository
         TripAuthorityPassengerInput passenger,
         int tripAuthorityCode,
         IReadOnlySet<string> columns,
-        int currentUserId)
+        int currentUserId
+    )
     {
         var values = new List<WriteValue>();
-        AddValue(values, columns, "trip_authority_code", "@tripAuthorityCode", DbType.Int32, tripAuthorityCode);
-        AddValue(values, columns, "trip_passenger_name", "@tripPassengerName", DbType.String, passenger.Name);
-        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
-        AddValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddValue(
+            values,
+            columns,
+            "trip_authority_code",
+            "@tripAuthorityCode",
+            DbType.Int32,
+            tripAuthorityCode
+        );
+        AddValue(
+            values,
+            columns,
+            "trip_passenger_name",
+            "@tripPassengerName",
+            DbType.String,
+            passenger.Name
+        );
+        AddValue(
+            values,
+            columns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddValue(
+            values,
+            columns,
+            "created_by_user_code",
+            "@createdByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
 
         await ExecuteInsertAsync(TripPassengerTableName, values);
@@ -638,24 +901,109 @@ public sealed class TripRepository : ITripRepository
         TripAuthorityRouteInput route,
         int tripAuthorityCode,
         IReadOnlySet<string> columns,
-        int currentUserId)
+        int currentUserId
+    )
     {
         var values = new List<WriteValue>();
-        AddValue(values, columns, "trip_authority_code", "@tripAuthorityCode", DbType.Int32, tripAuthorityCode);
+        AddValue(
+            values,
+            columns,
+            "trip_authority_code",
+            "@tripAuthorityCode",
+            DbType.Int32,
+            tripAuthorityCode
+        );
         AddValue(values, columns, "start_date", "@startDate", DbType.DateTime2, route.StartDate);
         AddValue(values, columns, "end_date", "@endDate", DbType.DateTime2, route.EndDate);
-        AddValue(values, columns, "start_odo_meter", "@startOdometer", DbType.Int32, route.StartOdometer);
+        AddValue(
+            values,
+            columns,
+            "start_odo_meter",
+            "@startOdometer",
+            DbType.Int32,
+            route.StartOdometer
+        );
         AddValue(values, columns, "end_odo_meter", "@endOdometer", DbType.Int32, null);
-        AddFirstAvailableValue(values, columns, "@responsibilityCode", DbType.String, route.ResponsibilityCode, "bas_responsibility_code", "responsibility_code");
-        AddFirstAvailableValue(values, columns, "@objectiveCode", DbType.String, route.ObjectiveCode, "bas_object_code", "bas_objective_code", "objective_code");
-        AddFirstAvailableValue(values, columns, "@startLocation", DbType.String, route.StartLocation, "start_route_location_name", "start_location_name");
-        AddFirstAvailableValue(values, columns, "@endLocation", DbType.String, route.EndLocation, "end_route_location_name", "end_location_name");
-        AddValue(values, columns, "estimated_distance", "@estimatedDistance", DbType.Int32, route.EstimatedDistance);
+        AddFirstAvailableValue(
+            values,
+            columns,
+            "@responsibilityCode",
+            DbType.String,
+            route.ResponsibilityCode,
+            "bas_responsibility_code",
+            "responsibility_code"
+        );
+        AddFirstAvailableValue(
+            values,
+            columns,
+            "@objectiveCode",
+            DbType.String,
+            route.ObjectiveCode,
+            "bas_object_code",
+            "bas_objective_code",
+            "objective_code"
+        );
+        AddFirstAvailableValue(
+            values,
+            columns,
+            "@startLocation",
+            DbType.String,
+            route.StartLocation,
+            "start_route_location_name",
+            "start_location_name"
+        );
+        AddFirstAvailableValue(
+            values,
+            columns,
+            "@endLocation",
+            DbType.String,
+            route.EndLocation,
+            "end_route_location_name",
+            "end_location_name"
+        );
+        AddValue(
+            values,
+            columns,
+            "estimated_distance",
+            "@estimatedDistance",
+            DbType.Int32,
+            route.EstimatedDistance
+        );
         AddValue(values, columns, "distance", "@distance", DbType.Int32, 0);
-        AddFirstAvailableValue(values, columns, "@projectNumber", DbType.String, route.ProjectNumber, "bas_project_number", "project_number");
-        AddFirstAvailableValue(values, columns, "@fundCode", DbType.String, route.FundCode, "bas_fund_code", "fund_code");
-        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
-        AddValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddFirstAvailableValue(
+            values,
+            columns,
+            "@projectNumber",
+            DbType.String,
+            route.ProjectNumber,
+            "bas_project_number",
+            "project_number"
+        );
+        AddFirstAvailableValue(
+            values,
+            columns,
+            "@fundCode",
+            DbType.String,
+            route.FundCode,
+            "bas_fund_code",
+            "fund_code"
+        );
+        AddValue(
+            values,
+            columns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddValue(
+            values,
+            columns,
+            "created_by_user_code",
+            "@createdByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
 
         await ExecuteInsertAsync(RouteDetailTableName, values);
@@ -665,12 +1013,15 @@ public sealed class TripRepository : ITripRepository
     {
         if (values.Count == 0)
         {
-            throw new InvalidOperationException($"No compatible columns are available for inserting into {tableName}.");
+            throw new InvalidOperationException(
+                $"No compatible columns are available for inserting into {tableName}."
+            );
         }
 
         await using var command = _context.Database.GetDbConnection().CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-        command.CommandText = $"INSERT INTO [dbo].[{tableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+        command.CommandText =
+            $"INSERT INTO [dbo].[{tableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
         AddParameters(command, values);
         await command.ExecuteNonQueryAsync();
     }
@@ -681,7 +1032,8 @@ public sealed class TripRepository : ITripRepository
         string parameter,
         DbType dbType,
         object? value,
-        params string[] columns)
+        params string[] columns
+    )
     {
         var column = columns.FirstOrDefault(availableColumns.Contains);
         if (column is not null)
@@ -696,7 +1048,13 @@ public sealed class TripRepository : ITripRepository
         foreach (var tableName in TripDriverTableNames)
         {
             var columns = await GetTableColumnsAsync(tableName);
-            var requiredColumns = new[] { "trip_driver_code", "trip_driver_name", "trip_authority_code", "trip_driver_primary" };
+            var requiredColumns = new[]
+            {
+                "trip_driver_code",
+                "trip_driver_name",
+                "trip_authority_code",
+                "trip_driver_primary",
+            };
             if (!requiredColumns.All(columns.Contains))
             {
                 continue;
@@ -719,7 +1077,7 @@ public sealed class TripRepository : ITripRepository
                 GetColumnProjection("d", "driver_hasPDP", columns),
                 GetColumnProjection("d", "driver_PDP_ExpiryDate", columns),
                 GetColumnProjection("d", "driver_licence_ExpiryDate", columns),
-                GetColumnProjection("d", "driver_active", columns)
+                GetColumnProjection("d", "driver_active", columns),
             };
 
             var conditions = new List<string> { "[d].[trip_authority_code] = @tripId" };
@@ -736,23 +1094,28 @@ public sealed class TripRepository : ITripRepository
                 ORDER BY [d].[trip_driver_primary] DESC, [d].[trip_driver_code]
                 """,
                 command => AddParameter(command, "@tripId", DbType.Int32, tripId),
-                reader => results.Add(new TripAuthorityDriver(
-                    ReadInt32(reader, "trip_driver_code") ?? 0,
-                    ReadString(reader, "trip_driver_name"),
-                    ReadString(reader, "trip_driver_id"),
-                    ReadBoolean(reader, "trip_driver_primary"),
-                    ReadInt32(reader, "site_code"),
-                    ReadInt32(reader, "driver_licence_type_id"),
-                    ReadString(reader, "driver_passportnumber"),
-                    ReadString(reader, "driver_persalnumber"),
-                    ReadString(reader, "driver_contractnumber"),
-                    ReadString(reader, "driver_licence_number"),
-                    ReadDateTime(reader, "driver_licence_issuedate"),
-                    ReadDateTime(reader, "driver_licence_lastVerifiedDate"),
-                    ReadBoolean(reader, "driver_hasPDP"),
-                    ReadDateTime(reader, "driver_PDP_ExpiryDate"),
-                    ReadDateTime(reader, "driver_licence_ExpiryDate"),
-                    ReadBoolean(reader, "driver_active"))));
+                reader =>
+                    results.Add(
+                        new TripAuthorityDriver(
+                            ReadInt32(reader, "trip_driver_code") ?? 0,
+                            ReadString(reader, "trip_driver_name"),
+                            ReadString(reader, "trip_driver_id"),
+                            ReadBoolean(reader, "trip_driver_primary"),
+                            ReadInt32(reader, "site_code"),
+                            ReadInt32(reader, "driver_licence_type_id"),
+                            ReadString(reader, "driver_passportnumber"),
+                            ReadString(reader, "driver_persalnumber"),
+                            ReadString(reader, "driver_contractnumber"),
+                            ReadString(reader, "driver_licence_number"),
+                            ReadDateTime(reader, "driver_licence_issuedate"),
+                            ReadDateTime(reader, "driver_licence_lastVerifiedDate"),
+                            ReadBoolean(reader, "driver_hasPDP"),
+                            ReadDateTime(reader, "driver_PDP_ExpiryDate"),
+                            ReadDateTime(reader, "driver_licence_ExpiryDate"),
+                            ReadBoolean(reader, "driver_active")
+                        )
+                    )
+            );
         }
 
         return results
@@ -764,7 +1127,12 @@ public sealed class TripRepository : ITripRepository
     private async Task<IReadOnlyList<TripAuthorityPassenger>> GetTripPassengersAsync(int tripId)
     {
         var columns = await GetTableColumnsAsync(TripPassengerTableName);
-        var requiredColumns = new[] { "trip_passenger_code", "trip_passenger_name", "trip_authority_code" };
+        var requiredColumns = new[]
+        {
+            "trip_passenger_code",
+            "trip_passenger_name",
+            "trip_authority_code",
+        };
         if (!requiredColumns.All(columns.Contains))
         {
             // The later EF-created lookup table does not carry the legacy
@@ -789,9 +1157,14 @@ public sealed class TripRepository : ITripRepository
             ORDER BY [p].[trip_passenger_code]
             """,
             command => AddParameter(command, "@tripId", DbType.Int32, tripId),
-            reader => results.Add(new TripAuthorityPassenger(
-                ReadInt32(reader, "trip_passenger_code") ?? 0,
-                ReadString(reader, "trip_passenger_name"))));
+            reader =>
+                results.Add(
+                    new TripAuthorityPassenger(
+                        ReadInt32(reader, "trip_passenger_code") ?? 0,
+                        ReadString(reader, "trip_passenger_name")
+                    )
+                )
+        );
 
         return results;
     }
@@ -799,7 +1172,13 @@ public sealed class TripRepository : ITripRepository
     private async Task<IReadOnlyList<TripAuthorityRoute>> GetRouteDetailsAsync(int tripId)
     {
         var columns = await GetTableColumnsAsync(RouteDetailTableName);
-        var requiredColumns = new[] { "route_code", "trip_authority_code", "start_date", "end_date" };
+        var requiredColumns = new[]
+        {
+            "route_code",
+            "trip_authority_code",
+            "start_date",
+            "end_date",
+        };
         if (!requiredColumns.All(columns.Contains))
         {
             return [];
@@ -818,9 +1197,15 @@ public sealed class TripRepository : ITripRepository
             GetColumnProjection("r", "end_route_location_name", columns),
             GetColumnProjection("r", "estimated_distance", columns),
             GetColumnProjection("r", "distance", columns),
-            GetFirstColumnProjection("r", "project_number", columns, "bas_project_number", "project_number"),
+            GetFirstColumnProjection(
+                "r",
+                "project_number",
+                columns,
+                "bas_project_number",
+                "project_number"
+            ),
             GetFirstColumnProjection("r", "fund_code", columns, "bas_fund_code", "fund_code"),
-            GetColumnProjection("r", "modified_by_user_code", columns)
+            GetColumnProjection("r", "modified_by_user_code", columns),
         };
 
         var conditions = new List<string> { "[r].[trip_authority_code] = @tripId" };
@@ -838,26 +1223,35 @@ public sealed class TripRepository : ITripRepository
             ORDER BY [r].[start_date], [r].[route_code]
             """,
             command => AddParameter(command, "@tripId", DbType.Int32, tripId),
-            reader => results.Add(new TripAuthorityRoute(
-                ReadInt32(reader, "route_code") ?? 0,
-                ReadDateTime(reader, "start_date"),
-                ReadDateTime(reader, "end_date"),
-                ReadInt32(reader, "start_odo_meter"),
-                ReadInt32(reader, "end_odo_meter"),
-                ReadString(reader, "bas_responsibility_code"),
-                ReadString(reader, "bas_object_code"),
-                ReadString(reader, "start_route_location_name"),
-                ReadString(reader, "end_route_location_name"),
-                ReadInt32(reader, "estimated_distance"),
-                ReadInt32(reader, "distance"),
-                ReadString(reader, "project_number"),
-                ReadString(reader, "fund_code"),
-                ReadInt32(reader, "modified_by_user_code"))));
+            reader =>
+                results.Add(
+                    new TripAuthorityRoute(
+                        ReadInt32(reader, "route_code") ?? 0,
+                        ReadDateTime(reader, "start_date"),
+                        ReadDateTime(reader, "end_date"),
+                        ReadInt32(reader, "start_odo_meter"),
+                        ReadInt32(reader, "end_odo_meter"),
+                        ReadString(reader, "bas_responsibility_code"),
+                        ReadString(reader, "bas_object_code"),
+                        ReadString(reader, "start_route_location_name"),
+                        ReadString(reader, "end_route_location_name"),
+                        ReadInt32(reader, "estimated_distance"),
+                        ReadInt32(reader, "distance"),
+                        ReadString(reader, "project_number"),
+                        ReadString(reader, "fund_code"),
+                        ReadInt32(reader, "modified_by_user_code")
+                    )
+                )
+        );
 
         return results;
     }
 
-    private async Task ReadRowsAsync(string commandText, Action<DbCommand> configure, Action<DbDataReader> readRow)
+    private async Task ReadRowsAsync(
+        string commandText,
+        Action<DbCommand> configure,
+        Action<DbDataReader> readRow
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -893,7 +1287,8 @@ public sealed class TripRepository : ITripRepository
         bool includeDeleted = false,
         bool contractJoin = false,
         int? take = null,
-        string orderBy = "[t].[issue_date] DESC, [t].[trip_authority_code] DESC")
+        string orderBy = "[t].[issue_date] DESC, [t].[trip_authority_code] DESC"
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var hasContractProjection = contractJoin || await HasContractProjectionAsync();
@@ -924,7 +1319,8 @@ public sealed class TripRepository : ITripRepository
             conditions.Add("([t].[is_deleted] = 0 OR [t].[is_deleted] IS NULL)");
         }
 
-        var whereClause = conditions.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", conditions)}";
+        var whereClause =
+            conditions.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", conditions)}";
         var contractClause = hasContractProjection
             ? $"LEFT JOIN [dbo].[{ContractTableName}] AS [c] ON [c].[contract_code] = [t].[contract_code]"
             : string.Empty;
@@ -981,7 +1377,8 @@ public sealed class TripRepository : ITripRepository
         if (missingColumns.Length > 0)
         {
             throw new InvalidOperationException(
-                $"The required trip_authorities compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                $"The required trip_authorities compatibility columns are not available: {string.Join(", ", missingColumns)}"
+            );
         }
 
         return columns;
@@ -1050,7 +1447,7 @@ public sealed class TripRepository : ITripRepository
             date_updated = ReadDateTime(reader, "date_updated"),
             created_by_user_code = ReadInt32(reader, "created_by_user_code"),
             modified_by_user_code = ReadInt32(reader, "modified_by_user_code"),
-            is_deleted = ReadBoolean(reader, "is_deleted")
+            is_deleted = ReadBoolean(reader, "is_deleted"),
         };
 
         if (hasContractProjection)
@@ -1063,7 +1460,7 @@ public sealed class TripRepository : ITripRepository
                 {
                     contract_code = trip.contract_code,
                     vmf_code = vmfCode ?? 0,
-                    site_code = siteCode ?? 0
+                    site_code = siteCode ?? 0,
                 };
             }
         }
@@ -1075,39 +1472,185 @@ public sealed class TripRepository : ITripRepository
         Trip trip,
         IReadOnlySet<string> availableColumns,
         bool includeKey,
-        bool includeCreateAudit)
+        bool includeCreateAudit
+    )
     {
         var values = new List<WriteValue>();
-        AddValue(values, availableColumns, "trip_authority_code", "@tripAuthorityCode", DbType.Int32, trip.trip_authority_code, includeKey);
-        AddValue(values, availableColumns, "contract_code", "@contractCode", DbType.Int32, trip.contract_code);
-        AddValue(values, availableColumns, "approver_name", "@approverName", DbType.String, trip.approver_name);
-        AddValue(values, availableColumns, "approver_rank", "@approverRank", DbType.String, trip.approver_rank);
-        AddValue(values, availableColumns, "approver_tel", "@approverTel", DbType.String, trip.approver_tel);
-        AddValue(values, availableColumns, "end_odo_meter", "@endOdoMeter", DbType.Int32, trip.end_odo_meter);
-        AddValue(values, availableColumns, "expiry_date", "@expiryDate", DbType.DateTime, trip.expiry_date);
-        AddValue(values, availableColumns, "trip_reason", "@tripReason", DbType.String, trip.trip_reason);
-        AddValue(values, availableColumns, "trip_request_number", "@tripRequestNumber", DbType.String, trip.trip_request_number);
-        AddValue(values, availableColumns, "issue_date", "@issueDate", DbType.DateTime, trip.issue_date);
-        AddValue(values, availableColumns, "trip_type_code", "@tripTypeCode", DbType.Int16, trip.trip_type_code);
-        AddValue(values, availableColumns, "trip_incident_type_code", "@tripIncidentTypeCode", DbType.Int16, trip.trip_incident_type_code);
-        AddValue(values, availableColumns, "user_access_code", "@userAccessCode", DbType.Int16, trip.user_access_code);
-        AddValue(values, availableColumns, "locked_for_transfer", "@lockedForTransfer", DbType.Boolean, trip.locked_for_transfer);
-        AddValue(values, availableColumns, "Trip_Is_Monthly", "@tripIsMonthly", DbType.Boolean, trip.Trip_Is_Monthly);
+        AddValue(
+            values,
+            availableColumns,
+            "trip_authority_code",
+            "@tripAuthorityCode",
+            DbType.Int32,
+            trip.trip_authority_code,
+            includeKey
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "contract_code",
+            "@contractCode",
+            DbType.Int32,
+            trip.contract_code
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "approver_name",
+            "@approverName",
+            DbType.String,
+            trip.approver_name
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "approver_rank",
+            "@approverRank",
+            DbType.String,
+            trip.approver_rank
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "approver_tel",
+            "@approverTel",
+            DbType.String,
+            trip.approver_tel
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "end_odo_meter",
+            "@endOdoMeter",
+            DbType.Int32,
+            trip.end_odo_meter
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "expiry_date",
+            "@expiryDate",
+            DbType.DateTime,
+            trip.expiry_date
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "trip_reason",
+            "@tripReason",
+            DbType.String,
+            trip.trip_reason
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "trip_request_number",
+            "@tripRequestNumber",
+            DbType.String,
+            trip.trip_request_number
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "issue_date",
+            "@issueDate",
+            DbType.DateTime,
+            trip.issue_date
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "trip_type_code",
+            "@tripTypeCode",
+            DbType.Int16,
+            trip.trip_type_code
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "trip_incident_type_code",
+            "@tripIncidentTypeCode",
+            DbType.Int16,
+            trip.trip_incident_type_code
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "user_access_code",
+            "@userAccessCode",
+            DbType.Int16,
+            trip.user_access_code
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "locked_for_transfer",
+            "@lockedForTransfer",
+            DbType.Boolean,
+            trip.locked_for_transfer
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "Trip_Is_Monthly",
+            "@tripIsMonthly",
+            DbType.Boolean,
+            trip.Trip_Is_Monthly
+        );
 
         if (includeCreateAudit)
         {
-            AddValue(values, availableColumns, "date_created", "@dateCreated", DbType.DateTime2, trip.date_created);
-            AddValue(values, availableColumns, "created_by_user_code", "@createdByUser", DbType.Int32, trip.created_by_user_code);
+            AddValue(
+                values,
+                availableColumns,
+                "date_created",
+                "@dateCreated",
+                DbType.DateTime2,
+                trip.date_created
+            );
+            AddValue(
+                values,
+                availableColumns,
+                "created_by_user_code",
+                "@createdByUser",
+                DbType.Int32,
+                trip.created_by_user_code
+            );
         }
 
-        AddValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, trip.date_updated);
-        AddValue(values, availableColumns, "modified_by_user_code", "@modifiedByUserCode", DbType.Int32, trip.modified_by_user_code);
-        AddValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, trip.is_deleted);
+        AddValue(
+            values,
+            availableColumns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            trip.date_updated
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "modified_by_user_code",
+            "@modifiedByUserCode",
+            DbType.Int32,
+            trip.modified_by_user_code
+        );
+        AddValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            trip.is_deleted
+        );
         return values;
     }
 
-    private static string GetColumnProjection(string alias, string column, IReadOnlySet<string> availableColumns)
-        => availableColumns.Contains(column)
+    private static string GetColumnProjection(
+        string alias,
+        string column,
+        IReadOnlySet<string> availableColumns
+    ) =>
+        availableColumns.Contains(column)
             ? $"[{alias}].[{column}] AS [{column}]"
             : $"CAST(NULL AS sql_variant) AS [{column}]";
 
@@ -1115,7 +1658,8 @@ public sealed class TripRepository : ITripRepository
         string alias,
         string outputColumn,
         IReadOnlySet<string> availableColumns,
-        params string[] candidates)
+        params string[] candidates
+    )
     {
         var sourceColumn = candidates.FirstOrDefault(availableColumns.Contains);
         return sourceColumn is null
@@ -1130,7 +1674,8 @@ public sealed class TripRepository : ITripRepository
         string parameter,
         DbType dbType,
         object? value,
-        bool include = true)
+        bool include = true
+    )
     {
         if (include && availableColumns.Contains(column))
         {
@@ -1185,5 +1730,10 @@ public sealed class TripRepository : ITripRepository
         return !reader.IsDBNull(ordinal) && Convert.ToBoolean(reader.GetValue(ordinal));
     }
 
-    private readonly record struct WriteValue(string Column, string Parameter, DbType DbType, object? Value);
+    private readonly record struct WriteValue(
+        string Column,
+        string Parameter,
+        DbType DbType,
+        object? Value
+    );
 }

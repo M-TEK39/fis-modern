@@ -157,7 +157,9 @@ async function HomeContent({ searchParams, routePath }: HomePageProps) {
         </div>
         <p className="eyebrow">API unavailable</p>
         <h1>Your session could not be checked.</h1>
-        <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+        <p className="muted-copy">
+          The application is still running. Retry when the FIS API is available.
+        </p>
         <div className="button-row">
           <Link className="button button-primary" href="/home">
             Try again
@@ -173,8 +175,13 @@ async function HomeContent({ searchParams, routePath }: HomePageProps) {
   const query = await searchParams;
   const pageValue = Array.isArray(query.page) ? query.page[0] : query.page;
   const requestedPage = Number.parseInt(pageValue ?? "1", 10);
-  const currentPage = Number.isFinite(requestedPage) ? Math.min(Math.max(requestedPage, 1), TOTAL_PAGES) : 1;
-  const visibleDocuments = DOCUMENT_LINKS.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const currentPage = Number.isFinite(requestedPage)
+    ? Math.min(Math.max(requestedPage, 1), TOTAL_PAGES)
+    : 1;
+  const visibleDocuments = DOCUMENT_LINKS.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
   const currentPath = routePath ?? "/home";
   const pageHref = (page: number) => (page === 1 ? currentPath : `${currentPath}?page=${page}`);
 
@@ -194,8 +201,8 @@ async function HomeContent({ searchParams, routePath }: HomePageProps) {
       <p>
         Welcome to the Fleet Information System Web Site of the Gauteng Provincial Government.
         <br />
-        This site controls the issuing of Trip Authorities used by the Provincial Government. These Authorities can be
-        issued and printed from this site for free.
+        This site controls the issuing of Trip Authorities used by the Provincial Government. These
+        Authorities can be issued and printed from this site for free.
       </p>
 
       <hr />
@@ -245,13 +252,15 @@ async function HomeContent({ searchParams, routePath }: HomePageProps) {
 
       <hr />
 
-      <p>Please note that all actions on this site are logged and will be audited from time to time.</p>
+      <p>
+        Please note that all actions on this site are logged and will be audited from time to time.
+      </p>
 
       <hr />
 
       <p>
-        ADOBE ACROBAT might be required to view some of the files on this site. Please click below to download the
-        latest version for free from Adobe.
+        ADOBE ACROBAT might be required to view some of the files on this site. Please click below
+        to download the latest version for free from Adobe.
       </p>
 
       <p className="acrobat-link">

@@ -25,8 +25,8 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>MaintenanceTrigger entity if found, null otherwise</returns>
         public async Task<MaintenanceTriggerEntity?> GetByIdAsync(short triggerCode)
         {
-            return await _context.MaintenanceTriggers
-                .Where(x => !x.is_deleted)
+            return await _context
+                .MaintenanceTriggers.Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(mt => mt.maint_trigger_code == triggerCode);
         }
 
@@ -37,9 +37,11 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>MaintenanceTrigger entity if found, null otherwise</returns>
         public async Task<MaintenanceTriggerEntity?> GetByDescriptionAsync(string description)
         {
-            return await _context.MaintenanceTriggers
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(mt => mt.description != null && mt.description.ToLower() == description.ToLower());
+            return await _context
+                .MaintenanceTriggers.Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(mt =>
+                    mt.description != null && mt.description.ToLower() == description.ToLower()
+                );
         }
 
         /// <summary>
@@ -49,8 +51,8 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>MaintenanceTrigger entity if found, null otherwise</returns>
         public async Task<MaintenanceTriggerEntity?> GetByTriggerIdAsync(string triggerId)
         {
-            return await _context.MaintenanceTriggers
-                .Where(x => !x.is_deleted)
+            return await _context
+                .MaintenanceTriggers.Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(mt => mt.trigger_id == triggerId);
         }
 
@@ -60,8 +62,8 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Collection of all maintenance trigger entities</returns>
         public async Task<IEnumerable<MaintenanceTriggerEntity>> GetAllMaintenanceTriggersAsync()
         {
-            return await _context.MaintenanceTriggers
-                .Where(x => !x.is_deleted)
+            return await _context
+                .MaintenanceTriggers.Where(x => !x.is_deleted)
                 .OrderBy(mt => mt.description)
                 .ToListAsync();
         }
@@ -71,10 +73,15 @@ namespace FIS.Core.Infrastructure.Repositories
         /// </summary>
         /// <param name="searchTerm">The search term to filter by</param>
         /// <returns>Collection of matching maintenance trigger entities</returns>
-        public async Task<IEnumerable<MaintenanceTriggerEntity>> SearchMaintenanceTriggersAsync(string searchTerm)
+        public async Task<IEnumerable<MaintenanceTriggerEntity>> SearchMaintenanceTriggersAsync(
+            string searchTerm
+        )
         {
-            return await _context.MaintenanceTriggers
-                .Where(mt => mt.description != null && mt.description.ToLower().Contains(searchTerm.ToLower()))
+            return await _context
+                .MaintenanceTriggers.Where(mt =>
+                    mt.description != null
+                    && mt.description.ToLower().Contains(searchTerm.ToLower())
+                )
                 .OrderBy(mt => mt.description)
                 .ToListAsync();
         }
@@ -85,13 +92,16 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <param name="maintenanceTrigger">The maintenance trigger entity to create</param>
         /// <param name="currentUserId">The ID of the user performing the action</param>
         /// <returns>The created maintenance trigger entity</returns>
-        public async Task<MaintenanceTriggerEntity> CreateAsync(MaintenanceTriggerEntity maintenanceTrigger, int currentUserId)
+        public async Task<MaintenanceTriggerEntity> CreateAsync(
+            MaintenanceTriggerEntity maintenanceTrigger,
+            int currentUserId
+        )
         {
             // Auto-populate audit fields
             maintenanceTrigger.date_created = DateTime.UtcNow;
             maintenanceTrigger.created_by_user_code = currentUserId;
             maintenanceTrigger.is_deleted = false;
-            
+
             _context.MaintenanceTriggers.Add(maintenanceTrigger);
             await _context.SaveChangesAsync();
             return maintenanceTrigger;
@@ -103,14 +113,21 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <param name="maintenanceTrigger">The maintenance trigger entity to update</param>
         /// <param name="currentUserId">The ID of the user performing the action</param>
         /// <returns>The updated maintenance trigger entity</returns>
-        public async Task<MaintenanceTriggerEntity> UpdateAsync(MaintenanceTriggerEntity maintenanceTrigger, int currentUserId)
+        public async Task<MaintenanceTriggerEntity> UpdateAsync(
+            MaintenanceTriggerEntity maintenanceTrigger,
+            int currentUserId
+        )
         {
             if (maintenanceTrigger == null)
                 throw new ArgumentNullException(nameof(maintenanceTrigger));
 
-            var existing = await _context.MaintenanceTriggers.FindAsync(maintenanceTrigger.maint_trigger_code);
+            var existing = await _context.MaintenanceTriggers.FindAsync(
+                maintenanceTrigger.maint_trigger_code
+            );
             if (existing == null)
-                throw new InvalidOperationException($"MaintenanceTrigger with maint_trigger_code {maintenanceTrigger.maint_trigger_code} not found");
+                throw new InvalidOperationException(
+                    $"MaintenanceTrigger with maint_trigger_code {maintenanceTrigger.maint_trigger_code} not found"
+                );
 
             // Preserve creation audit fields
             maintenanceTrigger.date_created = existing.date_created;
@@ -118,7 +135,7 @@ namespace FIS.Core.Infrastructure.Repositories
             // Set update audit fields
             maintenanceTrigger.date_updated = DateTime.UtcNow;
             maintenanceTrigger.modified_by_user_code = currentUserId;
-            
+
             _context.Entry(existing).CurrentValues.SetValues(maintenanceTrigger);
             await _context.SaveChangesAsync();
             return existing;

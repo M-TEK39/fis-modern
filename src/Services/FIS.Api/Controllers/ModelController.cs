@@ -1,6 +1,6 @@
+using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
-using FIS.Api.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,7 +18,8 @@ public class ModelController : BaseApiController
     public ModelController(
         IModelRepository modelRepository,
         IMakeRepository makeRepository,
-        ILogger<ModelController> logger)
+        ILogger<ModelController> logger
+    )
     {
         _modelRepository = modelRepository;
         _makeRepository = makeRepository;
@@ -96,8 +97,11 @@ public class ModelController : BaseApiController
 
             var models = await _modelRepository.GetModelsByMakeAsync(makeCode);
             var modelDtos = models.Select(m => MapToDto(m));
-            _logger.LogInformation("Retrieved {Count} models for make {MakeCode}",
-                models.Count(), makeCode);
+            _logger.LogInformation(
+                "Retrieved {Count} models for make {MakeCode}",
+                models.Count(),
+                makeCode
+            );
             return Ok(modelDtos);
         }
         catch (Exception ex)
@@ -111,7 +115,9 @@ public class ModelController : BaseApiController
     /// Search models by name or specifications
     /// </summary>
     [HttpGet("search")]
-    public async Task<ActionResult<IEnumerable<ModelResponseDto>>> SearchModels([FromQuery] string? searchTerm)
+    public async Task<ActionResult<IEnumerable<ModelResponseDto>>> SearchModels(
+        [FromQuery] string? searchTerm
+    )
     {
         try
         {
@@ -119,8 +125,11 @@ public class ModelController : BaseApiController
 
             var models = await _modelRepository.SearchModelsAsync(searchTerm ?? "");
             var modelDtos = models.Select(m => MapToDto(m));
-            _logger.LogInformation("Found {Count} models matching search term '{SearchTerm}'",
-                models.Count(), searchTerm);
+            _logger.LogInformation(
+                "Found {Count} models matching search term '{SearchTerm}'",
+                models.Count(),
+                searchTerm
+            );
             return Ok(modelDtos);
         }
         catch (Exception ex)
@@ -134,7 +143,9 @@ public class ModelController : BaseApiController
     /// Get models by engine type
     /// </summary>
     [HttpGet("engine/{engineType}")]
-    public async Task<ActionResult<IEnumerable<ModelResponseDto>>> GetModelsByEngineType(string engineType)
+    public async Task<ActionResult<IEnumerable<ModelResponseDto>>> GetModelsByEngineType(
+        string engineType
+    )
     {
         try
         {
@@ -142,13 +153,20 @@ public class ModelController : BaseApiController
 
             var models = await _modelRepository.GetModelsByEngineTypeAsync(engineType);
             var modelDtos = models.Select(m => MapToDto(m));
-            _logger.LogInformation("Found {Count} models with engine type '{EngineType}'",
-                models.Count(), engineType);
+            _logger.LogInformation(
+                "Found {Count} models with engine type '{EngineType}'",
+                models.Count(),
+                engineType
+            );
             return Ok(modelDtos);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving models with engine type '{EngineType}'", engineType);
+            _logger.LogError(
+                ex,
+                "Error retrieving models with engine type '{EngineType}'",
+                engineType
+            );
             return StatusCode(500, "An error occurred while retrieving models by engine type");
         }
     }
@@ -172,7 +190,10 @@ public class ModelController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error checking model deletion for code {ModelCode}", modelCode);
-            return StatusCode(500, "An error occurred while checking whether the model can be deleted");
+            return StatusCode(
+                500,
+                "An error occurred while checking whether the model can be deleted"
+            );
         }
     }
 
@@ -180,7 +201,9 @@ public class ModelController : BaseApiController
     /// Create a new model
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<ModelResponseDto>> CreateModel([FromBody] CreateModelDto createDto)
+    public async Task<ActionResult<ModelResponseDto>> CreateModel(
+        [FromBody] CreateModelDto createDto
+    )
     {
         try
         {
@@ -220,17 +243,21 @@ public class ModelController : BaseApiController
                 licence_fee_code = createDto.licence_fee_code,
                 gvm = createDto.gvm,
                 transmission = createDto.transmission,
-                wesbank_kilos_per_litre = createDto.wesbank_kilos_per_litre
+                wesbank_kilos_per_litre = createDto.wesbank_kilos_per_litre,
             };
 
             var createdModel = await _modelRepository.CreateAsync(model, currentUserId);
-            _logger.LogInformation("Created new model with code {ModelCode}", createdModel.model_code);
+            _logger.LogInformation(
+                "Created new model with code {ModelCode}",
+                createdModel.model_code
+            );
 
             var responseDto = MapToDto(createdModel, make.make_description);
             return CreatedAtAction(
                 nameof(GetModel),
                 new { modelCode = createdModel.model_code },
-                responseDto);
+                responseDto
+            );
         }
         catch (Exception ex)
         {
@@ -243,7 +270,10 @@ public class ModelController : BaseApiController
     /// Update an existing model
     /// </summary>
     [HttpPut("{modelCode}")]
-    public async Task<ActionResult<ModelResponseDto>> UpdateModel(short modelCode, [FromBody] UpdateModelDto updateDto)
+    public async Task<ActionResult<ModelResponseDto>> UpdateModel(
+        short modelCode,
+        [FromBody] UpdateModelDto updateDto
+    )
     {
         try
         {
@@ -295,7 +325,7 @@ public class ModelController : BaseApiController
                 licence_fee_code = updateDto.licence_fee_code,
                 gvm = updateDto.gvm,
                 transmission = updateDto.transmission,
-                wesbank_kilos_per_litre = updateDto.wesbank_kilos_per_litre
+                wesbank_kilos_per_litre = updateDto.wesbank_kilos_per_litre,
             };
 
             var updatedModel = await _modelRepository.UpdateAsync(model, currentUserId);
@@ -315,19 +345,29 @@ public class ModelController : BaseApiController
     /// Updates only the model's licence fee without rewriting unrelated legacy fields.
     /// </summary>
     [HttpPatch("{modelCode}/licence-fee")]
-    public async Task<ActionResult<ModelResponseDto>> UpdateModelLicenceFee(short modelCode, [FromBody] UpdateModelLicenceFeeDto updateDto)
+    public async Task<ActionResult<ModelResponseDto>> UpdateModelLicenceFee(
+        short modelCode,
+        [FromBody] UpdateModelLicenceFeeDto updateDto
+    )
     {
         try
         {
-            if (!ModelState.IsValid || modelCode != updateDto.model_code || updateDto.licence_fee_code <= 0)
+            if (
+                !ModelState.IsValid
+                || modelCode != updateDto.model_code
+                || updateDto.licence_fee_code <= 0
+            )
             {
-                return BadRequest("Model and licence fee codes must be positive and match the route.");
+                return BadRequest(
+                    "Model and licence fee codes must be positive and match the route."
+                );
             }
 
             var updatedModel = await _modelRepository.UpdateLicenceFeeAsync(
                 modelCode,
                 updateDto.licence_fee_code,
-                GetCurrentUserId());
+                GetCurrentUserId()
+            );
             return Ok(MapToDto(updatedModel));
         }
         catch (InvalidOperationException)
@@ -403,7 +443,7 @@ public class ModelController : BaseApiController
             date_updated = model.date_updated,
             created_by_user_code = model.created_by_user_code,
             modified_by_user_code = model.modified_by_user_code,
-            is_deleted = model.is_deleted
+            is_deleted = model.is_deleted,
         };
     }
 }

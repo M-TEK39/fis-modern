@@ -4,6 +4,13 @@ type LegacyRenumberedReportPageProps = {
   searchParams: Promise<{ page?: string | string[] }>;
 };
 
-export default function LegacyRenumberedReportPage({ searchParams }: LegacyRenumberedReportPageProps) {
-  return <RenumberedReportPage routePath="/Master-File/RPT_renumbered.aspx" searchParams={searchParams} />;
+export default function LegacyRenumberedReportPage({
+  searchParams,
+}: LegacyRenumberedReportPageProps) {
+  return (
+    <RenumberedReportPage
+      routePath="/Master-File/RPT_renumbered.aspx"
+      searchParams={searchParams}
+    />
+  );
 }

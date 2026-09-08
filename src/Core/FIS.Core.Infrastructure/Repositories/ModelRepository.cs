@@ -39,7 +39,7 @@ public sealed class ModelRepository : IModelRepository
         "licence_fee_code",
         "gvm",
         "transmission",
-        "wesbank_kilos_per_litre"
+        "wesbank_kilos_per_litre",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -49,7 +49,7 @@ public sealed class ModelRepository : IModelRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private readonly FisDbContext _context;
@@ -59,11 +59,13 @@ public sealed class ModelRepository : IModelRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Model?> GetByIdAsync(short modelCode)
-        => (await QueryAsync(
-            "[model].[model_code] = @modelCode",
-            command => AddParameter(command, "@modelCode", DbType.Int16, modelCode)))
-            .SingleOrDefault();
+    public async Task<Model?> GetByIdAsync(short modelCode) =>
+        (
+            await QueryAsync(
+                "[model].[model_code] = @modelCode",
+                command => AddParameter(command, "@modelCode", DbType.Int16, modelCode)
+            )
+        ).SingleOrDefault();
 
     public async Task<Model?> GetByNameAsync(string modelName)
     {
@@ -72,19 +74,27 @@ public sealed class ModelRepository : IModelRepository
             return null;
         }
 
-        return (await QueryAsync(
-            "LOWER([model].[model_description]) = @modelDescription",
-            command => AddParameter(command, "@modelDescription", DbType.String, modelName.Trim().ToLowerInvariant())))
-            .SingleOrDefault();
+        return (
+            await QueryAsync(
+                "LOWER([model].[model_description]) = @modelDescription",
+                command =>
+                    AddParameter(
+                        command,
+                        "@modelDescription",
+                        DbType.String,
+                        modelName.Trim().ToLowerInvariant()
+                    )
+            )
+        ).SingleOrDefault();
     }
 
-    public async Task<IEnumerable<Model>> GetAllModelsAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<Model>> GetAllModelsAsync() => await QueryAsync();
 
-    public async Task<IEnumerable<Model>> GetModelsByMakeAsync(short makeCode)
-        => await QueryAsync(
+    public async Task<IEnumerable<Model>> GetModelsByMakeAsync(short makeCode) =>
+        await QueryAsync(
             "[model].[make_code] = @makeCode",
-            command => AddParameter(command, "@makeCode", DbType.Int16, makeCode));
+            command => AddParameter(command, "@makeCode", DbType.Int16, makeCode)
+        );
 
     public async Task<IEnumerable<Model>> GetModelsByEngineTypeAsync(string engineType)
     {
@@ -95,7 +105,14 @@ public sealed class ModelRepository : IModelRepository
 
         return await QueryAsync(
             "LOWER(COALESCE([model].[engine_type], '')) LIKE @engineType",
-            command => AddParameter(command, "@engineType", DbType.String, $"%{engineType.Trim().ToLowerInvariant()}%"));
+            command =>
+                AddParameter(
+                    command,
+                    "@engineType",
+                    DbType.String,
+                    $"%{engineType.Trim().ToLowerInvariant()}%"
+                )
+        );
     }
 
     public async Task<IEnumerable<Model>> SearchModelsAsync(string searchTerm)
@@ -107,9 +124,16 @@ public sealed class ModelRepository : IModelRepository
 
         return await QueryAsync(
             "(LOWER([model].[model_description]) LIKE @searchTerm OR "
-            + "LOWER(COALESCE([model].[engine_type], '')) LIKE @searchTerm OR "
-            + "LOWER(COALESCE([make].[make_description], '')) LIKE @searchTerm)",
-            command => AddParameter(command, "@searchTerm", DbType.String, $"%{searchTerm.Trim().ToLowerInvariant()}%"));
+                + "LOWER(COALESCE([model].[engine_type], '')) LIKE @searchTerm OR "
+                + "LOWER(COALESCE([make].[make_description], '')) LIKE @searchTerm)",
+            command =>
+                AddParameter(
+                    command,
+                    "@searchTerm",
+                    DbType.String,
+                    $"%{searchTerm.Trim().ToLowerInvariant()}%"
+                )
+        );
     }
 
     public async Task<ModelDeleteCheck> GetDeleteCheckAsync(short modelCode)
@@ -124,12 +148,18 @@ public sealed class ModelRepository : IModelRepository
         try
         {
             var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            var vehicleCount = await TableExistsAsync(connection, "dbo", "vehicle_master", transaction)
+            var vehicleCount = await TableExistsAsync(
+                connection,
+                "dbo",
+                "vehicle_master",
+                transaction
+            )
                 ? await CountAsync(
                     connection,
                     "SELECT COUNT(1) FROM [dbo].[vehicle_master] WHERE [model_code] = @modelCode",
                     modelCode,
-                    transaction)
+                    transaction
+                )
                 : 0;
             return new ModelDeleteCheck(vehicleCount);
         }
@@ -149,7 +179,14 @@ public sealed class ModelRepository : IModelRepository
         var availableColumns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
         var values = BuildLegacyValues(model);
-        AddOptionalValue(values, availableColumns, "type_code", "@typeCode", DbType.Int16, model.type_code);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "type_code",
+            "@typeCode",
+            DbType.Int16,
+            model.type_code
+        );
         AddCreateAuditValues(values, availableColumns, currentUserId, now);
 
         model.date_created = now;
@@ -163,12 +200,22 @@ public sealed class ModelRepository : IModelRepository
     {
         ArgumentNullException.ThrowIfNull(model);
 
-        var existing = await GetByIdAsync(model.model_code)
-            ?? throw new InvalidOperationException($"Model with model_code {model.model_code} not found");
+        var existing =
+            await GetByIdAsync(model.model_code)
+            ?? throw new InvalidOperationException(
+                $"Model with model_code {model.model_code} not found"
+            );
         var availableColumns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
         var values = BuildLegacyValues(model);
-        AddOptionalValue(values, availableColumns, "type_code", "@typeCode", DbType.Int16, model.type_code);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "type_code",
+            "@typeCode",
+            DbType.Int16,
+            model.type_code
+        );
         AddUpdateAuditValues(values, availableColumns, currentUserId, now);
 
         await ExecuteUpdateAsync(model.model_code, values);
@@ -181,14 +228,19 @@ public sealed class ModelRepository : IModelRepository
         return model;
     }
 
-    public async Task<Model> UpdateLicenceFeeAsync(short modelCode, short licenceFeeCode, int currentUserId)
+    public async Task<Model> UpdateLicenceFeeAsync(
+        short modelCode,
+        short licenceFeeCode,
+        int currentUserId
+    )
     {
-        var existing = await GetByIdAsync(modelCode)
+        var existing =
+            await GetByIdAsync(modelCode)
             ?? throw new InvalidOperationException($"Model with model_code {modelCode} not found");
         var availableColumns = await GetAvailableColumnsAsync();
         var values = new List<WriteValue>
         {
-            new("licence_fee_code", "@licenceFeeCode", DbType.Int16, licenceFeeCode)
+            new("licence_fee_code", "@licenceFeeCode", DbType.Int16, licenceFeeCode),
         };
         AddUpdateAuditValues(values, availableColumns, currentUserId, DateTime.UtcNow);
 
@@ -199,7 +251,8 @@ public sealed class ModelRepository : IModelRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The DELETE or soft-delete statement is selected from fixed compatibility branches and the model code is parameterized.")]
+        Justification = "The DELETE or soft-delete statement is selected from fixed compatibility branches and the model code is parameterized."
+    )]
     public async Task DeleteAsync(short modelCode, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -228,14 +281,21 @@ public sealed class ModelRepository : IModelRepository
                 if (availableColumns.Contains("modified_by_user_code"))
                 {
                     assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-                    AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                    AddParameter(
+                        command,
+                        "@modifiedByUserCode",
+                        DbType.Int32,
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
-                command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [model_code] = @modelCode";
+                command.CommandText =
+                    $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [model_code] = @modelCode";
             }
             else
             {
-                command.CommandText = $"DELETE FROM [dbo].[{TableName}] WHERE [model_code] = @modelCode";
+                command.CommandText =
+                    $"DELETE FROM [dbo].[{TableName}] WHERE [model_code] = @modelCode";
             }
 
             AddParameter(command, "@modelCode", DbType.Int16, modelCode);
@@ -250,11 +310,15 @@ public sealed class ModelRepository : IModelRepository
         }
     }
 
-    private static List<WriteValue> BuildLegacyValues(Model model)
-        =>
+    private static List<WriteValue> BuildLegacyValues(Model model) =>
         [
             new("make_code", "@makeCode", DbType.Int16, model.make_code),
-            new("unit_of_measure_code", "@unitOfMeasureCode", DbType.Int16, model.unit_of_measure_code),
+            new(
+                "unit_of_measure_code",
+                "@unitOfMeasureCode",
+                DbType.Int16,
+                model.unit_of_measure_code
+            ),
             new("fuel_type_code", "@fuelTypeCode", DbType.Int16, model.fuel_type_code),
             new("licence_code", "@licenceCode", DbType.Int16, model.licence_code),
             new("maint_trigger_code", "@maintTriggerCode", DbType.Int16, model.maint_trigger_code),
@@ -264,21 +328,35 @@ public sealed class ModelRepository : IModelRepository
             new("engine_capacity", "@engineCapacity", DbType.Int16, model.engine_capacity),
             new("rated_power", "@ratedPower", DbType.Int16, model.rated_power),
             new("fuel_tank_capacity", "@fuelTankCapacity", DbType.Int16, model.fuel_tank_capacity),
-            new("target_consumption", "@targetConsumption", DbType.Decimal, model.target_consumption),
+            new(
+                "target_consumption",
+                "@targetConsumption",
+                DbType.Decimal,
+                model.target_consumption
+            ),
             new("target_tyre_life", "@targetTyreLife", DbType.Int32, model.target_tyre_life),
             new("service_interval", "@serviceInterval", DbType.Int32, model.service_interval),
             new("vemm_code", "@vemmCode", DbType.String, model.vemm_code),
             new("licence_fee_code", "@licenceFeeCode", DbType.Int16, model.licence_fee_code),
             new("gvm", "@gvm", DbType.Int32, model.gvm),
             new("transmission", "@transmission", DbType.String, model.transmission),
-            new("wesbank_kilos_per_litre", "@wesbankKilosPerLitre", DbType.Decimal, model.wesbank_kilos_per_litre)
+            new(
+                "wesbank_kilos_per_litre",
+                "@wesbankKilosPerLitre",
+                DbType.Decimal,
+                model.wesbank_kilos_per_litre
+            ),
         ];
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list is composed only from fixed legacy columns and allowlisted optional columns; predicates and values are parameterized.")]
-    private async Task<List<Model>> QueryAsync(string? predicate = null, Action<DbCommand>? configure = null)
+        Justification = "The SELECT list is composed only from fixed legacy columns and allowlisted optional columns; predicates and values are parameterized."
+    )]
+    private async Task<List<Model>> QueryAsync(
+        string? predicate = null,
+        Action<DbCommand>? configure = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
@@ -294,7 +372,11 @@ public sealed class ModelRepository : IModelRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = RequiredColumns
                 .Select(column => $"[model].[{column}] AS [{column}]")
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
                 .Append("[make].[make_description] AS [make_description]")
                 .ToArray();
             var conditions = new List<string> { GetNotDeletedFilter(availableColumns) };
@@ -303,7 +385,8 @@ public sealed class ModelRepository : IModelRepository
                 conditions.Add(predicate);
             }
 
-            command.CommandText = $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] AS [model] LEFT JOIN [dbo].[make] AS [make] ON [make].[make_code] = [model].[make_code] WHERE {string.Join(" AND ", conditions)} ORDER BY [make].[make_description], [model].[model_description], [model].[model_code]";
+            command.CommandText =
+                $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] AS [model] LEFT JOIN [dbo].[make] AS [make] ON [make].[make_code] = [model].[make_code] WHERE {string.Join(" AND ", conditions)} ORDER BY [make].[make_description], [model].[model_description], [model].[model_code]";
             configure?.Invoke(command);
 
             var results = new List<Model>();
@@ -327,7 +410,8 @@ public sealed class ModelRepository : IModelRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed from fixed legacy and allowlisted optional columns; all values are parameters.")]
+        Justification = "The INSERT statement is composed from fixed legacy and allowlisted optional columns; all values are parameters."
+    )]
     private async Task<short> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -341,7 +425,8 @@ public sealed class ModelRepository : IModelRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[model_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+            command.CommandText =
+                $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[model_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
             AddParameters(command, values);
             return Convert.ToInt16(await command.ExecuteScalarAsync());
         }
@@ -357,7 +442,8 @@ public sealed class ModelRepository : IModelRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed from fixed legacy and allowlisted optional columns; all values are parameters.")]
+        Justification = "The UPDATE statement is composed from fixed legacy and allowlisted optional columns; all values are parameters."
+    )]
     private async Task ExecuteUpdateAsync(short modelCode, IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -371,7 +457,8 @@ public sealed class ModelRepository : IModelRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [model_code] = @modelCode";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [model_code] = @modelCode";
             AddParameters(command, values);
             AddParameter(command, "@modelCode", DbType.Int16, modelCode);
             await command.ExecuteNonQueryAsync();
@@ -414,10 +501,14 @@ public sealed class ModelRepository : IModelRepository
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
-                throw new InvalidOperationException($"The required model compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                throw new InvalidOperationException(
+                    $"The required model compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             return columns;
@@ -431,20 +522,51 @@ public sealed class ModelRepository : IModelRepository
         }
     }
 
-    private static void AddCreateAuditValues(ICollection<WriteValue> values, IReadOnlySet<string> columns, int currentUserId, DateTime now)
+    private static void AddCreateAuditValues(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        int currentUserId,
+        DateTime now
+    )
     {
         AddOptionalValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, now);
-        AddOptionalValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddOptionalValue(
+            values,
+            columns,
+            "created_by_user_code",
+            "@createdByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddOptionalValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
     }
 
-    private static void AddUpdateAuditValues(ICollection<WriteValue> values, IReadOnlySet<string> columns, int currentUserId, DateTime now)
+    private static void AddUpdateAuditValues(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        int currentUserId,
+        DateTime now
+    )
     {
         AddOptionalValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
-        AddOptionalValue(values, columns, "modified_by_user_code", "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddOptionalValue(
+            values,
+            columns,
+            "modified_by_user_code",
+            "@modifiedByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
     }
 
-    private static void AddOptionalValue(ICollection<WriteValue> values, IReadOnlySet<string> columns, string column, string parameter, DbType type, object? value)
+    private static void AddOptionalValue(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        string column,
+        string parameter,
+        DbType type,
+        object? value
+    )
     {
         if (columns.Contains(column))
         {
@@ -498,14 +620,24 @@ public sealed class ModelRepository : IModelRepository
             gvm = ReadInt32(reader, "gvm"),
             transmission = ReadString(reader, "transmission"),
             wesbank_kilos_per_litre = ReadDecimal(reader, "wesbank_kilos_per_litre"),
-            date_created = ReadDateTimeIfAvailable(reader, availableColumns, "date_created") ?? DateTime.MinValue,
+            date_created =
+                ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
+                ?? DateTime.MinValue,
             date_updated = ReadDateTimeIfAvailable(reader, availableColumns, "date_updated"),
-            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
-            modified_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "modified_by_user_code"),
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "created_by_user_code"
+            ),
+            modified_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "modified_by_user_code"
+            ),
             is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false,
             Make = makeDescription is null
                 ? null
-                : new Make { make_code = makeCode, make_description = makeDescription }
+                : new Make { make_code = makeCode, make_description = makeDescription },
         };
     }
 
@@ -522,19 +654,27 @@ public sealed class ModelRepository : IModelRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetNotDeletedFilter(IReadOnlySet<string> columns)
-        => columns.Contains("is_deleted") ? "([model].[is_deleted] = 0 OR [model].[is_deleted] IS NULL)" : "1 = 1";
+    private static string GetNotDeletedFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted")
+            ? "([model].[is_deleted] = 0 OR [model].[is_deleted] IS NULL)"
+            : "1 = 1";
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The count query is a fixed repository statement and the model code is parameterized.")]
-    private static async Task<int> CountAsync(DbConnection connection, string sql, short modelCode, DbTransaction? transaction)
+        Justification = "The count query is a fixed repository statement and the model code is parameterized."
+    )]
+    private static async Task<int> CountAsync(
+        DbConnection connection,
+        string sql,
+        short modelCode,
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -543,7 +683,12 @@ public sealed class ModelRepository : IModelRepository
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
-    private static async Task<bool> TableExistsAsync(DbConnection connection, string schema, string table, DbTransaction? transaction)
+    private static async Task<bool> TableExistsAsync(
+        DbConnection connection,
+        string schema,
+        string table,
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -558,25 +703,53 @@ public sealed class ModelRepository : IModelRepository
         return Convert.ToInt32(await command.ExecuteScalarAsync()) > 0;
     }
 
-    private static string? ReadString(DbDataReader reader, string column) => reader[column] is DBNull ? null : reader[column]?.ToString();
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : reader[column]?.ToString();
 
-    private static short? ReadInt16(DbDataReader reader, string column) => reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
+    private static short? ReadInt16(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
 
-    private static int? ReadInt32(DbDataReader reader, string column) => reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
+    private static int? ReadInt32(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
 
-    private static decimal? ReadDecimal(DbDataReader reader, string column) => reader[column] is DBNull ? null : Convert.ToDecimal(reader[column]);
+    private static decimal? ReadDecimal(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToDecimal(reader[column]);
 
-    private static short? ReadInt16IfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) && reader[column] is not DBNull ? Convert.ToInt16(reader[column]) : null;
+    private static short? ReadInt16IfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) =>
+        columns.Contains(column) && reader[column] is not DBNull
+            ? Convert.ToInt16(reader[column])
+            : null;
 
-    private static bool? ReadBooleanIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) && reader[column] is not DBNull ? Convert.ToBoolean(reader[column]) : null;
+    private static bool? ReadBooleanIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) =>
+        columns.Contains(column) && reader[column] is not DBNull
+            ? Convert.ToBoolean(reader[column])
+            : null;
 
-    private static int? ReadInt32IfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) && reader[column] is not DBNull ? Convert.ToInt32(reader[column]) : null;
+    private static int? ReadInt32IfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) =>
+        columns.Contains(column) && reader[column] is not DBNull
+            ? Convert.ToInt32(reader[column])
+            : null;
 
-    private static DateTime? ReadDateTimeIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) && reader[column] is not DBNull ? Convert.ToDateTime(reader[column]) : null;
+    private static DateTime? ReadDateTimeIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) =>
+        columns.Contains(column) && reader[column] is not DBNull
+            ? Convert.ToDateTime(reader[column])
+            : null;
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 }

@@ -50,7 +50,13 @@ function formValues(vehicle: DemoVehicleRecord): DemoVehicleFormValues {
   };
 }
 
-export default function DemoVehicleSearch({ mode, initialSearchTerm = "", sites = EMPTY_SITES, makes = EMPTY_MAKES, models = EMPTY_MODELS }: DemoVehicleSearchProps) {
+export default function DemoVehicleSearch({
+  mode,
+  initialSearchTerm = "",
+  sites = EMPTY_SITES,
+  makes = EMPTY_MAKES,
+  models = EMPTY_MODELS,
+}: DemoVehicleSearchProps) {
   const [searchMode, setSearchMode] = useState<DemoVehicleSearchMode>("GG");
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [matches, setMatches] = useState<DemoVehicleRecord[]>([]);
@@ -111,7 +117,9 @@ export default function DemoVehicleSearch({ mode, initialSearchTerm = "", sites 
         setError(result.message ?? "The demo vehicle could not be deleted.");
         return;
       }
-      setMatches((current) => current.filter((item) => item.demoVehicleCode !== vehicle.demoVehicleCode));
+      setMatches((current) =>
+        current.filter((item) => item.demoVehicleCode !== vehicle.demoVehicleCode),
+      );
       setMessage(result.message ?? "Demo vehicle deleted successfully.");
     });
   };
@@ -119,20 +127,157 @@ export default function DemoVehicleSearch({ mode, initialSearchTerm = "", sites 
   return (
     <>
       <section className="form-card" aria-labelledby="demo-vehicle-search-title">
-        <div className="form-card-header"><h2 id="demo-vehicle-search-title">Find a demo vehicle</h2><p>Search by GG or GP number before {mode === "edit" ? "updating" : "deleting"} a record.</p></div>
+        <div className="form-card-header">
+          <h2 id="demo-vehicle-search-title">Find a demo vehicle</h2>
+          <p>
+            Search by GG or GP number before {mode === "edit" ? "updating" : "deleting"} a record.
+          </p>
+        </div>
         <form className="form-card-body" onSubmit={handleSearch}>
-          <fieldset className="form-row"><legend className="form-label">Lookup Type</legend><label className="form-radio-label"><input type="radio" name="mode" value="GG" checked={searchMode === "GG"} onChange={() => setSearchMode("GG")} /> GG</label><label className="form-radio-label"><input type="radio" name="mode" value="GP" checked={searchMode === "GP"} onChange={() => setSearchMode("GP")} /> GP</label></fieldset>
-          <div className="form-row"><label className="form-label" htmlFor="demo-vehicle-search">{searchMode === "GG" ? "GG Number" : "GP Number"}</label><div className="fis-input-group-compact"><input id="demo-vehicle-search" className="form-input" name="search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} autoComplete="off" required /><button className="button button-secondary button-small" type="submit" disabled={isPending}>{isPending ? "Finding..." : "Find"}</button></div></div>
-          {mode === "edit" ? <div className="form-row"><label className="form-label" htmlFor="demo-vehicle-match">Vehicle Match</label><select id="demo-vehicle-match" className="form-select" value={selectedCode ?? ""} onChange={(event) => handleSelection(event.target.value)} disabled={matches.length === 0 || isPending}><option value="">Select demo vehicle...</option>{matches.map((vehicle) => <option key={vehicle.demoVehicleCode} value={vehicle.demoVehicleCode}>{getVehicleLabel(vehicle)}</option>)}</select></div> : null}
+          <fieldset className="form-row">
+            <legend className="form-label">Lookup Type</legend>
+            <label className="form-radio-label">
+              <input
+                type="radio"
+                name="mode"
+                value="GG"
+                checked={searchMode === "GG"}
+                onChange={() => setSearchMode("GG")}
+              />{" "}
+              GG
+            </label>
+            <label className="form-radio-label">
+              <input
+                type="radio"
+                name="mode"
+                value="GP"
+                checked={searchMode === "GP"}
+                onChange={() => setSearchMode("GP")}
+              />{" "}
+              GP
+            </label>
+          </fieldset>
+          <div className="form-row">
+            <label className="form-label" htmlFor="demo-vehicle-search">
+              {searchMode === "GG" ? "GG Number" : "GP Number"}
+            </label>
+            <div className="fis-input-group-compact">
+              <input
+                id="demo-vehicle-search"
+                className="form-input"
+                name="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                autoComplete="off"
+                required
+              />
+              <button
+                className="button button-secondary button-small"
+                type="submit"
+                disabled={isPending}
+              >
+                {isPending ? "Finding..." : "Find"}
+              </button>
+            </div>
+          </div>
+          {mode === "edit" ? (
+            <div className="form-row">
+              <label className="form-label" htmlFor="demo-vehicle-match">
+                Vehicle Match
+              </label>
+              <select
+                id="demo-vehicle-match"
+                className="form-select"
+                value={selectedCode ?? ""}
+                onChange={(event) => handleSelection(event.target.value)}
+                disabled={matches.length === 0 || isPending}
+              >
+                <option value="">Select demo vehicle...</option>
+                {matches.map((vehicle) => (
+                  <option key={vehicle.demoVehicleCode} value={vehicle.demoVehicleCode}>
+                    {getVehicleLabel(vehicle)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
         </form>
       </section>
 
-      {error ? <div className="notice notice-error" role="alert">{error}</div> : null}
-      {message ? <div className="notice notice-success" role="status">{message}</div> : null}
+      {error ? (
+        <div className="notice notice-error" role="alert">
+          {error}
+        </div>
+      ) : null}
+      {message ? (
+        <div className="notice notice-success" role="status">
+          {message}
+        </div>
+      ) : null}
 
-      {mode === "edit" && editing ? <section className="form-card fis-mt-1" aria-labelledby="demo-vehicle-edit-title"><div className="form-card-header"><h2 id="demo-vehicle-edit-title">Edit Demo Vehicle</h2><p>Update the legacy demo vehicle fields and save the complete record.</p></div><DemoVehicleForm key={editing.demoVehicleCode} action={updateDemoVehicleAction} mode="update" initialValues={formValues(editing)} sites={sites} makes={makes} models={models} returnPath="/vehicles" /></section> : null}
+      {mode === "edit" && editing ? (
+        <section className="form-card fis-mt-1" aria-labelledby="demo-vehicle-edit-title">
+          <div className="form-card-header">
+            <h2 id="demo-vehicle-edit-title">Edit Demo Vehicle</h2>
+            <p>Update the legacy demo vehicle fields and save the complete record.</p>
+          </div>
+          <DemoVehicleForm
+            key={editing.demoVehicleCode}
+            action={updateDemoVehicleAction}
+            mode="update"
+            initialValues={formValues(editing)}
+            sites={sites}
+            makes={makes}
+            models={models}
+            returnPath="/vehicles"
+          />
+        </section>
+      ) : null}
 
-      {mode === "delete" && matches.length > 0 ? <section className="table-container fis-mt-1" aria-labelledby="demo-vehicle-delete-results-title"><div className="table-header"><span className="table-title" id="demo-vehicle-delete-results-title">{matches.length} match{matches.length === 1 ? "" : "es"}</span></div><div className="table-wrapper"><table className="data-table"><caption className="sr-only">Demo vehicle deletion matches</caption><thead><tr><th scope="col">GG Number</th><th scope="col">Reg Number</th><th scope="col">Model</th><th scope="col">Actions</th></tr></thead><tbody>{matches.map((vehicle) => <tr key={vehicle.demoVehicleCode}><td>{valueOrDash(vehicle.ggNumber)}</td><td>{valueOrDash(vehicle.registrationNumber)}</td><td>{valueOrDash(vehicle.modelDescription)}</td><td className="actions-column"><button className="button button-secondary button-small" type="button" onClick={() => handleDelete(vehicle)} disabled={isPending}>Delete</button></td></tr>)}</tbody></table></div></section> : null}
+      {mode === "delete" && matches.length > 0 ? (
+        <section
+          className="table-container fis-mt-1"
+          aria-labelledby="demo-vehicle-delete-results-title"
+        >
+          <div className="table-header">
+            <span className="table-title" id="demo-vehicle-delete-results-title">
+              {matches.length} match{matches.length === 1 ? "" : "es"}
+            </span>
+          </div>
+          <div className="table-wrapper">
+            <table className="data-table">
+              <caption className="sr-only">Demo vehicle deletion matches</caption>
+              <thead>
+                <tr>
+                  <th scope="col">GG Number</th>
+                  <th scope="col">Reg Number</th>
+                  <th scope="col">Model</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matches.map((vehicle) => (
+                  <tr key={vehicle.demoVehicleCode}>
+                    <td>{valueOrDash(vehicle.ggNumber)}</td>
+                    <td>{valueOrDash(vehicle.registrationNumber)}</td>
+                    <td>{valueOrDash(vehicle.modelDescription)}</td>
+                    <td className="actions-column">
+                      <button
+                        className="button button-secondary button-small"
+                        type="button"
+                        onClick={() => handleDelete(vehicle)}
+                        disabled={isPending}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
     </>
   );
 }

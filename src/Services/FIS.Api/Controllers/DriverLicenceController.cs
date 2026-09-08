@@ -1,8 +1,8 @@
+using System.Text.Json.Serialization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Drivers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Text.Json.Serialization;
 
 namespace FIS.Api.Controllers;
 
@@ -16,7 +16,8 @@ public class DriverLicenceController : BaseApiController
 
     public DriverLicenceController(
         ILogger<DriverLicenceController> logger,
-        IDriverLicenceRepository repository)
+        IDriverLicenceRepository repository
+    )
     {
         _logger = logger;
         _repository = repository;
@@ -49,14 +50,20 @@ public class DriverLicenceController : BaseApiController
         {
             if (await _repository.GetByIdAsync(code) is null)
             {
-                return NotFound(new { message = $"Driver licence type with code {code} not found" });
+                return NotFound(
+                    new { message = $"Driver licence type with code {code} not found" }
+                );
             }
 
             return Ok(await _repository.GetDeleteCheckAsync(code));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking driver licence type dependencies for {Code}", code);
+            _logger.LogError(
+                ex,
+                "Error checking driver licence type dependencies for {Code}",
+                code
+            );
             return StatusCode(500, "Error checking driver licence type dependencies");
         }
     }
@@ -73,7 +80,9 @@ public class DriverLicenceController : BaseApiController
             var licence = await _repository.GetByIdAsync(code);
 
             if (licence == null)
-                return NotFound(new { message = $"Driver licence type with code {code} not found" });
+                return NotFound(
+                    new { message = $"Driver licence type with code {code} not found" }
+                );
 
             return Ok(MapToDto(licence));
         }
@@ -88,7 +97,9 @@ public class DriverLicenceController : BaseApiController
     /// Create new driver licence type
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<DriverLicenceTypeDto>> Create([FromBody] CreateDriverLicenceTypeDto request)
+    public async Task<ActionResult<DriverLicenceTypeDto>> Create(
+        [FromBody] CreateDriverLicenceTypeDto request
+    )
     {
         try
         {
@@ -96,12 +107,12 @@ public class DriverLicenceController : BaseApiController
             if (validationError is not null)
                 return BadRequest(new { message = validationError });
 
-            _logger.LogInformation("Creating driver licence type: {Description}", request.Description);
+            _logger.LogInformation(
+                "Creating driver licence type: {Description}",
+                request.Description
+            );
 
-            var licence = new DriverLicence
-            {
-                description = request.Description
-            };
+            var licence = new DriverLicence { description = request.Description };
 
             var created = await _repository.CreateAsync(licence, GetCurrentUserId());
             return Ok(MapToDto(created));
@@ -117,7 +128,10 @@ public class DriverLicenceController : BaseApiController
     /// Update existing driver licence type
     /// </summary>
     [HttpPut("{code}")]
-    public async Task<ActionResult<DriverLicenceTypeDto>> Update(short code, [FromBody] UpdateDriverLicenceTypeDto request)
+    public async Task<ActionResult<DriverLicenceTypeDto>> Update(
+        short code,
+        [FromBody] UpdateDriverLicenceTypeDto request
+    )
     {
         try
         {
@@ -132,7 +146,9 @@ public class DriverLicenceController : BaseApiController
 
             var existing = await _repository.GetByIdAsync(code);
             if (existing == null)
-                return NotFound(new { message = $"Driver licence type with code {code} not found" });
+                return NotFound(
+                    new { message = $"Driver licence type with code {code} not found" }
+                );
 
             existing.description = request.Description;
 
@@ -158,16 +174,20 @@ public class DriverLicenceController : BaseApiController
 
             var existing = await _repository.GetByIdAsync(code);
             if (existing == null)
-                return NotFound(new { message = $"Driver licence type with code {code} not found" });
+                return NotFound(
+                    new { message = $"Driver licence type with code {code} not found" }
+                );
 
             var deleteCheck = await _repository.GetDeleteCheckAsync(code);
             if (!deleteCheck.CanDelete)
             {
-                return Conflict(new
-                {
-                    message = "Models using this driver licence type must be changed before deleting it.",
-                    modelCount = deleteCheck.ModelCount
-                });
+                return Conflict(
+                    new
+                    {
+                        message = "Models using this driver licence type must be changed before deleting it.",
+                        modelCount = deleteCheck.ModelCount,
+                    }
+                );
             }
 
             await _repository.DeleteAsync(code, GetCurrentUserId());
@@ -190,7 +210,7 @@ public class DriverLicenceController : BaseApiController
             DateUpdated = licence.date_updated,
             CreatedByUserCode = licence.created_by_user_code,
             ModifiedByUserCode = licence.modified_by_user_code,
-            IsDeleted = licence.is_deleted
+            IsDeleted = licence.is_deleted,
         };
     }
 
@@ -220,6 +240,7 @@ public class CreateDriverLicenceTypeDto
 {
     [JsonPropertyName("licence_code")]
     public short LicenceCode { get; set; }
+
     [JsonPropertyName("description")]
     public string? Description { get; set; }
 }
@@ -228,6 +249,7 @@ public class UpdateDriverLicenceTypeDto
 {
     [JsonPropertyName("licence_code")]
     public short LicenceCode { get; set; }
+
     [JsonPropertyName("description")]
     public string? Description { get; set; }
 }

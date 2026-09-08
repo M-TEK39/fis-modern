@@ -35,7 +35,7 @@ public class TowingRepository : ITowingRepository
         "Person_at_vehicle_name",
         "Person_at_vehicle_cell",
         "Remaks",
-        "Tow_Truck_code"
+        "Tow_Truck_code",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -44,14 +44,10 @@ public class TowingRepository : ITowingRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
-    private static readonly string[] RequiredColumns =
-    [
-        "Towing_code",
-        "vmf_code"
-    ];
+    private static readonly string[] RequiredColumns = ["Towing_code", "vmf_code"];
 
     private readonly FisDbContext _context;
 
@@ -60,24 +56,27 @@ public class TowingRepository : ITowingRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Towing?> GetByIdAsync(short towingCode)
-        => (await QueryAsync(
-            "WHERE [Towing_code] = @towingCode",
-            command => AddParameter(command, "@towingCode", DbType.Int16, towingCode)))
-            .SingleOrDefault();
+    public async Task<Towing?> GetByIdAsync(short towingCode) =>
+        (
+            await QueryAsync(
+                "WHERE [Towing_code] = @towingCode",
+                command => AddParameter(command, "@towingCode", DbType.Int16, towingCode)
+            )
+        ).SingleOrDefault();
 
-    public async Task<IEnumerable<Towing>> GetAllAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<Towing>> GetAllAsync() => await QueryAsync();
 
-    public async Task<IEnumerable<Towing>> GetByVehicleAsync(int vmfCode)
-        => await QueryAsync(
+    public async Task<IEnumerable<Towing>> GetByVehicleAsync(int vmfCode) =>
+        await QueryAsync(
             "WHERE [vmf_code] = @vmfCode",
-            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode));
+            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
+        );
 
-    public async Task<IEnumerable<Towing>> GetBySiteAsync(short siteCode)
-        => await QueryAsync(
+    public async Task<IEnumerable<Towing>> GetBySiteAsync(short siteCode) =>
+        await QueryAsync(
             "WHERE [Site_code] = @siteCode",
-            command => AddParameter(command, "@siteCode", DbType.Int16, siteCode));
+            command => AddParameter(command, "@siteCode", DbType.Int16, siteCode)
+        );
 
     public async Task<Towing> CreateAsync(Towing towing, int currentUserId)
     {
@@ -89,15 +88,30 @@ public class TowingRepository : ITowingRepository
             .ToList();
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_created", "@dateCreated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "created_by_user_code",
             "@createdByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            false
+        );
 
         towing.Towing_code = await ExecuteInsertAsync(values);
         towing.date_created = now;
@@ -114,7 +128,8 @@ public class TowingRepository : ITowingRepository
         if (existing == null)
         {
             throw new InvalidOperationException(
-                $"Towing with Towing_code {towing.Towing_code} not found");
+                $"Towing with Towing_code {towing.Towing_code} not found"
+            );
         }
 
         var availableColumns = await GetAvailableColumnsAsync();
@@ -123,15 +138,30 @@ public class TowingRepository : ITowingRepository
             .ToList();
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "modified_by_user_code",
             "@modifiedByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, towing.is_deleted);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            towing.is_deleted
+        );
 
         await ExecuteUpdateAsync(towing.Towing_code, values, availableColumns);
         towing.date_created = existing.date_created;
@@ -144,7 +174,8 @@ public class TowingRepository : ITowingRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "DeleteAsync selects between fixed legacy SQL statements and uses a parameter for the record identifier.")]
+        Justification = "DeleteAsync selects between fixed legacy SQL statements and uses a parameter for the record identifier."
+    )]
     public async Task DeleteAsync(short towingCode, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -175,7 +206,8 @@ public class TowingRepository : ITowingRepository
                         command,
                         "@modifiedByUserCode",
                         DbType.Int32,
-                        currentUserId > 0 ? currentUserId : null);
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
                 command.CommandText = $"""
@@ -208,10 +240,12 @@ public class TowingRepository : ITowingRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters.")]
+        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters."
+    )]
     private async Task<List<Towing>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
@@ -227,7 +261,11 @@ public class TowingRepository : ITowingRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = LegacyColumns
                 .Select(column => GetColumnProjection(availableColumns, column))
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
                 .ToArray();
             var whereClause = string.IsNullOrWhiteSpace(predicate)
                 ? $"WHERE {GetActiveFilter(availableColumns)}"
@@ -262,7 +300,8 @@ public class TowingRepository : ITowingRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The INSERT statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task<short> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -277,7 +316,10 @@ public class TowingRepository : ITowingRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{TableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[Towing_code]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
@@ -296,11 +338,13 @@ public class TowingRepository : ITowingRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The UPDATE statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task ExecuteUpdateAsync(
         short towingCode,
         IReadOnlyList<WriteValue> values,
-        IReadOnlySet<string> availableColumns)
+        IReadOnlySet<string> availableColumns
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -315,7 +359,10 @@ public class TowingRepository : ITowingRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{TableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [Towing_code] = @towingCode
                 AND {GetActiveFilter(availableColumns)}
                 """;
@@ -361,11 +408,14 @@ public class TowingRepository : ITowingRepository
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"The required Towing compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                    $"The required Towing compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             return columns;
@@ -379,8 +429,8 @@ public class TowingRepository : ITowingRepository
         }
     }
 
-    private static Towing MapTowing(DbDataReader reader, IReadOnlySet<string> availableColumns)
-        => new()
+    private static Towing MapTowing(DbDataReader reader, IReadOnlySet<string> availableColumns) =>
+        new()
         {
             Towing_code = ReadInt16(reader, "Towing_code") ?? 0,
             vmf_code = ReadInt32(reader, "vmf_code") ?? 0,
@@ -398,17 +448,25 @@ public class TowingRepository : ITowingRepository
             Person_at_vehicle_cell = ReadString(reader, "Person_at_vehicle_cell"),
             Remaks = ReadString(reader, "Remaks"),
             Tow_Truck_code = ReadInt16(reader, "Tow_Truck_code"),
-            date_created = ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
+            date_created =
+                ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
                 ?? ReadDateTime(reader, "Tow_request_date")
                 ?? DateTime.MinValue,
             date_updated = ReadDateTimeIfAvailable(reader, availableColumns, "date_updated"),
-            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
-            modified_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "modified_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "created_by_user_code"
+            ),
+            modified_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "modified_by_user_code"
+            ),
+            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false,
         };
 
-    private static List<WriteValue> BuildLegacyWriteValues(Towing towing)
-        =>
+    private static List<WriteValue> BuildLegacyWriteValues(Towing towing) =>
         [
             new("vmf_code", "@vmfCode", DbType.Int32, towing.vmf_code),
             new("Call_refer", "@callRefer", DbType.Decimal, towing.Call_refer),
@@ -421,13 +479,38 @@ public class TowingRepository : ITowingRepository
             new("Vehicle_problem", "@vehicleProblem", DbType.String, towing.Vehicle_problem),
             new("Keys", "@keys", DbType.String, towing.Keys),
             new("Site_code", "@siteCode", DbType.Int16, towing.Site_code),
-            new("Contact_person_name", "@contactPersonName", DbType.String, towing.Contact_person_name),
-            new("Contact_person_tel", "@contactPersonTel", DbType.String, towing.Contact_person_tel),
-            new("Contact_person_cell", "@contactPersonCell", DbType.String, towing.Contact_person_cell),
-            new("Person_at_vehicle_name", "@personAtVehicleName", DbType.String, towing.Person_at_vehicle_name),
-            new("Person_at_vehicle_cell", "@personAtVehicleCell", DbType.String, towing.Person_at_vehicle_cell),
+            new(
+                "Contact_person_name",
+                "@contactPersonName",
+                DbType.String,
+                towing.Contact_person_name
+            ),
+            new(
+                "Contact_person_tel",
+                "@contactPersonTel",
+                DbType.String,
+                towing.Contact_person_tel
+            ),
+            new(
+                "Contact_person_cell",
+                "@contactPersonCell",
+                DbType.String,
+                towing.Contact_person_cell
+            ),
+            new(
+                "Person_at_vehicle_name",
+                "@personAtVehicleName",
+                DbType.String,
+                towing.Person_at_vehicle_name
+            ),
+            new(
+                "Person_at_vehicle_cell",
+                "@personAtVehicleCell",
+                DbType.String,
+                towing.Person_at_vehicle_cell
+            ),
             new("Remaks", "@remaks", DbType.String, towing.Remaks),
-            new("Tow_Truck_code", "@towTruckCode", DbType.Int16, towing.Tow_Truck_code)
+            new("Tow_Truck_code", "@towTruckCode", DbType.Int16, towing.Tow_Truck_code),
         ];
 
     private static void AddOptionalValue(
@@ -436,7 +519,8 @@ public class TowingRepository : ITowingRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -461,8 +545,8 @@ public class TowingRepository : ITowingRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string GetActiveFilter(IReadOnlySet<string> availableColumns)
-        => availableColumns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+    private static string GetActiveFilter(IReadOnlySet<string> availableColumns) =>
+        availableColumns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
     {
@@ -476,25 +560,25 @@ public class TowingRepository : ITowingRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "sql_variant"
+            _ => "sql_variant",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetColumnProjection(IReadOnlySet<string> columns, string column)
-        => columns.Contains(column)
+    private static string GetColumnProjection(IReadOnlySet<string> columns, string column) =>
+        columns.Contains(column)
             ? $"[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetLegacySqlType(column)}) AS [{column}]";
 
-    private static string GetLegacySqlType(string column)
-        => column switch
+    private static string GetLegacySqlType(string column) =>
+        column switch
         {
             "Towing_code" or "Site_code" or "Tow_Truck_code" => "smallint",
             "vmf_code" => "int",
             "Call_refer" => "numeric(18, 0)",
             "Tow_request_date" => "date",
             "Tow_request_time" => "time",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
 
     private static string? ReadString(DbDataReader reader, string column)
@@ -512,8 +596,8 @@ public class TowingRepository : ITowingRepository
     private static DateTime? ReadDateTimeIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadDateTime(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadDateTime(reader, column) : null;
 
     private static DateTime? ReadTime(DbDataReader reader, string column)
     {
@@ -528,7 +612,7 @@ public class TowingRepository : ITowingRepository
         {
             TimeSpan time => DateTime.MinValue.Add(time),
             DateTime dateTime => DateTime.MinValue.Add(dateTime.TimeOfDay),
-            _ => DateTime.MinValue.Add(TimeSpan.Parse(Convert.ToString(value)!))
+            _ => DateTime.MinValue.Add(TimeSpan.Parse(Convert.ToString(value)!)),
         };
     }
 
@@ -541,8 +625,8 @@ public class TowingRepository : ITowingRepository
     private static int? ReadInt32IfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadInt32(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadInt32(reader, column) : null;
 
     private static short? ReadInt16(DbDataReader reader, string column)
     {
@@ -559,7 +643,8 @@ public class TowingRepository : ITowingRepository
     private static bool? ReadBooleanIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
+        string column
+    )
     {
         if (!columns.Contains(column))
         {

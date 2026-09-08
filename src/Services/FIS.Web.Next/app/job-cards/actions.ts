@@ -46,7 +46,8 @@ function optionalMoney(formData: FormData, key: string, label: string) {
   const value = text(formData, key);
   if (!value) return null;
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) throw new JobCardValidationError(`${label} must be zero or greater.`);
+  if (!Number.isFinite(parsed) || parsed < 0)
+    throw new JobCardValidationError(`${label} must be zero or greater.`);
   return parsed;
 }
 
@@ -61,7 +62,8 @@ function optionalDate(formData: FormData, key: string, label: string) {
 
 function optionalText(formData: FormData, key: string, label: string, maxLength: number) {
   const value = text(formData, key);
-  if (value.length > maxLength) throw new JobCardValidationError(`${label} must be ${maxLength} characters or fewer.`);
+  if (value.length > maxLength)
+    throw new JobCardValidationError(`${label} must be ${maxLength} characters or fewer.`);
   return value || null;
 }
 
@@ -70,7 +72,11 @@ function returnPath(formData: FormData, fallback: string) {
   return value.startsWith("/") && !value.startsWith("//") ? value : fallback;
 }
 
-function redirectWithMessage(path: string, key: "saved" | "updated" | "deleted" | "error", message: string): never {
+function redirectWithMessage(
+  path: string,
+  key: "saved" | "updated" | "deleted" | "error",
+  message: string,
+): never {
   const separator = path.includes("?") ? "&" : "?";
   redirect(`${path}${separator}${new URLSearchParams({ [key]: message }).toString()}`);
 }
@@ -78,14 +84,25 @@ function redirectWithMessage(path: string, key: "saved" | "updated" | "deleted" 
 function hasJobCardRole(roles: readonly string[], kind: "capturer" | "authorizer") {
   return roles.some((role) => {
     const normalized = role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
-    return normalized.includes("jobcard") && normalized.includes(kind === "capturer" ? "captur" : "author");
+    return (
+      normalized.includes("jobcard") &&
+      normalized.includes(kind === "capturer" ? "captur" : "author")
+    );
   });
 }
 
 async function authorizePage(kind: "capturer" | "authorizer") {
   const session = await getSession();
-  if (session.status === "unavailable") return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
-  if (session.status !== "authenticated") return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+  if (session.status === "unavailable")
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
+  if (session.status !== "authenticated")
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
 
   const accessLevel = Number(session.accessLevel);
   const hasLegacyAccess = Number.isInteger(accessLevel) && (accessLevel & (1 | 32)) !== 0;
@@ -97,15 +114,27 @@ async function authorizePage(kind: "capturer" | "authorizer") {
 
 function apiErrorMessage(error: unknown) {
   if (error instanceof JobCardApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return "The Job Cards service is temporarily unavailable. Please try again.";
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return "The Job Cards service is temporarily unavailable. Please try again.";
     if (error.reason === "not-found") return "The job card was not found.";
   }
   return "The Job Card operation failed. Please try again.";
 }
 
 function revalidateJobCardPages() {
-  for (const path of ["/job-cards", "/job-cards/capturer-default", "/job-cards/list", "/job-cards/authorizer-dashboard", "/job-cards/authorizer-vehicles", "/job-cards/cancel", "/job-cards/close", "/job-cards/print", "/job-cards/repair-cost-report"]) {
+  for (const path of [
+    "/job-cards",
+    "/job-cards/capturer-default",
+    "/job-cards/list",
+    "/job-cards/authorizer-dashboard",
+    "/job-cards/authorizer-vehicles",
+    "/job-cards/cancel",
+    "/job-cards/close",
+    "/job-cards/print",
+    "/job-cards/repair-cost-report",
+  ]) {
     revalidatePath(path);
   }
 }
@@ -117,17 +146,31 @@ export async function createJobCardAction(formData: FormData) {
   if (!access.ok) redirectWithMessage(path, "error", access.message);
 
   try {
-    const extraCodes = formData.getAll("extraCode").map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0);
-    if (extraCodes.length === 0) throw new JobCardValidationError("Select at least one job card category.");
+    const extraCodes = formData
+      .getAll("extraCode")
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0);
+    if (extraCodes.length === 0)
+      throw new JobCardValidationError("Select at least one job card category.");
     const comment = optionalText(formData, "jcsComment", "Comment", 2000);
     const damages = optionalText(formData, "damages", "Damages", 2000);
     for (const extraCode of extraCodes) {
-      await createJobCard({ vmf_code: vmfCode, extra_code: extraCode, jcs_comment: comment, damages, priority: text(formData, "priority") || "N" });
+      await createJobCard({
+        vmf_code: vmfCode,
+        extra_code: extraCode,
+        jcs_comment: comment,
+        damages,
+        priority: text(formData, "priority") || "N",
+      });
     }
     revalidateJobCardPages();
     redirectWithMessage(path, "saved", "1");
   } catch (error) {
-    redirectWithMessage(path, "error", error instanceof JobCardValidationError ? error.message : apiErrorMessage(error));
+    redirectWithMessage(
+      path,
+      "error",
+      error instanceof JobCardValidationError ? error.message : apiErrorMessage(error),
+    );
   }
 }
 
@@ -149,7 +192,11 @@ export async function updateJobCardAction(formData: FormData) {
     revalidateJobCardPages();
     redirectWithMessage(path, "updated", "1");
   } catch (error) {
-    redirectWithMessage(path, "error", error instanceof JobCardValidationError ? error.message : apiErrorMessage(error));
+    redirectWithMessage(
+      path,
+      "error",
+      error instanceof JobCardValidationError ? error.message : apiErrorMessage(error),
+    );
   }
 }
 
@@ -164,7 +211,11 @@ export async function authorizeJobCardAction(formData: FormData) {
     revalidateJobCardPages();
     redirectWithMessage(path, "updated", "Job card authorized.");
   } catch (error) {
-    redirectWithMessage(path, "error", error instanceof JobCardValidationError ? error.message : apiErrorMessage(error));
+    redirectWithMessage(
+      path,
+      "error",
+      error instanceof JobCardValidationError ? error.message : apiErrorMessage(error),
+    );
   }
 }
 
@@ -177,12 +228,17 @@ export async function declineJobCardAction(formData: FormData) {
   try {
     const reason = text(formData, "declineReason");
     if (!reason) throw new JobCardValidationError("A decline reason is required.");
-    if (reason.length > 2000) throw new JobCardValidationError("The decline reason must be 2000 characters or fewer.");
+    if (reason.length > 2000)
+      throw new JobCardValidationError("The decline reason must be 2000 characters or fewer.");
     await declineJobCard(id, reason);
     revalidateJobCardPages();
     redirectWithMessage(path, "updated", "Job card declined.");
   } catch (error) {
-    redirectWithMessage(path, "error", error instanceof JobCardValidationError ? error.message : apiErrorMessage(error));
+    redirectWithMessage(
+      path,
+      "error",
+      error instanceof JobCardValidationError ? error.message : apiErrorMessage(error),
+    );
   }
 }
 
@@ -197,7 +253,11 @@ export async function cancelJobCardAction(formData: FormData) {
     revalidateJobCardPages();
     redirectWithMessage(path, "updated", "Job card canceled.");
   } catch (error) {
-    redirectWithMessage(path, "error", error instanceof JobCardValidationError ? error.message : apiErrorMessage(error));
+    redirectWithMessage(
+      path,
+      "error",
+      error instanceof JobCardValidationError ? error.message : apiErrorMessage(error),
+    );
   }
 }
 
@@ -220,7 +280,11 @@ export async function closeJobCardAction(formData: FormData) {
     revalidateJobCardPages();
     redirectWithMessage(path, "updated", "Job card closed.");
   } catch (error) {
-    redirectWithMessage(path, "error", error instanceof JobCardValidationError ? error.message : apiErrorMessage(error));
+    redirectWithMessage(
+      path,
+      "error",
+      error instanceof JobCardValidationError ? error.message : apiErrorMessage(error),
+    );
   }
 }
 
@@ -242,7 +306,11 @@ export async function updateJobCardCostsAction(formData: FormData) {
     revalidateJobCardPages();
     redirectWithMessage(path, "updated", "Job card costs updated.");
   } catch (error) {
-    redirectWithMessage(path, "error", error instanceof JobCardValidationError ? error.message : apiErrorMessage(error));
+    redirectWithMessage(
+      path,
+      "error",
+      error instanceof JobCardValidationError ? error.message : apiErrorMessage(error),
+    );
   }
 }
 
@@ -257,6 +325,10 @@ export async function deleteJobCardAction(formData: FormData) {
     revalidateJobCardPages();
     redirectWithMessage(path, "deleted", "Job card deleted.");
   } catch (error) {
-    redirectWithMessage(path, "error", error instanceof JobCardValidationError ? error.message : apiErrorMessage(error));
+    redirectWithMessage(
+      path,
+      "error",
+      error instanceof JobCardValidationError ? error.message : apiErrorMessage(error),
+    );
   }
 }

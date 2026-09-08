@@ -49,10 +49,14 @@ export type PrivateHireContractorRecord = {
   status: string;
 };
 
-export type PrivateHireApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type PrivateHireApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class PrivateHireApiError extends Error {
-  constructor(public readonly reason: PrivateHireApiErrorReason, message: string) {
+  constructor(
+    public readonly reason: PrivateHireApiErrorReason,
+    message: string,
+  ) {
     super(message);
     this.name = "PrivateHireApiError";
   }
@@ -90,7 +94,8 @@ function asNumber(value: unknown) {
 function asBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") return ["true", "1", "y", "yes"].includes(value.trim().toLowerCase());
+  if (typeof value === "string")
+    return ["true", "1", "y", "yes"].includes(value.trim().toLowerCase());
   return null;
 }
 
@@ -105,7 +110,8 @@ function getCollection(payload: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new PrivateHireApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new PrivateHireApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -121,9 +127,18 @@ async function requestApi(path: string, init: RequestInit = {}) {
       },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) throw new PrivateHireApiError("unauthorized", "The FIS access cookie was rejected.");
-    if (response.status === 404) throw new PrivateHireApiError("not-found", "The requested Private Hire record was not found.");
-    if (!response.ok) throw new PrivateHireApiError(response.status >= 500 ? "unavailable" : "invalid-response", `FIS API returned HTTP ${response.status}.`);
+    if (response.status === 401 || response.status === 403)
+      throw new PrivateHireApiError("unauthorized", "The FIS access cookie was rejected.");
+    if (response.status === 404)
+      throw new PrivateHireApiError(
+        "not-found",
+        "The requested Private Hire record was not found.",
+      );
+    if (!response.ok)
+      throw new PrivateHireApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        `FIS API returned HTTP ${response.status}.`,
+      );
     return response;
   } catch (error) {
     if (error instanceof PrivateHireApiError) throw error;
@@ -146,12 +161,16 @@ function mapVehicle(value: unknown): PrivateHireVehicleRecord | null {
   const phvCode = asNumber(getValue(value, "PHV_code", "phvCode", "vehicle_id"));
   const registrationNumber = asString(getValue(value, "registration_number", "registrationNumber"));
   if (phvCode === null || registrationNumber === null) return null;
-  const returnDate = asString(getValue(value, "return_date", "returnDate", "date_retired", "hire_end_date"));
+  const returnDate = asString(
+    getValue(value, "return_date", "returnDate", "date_retired", "hire_end_date"),
+  );
   return {
     phvCode,
     registrationNumber,
     modelCode: asNumber(getValue(value, "model_code", "modelCode")) ?? 0,
-    modelDescription: asString(getValue(value, "model_desc", "modelDescription", "model_description", "make_model")),
+    modelDescription: asString(
+      getValue(value, "model_desc", "modelDescription", "model_description", "make_model"),
+    ),
     siteCode: asNumber(getValue(value, "site_code", "siteCode", "department_code")) ?? 0,
     contractedTo: asNumber(getValue(value, "contracted_to", "contractedTo")),
     engineNumber: asString(getValue(value, "engine_number", "engineNumber")),
@@ -163,21 +182,26 @@ function mapVehicle(value: unknown): PrivateHireVehicleRecord | null {
     contractorId: asNumber(getValue(value, "contractor_id", "contractorId")) ?? 0,
     fuelCard: asString(getValue(value, "fuel_card", "fuelCard")),
     fuelCardReceiver: asString(getValue(value, "fuel_card_receiver", "fuelCardReceiver")),
-    takeOnDate: asString(getValue(value, "take_on_date", "takeOnDate", "date_hired", "hire_start_date")),
+    takeOnDate: asString(
+      getValue(value, "take_on_date", "takeOnDate", "date_hired", "hire_start_date"),
+    ),
     takeOnOdo: asNumber(getValue(value, "take_on_odo", "takeOnOdo")) ?? 0,
     returnDate,
     returnOdo: asNumber(getValue(value, "return_odo", "returnOdo")) ?? 0,
     kmTariff: asNumber(getValue(value, "km_tariff", "kmTariff")),
     dailyTariff: asNumber(getValue(value, "daily_tariff", "dailyTariff")),
     hourlyTariff: asNumber(getValue(value, "hourly_tariff", "hourlyTariff")),
-    hireStatus: asString(getValue(value, "hire_status", "hireStatus")) ?? (returnDate ? "Retired" : "Active"),
+    hireStatus:
+      asString(getValue(value, "hire_status", "hireStatus")) ?? (returnDate ? "Retired" : "Active"),
   };
 }
 
 function mapContractor(value: unknown): PrivateHireContractorRecord | null {
   if (!isRecord(value)) return null;
   const contractorId = asNumber(getValue(value, "contractor_id", "contractorId"));
-  const companyName = asString(getValue(value, "company_name", "companyName", "contractor_name", "contractorName"));
+  const companyName = asString(
+    getValue(value, "company_name", "companyName", "contractor_name", "contractorName"),
+  );
   if (contractorId === null || companyName === null) return null;
   const active = asNumber(getValue(value, "active"));
   return {
@@ -210,8 +234,14 @@ export async function getPrivateHireVehicles() {
 }
 
 export async function getPrivateHireVehicle(phvCode: number) {
-  const record = mapVehicle(await readJson(await requestApi(`api/PrivateHire/${encodeURIComponent(phvCode)}`)));
-  if (!record) throw new PrivateHireApiError("invalid-response", "The FIS API returned an invalid Private Hire vehicle.");
+  const record = mapVehicle(
+    await readJson(await requestApi(`api/PrivateHire/${encodeURIComponent(phvCode)}`)),
+  );
+  if (!record)
+    throw new PrivateHireApiError(
+      "invalid-response",
+      "The FIS API returned an invalid Private Hire vehicle.",
+    );
   return record;
 }
 
@@ -222,7 +252,9 @@ export async function searchPrivateHireVehicles(searchTerm: string) {
     .filter((record): record is PrivateHireVehicleRecord => record !== null);
 }
 
-export type PrivateHireVehicleInput = Omit<PrivateHireVehicleRecord, "hireStatus" | "phvCode"> & { phvCode?: number };
+export type PrivateHireVehicleInput = Omit<PrivateHireVehicleRecord, "hireStatus" | "phvCode"> & {
+  phvCode?: number;
+};
 
 function vehiclePayload(input: PrivateHireVehicleInput) {
   return {
@@ -252,14 +284,36 @@ function vehiclePayload(input: PrivateHireVehicleInput) {
 }
 
 export async function createPrivateHireVehicle(input: PrivateHireVehicleInput) {
-  const record = mapVehicle(await readJson(await requestApi("api/PrivateHire", { method: "POST", body: JSON.stringify(vehiclePayload(input)) })));
-  if (!record) throw new PrivateHireApiError("invalid-response", "The FIS API returned an invalid created Private Hire vehicle.");
+  const record = mapVehicle(
+    await readJson(
+      await requestApi("api/PrivateHire", {
+        method: "POST",
+        body: JSON.stringify(vehiclePayload(input)),
+      }),
+    ),
+  );
+  if (!record)
+    throw new PrivateHireApiError(
+      "invalid-response",
+      "The FIS API returned an invalid created Private Hire vehicle.",
+    );
   return record;
 }
 
 export async function updatePrivateHireVehicle(phvCode: number, input: PrivateHireVehicleInput) {
-  const record = mapVehicle(await readJson(await requestApi(`api/PrivateHire/${encodeURIComponent(phvCode)}`, { method: "PUT", body: JSON.stringify(vehiclePayload({ ...input, phvCode })) })));
-  if (!record) throw new PrivateHireApiError("invalid-response", "The FIS API returned an invalid updated Private Hire vehicle.");
+  const record = mapVehicle(
+    await readJson(
+      await requestApi(`api/PrivateHire/${encodeURIComponent(phvCode)}`, {
+        method: "PUT",
+        body: JSON.stringify(vehiclePayload({ ...input, phvCode })),
+      }),
+    ),
+  );
+  if (!record)
+    throw new PrivateHireApiError(
+      "invalid-response",
+      "The FIS API returned an invalid updated Private Hire vehicle.",
+    );
   return record;
 }
 
@@ -274,12 +328,23 @@ export async function getPrivateHireContractors() {
 }
 
 export async function getPrivateHireContractor(contractorId: number) {
-  const record = mapContractor(await readJson(await requestApi(`api/PrivateHire/contractors/${encodeURIComponent(contractorId)}`)));
-  if (!record) throw new PrivateHireApiError("invalid-response", "The FIS API returned an invalid Private Hire contractor.");
+  const record = mapContractor(
+    await readJson(
+      await requestApi(`api/PrivateHire/contractors/${encodeURIComponent(contractorId)}`),
+    ),
+  );
+  if (!record)
+    throw new PrivateHireApiError(
+      "invalid-response",
+      "The FIS API returned an invalid Private Hire contractor.",
+    );
   return record;
 }
 
-export type PrivateHireContractorInput = Omit<PrivateHireContractorRecord, "status" | "contractorId"> & { contractorId?: number; status?: string };
+export type PrivateHireContractorInput = Omit<
+  PrivateHireContractorRecord,
+  "status" | "contractorId"
+> & { contractorId?: number; status?: string };
 
 function contractorPayload(input: PrivateHireContractorInput) {
   return {
@@ -302,17 +367,44 @@ function contractorPayload(input: PrivateHireContractorInput) {
 }
 
 export async function createPrivateHireContractor(input: PrivateHireContractorInput) {
-  const record = mapContractor(await readJson(await requestApi("api/PrivateHire/contractors", { method: "POST", body: JSON.stringify(contractorPayload(input)) })));
-  if (!record) throw new PrivateHireApiError("invalid-response", "The FIS API returned an invalid created Private Hire contractor.");
+  const record = mapContractor(
+    await readJson(
+      await requestApi("api/PrivateHire/contractors", {
+        method: "POST",
+        body: JSON.stringify(contractorPayload(input)),
+      }),
+    ),
+  );
+  if (!record)
+    throw new PrivateHireApiError(
+      "invalid-response",
+      "The FIS API returned an invalid created Private Hire contractor.",
+    );
   return record;
 }
 
-export async function updatePrivateHireContractor(contractorId: number, input: PrivateHireContractorInput) {
-  const record = mapContractor(await readJson(await requestApi(`api/PrivateHire/contractors/${encodeURIComponent(contractorId)}`, { method: "PUT", body: JSON.stringify(contractorPayload({ ...input, contractorId })) })));
-  if (!record) throw new PrivateHireApiError("invalid-response", "The FIS API returned an invalid updated Private Hire contractor.");
+export async function updatePrivateHireContractor(
+  contractorId: number,
+  input: PrivateHireContractorInput,
+) {
+  const record = mapContractor(
+    await readJson(
+      await requestApi(`api/PrivateHire/contractors/${encodeURIComponent(contractorId)}`, {
+        method: "PUT",
+        body: JSON.stringify(contractorPayload({ ...input, contractorId })),
+      }),
+    ),
+  );
+  if (!record)
+    throw new PrivateHireApiError(
+      "invalid-response",
+      "The FIS API returned an invalid updated Private Hire contractor.",
+    );
   return record;
 }
 
 export async function deletePrivateHireContractor(contractorId: number) {
-  await requestApi(`api/PrivateHire/contractors/${encodeURIComponent(contractorId)}`, { method: "DELETE" });
+  await requestApi(`api/PrivateHire/contractors/${encodeURIComponent(contractorId)}`, {
+    method: "DELETE",
+  });
 }

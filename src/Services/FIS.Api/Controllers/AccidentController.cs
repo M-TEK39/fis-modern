@@ -1,11 +1,11 @@
+using System.Data;
+using System.Globalization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Data;
-using System.Globalization;
 
 namespace FIS.Api.Controllers;
 
@@ -19,7 +19,11 @@ public class AccidentController : BaseApiController
     private readonly FisDbContext _context;
     private readonly ILogger<AccidentController> _logger;
 
-    public AccidentController(IAccidentRepository repository, FisDbContext context, ILogger<AccidentController> logger)
+    public AccidentController(
+        IAccidentRepository repository,
+        FisDbContext context,
+        ILogger<AccidentController> logger
+    )
     {
         _repository = repository;
         _context = context;
@@ -60,11 +64,13 @@ public class AccidentController : BaseApiController
     {
         try
         {
-            var rows = await ExecuteReportQueryAsync("""
+            var rows = await ExecuteReportQueryAsync(
+                """
                 SELECT [acc_type_code], [acc_type_description]
                 FROM [dbo].[acc_type]
                 ORDER BY [acc_type_code]
-                """);
+                """
+            );
             return Ok(rows);
         }
         catch (Exception ex)
@@ -134,7 +140,9 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/last-gg-reference")]
-    public async Task<ActionResult<IEnumerable<AccidentLastGgReferenceRow>>> GetLastGgReferenceReport()
+    public async Task<
+        ActionResult<IEnumerable<AccidentLastGgReferenceRow>>
+    > GetLastGgReferenceReport()
     {
         try
         {
@@ -149,18 +157,21 @@ public class AccidentController : BaseApiController
 
     [HttpGet("reports/all")]
     public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetAllAccidentsReport(
-        [FromQuery] string mode = "2002-current")
+        [FromQuery] string mode = "2002-current"
+    )
     {
         var normalizedMode = mode.Trim().ToLowerInvariant() switch
         {
             "2002-current" or "radionou" or "current" => "2002-current",
             "1999-2001" or "radioou" or "middle" => "1999-2001",
             "before-1999" or "radiobou" or "before" => "before-1999",
-            _ => string.Empty
+            _ => string.Empty,
         };
         if (normalizedMode.Length == 0)
         {
-            return BadRequest(new { error = "Mode must be 2002-current, 1999-2001, or before-1999." });
+            return BadRequest(
+                new { error = "Mode must be 2002-current, 1999-2001, or before-1999." }
+            );
         }
 
         try
@@ -176,14 +187,15 @@ public class AccidentController : BaseApiController
 
     [HttpGet("reports/garage-detail")]
     public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetGarageAccidentsReport(
-        [FromQuery] string mode = "jhb")
+        [FromQuery] string mode = "jhb"
+    )
     {
         var normalizedMode = mode.Trim().ToLowerInvariant() switch
         {
             "jhb" or "radiojhb" => "jhb",
             "pta" or "radiopta" => "pta",
             "all" or "radioall" => "all",
-            _ => string.Empty
+            _ => string.Empty,
         };
         if (normalizedMode.Length == 0)
         {
@@ -204,7 +216,8 @@ public class AccidentController : BaseApiController
     [HttpGet("reports/driver")]
     public async Task<ActionResult<IEnumerable<AccidentDriverReportRow>>> GetDriverReport(
         [FromQuery] string searchTerm,
-        [FromQuery] string mode = "name")
+        [FromQuery] string mode = "name"
+    )
     {
         var searchById = mode.Equals("id", StringComparison.OrdinalIgnoreCase);
         if (!searchById && !mode.Equals("name", StringComparison.OrdinalIgnoreCase))
@@ -226,7 +239,8 @@ public class AccidentController : BaseApiController
     [HttpGet("reports/vehicle")]
     public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetVehicleReport(
         [FromQuery] string searchTerm,
-        [FromQuery] string mode = "registration")
+        [FromQuery] string mode = "registration"
+    )
     {
         var normalizedMode = mode.Trim().ToLowerInvariant();
         var searchByFleet = normalizedMode is "fleet" or "gg" or "radiogg";
@@ -248,9 +262,12 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/outstanding-documents")]
-    public async Task<ActionResult<IEnumerable<AccidentOutstandingDocumentLookupRow>>> GetOutstandingDocumentLookup(
+    public async Task<
+        ActionResult<IEnumerable<AccidentOutstandingDocumentLookupRow>>
+    > GetOutstandingDocumentLookup(
         [FromQuery] string searchTerm,
-        [FromQuery] string mode = "registration")
+        [FromQuery] string mode = "registration"
+    )
     {
         if (searchTerm?.Trim().Length > 8)
         {
@@ -267,7 +284,12 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetOutstandingDocumentLookupAsync(searchTerm ?? string.Empty, searchByFleet));
+            return Ok(
+                await _repository.GetOutstandingDocumentLookupAsync(
+                    searchTerm ?? string.Empty,
+                    searchByFleet
+                )
+            );
         }
         catch (Exception ex)
         {
@@ -277,7 +299,9 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/outstanding-documents/{accidentCode:int}")]
-    public async Task<ActionResult<AccidentOutstandingDocumentReport>> GetOutstandingDocumentReport(int accidentCode)
+    public async Task<ActionResult<AccidentOutstandingDocumentReport>> GetOutstandingDocumentReport(
+        int accidentCode
+    )
     {
         if (accidentCode <= 0)
         {
@@ -291,15 +315,22 @@ public class AccidentController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving outstanding accident document report for {AccidentCode}", accidentCode);
+            _logger.LogError(
+                ex,
+                "Error retrieving outstanding accident document report for {AccidentCode}",
+                accidentCode
+            );
             return StatusCode(500);
         }
     }
 
     [HttpGet("reports/inspection-letter")]
-    public async Task<ActionResult<IEnumerable<AccidentOutstandingDocumentLookupRow>>> GetInspectionLetterLookup(
+    public async Task<
+        ActionResult<IEnumerable<AccidentOutstandingDocumentLookupRow>>
+    > GetInspectionLetterLookup(
         [FromQuery] string searchTerm,
-        [FromQuery] string mode = "registration")
+        [FromQuery] string mode = "registration"
+    )
     {
         if (searchTerm?.Trim().Length > 8)
         {
@@ -316,7 +347,12 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetInspectionLetterLookupAsync(searchTerm ?? string.Empty, searchByFleet));
+            return Ok(
+                await _repository.GetInspectionLetterLookupAsync(
+                    searchTerm ?? string.Empty,
+                    searchByFleet
+                )
+            );
         }
         catch (Exception ex)
         {
@@ -326,7 +362,9 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/inspection-letter/{accidentCode:int}")]
-    public async Task<ActionResult<AccidentOutstandingDocumentReport>> GetInspectionLetterReport(int accidentCode)
+    public async Task<ActionResult<AccidentOutstandingDocumentReport>> GetInspectionLetterReport(
+        int accidentCode
+    )
     {
         if (accidentCode <= 0)
         {
@@ -340,7 +378,11 @@ public class AccidentController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving inspection letter for {AccidentCode}", accidentCode);
+            _logger.LogError(
+                ex,
+                "Error retrieving inspection letter for {AccidentCode}",
+                accidentCode
+            );
             return StatusCode(500);
         }
     }
@@ -348,11 +390,14 @@ public class AccidentController : BaseApiController
     [HttpGet("reports/private-vehicle")]
     public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetPrivateVehicleReport(
         [FromQuery] string searchTerm,
-        [FromQuery] string mode = "third-party")
+        [FromQuery] string mode = "third-party"
+    )
     {
         var normalizedMode = mode.Trim().ToLowerInvariant();
-        var searchByDescription = normalizedMode is "description" or "capture-description" or "private-description";
-        var validThirdPartyMode = normalizedMode is "third-party" or "thirdparty" or "regno" or "private";
+        var searchByDescription =
+            normalizedMode is "description" or "capture-description" or "private-description";
+        var validThirdPartyMode =
+            normalizedMode is "third-party" or "thirdparty" or "regno" or "private";
         if (!searchByDescription && !validThirdPartyMode)
         {
             return BadRequest(new { error = "Mode must be third-party or description." });
@@ -360,7 +405,9 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetPrivateVehicleReportAsync(searchTerm, searchByDescription));
+            return Ok(
+                await _repository.GetPrivateVehicleReportAsync(searchTerm, searchByDescription)
+            );
         }
         catch (Exception ex)
         {
@@ -374,7 +421,8 @@ public class AccidentController : BaseApiController
         [FromQuery] string? departmentNumber,
         [FromQuery] DateTime startDate,
         [FromQuery] DateTime endDate,
-        [FromQuery] string status = "open")
+        [FromQuery] string status = "open"
+    )
     {
         if (endDate < startDate)
         {
@@ -389,11 +437,14 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetPeriodReportAsync(
-                departmentNumber ?? string.Empty,
-                startDate,
-                endDate,
-                normalizedStatus is "closed" or "close"));
+            return Ok(
+                await _repository.GetPeriodReportAsync(
+                    departmentNumber ?? string.Empty,
+                    startDate,
+                    endDate,
+                    normalizedStatus is "closed" or "close"
+                )
+            );
         }
         catch (Exception ex)
         {
@@ -403,10 +454,13 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/department-period")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetDepartmentPeriodReport(
+    public async Task<
+        ActionResult<IEnumerable<AccidentVehicleReportRow>>
+    > GetDepartmentPeriodReport(
         [FromQuery] string? departmentNumber,
         [FromQuery] DateTime startDate,
-        [FromQuery] DateTime endDate)
+        [FromQuery] DateTime endDate
+    )
     {
         if (endDate < startDate)
         {
@@ -415,10 +469,13 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetDepartmentPeriodReportAsync(
-                departmentNumber ?? string.Empty,
-                startDate,
-                endDate));
+            return Ok(
+                await _repository.GetDepartmentPeriodReportAsync(
+                    departmentNumber ?? string.Empty,
+                    startDate,
+                    endDate
+                )
+            );
         }
         catch (Exception ex)
         {
@@ -428,11 +485,14 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/department-period-vip")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetDepartmentPeriodVipReport(
+    public async Task<
+        ActionResult<IEnumerable<AccidentVehicleReportRow>>
+    > GetDepartmentPeriodVipReport(
         [FromQuery] string? departmentNumber,
         [FromQuery] DateTime startDate,
         [FromQuery] DateTime endDate,
-        [FromQuery] string mode = "all")
+        [FromQuery] string mode = "all"
+    )
     {
         if (endDate < startDate)
         {
@@ -445,7 +505,7 @@ public class AccidentController : BaseApiController
             "vip" or "radiovip" => "vip",
             "pool" or "radiopool" => "pool",
             "permanent" or "radioperm" => "permanent",
-            _ => string.Empty
+            _ => string.Empty,
         };
         if (normalizedMode.Length == 0)
         {
@@ -454,11 +514,14 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetDepartmentPeriodVipReportAsync(
-                departmentNumber ?? string.Empty,
-                startDate,
-                endDate,
-                normalizedMode));
+            return Ok(
+                await _repository.GetDepartmentPeriodVipReportAsync(
+                    departmentNumber ?? string.Empty,
+                    startDate,
+                    endDate,
+                    normalizedMode
+                )
+            );
         }
         catch (Exception ex)
         {
@@ -473,14 +536,15 @@ public class AccidentController : BaseApiController
         [FromQuery] string garage = "jhb",
         [FromQuery] string period = "month",
         [FromQuery] int? year = null,
-        [FromQuery] int? month = null)
+        [FromQuery] int? month = null
+    )
     {
         var normalizedGarage = garage.Trim().ToLowerInvariant() switch
         {
             "jhb" or "radiojhb" => "jhb",
             "pta" or "radiopta" => "pta",
             "all" or "radioall" => "all",
-            _ => string.Empty
+            _ => string.Empty,
         };
         if (normalizedGarage.Length == 0)
         {
@@ -493,31 +557,41 @@ public class AccidentController : BaseApiController
             "year" or "radioyear" => "year",
             "02/03" or "radiof23" => "02/03",
             "01/02" or "radioy12" => "01/02",
-            _ => string.Empty
+            _ => string.Empty,
         };
         if (normalizedPeriod.Length == 0)
         {
             return BadRequest(new { error = "Period must be month, year, 02/03, or 01/02." });
         }
 
-        if (normalizedPeriod is "month" or "year" && (!year.HasValue || year.Value is < 1 or > 9999))
+        if (
+            normalizedPeriod is "month" or "year"
+            && (!year.HasValue || year.Value is < 1 or > 9999)
+        )
         {
-            return BadRequest(new { error = "Year must be between 1 and 9999 for the selected period." });
+            return BadRequest(
+                new { error = "Year must be between 1 and 9999 for the selected period." }
+            );
         }
 
         if (normalizedPeriod == "month" && (!month.HasValue || month.Value is < 1 or > 12))
         {
-            return BadRequest(new { error = "Month must be between 1 and 12 for a monthly report." });
+            return BadRequest(
+                new { error = "Month must be between 1 and 12 for a monthly report." }
+            );
         }
 
         try
         {
-            return Ok(await _repository.GetDepartmentMonthReportAsync(
-                departmentNumber ?? string.Empty,
-                normalizedGarage,
-                normalizedPeriod,
-                year,
-                month));
+            return Ok(
+                await _repository.GetDepartmentMonthReportAsync(
+                    departmentNumber ?? string.Empty,
+                    normalizedGarage,
+                    normalizedPeriod,
+                    year,
+                    month
+                )
+            );
         }
         catch (Exception ex)
         {
@@ -527,17 +601,20 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/department-finyear")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetDepartmentFinancialYearReport(
+    public async Task<
+        ActionResult<IEnumerable<AccidentVehicleReportRow>>
+    > GetDepartmentFinancialYearReport(
         [FromQuery] string? departmentNumber,
         [FromQuery] string? financialYear,
-        [FromQuery] string garage = "jhb")
+        [FromQuery] string garage = "jhb"
+    )
     {
         var normalizedGarage = garage.Trim().ToLowerInvariant() switch
         {
             "jhb" or "radiojhb" => "jhb",
             "pta" or "radiopta" => "pta",
             "all" or "radioall" => "all",
-            _ => string.Empty
+            _ => string.Empty,
         };
         if (normalizedGarage.Length == 0)
         {
@@ -547,15 +624,20 @@ public class AccidentController : BaseApiController
         var normalizedFinancialYear = financialYear?.Trim() ?? string.Empty;
         if (normalizedFinancialYear.Length == 0 || normalizedFinancialYear.Length > 5)
         {
-            return BadRequest(new { error = "Book / Financial Year must be between 1 and 5 characters." });
+            return BadRequest(
+                new { error = "Book / Financial Year must be between 1 and 5 characters." }
+            );
         }
 
         try
         {
-            return Ok(await _repository.GetDepartmentFinancialYearReportAsync(
-                departmentNumber ?? string.Empty,
-                normalizedGarage,
-                normalizedFinancialYear));
+            return Ok(
+                await _repository.GetDepartmentFinancialYearReportAsync(
+                    departmentNumber ?? string.Empty,
+                    normalizedGarage,
+                    normalizedFinancialYear
+                )
+            );
         }
         catch (Exception ex)
         {
@@ -565,8 +647,9 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/accident-costs-finyear")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetAccidentCostsFinancialYearReport(
-        [FromQuery] string? financialYear)
+    public async Task<
+        ActionResult<IEnumerable<AccidentVehicleReportRow>>
+    > GetAccidentCostsFinancialYearReport([FromQuery] string? financialYear)
     {
         var normalizedFinancialYear = financialYear?.Trim() ?? string.Empty;
         if (normalizedFinancialYear.Length == 0 || normalizedFinancialYear.Length > 5)
@@ -576,7 +659,9 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetAccidentCostsFinancialYearReportAsync(normalizedFinancialYear));
+            return Ok(
+                await _repository.GetAccidentCostsFinancialYearReportAsync(normalizedFinancialYear)
+            );
         }
         catch (Exception ex)
         {
@@ -586,15 +671,16 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/duplicates")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetDuplicateAccidentsReport(
-        [FromQuery] string garage = "all")
+    public async Task<
+        ActionResult<IEnumerable<AccidentVehicleReportRow>>
+    > GetDuplicateAccidentsReport([FromQuery] string garage = "all")
     {
         var normalizedGarage = garage.Trim().ToLowerInvariant() switch
         {
             "jhb" or "radiojhb" => "jhb",
             "pta" or "radiopta" => "pta",
             "all" or "radioall" => "all",
-            _ => string.Empty
+            _ => string.Empty,
         };
         if (normalizedGarage.Length == 0)
         {
@@ -613,7 +699,9 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/new-accidents")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetNewAccidentsReport([FromQuery] string mode = "all")
+    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetNewAccidentsReport(
+        [FromQuery] string mode = "all"
+    )
     {
         var normalizedMode = mode.Trim().ToLowerInvariant();
         if (normalizedMode is not ("all" or "call" or "garage" or "confirm"))
@@ -725,8 +813,15 @@ public class AccidentController : BaseApiController
         }
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA2100", Justification = "SQL text is defined in controller constants and user inputs are parameterized.")]
-    private async Task<List<Dictionary<string, string>>> ExecuteReportQueryAsync(string sql, params (string name, object value)[] parameters)
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Security",
+        "CA2100",
+        Justification = "SQL text is defined in controller constants and user inputs are parameterized."
+    )]
+    private async Task<List<Dictionary<string, string>>> ExecuteReportQueryAsync(
+        string sql,
+        params (string name, object value)[] parameters
+    )
     {
         var result = new List<Dictionary<string, string>>();
         var connection = _context.Database.GetDbConnection();
@@ -765,7 +860,9 @@ public class AccidentController : BaseApiController
                     }
                     else
                     {
-                        value = Convert.ToString(reader.GetValue(i), CultureInfo.InvariantCulture) ?? string.Empty;
+                        value =
+                            Convert.ToString(reader.GetValue(i), CultureInfo.InvariantCulture)
+                            ?? string.Empty;
                     }
                     row[key] = value;
                 }

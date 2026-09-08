@@ -23,7 +23,10 @@ export type LicenseVehicleDetails = {
   comments: string | null;
 };
 
-export type LicenseVehicleWriteInput = Omit<LicenseVehicleDetails, "vmfCode" | "numberType" | "number"> & {
+export type LicenseVehicleWriteInput = Omit<
+  LicenseVehicleDetails,
+  "vmfCode" | "numberType" | "number"
+> & {
   vmfCode: number;
   numberType: "GG" | "GP";
   number: string;
@@ -59,10 +62,15 @@ export type LicenseHistory = {
   history: LicenseHistoryEntry[];
 };
 
-export type LicenseApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type LicenseApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class LicenseApiError extends Error {
-  constructor(public readonly reason: LicenseApiErrorReason, message: string, public readonly status?: number) {
+  constructor(
+    public readonly reason: LicenseApiErrorReason,
+    message: string,
+    public readonly status?: number,
+  ) {
     super(message);
     this.name = "LicenseApiError";
   }
@@ -99,7 +107,8 @@ function asString(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new LicenseApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new LicenseApiError("unauthorized", "No FIS access cookie is available.");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   try {
@@ -109,17 +118,32 @@ async function requestApi(path: string, init: RequestInit = {}) {
       headers: { accept: "application/json", cookie: cookieHeader, ...init.headers },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) throw new LicenseApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
-    if (response.status === 404) throw new LicenseApiError("not-found", "The requested licence record was not found.", response.status);
+    if (response.status === 401 || response.status === 403)
+      throw new LicenseApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
+    if (response.status === 404)
+      throw new LicenseApiError(
+        "not-found",
+        "The requested licence record was not found.",
+        response.status,
+      );
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based error when the body is not JSON.
       }
-      throw new LicenseApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new LicenseApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -138,7 +162,11 @@ async function readJson(response: Response) {
   }
 }
 
-function mapDetails(value: unknown, numberType: "GG" | "GP", number: string): LicenseVehicleDetails | null {
+function mapDetails(
+  value: unknown,
+  numberType: "GG" | "GP",
+  number: string,
+): LicenseVehicleDetails | null {
   if (!isRecord(value)) return null;
   const vmfCode = asNumber(getValue(value, "vmfCode", "vmf_code"));
   if (vmfCode === null) return null;
@@ -151,10 +179,18 @@ function mapDetails(value: unknown, numberType: "GG" | "GP", number: string): Li
     regDoc: asString(getValue(value, "regDoc", "lic_registration_doc")),
     tare: asString(getValue(value, "tare")),
     receiver: asString(getValue(value, "receiver", "Licence_receiver", "licence_receiver")),
-    receiverId: asString(getValue(value, "receiverId", "Licence_receiver_id", "licence_receiver_id")),
-    receiverTel: asString(getValue(value, "receiverTel", "Licence_receiver_tel", "licence_receiver_tel")),
-    receiverSiteCode: asNumber(getValue(value, "receiverSiteCode", "Licence_receiver_site", "licence_receiver_site")),
-    dateCollected: asString(getValue(value, "dateCollected", "Licence_date_taken", "licence_date_taken")),
+    receiverId: asString(
+      getValue(value, "receiverId", "Licence_receiver_id", "licence_receiver_id"),
+    ),
+    receiverTel: asString(
+      getValue(value, "receiverTel", "Licence_receiver_tel", "licence_receiver_tel"),
+    ),
+    receiverSiteCode: asNumber(
+      getValue(value, "receiverSiteCode", "Licence_receiver_site", "licence_receiver_site"),
+    ),
+    dateCollected: asString(
+      getValue(value, "dateCollected", "Licence_date_taken", "licence_date_taken"),
+    ),
     cofRequired: asString(getValue(value, "cofRequired", "cof_required")),
     cofExpDate: asString(getValue(value, "cofExpDate", "cof_last_done")),
     comments: asString(getValue(value, "comments", "licence_comments")),
@@ -162,7 +198,8 @@ function mapDetails(value: unknown, numberType: "GG" | "GP", number: string): Li
 }
 
 function mapHistory(value: unknown, fallbackVmfCode: number): LicenseHistory {
-  if (!isRecord(value)) return { vmfCode: fallbackVmfCode, fleetNumber: null, registrationNumber: null, history: [] };
+  if (!isRecord(value))
+    return { vmfCode: fallbackVmfCode, fleetNumber: null, registrationNumber: null, history: [] };
   const historyValue = getValue(value, "history");
   const history = Array.isArray(historyValue)
     ? historyValue.flatMap((item) => {
@@ -170,27 +207,33 @@ function mapHistory(value: unknown, fallbackVmfCode: number): LicenseHistory {
         const historyId = asNumber(getValue(item, "licence_history_id", "historyId"));
         const vmfCode = asNumber(getValue(item, "vmf_code", "vmfCode"));
         if (historyId === null || vmfCode === null) return [];
-        return [{
-          historyId,
-          vmfCode,
-          fleetNumber: asString(getValue(item, "fleet_number", "fleetNumber")),
-          registrationNumber: asString(getValue(item, "registration_number", "registrationNumber")),
-          dueDate: asString(getValue(item, "licence_due_date", "dueDate")),
-          registerNumber: asString(getValue(item, "lic_register_number", "registerNumber")),
-          registrationDocument: asString(getValue(item, "lic_registration_doc", "registrationDocument")),
-          comments: asString(getValue(item, "licence_comments", "comments")),
-          cofDate: asString(getValue(item, "cof_last_done", "cofDate")),
-          cofRequired: asString(getValue(item, "cof_required", "cofRequired")),
-          tare: asNumber(getValue(item, "tare")),
-          receiver: asString(getValue(item, "Licence_receiver", "receiver")),
-          receiverId: asString(getValue(item, "Licence_receiver_id", "receiverId")),
-          receiverTel: asString(getValue(item, "Licence_receiver_tel", "receiverTel")),
-          receiverSite: asNumber(getValue(item, "Licence_receiver_site", "receiverSite")),
-          dateCollected: asString(getValue(item, "Licence_date_taken", "dateCollected")),
-          capturedAt: asString(getValue(item, "captured_at", "capturedAt")),
-          capturedByEmail: asString(getValue(item, "captured_by_user_email", "capturedByEmail")),
-          updateNotes: asString(getValue(item, "update_notes", "updateNotes")),
-        } satisfies LicenseHistoryEntry];
+        return [
+          {
+            historyId,
+            vmfCode,
+            fleetNumber: asString(getValue(item, "fleet_number", "fleetNumber")),
+            registrationNumber: asString(
+              getValue(item, "registration_number", "registrationNumber"),
+            ),
+            dueDate: asString(getValue(item, "licence_due_date", "dueDate")),
+            registerNumber: asString(getValue(item, "lic_register_number", "registerNumber")),
+            registrationDocument: asString(
+              getValue(item, "lic_registration_doc", "registrationDocument"),
+            ),
+            comments: asString(getValue(item, "licence_comments", "comments")),
+            cofDate: asString(getValue(item, "cof_last_done", "cofDate")),
+            cofRequired: asString(getValue(item, "cof_required", "cofRequired")),
+            tare: asNumber(getValue(item, "tare")),
+            receiver: asString(getValue(item, "Licence_receiver", "receiver")),
+            receiverId: asString(getValue(item, "Licence_receiver_id", "receiverId")),
+            receiverTel: asString(getValue(item, "Licence_receiver_tel", "receiverTel")),
+            receiverSite: asNumber(getValue(item, "Licence_receiver_site", "receiverSite")),
+            dateCollected: asString(getValue(item, "Licence_date_taken", "dateCollected")),
+            capturedAt: asString(getValue(item, "captured_at", "capturedAt")),
+            capturedByEmail: asString(getValue(item, "captured_by_user_email", "capturedByEmail")),
+            updateNotes: asString(getValue(item, "update_notes", "updateNotes")),
+          } satisfies LicenseHistoryEntry,
+        ];
       })
     : [];
   return {
@@ -210,39 +253,47 @@ export async function submitLicensePassword(password: string) {
 }
 
 export async function getLicenseVehicle(numberType: "GG" | "GP", number: string) {
-  const payload = await readJson(await requestApi("api/License/one-vehicle/lookup", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ number_type: numberType, number }),
-  }));
+  const payload = await readJson(
+    await requestApi("api/License/one-vehicle/lookup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ number_type: numberType, number }),
+    }),
+  );
   const details = mapDetails(payload, numberType, number);
-  if (!details) throw new LicenseApiError("invalid-response", "The licence lookup response was invalid.");
+  if (!details)
+    throw new LicenseApiError("invalid-response", "The licence lookup response was invalid.");
   return details;
 }
 
 export async function getLicenseVehicleHistory(vmfCode: number) {
-  return mapHistory(await readJson(await requestApi(`api/vehicles/${encodeURIComponent(vmfCode)}/licence/history`)), vmfCode);
+  return mapHistory(
+    await readJson(await requestApi(`api/vehicles/${encodeURIComponent(vmfCode)}/licence/history`)),
+    vmfCode,
+  );
 }
 
 export async function captureLicenseVehicle(input: LicenseVehicleWriteInput) {
-  const payload = await readJson(await requestApi(`api/vehicles/${encodeURIComponent(input.vmfCode)}/licence`, {
-    method: "PATCH",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      licence_due_date: input.expDate,
-      lic_register_number: input.registerNumber,
-      lic_registration_doc: input.regDoc,
-      licence_comments: input.comments,
-      cof_last_done: input.cofExpDate,
-      cof_required: input.cofRequired,
-      tare: input.tare ? Number(input.tare) : null,
-      Licence_receiver: input.receiver,
-      Licence_receiver_id: input.receiverId,
-      Licence_receiver_tel: input.receiverTel,
-      Licence_receiver_site: input.receiverSiteCode,
-      Licence_date_taken: input.dateCollected,
-      update_notes: input.updateNotes ?? null,
+  const payload = await readJson(
+    await requestApi(`api/vehicles/${encodeURIComponent(input.vmfCode)}/licence`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        licence_due_date: input.expDate,
+        lic_register_number: input.registerNumber,
+        lic_registration_doc: input.regDoc,
+        licence_comments: input.comments,
+        cof_last_done: input.cofExpDate,
+        cof_required: input.cofRequired,
+        tare: input.tare ? Number(input.tare) : null,
+        Licence_receiver: input.receiver,
+        Licence_receiver_id: input.receiverId,
+        Licence_receiver_tel: input.receiverTel,
+        Licence_receiver_site: input.receiverSiteCode,
+        Licence_date_taken: input.dateCollected,
+        update_notes: input.updateNotes ?? null,
+      }),
     }),
-  }));
+  );
   return mapDetails(payload, input.numberType, input.number);
 }

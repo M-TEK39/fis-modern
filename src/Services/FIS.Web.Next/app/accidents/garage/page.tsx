@@ -19,7 +19,9 @@ type GaragePageProps = {
 };
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function getQueryValue(value: string | string[] | undefined) {
@@ -70,7 +72,9 @@ function ApiUnavailable() {
       </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Garage accident records could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
         <Link className="button button-primary" href="/accidents/garage">
           Try again
@@ -91,7 +95,9 @@ function AccessRestricted() {
       </div>
       <p className="eyebrow">Access restricted</p>
       <h2>You do not have permission to maintain garage accidents.</h2>
-      <p className="muted-copy">Contact your FIS administrator if you need accident-management access.</p>
+      <p className="muted-copy">
+        Contact your FIS administrator if you need accident-management access.
+      </p>
     </section>
   );
 }
@@ -100,7 +106,11 @@ function NoRecords({ searchTerm }: { searchTerm: string }) {
   return (
     <div className="vehicle-empty-state">
       <p className="eyebrow">No records found</p>
-      <h2>{searchTerm ? `No accidents matched “${searchTerm}”.` : "No garage accidents are available."}</h2>
+      <h2>
+        {searchTerm
+          ? `No accidents matched “${searchTerm}”.`
+          : "No garage accidents are available."}
+      </h2>
       <p className="muted-copy">Try another GG or GP number, or add a new accident record.</p>
     </div>
   );
@@ -141,7 +151,10 @@ async function GarageContent({ searchParams }: GaragePageProps) {
       return <SessionRecovery returnPath="/accidents/garage" />;
     }
 
-    console.error("FIS garage accident request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS garage accident request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return <ApiUnavailable />;
   }
 
@@ -237,7 +250,10 @@ async function GarageContent({ searchParams }: GaragePageProps) {
                   Previous
                 </Link>
               ) : (
-                <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
                   Previous
                 </span>
               )}
@@ -252,7 +268,10 @@ async function GarageContent({ searchParams }: GaragePageProps) {
                   Next
                 </Link>
               ) : (
-                <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
                   Next
                 </span>
               )}

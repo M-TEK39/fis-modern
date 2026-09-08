@@ -8,7 +8,11 @@ type JsonRecord = Record<string, unknown>;
 export type AuditApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
 
 export class AuditApiError extends Error {
-  constructor(public readonly reason: AuditApiErrorReason, message: string, public readonly status?: number) {
+  constructor(
+    public readonly reason: AuditApiErrorReason,
+    message: string,
+    public readonly status?: number,
+  ) {
     super(message);
     this.name = "AuditApiError";
   }
@@ -124,8 +128,18 @@ async function requestApi(path: string) {
       signal: controller.signal,
     });
 
-    if (response.status === 401 || response.status === 403) throw new AuditApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
-    if (!response.ok) throw new AuditApiError(response.status >= 500 ? "unavailable" : "invalid-response", `FIS API returned HTTP ${response.status}.`, response.status);
+    if (response.status === 401 || response.status === 403)
+      throw new AuditApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
+    if (!response.ok)
+      throw new AuditApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        `FIS API returned HTTP ${response.status}.`,
+        response.status,
+      );
 
     try {
       return (await response.json()) as unknown;
@@ -191,14 +205,17 @@ function mapUserStatusItem(value: unknown): UserStatusItem | null {
 function mapPasswordHistoryItem(value: unknown): PasswordHistoryItem | null {
   if (!isRecord(value)) return null;
   const userAccessCode = asNumber(getValue(value, "user_access_code", "userAccessCode"));
-  const lastPasswordChange = asString(getValue(value, "last_password_change", "lastPasswordChange"));
+  const lastPasswordChange = asString(
+    getValue(value, "last_password_change", "lastPasswordChange"),
+  );
   if (userAccessCode === null || !lastPasswordChange) return null;
   return {
     userAccessCode,
     lastPasswordChange,
     passwordExpiryDate: asString(getValue(value, "password_expiry_date", "passwordExpiryDate")),
     changedByUserCode: asNumber(getValue(value, "changed_by_user_code", "changedByUserCode")),
-    failedLoginAttempts: asNumber(getValue(value, "failed_login_attempts", "failedLoginAttempts")) ?? 0,
+    failedLoginAttempts:
+      asNumber(getValue(value, "failed_login_attempts", "failedLoginAttempts")) ?? 0,
     accountLockedUntil: asString(getValue(value, "account_locked_until", "accountLockedUntil")),
     isExpired: asBoolean(getValue(value, "isExpired", "IsExpired")),
   };
@@ -206,35 +223,63 @@ function mapPasswordHistoryItem(value: unknown): PasswordHistoryItem | null {
 
 export async function getAuditTrail(filters: AuditTrailFilters = {}): Promise<AuditPagedResult> {
   const payload = await requestApi(`api/audit${queryString(filters)}`);
-  if (!isRecord(payload)) throw new AuditApiError("invalid-response", "The FIS API returned an invalid audit result.");
-  const items = collection(payload).map(mapAuditItem).filter((item): item is AuditItem => item !== null);
+  if (!isRecord(payload))
+    throw new AuditApiError("invalid-response", "The FIS API returned an invalid audit result.");
+  const items = collection(payload)
+    .map(mapAuditItem)
+    .filter((item): item is AuditItem => item !== null);
   return {
     totalCount: asNumber(getValue(payload, "totalCount", "TotalCount")) ?? items.length,
     pageNumber: asNumber(getValue(payload, "pageNumber", "PageNumber")) ?? filters.pageNumber ?? 1,
     pageSize: asNumber(getValue(payload, "pageSize", "PageSize")) ?? filters.pageSize ?? 50,
-    totalPages: asNumber(getValue(payload, "totalPages", "TotalPages")) ?? (items.length > 0 ? 1 : 0),
+    totalPages:
+      asNumber(getValue(payload, "totalPages", "TotalPages")) ?? (items.length > 0 ? 1 : 0),
     items,
   };
 }
 
-export async function getUserStatusHistory(filters: { userAccessCode?: number; fromDate?: string; toDate?: string; pageNumber?: number; pageSize?: number } = {}): Promise<UserStatusResult> {
+export async function getUserStatusHistory(
+  filters: {
+    userAccessCode?: number;
+    fromDate?: string;
+    toDate?: string;
+    pageNumber?: number;
+    pageSize?: number;
+  } = {},
+): Promise<UserStatusResult> {
   const payload = await requestApi(`api/audit/user-status-history${queryString(filters)}`);
-  if (!isRecord(payload)) throw new AuditApiError("invalid-response", "The FIS API returned an invalid user status result.");
-  const items = collection(payload).map(mapUserStatusItem).filter((item): item is UserStatusItem => item !== null);
+  if (!isRecord(payload))
+    throw new AuditApiError(
+      "invalid-response",
+      "The FIS API returned an invalid user status result.",
+    );
+  const items = collection(payload)
+    .map(mapUserStatusItem)
+    .filter((item): item is UserStatusItem => item !== null);
   return {
     totalCount: asNumber(getValue(payload, "totalCount", "TotalCount")) ?? items.length,
-    totalPages: asNumber(getValue(payload, "totalPages", "TotalPages")) ?? (items.length > 0 ? 1 : 0),
+    totalPages:
+      asNumber(getValue(payload, "totalPages", "TotalPages")) ?? (items.length > 0 ? 1 : 0),
     items,
   };
 }
 
-export async function getPasswordHistory(filters: { userAccessCode?: number; pageNumber?: number; pageSize?: number } = {}): Promise<PasswordHistoryResult> {
+export async function getPasswordHistory(
+  filters: { userAccessCode?: number; pageNumber?: number; pageSize?: number } = {},
+): Promise<PasswordHistoryResult> {
   const payload = await requestApi(`api/audit/password-history${queryString(filters)}`);
-  if (!isRecord(payload)) throw new AuditApiError("invalid-response", "The FIS API returned an invalid password history result.");
-  const items = collection(payload).map(mapPasswordHistoryItem).filter((item): item is PasswordHistoryItem => item !== null);
+  if (!isRecord(payload))
+    throw new AuditApiError(
+      "invalid-response",
+      "The FIS API returned an invalid password history result.",
+    );
+  const items = collection(payload)
+    .map(mapPasswordHistoryItem)
+    .filter((item): item is PasswordHistoryItem => item !== null);
   return {
     totalCount: asNumber(getValue(payload, "totalCount", "TotalCount")) ?? items.length,
-    totalPages: asNumber(getValue(payload, "totalPages", "TotalPages")) ?? (items.length > 0 ? 1 : 0),
+    totalPages:
+      asNumber(getValue(payload, "totalPages", "TotalPages")) ?? (items.length > 0 ? 1 : 0),
     items,
   };
 }

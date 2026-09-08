@@ -14,7 +14,10 @@ public class DriverLicenceTypeController : BaseApiController
     private readonly FisDbContext _context;
     private readonly ILogger<DriverLicenceTypeController> _logger;
 
-    public DriverLicenceTypeController(FisDbContext context, ILogger<DriverLicenceTypeController> logger)
+    public DriverLicenceTypeController(
+        FisDbContext context,
+        ILogger<DriverLicenceTypeController> logger
+    )
     {
         _context = context;
         _logger = logger;
@@ -28,14 +31,14 @@ public class DriverLicenceTypeController : BaseApiController
     {
         try
         {
-            var types = await _context.DriverLicenceTypes
-                .Where(t => !t.is_deleted)
+            var types = await _context
+                .DriverLicenceTypes.Where(t => !t.is_deleted)
                 .OrderBy(t => t.driver_licence_type_description)
                 .Select(t => new
                 {
                     driver_licence_type_id = t.driver_licence_type_id,
                     driver_licence_type_code = t.driver_licence_type_code,
-                    driver_licence_type_description = t.driver_licence_type_description
+                    driver_licence_type_description = t.driver_licence_type_description,
                 })
                 .ToListAsync();
 
@@ -45,7 +48,10 @@ public class DriverLicenceTypeController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving driver licence types");
-            return StatusCode(500, new { error = "Failed to retrieve driver licence types", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to retrieve driver licence types", message = ex.Message }
+            );
         }
     }
 }

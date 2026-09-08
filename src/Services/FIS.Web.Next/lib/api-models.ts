@@ -53,7 +53,16 @@ export type ModelDeleteCheck = {
   canDelete: boolean;
 };
 
-export type ModelWriteInput = Omit<ModelRecord, "modelCode" | "makeDescription" | "dateCreated" | "dateUpdated" | "createdByUserCode" | "modifiedByUserCode" | "isDeleted">;
+export type ModelWriteInput = Omit<
+  ModelRecord,
+  | "modelCode"
+  | "makeDescription"
+  | "dateCreated"
+  | "dateUpdated"
+  | "createdByUserCode"
+  | "modifiedByUserCode"
+  | "isDeleted"
+>;
 
 export type ModelApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
 
@@ -129,17 +138,26 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
     if (response.status === 401 || response.status === 403) {
-      throw new ModelApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new ModelApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the API body is not JSON.
       }
-      throw new ModelApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new ModelApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -161,7 +179,9 @@ async function readJson(response: Response) {
 function mapModel(value: unknown): ModelRecord | null {
   if (!isRecord(value)) return null;
   const modelCode = asNumber(getValue(value, "model_code", "modelCode"));
-  const modelDescription = asString(getValue(value, "model_description", "modelDescription", "model_name", "modelName"));
+  const modelDescription = asString(
+    getValue(value, "model_description", "modelDescription", "model_name", "modelName"),
+  );
   const makeCode = asNumber(getValue(value, "make_code", "makeCode"));
   if (modelCode === null || modelDescription === null || makeCode === null) return null;
 
@@ -169,11 +189,15 @@ function mapModel(value: unknown): ModelRecord | null {
     modelCode,
     modelDescription,
     makeCode,
-    makeDescription: asString(getValue(value, "make_description", "makeDescription", "make_name", "makeName")),
+    makeDescription: asString(
+      getValue(value, "make_description", "makeDescription", "make_name", "makeName"),
+    ),
     unitOfMeasureCode: asNumber(getValue(value, "unit_of_measure_code", "unitOfMeasureCode")) ?? 0,
     fuelTypeCode: asNumber(getValue(value, "fuel_type_code", "fuelTypeCode")) ?? 0,
     licenceCode: asNumber(getValue(value, "licence_code", "licenceCode")) ?? 0,
-    maintenanceTriggerCode: asNumber(getValue(value, "maint_trigger_code", "maintenanceTriggerCode", "maintTriggerCode")),
+    maintenanceTriggerCode: asNumber(
+      getValue(value, "maint_trigger_code", "maintenanceTriggerCode", "maintTriggerCode"),
+    ),
     classCode: asNumber(getValue(value, "class_code", "classCode")) ?? 0,
     typeCode: asNumber(getValue(value, "type_code", "typeCode")),
     engineType: asString(getValue(value, "engine_type", "engineType")),
@@ -187,7 +211,9 @@ function mapModel(value: unknown): ModelRecord | null {
     licenceFeeCode: asNumber(getValue(value, "licence_fee_code", "licenceFeeCode")),
     gvm: asNumber(getValue(value, "gvm")),
     transmission: asString(getValue(value, "transmission")),
-    wesbankKilosPerLitre: asNumber(getValue(value, "wesbank_kilos_per_litre", "wesbankKilosPerLitre")),
+    wesbankKilosPerLitre: asNumber(
+      getValue(value, "wesbank_kilos_per_litre", "wesbankKilosPerLitre"),
+    ),
     dateCreated: asString(getValue(value, "date_created", "dateCreated")),
     dateUpdated: asString(getValue(value, "date_updated", "dateUpdated")),
     createdByUserCode: asNumber(getValue(value, "created_by_user_code", "createdByUserCode")),
@@ -196,7 +222,11 @@ function mapModel(value: unknown): ModelRecord | null {
   };
 }
 
-function mapOption(value: unknown, codeKeys: string[], descriptionKeys: string[]): ModelOption | null {
+function mapOption(
+  value: unknown,
+  codeKeys: string[],
+  descriptionKeys: string[],
+): ModelOption | null {
   if (!isRecord(value)) return null;
   const code = asNumber(getValue(value, ...codeKeys));
   const description = asString(getValue(value, ...descriptionKeys));
@@ -221,7 +251,8 @@ async function getOptionalOptions(path: string, codeKeys: string[], descriptionK
 
 export async function getModels() {
   const payload = await readJson(await requestApi("api/model"));
-  if (!Array.isArray(payload)) throw new ModelApiError("invalid-response", "The model response was not a list.");
+  if (!Array.isArray(payload))
+    throw new ModelApiError("invalid-response", "The model response was not a list.");
   return payload.map(mapModel).filter((model): model is ModelRecord => model !== null);
 }
 
@@ -230,8 +261,11 @@ export async function getModel(modelCode: number) {
 }
 
 export async function getModelDeleteCheck(modelCode: number): Promise<ModelDeleteCheck> {
-  const payload = await readJson(await requestApi(`api/model/${encodeURIComponent(modelCode)}/delete-check`));
-  if (!isRecord(payload)) throw new ModelApiError("invalid-response", "The model dependency response was invalid.");
+  const payload = await readJson(
+    await requestApi(`api/model/${encodeURIComponent(modelCode)}/delete-check`),
+  );
+  if (!isRecord(payload))
+    throw new ModelApiError("invalid-response", "The model dependency response was invalid.");
   return {
     vehicleCount: asNumber(getValue(payload, "vehicleCount", "VehicleCount")) ?? 0,
     canDelete: asBoolean(getValue(payload, "canDelete", "CanDelete")),
@@ -239,17 +273,63 @@ export async function getModelDeleteCheck(modelCode: number): Promise<ModelDelet
 }
 
 export async function getModelReferenceData(): Promise<ModelReferenceData> {
-  const [makes, types, fuelTypes, classes, units, licenceFees, driverLicences, maintenanceTriggers] = await Promise.all([
+  const [
+    makes,
+    types,
+    fuelTypes,
+    classes,
+    units,
+    licenceFees,
+    driverLicences,
+    maintenanceTriggers,
+  ] = await Promise.all([
     getOptions("api/make", ["make_code", "makeCode"], ["make_description", "makeDescription"]),
-    getOptionalOptions("api/type", ["type_code", "typeCode"], ["type_description", "typeDescription"]),
-    getOptions("api/fueltype", ["fuel_type_code", "fuelTypeCode"], ["fuel_description", "fuelDescription"]),
-    getOptions("api/class", ["class_code", "classCode"], ["description", "Description", "class_description", "classDescription"]),
-    getOptions("api/UnitOfMeasure", ["unit_of_measure_code", "unitOfMeasureCode"], ["unit_description", "unitDescription"]),
-    getOptions("api/licensefee", ["licence_fee_code", "LicenceFeeCode", "licenceFeeCode"], ["licence_description", "Description", "description"]),
-    getOptions("api/DriverLicence", ["licence_code", "LicenceCode", "licenceCode"], ["description", "Description"]),
-    getOptionalOptions("api/MaintenanceTrigger", ["maint_trigger_code", "Id", "maintTriggerCode"], ["description", "Description"]),
+    getOptionalOptions(
+      "api/type",
+      ["type_code", "typeCode"],
+      ["type_description", "typeDescription"],
+    ),
+    getOptions(
+      "api/fueltype",
+      ["fuel_type_code", "fuelTypeCode"],
+      ["fuel_description", "fuelDescription"],
+    ),
+    getOptions(
+      "api/class",
+      ["class_code", "classCode"],
+      ["description", "Description", "class_description", "classDescription"],
+    ),
+    getOptions(
+      "api/UnitOfMeasure",
+      ["unit_of_measure_code", "unitOfMeasureCode"],
+      ["unit_description", "unitDescription"],
+    ),
+    getOptions(
+      "api/licensefee",
+      ["licence_fee_code", "LicenceFeeCode", "licenceFeeCode"],
+      ["licence_description", "Description", "description"],
+    ),
+    getOptions(
+      "api/DriverLicence",
+      ["licence_code", "LicenceCode", "licenceCode"],
+      ["description", "Description"],
+    ),
+    getOptionalOptions(
+      "api/MaintenanceTrigger",
+      ["maint_trigger_code", "Id", "maintTriggerCode"],
+      ["description", "Description"],
+    ),
   ]);
-  return { makes, types, fuelTypes, classes, units, licenceFees, driverLicences, maintenanceTriggers };
+  return {
+    makes,
+    types,
+    fuelTypes,
+    classes,
+    units,
+    licenceFees,
+    driverLicences,
+    maintenanceTriggers,
+  };
 }
 
 function toRequest(input: ModelWriteInput) {
@@ -278,27 +358,39 @@ function toRequest(input: ModelWriteInput) {
 }
 
 export async function createModel(input: ModelWriteInput) {
-  return mapModel(await readJson(await requestApi("api/model", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(toRequest(input)),
-  })));
+  return mapModel(
+    await readJson(
+      await requestApi("api/model", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(toRequest(input)),
+      }),
+    ),
+  );
 }
 
 export async function updateModel(modelCode: number, input: ModelWriteInput) {
-  return mapModel(await readJson(await requestApi(`api/model/${encodeURIComponent(modelCode)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ model_code: modelCode, ...toRequest(input) }),
-  })));
+  return mapModel(
+    await readJson(
+      await requestApi(`api/model/${encodeURIComponent(modelCode)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model_code: modelCode, ...toRequest(input) }),
+      }),
+    ),
+  );
 }
 
 export async function updateModelLicenceFee(modelCode: number, licenceFeeCode: number) {
-  return mapModel(await readJson(await requestApi(`api/model/${encodeURIComponent(modelCode)}/licence-fee`, {
-    method: "PATCH",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ model_code: modelCode, licence_fee_code: licenceFeeCode }),
-  })));
+  return mapModel(
+    await readJson(
+      await requestApi(`api/model/${encodeURIComponent(modelCode)}/licence-fee`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model_code: modelCode, licence_fee_code: licenceFeeCode }),
+      }),
+    ),
+  );
 }
 
 export async function deleteModel(modelCode: number) {

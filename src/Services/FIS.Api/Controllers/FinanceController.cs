@@ -1,15 +1,15 @@
+using System.Collections.Concurrent;
+using System.ComponentModel.DataAnnotations;
+using System.Data;
+using System.Globalization;
+using System.IO.Compression;
+using System.Threading;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.ComponentModel.DataAnnotations;
-using System.Collections.Concurrent;
-using System.Threading;
-using System.Globalization;
-using System.IO.Compression;
-using System.Data;
 
 namespace FIS.Api.Controllers;
 
@@ -36,7 +36,8 @@ public class FinanceController : BaseApiController
     public FinanceController(
         IJournalDetailService journalService,
         FisDbContext context,
-        ILogger<FinanceController> logger)
+        ILogger<FinanceController> logger
+    )
     {
         _journalService = journalService;
         _context = context;
@@ -50,42 +51,46 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var batch = await _context.Batches
-                .Where(b => !b.is_deleted)
+            var batch = await _context
+                .Batches.Where(b => !b.is_deleted)
                 .OrderByDescending(b => b.batch_date)
                 .ThenByDescending(b => b.batch_code)
                 .FirstOrDefaultAsync();
 
             if (batch is null)
             {
-                return Ok(new BatchStatusDto
-                {
-                    BatchCode = 0,
-                    Status = "No active batch",
-                    IsActive = false
-                });
+                return Ok(
+                    new BatchStatusDto
+                    {
+                        BatchCode = 0,
+                        Status = "No active batch",
+                        IsActive = false,
+                    }
+                );
             }
 
-            var totalTransactions = await _context.JournalDetails
-                .CountAsync(jd =>
-                    !jd.is_deleted &&
-                    jd.journal_detail_date.Date == batch.batch_date.Date);
+            var totalTransactions = await _context.JournalDetails.CountAsync(jd =>
+                !jd.is_deleted && jd.journal_detail_date.Date == batch.batch_date.Date
+            );
 
-            var processedTransactions = await _context.JournalDetails
-                .CountAsync(jd =>
-                    !jd.is_deleted &&
-                    jd.journal_detail_date.Date == batch.batch_date.Date &&
-                    jd.journal_detail_date_posted.HasValue);
+            var processedTransactions = await _context.JournalDetails.CountAsync(jd =>
+                !jd.is_deleted
+                && jd.journal_detail_date.Date == batch.batch_date.Date
+                && jd.journal_detail_date_posted.HasValue
+            );
 
-            return Ok(new BatchStatusDto
-            {
-                BatchCode = batch.batch_code,
-                BatchDate = batch.batch_date,
-                Status = processedTransactions < totalTransactions ? "In progress" : "Ready/Posted",
-                IsActive = processedTransactions < totalTransactions,
-                TotalTransactions = totalTransactions,
-                ProcessedTransactions = processedTransactions
-            });
+            return Ok(
+                new BatchStatusDto
+                {
+                    BatchCode = batch.batch_code,
+                    BatchDate = batch.batch_date,
+                    Status =
+                        processedTransactions < totalTransactions ? "In progress" : "Ready/Posted",
+                    IsActive = processedTransactions < totalTransactions,
+                    TotalTransactions = totalTransactions,
+                    ProcessedTransactions = processedTransactions,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -95,14 +100,17 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("batch/start")]
-    public async Task<ActionResult<BatchStartResultDto>> StartBatch([FromBody] StartBatchDto? request)
+    public async Task<ActionResult<BatchStartResultDto>> StartBatch(
+        [FromBody] StartBatchDto? request
+    )
     {
         var requestedDate = request?.BatchDate.Date ?? DateTime.Today;
         if (requestedDate == DateTime.MinValue)
         {
             requestedDate = DateTime.Today;
         }
-        var financialSystemCode = request?.FinancialSystemCode > 0 ? request.FinancialSystemCode : (byte)1;
+        var financialSystemCode =
+            request?.FinancialSystemCode > 0 ? request.FinancialSystemCode : (byte)1;
         var batchMode = request?.BatchMode ?? ExportBatchMode.BatchAppendOrCreate;
 
         if (requestedDate == DateTime.MaxValue)
@@ -112,19 +120,19 @@ public class FinanceController : BaseApiController
 
         if (batchMode == ExportBatchMode.BatchMustExist)
         {
-            return BadRequest(new
-            {
-                error = "The flag BatchMode.BatchMustExist is invalid for batch creation."
-            });
+            return BadRequest(
+                new { error = "The flag BatchMode.BatchMustExist is invalid for batch creation." }
+            );
         }
 
         try
         {
-            var existing = await _context.Batches
-                .Where(b =>
-                    !b.is_deleted &&
-                    b.batch_date.Date == requestedDate &&
-                    b.financial_system_code == financialSystemCode)
+            var existing = await _context
+                .Batches.Where(b =>
+                    !b.is_deleted
+                    && b.batch_date.Date == requestedDate
+                    && b.financial_system_code == financialSystemCode
+                )
                 .OrderByDescending(b => b.batch_code)
                 .FirstOrDefaultAsync();
 
@@ -132,41 +140,61 @@ public class FinanceController : BaseApiController
             {
                 if (batchMode == ExportBatchMode.BatchMustCreateNew)
                 {
-                    return Conflict(new
-                    {
-                        error = "Batch already exists for selected date and financial system, but mode requires a new batch."
-                    });
+                    return Conflict(
+                        new
+                        {
+                            error = "Batch already exists for selected date and financial system, but mode requires a new batch.",
+                        }
+                    );
                 }
 
-                await PrepareBatchJournalsAndMappingsAsync(existing.batch_code, existing.batch_date.Date, existing.financial_system_code);
-                return Ok(new BatchStartResultDto
-                {
-                    BatchCode = existing.batch_code,
-                    BatchDate = existing.batch_date,
-                    Success = true,
-                    Message = "Batch already exists for the selected date and financial system."
-                });
+                await PrepareBatchJournalsAndMappingsAsync(
+                    existing.batch_code,
+                    existing.batch_date.Date,
+                    existing.financial_system_code
+                );
+                return Ok(
+                    new BatchStartResultDto
+                    {
+                        BatchCode = existing.batch_code,
+                        BatchDate = existing.batch_date,
+                        Success = true,
+                        Message =
+                            "Batch already exists for the selected date and financial system.",
+                    }
+                );
             }
 
-            var newBatchCode = await CreateBatchViaLegacyProcAsync(requestedDate, financialSystemCode);
-            var newBatch = await _context.Batches
-                .AsNoTracking()
+            var newBatchCode = await CreateBatchViaLegacyProcAsync(
+                requestedDate,
+                financialSystemCode
+            );
+            var newBatch = await _context
+                .Batches.AsNoTracking()
                 .FirstOrDefaultAsync(b => !b.is_deleted && b.batch_code == newBatchCode);
 
             if (newBatch is null)
             {
-                throw new InvalidOperationException($"Batch {newBatchCode} was created but could not be loaded.");
+                throw new InvalidOperationException(
+                    $"Batch {newBatchCode} was created but could not be loaded."
+                );
             }
 
-            await PrepareBatchJournalsAndMappingsAsync(newBatch.batch_code, newBatch.batch_date.Date, newBatch.financial_system_code);
+            await PrepareBatchJournalsAndMappingsAsync(
+                newBatch.batch_code,
+                newBatch.batch_date.Date,
+                newBatch.financial_system_code
+            );
 
-            return Ok(new BatchStartResultDto
-            {
-                BatchCode = newBatch.batch_code,
-                BatchDate = newBatch.batch_date,
-                Success = true,
-                Message = "Batch created."
-            });
+            return Ok(
+                new BatchStartResultDto
+                {
+                    BatchCode = newBatch.batch_code,
+                    BatchDate = newBatch.batch_date,
+                    Success = true,
+                    Message = "Batch created.",
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -180,25 +208,27 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var latestBatch = await _context.Batches
-                .Where(b => !b.is_deleted)
+            var latestBatch = await _context
+                .Batches.Where(b => !b.is_deleted)
                 .OrderByDescending(b => b.batch_date)
                 .ThenByDescending(b => b.batch_code)
                 .FirstOrDefaultAsync();
 
             if (latestBatch is null)
             {
-                return Ok(new ScoaCheckResultDto
-                {
-                    IsCompliant = false,
-                    Errors = new List<string> { "No batch exists to validate." },
-                    TotalChecked = 0
-                });
+                return Ok(
+                    new ScoaCheckResultDto
+                    {
+                        IsCompliant = false,
+                        Errors = new List<string> { "No batch exists to validate." },
+                        TotalChecked = 0,
+                    }
+                );
             }
 
             var batchDate = latestBatch.batch_date.Date;
-            var journalDetailCodes = await _context.JournalDetails
-                .AsNoTracking()
+            var journalDetailCodes = await _context
+                .JournalDetails.AsNoTracking()
                 .Where(jd => !jd.is_deleted && jd.journal_detail_date.Date == batchDate)
                 .Select(jd => jd.journal_detail_code)
                 .Distinct()
@@ -206,16 +236,18 @@ public class FinanceController : BaseApiController
 
             if (journalDetailCodes.Count == 0)
             {
-                return Ok(new ScoaCheckResultDto
-                {
-                    IsCompliant = false,
-                    Warnings = new List<string> { "Batch has no journal details to validate." },
-                    TotalChecked = 0
-                });
+                return Ok(
+                    new ScoaCheckResultDto
+                    {
+                        IsCompliant = false,
+                        Warnings = new List<string> { "Batch has no journal details to validate." },
+                        TotalChecked = 0,
+                    }
+                );
             }
 
-            var mappedCodes = await _context.SegmentJournalDetailMaps
-                .AsNoTracking()
+            var mappedCodes = await _context
+                .SegmentJournalDetailMaps.AsNoTracking()
                 .Where(m => !m.is_deleted && journalDetailCodes.Contains(m.journal_detail_code))
                 .Select(m => m.journal_detail_code)
                 .Distinct()
@@ -230,13 +262,15 @@ public class FinanceController : BaseApiController
                 errors.Add($"{missingCount} journal detail record(s) have no segment mapping.");
             }
 
-            return Ok(new ScoaCheckResultDto
-            {
-                IsCompliant = errors.Count == 0,
-                Errors = errors,
-                Warnings = warnings,
-                TotalChecked = journalDetailCodes.Count
-            });
+            return Ok(
+                new ScoaCheckResultDto
+                {
+                    IsCompliant = errors.Count == 0,
+                    Errors = errors,
+                    Warnings = warnings,
+                    TotalChecked = journalDetailCodes.Count,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -250,8 +284,8 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var latestBatch = await _context.Batches
-                .Where(b => !b.is_deleted)
+            var latestBatch = await _context
+                .Batches.Where(b => !b.is_deleted)
                 .OrderByDescending(b => b.batch_date)
                 .ThenByDescending(b => b.batch_code)
                 .FirstOrDefaultAsync();
@@ -262,8 +296,10 @@ public class FinanceController : BaseApiController
             }
 
             var batchDate = latestBatch.batch_date.Date;
-            var journalDetails = await _context.JournalDetails
-                .Where(jd => !jd.is_deleted && jd.journal_detail_date.Date == batchDate)
+            var journalDetails = await _context
+                .JournalDetails.Where(jd =>
+                    !jd.is_deleted && jd.journal_detail_date.Date == batchDate
+                )
                 .ToListAsync();
 
             foreach (var jd in journalDetails)
@@ -275,8 +311,8 @@ public class FinanceController : BaseApiController
                 jd.date_updated = DateTime.UtcNow;
             }
 
-            var linkedJournals = await _context.JournalHeaders
-                .Where(j => !j.is_deleted && j.batch_code == latestBatch.batch_code)
+            var linkedJournals = await _context
+                .JournalHeaders.Where(j => !j.is_deleted && j.batch_code == latestBatch.batch_code)
                 .ToListAsync();
 
             foreach (var journal in linkedJournals)
@@ -292,7 +328,14 @@ public class FinanceController : BaseApiController
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Batch rolled back", updated = journalDetails.Count, batchCode = latestBatch.batch_code });
+            return Ok(
+                new
+                {
+                    message = "Batch rolled back",
+                    updated = journalDetails.Count,
+                    batchCode = latestBatch.batch_code,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -306,8 +349,8 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var latestBatch = await _context.Batches
-                .Where(b => !b.is_deleted)
+            var latestBatch = await _context
+                .Batches.Where(b => !b.is_deleted)
                 .OrderByDescending(b => b.batch_date)
                 .ThenByDescending(b => b.batch_code)
                 .FirstOrDefaultAsync();
@@ -321,11 +364,12 @@ public class FinanceController : BaseApiController
             var now = DateTime.UtcNow;
             var userCode = GetCurrentUserId();
 
-            var unpostedRows = await _context.JournalDetails
-                .Where(jd =>
-                    !jd.is_deleted &&
-                    jd.journal_detail_date.Date == batchDate &&
-                    !jd.journal_detail_date_posted.HasValue)
+            var unpostedRows = await _context
+                .JournalDetails.Where(jd =>
+                    !jd.is_deleted
+                    && jd.journal_detail_date.Date == batchDate
+                    && !jd.journal_detail_date_posted.HasValue
+                )
                 .ToListAsync();
 
             foreach (var row in unpostedRows)
@@ -341,7 +385,14 @@ public class FinanceController : BaseApiController
 
             await _context.SaveChangesAsync();
 
-            return Ok(new { message = "Batch finalized", posted = unpostedRows.Count, batchCode = latestBatch.batch_code });
+            return Ok(
+                new
+                {
+                    message = "Batch finalized",
+                    posted = unpostedRows.Count,
+                    batchCode = latestBatch.batch_code,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -359,11 +410,9 @@ public class FinanceController : BaseApiController
     {
         if (string.IsNullOrWhiteSpace(request.FileData))
         {
-            return BadRequest(new BasImportResultDto
-            {
-                Success = false,
-                Message = "FileData is required."
-            });
+            return BadRequest(
+                new BasImportResultDto { Success = false, Message = "FileData is required." }
+            );
         }
 
         try
@@ -376,12 +425,14 @@ public class FinanceController : BaseApiController
 
             if (lines.Count == 0)
             {
-                return Ok(new BasImportResultDto
-                {
-                    Success = true,
-                    RecordsImported = 0,
-                    Message = "No BAS rows found in import file."
-                });
+                return Ok(
+                    new BasImportResultDto
+                    {
+                        Success = true,
+                        RecordsImported = 0,
+                        Message = "No BAS rows found in import file.",
+                    }
+                );
             }
 
             var userCode = GetCurrentUserId();
@@ -404,48 +455,59 @@ public class FinanceController : BaseApiController
                 var departmentCodeText = cols[3].Trim();
                 var siteCodeText = cols.Length >= 5 ? cols[4].Trim() : string.Empty;
 
-                if (string.IsNullOrWhiteSpace(segmentNumber) ||
-                    !int.TryParse(groupCodeText, out var segmentGroupCode) ||
-                    !short.TryParse(departmentCodeText, out var departmentCode))
+                if (
+                    string.IsNullOrWhiteSpace(segmentNumber)
+                    || !int.TryParse(groupCodeText, out var segmentGroupCode)
+                    || !short.TryParse(departmentCodeText, out var departmentCode)
+                )
                 {
                     errors.Add($"Skipped invalid row: '{rawLine}'");
                     continue;
                 }
 
                 short? siteCode = null;
-                if (!string.IsNullOrWhiteSpace(siteCodeText) && short.TryParse(siteCodeText, out var parsedSite))
+                if (
+                    !string.IsNullOrWhiteSpace(siteCodeText)
+                    && short.TryParse(siteCodeText, out var parsedSite)
+                )
                 {
                     siteCode = parsedSite;
                 }
 
-                var existing = await _context.BasSegments
-                    .FirstOrDefaultAsync(s =>
-                        !s.is_deleted &&
-                        s.segment_number == segmentNumber &&
-                        s.segment_group_code == segmentGroupCode &&
-                        s.department_code == departmentCode &&
-                        s.site_code == siteCode);
+                var existing = await _context.BasSegments.FirstOrDefaultAsync(s =>
+                    !s.is_deleted
+                    && s.segment_number == segmentNumber
+                    && s.segment_group_code == segmentGroupCode
+                    && s.department_code == departmentCode
+                    && s.site_code == siteCode
+                );
 
                 if (existing is null)
                 {
-                    _context.BasSegments.Add(new FIS.Core.Domain.Entities.ReferenceData.BasSegment
-                    {
-                        segment_number = segmentNumber,
-                        segment_name = string.IsNullOrWhiteSpace(segmentName) ? null : segmentName,
-                        segment_group_code = segmentGroupCode,
-                        department_code = departmentCode,
-                        site_code = siteCode,
-                        date_created = now,
-                        date_updated = now,
-                        created_by_user_code = userCode,
-                        modified_by_user_code = userCode,
-                        is_deleted = false
-                    });
+                    _context.BasSegments.Add(
+                        new FIS.Core.Domain.Entities.ReferenceData.BasSegment
+                        {
+                            segment_number = segmentNumber,
+                            segment_name = string.IsNullOrWhiteSpace(segmentName)
+                                ? null
+                                : segmentName,
+                            segment_group_code = segmentGroupCode,
+                            department_code = departmentCode,
+                            site_code = siteCode,
+                            date_created = now,
+                            date_updated = now,
+                            created_by_user_code = userCode,
+                            modified_by_user_code = userCode,
+                            is_deleted = false,
+                        }
+                    );
                     imported++;
                 }
                 else
                 {
-                    existing.segment_name = string.IsNullOrWhiteSpace(segmentName) ? existing.segment_name : segmentName;
+                    existing.segment_name = string.IsNullOrWhiteSpace(segmentName)
+                        ? existing.segment_name
+                        : segmentName;
                     existing.date_updated = now;
                     existing.modified_by_user_code = userCode;
                     imported++;
@@ -454,25 +516,31 @@ public class FinanceController : BaseApiController
 
             await _context.SaveChangesAsync();
 
-            return Ok(new BasImportResultDto
-            {
-                Success = true,
-                RecordsImported = imported,
-                Errors = errors,
-                Message = errors.Count == 0
-                    ? $"Imported/updated {imported} BAS segment row(s)."
-                    : $"Imported/updated {imported} BAS segment row(s) with {errors.Count} warning(s)."
-            });
+            return Ok(
+                new BasImportResultDto
+                {
+                    Success = true,
+                    RecordsImported = imported,
+                    Errors = errors,
+                    Message =
+                        errors.Count == 0
+                            ? $"Imported/updated {imported} BAS segment row(s)."
+                            : $"Imported/updated {imported} BAS segment row(s) with {errors.Count} warning(s).",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error importing BAS segment codes");
-            return StatusCode(500, new BasImportResultDto
-            {
-                Success = false,
-                Message = "Failed to import BAS segment codes.",
-                Errors = new List<string> { ex.Message }
-            });
+            return StatusCode(
+                500,
+                new BasImportResultDto
+                {
+                    Success = false,
+                    Message = "Failed to import BAS segment codes.",
+                    Errors = new List<string> { ex.Message },
+                }
+            );
         }
     }
 
@@ -482,15 +550,21 @@ public class FinanceController : BaseApiController
         try
         {
             var activeSegments = await _context.BasSegments.CountAsync(x => !x.is_deleted);
-            var invalidJournals = await _context.JournalWithInvalidBasCodes.CountAsync(x => !x.is_deleted);
-            var uninvoicedJournals = await _context.JournalDetails.CountAsync(x => !x.is_deleted && !x.journal_detail_date_posted.HasValue);
+            var invalidJournals = await _context.JournalWithInvalidBasCodes.CountAsync(x =>
+                !x.is_deleted
+            );
+            var uninvoicedJournals = await _context.JournalDetails.CountAsync(x =>
+                !x.is_deleted && !x.journal_detail_date_posted.HasValue
+            );
 
-            return Ok(new
-            {
-                activeSegments,
-                invalidJournals,
-                uninvoicedJournals
-            });
+            return Ok(
+                new
+                {
+                    activeSegments,
+                    invalidJournals,
+                    uninvoicedJournals,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -500,15 +574,22 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/segments")]
-    public async Task<ActionResult<IEnumerable<BasSegmentDto>>> GetBasSegments([FromQuery] int? departmentCode, [FromQuery] string? segmentType)
+    public async Task<ActionResult<IEnumerable<BasSegmentDto>>> GetBasSegments(
+        [FromQuery] int? departmentCode,
+        [FromQuery] string? segmentType
+    )
     {
         try
         {
             var query =
                 from seg in _context.BasSegments.AsNoTracking()
-                join grp in _context.SegmentGroups.AsNoTracking() on seg.segment_group_code equals grp.segment_group_code into segGroups
+                join grp in _context.SegmentGroups.AsNoTracking()
+                    on seg.segment_group_code equals grp.segment_group_code
+                    into segGroups
                 from grp in segGroups.DefaultIfEmpty()
-                join typ in _context.SegmentTypes.AsNoTracking() on grp.segment_type_code equals typ.segment_type_code into segmentTypes
+                join typ in _context.SegmentTypes.AsNoTracking()
+                    on grp.segment_type_code equals typ.segment_type_code
+                    into segmentTypes
                 from typ in segmentTypes.DefaultIfEmpty()
                 where !seg.is_deleted
                 select new
@@ -518,7 +599,7 @@ public class FinanceController : BaseApiController
                     seg.segment_name,
                     seg.department_code,
                     SegmentTypeCode = typ != null ? typ.segment_type_code : (byte?)null,
-                    SegmentTypeName = typ != null ? typ.segment_type_name : null
+                    SegmentTypeName = typ != null ? typ.segment_type_name : null,
                 };
 
             if (departmentCode.HasValue)
@@ -531,8 +612,11 @@ public class FinanceController : BaseApiController
             {
                 var token = segmentType.Trim();
                 query = query.Where(x =>
-                    (x.SegmentTypeName != null && EF.Functions.Like(x.SegmentTypeName, $"%{token}%")) ||
-                    (x.SegmentTypeCode.HasValue && x.SegmentTypeCode.Value.ToString() == token));
+                    (
+                        x.SegmentTypeName != null
+                        && EF.Functions.Like(x.SegmentTypeName, $"%{token}%")
+                    ) || (x.SegmentTypeCode.HasValue && x.SegmentTypeCode.Value.ToString() == token)
+                );
             }
 
             var rows = await query
@@ -542,13 +626,16 @@ public class FinanceController : BaseApiController
                 .ToListAsync();
 
             var response = rows.Select(x => new BasSegmentDto
-            {
-                SegmentCode = x.segment_code,
-                SegmentType = x.SegmentTypeName ?? x.SegmentTypeCode?.ToString() ?? string.Empty,
-                SegmentValue = $"{x.segment_number ?? string.Empty} {x.segment_name ?? string.Empty}".Trim(),
-                DepartmentCode = x.department_code,
-                IsActive = true
-            }).ToList();
+                {
+                    SegmentCode = x.segment_code,
+                    SegmentType =
+                        x.SegmentTypeName ?? x.SegmentTypeCode?.ToString() ?? string.Empty,
+                    SegmentValue =
+                        $"{x.segment_number ?? string.Empty} {x.segment_name ?? string.Empty}".Trim(),
+                    DepartmentCode = x.department_code,
+                    IsActive = true,
+                })
+                .ToList();
 
             return Ok(response);
         }
@@ -572,8 +659,8 @@ public class FinanceController : BaseApiController
             var userCode = GetCurrentUserId();
             var now = DateTime.UtcNow;
 
-            var segments = await _context.BasSegments
-                .Where(s => request.SegmentCodes.Contains(s.segment_code))
+            var segments = await _context
+                .BasSegments.Where(s => request.SegmentCodes.Contains(s.segment_code))
                 .ToListAsync();
 
             foreach (var seg in segments)
@@ -585,12 +672,14 @@ public class FinanceController : BaseApiController
 
             await _context.SaveChangesAsync();
 
-            return Ok(new
-            {
-                message = $"Activated {segments.Count} segment(s).",
-                requested = request.SegmentCodes.Count,
-                updated = segments.Count
-            });
+            return Ok(
+                new
+                {
+                    message = $"Activated {segments.Count} segment(s).",
+                    requested = request.SegmentCodes.Count,
+                    updated = segments.Count,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -600,24 +689,27 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/journals/invalid")]
-    public async Task<ActionResult<IEnumerable<InvalidJournalDto>>> GetInvalidJournals([FromQuery] int? departmentCode)
+    public async Task<ActionResult<IEnumerable<InvalidJournalDto>>> GetInvalidJournals(
+        [FromQuery] int? departmentCode
+    )
     {
         try
         {
-            var rows = await _context.JournalWithInvalidBasCodes
-                .AsNoTracking()
+            var rows = await _context
+                .JournalWithInvalidBasCodes.AsNoTracking()
                 .Where(x => !x.is_deleted)
                 .OrderByDescending(x => x.Id)
                 .Take(500)
                 .ToListAsync();
 
             var response = rows.Select(x => new InvalidJournalDto
-            {
-                JournalDetailCode = Guid.Empty,
-                JournalNumber = x.GGNumber ?? string.Empty,
-                Reason = x.JournalType ?? "Invalid BAS code",
-                DepartmentCode = departmentCode
-            }).ToList();
+                {
+                    JournalDetailCode = Guid.Empty,
+                    JournalNumber = x.GGNumber ?? string.Empty,
+                    Reason = x.JournalType ?? "Invalid BAS code",
+                    DepartmentCode = departmentCode,
+                })
+                .ToList();
 
             return Ok(response);
         }
@@ -629,12 +721,14 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/journals/uninvoiced")]
-    public async Task<ActionResult<IEnumerable<UninvoicedJournalDto>>> GetUninvoicedJournals([FromQuery] int? departmentCode)
+    public async Task<ActionResult<IEnumerable<UninvoicedJournalDto>>> GetUninvoicedJournals(
+        [FromQuery] int? departmentCode
+    )
     {
         try
         {
-            var query = _context.JournalDetails
-                .AsNoTracking()
+            var query = _context
+                .JournalDetails.AsNoTracking()
                 .Where(jd => !jd.is_deleted && !jd.journal_detail_date_posted.HasValue);
 
             if (departmentCode.HasValue)
@@ -648,9 +742,11 @@ public class FinanceController : BaseApiController
                 .Select(jd => new UninvoicedJournalDto
                 {
                     JournalDetailCode = jd.journal_detail_code,
-                    JournalNumber = jd.journal_code.HasValue ? jd.journal_code.Value.ToString() : jd.journal_detail_id.ToString(),
+                    JournalNumber = jd.journal_code.HasValue
+                        ? jd.journal_code.Value.ToString()
+                        : jd.journal_detail_id.ToString(),
                     Amount = jd.journal_detail_amount,
-                    TransactionDate = jd.journal_detail_date
+                    TransactionDate = jd.journal_detail_date,
                 })
                 .Take(1000)
                 .ToListAsync();
@@ -669,19 +765,19 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var departmentsWithBas = _context.BasSegments
-                .Where(s => !s.is_deleted)
+            var departmentsWithBas = _context
+                .BasSegments.Where(s => !s.is_deleted)
                 .Select(s => s.department_code)
                 .Distinct();
 
-            var response = await _context.Departments
-                .AsNoTracking()
+            var response = await _context
+                .Departments.AsNoTracking()
                 .Where(d => !d.is_deleted && !departmentsWithBas.Contains(d.department_code))
                 .OrderBy(d => d.description)
                 .Select(d => new FinanceDepartmentDto
                 {
                     DepartmentCode = d.department_code,
-                    DepartmentName = d.description ?? $"Department {d.department_code}"
+                    DepartmentName = d.description ?? $"Department {d.department_code}",
                 })
                 .ToListAsync();
 
@@ -695,18 +791,23 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/departments-missing-financial-system")]
-    public async Task<ActionResult<IEnumerable<FinanceDepartmentDto>>> GetDepartmentsMissingFinancialSystem()
+    public async Task<
+        ActionResult<IEnumerable<FinanceDepartmentDto>>
+    > GetDepartmentsMissingFinancialSystem()
     {
         try
         {
-            var response = await _context.Departments
-                .AsNoTracking()
-                .Where(d => !d.is_deleted && (!d.financial_system_code.HasValue || d.financial_system_code.Value == 0))
+            var response = await _context
+                .Departments.AsNoTracking()
+                .Where(d =>
+                    !d.is_deleted
+                    && (!d.financial_system_code.HasValue || d.financial_system_code.Value == 0)
+                )
                 .OrderBy(d => d.description)
                 .Select(d => new FinanceDepartmentDto
                 {
                     DepartmentCode = d.department_code,
-                    DepartmentName = d.description ?? $"Department {d.department_code}"
+                    DepartmentName = d.description ?? $"Department {d.department_code}",
                 })
                 .ToListAsync();
 
@@ -715,7 +816,10 @@ public class FinanceController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching departments missing financial system");
-            return StatusCode(500, new { error = "Failed to fetch departments missing financial system" });
+            return StatusCode(
+                500,
+                new { error = "Failed to fetch departments missing financial system" }
+            );
         }
     }
 
@@ -728,8 +832,20 @@ public class FinanceController : BaseApiController
     {
         var years = new List<FinancialYearDto>
         {
-            new() { Code = 2023, Name = "2023/2024", StartDate = new DateTime(2023, 7, 1), EndDate = new DateTime(2024, 6, 30) },
-            new() { Code = 2024, Name = "2024/2025", StartDate = new DateTime(2024, 7, 1), EndDate = new DateTime(2025, 6, 30) }
+            new()
+            {
+                Code = 2023,
+                Name = "2023/2024",
+                StartDate = new DateTime(2023, 7, 1),
+                EndDate = new DateTime(2024, 6, 30),
+            },
+            new()
+            {
+                Code = 2024,
+                Name = "2024/2025",
+                StartDate = new DateTime(2024, 7, 1),
+                EndDate = new DateTime(2025, 6, 30),
+            },
         };
         return Ok(years);
     }
@@ -739,8 +855,8 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var dates = await _context.Batches
-                .AsNoTracking()
+            var dates = await _context
+                .Batches.AsNoTracking()
                 .Where(b => !b.is_deleted)
                 .Select(b => b.batch_date.Date)
                 .Distinct()
@@ -762,7 +878,7 @@ public class FinanceController : BaseApiController
         var types = new List<SegmentTypeDto>
         {
             new() { Code = "OBJ", Name = "Objective" },
-            new() { Code = "RESP", Name = "Responsibility" }
+            new() { Code = "RESP", Name = "Responsibility" },
         };
         return Ok(types);
     }
@@ -776,28 +892,25 @@ public class FinanceController : BaseApiController
     {
         if (request.FinancialSystemCode != (byte)ExportFinancialSystem.All)
         {
-            return BadRequest(new
-            {
-                error = "FinancialSystemCode must be ALL for this endpoint."
-            });
+            return BadRequest(new { error = "FinancialSystemCode must be ALL for this endpoint." });
         }
 
         var zipBytes = await BuildMultiSystemExportZipAsync(request, includeCustomerColumn: false);
         return File(
             zipBytes,
             "application/zip",
-            $"pastel_export_all_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+            $"pastel_export_all_{DateTime.UtcNow:yyyyMMddHHmmss}.zip"
+        );
     }
 
     [HttpPost("interface/pastel-csv-customer-all")]
-    public async Task<ActionResult> ExportPastelCsvCustomerAll([FromBody] PastelCustomerExportDto request)
+    public async Task<ActionResult> ExportPastelCsvCustomerAll(
+        [FromBody] PastelCustomerExportDto request
+    )
     {
         if (request.FinancialSystemCode != (byte)ExportFinancialSystem.All)
         {
-            return BadRequest(new
-            {
-                error = "FinancialSystemCode must be ALL for this endpoint."
-            });
+            return BadRequest(new { error = "FinancialSystemCode must be ALL for this endpoint." });
         }
 
         var translatedAll = new PastelExportDto
@@ -807,14 +920,18 @@ public class FinanceController : BaseApiController
             FinancialSystemCode = request.FinancialSystemCode,
             BatchMode = request.BatchMode,
             SkipPosting = request.SkipPosting,
-            ReverseBatch = request.ReverseBatch
+            ReverseBatch = request.ReverseBatch,
         };
 
-        var zipBytes = await BuildMultiSystemExportZipAsync(translatedAll, includeCustomerColumn: true);
+        var zipBytes = await BuildMultiSystemExportZipAsync(
+            translatedAll,
+            includeCustomerColumn: true
+        );
         return File(
             zipBytes,
             "application/zip",
-            $"pastel_customers_all_{DateTime.UtcNow:yyyyMMddHHmmss}.zip");
+            $"pastel_customers_all_{DateTime.UtcNow:yyyyMMddHHmmss}.zip"
+        );
     }
 
     [HttpPost("interface/pastel-csv")]
@@ -822,10 +939,12 @@ public class FinanceController : BaseApiController
     {
         if (request.FinancialSystemCode == (byte)ExportFinancialSystem.All)
         {
-            return BadRequest(new
-            {
-                error = "FinancialSystem ALL is not valid for single export execution. Submit BAS, SAP, or MPI separately."
-            });
+            return BadRequest(
+                new
+                {
+                    error = "FinancialSystem ALL is not valid for single export execution. Submit BAS, SAP, or MPI separately.",
+                }
+            );
         }
 
         var prepare = await PrepareExportContextAsync(request);
@@ -838,15 +957,21 @@ public class FinanceController : BaseApiController
         {
             if (!request.SkipPosting)
             {
-                await MarkExportRowsPostedAsync(prepare.StartDate, request.FinancialSystemCode, request.DepartmentCode);
+                await MarkExportRowsPostedAsync(
+                    prepare.StartDate,
+                    request.FinancialSystemCode,
+                    request.DepartmentCode
+                );
             }
 
-            return Ok(new
-            {
-                message = "MPI export has no file output. Posting workflow completed.",
-                batchCode = prepare.BatchCode,
-                batchDate = prepare.StartDate
-            });
+            return Ok(
+                new
+                {
+                    message = "MPI export has no file output. Posting workflow completed.",
+                    batchCode = prepare.BatchCode,
+                    batchDate = prepare.StartDate,
+                }
+            );
         }
 
         var lines = await BuildExportLinesAsync(
@@ -854,28 +979,43 @@ public class FinanceController : BaseApiController
             prepare.EndDate,
             request.DepartmentCode,
             includeCustomerColumn: false,
-            reverseBatch: request.ReverseBatch);
+            reverseBatch: request.ReverseBatch
+        );
 
         if (!request.SkipPosting)
         {
-            await MarkExportRowsPostedAsync(prepare.StartDate, request.FinancialSystemCode, request.DepartmentCode);
+            await MarkExportRowsPostedAsync(
+                prepare.StartDate,
+                request.FinancialSystemCode,
+                request.DepartmentCode
+            );
         }
 
         var csvContent = string.Join('\n', lines);
         var bytes = System.Text.Encoding.UTF8.GetBytes(csvContent);
-        var deptSuffix = request.DepartmentCode.HasValue ? $"-{request.DepartmentCode.Value}" : string.Empty;
-        return File(bytes, "text/csv", $"pastel_export_{prepare.StartDate:yyyyMMdd}_{prepare.EndDate:yyyyMMdd}_batch{prepare.BatchCode}{deptSuffix}.csv");
+        var deptSuffix = request.DepartmentCode.HasValue
+            ? $"-{request.DepartmentCode.Value}"
+            : string.Empty;
+        return File(
+            bytes,
+            "text/csv",
+            $"pastel_export_{prepare.StartDate:yyyyMMdd}_{prepare.EndDate:yyyyMMdd}_batch{prepare.BatchCode}{deptSuffix}.csv"
+        );
     }
 
     [HttpPost("interface/pastel-csv-customer")]
-    public async Task<ActionResult> ExportPastelCsvCustomer([FromBody] PastelCustomerExportDto request)
+    public async Task<ActionResult> ExportPastelCsvCustomer(
+        [FromBody] PastelCustomerExportDto request
+    )
     {
         if (request.FinancialSystemCode == (byte)ExportFinancialSystem.All)
         {
-            return BadRequest(new
-            {
-                error = "FinancialSystem ALL is not valid for single export execution. Submit BAS, SAP, or MPI separately."
-            });
+            return BadRequest(
+                new
+                {
+                    error = "FinancialSystem ALL is not valid for single export execution. Submit BAS, SAP, or MPI separately.",
+                }
+            );
         }
 
         var translated = new PastelExportDto
@@ -885,7 +1025,7 @@ public class FinanceController : BaseApiController
             FinancialSystemCode = request.FinancialSystemCode,
             BatchMode = request.BatchMode,
             SkipPosting = request.SkipPosting,
-            ReverseBatch = request.ReverseBatch
+            ReverseBatch = request.ReverseBatch,
         };
 
         var prepare = await PrepareExportContextAsync(translated);
@@ -898,15 +1038,21 @@ public class FinanceController : BaseApiController
         {
             if (!request.SkipPosting)
             {
-                await MarkExportRowsPostedAsync(prepare.StartDate, request.FinancialSystemCode, request.DepartmentCode);
+                await MarkExportRowsPostedAsync(
+                    prepare.StartDate,
+                    request.FinancialSystemCode,
+                    request.DepartmentCode
+                );
             }
 
-            return Ok(new
-            {
-                message = "MPI export has no file output. Posting workflow completed.",
-                batchCode = prepare.BatchCode,
-                batchDate = prepare.StartDate
-            });
+            return Ok(
+                new
+                {
+                    message = "MPI export has no file output. Posting workflow completed.",
+                    batchCode = prepare.BatchCode,
+                    batchDate = prepare.StartDate,
+                }
+            );
         }
 
         var lines = await BuildExportLinesAsync(
@@ -914,17 +1060,28 @@ public class FinanceController : BaseApiController
             prepare.EndDate,
             request.DepartmentCode,
             includeCustomerColumn: true,
-            reverseBatch: request.ReverseBatch);
+            reverseBatch: request.ReverseBatch
+        );
 
         if (!request.SkipPosting)
         {
-            await MarkExportRowsPostedAsync(prepare.StartDate, request.FinancialSystemCode, request.DepartmentCode);
+            await MarkExportRowsPostedAsync(
+                prepare.StartDate,
+                request.FinancialSystemCode,
+                request.DepartmentCode
+            );
         }
 
         var csvContent = string.Join('\n', lines);
         var bytes = System.Text.Encoding.UTF8.GetBytes(csvContent);
-        var deptSuffix = request.DepartmentCode.HasValue ? $"-{request.DepartmentCode.Value}" : string.Empty;
-        return File(bytes, "text/csv", $"pastel_customers_{prepare.StartDate:yyyyMMdd}_{prepare.EndDate:yyyyMMdd}_batch{prepare.BatchCode}{deptSuffix}.csv");
+        var deptSuffix = request.DepartmentCode.HasValue
+            ? $"-{request.DepartmentCode.Value}"
+            : string.Empty;
+        return File(
+            bytes,
+            "text/csv",
+            $"pastel_customers_{prepare.StartDate:yyyyMMdd}_{prepare.EndDate:yyyyMMdd}_batch{prepare.BatchCode}{deptSuffix}.csv"
+        );
     }
 
     [HttpPost("interface/export-async")]
@@ -932,10 +1089,12 @@ public class FinanceController : BaseApiController
     {
         if (request.FinancialSystemCode == (byte)ExportFinancialSystem.All)
         {
-            return BadRequest(new
-            {
-                error = "FinancialSystem ALL is not valid for single export execution. Submit BAS, SAP, or MPI separately."
-            });
+            return BadRequest(
+                new
+                {
+                    error = "FinancialSystem ALL is not valid for single export execution. Submit BAS, SAP, or MPI separately.",
+                }
+            );
         }
 
         var taskResult = QueueAsyncExportTask(request);
@@ -947,17 +1106,14 @@ public class FinanceController : BaseApiController
     {
         if (request.FinancialSystemCode != (byte)ExportFinancialSystem.All)
         {
-            return BadRequest(new
-            {
-                error = "FinancialSystemCode must be ALL for this endpoint."
-            });
+            return BadRequest(new { error = "FinancialSystemCode must be ALL for this endpoint." });
         }
 
         var systems = new[]
         {
             ExportFinancialSystem.Bas,
             ExportFinancialSystem.Sap,
-            ExportFinancialSystem.Mpi
+            ExportFinancialSystem.Mpi,
         };
 
         var queued = new List<object>();
@@ -972,23 +1128,23 @@ public class FinanceController : BaseApiController
                 FinancialSystemCode = (byte)system,
                 BatchMode = request.BatchMode,
                 SkipPosting = request.SkipPosting,
-                ReverseBatch = request.ReverseBatch
+                ReverseBatch = request.ReverseBatch,
             };
 
             var taskResult = QueueAsyncExportTask(perSystem);
-            queued.Add(new
-            {
-                system = system.ToString().ToUpperInvariant(),
-                taskId = taskResult.TaskId,
-                status = taskResult.Status
-            });
+            queued.Add(
+                new
+                {
+                    system = system.ToString().ToUpperInvariant(),
+                    taskId = taskResult.TaskId,
+                    status = taskResult.Status,
+                }
+            );
         }
 
-        return Ok(new
-        {
-            message = "Queued asynchronous exports for BAS, SAP and MPI.",
-            tasks = queued
-        });
+        return Ok(
+            new { message = "Queued asynchronous exports for BAS, SAP and MPI.", tasks = queued }
+        );
     }
 
     private (Guid TaskId, string Status) QueueAsyncExportTask(PastelExportDto request)
@@ -1004,7 +1160,7 @@ public class FinanceController : BaseApiController
             TaskId = taskId,
             Status = "Queued",
             CreatedAtUtc = DateTime.UtcNow,
-            Request = request
+            Request = request,
         };
         ExportTasks[taskId] = state;
         Interlocked.Increment(ref _exportsCreated);
@@ -1041,13 +1197,22 @@ public class FinanceController : BaseApiController
                 {
                     if (!request.SkipPosting)
                     {
-                        await MarkExportRowsPostedAsync(prepare.StartDate, request.FinancialSystemCode, request.DepartmentCode);
+                        await MarkExportRowsPostedAsync(
+                            prepare.StartDate,
+                            request.FinancialSystemCode,
+                            request.DepartmentCode
+                        );
                     }
 
-                    state.FileContent = System.Text.Encoding.UTF8.GetBytes("MPI export has no file output. Posting workflow completed.");
+                    state.FileContent = System.Text.Encoding.UTF8.GetBytes(
+                        "MPI export has no file output. Posting workflow completed."
+                    );
                     state.FileContentType = "text/plain";
-                    var mpiDeptSuffix = request.DepartmentCode.HasValue ? $"-{request.DepartmentCode.Value}" : string.Empty;
-                    state.FileName = $"mpi-posting-{prepare.StartDate:yyyyMMdd}-batch{prepare.BatchCode}{mpiDeptSuffix}.txt";
+                    var mpiDeptSuffix = request.DepartmentCode.HasValue
+                        ? $"-{request.DepartmentCode.Value}"
+                        : string.Empty;
+                    state.FileName =
+                        $"mpi-posting-{prepare.StartDate:yyyyMMdd}-batch{prepare.BatchCode}{mpiDeptSuffix}.txt";
                     state.Status = "Completed";
                     state.ProgressPercent = 100;
                     state.CompletedAtUtc = DateTime.UtcNow;
@@ -1061,18 +1226,26 @@ public class FinanceController : BaseApiController
                     prepare.EndDate,
                     request.DepartmentCode,
                     includeCustomerColumn: false,
-                    reverseBatch: request.ReverseBatch);
+                    reverseBatch: request.ReverseBatch
+                );
 
                 state.ProgressPercent = 70;
                 if (!request.SkipPosting)
                 {
-                    await MarkExportRowsPostedAsync(prepare.StartDate, request.FinancialSystemCode, request.DepartmentCode);
+                    await MarkExportRowsPostedAsync(
+                        prepare.StartDate,
+                        request.FinancialSystemCode,
+                        request.DepartmentCode
+                    );
                 }
 
                 content = System.Text.Encoding.UTF8.GetBytes(string.Join('\n', lines));
                 contentType = "text/csv";
-                var deptSuffix = request.DepartmentCode.HasValue ? $"-{request.DepartmentCode.Value}" : string.Empty;
-                filename = $"pastel_export_{prepare.StartDate:yyyyMMdd}_{prepare.EndDate:yyyyMMdd}_batch{prepare.BatchCode}{deptSuffix}.csv";
+                var deptSuffix = request.DepartmentCode.HasValue
+                    ? $"-{request.DepartmentCode.Value}"
+                    : string.Empty;
+                filename =
+                    $"pastel_export_{prepare.StartDate:yyyyMMdd}_{prepare.EndDate:yyyyMMdd}_batch{prepare.BatchCode}{deptSuffix}.csv";
 
                 if (state.CancellationTokenSource.IsCancellationRequested || _exportsCancelAll)
                 {
@@ -1114,15 +1287,17 @@ public class FinanceController : BaseApiController
             return NotFound(new { error = "Export task not found." });
         }
 
-        return Ok(new
-        {
-            taskId = state.TaskId,
-            status = state.Status,
-            progressPercent = state.ProgressPercent,
-            createdAtUtc = state.CreatedAtUtc,
-            completedAtUtc = state.CompletedAtUtc,
-            errorMessage = state.ErrorMessage
-        });
+        return Ok(
+            new
+            {
+                taskId = state.TaskId,
+                status = state.Status,
+                progressPercent = state.ProgressPercent,
+                createdAtUtc = state.CreatedAtUtc,
+                completedAtUtc = state.CompletedAtUtc,
+                errorMessage = state.ErrorMessage,
+            }
+        );
     }
 
     [HttpPost("interface/export-cancel/{taskId:guid}")]
@@ -1135,7 +1310,14 @@ public class FinanceController : BaseApiController
 
         if (state.Status is "Completed" or "Failed" or "Cancelled")
         {
-            return Ok(new { taskId, status = state.Status, message = "Task already finalized." });
+            return Ok(
+                new
+                {
+                    taskId,
+                    status = state.Status,
+                    message = "Task already finalized.",
+                }
+            );
         }
 
         state.CancellationTokenSource.Cancel();
@@ -1143,7 +1325,14 @@ public class FinanceController : BaseApiController
         state.ProgressPercent = 100;
         Interlocked.Increment(ref _exportsCancelled);
 
-        return Ok(new { taskId, status = state.Status, message = "Cancellation requested." });
+        return Ok(
+            new
+            {
+                taskId,
+                status = state.Status,
+                message = "Cancellation requested.",
+            }
+        );
     }
 
     [HttpPost("interface/export-cancel-all")]
@@ -1170,11 +1359,9 @@ public class FinanceController : BaseApiController
             Interlocked.Add(ref _exportsCancelled, cancelled);
         }
 
-        return Ok(new
-        {
-            message = "Cancellation requested for all running/queued exports.",
-            cancelled
-        });
+        return Ok(
+            new { message = "Cancellation requested for all running/queued exports.", cancelled }
+        );
     }
 
     [HttpGet("interface/export-runtime")]
@@ -1185,16 +1372,18 @@ public class FinanceController : BaseApiController
         var completed = Volatile.Read(ref _exportsCompleted);
         var cancelled = Volatile.Read(ref _exportsCancelled);
 
-        return Ok(new
-        {
-            exportsCreated = created,
-            exportsRunning = running,
-            exportsCompleted = completed,
-            exportsCancelled = cancelled,
-            isRunning = running > 0,
-            isComplete = created > 0 && created == completed + cancelled,
-            cancelAllRequested = _exportsCancelAll
-        });
+        return Ok(
+            new
+            {
+                exportsCreated = created,
+                exportsRunning = running,
+                exportsCompleted = completed,
+                exportsCancelled = cancelled,
+                isRunning = running > 0,
+                isComplete = created > 0 && created == completed + cancelled,
+                cancelAllRequested = _exportsCancelAll,
+            }
+        );
     }
 
     [HttpGet("interface/export-download/{taskId:guid}")]
@@ -1205,7 +1394,11 @@ public class FinanceController : BaseApiController
             return NotFound(new { error = "Export task not found." });
         }
 
-        if (state.Status != "Completed" || state.FileContent is null || state.FileContent.Length == 0)
+        if (
+            state.Status != "Completed"
+            || state.FileContent is null
+            || state.FileContent.Length == 0
+        )
         {
             return BadRequest(new { error = "Export output not available for download." });
         }
@@ -1213,7 +1406,8 @@ public class FinanceController : BaseApiController
         return File(
             state.FileContent,
             state.FileContentType ?? "application/octet-stream",
-            state.FileName ?? $"finance-export-{taskId}.dat");
+            state.FileName ?? $"finance-export-{taskId}.dat"
+        );
     }
 
     [HttpPost("missing-kilometres/close-gaps")]
@@ -1224,7 +1418,14 @@ public class FinanceController : BaseApiController
             return BadRequest(new { error = "Financial year is required." });
         }
 
-        if (!short.TryParse(request.FinancialYear, NumberStyles.Integer, CultureInfo.InvariantCulture, out var financialYear))
+        if (
+            !short.TryParse(
+                request.FinancialYear,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var financialYear
+            )
+        )
         {
             return BadRequest(new { error = "Financial year is invalid." });
         }
@@ -1233,21 +1434,25 @@ public class FinanceController : BaseApiController
         var gapsDataSet = await BuildCloseKiloGapsDataSetAsync(financialYear, currentUserId);
         if (gapsDataSet.Tables.Count == 0 || gapsDataSet.Tables[0].Rows.Count == 0)
         {
-            return Ok(new
-            {
-                message = $"No Kilo gaps were found for Financial Year=[{financialYear}/{financialYear + 1}]. Therefore, no kilo gaps were closed.",
-                recordsProcessed = 0
-            });
+            return Ok(
+                new
+                {
+                    message = $"No Kilo gaps were found for Financial Year=[{financialYear}/{financialYear + 1}]. Therefore, no kilo gaps were closed.",
+                    recordsProcessed = 0,
+                }
+            );
         }
 
         var xmlDoc = gapsDataSet.GetXml();
         var affected = await ExecuteCloseKiloGapsProcAsync(xmlDoc);
 
-        return Ok(new
-        {
-            message = $"A total of {affected} kilo gaps (excluding VIP) were successfully closed for Financial Year=[{financialYear}/{financialYear + 1}].",
-            recordsProcessed = affected
-        });
+        return Ok(
+            new
+            {
+                message = $"A total of {affected} kilo gaps (excluding VIP) were successfully closed for Financial Year=[{financialYear}/{financialYear + 1}].",
+                recordsProcessed = affected,
+            }
+        );
     }
 
     [HttpGet("reports/reversals-tree/{journalNumber}")]
@@ -1262,12 +1467,15 @@ public class FinanceController : BaseApiController
         var hasJournalCode = long.TryParse(trimmed, out var journalCode);
         var hasJournalDetailId = int.TryParse(trimmed, out var journalDetailId);
 
-        var roots = await _context.JournalDetails
-            .AsNoTracking()
+        var roots = await _context
+            .JournalDetails.AsNoTracking()
             .Where(jd =>
-                !jd.is_deleted &&
-                ((hasJournalCode && jd.journal_code == journalCode) ||
-                 (hasJournalDetailId && jd.journal_detail_id == journalDetailId)))
+                !jd.is_deleted
+                && (
+                    (hasJournalCode && jd.journal_code == journalCode)
+                    || (hasJournalDetailId && jd.journal_detail_id == journalDetailId)
+                )
+            )
             .Select(jd => jd.journal_detail_code)
             .ToListAsync();
 
@@ -1282,19 +1490,20 @@ public class FinanceController : BaseApiController
 
         while (frontier.Count > 0)
         {
-            var matches = await _context.JournalDetails
-                .AsNoTracking()
+            var matches = await _context
+                .JournalDetails.AsNoTracking()
                 .Where(jd =>
-                    !jd.is_deleted &&
-                    jd.journal_detail_reversalof.HasValue &&
-                    frontier.Contains(jd.journal_detail_reversalof.Value))
+                    !jd.is_deleted
+                    && jd.journal_detail_reversalof.HasValue
+                    && frontier.Contains(jd.journal_detail_reversalof.Value)
+                )
                 .Select(jd => new
                 {
                     jd.journal_detail_code,
                     jd.journal_code,
                     jd.journal_detail_id,
                     jd.journal_detail_date,
-                    jd.journal_detail_amount
+                    jd.journal_detail_amount,
                 })
                 .ToListAsync();
 
@@ -1307,29 +1516,37 @@ public class FinanceController : BaseApiController
                 }
 
                 frontier.Add(row.journal_detail_code);
-                reversalRows.Add(new ReversalNodeDto
-                {
-                    JournalNumber = row.journal_code?.ToString(CultureInfo.InvariantCulture) ?? row.journal_detail_id.ToString(CultureInfo.InvariantCulture),
-                    ReversalDate = row.journal_detail_date,
-                    Amount = row.journal_detail_amount
-                });
+                reversalRows.Add(
+                    new ReversalNodeDto
+                    {
+                        JournalNumber =
+                            row.journal_code?.ToString(CultureInfo.InvariantCulture)
+                            ?? row.journal_detail_id.ToString(CultureInfo.InvariantCulture),
+                        ReversalDate = row.journal_detail_date,
+                        Amount = row.journal_detail_amount,
+                    }
+                );
             }
         }
 
-        return Ok(new ReversalTreeDto
-        {
-            JournalNumber = trimmed,
-            Reversals = reversalRows
-                .OrderBy(x => x.ReversalDate)
-                .ThenBy(x => x.JournalNumber)
-                .ToList()
-        });
+        return Ok(
+            new ReversalTreeDto
+            {
+                JournalNumber = trimmed,
+                Reversals = reversalRows
+                    .OrderBy(x => x.ReversalDate)
+                    .ThenBy(x => x.JournalNumber)
+                    .ToList(),
+            }
+        );
     }
 
     [HttpPost("standard-bank/import")]
     [RequestFormLimits(MultipartBodyLengthLimit = 20 * 1024 * 1024)]
     [RequestSizeLimit(20 * 1024 * 1024)]
-    public async Task<ActionResult<ImportResultDto>> ImportStandardBankData([FromForm] IFormFile? file)
+    public async Task<ActionResult<ImportResultDto>> ImportStandardBankData(
+        [FromForm] IFormFile? file
+    )
     {
         if (file is null || file.Length == 0)
         {
@@ -1372,7 +1589,7 @@ public class FinanceController : BaseApiController
                     fuel_card_code = ParseNullableInt(columns, fuelCardIndex),
                     file_date = ParseNullableDate(columns, fileDateIndex) ?? DateTime.Today,
                     date_created = DateTime.UtcNow,
-                    is_deleted = false
+                    is_deleted = false,
                 };
 
                 _context.WesbankTransactions.Add(tx);
@@ -1389,12 +1606,14 @@ public class FinanceController : BaseApiController
             await _context.SaveChangesAsync();
         }
 
-        return Ok(new ImportResultDto
-        {
-            Success = imported > 0 && failed == 0,
-            RecordsImported = imported,
-            RecordsFailed = failed
-        });
+        return Ok(
+            new ImportResultDto
+            {
+                Success = imported > 0 && failed == 0,
+                RecordsImported = imported,
+                RecordsFailed = failed,
+            }
+        );
     }
 
     #endregion
@@ -1406,8 +1625,8 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var years = await _context.TariffParameters
-                .Where(tp => !tp.is_deleted)
+            var years = await _context
+                .TariffParameters.Where(tp => !tp.is_deleted)
                 .Select(tp => tp.TariffParameterYear)
                 .Distinct()
                 .OrderByDescending(y => y)
@@ -1430,8 +1649,8 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var param = await _context.TariffParameters
-                .Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
+            var param = await _context
+                .TariffParameters.Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
                 .FirstOrDefaultAsync();
 
             // Global parameters (interest rate, fuel price, etc.)
@@ -1446,116 +1665,147 @@ public class FinanceController : BaseApiController
                 approvedBy = param.Approval_user_access_name;
                 effectiveDate = param.EffectiveDate;
 
-                globalParams.Add(new TariffParameterItemDto
-                {
-                    ParameterName = "Annual Interest Rate",
-                    Value = param.AnnualInterestRatePercentage,
-                    Unit = "%",
-                });
-                globalParams.Add(new TariffParameterItemDto
-                {
-                    ParameterName = "Annual Payments",
-                    Value = param.AnnualPayments,
-                    Unit = "payments/year",
-                });
-                if (param.EffectiveInterestRate.HasValue)
-                    globalParams.Add(new TariffParameterItemDto
+                globalParams.Add(
+                    new TariffParameterItemDto
                     {
-                        ParameterName = "Effective Interest Rate",
-                        Value = param.EffectiveInterestRate.Value,
+                        ParameterName = "Annual Interest Rate",
+                        Value = param.AnnualInterestRatePercentage,
                         Unit = "%",
-                    });
-                globalParams.Add(new TariffParameterItemDto
-                {
-                    ParameterName = "Pool Vehicle Charged Days/Month",
-                    Value = param.PoolVehicleChargedDaysPerMonth,
-                    Unit = "days",
-                });
+                    }
+                );
+                globalParams.Add(
+                    new TariffParameterItemDto
+                    {
+                        ParameterName = "Annual Payments",
+                        Value = param.AnnualPayments,
+                        Unit = "payments/year",
+                    }
+                );
+                if (param.EffectiveInterestRate.HasValue)
+                    globalParams.Add(
+                        new TariffParameterItemDto
+                        {
+                            ParameterName = "Effective Interest Rate",
+                            Value = param.EffectiveInterestRate.Value,
+                            Unit = "%",
+                        }
+                    );
+                globalParams.Add(
+                    new TariffParameterItemDto
+                    {
+                        ParameterName = "Pool Vehicle Charged Days/Month",
+                        Value = param.PoolVehicleChargedDaysPerMonth,
+                        Unit = "days",
+                    }
+                );
                 if (param.AverageFuelPrice.HasValue)
-                    globalParams.Add(new TariffParameterItemDto
-                    {
-                        ParameterName = "Average Fuel Price",
-                        Value = param.AverageFuelPrice.Value,
-                        Unit = "R/litre",
-                    });
+                    globalParams.Add(
+                        new TariffParameterItemDto
+                        {
+                            ParameterName = "Average Fuel Price",
+                            Value = param.AverageFuelPrice.Value,
+                            Unit = "R/litre",
+                        }
+                    );
                 if (param.AnnualRecoveredKilos.HasValue)
-                    globalParams.Add(new TariffParameterItemDto
-                    {
-                        ParameterName = "Annual Recovered Kilometres",
-                        Value = param.AnnualRecoveredKilos.Value,
-                        Unit = "km",
-                    });
+                    globalParams.Add(
+                        new TariffParameterItemDto
+                        {
+                            ParameterName = "Annual Recovered Kilometres",
+                            Value = param.AnnualRecoveredKilos.Value,
+                            Unit = "km",
+                        }
+                    );
             }
 
             // Fixed and kilo tariffs per vehicle class (from Tariff table, current effective date)
             var today = DateTime.Today;
-            var classTariffs = await _context.Tariffs
-                .Where(t => t.effective_start_date <= today &&
-                            (t.effective_end_date == null || t.effective_end_date >= today))
-                .Join(_context.Classes,
-                      t => t.class_code, c => c.class_code,
-                      (t, c) => new
-                      {
-                          t.tariff_code,
-                          t.class_code,
-                          class_description = c.description,
-                          t.monthly_fixed_amount,
-                          t.monthly_odo_amount,
-                          t.daily_fixed_amount,
-                          t.effective_start_date,
-                      })
+            var classTariffs = await _context
+                .Tariffs.Where(t =>
+                    t.effective_start_date <= today
+                    && (t.effective_end_date == null || t.effective_end_date >= today)
+                )
+                .Join(
+                    _context.Classes,
+                    t => t.class_code,
+                    c => c.class_code,
+                    (t, c) =>
+                        new
+                        {
+                            t.tariff_code,
+                            t.class_code,
+                            class_description = c.description,
+                            t.monthly_fixed_amount,
+                            t.monthly_odo_amount,
+                            t.daily_fixed_amount,
+                            t.effective_start_date,
+                        }
+                )
                 .OrderBy(x => x.class_code)
                 .ToListAsync();
 
-            var fixedTariffs = classTariffs.Select(t => new TariffClassRowDto
-            {
-                ClassCode      = t.class_code,
-                ClassDescription = t.class_description ?? $"Class {t.class_code}",
-                Amount         = t.monthly_fixed_amount,
-                Unit           = "R/month",
-                EffectiveDate  = t.effective_start_date,
-            }).ToList();
+            var fixedTariffs = classTariffs
+                .Select(t => new TariffClassRowDto
+                {
+                    ClassCode = t.class_code,
+                    ClassDescription = t.class_description ?? $"Class {t.class_code}",
+                    Amount = t.monthly_fixed_amount,
+                    Unit = "R/month",
+                    EffectiveDate = t.effective_start_date,
+                })
+                .ToList();
 
-            var kiloTariffs = classTariffs.Select(t => new TariffClassRowDto
-            {
-                ClassCode      = t.class_code,
-                ClassDescription = t.class_description ?? $"Class {t.class_code}",
-                Amount         = t.monthly_odo_amount,
-                Unit           = "R/km",
-                EffectiveDate  = t.effective_start_date,
-            }).ToList();
+            var kiloTariffs = classTariffs
+                .Select(t => new TariffClassRowDto
+                {
+                    ClassCode = t.class_code,
+                    ClassDescription = t.class_description ?? $"Class {t.class_code}",
+                    Amount = t.monthly_odo_amount,
+                    Unit = "R/km",
+                    EffectiveDate = t.effective_start_date,
+                })
+                .ToList();
 
             // Maintenance values for this parameter year
-            var maintValues = param != null
-                ? await _context.MaintenanceValues
-                    .Where(mv => mv.TariffParameterID == param.TariffParameterID)
-                    .Join(_context.Classes,
-                          mv => mv.class_code, c => c.class_code,
-                          (mv, c) => new MaintenanceValueRowDto
-                          {
-                              ClassCode      = mv.class_code,
-                              ClassDescription = c.description ?? $"Class {mv.class_code}",
-                              MonthsAge      = mv.months_age,
-                              KilometerAge   = mv.kilometer_age,
-                              Amount         = mv.amount,
-                              RandPerKilometer = mv.RandPerKilometer,
-                          })
-                    .OrderBy(mv => mv.ClassCode)
-                    .ThenBy(mv => mv.MonthsAge)
-                    .ToListAsync()
-                : new List<MaintenanceValueRowDto>();
+            var maintValues =
+                param != null
+                    ? await _context
+                        .MaintenanceValues.Where(mv =>
+                            mv.TariffParameterID == param.TariffParameterID
+                        )
+                        .Join(
+                            _context.Classes,
+                            mv => mv.class_code,
+                            c => c.class_code,
+                            (mv, c) =>
+                                new MaintenanceValueRowDto
+                                {
+                                    ClassCode = mv.class_code,
+                                    ClassDescription = c.description ?? $"Class {mv.class_code}",
+                                    MonthsAge = mv.months_age,
+                                    KilometerAge = mv.kilometer_age,
+                                    Amount = mv.amount,
+                                    RandPerKilometer = mv.RandPerKilometer,
+                                }
+                        )
+                        .OrderBy(mv => mv.ClassCode)
+                        .ThenBy(mv => mv.MonthsAge)
+                        .ToListAsync()
+                    : new List<MaintenanceValueRowDto>();
 
-            return Ok(new TariffParametersDto
-            {
-                Year          = year,
-                IsApproved    = isApproved,
-                ApprovedBy    = approvedBy,
-                EffectiveDate = effectiveDate,
-                Parameters    = globalParams,
-                FixedTariffs  = fixedTariffs,
-                KiloTariffs   = kiloTariffs,
-                MaintenanceValues = maintValues,
-            });
+            return Ok(
+                new TariffParametersDto
+                {
+                    Year = year,
+                    IsApproved = isApproved,
+                    ApprovedBy = approvedBy,
+                    EffectiveDate = effectiveDate,
+                    Parameters = globalParams,
+                    FixedTariffs = fixedTariffs,
+                    KiloTariffs = kiloTariffs,
+                    MaintenanceValues = maintValues,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -1565,12 +1815,15 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("tariff-parameters/{year}/approve")]
-    public async Task<ActionResult> ApproveTariffParameters(int year, [FromBody] ApproveTariffDto? request = null)
+    public async Task<ActionResult> ApproveTariffParameters(
+        int year,
+        [FromBody] ApproveTariffDto? request = null
+    )
     {
         var currentUserId = GetCurrentUserId();
 
-        var tariff = await _context.TariffParameters
-            .Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
+        var tariff = await _context
+            .TariffParameters.Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
             .OrderByDescending(tp => tp.TariffParameterID)
             .FirstOrDefaultAsync();
 
@@ -1589,16 +1842,21 @@ public class FinanceController : BaseApiController
 
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = $"Tariff parameters for {year} approved", approvedBy = currentUserId });
+        return Ok(
+            new { message = $"Tariff parameters for {year} approved", approvedBy = currentUserId }
+        );
     }
 
     [HttpPost("tariff-parameters/{year}/reject")]
-    public async Task<ActionResult> RejectTariffParameters(int year, [FromBody] RejectTariffDto? request = null)
+    public async Task<ActionResult> RejectTariffParameters(
+        int year,
+        [FromBody] RejectTariffDto? request = null
+    )
     {
         var currentUserId = GetCurrentUserId();
 
-        var tariff = await _context.TariffParameters
-            .Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
+        var tariff = await _context
+            .TariffParameters.Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
             .OrderByDescending(tp => tp.TariffParameterID)
             .FirstOrDefaultAsync();
 
@@ -1617,12 +1875,14 @@ public class FinanceController : BaseApiController
 
         await _context.SaveChangesAsync();
 
-        return Ok(new
-        {
-            message = $"Tariff parameters for {year} rejected",
-            rejectedBy = currentUserId,
-            notes = request?.RejectionNotes
-        });
+        return Ok(
+            new
+            {
+                message = $"Tariff parameters for {year} rejected",
+                rejectedBy = currentUserId,
+                notes = request?.RejectionNotes,
+            }
+        );
     }
 
     private async Task<ExportPreparationResult> PrepareExportContextAsync(PastelExportDto request)
@@ -1632,14 +1892,20 @@ public class FinanceController : BaseApiController
 
         if (finSystemCode == (byte)ExportFinancialSystem.All)
         {
-            return ExportPreparationResult.Failed("FinancialSystem ALL is not valid for single export call.");
+            return ExportPreparationResult.Failed(
+                "FinancialSystem ALL is not valid for single export call."
+            );
         }
 
         var (startDate, endDate) = await ResolveExportDateWindowAsync(request);
 
-        var existingBatch = await _context.Batches
-            .AsNoTracking()
-            .Where(b => !b.is_deleted && b.batch_date.Date == startDate.Date && b.financial_system_code == finSystemCode)
+        var existingBatch = await _context
+            .Batches.AsNoTracking()
+            .Where(b =>
+                !b.is_deleted
+                && b.batch_date.Date == startDate.Date
+                && b.financial_system_code == finSystemCode
+            )
             .OrderByDescending(b => b.batch_code)
             .FirstOrDefaultAsync();
         var hasBatch = existingBatch is not null;
@@ -1649,45 +1915,70 @@ public class FinanceController : BaseApiController
         {
             if (batchMode == ExportBatchMode.BatchMustExist)
             {
-                return ExportPreparationResult.Failed("Batch does not exist for requested date and financial system.");
+                return ExportPreparationResult.Failed(
+                    "Batch does not exist for requested date and financial system."
+                );
             }
 
-            if (batchMode == ExportBatchMode.BatchAppendOrCreate || batchMode == ExportBatchMode.BatchMustCreateNew || batchMode == ExportBatchMode.ExportNewSerialNumber)
+            if (
+                batchMode == ExportBatchMode.BatchAppendOrCreate
+                || batchMode == ExportBatchMode.BatchMustCreateNew
+                || batchMode == ExportBatchMode.ExportNewSerialNumber
+            )
             {
-                var newBatchCode = await CreateBatchViaLegacyProcAsync(startDate.Date, finSystemCode);
-                var newBatch = await _context.Batches
-                    .AsNoTracking()
+                var newBatchCode = await CreateBatchViaLegacyProcAsync(
+                    startDate.Date,
+                    finSystemCode
+                );
+                var newBatch = await _context
+                    .Batches.AsNoTracking()
                     .FirstOrDefaultAsync(b => !b.is_deleted && b.batch_code == newBatchCode);
                 if (newBatch is null)
                 {
-                    return ExportPreparationResult.Failed($"Batch {newBatchCode} was created but could not be loaded.");
+                    return ExportPreparationResult.Failed(
+                        $"Batch {newBatchCode} was created but could not be loaded."
+                    );
                 }
 
-                await PrepareBatchJournalsAndMappingsAsync(newBatch.batch_code, newBatch.batch_date.Date, newBatch.financial_system_code);
+                await PrepareBatchJournalsAndMappingsAsync(
+                    newBatch.batch_code,
+                    newBatch.batch_date.Date,
+                    newBatch.financial_system_code
+                );
                 resolvedBatchCode = newBatch.batch_code;
             }
             else
             {
-                return ExportPreparationResult.Failed("Batch does not exist for requested date and financial system.");
+                return ExportPreparationResult.Failed(
+                    "Batch does not exist for requested date and financial system."
+                );
             }
         }
         else if (batchMode == ExportBatchMode.ExportNewSerialNumber)
         {
             var newBatchCode = await CreateBatchViaLegacyProcAsync(startDate.Date, finSystemCode);
-            var newBatch = await _context.Batches
-                .AsNoTracking()
+            var newBatch = await _context
+                .Batches.AsNoTracking()
                 .FirstOrDefaultAsync(b => !b.is_deleted && b.batch_code == newBatchCode);
             if (newBatch is null)
             {
-                return ExportPreparationResult.Failed($"Batch {newBatchCode} was created but could not be loaded.");
+                return ExportPreparationResult.Failed(
+                    $"Batch {newBatchCode} was created but could not be loaded."
+                );
             }
 
-            await PrepareBatchJournalsAndMappingsAsync(newBatch.batch_code, newBatch.batch_date.Date, newBatch.financial_system_code);
+            await PrepareBatchJournalsAndMappingsAsync(
+                newBatch.batch_code,
+                newBatch.batch_date.Date,
+                newBatch.financial_system_code
+            );
             resolvedBatchCode = newBatch.batch_code;
         }
         else if (batchMode == ExportBatchMode.BatchMustCreateNew)
         {
-            return ExportPreparationResult.Failed("Batch already exists, but mode requires creating a new batch.");
+            return ExportPreparationResult.Failed(
+                "Batch already exists, but mode requires creating a new batch."
+            );
         }
 
         return ExportPreparationResult.Ok(startDate, endDate, resolvedBatchCode);
@@ -1706,7 +1997,9 @@ public class FinanceController : BaseApiController
         }
     }
 
-    private async Task<(DateTime startDate, DateTime endDate)> ResolveExportDateWindowAsync(PastelExportDto request)
+    private async Task<(DateTime startDate, DateTime endDate)> ResolveExportDateWindowAsync(
+        PastelExportDto request
+    )
     {
         if (request.StartDate != default && request.EndDate != default)
         {
@@ -1722,8 +2015,8 @@ public class FinanceController : BaseApiController
 
             if (int.TryParse(request.BatchDate, out var batchCode))
             {
-                var batchByCode = await _context.Batches
-                    .AsNoTracking()
+                var batchByCode = await _context
+                    .Batches.AsNoTracking()
                     .FirstOrDefaultAsync(b => !b.is_deleted && b.batch_code == batchCode);
                 if (batchByCode is not null)
                 {
@@ -1732,8 +2025,8 @@ public class FinanceController : BaseApiController
             }
         }
 
-        var latestBatch = await _context.Batches
-            .AsNoTracking()
+        var latestBatch = await _context
+            .Batches.AsNoTracking()
             .Where(b => !b.is_deleted)
             .OrderByDescending(b => b.batch_date)
             .ThenByDescending(b => b.batch_code)
@@ -1753,14 +2046,16 @@ public class FinanceController : BaseApiController
         DateTime endDate,
         int? departmentCode,
         bool includeCustomerColumn,
-        bool reverseBatch)
+        bool reverseBatch
+    )
     {
-        var query = _context.JournalDetails
-            .AsNoTracking()
+        var query = _context
+            .JournalDetails.AsNoTracking()
             .Where(jd =>
-                !jd.is_deleted &&
-                jd.journal_detail_date.Date >= startDate &&
-                jd.journal_detail_date.Date <= endDate);
+                !jd.is_deleted
+                && jd.journal_detail_date.Date >= startDate
+                && jd.journal_detail_date.Date <= endDate
+            );
 
         if (departmentCode.HasValue)
         {
@@ -1779,7 +2074,7 @@ public class FinanceController : BaseApiController
                 jd.site_code,
                 jd.vmf_code,
                 jd.journal_detail_amount,
-                jd.journal_detail_description
+                jd.journal_detail_description,
             })
             .Take(100000)
             .ToListAsync();
@@ -1787,19 +2082,29 @@ public class FinanceController : BaseApiController
         var lines = new List<string>();
         if (includeCustomerColumn)
         {
-            lines.Add("TransactionDate,JournalDetailId,DepartmentCode,SiteCode,VehicleCode,Amount,Customer,Description");
+            lines.Add(
+                "TransactionDate,JournalDetailId,DepartmentCode,SiteCode,VehicleCode,Amount,Customer,Description"
+            );
         }
         else
         {
-            lines.Add("TransactionDate,JournalDetailId,DepartmentCode,SiteCode,VehicleCode,Amount,Description");
+            lines.Add(
+                "TransactionDate,JournalDetailId,DepartmentCode,SiteCode,VehicleCode,Amount,Description"
+            );
         }
 
         foreach (var row in rows)
         {
-            var description = (row.journal_detail_description ?? string.Empty).Replace("\"", "\"\"");
-            var exportAmount = reverseBatch ? (row.journal_detail_amount * -1m) : row.journal_detail_amount;
+            var description = (row.journal_detail_description ?? string.Empty).Replace(
+                "\"",
+                "\"\""
+            );
+            var exportAmount = reverseBatch
+                ? (row.journal_detail_amount * -1m)
+                : row.journal_detail_amount;
             var amount = exportAmount.ToString("0.00", CultureInfo.InvariantCulture);
-            var baseColumns = $"{row.journal_detail_date:yyyy-MM-dd},{row.journal_detail_id},{row.department_code},{row.site_code},{row.vmf_code},{amount}";
+            var baseColumns =
+                $"{row.journal_detail_date:yyyy-MM-dd},{row.journal_detail_id},{row.department_code},{row.site_code},{row.vmf_code},{amount}";
 
             if (includeCustomerColumn)
             {
@@ -1815,13 +2120,16 @@ public class FinanceController : BaseApiController
         return lines;
     }
 
-    private async Task<byte[]> BuildMultiSystemExportZipAsync(PastelExportDto request, bool includeCustomerColumn)
+    private async Task<byte[]> BuildMultiSystemExportZipAsync(
+        PastelExportDto request,
+        bool includeCustomerColumn
+    )
     {
         var systems = new[]
         {
             ExportFinancialSystem.Bas,
             ExportFinancialSystem.Sap,
-            ExportFinancialSystem.Mpi
+            ExportFinancialSystem.Mpi,
         };
 
         using var memoryStream = new MemoryStream();
@@ -1838,7 +2146,7 @@ public class FinanceController : BaseApiController
                     FinancialSystemCode = (byte)system,
                     BatchMode = request.BatchMode,
                     SkipPosting = request.SkipPosting,
-                    ReverseBatch = request.ReverseBatch
+                    ReverseBatch = request.ReverseBatch,
                 };
 
                 var prepare = await PrepareExportContextAsync(perSystem);
@@ -1856,23 +2164,35 @@ public class FinanceController : BaseApiController
                     prepare.EndDate,
                     perSystem.DepartmentCode,
                     includeCustomerColumn,
-                    reverseBatch: perSystem.ReverseBatch);
+                    reverseBatch: perSystem.ReverseBatch
+                );
 
                 if (!perSystem.SkipPosting)
                 {
-                    await MarkExportRowsPostedAsync(prepare.StartDate, perSystem.FinancialSystemCode, perSystem.DepartmentCode);
+                    await MarkExportRowsPostedAsync(
+                        prepare.StartDate,
+                        perSystem.FinancialSystemCode,
+                        perSystem.DepartmentCode
+                    );
                 }
 
                 if (system == ExportFinancialSystem.Mpi)
                 {
-                    var mpiEntry = archive.CreateEntry($"MPI_INFO_batch{prepare.BatchCode}_{prepare.StartDate:yyyyMMdd}.txt");
+                    var mpiEntry = archive.CreateEntry(
+                        $"MPI_INFO_batch{prepare.BatchCode}_{prepare.StartDate:yyyyMMdd}.txt"
+                    );
                     await using var mpiWriter = new StreamWriter(mpiEntry.Open());
-                    await mpiWriter.WriteAsync("MPI export has no file output. Posting workflow completed.");
+                    await mpiWriter.WriteAsync(
+                        "MPI export has no file output. Posting workflow completed."
+                    );
                     continue;
                 }
 
-                var deptSuffix = perSystem.DepartmentCode.HasValue ? $"-{perSystem.DepartmentCode.Value}" : string.Empty;
-                var entryName = $"{system.ToString().ToUpperInvariant()}_{prepare.StartDate:yyyyMMdd}_{prepare.EndDate:yyyyMMdd}_batch{prepare.BatchCode}{deptSuffix}.csv";
+                var deptSuffix = perSystem.DepartmentCode.HasValue
+                    ? $"-{perSystem.DepartmentCode.Value}"
+                    : string.Empty;
+                var entryName =
+                    $"{system.ToString().ToUpperInvariant()}_{prepare.StartDate:yyyyMMdd}_{prepare.EndDate:yyyyMMdd}_batch{prepare.BatchCode}{deptSuffix}.csv";
                 var entry = archive.CreateEntry(entryName, CompressionLevel.Fastest);
                 await using var entryWriter = new StreamWriter(entry.Open());
                 foreach (var line in lines)
@@ -1885,30 +2205,42 @@ public class FinanceController : BaseApiController
         return memoryStream.ToArray();
     }
 
-    private async Task MarkExportRowsPostedAsync(DateTime batchDate, byte financialSystemCode, int? departmentCode)
+    private async Task MarkExportRowsPostedAsync(
+        DateTime batchDate,
+        byte financialSystemCode,
+        int? departmentCode
+    )
     {
         var sqlBatchDate = batchDate.Date;
         if (departmentCode.HasValue)
         {
             var dept = (short)departmentCode.Value;
             await _context.Database.ExecuteSqlInterpolatedAsync(
-                $"EXEC DEV_UPD_DepartmentBatchToPosted @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}, @DepartmentCode={dept}");
+                $"EXEC DEV_UPD_DepartmentBatchToPosted @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}, @DepartmentCode={dept}"
+            );
             return;
         }
 
         await _context.Database.ExecuteSqlInterpolatedAsync(
-            $"EXEC DEV_UPD_BatchToPosted @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}");
+            $"EXEC DEV_UPD_BatchToPosted @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}"
+        );
     }
 
-    private async Task PrepareBatchJournalsAndMappingsAsync(int batchCode, DateTime batchDate, byte financialSystemCode)
+    private async Task PrepareBatchJournalsAndMappingsAsync(
+        int batchCode,
+        DateTime batchDate,
+        byte financialSystemCode
+    )
     {
         var sqlBatchDate = batchDate.Date;
         try
         {
             await _context.Database.ExecuteSqlInterpolatedAsync(
-                $"EXEC DEV_INS_SegmentJournalDetailMapsForExport @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}");
+                $"EXEC DEV_INS_SegmentJournalDetailMapsForExport @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}"
+            );
             await _context.Database.ExecuteSqlInterpolatedAsync(
-                $"EXEC DEV_UPD_VerifySegmentJournalDetailMapsForExport @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}");
+                $"EXEC DEV_UPD_VerifySegmentJournalDetailMapsForExport @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}"
+            );
 
             var unpostedCount = await GetUnpostedJournalDetailCountAsync(financialSystemCode);
 
@@ -1918,26 +2250,37 @@ public class FinanceController : BaseApiController
             }
 
             await _context.Database.ExecuteSqlInterpolatedAsync(
-                $"EXEC DEV_UPD_UnpostedJournalToJournalDetail @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}");
+                $"EXEC DEV_UPD_UnpostedJournalToJournalDetail @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}"
+            );
             await _context.Database.ExecuteSqlInterpolatedAsync(
-                $"EXEC DEV_INS_JournalSummary @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}");
+                $"EXEC DEV_INS_JournalSummary @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}"
+            );
             await _context.Database.ExecuteSqlInterpolatedAsync(
-                $"EXEC DEV_INS_RevenueJournals @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}");
+                $"EXEC DEV_INS_RevenueJournals @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}"
+            );
             await _context.Database.ExecuteSqlInterpolatedAsync(
-                $"EXEC DEV_INS_SegmentJournalDetailSummaryMapsForExport @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}");
+                $"EXEC DEV_INS_SegmentJournalDetailSummaryMapsForExport @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}"
+            );
             await _context.Database.ExecuteSqlInterpolatedAsync(
-                $"EXEC DEV_UPD_VerifySegmentJournalDetailMapsForExport @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}");
+                $"EXEC DEV_UPD_VerifySegmentJournalDetailMapsForExport @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}"
+            );
             await _context.Database.ExecuteSqlInterpolatedAsync(
-                $"EXEC DEV_INS_MFCodeMap @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}");
+                $"EXEC DEV_INS_MFCodeMap @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}"
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex,
+            _logger.LogError(
+                ex,
                 "Legacy finance procedure sequence failed for batch {BatchCode} ({BatchDate}, FS {FinancialSystemCode}).",
-                batchCode, batchDate, financialSystemCode);
+                batchCode,
+                batchDate,
+                financialSystemCode
+            );
             throw new InvalidOperationException(
                 $"Legacy finance procedure sequence failed for batch {batchCode} on {batchDate:yyyy-MM-dd} (financial system {financialSystemCode}).",
-                ex);
+                ex
+            );
         }
     }
 
@@ -1980,7 +2323,10 @@ public class FinanceController : BaseApiController
         }
     }
 
-    private async Task<int> CreateBatchViaLegacyProcAsync(DateTime batchDate, byte financialSystemCode)
+    private async Task<int> CreateBatchViaLegacyProcAsync(
+        DateTime batchDate,
+        byte financialSystemCode
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -2083,7 +2429,12 @@ public class FinanceController : BaseApiController
             return null;
         }
 
-        return int.TryParse(columns[index], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+        return int.TryParse(
+            columns[index],
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var value
+        )
             ? value
             : null;
     }
@@ -2101,12 +2452,26 @@ public class FinanceController : BaseApiController
             return null;
         }
 
-        if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsed))
+        if (
+            DateTime.TryParse(
+                raw,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeLocal,
+                out var parsed
+            )
+        )
         {
             return parsed.Date;
         }
 
-        if (DateTime.TryParse(raw, CultureInfo.GetCultureInfo("en-ZA"), DateTimeStyles.AssumeLocal, out parsed))
+        if (
+            DateTime.TryParse(
+                raw,
+                CultureInfo.GetCultureInfo("en-ZA"),
+                DateTimeStyles.AssumeLocal,
+                out parsed
+            )
+        )
         {
             return parsed.Date;
         }
@@ -2114,7 +2479,10 @@ public class FinanceController : BaseApiController
         return null;
     }
 
-    private async Task<DataSet> BuildCloseKiloGapsDataSetAsync(short financialYear, int currentUserId)
+    private async Task<DataSet> BuildCloseKiloGapsDataSetAsync(
+        short financialYear,
+        int currentUserId
+    )
     {
         var allKilos = await LoadAllVehicleKilosAsync();
         var table = CreateKiloGapsTableSchema();
@@ -2124,9 +2492,15 @@ public class FinanceController : BaseApiController
         DataRow? prev = null;
         foreach (DataRow current in allKilos.Rows)
         {
-            if (prev is not null &&
-                SafeInt(prev, "vmf_code") == SafeInt(current, "vmf_code") &&
-                !string.Equals(SafeString(prev, "TA_REK"), SafeString(current, "TA_REK"), StringComparison.OrdinalIgnoreCase))
+            if (
+                prev is not null
+                && SafeInt(prev, "vmf_code") == SafeInt(current, "vmf_code")
+                && !string.Equals(
+                    SafeString(prev, "TA_REK"),
+                    SafeString(current, "TA_REK"),
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
                 var prevEnd = SafeInt(prev, "end_odo");
                 var currStart = SafeInt(current, "start_odo");
@@ -2140,11 +2514,21 @@ public class FinanceController : BaseApiController
                     var prevFinancialYear = SafeShort(prev, "FinancialYear");
                     var currFinancialYear = SafeShort(current, "FinancialYear");
 
-                    if (string.Equals(prevSite, currSite, StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(prevContractType, "VIP", StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(currContractType, "VIP", StringComparison.OrdinalIgnoreCase) &&
-                        prevFinancialYear >= financialYear - 1 &&
-                        currFinancialYear == financialYear)
+                    if (
+                        string.Equals(prevSite, currSite, StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(
+                            prevContractType,
+                            "VIP",
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                        && !string.Equals(
+                            currContractType,
+                            "VIP",
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                        && prevFinancialYear >= financialYear - 1
+                        && currFinancialYear == financialYear
+                    )
                     {
                         var row = table.NewRow();
                         FillGapRow(row, prev, current, gapSize, closeGapNumber, currentUserId);
@@ -2162,7 +2546,14 @@ public class FinanceController : BaseApiController
         return result;
     }
 
-    private static void FillGapRow(DataRow row, DataRow prev, DataRow next, int gapSize, int gapNumber, int userId)
+    private static void FillGapRow(
+        DataRow row,
+        DataRow prev,
+        DataRow next,
+        int gapSize,
+        int gapNumber,
+        int userId
+    )
     {
         row["Prev_vmf_code"] = SafeInt(prev, "vmf_code");
         row["Prev_registration_number"] = SafeString(prev, "registration_number");
@@ -2189,7 +2580,8 @@ public class FinanceController : BaseApiController
 
         row["Gap_size"] = Convert.ToDouble(gapSize, CultureInfo.InvariantCulture);
         row["GapSize_Amount"] = Math.Round(gapSize * SafeDecimal(next, "Tariff"), 2);
-        row["Gap_RekNumber"] = $"GAP{gapNumber.ToString(CultureInfo.InvariantCulture).PadLeft(7, '0')}";
+        row["Gap_RekNumber"] =
+            $"GAP{gapNumber.ToString(CultureInfo.InvariantCulture).PadLeft(7, '0')}";
         row["UserID_ToCloseGap"] = Convert.ToDecimal(userId, CultureInfo.InvariantCulture);
 
         row["Next_vmf_code"] = SafeInt(next, "vmf_code");
@@ -2369,48 +2761,193 @@ public class FinanceController : BaseApiController
         return table;
     }
 
-    private static string SafeString(DataRow row, string column)
-        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToString(row[column], CultureInfo.InvariantCulture) ?? string.Empty : string.Empty;
+    private static string SafeString(DataRow row, string column) =>
+        row.Table.Columns.Contains(column) && row[column] is not DBNull
+            ? Convert.ToString(row[column], CultureInfo.InvariantCulture) ?? string.Empty
+            : string.Empty;
 
-    private static int SafeInt(DataRow row, string column)
-        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToInt32(row[column], CultureInfo.InvariantCulture) : 0;
+    private static int SafeInt(DataRow row, string column) =>
+        row.Table.Columns.Contains(column) && row[column] is not DBNull
+            ? Convert.ToInt32(row[column], CultureInfo.InvariantCulture)
+            : 0;
 
-    private static short SafeShort(DataRow row, string column)
-        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToInt16(row[column], CultureInfo.InvariantCulture) : (short)0;
+    private static short SafeShort(DataRow row, string column) =>
+        row.Table.Columns.Contains(column) && row[column] is not DBNull
+            ? Convert.ToInt16(row[column], CultureInfo.InvariantCulture)
+            : (short)0;
 
-    private static double SafeDouble(DataRow row, string column)
-        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToDouble(row[column], CultureInfo.InvariantCulture) : 0d;
+    private static double SafeDouble(DataRow row, string column) =>
+        row.Table.Columns.Contains(column) && row[column] is not DBNull
+            ? Convert.ToDouble(row[column], CultureInfo.InvariantCulture)
+            : 0d;
 
-    private static decimal SafeDecimal(DataRow row, string column)
-        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToDecimal(row[column], CultureInfo.InvariantCulture) : 0m;
+    private static decimal SafeDecimal(DataRow row, string column) =>
+        row.Table.Columns.Contains(column) && row[column] is not DBNull
+            ? Convert.ToDecimal(row[column], CultureInfo.InvariantCulture)
+            : 0m;
 
-    private static DateTime SafeDate(DataRow row, string column)
-        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToDateTime(row[column], CultureInfo.InvariantCulture) : DateTime.MinValue;
+    private static DateTime SafeDate(DataRow row, string column) =>
+        row.Table.Columns.Contains(column) && row[column] is not DBNull
+            ? Convert.ToDateTime(row[column], CultureInfo.InvariantCulture)
+            : DateTime.MinValue;
 
     #endregion
 }
 
 #region DTOs
-public class BatchStatusDto { public int BatchCode { get; set; } public string Status { get; set; } = ""; public DateTime? BatchDate { get; set; } public bool IsActive { get; set; } public int TotalTransactions { get; set; } public int ProcessedTransactions { get; set; } }
-public class StartBatchDto { public DateTime BatchDate { get; set; } public byte FinancialSystemCode { get; set; } = 1; public ExportBatchMode? BatchMode { get; set; } }
-public class BatchStartResultDto { public int BatchCode { get; set; } public DateTime BatchDate { get; set; } public bool Success { get; set; } public string Message { get; set; } = ""; }
-public class ScoaCheckResultDto { public bool IsCompliant { get; set; } public List<string> Errors { get; set; } = new(); public List<string> Warnings { get; set; } = new(); public int TotalChecked { get; set; } }
-public class BasImportDto { [Required] public string FileData { get; set; } = ""; public int? DepartmentCode { get; set; } }
-public class BasImportResultDto { public bool Success { get; set; } public int RecordsImported { get; set; } public List<string> Errors { get; set; } = new(); public string Message { get; set; } = ""; }
-public class BasSegmentDto { public int SegmentCode { get; set; } public string SegmentType { get; set; } = ""; public string SegmentValue { get; set; } = ""; public int? DepartmentCode { get; set; } public bool IsActive { get; set; } }
-public class ActivateSegmentsDto { [Required] public List<int> SegmentCodes { get; set; } = new(); }
-public class InvalidJournalDto { public Guid JournalDetailCode { get; set; } public string JournalNumber { get; set; } = ""; public string Reason { get; set; } = ""; public int? DepartmentCode { get; set; } }
-public class UninvoicedJournalDto { public Guid JournalDetailCode { get; set; } public string JournalNumber { get; set; } = ""; public decimal Amount { get; set; } public DateTime TransactionDate { get; set; } }
-public class FinanceDepartmentDto { public int DepartmentCode { get; set; } public string DepartmentName { get; set; } = ""; }
-public class FinancialYearDto { public short Code { get; set; } public string Name { get; set; } = ""; public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
-public class SegmentTypeDto { public string Code { get; set; } = ""; public string Name { get; set; } = ""; }
-public class PastelExportDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } public int? DepartmentCode { get; set; } public string? BatchDate { get; set; } public byte FinancialSystemCode { get; set; } = 1; public ExportBatchMode? BatchMode { get; set; } public bool SkipPosting { get; set; } public bool ReverseBatch { get; set; } }
-public class PastelCustomerExportDto { public int? DepartmentCode { get; set; } public string? BatchDate { get; set; } public byte FinancialSystemCode { get; set; } = 1; public ExportBatchMode? BatchMode { get; set; } public bool SkipPosting { get; set; } public bool ReverseBatch { get; set; } }
-public class ReversalTreeDto { public string JournalNumber { get; set; } = ""; public List<ReversalNodeDto> Reversals { get; set; } = new(); }
-public class ReversalNodeDto { public string JournalNumber { get; set; } = ""; public DateTime ReversalDate { get; set; } public decimal Amount { get; set; } }
-public class CloseKiloGapsRequest { public string FinancialYear { get; set; } = ""; }
-public class StandardBankImportDto { [Required] public string FileContent { get; set; } = ""; }
-public class ImportResultDto { public bool Success { get; set; } public int RecordsImported { get; set; } public int RecordsFailed { get; set; } public List<string> Errors { get; set; } = new(); }
+public class BatchStatusDto
+{
+    public int BatchCode { get; set; }
+    public string Status { get; set; } = "";
+    public DateTime? BatchDate { get; set; }
+    public bool IsActive { get; set; }
+    public int TotalTransactions { get; set; }
+    public int ProcessedTransactions { get; set; }
+}
+
+public class StartBatchDto
+{
+    public DateTime BatchDate { get; set; }
+    public byte FinancialSystemCode { get; set; } = 1;
+    public ExportBatchMode? BatchMode { get; set; }
+}
+
+public class BatchStartResultDto
+{
+    public int BatchCode { get; set; }
+    public DateTime BatchDate { get; set; }
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
+}
+
+public class ScoaCheckResultDto
+{
+    public bool IsCompliant { get; set; }
+    public List<string> Errors { get; set; } = new();
+    public List<string> Warnings { get; set; } = new();
+    public int TotalChecked { get; set; }
+}
+
+public class BasImportDto
+{
+    [Required]
+    public string FileData { get; set; } = "";
+    public int? DepartmentCode { get; set; }
+}
+
+public class BasImportResultDto
+{
+    public bool Success { get; set; }
+    public int RecordsImported { get; set; }
+    public List<string> Errors { get; set; } = new();
+    public string Message { get; set; } = "";
+}
+
+public class BasSegmentDto
+{
+    public int SegmentCode { get; set; }
+    public string SegmentType { get; set; } = "";
+    public string SegmentValue { get; set; } = "";
+    public int? DepartmentCode { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class ActivateSegmentsDto
+{
+    [Required]
+    public List<int> SegmentCodes { get; set; } = new();
+}
+
+public class InvalidJournalDto
+{
+    public Guid JournalDetailCode { get; set; }
+    public string JournalNumber { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public int? DepartmentCode { get; set; }
+}
+
+public class UninvoicedJournalDto
+{
+    public Guid JournalDetailCode { get; set; }
+    public string JournalNumber { get; set; } = "";
+    public decimal Amount { get; set; }
+    public DateTime TransactionDate { get; set; }
+}
+
+public class FinanceDepartmentDto
+{
+    public int DepartmentCode { get; set; }
+    public string DepartmentName { get; set; } = "";
+}
+
+public class FinancialYearDto
+{
+    public short Code { get; set; }
+    public string Name { get; set; } = "";
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class SegmentTypeDto
+{
+    public string Code { get; set; } = "";
+    public string Name { get; set; } = "";
+}
+
+public class PastelExportDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public int? DepartmentCode { get; set; }
+    public string? BatchDate { get; set; }
+    public byte FinancialSystemCode { get; set; } = 1;
+    public ExportBatchMode? BatchMode { get; set; }
+    public bool SkipPosting { get; set; }
+    public bool ReverseBatch { get; set; }
+}
+
+public class PastelCustomerExportDto
+{
+    public int? DepartmentCode { get; set; }
+    public string? BatchDate { get; set; }
+    public byte FinancialSystemCode { get; set; } = 1;
+    public ExportBatchMode? BatchMode { get; set; }
+    public bool SkipPosting { get; set; }
+    public bool ReverseBatch { get; set; }
+}
+
+public class ReversalTreeDto
+{
+    public string JournalNumber { get; set; } = "";
+    public List<ReversalNodeDto> Reversals { get; set; } = new();
+}
+
+public class ReversalNodeDto
+{
+    public string JournalNumber { get; set; } = "";
+    public DateTime ReversalDate { get; set; }
+    public decimal Amount { get; set; }
+}
+
+public class CloseKiloGapsRequest
+{
+    public string FinancialYear { get; set; } = "";
+}
+
+public class StandardBankImportDto
+{
+    [Required]
+    public string FileContent { get; set; } = "";
+}
+
+public class ImportResultDto
+{
+    public bool Success { get; set; }
+    public int RecordsImported { get; set; }
+    public int RecordsFailed { get; set; }
+    public List<string> Errors { get; set; } = new();
+}
+
 public class TariffParametersDto
 {
     public int Year { get; set; }
@@ -2422,18 +2959,49 @@ public class TariffParametersDto
     public List<TariffClassRowDto> KiloTariffs { get; set; } = new();
     public List<MaintenanceValueRowDto> MaintenanceValues { get; set; } = new();
 }
-public class TariffParameterItemDto { public string ParameterName { get; set; } = ""; public decimal Value { get; set; } public string Unit { get; set; } = ""; }
-public class TariffClassRowDto { public short ClassCode { get; set; } public string ClassDescription { get; set; } = ""; public decimal Amount { get; set; } public string Unit { get; set; } = ""; public DateTime EffectiveDate { get; set; } }
-public class MaintenanceValueRowDto { public short ClassCode { get; set; } public string ClassDescription { get; set; } = ""; public short MonthsAge { get; set; } public int KilometerAge { get; set; } public decimal Amount { get; set; } public decimal RandPerKilometer { get; set; } }
-public class ApproveTariffDto { public string? ApprovalNotes { get; set; } }
-public class RejectTariffDto { public string? RejectionNotes { get; set; } }
+
+public class TariffParameterItemDto
+{
+    public string ParameterName { get; set; } = "";
+    public decimal Value { get; set; }
+    public string Unit { get; set; } = "";
+}
+
+public class TariffClassRowDto
+{
+    public short ClassCode { get; set; }
+    public string ClassDescription { get; set; } = "";
+    public decimal Amount { get; set; }
+    public string Unit { get; set; } = "";
+    public DateTime EffectiveDate { get; set; }
+}
+
+public class MaintenanceValueRowDto
+{
+    public short ClassCode { get; set; }
+    public string ClassDescription { get; set; } = "";
+    public short MonthsAge { get; set; }
+    public int KilometerAge { get; set; }
+    public decimal Amount { get; set; }
+    public decimal RandPerKilometer { get; set; }
+}
+
+public class ApproveTariffDto
+{
+    public string? ApprovalNotes { get; set; }
+}
+
+public class RejectTariffDto
+{
+    public string? RejectionNotes { get; set; }
+}
 
 public enum ExportFinancialSystem : byte
 {
     All = 0,
     Bas = 1,
     Sap = 2,
-    Mpi = 3
+    Mpi = 3,
 }
 
 public enum ExportBatchMode
@@ -2441,7 +3009,7 @@ public enum ExportBatchMode
     BatchAppendOrCreate = 0,
     BatchMustCreateNew = 1,
     BatchMustExist = 2,
-    ExportNewSerialNumber = 3
+    ExportNewSerialNumber = 3,
 }
 
 public sealed class ExportPreparationResult
@@ -2453,7 +3021,13 @@ public sealed class ExportPreparationResult
     public int BatchCode { get; private init; }
 
     public static ExportPreparationResult Ok(DateTime start, DateTime end, int batchCode) =>
-        new() { Success = true, StartDate = start.Date, EndDate = end.Date, BatchCode = batchCode };
+        new()
+        {
+            Success = true,
+            StartDate = start.Date,
+            EndDate = end.Date,
+            BatchCode = batchCode,
+        };
 
     public static ExportPreparationResult Failed(string message) =>
         new() { Success = false, ErrorMessage = message };

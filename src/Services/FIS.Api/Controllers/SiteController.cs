@@ -121,8 +121,7 @@ public class SiteController : BaseApiController
     }
 
     [HttpGet("active")]
-    public async Task<ActionResult<IEnumerable<SiteDto>>> GetActiveSites()
-        => await GetSites();
+    public async Task<ActionResult<IEnumerable<SiteDto>>> GetActiveSites() => await GetSites();
 
     [HttpGet("{id:int}/delete-check")]
     public async Task<ActionResult<SiteDeleteCheck>> GetDeleteCheck(short id)
@@ -184,18 +183,35 @@ public class SiteController : BaseApiController
                 return NotFound();
             }
 
-            if (existingSite.site_active != dto.SiteActive &&
-                (string.IsNullOrWhiteSpace(dto.Notes) || string.Equals(existingSite.notes?.Trim(), dto.Notes.Trim(), StringComparison.Ordinal)))
+            if (
+                existingSite.site_active != dto.SiteActive
+                && (
+                    string.IsNullOrWhiteSpace(dto.Notes)
+                    || string.Equals(
+                        existingSite.notes?.Trim(),
+                        dto.Notes.Trim(),
+                        StringComparison.Ordinal
+                    )
+                )
+            )
             {
-                return BadRequest(new { message = "A new note is required when changing the site active status." });
+                return BadRequest(
+                    new { message = "A new note is required when changing the site active status." }
+                );
             }
 
-            if (existingSite.site_active && !dto.SiteActive && await _siteRepository.HasActiveContractsAsync(id))
+            if (
+                existingSite.site_active
+                && !dto.SiteActive
+                && await _siteRepository.HasActiveContractsAsync(id)
+            )
             {
-                return Conflict(new
-                {
-                    message = "This site cannot be deactivated while active vehicle contracts are assigned to it."
-                });
+                return Conflict(
+                    new
+                    {
+                        message = "This site cannot be deactivated while active vehicle contracts are assigned to it.",
+                    }
+                );
             }
 
             var currentUserId = GetCurrentUserId();
@@ -224,11 +240,13 @@ public class SiteController : BaseApiController
             var deleteCheck = await _siteRepository.GetDeleteCheckAsync(id);
             if (!deleteCheck.CanDelete)
             {
-                return Conflict(new
-                {
-                    message = "Contracts issued to this site must be changed before deleting it.",
-                    contractCount = deleteCheck.ContractCount
-                });
+                return Conflict(
+                    new
+                    {
+                        message = "Contracts issued to this site must be changed before deleting it.",
+                        contractCount = deleteCheck.ContractCount,
+                    }
+                );
             }
 
             await _siteRepository.DeleteAsync(id, currentUserId);
@@ -274,7 +292,11 @@ public class SiteController : BaseApiController
         {
             site.user_access_code = dto.UserAccessCode;
         }
-        else if (site.user_access_code is null && currentUserId > 0 && currentUserId <= short.MaxValue)
+        else if (
+            site.user_access_code is null
+            && currentUserId > 0
+            && currentUserId <= short.MaxValue
+        )
         {
             site.user_access_code = currentUserId;
         }
@@ -294,7 +316,10 @@ public class SiteController : BaseApiController
             return "A department is required.";
         }
 
-        if (string.IsNullOrWhiteSpace(dto.DepartmentNumber) || dto.DepartmentNumber.Trim().Length != 7)
+        if (
+            string.IsNullOrWhiteSpace(dto.DepartmentNumber)
+            || dto.DepartmentNumber.Trim().Length != 7
+        )
         {
             return "Department number must be 7 characters long.";
         }
@@ -317,11 +342,11 @@ public class SiteController : BaseApiController
         return null;
     }
 
-    private static string? Clean(string? value)
-        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? Clean(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static SiteDto MapToDto(Site site)
-        => new()
+    private static SiteDto MapToDto(Site site) =>
+        new()
         {
             SiteCode = site.Site_code,
             DepartmentCode = site.Depatrment_code,
@@ -354,14 +379,19 @@ public class SiteController : BaseApiController
             UserAccessCode = site.user_access_code,
             ModifiedByUserCode = site.modified_by_user_code,
             DateCreated = site.date_created,
-            DateUpdated = site.date_updated
+            DateUpdated = site.date_updated,
         };
 
-    private static string? FormatProvinceCode(byte? provinceCode)
-        => provinceCode?.ToString(CultureInfo.InvariantCulture);
+    private static string? FormatProvinceCode(byte? provinceCode) =>
+        provinceCode?.ToString(CultureInfo.InvariantCulture);
 
-    private static byte? ParseProvinceCode(string? provinceCode)
-        => byte.TryParse(provinceCode, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+    private static byte? ParseProvinceCode(string? provinceCode) =>
+        byte.TryParse(
+            provinceCode,
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var parsed
+        )
             ? parsed
             : null;
 }

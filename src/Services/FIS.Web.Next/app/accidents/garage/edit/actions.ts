@@ -163,13 +163,23 @@ function getAmount(formData: FormData, key: string, label: string, existing: num
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
-function buildUpdateRequest(formData: FormData, existing: AccidentEditRecord): AccidentUpdateRequest {
+function buildUpdateRequest(
+  formData: FormData,
+  existing: AccidentEditRecord,
+): AccidentUpdateRequest {
   const accidentDate = getRequiredDate(formData, "occurenceDate", "Accident date");
   const reportedDate = getRequiredDate(formData, "reportedDate", "Date reported");
-  const driverEmployNumber = getOptionalText(formData, "driverEmployNumber", "Driver ID number", 13);
+  const driverEmployNumber = getOptionalText(
+    formData,
+    "driverEmployNumber",
+    "Driver ID number",
+    13,
+  );
   if (driverEmployNumber && !/^[0-9/]+$/.test(driverEmployNumber)) {
     throw new AccidentFormValidationError("Driver ID number may contain only numbers and '/'.");
   }
@@ -180,10 +190,16 @@ function buildUpdateRequest(formData: FormData, existing: AccidentEditRecord): A
     throw new AccidentFormValidationError("Notify HQ date is required when Notify HQ is Y or X.");
   }
 
-  const flagTripAuthor = getChoice(formData, "flagTripAuthor", "Notify trip authority", ["N", "Y", "X"]);
+  const flagTripAuthor = getChoice(formData, "flagTripAuthor", "Notify trip authority", [
+    "N",
+    "Y",
+    "X",
+  ]);
   const flagTripAuthDate = getOptionalDate(formData, "flagTripAuthDate", "Notify trip date");
   if ((flagTripAuthor === "Y" || flagTripAuthor === "X") && !flagTripAuthDate) {
-    throw new AccidentFormValidationError("Notify trip date is required when Notify trip authority is Y or X.");
+    throw new AccidentFormValidationError(
+      "Notify trip date is required when Notify trip authority is Y or X.",
+    );
   }
 
   return {
@@ -202,13 +218,34 @@ function buildUpdateRequest(formData: FormData, existing: AccidentEditRecord): A
     claim_amount: getAmount(formData, "claimAmount", "Claim amount", existing.claimAmount),
     excess_amount: getAmount(formData, "excessAmount", "Excess amount", existing.excessAmount),
     call_refer: existing.callRefer,
-    captured_person: getChoice(formData, "capturedPerson", "Capture person", ["?", "HM", "DF", "MDS", "CR", "JR", "MO", "AJ"]),
-    fin_year: getChoice(formData, "finYear", "Financial year", ["02/03", "01/02", "00/01", "99/00", "98/99", "97/98"]),
+    captured_person: getChoice(formData, "capturedPerson", "Capture person", [
+      "?",
+      "HM",
+      "DF",
+      "MDS",
+      "CR",
+      "JR",
+      "MO",
+      "AJ",
+    ]),
+    fin_year: getChoice(formData, "finYear", "Financial year", [
+      "02/03",
+      "01/02",
+      "00/01",
+      "99/00",
+      "98/99",
+      "97/98",
+    ]),
     garage: getChoice(formData, "garage", "Garage", ["PTA", "JHB"]),
     driver_telno: getOptionalText(formData, "driverTelno", "Driver telephone", 30),
     driver_site_code: getOptionalInteger(formData, "driverSiteCode", "Site"),
     transoffic_name: getOptionalText(formData, "transportOfficerName", "Transport officer", 30),
-    transoffic_tel: getOptionalText(formData, "transportOfficerTel", "Transport officer telephone", 20),
+    transoffic_tel: getOptionalText(
+      formData,
+      "transportOfficerTel",
+      "Transport officer telephone",
+      20,
+    ),
     accident_km: getAmount(formData, "accidentKm", "GG car km", existing.accidentKm),
     acc_type_code: getOptionalInteger(formData, "accidentTypeCode", "Accident category"),
     flag_gg_hq: flagGgHq,
@@ -220,13 +257,38 @@ function buildUpdateRequest(formData: FormData, existing: AccidentEditRecord): A
     damage_description: getOptionalText(formData, "damageDescription", "GG damage description", 60),
     death: getChoice(formData, "death", "Death", ["?", "N", "Y"]),
     injured: getChoice(formData, "injured", "Injured", ["?", "N", "Y"]),
-    third_party_regno: getOptionalText(formData, "thirdPartyRegistration", "Private party registration", 8),
+    third_party_regno: getOptionalText(
+      formData,
+      "thirdPartyRegistration",
+      "Private party registration",
+      8,
+    ),
     third_party_owner: getOptionalText(formData, "thirdPartyOwner", "Private party name", 30),
-    third_party_tel: getOptionalText(formData, "thirdPartyTelephone", "Private party telephone", 30),
-    third_party_claim: getAmount(formData, "thirdPartyClaim", "Private car damage", existing.thirdPartyClaim),
-    SecondThirdPartyRegNo: getOptionalText(formData, "secondThirdPartyRegNo", "2nd third-party registration", 8),
+    third_party_tel: getOptionalText(
+      formData,
+      "thirdPartyTelephone",
+      "Private party telephone",
+      30,
+    ),
+    third_party_claim: getAmount(
+      formData,
+      "thirdPartyClaim",
+      "Private car damage",
+      existing.thirdPartyClaim,
+    ),
+    SecondThirdPartyRegNo: getOptionalText(
+      formData,
+      "secondThirdPartyRegNo",
+      "2nd third-party registration",
+      8,
+    ),
     th_claim_receive: getChoice(formData, "claimReceived", "Claim received", ["N", "Y"]),
-    claim_against_dept: getAmount(formData, "claimAmount", "Claim amount", existing.claimAgainstDepartment),
+    claim_against_dept: getAmount(
+      formData,
+      "claimAmount",
+      "Claim amount",
+      existing.claimAgainstDepartment,
+    ),
     letterhead: getChoice(formData, "letterhead", "Letterhead", ["N", "Y"]),
     z181: getChoice(formData, "z181", "Z181", ["N", "Y"]),
     part3: getChoice(formData, "part3", "Part III", ["N", "Y"]),
@@ -234,18 +296,54 @@ function buildUpdateRequest(formData: FormData, existing: AccidentEditRecord): A
     sketch: getChoice(formData, "sketch", "Sketch", ["N", "Y"]),
     iddoc: getChoice(formData, "iddoc", "ID document", ["N", "Y"]),
     drivelic: getChoice(formData, "drivelic", "Driving licence", ["N", "Y"]),
-    docs_acc_relieve: getChoice(formData, "documentsAccidentRelieve", "Documents received for relief", ["N", "Y"]),
+    docs_acc_relieve: getChoice(
+      formData,
+      "documentsAccidentRelieve",
+      "Documents received for relief",
+      ["N", "Y"],
+    ),
     flag_case_num: getChoice(formData, "flagCaseNumber", "Case number received", ["N", "Y"]),
     trip_author: getChoice(formData, "tripAuthor", "Trip authority", ["N", "Y"]),
     flag_trip_author: flagTripAuthor,
     flag_trip_auth_date: flagTripAuthDate,
-    driver_fault: getChoice(formData, "driverFault", "GG driver fault", ["Unknown", "Yes", "No", "Maybe"]),
-    attorney_insure: getChoice(formData, "attorneyInsure", "Attorney / insurance", ["?", "ATT", "INS"]),
-    insurance_claim: getChoice(formData, "insuranceClaim", "Claim against department", ["?", "Y", "N"]),
-    priv_dampay_date: getOptionalDate(formData, "privateDamagePaymentDate", "Private damage payment date"),
-    th_claim_accept_reject: getChoice(formData, "thirdPartyClaimDecision", "Claim accept/reject", ["?", "ACC", "REJ"]),
-    th_claim_reject_reason: getOptionalText(formData, "thirdPartyClaimRejectReason", "Claim reject reason", 30),
-    write_off_amount: getAmount(formData, "writeOffAmount", "Write-off amount", existing.writeOffAmount),
+    driver_fault: getChoice(formData, "driverFault", "GG driver fault", [
+      "Unknown",
+      "Yes",
+      "No",
+      "Maybe",
+    ]),
+    attorney_insure: getChoice(formData, "attorneyInsure", "Attorney / insurance", [
+      "?",
+      "ATT",
+      "INS",
+    ]),
+    insurance_claim: getChoice(formData, "insuranceClaim", "Claim against department", [
+      "?",
+      "Y",
+      "N",
+    ]),
+    priv_dampay_date: getOptionalDate(
+      formData,
+      "privateDamagePaymentDate",
+      "Private damage payment date",
+    ),
+    th_claim_accept_reject: getChoice(formData, "thirdPartyClaimDecision", "Claim accept/reject", [
+      "?",
+      "ACC",
+      "REJ",
+    ]),
+    th_claim_reject_reason: getOptionalText(
+      formData,
+      "thirdPartyClaimRejectReason",
+      "Claim reject reason",
+      30,
+    ),
+    write_off_amount: getAmount(
+      formData,
+      "writeOffAmount",
+      "Write-off amount",
+      existing.writeOffAmount,
+    ),
     write_off_date: getOptionalDate(formData, "writeOffDate", "Write-off date"),
     occurence_place: getOptionalText(formData, "occurencePlace", "Accident place", 50),
     tow_need: getChoice(formData, "towNeed", "Tow required", ["N", "Y"]),
@@ -280,11 +378,17 @@ export async function updateGarageAccidentAction(
 ): Promise<GarageEditActionState> {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { status: "error", message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      status: "error",
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { status: "error", message: "Your session has expired. Sign in again before editing an accident." };
+    return {
+      status: "error",
+      message: "Your session has expired. Sign in again before editing an accident.",
+    };
   }
 
   if (!hasRole(session.roles, ACCIDENTS_ROLE)) {
@@ -297,7 +401,10 @@ export async function updateGarageAccidentAction(
   } catch (error) {
     return {
       status: "error",
-      message: error instanceof AccidentFormValidationError ? error.message : "A valid accident record is required.",
+      message:
+        error instanceof AccidentFormValidationError
+          ? error.message
+          : "A valid accident record is required.",
     };
   }
 
@@ -313,7 +420,10 @@ export async function updateGarageAccidentAction(
       return { status: "error", message: apiErrorMessage(error) };
     }
 
-    console.error("FIS garage accident update failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS garage accident update failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "error", message: "Accident update failed. Please try again." };
   }
 

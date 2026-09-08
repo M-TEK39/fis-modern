@@ -1,8 +1,8 @@
+using System.Text.Json;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Interfaces.Workflow;
 using FIS.Core.Domain.Entities.System;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace FIS.Core.Application.Services.Workflow;
 
@@ -28,7 +28,8 @@ public class WorkflowExecutionService : IWorkflowExecutionService
         IConditionEvaluator conditionEvaluator,
         INotificationService notificationService,
         IAnalyticsService analyticsService,
-        ILogger<WorkflowExecutionService> logger)
+        ILogger<WorkflowExecutionService> logger
+    )
     {
         _workflowRepository = workflowRepository;
         _stepRepository = stepRepository;
@@ -40,10 +41,13 @@ public class WorkflowExecutionService : IWorkflowExecutionService
         _logger = logger;
     }
 
-    public async Task<StepExecutionResult> ExecuteStepAsync(int stepId, WorkflowExecutionContext context)
+    public async Task<StepExecutionResult> ExecuteStepAsync(
+        int stepId,
+        WorkflowExecutionContext context
+    )
     {
         int? executionHistoryId = null;
-        
+
         try
         {
             var step = await _stepRepository.GetByIdAsync(stepId);
@@ -54,54 +58,78 @@ public class WorkflowExecutionService : IWorkflowExecutionService
 
             // Record step execution start (Phase 5 - Analytics)
             executionHistoryId = await _analyticsService.RecordStepExecutionAsync(
-                context.StatusID, 
-                stepId, 
-                step.WorkflowID, 
-                step.HandlerType);
+                context.StatusID,
+                stepId,
+                step.WorkflowID,
+                step.HandlerType
+            );
 
             // If no handler type is specified, treat as manual step
             if (string.IsNullOrWhiteSpace(step.HandlerType))
             {
-                _logger.LogInformation("Step {StepID} has no handler - treating as manual step", stepId);
-                
+                _logger.LogInformation(
+                    "Step {StepID} has no handler - treating as manual step",
+                    stepId
+                );
+
                 // Complete analytics tracking for manual step
                 if (executionHistoryId.HasValue)
                 {
-                    await _analyticsService.CompleteStepExecutionAsync(executionHistoryId.Value, true);
+                    await _analyticsService.CompleteStepExecutionAsync(
+                        executionHistoryId.Value,
+                        true
+                    );
                 }
-                
-                return StepExecutionResult.SuccessResult("Manual step - no handler execution required");
+
+                return StepExecutionResult.SuccessResult(
+                    "Manual step - no handler execution required"
+                );
             }
 
             // Get the handler
             var handler = _handlerFactory.GetHandler(step.HandlerType);
             if (handler == null)
             {
-                _logger.LogError("Handler type '{HandlerType}' not found for Step {StepID}", step.HandlerType, stepId);
-                
+                _logger.LogError(
+                    "Handler type '{HandlerType}' not found for Step {StepID}",
+                    step.HandlerType,
+                    stepId
+                );
+
                 // Complete analytics tracking with failure
                 if (executionHistoryId.HasValue)
                 {
-                    await _analyticsService.CompleteStepExecutionAsync(executionHistoryId.Value, false, $"Handler type '{step.HandlerType}' not registered");
+                    await _analyticsService.CompleteStepExecutionAsync(
+                        executionHistoryId.Value,
+                        false,
+                        $"Handler type '{step.HandlerType}' not registered"
+                    );
                 }
-                
-                return StepExecutionResult.FailureResult($"Handler type '{step.HandlerType}' not registered");
+
+                return StepExecutionResult.FailureResult(
+                    $"Handler type '{step.HandlerType}' not registered"
+                );
             }
 
             // Parse step parameters
             var parameters = ParseStepParameters(step.StepParameters);
 
             // Execute the handler
-            _logger.LogInformation("Executing handler '{HandlerType}' for Step {StepID}", step.HandlerType, stepId);
+            _logger.LogInformation(
+                "Executing handler '{HandlerType}' for Step {StepID}",
+                step.HandlerType,
+                stepId
+            );
             var result = await handler.ExecuteAsync(parameters, context);
 
             // Complete analytics tracking
             if (executionHistoryId.HasValue)
             {
                 await _analyticsService.CompleteStepExecutionAsync(
-                    executionHistoryId.Value, 
-                    result.Success, 
-                    result.Success ? null : result.Message);
+                    executionHistoryId.Value,
+                    result.Success,
+                    result.Success ? null : result.Message
+                );
             }
 
             // Merge output data into workflow context
@@ -118,33 +146,45 @@ public class WorkflowExecutionService : IWorkflowExecutionService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error executing step {StepID}", stepId);
-            
+
             // Complete analytics tracking with error
             if (executionHistoryId.HasValue)
             {
-                await _analyticsService.CompleteStepExecutionAsync(executionHistoryId.Value, false, ex.Message);
+                await _analyticsService.CompleteStepExecutionAsync(
+                    executionHistoryId.Value,
+                    false,
+                    ex.Message
+                );
             }
-            
+
             // Send error notification
             try
             {
                 var errorData = new Dictionary<string, object>
                 {
                     ["Error"] = ex.Message,
-                    ["StepID"] = stepId
+                    ["StepID"] = stepId,
                 };
                 await _notificationService.SendStepNotificationAsync(stepId, "Error", errorData);
             }
             catch (Exception notifEx)
             {
-                _logger.LogWarning(notifEx, "Failed to send Error notification for step {StepId}", stepId);
+                _logger.LogWarning(
+                    notifEx,
+                    "Failed to send Error notification for step {StepId}",
+                    stepId
+                );
             }
 
             return StepExecutionResult.FailureResult($"Step execution failed: {ex.Message}", ex);
         }
     }
 
-    public async Task<WorkflowInstanceResult> StartWorkflowAsync(int workflowId, int userId, Dictionary<string, object>? initialData = null)
+    public async Task<WorkflowInstanceResult> StartWorkflowAsync(
+        int workflowId,
+        int userId,
+        Dictionary<string, object>? initialData = null
+    )
     {
         try
         {
@@ -154,7 +194,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 return new WorkflowInstanceResult
                 {
                     Success = false,
-                    Message = "Workflow not found"
+                    Message = "Workflow not found",
                 };
             }
 
@@ -167,7 +207,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 return new WorkflowInstanceResult
                 {
                     Success = false,
-                    Message = "Workflow has no steps defined"
+                    Message = "Workflow has no steps defined",
                 };
             }
 
@@ -180,7 +220,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 StepID = firstStep.StepID,
                 DateStarted = DateTime.Now,
                 IsBusy = true,
-                StartedByUserName = $"User {userId}"
+                StartedByUserName = $"User {userId}",
             };
 
             var createdStatus = await _statusRepository.CreateAsync(status, userId);
@@ -193,17 +233,25 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 StatusID = createdStatus.StatusID,
                 CurrentUserId = userId,
                 WorkflowData = initialData ?? new Dictionary<string, object>(),
-                StartTime = DateTime.UtcNow
+                StartTime = DateTime.UtcNow,
             };
 
             // Send WorkflowStarted notification
             try
             {
-                await _notificationService.SendWorkflowNotificationAsync(workflowId, "WorkflowStarted", context.WorkflowData);
+                await _notificationService.SendWorkflowNotificationAsync(
+                    workflowId,
+                    "WorkflowStarted",
+                    context.WorkflowData
+                );
             }
             catch (Exception notifEx)
             {
-                _logger.LogWarning(notifEx, "Failed to send WorkflowStarted notification for workflow {WorkflowId}", workflowId);
+                _logger.LogWarning(
+                    notifEx,
+                    "Failed to send WorkflowStarted notification for workflow {WorkflowId}",
+                    workflowId
+                );
             }
 
             // Execute first step if it has a handler
@@ -212,11 +260,18 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 var executionResult = await ExecuteStepAsync(firstStep.StepID, context);
                 if (!executionResult.Success)
                 {
-                    _logger.LogWarning("First step execution failed: {Message}", executionResult.Message);
+                    _logger.LogWarning(
+                        "First step execution failed: {Message}",
+                        executionResult.Message
+                    );
                 }
             }
 
-            _logger.LogInformation("Started workflow {WorkflowId} at step {StepId}", workflowId, firstStep.StepID);
+            _logger.LogInformation(
+                "Started workflow {WorkflowId} at step {StepId}",
+                workflowId,
+                firstStep.StepID
+            );
 
             return new WorkflowInstanceResult
             {
@@ -229,7 +284,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 StatusID = createdStatus.StatusID,
                 IsActive = true,
                 IsCompleted = false,
-                Data = context.WorkflowData
+                Data = context.WorkflowData,
             };
         }
         catch (Exception ex)
@@ -238,23 +293,23 @@ public class WorkflowExecutionService : IWorkflowExecutionService
             return new WorkflowInstanceResult
             {
                 Success = false,
-                Message = $"Error starting workflow: {ex.Message}"
+                Message = $"Error starting workflow: {ex.Message}",
             };
         }
     }
 
-    public async Task<WorkflowInstanceResult> CompleteStepAsync(int statusId, int userId, Dictionary<string, object>? outputData = null)
+    public async Task<WorkflowInstanceResult> CompleteStepAsync(
+        int statusId,
+        int userId,
+        Dictionary<string, object>? outputData = null
+    )
     {
         try
         {
             var currentStatus = await _statusRepository.GetByIdAsync(statusId);
             if (currentStatus == null)
             {
-                return new WorkflowInstanceResult
-                {
-                    Success = false,
-                    Message = "Status not found"
-                };
+                return new WorkflowInstanceResult { Success = false, Message = "Status not found" };
             }
 
             if (currentStatus.DateCompleted != null)
@@ -262,7 +317,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 return new WorkflowInstanceResult
                 {
                     Success = false,
-                    Message = "Step already completed"
+                    Message = "Step already completed",
                 };
             }
 
@@ -277,19 +332,26 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 return new WorkflowInstanceResult
                 {
                     Success = false,
-                    Message = "Current step not found"
+                    Message = "Current step not found",
                 };
             }
 
             // Send StepCompleted notification
             try
             {
-                await _notificationService.SendStepNotificationAsync(currentStep.StepID, "StepCompleted", 
-                    outputData ?? new Dictionary<string, object>());
+                await _notificationService.SendStepNotificationAsync(
+                    currentStep.StepID,
+                    "StepCompleted",
+                    outputData ?? new Dictionary<string, object>()
+                );
             }
             catch (Exception notifEx)
             {
-                _logger.LogWarning(notifEx, "Failed to send StepCompleted notification for step {StepId}", currentStep.StepID);
+                _logger.LogWarning(
+                    notifEx,
+                    "Failed to send StepCompleted notification for step {StepId}",
+                    currentStep.StepID
+                );
             }
 
             // Get all steps for this workflow
@@ -309,13 +371,19 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 // Send WorkflowCompleted notification
                 try
                 {
-                    await _notificationService.SendWorkflowNotificationAsync(currentStep.WorkflowID, "WorkflowCompleted",
-                        outputData ?? new Dictionary<string, object>());
+                    await _notificationService.SendWorkflowNotificationAsync(
+                        currentStep.WorkflowID,
+                        "WorkflowCompleted",
+                        outputData ?? new Dictionary<string, object>()
+                    );
                 }
                 catch (Exception notifEx)
                 {
-                    _logger.LogWarning(notifEx, "Failed to send WorkflowCompleted notification for workflow {WorkflowId}", 
-                        currentStep.WorkflowID);
+                    _logger.LogWarning(
+                        notifEx,
+                        "Failed to send WorkflowCompleted notification for workflow {WorkflowId}",
+                        currentStep.WorkflowID
+                    );
                 }
 
                 return new WorkflowInstanceResult
@@ -329,7 +397,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                     StatusID = statusId,
                     IsActive = false,
                     IsCompleted = true,
-                    Data = outputData
+                    Data = outputData,
                 };
             }
 
@@ -339,7 +407,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 StepID = nextStep.StepID,
                 DateStarted = DateTime.Now,
                 IsBusy = true,
-                StartedByUserName = $"User {userId}"
+                StartedByUserName = $"User {userId}",
             };
 
             var createdNextStatus = await _statusRepository.CreateAsync(nextStatus, userId);
@@ -352,7 +420,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 StatusID = createdNextStatus.StatusID,
                 CurrentUserId = userId,
                 WorkflowData = outputData ?? new Dictionary<string, object>(),
-                StartTime = DateTime.UtcNow
+                StartTime = DateTime.UtcNow,
             };
 
             // Execute next step if it has a handler
@@ -361,11 +429,18 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 var executionResult = await ExecuteStepAsync(nextStep.StepID, context);
                 if (!executionResult.Success)
                 {
-                    _logger.LogWarning("Next step execution failed: {Message}", executionResult.Message);
+                    _logger.LogWarning(
+                        "Next step execution failed: {Message}",
+                        executionResult.Message
+                    );
                 }
             }
 
-            _logger.LogInformation("Workflow {WorkflowId} advanced to step {StepId}", currentStep.WorkflowID, nextStep.StepID);
+            _logger.LogInformation(
+                "Workflow {WorkflowId} advanced to step {StepId}",
+                currentStep.WorkflowID,
+                nextStep.StepID
+            );
 
             return new WorkflowInstanceResult
             {
@@ -378,7 +453,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 StatusID = createdNextStatus.StatusID,
                 IsActive = true,
                 IsCompleted = false,
-                Data = context.WorkflowData
+                Data = context.WorkflowData,
             };
         }
         catch (Exception ex)
@@ -387,7 +462,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
             return new WorkflowInstanceResult
             {
                 Success = false,
-                Message = $"Error completing step: {ex.Message}"
+                Message = $"Error completing step: {ex.Message}",
             };
         }
     }
@@ -401,10 +476,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
 
         try
         {
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
             return JsonSerializer.Deserialize<Dictionary<string, object>>(parametersJson, options)
                 ?? new Dictionary<string, object>();
@@ -419,58 +491,89 @@ public class WorkflowExecutionService : IWorkflowExecutionService
     /// <summary>
     /// Determines the next step to execute, considering conditional branching
     /// </summary>
-    private async Task<Step?> DetermineNextStepAsync(Step currentStep, List<Step> allSteps, Dictionary<string, object>? contextData)
+    private async Task<Step?> DetermineNextStepAsync(
+        Step currentStep,
+        List<Step> allSteps,
+        Dictionary<string, object>? contextData
+    )
     {
         try
         {
             // Check if current step is conditional
-            if (currentStep.IsConditional && !string.IsNullOrWhiteSpace(currentStep.ConditionExpression))
+            if (
+                currentStep.IsConditional
+                && !string.IsNullOrWhiteSpace(currentStep.ConditionExpression)
+            )
             {
-                _logger.LogInformation("Step {StepID} is conditional - evaluating expression: {Expression}", 
-                    currentStep.StepID, currentStep.ConditionExpression);
+                _logger.LogInformation(
+                    "Step {StepID} is conditional - evaluating expression: {Expression}",
+                    currentStep.StepID,
+                    currentStep.ConditionExpression
+                );
 
                 // Evaluate the condition
                 var conditionResult = await _conditionEvaluator.EvaluateAsync(
-                    currentStep.ConditionExpression, 
-                    contextData ?? new Dictionary<string, object>());
+                    currentStep.ConditionExpression,
+                    contextData ?? new Dictionary<string, object>()
+                );
 
                 // Route based on condition result
                 if (conditionResult && currentStep.TrueStepID.HasValue)
                 {
-                    var trueStep = allSteps.FirstOrDefault(s => s.StepID == currentStep.TrueStepID.Value);
-                    _logger.LogInformation("Condition evaluated to TRUE - routing to step {StepID}", currentStep.TrueStepID);
+                    var trueStep = allSteps.FirstOrDefault(s =>
+                        s.StepID == currentStep.TrueStepID.Value
+                    );
+                    _logger.LogInformation(
+                        "Condition evaluated to TRUE - routing to step {StepID}",
+                        currentStep.TrueStepID
+                    );
                     return trueStep;
                 }
                 else if (!conditionResult && currentStep.FalseStepID.HasValue)
                 {
-                    var falseStep = allSteps.FirstOrDefault(s => s.StepID == currentStep.FalseStepID.Value);
-                    _logger.LogInformation("Condition evaluated to FALSE - routing to step {StepID}", currentStep.FalseStepID);
+                    var falseStep = allSteps.FirstOrDefault(s =>
+                        s.StepID == currentStep.FalseStepID.Value
+                    );
+                    _logger.LogInformation(
+                        "Condition evaluated to FALSE - routing to step {StepID}",
+                        currentStep.FalseStepID
+                    );
                     return falseStep;
                 }
                 else
                 {
-                    _logger.LogWarning("Conditional step {StepID} has no valid target step for condition result: {Result}", 
-                        currentStep.StepID, conditionResult);
-                    
+                    _logger.LogWarning(
+                        "Conditional step {StepID} has no valid target step for condition result: {Result}",
+                        currentStep.StepID,
+                        conditionResult
+                    );
+
                     // Fall through to sequential logic if no valid conditional target
                 }
             }
 
             // Default sequential logic: Get next step by order
             var nextStep = allSteps.FirstOrDefault(s => s.StepOrder > currentStep.StepOrder);
-            
+
             if (nextStep != null)
             {
-                _logger.LogInformation("Sequential routing: next step is {StepID} (Order: {StepOrder})", 
-                    nextStep.StepID, nextStep.StepOrder);
+                _logger.LogInformation(
+                    "Sequential routing: next step is {StepID} (Order: {StepOrder})",
+                    nextStep.StepID,
+                    nextStep.StepOrder
+                );
             }
 
             return nextStep;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error determining next step from {StepID} - falling back to sequential", currentStep.StepID);
-            
+            _logger.LogError(
+                ex,
+                "Error determining next step from {StepID} - falling back to sequential",
+                currentStep.StepID
+            );
+
             // Fallback to sequential logic on error
             return allSteps.FirstOrDefault(s => s.StepOrder > currentStep.StepOrder);
         }

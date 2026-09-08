@@ -161,7 +161,10 @@ export type FmlReportQuery = {
 export type FmlApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class FmlApiError extends Error {
-  constructor(public readonly reason: FmlApiErrorReason, message: string) {
+  constructor(
+    public readonly reason: FmlApiErrorReason,
+    message: string,
+  ) {
     super(message);
     this.name = "FmlApiError";
   }
@@ -201,7 +204,11 @@ function asNumber(value: unknown) {
 function asBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
-  return ["true", "1", "yes", "y"].includes(String(value ?? "").trim().toLowerCase());
+  return ["true", "1", "yes", "y"].includes(
+    String(value ?? "")
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 function getCollection(payload: unknown) {
@@ -235,8 +242,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
     if (response.status === 401 || response.status === 403) {
       throw new FmlApiError("unauthorized", "The FIS access cookie was rejected.");
     }
-    if (response.status === 404) throw new FmlApiError("not-found", "The requested FML record was not found.");
-    if (!response.ok) throw new FmlApiError("unavailable", `FIS API returned HTTP ${response.status}.`);
+    if (response.status === 404)
+      throw new FmlApiError("not-found", "The requested FML record was not found.");
+    if (!response.ok)
+      throw new FmlApiError("unavailable", `FIS API returned HTTP ${response.status}.`);
     try {
       return (await response.json()) as unknown;
     } catch {
@@ -252,7 +261,9 @@ async function requestApi(path: string, init: RequestInit = {}) {
 
 function mapTerm(value: unknown): LeaseTermRecord | null {
   if (!isRecord(value)) return null;
-  const termId = asNumber(getValue(value, "VehicleContractTermID", "vehicleContractTermID", "leasecontract_code"));
+  const termId = asNumber(
+    getValue(value, "VehicleContractTermID", "vehicleContractTermID", "leasecontract_code"),
+  );
   const vmfCode = asNumber(getValue(value, "vmf_Code", "vmf_code", "vmfCode"));
   if (termId === null || vmfCode === null) return null;
 
@@ -272,7 +283,10 @@ function mapTerm(value: unknown): LeaseTermRecord | null {
     endDate: asString(getValue(value, "EndDate", "endDate", "lease_enddate")),
     agreedOverallKilo: asNumber(getValue(value, "AgreedOverallKilo", "agreedOverallKilo")),
     excessKilosTariff: asNumber(getValue(value, "ExcessKilosTarrif", "excessKilosTarrif")),
-    relieveVehicle: getValue(value, "RelieveVehicle", "relieveVehicle") === undefined ? null : asBoolean(getValue(value, "RelieveVehicle", "relieveVehicle")),
+    relieveVehicle:
+      getValue(value, "RelieveVehicle", "relieveVehicle") === undefined
+        ? null
+        : asBoolean(getValue(value, "RelieveVehicle", "relieveVehicle")),
     leaseSiteCode: asNumber(getValue(value, "lease_site_code", "leaseSiteCode")),
     comments: asString(getValue(value, "Comments", "comments")),
     rejected: asNumber(getValue(value, "Rejected", "rejected")),
@@ -312,18 +326,24 @@ function mapTariff(value: unknown): LeaseTariffRecord | null {
 
 export async function getLeaseTerms() {
   const payload = await requestApi("api/leasecontractterms");
-  return getCollection(payload).map(mapTerm).filter((value): value is LeaseTermRecord => value !== null);
+  return getCollection(payload)
+    .map(mapTerm)
+    .filter((value): value is LeaseTermRecord => value !== null);
 }
 
 export async function getLeaseTerm(termId: number) {
   const payload = await requestApi(`api/leasecontractterms/${termId}`);
   const term = mapTerm(payload);
-  if (!term) throw new FmlApiError("invalid-response", "The FIS API returned an unexpected lease term.");
+  if (!term)
+    throw new FmlApiError("invalid-response", "The FIS API returned an unexpected lease term.");
   return term;
 }
 
 export async function createLeaseTerm(input: LeaseTermWriteInput) {
-  const payload = await requestApi("api/leasecontractterms", { method: "POST", body: JSON.stringify(input) });
+  const payload = await requestApi("api/leasecontractterms", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
   return mapTerm(payload);
 }
 
@@ -337,7 +357,9 @@ export async function updateLeaseTerm(termId: number, input: LeaseTermWriteInput
 
 export async function getLeaseTariffs(vmfCode: number) {
   const payload = await requestApi(`api/lease-tariffs/vehicle/${vmfCode}`);
-  return getCollection(payload).map(mapTariff).filter((value): value is LeaseTariffRecord => value !== null);
+  return getCollection(payload)
+    .map(mapTariff)
+    .filter((value): value is LeaseTariffRecord => value !== null);
 }
 
 export async function getLatestLeaseTariff(vmfCode: number) {
@@ -346,13 +368,23 @@ export async function getLatestLeaseTariff(vmfCode: number) {
 }
 
 export async function createLeaseTariff(input: LeaseTariffWriteInput) {
-  const payload = await requestApi("api/lease-tariffs", { method: "POST", body: JSON.stringify(input) });
+  const payload = await requestApi("api/lease-tariffs", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
   return mapTariff(payload);
 }
 
 export async function importLeaseTariffs(rows: LeaseTariffImportInput[]) {
-  const payload = await requestApi("api/lease-tariffs/import", { method: "POST", body: JSON.stringify(rows) });
-  if (!isRecord(payload)) throw new FmlApiError("invalid-response", "The FIS API returned an unexpected tariff import result.");
+  const payload = await requestApi("api/lease-tariffs/import", {
+    method: "POST",
+    body: JSON.stringify(rows),
+  });
+  if (!isRecord(payload))
+    throw new FmlApiError(
+      "invalid-response",
+      "The FIS API returned an unexpected tariff import result.",
+    );
   return {
     imported: asNumber(getValue(payload, "Imported", "imported")) ?? 0,
     failed: asNumber(getValue(payload, "Failed", "failed")) ?? 0,
@@ -384,20 +416,29 @@ function reportQuery(query: FmlReportQuery) {
 
 export async function getFmlMaintenanceHistory(query: FmlReportQuery = {}) {
   const payload = await requestApi(`api/report/fml/maintenance-history${reportQuery(query)}`);
-  const records = reportRows(payload, "Records").map((row) => ({
-    ggNumber: asString(getValue(row, "GgNumber", "ggNumber")),
-    yearManufactured: asNumber(getValue(row, "YearManufactured", "yearManufactured")),
-    modelDescription: asString(getValue(row, "ModelDescription", "modelDescription")),
-    currentStatus: asString(getValue(row, "CurrentStatus", "currentStatus")),
-    currentStatusDate: asString(getValue(row, "CurrentStatusDate", "currentStatusDate")),
-    hiredFrom: asString(getValue(row, "HiredFrom", "hiredFrom")),
-    maintenanceExpenseType: asString(getValue(row, "MaintenanceExpenseType", "maintenanceExpenseType")),
-    totalCostOverDateRange: asNumber(getValue(row, "TotalCostOverDateRange", "totalCostOverDateRange")),
-  } satisfies FmlMaintenanceHistoryRow));
+  const records = reportRows(payload, "Records").map(
+    (row) =>
+      ({
+        ggNumber: asString(getValue(row, "GgNumber", "ggNumber")),
+        yearManufactured: asNumber(getValue(row, "YearManufactured", "yearManufactured")),
+        modelDescription: asString(getValue(row, "ModelDescription", "modelDescription")),
+        currentStatus: asString(getValue(row, "CurrentStatus", "currentStatus")),
+        currentStatusDate: asString(getValue(row, "CurrentStatusDate", "currentStatusDate")),
+        hiredFrom: asString(getValue(row, "HiredFrom", "hiredFrom")),
+        maintenanceExpenseType: asString(
+          getValue(row, "MaintenanceExpenseType", "maintenanceExpenseType"),
+        ),
+        totalCostOverDateRange: asNumber(
+          getValue(row, "TotalCostOverDateRange", "totalCostOverDateRange"),
+        ),
+      }) satisfies FmlMaintenanceHistoryRow,
+  );
   return {
     records,
     grandTotal: isRecord(payload) ? asNumber(getValue(payload, "GrandTotal", "grandTotal")) : null,
-    totalCount: isRecord(payload) ? asNumber(getValue(payload, "TotalCount", "totalCount")) ?? records.length : records.length,
+    totalCount: isRecord(payload)
+      ? (asNumber(getValue(payload, "TotalCount", "totalCount")) ?? records.length)
+      : records.length,
   };
 }
 
@@ -411,65 +452,89 @@ export async function getFmlExpiredOpenContracts() {
 
 async function getFmlContractReport(path: string) {
   const payload = await requestApi(`api/report/fml/${path}`);
-  const contracts = reportRows(payload, "Contracts").map((row) => ({
-    rowNumber: asNumber(getValue(row, "RowNumber", "rowNumber")),
-    ggNumber: asString(getValue(row, "GgNumber", "ggNumber")),
-    gpNumber: asString(getValue(row, "GpNumber", "gpNumber")),
-    model: asString(getValue(row, "Model", "model")),
-    yearModel: asNumber(getValue(row, "YearModel", "yearModel")),
-    hiredFrom: asString(getValue(row, "HiredFrom", "hiredFrom")),
-    hireType: asString(getValue(row, "HireType", "hireType")),
-    stillCurrent: asString(getValue(row, "StillCurrent", "stillCurrent")),
-    contractStartDate: asString(getValue(row, "ContractStartDate", "contractStartDate")),
-    targetReturnDate: asString(getValue(row, "TargetReturnDate", "targetReturnDate")),
-    contractType: asString(getValue(row, "ContractType", "contractType")),
-    siteName: asString(getValue(row, "SiteName", "siteName")),
-    fixedTariff: asNumber(getValue(row, "FixedTariff", "fixedTariff")),
-  } satisfies FmlContractRow));
-  return { contracts, totalCount: isRecord(payload) ? asNumber(getValue(payload, "TotalCount", "totalCount")) ?? contracts.length : contracts.length };
+  const contracts = reportRows(payload, "Contracts").map(
+    (row) =>
+      ({
+        rowNumber: asNumber(getValue(row, "RowNumber", "rowNumber")),
+        ggNumber: asString(getValue(row, "GgNumber", "ggNumber")),
+        gpNumber: asString(getValue(row, "GpNumber", "gpNumber")),
+        model: asString(getValue(row, "Model", "model")),
+        yearModel: asNumber(getValue(row, "YearModel", "yearModel")),
+        hiredFrom: asString(getValue(row, "HiredFrom", "hiredFrom")),
+        hireType: asString(getValue(row, "HireType", "hireType")),
+        stillCurrent: asString(getValue(row, "StillCurrent", "stillCurrent")),
+        contractStartDate: asString(getValue(row, "ContractStartDate", "contractStartDate")),
+        targetReturnDate: asString(getValue(row, "TargetReturnDate", "targetReturnDate")),
+        contractType: asString(getValue(row, "ContractType", "contractType")),
+        siteName: asString(getValue(row, "SiteName", "siteName")),
+        fixedTariff: asNumber(getValue(row, "FixedTariff", "fixedTariff")),
+      }) satisfies FmlContractRow,
+  );
+  return {
+    contracts,
+    totalCount: isRecord(payload)
+      ? (asNumber(getValue(payload, "TotalCount", "totalCount")) ?? contracts.length)
+      : contracts.length,
+  };
 }
 
 export async function getFmlVehiclesNoContracts() {
   const payload = await requestApi("api/report/fml/vehicles-no-contracts");
-  const vehicles = reportRows(payload, "Vehicles").map((row) => ({
-    vehicleCounter: asNumber(getValue(row, "VehicleCounter", "vehicleCounter")),
-    ggNumber: asString(getValue(row, "GgNumber", "ggNumber")),
-    registrationNumber: asString(getValue(row, "RegistrationNumber", "registrationNumber")),
-    hiredFrom: asString(getValue(row, "HiredFrom", "hiredFrom")),
-    vehicleStatus: asString(getValue(row, "VehicleStatus", "vehicleStatus")),
-    location: asString(getValue(row, "Location", "location")),
-    yearModel: asNumber(getValue(row, "YearModel", "yearModel")),
-    modelDescription: asString(getValue(row, "ModelDescription", "modelDescription")),
-    classDescription: asString(getValue(row, "ClassDescription", "classDescription")),
-    purchaseAmount: asNumber(getValue(row, "PurchaseAmount", "purchaseAmount")),
-  } satisfies FmlNoContractRow));
-  return { vehicles, totalCount: isRecord(payload) ? asNumber(getValue(payload, "TotalCount", "totalCount")) ?? vehicles.length : vehicles.length };
+  const vehicles = reportRows(payload, "Vehicles").map(
+    (row) =>
+      ({
+        vehicleCounter: asNumber(getValue(row, "VehicleCounter", "vehicleCounter")),
+        ggNumber: asString(getValue(row, "GgNumber", "ggNumber")),
+        registrationNumber: asString(getValue(row, "RegistrationNumber", "registrationNumber")),
+        hiredFrom: asString(getValue(row, "HiredFrom", "hiredFrom")),
+        vehicleStatus: asString(getValue(row, "VehicleStatus", "vehicleStatus")),
+        location: asString(getValue(row, "Location", "location")),
+        yearModel: asNumber(getValue(row, "YearModel", "yearModel")),
+        modelDescription: asString(getValue(row, "ModelDescription", "modelDescription")),
+        classDescription: asString(getValue(row, "ClassDescription", "classDescription")),
+        purchaseAmount: asNumber(getValue(row, "PurchaseAmount", "purchaseAmount")),
+      }) satisfies FmlNoContractRow,
+  );
+  return {
+    vehicles,
+    totalCount: isRecord(payload)
+      ? (asNumber(getValue(payload, "TotalCount", "totalCount")) ?? vehicles.length)
+      : vehicles.length,
+  };
 }
 
 export async function getFmlOverUtilized(query: FmlReportQuery = {}) {
   const payload = await requestApi(`api/report/fml/over-utilized${reportQuery(query)}`);
-  const vehicles = reportRows(payload, "Vehicles").map((row) => ({
-    vehicleCounter: asNumber(getValue(row, "VehicleCounter", "vehicleCounter")),
-    ggNumber: asString(getValue(row, "GgNumber", "ggNumber")),
-    gpNumber: asString(getValue(row, "GpNumber", "gpNumber")),
-    hiredFrom: asString(getValue(row, "HiredFrom", "hiredFrom")),
-    month: asString(getValue(row, "Month", "month")),
-    maxOdoMeter: asNumber(getValue(row, "MaxOdoMeter", "maxOdoMeter")),
-    minOdoMeter: asNumber(getValue(row, "MinOdoMeter", "minOdoMeter")),
-    actualKilos: asNumber(getValue(row, "ActualKilos", "actualKilos")),
-    agreedKilos: asNumber(getValue(row, "AgreedKilos", "agreedKilos")),
-    excessKilos: asNumber(getValue(row, "ExcessKilos", "excessKilos")),
-    agreedOverallKilo: asNumber(getValue(row, "AgreedOverallKilo", "agreedOverallKilo")),
-    agreedTerms: asNumber(getValue(row, "AgreedTerms", "agreedTerms")),
-    actualTerm: asNumber(getValue(row, "ActualTerm", "actualTerm")),
-    totalKilos: asNumber(getValue(row, "TotalKilos", "totalKilos")),
-    totalExcessKilos: asNumber(getValue(row, "TotalExcessKilos", "totalExcessKilos")),
-    averageMonthlyKilos: asNumber(getValue(row, "AverageMonthlyKilos", "averageMonthlyKilos")),
-    projectedEndMonth: asString(getValue(row, "ProjectedEndMonth", "projectedEndMonth")),
-    projectedEndDate: asString(getValue(row, "ProjectedEndDate", "projectedEndDate")),
-    yearModel: asNumber(getValue(row, "YearModel", "yearModel")),
-    modelDescription: asString(getValue(row, "ModelDescription", "modelDescription")),
-    purchaseAmount: asNumber(getValue(row, "PurchaseAmount", "purchaseAmount")),
-  } satisfies FmlOverUtilizedRow));
-  return { vehicles, totalCount: isRecord(payload) ? asNumber(getValue(payload, "TotalCount", "totalCount")) ?? vehicles.length : vehicles.length };
+  const vehicles = reportRows(payload, "Vehicles").map(
+    (row) =>
+      ({
+        vehicleCounter: asNumber(getValue(row, "VehicleCounter", "vehicleCounter")),
+        ggNumber: asString(getValue(row, "GgNumber", "ggNumber")),
+        gpNumber: asString(getValue(row, "GpNumber", "gpNumber")),
+        hiredFrom: asString(getValue(row, "HiredFrom", "hiredFrom")),
+        month: asString(getValue(row, "Month", "month")),
+        maxOdoMeter: asNumber(getValue(row, "MaxOdoMeter", "maxOdoMeter")),
+        minOdoMeter: asNumber(getValue(row, "MinOdoMeter", "minOdoMeter")),
+        actualKilos: asNumber(getValue(row, "ActualKilos", "actualKilos")),
+        agreedKilos: asNumber(getValue(row, "AgreedKilos", "agreedKilos")),
+        excessKilos: asNumber(getValue(row, "ExcessKilos", "excessKilos")),
+        agreedOverallKilo: asNumber(getValue(row, "AgreedOverallKilo", "agreedOverallKilo")),
+        agreedTerms: asNumber(getValue(row, "AgreedTerms", "agreedTerms")),
+        actualTerm: asNumber(getValue(row, "ActualTerm", "actualTerm")),
+        totalKilos: asNumber(getValue(row, "TotalKilos", "totalKilos")),
+        totalExcessKilos: asNumber(getValue(row, "TotalExcessKilos", "totalExcessKilos")),
+        averageMonthlyKilos: asNumber(getValue(row, "AverageMonthlyKilos", "averageMonthlyKilos")),
+        projectedEndMonth: asString(getValue(row, "ProjectedEndMonth", "projectedEndMonth")),
+        projectedEndDate: asString(getValue(row, "ProjectedEndDate", "projectedEndDate")),
+        yearModel: asNumber(getValue(row, "YearModel", "yearModel")),
+        modelDescription: asString(getValue(row, "ModelDescription", "modelDescription")),
+        purchaseAmount: asNumber(getValue(row, "PurchaseAmount", "purchaseAmount")),
+      }) satisfies FmlOverUtilizedRow,
+  );
+  return {
+    vehicles,
+    totalCount: isRecord(payload)
+      ? (asNumber(getValue(payload, "TotalCount", "totalCount")) ?? vehicles.length)
+      : vehicles.length,
+  };
 }

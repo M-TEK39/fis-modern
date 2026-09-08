@@ -22,7 +22,8 @@ namespace FIS.Api.Controllers;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "All interpolated SQL identifiers come from fixed table and column names; request values are parameters.")]
+    Justification = "All interpolated SQL identifiers come from fixed table and column names; request values are parameters."
+)]
 public sealed class SiteDriversController : BaseApiController
 {
     private const string DriversTable = "site_drivers";
@@ -49,7 +50,8 @@ public sealed class SiteDriversController : BaseApiController
 
                 var siteFilter = siteCode.HasValue ? " AND [site_code] = @siteCode" : string.Empty;
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"{BuildDriverSelect(schema)} WHERE {BuildDriverPredicate(schema)}{siteFilter} ORDER BY [driver_surname], [driver_firstname], [site_driver_code]";
+                command.CommandText =
+                    $"{BuildDriverSelect(schema)} WHERE {BuildDriverPredicate(schema)}{siteFilter} ORDER BY [driver_surname], [driver_firstname], [site_driver_code]";
                 if (siteCode.HasValue)
                 {
                     AddParameter(command, "@siteCode", siteCode.Value);
@@ -78,7 +80,9 @@ public sealed class SiteDriversController : BaseApiController
                 return await ReadDriverByIdAsync(connection, schema, id);
             });
 
-            return driver is null ? NotFound(new { message = $"Site driver not found with code: {id}" }) : Ok(driver);
+            return driver is null
+                ? NotFound(new { message = $"Site driver not found with code: {id}" })
+                : Ok(driver);
         }
         catch (Exception ex)
         {
@@ -94,27 +98,34 @@ public sealed class SiteDriversController : BaseApiController
             var types = await WithConnectionAsync(async connection =>
             {
                 var schema = await ReadTableSchemaAsync(connection, LicenceTypesTable);
-                if (!schema.Has("driver_licence_type_id")
+                if (
+                    !schema.Has("driver_licence_type_id")
                     || !schema.Has("driver_licence_type_code")
-                    || !schema.Has("driver_licence_type_description"))
+                    || !schema.Has("driver_licence_type_description")
+                )
                 {
                     return new List<SiteDriverLicenceTypeDto>();
                 }
 
-                var activePredicate = schema.Has("is_deleted") ? "COALESCE([is_deleted], 0) = 0" : "1 = 1";
+                var activePredicate = schema.Has("is_deleted")
+                    ? "COALESCE([is_deleted], 0) = 0"
+                    : "1 = 1";
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"SELECT [driver_licence_type_id] AS [Id], [driver_licence_type_code] AS [Code], [driver_licence_type_description] AS [Description] FROM [dbo].[{LicenceTypesTable}] WHERE {activePredicate} ORDER BY [driver_licence_type_description], [driver_licence_type_id]";
+                command.CommandText =
+                    $"SELECT [driver_licence_type_id] AS [Id], [driver_licence_type_code] AS [Code], [driver_licence_type_description] AS [Description] FROM [dbo].[{LicenceTypesTable}] WHERE {activePredicate} ORDER BY [driver_licence_type_description], [driver_licence_type_id]";
 
                 var result = new List<SiteDriverLicenceTypeDto>();
                 await using var reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
                 {
-                    result.Add(new SiteDriverLicenceTypeDto
-                    {
-                        Id = ReadInt(reader, "Id") ?? 0,
-                        Code = ReadString(reader, "Code"),
-                        Description = ReadString(reader, "Description")
-                    });
+                    result.Add(
+                        new SiteDriverLicenceTypeDto
+                        {
+                            Id = ReadInt(reader, "Id") ?? 0,
+                            Code = ReadString(reader, "Code"),
+                            Description = ReadString(reader, "Description"),
+                        }
+                    );
                 }
 
                 return result.Where(item => item.Id > 0).ToList();
@@ -124,13 +135,18 @@ public sealed class SiteDriversController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Unable to retrieve site-driver licence types; returning an empty lookup");
+            _logger.LogWarning(
+                ex,
+                "Unable to retrieve site-driver licence types; returning an empty lookup"
+            );
             return Ok(Array.Empty<SiteDriverLicenceTypeDto>());
         }
     }
 
     [HttpPost("licence-types")]
-    public async Task<ActionResult<SiteDriverLicenceTypeDto>> CreateLicenceType([FromBody] SiteDriverLicenceTypeWriteDto dto)
+    public async Task<ActionResult<SiteDriverLicenceTypeDto>> CreateLicenceType(
+        [FromBody] SiteDriverLicenceTypeWriteDto dto
+    )
     {
         try
         {
@@ -143,17 +159,18 @@ public sealed class SiteDriversController : BaseApiController
                 var columns = new List<string>
                 {
                     "driver_licence_type_code",
-                    "driver_licence_type_description"
+                    "driver_licence_type_description",
                 };
                 var values = new List<(string Name, object? Value)>
                 {
                     ("@code", NullIfWhiteSpace(dto.Code)),
-                    ("@description", dto.Description!.Trim())
+                    ("@description", dto.Description!.Trim()),
                 };
                 AddOptionalLicenceTypeInsertFields(schema, columns, values, GetCurrentUserId());
 
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"INSERT INTO [dbo].[{LicenceTypesTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[driver_licence_type_id] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
+                command.CommandText =
+                    $"INSERT INTO [dbo].[{LicenceTypesTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[driver_licence_type_id] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
                 AddParameters(command, values);
 
                 var id = Convert.ToInt32(await command.ExecuteScalarAsync());
@@ -161,7 +178,13 @@ public sealed class SiteDriversController : BaseApiController
             });
 
             return created is null
-                ? StatusCode(500, new { message = "The driver licence type was created but could not be reloaded." })
+                ? StatusCode(
+                    500,
+                    new
+                    {
+                        message = "The driver licence type was created but could not be reloaded.",
+                    }
+                )
                 : CreatedAtAction(nameof(GetLicenceTypes), created);
         }
         catch (ArgumentException ex)
@@ -175,7 +198,10 @@ public sealed class SiteDriversController : BaseApiController
     }
 
     [HttpPut("licence-types/{id:int}")]
-    public async Task<ActionResult<SiteDriverLicenceTypeDto>> UpdateLicenceType(int id, [FromBody] SiteDriverLicenceTypeWriteDto dto)
+    public async Task<ActionResult<SiteDriverLicenceTypeDto>> UpdateLicenceType(
+        int id,
+        [FromBody] SiteDriverLicenceTypeWriteDto dto
+    )
     {
         try
         {
@@ -192,11 +218,11 @@ public sealed class SiteDriversController : BaseApiController
 
                 var assignments = new List<string>
                 {
-                    "[driver_licence_type_description] = @description"
+                    "[driver_licence_type_description] = @description",
                 };
                 var values = new List<(string Name, object? Value)>
                 {
-                    ("@description", dto.Description!.Trim())
+                    ("@description", dto.Description!.Trim()),
                 };
 
                 // An omitted code must not erase a legacy code that the current
@@ -210,7 +236,8 @@ public sealed class SiteDriversController : BaseApiController
                 AddOptionalLicenceTypeUpdateFields(schema, assignments, values, GetCurrentUserId());
 
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"UPDATE [dbo].[{LicenceTypesTable}] SET {string.Join(", ", assignments)} WHERE [driver_licence_type_id] = @id";
+                command.CommandText =
+                    $"UPDATE [dbo].[{LicenceTypesTable}] SET {string.Join(", ", assignments)} WHERE [driver_licence_type_id] = @id";
                 AddParameters(command, values);
                 AddParameter(command, "@id", id);
                 await command.ExecuteNonQueryAsync();
@@ -252,8 +279,14 @@ public sealed class SiteDriversController : BaseApiController
                 {
                     var assignments = new List<string> { "[is_deleted] = @isDeleted" };
                     var values = new List<(string Name, object? Value)> { ("@isDeleted", true) };
-                    AddOptionalLicenceTypeUpdateFields(schema, assignments, values, GetCurrentUserId());
-                    command.CommandText = $"UPDATE [dbo].[{LicenceTypesTable}] SET {string.Join(", ", assignments)} WHERE [driver_licence_type_id] = @id";
+                    AddOptionalLicenceTypeUpdateFields(
+                        schema,
+                        assignments,
+                        values,
+                        GetCurrentUserId()
+                    );
+                    command.CommandText =
+                        $"UPDATE [dbo].[{LicenceTypesTable}] SET {string.Join(", ", assignments)} WHERE [driver_licence_type_id] = @id";
                     AddParameters(command, values);
                 }
                 else
@@ -261,7 +294,8 @@ public sealed class SiteDriversController : BaseApiController
                     // The legacy table is NonActivateableEntityBase in the old
                     // API, so deletion is intentionally a physical delete there.
                     // SQL Server still protects rows referenced by site_drivers.
-                    command.CommandText = $"DELETE FROM [dbo].[{LicenceTypesTable}] WHERE [driver_licence_type_id] = @id";
+                    command.CommandText =
+                        $"DELETE FROM [dbo].[{LicenceTypesTable}] WHERE [driver_licence_type_id] = @id";
                 }
 
                 AddParameter(command, "@id", id);
@@ -269,7 +303,9 @@ public sealed class SiteDriversController : BaseApiController
                 return true;
             });
 
-            return deleted ? NoContent() : NotFound(new { message = $"Driver licence type not found with code: {id}" });
+            return deleted
+                ? NoContent()
+                : NotFound(new { message = $"Driver licence type not found with code: {id}" });
         }
         catch (Exception ex)
         {
@@ -293,7 +329,8 @@ public sealed class SiteDriversController : BaseApiController
                 AddOptionalAuditInsertFields(schema, columns, values, GetCurrentUserId());
 
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"INSERT INTO [dbo].[{DriversTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[site_driver_code] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
+                command.CommandText =
+                    $"INSERT INTO [dbo].[{DriversTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[site_driver_code] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
                 AddParameters(command, values);
 
                 var driverId = Convert.ToInt32(await command.ExecuteScalarAsync());
@@ -301,7 +338,10 @@ public sealed class SiteDriversController : BaseApiController
             });
 
             return created is null
-                ? StatusCode(500, new { message = "The site driver was created but could not be reloaded." })
+                ? StatusCode(
+                    500,
+                    new { message = "The site driver was created but could not be reloaded." }
+                )
                 : CreatedAtAction(nameof(GetDriver), new { id = created.SiteDriverCode }, created);
         }
         catch (ArgumentException ex)
@@ -330,12 +370,15 @@ public sealed class SiteDriversController : BaseApiController
                     return null;
                 }
 
-                var assignments = DriverColumns.Select(column => $"{QuoteIdentifier(column)} = @{ParameterName(column)}").ToList();
+                var assignments = DriverColumns
+                    .Select(column => $"{QuoteIdentifier(column)} = @{ParameterName(column)}")
+                    .ToList();
                 var values = DriverValues(dto);
                 AddOptionalAuditUpdateFields(schema, assignments, values, GetCurrentUserId());
 
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"UPDATE [dbo].[{DriversTable}] SET {string.Join(", ", assignments)} WHERE [site_driver_code] = @siteDriverCode";
+                command.CommandText =
+                    $"UPDATE [dbo].[{DriversTable}] SET {string.Join(", ", assignments)} WHERE [site_driver_code] = @siteDriverCode";
                 AddParameters(command, values);
                 AddParameter(command, "@siteDriverCode", id);
                 await command.ExecuteNonQueryAsync();
@@ -387,7 +430,8 @@ public sealed class SiteDriversController : BaseApiController
                 }
 
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"UPDATE [dbo].[{DriversTable}] SET {string.Join(", ", assignments)} WHERE [site_driver_code] = @siteDriverCode";
+                command.CommandText =
+                    $"UPDATE [dbo].[{DriversTable}] SET {string.Join(", ", assignments)} WHERE [site_driver_code] = @siteDriverCode";
                 AddParameter(command, "@driverActive", false);
                 AddParameter(command, "@isDeleted", true);
                 AddParameter(command, "@dateUpdated", DateTime.UtcNow);
@@ -397,7 +441,9 @@ public sealed class SiteDriversController : BaseApiController
                 return true;
             });
 
-            return deleted ? NoContent() : NotFound(new { message = $"Site driver not found with code: {id}" });
+            return deleted
+                ? NoContent()
+                : NotFound(new { message = $"Site driver not found with code: {id}" });
         }
         catch (Exception ex)
         {
@@ -421,7 +467,7 @@ public sealed class SiteDriversController : BaseApiController
         "driver_hasPDP",
         "driver_PDP_ExpiryDate",
         "driver_licence_ExpiryDate",
-        "driver_active"
+        "driver_active",
     ];
 
     private static void EnsureLicenceTypeTable(TableSchema schema)
@@ -430,11 +476,13 @@ public sealed class SiteDriversController : BaseApiController
         [
             "driver_licence_type_id",
             "driver_licence_type_code",
-            "driver_licence_type_description"
+            "driver_licence_type_description",
         ];
         if (requiredColumns.Any(column => !schema.Has(column)))
         {
-            throw new InvalidOperationException("The dbo.driver_licence_types table is missing one or more required legacy columns.");
+            throw new InvalidOperationException(
+                "The dbo.driver_licence_types table is missing one or more required legacy columns."
+            );
         }
     }
 
@@ -449,11 +497,15 @@ public sealed class SiteDriversController : BaseApiController
         var descriptionLength = schema.Has("is_deleted") ? 255 : 100;
         if (dto.Code?.Trim().Length > codeLength)
         {
-            throw new ArgumentException($"The driver licence type code must be {codeLength} characters or fewer.");
+            throw new ArgumentException(
+                $"The driver licence type code must be {codeLength} characters or fewer."
+            );
         }
         if (dto.Description.Trim().Length > descriptionLength)
         {
-            throw new ArgumentException($"The driver licence type description must be {descriptionLength} characters or fewer.");
+            throw new ArgumentException(
+                $"The driver licence type description must be {descriptionLength} characters or fewer."
+            );
         }
     }
 
@@ -461,7 +513,8 @@ public sealed class SiteDriversController : BaseApiController
         TableSchema schema,
         ICollection<string> columns,
         ICollection<(string Name, object? Value)> values,
-        int currentUserId)
+        int currentUserId
+    )
     {
         if (schema.Has("date_created"))
         {
@@ -484,7 +537,8 @@ public sealed class SiteDriversController : BaseApiController
         TableSchema schema,
         ICollection<string> assignments,
         ICollection<(string Name, object? Value)> values,
-        int currentUserId)
+        int currentUserId
+    )
     {
         if (schema.Has("date_updated"))
         {
@@ -503,10 +557,15 @@ public sealed class SiteDriversController : BaseApiController
         return $"SELECT [driver_licence_type_id] AS [Id], [driver_licence_type_code] AS [Code], [driver_licence_type_description] AS [Description] FROM [dbo].[{LicenceTypesTable}]";
     }
 
-    private static async Task<SiteDriverLicenceTypeDto?> ReadLicenceTypeByIdAsync(DbConnection connection, TableSchema schema, int id)
+    private static async Task<SiteDriverLicenceTypeDto?> ReadLicenceTypeByIdAsync(
+        DbConnection connection,
+        TableSchema schema,
+        int id
+    )
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = $"{BuildLicenceTypeSelect(schema)} WHERE [driver_licence_type_id] = @id";
+        command.CommandText =
+            $"{BuildLicenceTypeSelect(schema)} WHERE [driver_licence_type_id] = @id";
         AddParameter(command, "@id", id);
         await using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync())
@@ -518,7 +577,7 @@ public sealed class SiteDriversController : BaseApiController
         {
             Id = ReadInt(reader, "Id") ?? 0,
             Code = ReadString(reader, "Code"),
-            Description = ReadString(reader, "Description")
+            Description = ReadString(reader, "Description"),
         };
     }
 
@@ -544,10 +603,14 @@ public sealed class SiteDriversController : BaseApiController
         }
     }
 
-    private static async Task<TableSchema> ReadTableSchemaAsync(DbConnection connection, string tableName)
+    private static async Task<TableSchema> ReadTableSchemaAsync(
+        DbConnection connection,
+        string tableName
+    )
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table";
+        command.CommandText =
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table";
         AddParameter(command, "@schema", "dbo");
         AddParameter(command, "@table", tableName);
 
@@ -568,19 +631,28 @@ public sealed class SiteDriversController : BaseApiController
     {
         if (!schema.Has("site_driver_code") || DriverColumns.Any(column => !schema.Has(column)))
         {
-            throw new InvalidOperationException("The dbo.site_drivers table is missing one or more required legacy columns.");
+            throw new InvalidOperationException(
+                "The dbo.site_drivers table is missing one or more required legacy columns."
+            );
         }
     }
 
     private static string BuildDriverSelect(TableSchema schema)
     {
-        var columns = string.Join(", ", DriverColumns.Select(column => $"{QuoteIdentifier(column)} AS {QuoteIdentifier(column)}"));
+        var columns = string.Join(
+            ", ",
+            DriverColumns.Select(column =>
+                $"{QuoteIdentifier(column)} AS {QuoteIdentifier(column)}"
+            )
+        );
         return $"SELECT [site_driver_code] AS [site_driver_code], {columns} FROM [dbo].[{DriversTable}]";
     }
 
     private static string BuildDriverPredicate(TableSchema schema)
     {
-        var deletedPredicate = schema.Has("is_deleted") ? " AND COALESCE([is_deleted], 0) = 0" : string.Empty;
+        var deletedPredicate = schema.Has("is_deleted")
+            ? " AND COALESCE([is_deleted], 0) = 0"
+            : string.Empty;
         return $"[driver_active] = 1{deletedPredicate}";
     }
 
@@ -596,10 +668,15 @@ public sealed class SiteDriversController : BaseApiController
         return result;
     }
 
-    private static async Task<DriverDto?> ReadDriverByIdAsync(DbConnection connection, TableSchema schema, int id)
+    private static async Task<DriverDto?> ReadDriverByIdAsync(
+        DbConnection connection,
+        TableSchema schema,
+        int id
+    )
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = $"{BuildDriverSelect(schema)} WHERE [site_driver_code] = @siteDriverCode";
+        command.CommandText =
+            $"{BuildDriverSelect(schema)} WHERE [site_driver_code] = @siteDriverCode";
         AddParameter(command, "@siteDriverCode", id);
         await using var reader = await command.ExecuteReaderAsync();
         return await reader.ReadAsync() ? ReadDriver(reader) : null;
@@ -624,7 +701,7 @@ public sealed class SiteDriversController : BaseApiController
             DriverHasPDP = ReadBool(reader, "driver_hasPDP"),
             DriverPDPExpiryDate = ReadNullableDateTime(reader, "driver_PDP_ExpiryDate"),
             DriverLicenceExpiryDate = ReadNullableDateTime(reader, "driver_licence_ExpiryDate"),
-            DriverActive = ReadBool(reader, "driver_active")
+            DriverActive = ReadBool(reader, "driver_active"),
         };
     }
 
@@ -645,7 +722,10 @@ public sealed class SiteDriversController : BaseApiController
         ValidateLength(dto.DriverPersonalNumber, 10, "The Persal number");
         ValidateLength(dto.DriverContractNumber, 10, "The contract number");
         ValidateLength(dto.DriverLicenceNumber, 20, "The licence number");
-        if (string.IsNullOrWhiteSpace(dto.DriverSurname) || string.IsNullOrWhiteSpace(dto.DriverFirstname))
+        if (
+            string.IsNullOrWhiteSpace(dto.DriverSurname)
+            || string.IsNullOrWhiteSpace(dto.DriverFirstname)
+        )
         {
             throw new ArgumentException("The first name and surname are required.");
         }
@@ -659,7 +739,9 @@ public sealed class SiteDriversController : BaseApiController
         }
         if (dto.DriverHasPDP && dto.DriverPDPExpiryDate is null)
         {
-            throw new ArgumentException("The PDP expiry date is required when the driver has a PDP.");
+            throw new ArgumentException(
+                "The PDP expiry date is required when the driver has a PDP."
+            );
         }
     }
 
@@ -689,11 +771,16 @@ public sealed class SiteDriversController : BaseApiController
             ("@driver_hasPDP", dto.DriverHasPDP),
             ("@driver_PDP_ExpiryDate", dto.DriverPDPExpiryDate),
             ("@driver_licence_ExpiryDate", dto.DriverLicenceExpiryDate),
-            ("@driver_active", dto.DriverActive)
+            ("@driver_active", dto.DriverActive),
         ];
     }
 
-    private static void AddOptionalAuditInsertFields(TableSchema schema, ICollection<string> columns, ICollection<(string Name, object? Value)> values, int currentUserId)
+    private static void AddOptionalAuditInsertFields(
+        TableSchema schema,
+        ICollection<string> columns,
+        ICollection<(string Name, object? Value)> values,
+        int currentUserId
+    )
     {
         if (schema.Has("date_created"))
         {
@@ -712,7 +799,12 @@ public sealed class SiteDriversController : BaseApiController
         }
     }
 
-    private static void AddOptionalAuditUpdateFields(TableSchema schema, ICollection<string> assignments, ICollection<(string Name, object? Value)> values, int currentUserId)
+    private static void AddOptionalAuditUpdateFields(
+        TableSchema schema,
+        ICollection<string> assignments,
+        ICollection<(string Name, object? Value)> values,
+        int currentUserId
+    )
     {
         if (schema.Has("date_updated"))
         {
@@ -728,7 +820,10 @@ public sealed class SiteDriversController : BaseApiController
 
     private static string ParameterName(string column) => column;
 
-    private static void AddParameters(DbCommand command, IEnumerable<(string Name, object? Value)> values)
+    private static void AddParameters(
+        DbCommand command,
+        IEnumerable<(string Name, object? Value)> values
+    )
     {
         foreach (var (name, value) in values)
         {
@@ -744,7 +839,8 @@ public sealed class SiteDriversController : BaseApiController
         command.Parameters.Add(parameter);
     }
 
-    private static object? NullIfWhiteSpace(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static object? NullIfWhiteSpace(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static int? ReadInt(DbDataReader reader, string name)
     {

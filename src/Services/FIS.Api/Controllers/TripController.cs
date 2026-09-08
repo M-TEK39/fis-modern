@@ -88,12 +88,12 @@ public class TripDto
     public short? UserAccessCode { get; set; }
     public bool LockedForTransfer { get; set; }
     public bool TripIsMonthly { get; set; }
-    
+
     // Computed properties for display
     public string ApproverFullInfo => $"{ApproverName} ({ApproverRank})".Trim();
     public bool IsExpired => ExpiryDate.HasValue && ExpiryDate.Value < DateTime.Now;
-    public int DaysUntilExpiry => ExpiryDate.HasValue ? 
-        (int)(ExpiryDate.Value - DateTime.Now).TotalDays : 0;
+    public int DaysUntilExpiry =>
+        ExpiryDate.HasValue ? (int)(ExpiryDate.Value - DateTime.Now).TotalDays : 0;
 }
 
 public class TripAuthorityVehicleDto
@@ -208,18 +208,20 @@ public class TripController : BaseApiController
         try
         {
             var vehicles = await _tripService.GetTripAuthorityVehiclesAsync();
-            return Ok(vehicles.Select(vehicle => new TripAuthorityVehicleDto
-            {
-                VmfCode = vehicle.VmfCode,
-                ContractCode = vehicle.ContractCode,
-                SiteCode = vehicle.SiteCode,
-                FleetNumber = vehicle.FleetNumber,
-                RegistrationNumber = vehicle.RegistrationNumber,
-                LicenceDueDate = vehicle.LicenceDueDate,
-                MakeDescription = vehicle.MakeDescription,
-                ModelDescription = vehicle.ModelDescription,
-                ContractType = vehicle.ContractType
-            }));
+            return Ok(
+                vehicles.Select(vehicle => new TripAuthorityVehicleDto
+                {
+                    VmfCode = vehicle.VmfCode,
+                    ContractCode = vehicle.ContractCode,
+                    SiteCode = vehicle.SiteCode,
+                    FleetNumber = vehicle.FleetNumber,
+                    RegistrationNumber = vehicle.RegistrationNumber,
+                    LicenceDueDate = vehicle.LicenceDueDate,
+                    MakeDescription = vehicle.MakeDescription,
+                    ModelDescription = vehicle.ModelDescription,
+                    ContractType = vehicle.ContractType,
+                })
+            );
         }
         catch (Exception ex)
         {
@@ -257,7 +259,7 @@ public class TripController : BaseApiController
                 TripIncidentTypeCode = trip.trip_incident_type_code,
                 UserAccessCode = trip.user_access_code,
                 LockedForTransfer = trip.locked_for_transfer,
-                TripIsMonthly = trip.Trip_Is_Monthly
+                TripIsMonthly = trip.Trip_Is_Monthly,
             };
 
             return Ok(tripDto);
@@ -280,51 +282,59 @@ public class TripController : BaseApiController
                 return NotFound();
             }
 
-            return Ok(new TripAuthorityDetailsDto
-            {
-                Trip = MapTrip(details.Trip),
-                Drivers = details.Drivers.Select(driver => new TripAuthorityDriverDto
+            return Ok(
+                new TripAuthorityDetailsDto
                 {
-                    TripDriverCode = driver.TripDriverCode,
-                    Name = driver.Name,
-                    IdentityNumber = driver.IdentityNumber,
-                    IsPrimary = driver.IsPrimary,
-                    SiteCode = driver.SiteCode,
-                    LicenceTypeCode = driver.LicenceTypeCode,
-                    PassportNumber = driver.PassportNumber,
-                    PersalNumber = driver.PersalNumber,
-                    ContractNumber = driver.ContractNumber,
-                    LicenceNumber = driver.LicenceNumber,
-                    LicenceIssueDate = driver.LicenceIssueDate,
-                    LicenceLastVerifiedDate = driver.LicenceLastVerifiedDate,
-                    HasPdp = driver.HasPdp,
-                    PdpExpiryDate = driver.PdpExpiryDate,
-                    LicenceExpiryDate = driver.LicenceExpiryDate,
-                    IsActive = driver.IsActive
-                }).ToArray(),
-                Passengers = details.Passengers.Select(passenger => new TripAuthorityPassengerDto
-                {
-                    TripPassengerCode = passenger.TripPassengerCode,
-                    Name = passenger.Name
-                }).ToArray(),
-                Routes = details.Routes.Select(route => new TripAuthorityRouteDto
-                {
-                    RouteCode = route.RouteCode,
-                    StartDate = route.StartDate,
-                    EndDate = route.EndDate,
-                    StartOdometer = route.StartOdometer,
-                    EndOdometer = route.EndOdometer,
-                    ResponsibilityCode = route.ResponsibilityCode,
-                    ObjectiveCode = route.ObjectiveCode,
-                    StartLocation = route.StartLocation,
-                    EndLocation = route.EndLocation,
-                    EstimatedDistance = route.EstimatedDistance,
-                    Distance = route.Distance,
-                    ProjectNumber = route.ProjectNumber,
-                    FundCode = route.FundCode,
-                    EditedByUserCode = route.EditedByUserCode
-                }).ToArray()
-            });
+                    Trip = MapTrip(details.Trip),
+                    Drivers = details
+                        .Drivers.Select(driver => new TripAuthorityDriverDto
+                        {
+                            TripDriverCode = driver.TripDriverCode,
+                            Name = driver.Name,
+                            IdentityNumber = driver.IdentityNumber,
+                            IsPrimary = driver.IsPrimary,
+                            SiteCode = driver.SiteCode,
+                            LicenceTypeCode = driver.LicenceTypeCode,
+                            PassportNumber = driver.PassportNumber,
+                            PersalNumber = driver.PersalNumber,
+                            ContractNumber = driver.ContractNumber,
+                            LicenceNumber = driver.LicenceNumber,
+                            LicenceIssueDate = driver.LicenceIssueDate,
+                            LicenceLastVerifiedDate = driver.LicenceLastVerifiedDate,
+                            HasPdp = driver.HasPdp,
+                            PdpExpiryDate = driver.PdpExpiryDate,
+                            LicenceExpiryDate = driver.LicenceExpiryDate,
+                            IsActive = driver.IsActive,
+                        })
+                        .ToArray(),
+                    Passengers = details
+                        .Passengers.Select(passenger => new TripAuthorityPassengerDto
+                        {
+                            TripPassengerCode = passenger.TripPassengerCode,
+                            Name = passenger.Name,
+                        })
+                        .ToArray(),
+                    Routes = details
+                        .Routes.Select(route => new TripAuthorityRouteDto
+                        {
+                            RouteCode = route.RouteCode,
+                            StartDate = route.StartDate,
+                            EndDate = route.EndDate,
+                            StartOdometer = route.StartOdometer,
+                            EndOdometer = route.EndOdometer,
+                            ResponsibilityCode = route.ResponsibilityCode,
+                            ObjectiveCode = route.ObjectiveCode,
+                            StartLocation = route.StartLocation,
+                            EndLocation = route.EndLocation,
+                            EstimatedDistance = route.EstimatedDistance,
+                            Distance = route.Distance,
+                            ProjectNumber = route.ProjectNumber,
+                            FundCode = route.FundCode,
+                            EditedByUserCode = route.EditedByUserCode,
+                        })
+                        .ToArray(),
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -357,7 +367,7 @@ public class TripController : BaseApiController
                 TripIncidentTypeCode = t.trip_incident_type_code,
                 UserAccessCode = t.user_access_code,
                 LockedForTransfer = t.locked_for_transfer,
-                TripIsMonthly = t.Trip_Is_Monthly
+                TripIsMonthly = t.Trip_Is_Monthly,
             });
             return Ok(tripDtos);
         }
@@ -392,7 +402,7 @@ public class TripController : BaseApiController
                 TripIncidentTypeCode = t.trip_incident_type_code,
                 UserAccessCode = t.user_access_code,
                 LockedForTransfer = t.locked_for_transfer,
-                TripIsMonthly = t.Trip_Is_Monthly
+                TripIsMonthly = t.Trip_Is_Monthly,
             });
             return Ok(tripDtos);
         }
@@ -406,7 +416,8 @@ public class TripController : BaseApiController
     [HttpGet("daterange")]
     public async Task<ActionResult<IEnumerable<TripDto>>> GetTripsByDateRange(
         [FromQuery] DateTime startDate,
-        [FromQuery] DateTime endDate)
+        [FromQuery] DateTime endDate
+    )
     {
         try
         {
@@ -429,13 +440,18 @@ public class TripController : BaseApiController
                 TripIncidentTypeCode = t.trip_incident_type_code,
                 UserAccessCode = t.user_access_code,
                 LockedForTransfer = t.locked_for_transfer,
-                TripIsMonthly = t.Trip_Is_Monthly
+                TripIsMonthly = t.Trip_Is_Monthly,
             });
             return Ok(tripDtos);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving trips for date range {StartDate} to {EndDate}", startDate, endDate);
+            _logger.LogError(
+                ex,
+                "Error retrieving trips for date range {StartDate} to {EndDate}",
+                startDate,
+                endDate
+            );
             return StatusCode(500, "Internal server error");
         }
     }
@@ -447,7 +463,7 @@ public class TripController : BaseApiController
         {
             var startDate = DateTime.Now.AddDays(-days);
             var endDate = DateTime.Now;
-            
+
             return await GetTripsByDateRange(startDate, endDate);
         }
         catch (Exception ex)
@@ -477,7 +493,7 @@ public class TripController : BaseApiController
                 trip_incident_type_code = createTripDto.TripIncidentTypeCode,
                 user_access_code = createTripDto.UserAccessCode,
                 locked_for_transfer = createTripDto.LockedForTransfer,
-                Trip_Is_Monthly = createTripDto.TripIsMonthly
+                Trip_Is_Monthly = createTripDto.TripIsMonthly,
             };
 
             var createdTrip = await _tripService.CreateTripAsync(trip);
@@ -500,10 +516,14 @@ public class TripController : BaseApiController
                 TripIncidentTypeCode = createdTrip.trip_incident_type_code,
                 UserAccessCode = createdTrip.user_access_code,
                 LockedForTransfer = createdTrip.locked_for_transfer,
-                TripIsMonthly = createdTrip.Trip_Is_Monthly
+                TripIsMonthly = createdTrip.Trip_Is_Monthly,
             };
 
-            return CreatedAtAction(nameof(GetTrip), new { id = createdTrip.trip_authority_code }, tripDto);
+            return CreatedAtAction(
+                nameof(GetTrip),
+                new { id = createdTrip.trip_authority_code },
+                tripDto
+            );
         }
         catch (Exception ex)
         {
@@ -513,7 +533,9 @@ public class TripController : BaseApiController
     }
 
     [HttpPost("with-details")]
-    public async Task<ActionResult<TripDto>> CreateTripAuthority([FromBody] CreateTripAuthorityDto request)
+    public async Task<ActionResult<TripDto>> CreateTripAuthority(
+        [FromBody] CreateTripAuthorityDto request
+    )
     {
         try
         {
@@ -531,43 +553,54 @@ public class TripController : BaseApiController
                 trip_incident_type_code = request.TripIncidentTypeCode,
                 user_access_code = request.UserAccessCode ?? (short?)GetCurrentUserId(),
                 locked_for_transfer = false,
-                Trip_Is_Monthly = request.TripIsMonthly
+                Trip_Is_Monthly = request.TripIsMonthly,
             };
 
             var createdTrip = await _tripService.CreateTripAuthorityAsync(
                 trip,
-                request.Drivers.Select(driver => new TripAuthorityDriverInput(
-                    driver.Name,
-                    driver.IdentityNumber,
-                    driver.IsPrimary,
-                    driver.SiteCode,
-                    driver.LicenceTypeCode,
-                    driver.PassportNumber,
-                    driver.PersalNumber,
-                    driver.ContractNumber,
-                    driver.LicenceNumber,
-                    driver.LicenceIssueDate,
-                    driver.LicenceLastVerifiedDate,
-                    driver.HasPdp,
-                    driver.PdpExpiryDate,
-                    driver.LicenceExpiryDate,
-                    driver.IsActive)).ToArray(),
-                request.Passengers
-                    .Where(passenger => !string.IsNullOrWhiteSpace(passenger.Name))
+                request
+                    .Drivers.Select(driver => new TripAuthorityDriverInput(
+                        driver.Name,
+                        driver.IdentityNumber,
+                        driver.IsPrimary,
+                        driver.SiteCode,
+                        driver.LicenceTypeCode,
+                        driver.PassportNumber,
+                        driver.PersalNumber,
+                        driver.ContractNumber,
+                        driver.LicenceNumber,
+                        driver.LicenceIssueDate,
+                        driver.LicenceLastVerifiedDate,
+                        driver.HasPdp,
+                        driver.PdpExpiryDate,
+                        driver.LicenceExpiryDate,
+                        driver.IsActive
+                    ))
+                    .ToArray(),
+                request
+                    .Passengers.Where(passenger => !string.IsNullOrWhiteSpace(passenger.Name))
                     .Select(passenger => new TripAuthorityPassengerInput(passenger.Name.Trim()))
                     .ToArray(),
-                request.Routes.Select(route => new TripAuthorityRouteInput(
-                    route.StartDate,
-                    route.EndDate,
-                    route.StartLocation,
-                    route.EndLocation,
-                    route.EstimatedDistance,
-                    route.ResponsibilityCode.Trim(),
-                    route.ObjectiveCode.Trim(),
-                    route.ProjectNumber.Trim(),
-                    route.FundCode.Trim())).ToArray());
+                request
+                    .Routes.Select(route => new TripAuthorityRouteInput(
+                        route.StartDate,
+                        route.EndDate,
+                        route.StartLocation,
+                        route.EndLocation,
+                        route.EstimatedDistance,
+                        route.ResponsibilityCode.Trim(),
+                        route.ObjectiveCode.Trim(),
+                        route.ProjectNumber.Trim(),
+                        route.FundCode.Trim()
+                    ))
+                    .ToArray()
+            );
 
-            return CreatedAtAction(nameof(GetTrip), new { id = createdTrip.trip_authority_code }, MapTrip(createdTrip));
+            return CreatedAtAction(
+                nameof(GetTrip),
+                new { id = createdTrip.trip_authority_code },
+                MapTrip(createdTrip)
+            );
         }
         catch (ArgumentException ex)
         {
@@ -575,7 +608,11 @@ public class TripController : BaseApiController
         }
         catch (InvalidOperationException ex)
         {
-            _logger.LogWarning(ex, "Trip authority creation was rejected for contract {ContractCode}", request.ContractCode);
+            _logger.LogWarning(
+                ex,
+                "Trip authority creation was rejected for contract {ContractCode}",
+                request.ContractCode
+            );
             return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
@@ -586,7 +623,10 @@ public class TripController : BaseApiController
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<TripDto>> UpdateTrip(int id, [FromBody] UpdateTripDto updateTripDto)
+    public async Task<ActionResult<TripDto>> UpdateTrip(
+        int id,
+        [FromBody] UpdateTripDto updateTripDto
+    )
     {
         try
         {
@@ -631,7 +671,7 @@ public class TripController : BaseApiController
                 TripIncidentTypeCode = existingTrip.trip_incident_type_code,
                 UserAccessCode = existingTrip.user_access_code,
                 LockedForTransfer = existingTrip.locked_for_transfer,
-                TripIsMonthly = existingTrip.Trip_Is_Monthly
+                TripIsMonthly = existingTrip.Trip_Is_Monthly,
             };
 
             return Ok(tripDto);
@@ -667,7 +707,9 @@ public class TripController : BaseApiController
                     return BadRequest("Every route must include a valid end odometer.");
                 }
 
-                var existingRoute = details.Routes.FirstOrDefault(item => item.RouteCode == route.RouteCode);
+                var existingRoute = details.Routes.FirstOrDefault(item =>
+                    item.RouteCode == route.RouteCode
+                );
                 if (existingRoute is null)
                 {
                     return BadRequest($"Route {route.RouteCode} does not belong to trip {id}.");
@@ -676,7 +718,9 @@ public class TripController : BaseApiController
                 var distance = existingRoute.StartOdometer.HasValue
                     ? route.EndOdometer.Value - existingRoute.StartOdometer.Value
                     : route.EndOdometer.Value;
-                routeUpdates.Add(new TripAuthorityRouteUpdate(route.RouteCode, route.EndOdometer.Value, distance));
+                routeUpdates.Add(
+                    new TripAuthorityRouteUpdate(route.RouteCode, route.EndOdometer.Value, distance)
+                );
             }
 
             await _tripService.CloseTripAsync(id, routeUpdates, closeTripDto.EndOdometer);
@@ -690,7 +734,11 @@ public class TripController : BaseApiController
         }
         catch (ArgumentException ex)
         {
-            _logger.LogWarning(ex, "Trip {TripId} close request contained duplicate or invalid routes", id);
+            _logger.LogWarning(
+                ex,
+                "Trip {TripId} close request contained duplicate or invalid routes",
+                id
+            );
             return BadRequest("The trip close request contains duplicate or invalid routes.");
         }
         catch (Exception ex)
@@ -721,8 +769,8 @@ public class TripController : BaseApiController
         }
     }
 
-    private static TripDto MapTrip(Trip trip)
-        => new()
+    private static TripDto MapTrip(Trip trip) =>
+        new()
         {
             TripAuthorityCode = trip.trip_authority_code,
             ContractCode = trip.contract_code,
@@ -740,6 +788,6 @@ public class TripController : BaseApiController
             TripIncidentTypeCode = trip.trip_incident_type_code,
             UserAccessCode = trip.user_access_code,
             LockedForTransfer = trip.locked_for_transfer,
-            TripIsMonthly = trip.Trip_Is_Monthly
+            TripIsMonthly = trip.Trip_Is_Monthly,
         };
 }

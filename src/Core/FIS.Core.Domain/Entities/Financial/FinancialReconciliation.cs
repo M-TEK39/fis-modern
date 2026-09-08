@@ -1,5 +1,5 @@
-using FIS.Core.Domain.Enums;
 using System.ComponentModel.DataAnnotations.Schema;
+using FIS.Core.Domain.Enums;
 
 namespace FIS.Core.Domain.Entities.Financial;
 

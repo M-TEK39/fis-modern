@@ -5,5 +5,10 @@ type LegacyAuctionDetailProps = {
 };
 
 export default function LegacyAuctionDetailPage({ searchParams }: LegacyAuctionDetailProps) {
-  return <AuctionDetailPage routePath="/auction/MNT_auctionj_getdetail.aspx" searchParams={searchParams} />;
+  return (
+    <AuctionDetailPage
+      routePath="/auction/MNT_auctionj_getdetail.aspx"
+      searchParams={searchParams}
+    />
+  );
 }

@@ -92,7 +92,8 @@ export type VehicleUpdateRequest = {
   recalculate_tariff: boolean;
 };
 
-export type VehicleEditApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type VehicleEditApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class VehicleEditApiError extends Error {
   constructor(
@@ -191,7 +192,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
         // Keep the status-based message when the API has no JSON error body.
       }
 
-      throw new VehicleEditApiError(response.status >= 500 ? "unavailable" : "invalid-response", message);
+      throw new VehicleEditApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+      );
     }
 
     return response;
@@ -221,7 +225,10 @@ function mapVehicle(payload: unknown): VehicleEditVehicle {
 
   const vmfCode = asNumber(getValue(payload, "vmf_code", "vmfCode"));
   if (vmfCode === null) {
-    throw new VehicleEditApiError("invalid-response", "The FIS API returned a vehicle without a VMF code.");
+    throw new VehicleEditApiError(
+      "invalid-response",
+      "The FIS API returned a vehicle without a VMF code.",
+    );
   }
 
   return {
@@ -230,7 +237,8 @@ function mapVehicle(payload: unknown): VehicleEditVehicle {
     registrationNumber: asString(getValue(payload, "registration_number", "registrationNumber")),
     previousGgNumber: asString(getValue(payload, "previos_gg_number", "previousGgNumber")) || null,
     followupGgNumber: asString(getValue(payload, "followup_gg_number", "followupGgNumber")) || null,
-    recoveredGgNumber: asString(getValue(payload, "recovered_gg_number", "recoveredGgNumber")) || null,
+    recoveredGgNumber:
+      asString(getValue(payload, "recovered_gg_number", "recoveredGgNumber")) || null,
     renumberedTo: asString(getValue(payload, "renumbered_to", "renumberedTo")) || null,
     assetNumber: asString(getValue(payload, "asset_number", "assetNumber")) || null,
     modelCode: asNumber(getValue(payload, "model_code", "modelCode")) ?? 0,
@@ -239,17 +247,22 @@ function mapVehicle(payload: unknown): VehicleEditVehicle {
     typeName: asString(getValue(payload, "type_name", "typeName")) || null,
     vehicleStatusCode: asNumber(getValue(payload, "vehicle_status_code", "vehicleStatusCode")) ?? 0,
     statusDescription:
-      asString(getValue(payload, "status_description", "statusDescription", "vehicle_status_description")) || null,
+      asString(
+        getValue(payload, "status_description", "statusDescription", "vehicle_status_description"),
+      ) || null,
     locationCode: asNumber(getValue(payload, "location_code", "locationCode")) ?? 0,
-    locationDescription: asString(getValue(payload, "location_description", "locationDescription")) || null,
+    locationDescription:
+      asString(getValue(payload, "location_description", "locationDescription")) || null,
     siteCode: asNumber(getValue(payload, "site_code", "siteCode", "Site_code")),
     takeOnDate: asString(getValue(payload, "take_on_date", "takeOnDate")) || null,
     takeOnOdo: asNumber(getValue(payload, "take_on_odo", "takeOnOdo")) ?? 0,
     currentOdo: asNumber(getValue(payload, "current_odo", "currentOdo")) ?? 0,
     odoAdjustment: asNumber(getValue(payload, "odo_adjustment", "odoAdjustment")),
     odoUpdateDate: asString(getValue(payload, "odo_update_date", "odoUpdateDate")) || null,
-    firstRegistrationDate: asString(getValue(payload, "date_First_Regist", "firstRegistrationDate")) || null,
-    vehicleStatusDate: asString(getValue(payload, "vehicle_status_date", "vehicleStatusDate")) || null,
+    firstRegistrationDate:
+      asString(getValue(payload, "date_First_Regist", "firstRegistrationDate")) || null,
+    vehicleStatusDate:
+      asString(getValue(payload, "vehicle_status_date", "vehicleStatusDate")) || null,
     engineNumber: asString(getValue(payload, "engine_number_1", "engineNumber1", "engine_number")),
     chassisNumber: asString(getValue(payload, "chassis_number", "chassisNumber")),
     tare: asNumber(getValue(payload, "tare")),
@@ -267,7 +280,8 @@ function mapVehicle(payload: unknown): VehicleEditVehicle {
     fuelCardDate: asString(getValue(payload, "fuel_card_date", "fuelCardDate")) || null,
     maintCardNumber: asString(getValue(payload, "maint_card_number", "maintCardNumber")) || null,
     maintCardExpiry: asString(getValue(payload, "maint_card_exdate", "maintCardExpiry")) || null,
-    operatorCardNumber: asString(getValue(payload, "operator_card_number", "operatorCardNumber")) || null,
+    operatorCardNumber:
+      asString(getValue(payload, "operator_card_number", "operatorCardNumber")) || null,
     purchaseDate: asString(getValue(payload, "purchase_date", "purchaseDate")) || null,
     purchaseAmount: asNumber(getValue(payload, "purchase_amount", "purchaseAmount")),
     purchasedFrom: asString(getValue(payload, "purchased_from", "purchasedFrom")) || null,
@@ -284,9 +298,11 @@ function mapVehicle(payload: unknown): VehicleEditVehicle {
     cofRequired: asString(getValue(payload, "cof_required", "cofRequired")) || null,
     cofNumber: asString(getValue(payload, "cof_number", "cofNumber")) || null,
     cofAmount: asNumber(getValue(payload, "Cof_amount", "cofAmount")),
-    licenceRegisterNumber: asString(getValue(payload, "lic_register_number", "licenceRegisterNumber")) || null,
+    licenceRegisterNumber:
+      asString(getValue(payload, "lic_register_number", "licenceRegisterNumber")) || null,
     ifmsVehicleRegisterNumber:
-      asString(getValue(payload, "ifms_vehicle_register_number", "ifmsVehicleRegisterNumber")) || null,
+      asString(getValue(payload, "ifms_vehicle_register_number", "ifmsVehicleRegisterNumber")) ||
+      null,
     natisModelNumber: asString(getValue(payload, "natis_model_number", "natisModelNumber")) || null,
     dateCreated: asString(getValue(payload, "date_created", "dateCreated")) || null,
     dateUpdated: asString(getValue(payload, "date_updated", "dateUpdated")) || null,
@@ -309,7 +325,10 @@ export async function updateVehicleAgainstApi(vmfCode: number, request: VehicleU
   return { ok: true as const };
 }
 
-export async function updateVehicleInvoiceAgainstApi(vmfCode: number, invoiceNumber: string | null) {
+export async function updateVehicleInvoiceAgainstApi(
+  vmfCode: number,
+  invoiceNumber: string | null,
+) {
   const response = await requestApi(`api/vehicles/${encodeURIComponent(vmfCode)}/invoice`, {
     method: "PATCH",
     body: JSON.stringify({ invoice_number: invoiceNumber }),

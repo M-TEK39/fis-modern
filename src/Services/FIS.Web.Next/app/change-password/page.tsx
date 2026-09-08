@@ -13,7 +13,9 @@ function UnavailableState() {
       </div>
       <p className="eyebrow">API unavailable</p>
       <h1>We could not verify your session.</h1>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
         <Link className="button button-primary" href="/change-password">
           Try again
@@ -90,7 +92,9 @@ async function ChangePasswordContent() {
           <div className="auth-header">
             <p className="eyebrow">Password security</p>
             <h1 id="change-password-title">
-              {session.passwordChangeRequired ? "Your password has expired" : "Change your password"}
+              {session.passwordChangeRequired
+                ? "Your password has expired"
+                : "Change your password"}
             </h1>
             <p>
               {session.passwordChangeRequired

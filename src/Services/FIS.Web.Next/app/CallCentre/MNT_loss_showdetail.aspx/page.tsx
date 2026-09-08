@@ -6,9 +6,7 @@ function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function LegacyLossShowDetailPage({
-  searchParams,
-}: IncidentCapturePageProps) {
+export default async function LegacyLossShowDetailPage({ searchParams }: IncidentCapturePageProps) {
   const values = await searchParams;
   const vmfCode = first(values.vmfCode) ?? first(values.ccVMF);
   const code = first(values.code) ?? first(values.cccode);

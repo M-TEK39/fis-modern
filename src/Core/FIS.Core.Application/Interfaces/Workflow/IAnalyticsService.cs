@@ -10,12 +10,21 @@ public interface IAnalyticsService
     /// <summary>
     /// Record step execution for analytics
     /// </summary>
-    Task<int> RecordStepExecutionAsync(int statusId, int stepId, int workflowId, string? handlerType);
+    Task<int> RecordStepExecutionAsync(
+        int statusId,
+        int stepId,
+        int workflowId,
+        string? handlerType
+    );
 
     /// <summary>
     /// Update step execution with completion details
     /// </summary>
-    Task CompleteStepExecutionAsync(int executionHistoryId, bool success, string? errorMessage = null);
+    Task CompleteStepExecutionAsync(
+        int executionHistoryId,
+        bool success,
+        string? errorMessage = null
+    );
 
     /// <summary>
     /// Generate daily metrics for a workflow
@@ -25,7 +34,11 @@ public interface IAnalyticsService
     /// <summary>
     /// Get workflow performance report
     /// </summary>
-    Task<WorkflowPerformanceReport> GetWorkflowPerformanceAsync(int workflowId, DateTime startDate, DateTime endDate);
+    Task<WorkflowPerformanceReport> GetWorkflowPerformanceAsync(
+        int workflowId,
+        DateTime startDate,
+        DateTime endDate
+    );
 
     /// <summary>
     /// Get step performance report

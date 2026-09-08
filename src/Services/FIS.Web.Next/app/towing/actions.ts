@@ -75,7 +75,11 @@ function getDate(formData: FormData, key: string, label: string, required = fals
   }
   const [year, month, day] = value.split("-").map(Number);
   const parsed = new Date(Date.UTC(year, month - 1, day));
-  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
     throw new TowingValidationError(`${label} is invalid.`);
   }
   return `${value}T00:00:00.000Z`;
@@ -94,28 +98,46 @@ function getTime(formData: FormData) {
 async function authorizeTowing() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
-  if (!session.roles.some((role) => role.localeCompare(TOWING_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
-    return { ok: false as const, message: "You do not have permission to maintain road side assistance records." };
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(TOWING_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain road side assistance records.",
+    };
   }
   return { ok: true as const };
 }
 
 function apiErrorMessage(error: unknown, operation: string) {
   if (error instanceof TowingApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return `The towing ${operation} service is temporarily unavailable. Please try again.`;
-    if (error.reason === "not-found") return "The towing record was not found. Return to the Towing menu and try again.";
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return `The towing ${operation} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "not-found")
+      return "The towing record was not found. Return to the Towing menu and try again.";
   }
   return `The towing record could not be ${operation}. Please try again.`;
 }
 
 function redirectError(returnPath: string, message: string) {
-  redirect(`${returnPath}${returnPath.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  redirect(
+    `${returnPath}${returnPath.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`,
+  );
 }
 
 function getTowingCode(formData: FormData) {
@@ -142,7 +164,12 @@ function buildTowingRequest(formData: FormData): TowingRequest {
     Contact_person_name: getOptionalText(formData, "contactPersonName", "Contact name", 30),
     Contact_person_tel: getOptionalText(formData, "contactPersonTel", "Contact telephone", 30),
     Contact_person_cell: getOptionalText(formData, "contactPersonCell", "Contact cell", 10),
-    Person_at_vehicle_name: getOptionalText(formData, "personAtVehicleName", "Person with vehicle", 30),
+    Person_at_vehicle_name: getOptionalText(
+      formData,
+      "personAtVehicleName",
+      "Person with vehicle",
+      30,
+    ),
     Person_at_vehicle_cell: getOptionalText(formData, "personAtVehicleCell", "Person cell", 10),
     Remaks: getOptionalText(formData, "remarks", "Remarks", 50),
     Tow_Truck_code: getOptionalInteger(formData, "towTruckCode", "Tow truck"),
@@ -160,7 +187,10 @@ export async function saveTowingAction(formData: FormData) {
     towingCode = getTowingCode(formData);
     request = buildTowingRequest(formData);
   } catch (error) {
-    redirectError(returnPath, error instanceof TowingValidationError ? error.message : "The towing form is invalid.");
+    redirectError(
+      returnPath,
+      error instanceof TowingValidationError ? error.message : "The towing form is invalid.",
+    );
   }
 
   try {
@@ -190,7 +220,10 @@ export async function deleteTowingAction(formData: FormData) {
     if (value === null) throw new TowingValidationError("The towing record is invalid.");
     towingCode = value;
   } catch (error) {
-    redirectError(returnPath, error instanceof TowingValidationError ? error.message : "The towing record is invalid.");
+    redirectError(
+      returnPath,
+      error instanceof TowingValidationError ? error.message : "The towing record is invalid.",
+    );
   }
 
   try {
@@ -219,7 +252,8 @@ function getTowCode(formData: FormData) {
   const value = getText(formData, "towCode");
   if (!value) return null;
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) throw new TowingValidationError("The tow truck record is invalid.");
+  if (!Number.isInteger(parsed) || parsed <= 0)
+    throw new TowingValidationError("The tow truck record is invalid.");
   return parsed;
 }
 
@@ -234,7 +268,10 @@ export async function saveTowTruckAction(formData: FormData) {
     towCode = getTowCode(formData);
     request = buildTowTruckRequest(formData);
   } catch (error) {
-    redirectError(returnPath, error instanceof TowingValidationError ? error.message : "The tow truck form is invalid.");
+    redirectError(
+      returnPath,
+      error instanceof TowingValidationError ? error.message : "The tow truck form is invalid.",
+    );
   }
 
   try {
@@ -263,7 +300,10 @@ export async function deleteTowTruckAction(formData: FormData) {
     if (value === null) throw new TowingValidationError("The tow truck record is invalid.");
     towCode = value;
   } catch (error) {
-    redirectError(returnPath, error instanceof TowingValidationError ? error.message : "The tow truck record is invalid.");
+    redirectError(
+      returnPath,
+      error instanceof TowingValidationError ? error.message : "The tow truck record is invalid.",
+    );
   }
 
   try {

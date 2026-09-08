@@ -22,36 +22,76 @@ public class LogsheetController : BaseApiController
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Logsheet>>> GetAll()
     {
-        try { return Ok(await _repository.GetAllAsync()); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            return Ok(await _repository.GetAllAsync());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<Logsheet>> GetById(int id)
     {
-        try { var item = await _repository.GetByIdAsync(id); return item == null ? NotFound() : Ok(item); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            var item = await _repository.GetByIdAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpPost]
     public async Task<ActionResult<Logsheet>> Create([FromBody] Logsheet item)
     {
-        try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.log_code }, created); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            var created = await _repository.CreateAsync(item, GetCurrentUserId());
+            return CreatedAtAction(nameof(GetById), new { id = created.log_code }, created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpPut("{id}")]
     public async Task<ActionResult<Logsheet>> Update(int id, [FromBody] Logsheet item)
     {
-        try { if (id != item.log_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            if (id != item.log_code)
+                return BadRequest();
+            return Ok(await _repository.UpdateAsync(item, GetCurrentUserId()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(int id)
     {
-        try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            await _repository.DeleteAsync(id, GetCurrentUserId());
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     #region Specialized Operations
@@ -64,7 +104,7 @@ public class LogsheetController : BaseApiController
     {
         var menu = new LogsheetMenuDto
         {
-            Options = new List<string> { "Enter", "Edit", "Delete", "Reports", "Help" }
+            Options = new List<string> { "Enter", "Edit", "Delete", "Reports", "Help" },
         };
         return Ok(menu);
     }
@@ -78,7 +118,7 @@ public class LogsheetController : BaseApiController
         var help = new LogsheetHelpDto
         {
             Title = "Logsheet Management Help",
-            Description = "Enter and manage vehicle logsheet entries"
+            Description = "Enter and manage vehicle logsheet entries",
         };
         return Ok(help);
     }
@@ -87,7 +127,9 @@ public class LogsheetController : BaseApiController
     /// Create new logsheet entry
     /// </summary>
     [HttpPost("entry")]
-    public async Task<ActionResult<LogsheetEntryResultDto>> CreateEntry([FromBody] LogsheetEntryDto request)
+    public async Task<ActionResult<LogsheetEntryResultDto>> CreateEntry(
+        [FromBody] LogsheetEntryDto request
+    )
     {
         try
         {
@@ -104,7 +146,7 @@ public class LogsheetController : BaseApiController
                 site_code = request.SiteCode,
                 rek_num = request.RequisitionNumber,
                 days_used = request.DaysUsed,
-                bund_num = request.BundleNumber
+                bund_num = request.BundleNumber,
             };
 
             var created = await _repository.CreateAsync(logsheet, GetCurrentUserId());
@@ -113,7 +155,7 @@ public class LogsheetController : BaseApiController
             {
                 Success = true,
                 LogCode = created.log_code,
-                Message = "Logsheet entry created successfully"
+                Message = "Logsheet entry created successfully",
             };
             return Ok(result);
         }
@@ -128,7 +170,10 @@ public class LogsheetController : BaseApiController
     /// Edit existing logsheet entry
     /// </summary>
     [HttpPut("edit/{id}")]
-    public async Task<ActionResult<LogsheetEntryResultDto>> EditEntry(int id, [FromBody] LogsheetEntryDto request)
+    public async Task<ActionResult<LogsheetEntryResultDto>> EditEntry(
+        int id,
+        [FromBody] LogsheetEntryDto request
+    )
     {
         try
         {
@@ -155,7 +200,7 @@ public class LogsheetController : BaseApiController
             {
                 Success = true,
                 LogCode = id,
-                Message = "Logsheet entry updated successfully"
+                Message = "Logsheet entry updated successfully",
             };
             return Ok(result);
         }
@@ -192,17 +237,33 @@ public class LogsheetController : BaseApiController
 
     private static string? ValidateEntry(LogsheetEntryDto request)
     {
-        if (request.VmfCode <= 0) return "A vehicle is required.";
-        if (double.IsNaN(request.StartOdometer) || double.IsInfinity(request.StartOdometer) || request.StartOdometer < 0)
+        if (request.VmfCode <= 0)
+            return "A vehicle is required.";
+        if (
+            double.IsNaN(request.StartOdometer)
+            || double.IsInfinity(request.StartOdometer)
+            || request.StartOdometer < 0
+        )
             return "Start odometer must be a non-negative number.";
-        if (double.IsNaN(request.EndOdometer) || double.IsInfinity(request.EndOdometer) || request.EndOdometer < request.StartOdometer)
+        if (
+            double.IsNaN(request.EndOdometer)
+            || double.IsInfinity(request.EndOdometer)
+            || request.EndOdometer < request.StartOdometer
+        )
             return "End odometer must be greater than or equal to start odometer.";
-        if (request.Month == default) return "A logsheet month is required.";
-        if (request.SiteCode <= 0) return "A site is required.";
-        if (string.IsNullOrWhiteSpace(request.RequisitionNumber) || request.RequisitionNumber.Length > 10)
+        if (request.Month == default)
+            return "A logsheet month is required.";
+        if (request.SiteCode <= 0)
+            return "A site is required.";
+        if (
+            string.IsNullOrWhiteSpace(request.RequisitionNumber)
+            || request.RequisitionNumber.Length > 10
+        )
             return "Requisition number is required and must be 10 characters or fewer.";
-        if (request.DaysUsed is < 0) return "Days used cannot be negative.";
-        if (request.BundleNumber is < 0) return "Batch number cannot be negative.";
+        if (request.DaysUsed is < 0)
+            return "Days used cannot be negative.";
+        if (request.BundleNumber is < 0)
+            return "Batch number cannot be negative.";
         return null;
     }
 
@@ -216,7 +277,14 @@ public class LogsheetController : BaseApiController
     {
         var menu = new LogsheetReportMenuDto
         {
-            Reports = new List<string> { "One Vehicle", "One Requisition", "Department Period", "Captured", "Total KM per Class" }
+            Reports = new List<string>
+            {
+                "One Vehicle",
+                "One Requisition",
+                "Department Period",
+                "Captured",
+                "Total KM per Class",
+            },
         };
         return Ok(menu);
     }
@@ -225,7 +293,9 @@ public class LogsheetController : BaseApiController
     /// Generate logsheet report for one vehicle
     /// </summary>
     [HttpPost("reports/one-vehicle")]
-    public async Task<ActionResult<LogsheetReportDto>> GetReportOneVehicle([FromBody] LogsheetOneVehicleRequestDto request)
+    public async Task<ActionResult<LogsheetReportDto>> GetReportOneVehicle(
+        [FromBody] LogsheetOneVehicleRequestDto request
+    )
     {
         try
         {
@@ -244,13 +314,17 @@ public class LogsheetController : BaseApiController
                 RecordCount = filteredLogsheets.Count,
                 GeneratedDate = DateTime.UtcNow,
                 StartDate = request.StartDate,
-                EndDate = request.EndDate
+                EndDate = request.EndDate,
             };
             return Ok(report);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating logsheet report for vehicle: {VmfCode}", request.VmfCode);
+            _logger.LogError(
+                ex,
+                "Error generating logsheet report for vehicle: {VmfCode}",
+                request.VmfCode
+            );
             return StatusCode(500, "Error generating report");
         }
     }
@@ -259,7 +333,9 @@ public class LogsheetController : BaseApiController
     /// Generate logsheet report for one requisition
     /// </summary>
     [HttpPost("reports/one-requisition")]
-    public async Task<ActionResult<LogsheetReportDto>> GetReportOneRequisition([FromBody] LogsheetOneRequisitionRequestDto request)
+    public async Task<ActionResult<LogsheetReportDto>> GetReportOneRequisition(
+        [FromBody] LogsheetOneRequisitionRequestDto request
+    )
     {
         try
         {
@@ -269,7 +345,13 @@ public class LogsheetController : BaseApiController
             var allLogsheets = await _repository.GetAllAsync();
             var filteredLogsheets = allLogsheets
                 .Where(l => !l.is_deleted)
-                .Where(l => l.rek_num != null && l.rek_num.Equals(request.RequisitionNumber, StringComparison.OrdinalIgnoreCase))
+                .Where(l =>
+                    l.rek_num != null
+                    && l.rek_num.Equals(
+                        request.RequisitionNumber,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
                 .OrderByDescending(l => l.month)
                 .ToList();
 
@@ -278,13 +360,17 @@ public class LogsheetController : BaseApiController
                 ReportType = "OneRequisition",
                 Data = filteredLogsheets.Cast<object>().ToList(),
                 RecordCount = filteredLogsheets.Count,
-                GeneratedDate = DateTime.UtcNow
+                GeneratedDate = DateTime.UtcNow,
             };
             return Ok(report);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating logsheet report for requisition: {RequisitionNumber}", request.RequisitionNumber);
+            _logger.LogError(
+                ex,
+                "Error generating logsheet report for requisition: {RequisitionNumber}",
+                request.RequisitionNumber
+            );
             return StatusCode(500, "Error generating report");
         }
     }
@@ -293,7 +379,9 @@ public class LogsheetController : BaseApiController
     /// Generate logsheet report by department and period
     /// </summary>
     [HttpPost("reports/department-period")]
-    public async Task<ActionResult<LogsheetReportDto>> GetReportDepartmentPeriod([FromBody] LogsheetDepartmentPeriodRequestDto request)
+    public async Task<ActionResult<LogsheetReportDto>> GetReportDepartmentPeriod(
+        [FromBody] LogsheetDepartmentPeriodRequestDto request
+    )
     {
         try
         {
@@ -314,14 +402,19 @@ public class LogsheetController : BaseApiController
                 RecordCount = filteredLogsheets.Count,
                 GeneratedDate = DateTime.UtcNow,
                 StartDate = request.StartDate,
-                EndDate = request.EndDate
+                EndDate = request.EndDate,
             };
             return Ok(report);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating logsheet report by department period: Department={DepartmentCode}, Start={StartDate}, End={EndDate}",
-                request.DepartmentCode, request.StartDate, request.EndDate);
+            _logger.LogError(
+                ex,
+                "Error generating logsheet report by department period: Department={DepartmentCode}, Start={StartDate}, End={EndDate}",
+                request.DepartmentCode,
+                request.StartDate,
+                request.EndDate
+            );
             return StatusCode(500, "Error generating report");
         }
     }
@@ -330,7 +423,9 @@ public class LogsheetController : BaseApiController
     /// Generate captured logsheets report
     /// </summary>
     [HttpPost("reports/captured")]
-    public async Task<ActionResult<LogsheetReportDto>> GetReportCaptured([FromBody] LogsheetCapturedRequestDto request)
+    public async Task<ActionResult<LogsheetReportDto>> GetReportCaptured(
+        [FromBody] LogsheetCapturedRequestDto request
+    )
     {
         try
         {
@@ -339,7 +434,9 @@ public class LogsheetController : BaseApiController
             // Filter by date range (captured in this period)
             var filteredLogsheets = allLogsheets
                 .Where(l => !l.is_deleted)
-                .Where(l => l.date_created >= request.StartDate && l.date_created <= request.EndDate)
+                .Where(l =>
+                    l.date_created >= request.StartDate && l.date_created <= request.EndDate
+                )
                 .OrderByDescending(l => l.date_created)
                 .ToList();
 
@@ -350,14 +447,18 @@ public class LogsheetController : BaseApiController
                 RecordCount = filteredLogsheets.Count,
                 GeneratedDate = DateTime.UtcNow,
                 StartDate = request.StartDate,
-                EndDate = request.EndDate
+                EndDate = request.EndDate,
             };
             return Ok(report);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating captured logsheets report: Start={StartDate}, End={EndDate}",
-                request.StartDate, request.EndDate);
+            _logger.LogError(
+                ex,
+                "Error generating captured logsheets report: Start={StartDate}, End={EndDate}",
+                request.StartDate,
+                request.EndDate
+            );
             return StatusCode(500, "Error generating report");
         }
     }
@@ -366,7 +467,9 @@ public class LogsheetController : BaseApiController
     /// Generate total kilometers per class code report
     /// </summary>
     [HttpPost("reports/total-km-per-class-code")]
-    public async Task<ActionResult<LogsheetReportDto>> GetReportTotalKmPerClass([FromBody] LogsheetKmPerClassRequestDto request)
+    public async Task<ActionResult<LogsheetReportDto>> GetReportTotalKmPerClass(
+        [FromBody] LogsheetKmPerClassRequestDto request
+    )
     {
         try
         {
@@ -387,7 +490,7 @@ public class LogsheetController : BaseApiController
                     ClassCode = g.Key,
                     TotalKilometers = g.Sum(l => l.end_odo - l.start_odo),
                     VehicleCount = g.Select(l => l.vmf_code).Distinct().Count(),
-                    RecordCount = g.Count()
+                    RecordCount = g.Count(),
                 })
                 .OrderByDescending(x => x.TotalKilometers)
                 .ToList();
@@ -399,14 +502,18 @@ public class LogsheetController : BaseApiController
                 RecordCount = kmByClassCode.Count,
                 GeneratedDate = DateTime.UtcNow,
                 StartDate = request.StartDate,
-                EndDate = request.EndDate
+                EndDate = request.EndDate,
             };
             return Ok(report);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating total km per class code report: Start={StartDate}, End={EndDate}",
-                request.StartDate, request.EndDate);
+            _logger.LogError(
+                ex,
+                "Error generating total km per class code report: Start={StartDate}, End={EndDate}",
+                request.StartDate,
+                request.EndDate
+            );
             return StatusCode(500, "Error generating report");
         }
     }
@@ -415,8 +522,17 @@ public class LogsheetController : BaseApiController
 }
 
 #region Logsheet DTOs
-public class LogsheetMenuDto { public List<string> Options { get; set; } = new(); }
-public class LogsheetHelpDto { public string Title { get; set; } = ""; public string Description { get; set; } = ""; }
+public class LogsheetMenuDto
+{
+    public List<string> Options { get; set; } = new();
+}
+
+public class LogsheetHelpDto
+{
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+}
+
 public class LogsheetEntryDto
 {
     public int VmfCode { get; set; }
@@ -428,13 +544,50 @@ public class LogsheetEntryDto
     public int? DaysUsed { get; set; }
     public int? BundleNumber { get; set; }
 }
-public class LogsheetEntryResultDto { public bool Success { get; set; } public int LogCode { get; set; } public string Message { get; set; } = ""; }
-public class LogsheetReportMenuDto { public List<string> Reports { get; set; } = new(); }
-public class LogsheetOneVehicleRequestDto { public int VmfCode { get; set; } public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
-public class LogsheetOneRequisitionRequestDto { public string RequisitionNumber { get; set; } = ""; }
-public class LogsheetDepartmentPeriodRequestDto { public int DepartmentCode { get; set; } public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
-public class LogsheetCapturedRequestDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
-public class LogsheetKmPerClassRequestDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+
+public class LogsheetEntryResultDto
+{
+    public bool Success { get; set; }
+    public int LogCode { get; set; }
+    public string Message { get; set; } = "";
+}
+
+public class LogsheetReportMenuDto
+{
+    public List<string> Reports { get; set; } = new();
+}
+
+public class LogsheetOneVehicleRequestDto
+{
+    public int VmfCode { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class LogsheetOneRequisitionRequestDto
+{
+    public string RequisitionNumber { get; set; } = "";
+}
+
+public class LogsheetDepartmentPeriodRequestDto
+{
+    public int DepartmentCode { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class LogsheetCapturedRequestDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class LogsheetKmPerClassRequestDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
 public class LogsheetReportDto
 {
     public string ReportType { get; set; } = "";

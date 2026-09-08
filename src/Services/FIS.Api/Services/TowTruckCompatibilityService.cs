@@ -14,7 +14,8 @@ namespace FIS.Api.Services;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "The command text uses only fixed table and column names; no user input is concatenated.")]
+    Justification = "The command text uses only fixed table and column names; no user input is concatenated."
+)]
 public sealed class TowTruckCompatibilityService
 {
     private const string TableName = "Tow_Truck";
@@ -24,7 +25,7 @@ public sealed class TowTruckCompatibilityService
         "Tow_area",
         "Tow_name",
         "Tow_tel",
-        "Tow_fax"
+        "Tow_fax",
     ];
     private static readonly string[] OptionalColumns =
     [
@@ -32,7 +33,7 @@ public sealed class TowTruckCompatibilityService
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
     private readonly FisDbContext _context;
 
@@ -42,25 +43,31 @@ public sealed class TowTruckCompatibilityService
     }
 
     public async Task<IReadOnlyList<TowTruckOption>> GetAllAsync(
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         return await QueryAsync(null, null, cancellationToken);
     }
 
     public async Task<TowTruckOption?> GetByIdAsync(
         short towCode,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        return (await QueryAsync(
-            "WHERE [Tow_code] = @towCode",
-            command => AddParameter(command, "@towCode", DbType.Int16, towCode),
-            cancellationToken)).SingleOrDefault();
+        return (
+            await QueryAsync(
+                "WHERE [Tow_code] = @towCode",
+                command => AddParameter(command, "@towCode", DbType.Int16, towCode),
+                cancellationToken
+            )
+        ).SingleOrDefault();
     }
 
     public async Task<TowTruckOption> CreateAsync(
         TowTruckRequest request,
         int currentUserId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var columns = await GetAvailableColumnsAsync(cancellationToken);
         var values = BuildLegacyWriteValues(request)
@@ -75,18 +82,26 @@ public sealed class TowTruckCompatibilityService
             "created_by_user_code",
             "@createdByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
+            currentUserId > 0 ? currentUserId : null
+        );
         AddOptionalValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
 
         var towCode = await ExecuteInsertAsync(values, cancellationToken);
-        return new TowTruckOption(towCode, request.TowArea, request.TowName, request.TowTel, request.TowFax);
+        return new TowTruckOption(
+            towCode,
+            request.TowArea,
+            request.TowName,
+            request.TowTel,
+            request.TowFax
+        );
     }
 
     public async Task<TowTruckOption?> UpdateAsync(
         short towCode,
         TowTruckRequest request,
         int currentUserId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var existing = await GetByIdAsync(towCode, cancellationToken);
         if (existing == null)
@@ -107,16 +122,24 @@ public sealed class TowTruckCompatibilityService
             "modified_by_user_code",
             "@modifiedByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
+            currentUserId > 0 ? currentUserId : null
+        );
 
         await ExecuteUpdateAsync(towCode, values, columns, cancellationToken);
-        return new TowTruckOption(towCode, request.TowArea, request.TowName, request.TowTel, request.TowFax);
+        return new TowTruckOption(
+            towCode,
+            request.TowArea,
+            request.TowName,
+            request.TowTel,
+            request.TowFax
+        );
     }
 
     public async Task<bool> DeleteAsync(
         short towCode,
         int currentUserId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var columns = await GetAvailableColumnsAsync(cancellationToken);
         var connection = _context.Database.GetDbConnection();
@@ -146,7 +169,8 @@ public sealed class TowTruckCompatibilityService
                         command,
                         "@modifiedByUserCode",
                         DbType.Int32,
-                        currentUserId > 0 ? currentUserId : null);
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
                 command.CommandText = $"""
@@ -179,11 +203,13 @@ public sealed class TowTruckCompatibilityService
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and filters use only fixed legacy columns and allowlisted optional columns; values are parameters.")]
+        Justification = "The SELECT list and filters use only fixed legacy columns and allowlisted optional columns; values are parameters."
+    )]
     private async Task<List<TowTruckOption>> QueryAsync(
         string? predicate,
         Action<DbCommand>? configure,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var columns = await GetAvailableColumnsAsync(cancellationToken);
         var connection = _context.Database.GetDbConnection();
@@ -204,7 +230,11 @@ public sealed class TowTruckCompatibilityService
             command.CommandText = $"""
                 SELECT {string.Join(", ", projection)}
                 FROM [dbo].[{TableName}]
-                {(string.IsNullOrWhiteSpace(predicate) ? $"WHERE {GetActiveFilter(columns)}" : $"{predicate} AND {GetActiveFilter(columns)}")}
+                {(
+                    string.IsNullOrWhiteSpace(predicate)
+                        ? $"WHERE {GetActiveFilter(columns)}"
+                        : $"{predicate} AND {GetActiveFilter(columns)}"
+                )}
                 ORDER BY {GetOrderExpression(columns, "Tow_name")}, [Tow_code]
                 """;
             configure?.Invoke(command);
@@ -230,10 +260,12 @@ public sealed class TowTruckCompatibilityService
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement uses fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The INSERT statement uses fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task<short> ExecuteInsertAsync(
         IReadOnlyList<WriteValue> values,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -247,7 +279,10 @@ public sealed class TowTruckCompatibilityService
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{TableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[Tow_code]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
@@ -266,12 +301,14 @@ public sealed class TowTruckCompatibilityService
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement uses fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The UPDATE statement uses fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task ExecuteUpdateAsync(
         short towCode,
         IReadOnlyList<WriteValue> values,
         IReadOnlySet<string> columns,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -286,7 +323,10 @@ public sealed class TowTruckCompatibilityService
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{TableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [Tow_code] = @towCode
                 AND {GetActiveFilter(columns)}
                 """;
@@ -303,7 +343,9 @@ public sealed class TowTruckCompatibilityService
         }
     }
 
-    private async Task<HashSet<string>> GetAvailableColumnsAsync(CancellationToken cancellationToken)
+    private async Task<HashSet<string>> GetAvailableColumnsAsync(
+        CancellationToken cancellationToken
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -334,7 +376,9 @@ public sealed class TowTruckCompatibilityService
 
             if (!columns.Contains("Tow_code"))
             {
-                throw new InvalidOperationException("The required Tow_Truck compatibility column Tow_code is not available.");
+                throw new InvalidOperationException(
+                    "The required Tow_Truck compatibility column Tow_code is not available."
+                );
             }
 
             return columns;
@@ -348,8 +392,8 @@ public sealed class TowTruckCompatibilityService
         }
     }
 
-    private static string GetProjection(IReadOnlySet<string> columns, string column)
-        => columns.Contains(column)
+    private static string GetProjection(IReadOnlySet<string> columns, string column) =>
+        columns.Contains(column)
             ? $"[{column}] AS [{column}]"
             : $"CAST(NULL AS varchar(1)) AS [{column}]";
 
@@ -365,16 +409,16 @@ public sealed class TowTruckCompatibilityService
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "sql_variant"
+            _ => "sql_variant",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetActiveFilter(IReadOnlySet<string> columns)
-        => columns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+    private static string GetActiveFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
 
-    private static string GetOrderExpression(IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) ? $"[{column}]" : "[Tow_code]";
+    private static string GetOrderExpression(IReadOnlySet<string> columns, string column) =>
+        columns.Contains(column) ? $"[{column}]" : "[Tow_code]";
 
     private static string? ReadString(DbDataReader reader, string column)
     {
@@ -382,21 +426,21 @@ public sealed class TowTruckCompatibilityService
         return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal).TrimEnd();
     }
 
-    private static TowTruckOption MapTowTruck(DbDataReader reader)
-        => new(
+    private static TowTruckOption MapTowTruck(DbDataReader reader) =>
+        new(
             Convert.ToInt16(reader.GetValue(reader.GetOrdinal("Tow_code"))),
             ReadString(reader, "Tow_area"),
             ReadString(reader, "Tow_name"),
             ReadString(reader, "Tow_tel"),
-            ReadString(reader, "Tow_fax"));
+            ReadString(reader, "Tow_fax")
+        );
 
-    private static List<WriteValue> BuildLegacyWriteValues(TowTruckRequest request)
-        =>
+    private static List<WriteValue> BuildLegacyWriteValues(TowTruckRequest request) =>
         [
             new("Tow_area", "@towArea", DbType.String, request.TowArea),
             new("Tow_name", "@towName", DbType.String, request.TowName),
             new("Tow_tel", "@towTel", DbType.String, request.TowTel),
-            new("Tow_fax", "@towFax", DbType.String, request.TowFax)
+            new("Tow_fax", "@towFax", DbType.String, request.TowFax),
         ];
 
     private static void AddOptionalValue(
@@ -405,7 +449,8 @@ public sealed class TowTruckCompatibilityService
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (columns.Contains(column))
         {
@@ -438,10 +483,12 @@ public sealed record TowTruckOption(
     string? TowArea,
     string? TowName,
     string? TowTel,
-    string? TowFax);
+    string? TowFax
+);
 
 public sealed record TowTruckRequest(
     string? TowArea,
     string? TowName,
     string? TowTel,
-    string? TowFax);
+    string? TowFax
+);

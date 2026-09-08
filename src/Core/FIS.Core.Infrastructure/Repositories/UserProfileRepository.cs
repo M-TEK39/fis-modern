@@ -1,9 +1,9 @@
+using System.Security.Cryptography;
+using System.Text;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace FIS.Core.Infrastructure.Repositories;
 
@@ -24,8 +24,8 @@ public class UserProfileRepository : IUserProfileRepository
     /// </summary>
     public async Task<UserAccessOld?> GetByIdAsync(short userAccessCode)
     {
-        return await _context.UserAccessOlds
-            .Where(u => u.user_active)
+        return await _context
+            .UserAccessOlds.Where(u => u.user_active)
             .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
     }
 
@@ -37,10 +37,11 @@ public class UserProfileRepository : IUserProfileRepository
         if (string.IsNullOrWhiteSpace(firstName))
             return null;
 
-        return await _context.UserAccessOlds
-            .Where(u => u.user_active)
-            .FirstOrDefaultAsync(u => u.FirstName != null &&
-                                     u.FirstName.ToLower() == firstName.ToLower().Trim());
+        return await _context
+            .UserAccessOlds.Where(u => u.user_active)
+            .FirstOrDefaultAsync(u =>
+                u.FirstName != null && u.FirstName.ToLower() == firstName.ToLower().Trim()
+            );
     }
 
     /// <summary>
@@ -51,10 +52,11 @@ public class UserProfileRepository : IUserProfileRepository
         if (string.IsNullOrWhiteSpace(email))
             return null;
 
-        return await _context.UserAccessOlds
-            .Where(u => u.user_active)
-            .FirstOrDefaultAsync(u => u.E_Mail != null &&
-                                     u.E_Mail.ToLower() == email.ToLower().Trim());
+        return await _context
+            .UserAccessOlds.Where(u => u.user_active)
+            .FirstOrDefaultAsync(u =>
+                u.E_Mail != null && u.E_Mail.ToLower() == email.ToLower().Trim()
+            );
     }
 
     /// <summary>
@@ -62,8 +64,8 @@ public class UserProfileRepository : IUserProfileRepository
     /// </summary>
     public async Task<IEnumerable<UserAccessOld>> GetAllActiveAsync()
     {
-        return await _context.UserAccessOlds
-            .Where(u => u.user_active)
+        return await _context
+            .UserAccessOlds.Where(u => u.user_active)
             .OrderBy(u => u.FirstName)
             .ThenBy(u => u.LastName)
             .ToListAsync();
@@ -74,8 +76,8 @@ public class UserProfileRepository : IUserProfileRepository
     /// </summary>
     public async Task<IEnumerable<UserAccessOld>> GetBySiteAsync(short siteCode)
     {
-        return await _context.UserAccessOlds
-            .Where(u => u.user_active && u.Site_code == siteCode)
+        return await _context
+            .UserAccessOlds.Where(u => u.user_active && u.Site_code == siteCode)
             .OrderBy(u => u.FirstName)
             .ThenBy(u => u.LastName)
             .ToListAsync();
@@ -91,12 +93,16 @@ public class UserProfileRepository : IUserProfileRepository
 
         var term = searchTerm.ToLower().Trim();
 
-        return await _context.UserAccessOlds
-            .Where(u => u.user_active &&
-                       ((u.FirstName != null && u.FirstName.ToLower().Contains(term)) ||
-                        (u.LastName != null && u.LastName.ToLower().Contains(term)) ||
-                        (u.E_Mail != null && u.E_Mail.ToLower().Contains(term)) ||
-                        (u.telephone != null && u.telephone.Contains(term))))
+        return await _context
+            .UserAccessOlds.Where(u =>
+                u.user_active
+                && (
+                    (u.FirstName != null && u.FirstName.ToLower().Contains(term))
+                    || (u.LastName != null && u.LastName.ToLower().Contains(term))
+                    || (u.E_Mail != null && u.E_Mail.ToLower().Contains(term))
+                    || (u.telephone != null && u.telephone.Contains(term))
+                )
+            )
             .OrderBy(u => u.FirstName)
             .ThenBy(u => u.LastName)
             .ToListAsync();
@@ -120,11 +126,14 @@ public class UserProfileRepository : IUserProfileRepository
     /// </summary>
     public async Task UpdateAsync(UserAccessOld userProfile, int currentUserId)
     {
-        var existing = await _context.UserAccessOlds
-            .FirstOrDefaultAsync(u => u.user_access_code == userProfile.user_access_code);
+        var existing = await _context.UserAccessOlds.FirstOrDefaultAsync(u =>
+            u.user_access_code == userProfile.user_access_code
+        );
 
         if (existing == null)
-            throw new KeyNotFoundException($"User profile with code {userProfile.user_access_code} not found");
+            throw new KeyNotFoundException(
+                $"User profile with code {userProfile.user_access_code} not found"
+            );
 
         existing.date_updated = DateTime.Now;
 
@@ -140,8 +149,9 @@ public class UserProfileRepository : IUserProfileRepository
     /// </summary>
     public async Task DeleteAsync(short userAccessCode, int currentUserId)
     {
-        var userProfile = await _context.UserAccessOlds
-            .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
+        var userProfile = await _context.UserAccessOlds.FirstOrDefaultAsync(u =>
+            u.user_access_code == userAccessCode
+        );
 
         if (userProfile == null)
             throw new KeyNotFoundException($"User profile with code {userAccessCode} not found");
@@ -182,7 +192,8 @@ public class UserProfileRepository : IUserProfileRepository
             var suppliedHash = Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(password)));
             return CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(suppliedHash),
-                Encoding.UTF8.GetBytes(storedPassword.ToUpperInvariant()));
+                Encoding.UTF8.GetBytes(storedPassword.ToUpperInvariant())
+            );
         }
 
         return user.password.TrimEnd() == password;
@@ -191,8 +202,8 @@ public class UserProfileRepository : IUserProfileRepository
     private static bool LooksLikeBcryptHash(string value)
     {
         return value.StartsWith("$2a$", StringComparison.Ordinal)
-               || value.StartsWith("$2b$", StringComparison.Ordinal)
-               || value.StartsWith("$2y$", StringComparison.Ordinal);
+            || value.StartsWith("$2b$", StringComparison.Ordinal)
+            || value.StartsWith("$2y$", StringComparison.Ordinal);
     }
 
     private static bool LooksLikeLegacyMd5Hash(string value)

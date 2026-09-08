@@ -416,9 +416,9 @@ function mapVehicle(value: unknown): CallCentreVehicleOption | null {
     getValue(value, "RegistrationNumber", "registration_number", "registrationNumber"),
   );
   const displayText =
-    asString(getValue(value, "DisplayText", "display_text", "displayText"))
-    || [fleetNumber, registrationNumber].filter(Boolean).join(" - ")
-    || String(vmfCode);
+    asString(getValue(value, "DisplayText", "display_text", "displayText")) ||
+    [fleetNumber, registrationNumber].filter(Boolean).join(" - ") ||
+    String(vmfCode);
 
   return { vmfCode, fleetNumber, registrationNumber, displayText };
 }
@@ -437,7 +437,9 @@ function mapSite(value: unknown): CallCentreSiteOption | null {
   return {
     code,
     description,
-    departmentNumber: asString(getValue(value, "DepartmentNumber", "Department_number", "department_number")),
+    departmentNumber: asString(
+      getValue(value, "DepartmentNumber", "Department_number", "department_number"),
+    ),
   };
 }
 
@@ -490,7 +492,9 @@ function mapCallCentreIncident(value: unknown): CallCentreIncidentRecord | null 
     callTime: asString(getValue(value, "Call_time", "callTime")),
     callDate: asString(getValue(value, "Call_date", "callDate")),
     incidentType: asString(getValue(value, "Incident_type", "incidentType")),
-    incidentDescription: asString(getValue(value, "Incident_Desc", "incidentDesc", "incidentDescription")),
+    incidentDescription: asString(
+      getValue(value, "Incident_Desc", "incidentDesc", "incidentDescription"),
+    ),
     captureName: asString(getValue(value, "Capture_name", "captureName")),
     userAccessCode: asNumber(getValue(value, "User_access_code", "userAccessCode")),
     callerName: asString(getValue(value, "Caller_name", "callerName")),
@@ -539,7 +543,9 @@ function mapDataAccessEntry(value: unknown): CallCentreDataAccessEntry | null {
 }
 
 export async function searchCallCentreVehicles(searchTerm: string) {
-  const response = await requestApi(`api/VehicleLookup?keyword=${encodeURIComponent(searchTerm)}&limit=20`);
+  const response = await requestApi(
+    `api/VehicleLookup?keyword=${encodeURIComponent(searchTerm)}&limit=20`,
+  );
   return getCollection(await readJson(response))
     .map(mapVehicle)
     .filter((vehicle): vehicle is CallCentreVehicleOption => vehicle !== null)
@@ -560,26 +566,40 @@ export async function getCallCentreIncident(callCentreCode: number) {
   const response = await requestApi(`api/CallCentre/${encodeURIComponent(callCentreCode)}`);
   const incident = mapCallCentreIncident(await readJson(response));
   if (!incident) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid call centre incident.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid call centre incident.",
+    );
   }
 
   return incident;
 }
 
-export async function getCallCentreEditDetails(callCentreCode: number): Promise<CallCentreEditDetails> {
-  const response = await requestApi(`api/CallCentre/${encodeURIComponent(callCentreCode)}/edit-details`);
+export async function getCallCentreEditDetails(
+  callCentreCode: number,
+): Promise<CallCentreEditDetails> {
+  const response = await requestApi(
+    `api/CallCentre/${encodeURIComponent(callCentreCode)}/edit-details`,
+  );
   const payload = await readJson(response);
   if (!isRecord(payload)) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned invalid call centre edit details.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned invalid call centre edit details.",
+    );
   }
 
   const mapChild = (value: unknown) => (isRecord(value) ? value : null);
   return {
-    accidentTableAvailable: Boolean(getValue(payload, "AccidentTableAvailable", "accidentTableAvailable")),
+    accidentTableAvailable: Boolean(
+      getValue(payload, "AccidentTableAvailable", "accidentTableAvailable"),
+    ),
     accident: mapChild(getValue(payload, "Accident", "accident")),
     lossTableAvailable: Boolean(getValue(payload, "LossTableAvailable", "lossTableAvailable")),
     loss: mapChild(getValue(payload, "Loss", "loss")),
-    towingTableAvailable: Boolean(getValue(payload, "TowingTableAvailable", "towingTableAvailable")),
+    towingTableAvailable: Boolean(
+      getValue(payload, "TowingTableAvailable", "towingTableAvailable"),
+    ),
     towing: mapChild(getValue(payload, "Towing", "towing")),
   };
 }
@@ -591,7 +611,10 @@ export async function getCallCentreIncidents() {
     .filter((incident): incident is CallCentreIncidentRecord => incident !== null);
 }
 
-export async function updateCallCentreIncident(callCentreCode: number, request: UpdateCallCentreRequest) {
+export async function updateCallCentreIncident(
+  callCentreCode: number,
+  request: UpdateCallCentreRequest,
+) {
   const response = await requestApi(`api/CallCentre/${encodeURIComponent(callCentreCode)}`, {
     method: "PUT",
     body: JSON.stringify(request),
@@ -599,7 +622,10 @@ export async function updateCallCentreIncident(callCentreCode: number, request: 
   const payload = await readJson(response);
   const updated = mapCallCentreIncident(payload);
   if (!updated) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid updated call centre record.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid updated call centre record.",
+    );
   }
 
   return updated;
@@ -609,31 +635,44 @@ export async function updateCallCentreEditDetails(
   callCentreCode: number,
   request: UpdateCallCentreEditDetailsRequest,
 ) {
-  const response = await requestApi(`api/CallCentre/${encodeURIComponent(callCentreCode)}/edit-details`, {
-    method: "PUT",
-    body: JSON.stringify(request),
-  });
+  const response = await requestApi(
+    `api/CallCentre/${encodeURIComponent(callCentreCode)}/edit-details`,
+    {
+      method: "PUT",
+      body: JSON.stringify(request),
+    },
+  );
   const payload = await readJson(response);
   const updated = mapCallCentreIncident(payload);
   if (!updated) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid updated call centre record.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid updated call centre record.",
+    );
   }
 
   return updated;
 }
 
 export async function getCallCentreDataAccess(callCentreCode: number) {
-  const response = await requestApi(`api/CallCentre/reports/data-access/${encodeURIComponent(callCentreCode)}`);
+  const response = await requestApi(
+    `api/CallCentre/reports/data-access/${encodeURIComponent(callCentreCode)}`,
+  );
   const payload = await readJson(response);
   if (!isRecord(payload)) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid data access report.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid data access report.",
+    );
   }
 
   const entries = getCollection(getValue(payload, "Entries", "entries"))
     .map(mapDataAccessEntry)
     .filter((entry): entry is CallCentreDataAccessEntry => entry !== null);
   return {
-    accessTableAvailable: Boolean(getValue(payload, "AccessTableAvailable", "accessTableAvailable")),
+    accessTableAvailable: Boolean(
+      getValue(payload, "AccessTableAvailable", "accessTableAvailable"),
+    ),
     entries,
   };
 }
@@ -669,7 +708,10 @@ export async function createCallCentreIncident(request: CreateCallCentreRequest)
   });
   const payload = await readJson(response);
   if (!isRecord(payload)) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid call centre record.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid call centre record.",
+    );
   }
 
   return asNumber(getValue(payload, "Call_centre_code", "call_centre_code", "callCentreCode"));
@@ -682,13 +724,21 @@ export async function createRoadAssistanceIncident(request: CreateRoadAssistance
   });
   const payload = await readJson(response);
   if (!isRecord(payload)) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid road assistance record.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid road assistance record.",
+    );
   }
 
-  const callCentreCode = asNumber(getValue(payload, "CallCentreCode", "callCentreCode", "Call_centre_code"));
+  const callCentreCode = asNumber(
+    getValue(payload, "CallCentreCode", "callCentreCode", "Call_centre_code"),
+  );
   const towingCode = asNumber(getValue(payload, "TowingCode", "towingCode", "Towing_code"));
   if (callCentreCode === null || towingCode === null) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned incomplete road assistance references.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned incomplete road assistance references.",
+    );
   }
 
   return { callCentreCode, towingCode };
@@ -701,13 +751,21 @@ export async function createAccidentIncident(request: CreateAccidentRequest) {
   });
   const payload = await readJson(response);
   if (!isRecord(payload)) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid accident record.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid accident record.",
+    );
   }
 
-  const callCentreCode = asNumber(getValue(payload, "CallCentreCode", "callCentreCode", "Call_centre_code"));
+  const callCentreCode = asNumber(
+    getValue(payload, "CallCentreCode", "callCentreCode", "Call_centre_code"),
+  );
   const accidentCode = asNumber(getValue(payload, "AccidentCode", "accidentCode", "accident_code"));
   if (callCentreCode === null || accidentCode === null) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned incomplete accident references.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned incomplete accident references.",
+    );
   }
 
   return { callCentreCode, accidentCode };
@@ -720,12 +778,20 @@ export async function createHiJackIncident(request: CreateHiJackRequest) {
   });
   const payload = await readJson(response);
   if (!isRecord(payload)) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid Hi-Jack record.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid Hi-Jack record.",
+    );
   }
 
-  const callCentreCode = asNumber(getValue(payload, "CallCentreCode", "callCentreCode", "Call_centre_code"));
+  const callCentreCode = asNumber(
+    getValue(payload, "CallCentreCode", "callCentreCode", "Call_centre_code"),
+  );
   if (callCentreCode === null) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an incomplete Hi-Jack reference.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an incomplete Hi-Jack reference.",
+    );
   }
 
   return { callCentreCode };
@@ -738,13 +804,21 @@ export async function createLossIncident(request: CreateLossRequest) {
   });
   const payload = await readJson(response);
   if (!isRecord(payload)) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid Loss/Theft record.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid Loss/Theft record.",
+    );
   }
 
-  const callCentreCode = asNumber(getValue(payload, "CallCentreCode", "callCentreCode", "Call_centre_code"));
+  const callCentreCode = asNumber(
+    getValue(payload, "CallCentreCode", "callCentreCode", "Call_centre_code"),
+  );
   const lossCode = asNumber(getValue(payload, "LossCode", "lossCode", "loss_code"));
   if (callCentreCode === null || lossCode === null) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned incomplete Loss/Theft references.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned incomplete Loss/Theft references.",
+    );
   }
 
   return { callCentreCode, lossCode };
@@ -770,12 +844,18 @@ export async function createAccidentTowing(request: CreateAccidentTowingRequest)
   });
   const payload = await readJson(response);
   if (!isRecord(payload)) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid towing record.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid towing record.",
+    );
   }
 
   const towingCode = asNumber(getValue(payload, "Towing_code", "towingCode", "TowingCode"));
   if (towingCode === null) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an incomplete towing reference.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an incomplete towing reference.",
+    );
   }
 
   return towingCode;
@@ -801,12 +881,18 @@ export async function createLossTowing(request: CreateAccidentTowingRequest) {
   });
   const payload = await readJson(response);
   if (!isRecord(payload)) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid Loss/Theft towing record.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid Loss/Theft towing record.",
+    );
   }
 
   const towingCode = asNumber(getValue(payload, "Towing_code", "towingCode", "TowingCode"));
   if (towingCode === null) {
-    throw new CallCentreApiError("invalid-response", "The FIS API returned an incomplete Loss/Theft towing reference.");
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an incomplete Loss/Theft towing reference.",
+    );
   }
 
   return towingCode;

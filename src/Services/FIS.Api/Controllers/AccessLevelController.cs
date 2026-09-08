@@ -19,7 +19,8 @@ public class AccessLevelController : BaseApiController
 
     public AccessLevelController(
         IAccessLevelRepository repository,
-        ILogger<AccessLevelController> logger)
+        ILogger<AccessLevelController> logger
+    )
     {
         _repository = repository;
         _logger = logger;
@@ -99,18 +100,27 @@ public class AccessLevelController : BaseApiController
     {
         try
         {
-            _logger.LogInformation("Fetching permissions for user access level: {AccessLevel}", userAccessLevel);
+            _logger.LogInformation(
+                "Fetching permissions for user access level: {AccessLevel}",
+                userAccessLevel
+            );
             var permissions = await _repository.GetUserPermissionsAsync(userAccessLevel);
 
-            return Ok(new UserPermissionsDto
-            {
-                UserAccessLevel = userAccessLevel,
-                Permissions = permissions.ToList()
-            });
+            return Ok(
+                new UserPermissionsDto
+                {
+                    UserAccessLevel = userAccessLevel,
+                    Permissions = permissions.ToList(),
+                }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching user permissions for access level {AccessLevel}", userAccessLevel);
+            _logger.LogError(
+                ex,
+                "Error fetching user permissions for access level {AccessLevel}",
+                userAccessLevel
+            );
             return StatusCode(500, "Error retrieving user permissions");
         }
     }
@@ -119,31 +129,43 @@ public class AccessLevelController : BaseApiController
     /// Check if a user has a specific permission
     /// </summary>
     [HttpPost("check-permission")]
-    public async Task<ActionResult<PermissionCheckDto>> CheckPermission([FromBody] CheckPermissionRequest request)
+    public async Task<ActionResult<PermissionCheckDto>> CheckPermission(
+        [FromBody] CheckPermissionRequest request
+    )
     {
         try
         {
             if (string.IsNullOrWhiteSpace(request.PermissionName))
                 return BadRequest(new { message = "Permission name is required" });
 
-            _logger.LogInformation("Checking if user access level {AccessLevel} has permission: {Permission}",
-                request.UserAccessLevel, request.PermissionName);
+            _logger.LogInformation(
+                "Checking if user access level {AccessLevel} has permission: {Permission}",
+                request.UserAccessLevel,
+                request.PermissionName
+            );
 
             var hasPermission = await _repository.UserHasPermissionAsync(
                 request.UserAccessLevel,
-                request.PermissionName);
+                request.PermissionName
+            );
 
-            return Ok(new PermissionCheckDto
-            {
-                UserAccessLevel = request.UserAccessLevel,
-                PermissionName = request.PermissionName,
-                HasPermission = hasPermission
-            });
+            return Ok(
+                new PermissionCheckDto
+                {
+                    UserAccessLevel = request.UserAccessLevel,
+                    PermissionName = request.PermissionName,
+                    HasPermission = hasPermission,
+                }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking permission {Permission} for access level {AccessLevel}",
-                request.PermissionName, request.UserAccessLevel);
+            _logger.LogError(
+                ex,
+                "Error checking permission {Permission} for access level {AccessLevel}",
+                request.PermissionName,
+                request.UserAccessLevel
+            );
             return StatusCode(500, "Error checking permission");
         }
     }
@@ -160,17 +182,26 @@ public class AccessLevelController : BaseApiController
                 return BadRequest(new { message = "Access level name is required" });
 
             var userId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} creating access level: {Name}", userId, dto.AccessLevelName);
+            _logger.LogInformation(
+                "User {UserId} creating access level: {Name}",
+                userId,
+                dto.AccessLevelName
+            );
 
             // Check if name already exists
             var existing = await _repository.GetByNameAsync(dto.AccessLevelName);
             if (existing != null)
-                return Conflict(new { message = $"Access level already exists with name: {dto.AccessLevelName}" });
+                return Conflict(
+                    new
+                    {
+                        message = $"Access level already exists with name: {dto.AccessLevelName}",
+                    }
+                );
 
             var accessLevel = new AccessLevel
             {
                 AccessLevelName = dto.AccessLevelName,
-                AccessLevelValue = dto.AccessLevelValue
+                AccessLevelValue = dto.AccessLevelValue,
             };
 
             var created = await _repository.CreateAsync(accessLevel, userId);
@@ -179,7 +210,8 @@ public class AccessLevelController : BaseApiController
             return CreatedAtAction(
                 nameof(GetById),
                 new { id = created.AccessLevelID },
-                MapToDto(created));
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -262,7 +294,7 @@ public class AccessLevelController : BaseApiController
             AccessLevelName = a.AccessLevelName ?? string.Empty,
             AccessLevelValue = a.AccessLevelValue,
             DateCreated = a.date_created,
-            CreatedByUserCode = a.created_by_user_code ?? 0
+            CreatedByUserCode = a.created_by_user_code ?? 0,
         };
     }
 }

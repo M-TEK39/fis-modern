@@ -29,7 +29,8 @@ function responseMessage(value: unknown, fallback: string) {
     if (typeof message === "string" && message.trim()) return message.trim();
     const imported = record.recordsImported ?? record.RecordsImported;
     const errors = record.errors ?? record.Errors;
-    if (typeof imported === "number") return `Imported/updated ${imported} BAS segment row(s).${Array.isArray(errors) && errors.length ? ` ${errors.length} warning(s).` : ""}`;
+    if (typeof imported === "number")
+      return `Imported/updated ${imported} BAS segment row(s).${Array.isArray(errors) && errors.length ? ` ${errors.length} warning(s).` : ""}`;
     const updated = record.updated ?? record.Updated;
     if (typeof updated === "number") return `Activated ${updated} segment(s).`;
   }
@@ -38,8 +39,10 @@ function responseMessage(value: unknown, fallback: string) {
 
 function apiMessage(error: unknown) {
   if (error instanceof FinanceApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return "The Finance service is temporarily unavailable. Please try again.";
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return "The Finance service is temporarily unavailable. Please try again.";
     return error.message;
   }
   return "The Finance operation could not be completed.";
@@ -48,12 +51,35 @@ function apiMessage(error: unknown) {
 export async function importBasAction(formData: FormData) {
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
-  if (session.status !== "authenticated") redirect(resultPath("import-bas", "error", "The sign-in service is temporarily unavailable. Please try again."));
-  if (!hasFinanceRole(session.roles)) redirect(resultPath("import-bas", "forbidden", "Your account does not have permission to maintain BAS segments."));
+  if (session.status !== "authenticated")
+    redirect(
+      resultPath(
+        "import-bas",
+        "error",
+        "The sign-in service is temporarily unavailable. Please try again.",
+      ),
+    );
+  if (!hasFinanceRole(session.roles))
+    redirect(
+      resultPath(
+        "import-bas",
+        "forbidden",
+        "Your account does not have permission to maintain BAS segments.",
+      ),
+    );
 
   const file = formData.get("file");
-  if (!file || typeof file !== "object" || !("arrayBuffer" in file) || typeof file.arrayBuffer !== "function") redirect(resultPath("import-bas", "error", "Select a BAS import file before submitting."));
-  if (file.size <= 0 || file.size > 20 * 1024 * 1024) redirect(resultPath("import-bas", "error", "The BAS import file must be between 1 byte and 20 MB."));
+  if (
+    !file ||
+    typeof file !== "object" ||
+    !("arrayBuffer" in file) ||
+    typeof file.arrayBuffer !== "function"
+  )
+    redirect(resultPath("import-bas", "error", "Select a BAS import file before submitting."));
+  if (file.size <= 0 || file.size > 20 * 1024 * 1024)
+    redirect(
+      resultPath("import-bas", "error", "The BAS import file must be between 1 byte and 20 MB."),
+    );
 
   let result: unknown;
   try {
@@ -68,16 +94,42 @@ export async function importBasAction(formData: FormData) {
 export async function activateBasSegmentsAction(formData: FormData) {
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
-  if (session.status !== "authenticated") redirect(resultPath("activate-bas", "error", "The sign-in service is temporarily unavailable. Please try again."));
-  if (!hasFinanceRole(session.roles)) redirect(resultPath("activate-bas", "forbidden", "Your account does not have permission to maintain BAS segments."));
+  if (session.status !== "authenticated")
+    redirect(
+      resultPath(
+        "activate-bas",
+        "error",
+        "The sign-in service is temporarily unavailable. Please try again.",
+      ),
+    );
+  if (!hasFinanceRole(session.roles))
+    redirect(
+      resultPath(
+        "activate-bas",
+        "forbidden",
+        "Your account does not have permission to maintain BAS segments.",
+      ),
+    );
 
-  const segmentCodes = formData.getAll("segmentCode").map((value) => typeof value === "string" ? Number(value) : NaN).filter((value) => Number.isSafeInteger(value) && value > 0);
-  if (segmentCodes.length === 0) redirect(resultPath("activate-bas", "error", "Select at least one BAS segment before updating the list."));
+  const segmentCodes = formData
+    .getAll("segmentCode")
+    .map((value) => (typeof value === "string" ? Number(value) : NaN))
+    .filter((value) => Number.isSafeInteger(value) && value > 0);
+  if (segmentCodes.length === 0)
+    redirect(
+      resultPath(
+        "activate-bas",
+        "error",
+        "Select at least one BAS segment before updating the list.",
+      ),
+    );
   let result: unknown;
   try {
     result = await activateBasSegments(segmentCodes);
   } catch (error) {
     redirect(resultPath("activate-bas", "error", apiMessage(error)));
   }
-  redirect(resultPath("activate-bas", "success", responseMessage(result, "BAS segment list updated.")));
+  redirect(
+    resultPath("activate-bas", "success", responseMessage(result, "BAS segment list updated.")),
+  );
 }

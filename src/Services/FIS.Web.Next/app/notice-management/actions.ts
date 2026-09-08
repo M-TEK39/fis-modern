@@ -59,7 +59,10 @@ function hasNoticeManagementPermission(accessLevel?: string) {
   if (!accessLevel) return false;
 
   try {
-    return (BigInt(accessLevel) & BigInt(NOTICE_MANAGEMENT_PERMISSION)) === BigInt(NOTICE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(NOTICE_MANAGEMENT_PERMISSION)) ===
+      BigInt(NOTICE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -74,9 +77,12 @@ function errorState(message: string): NoticeActionState {
 }
 
 function apiErrorMessage(error: NoticeApiError, subject: string) {
-  if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-  if (error.reason === "not-found") return `The selected ${subject} no longer exists. Reload the page and try again.`;
-  if (error.reason === "unavailable") return `The notice ${subject} is temporarily unavailable. Please try again.`;
+  if (error.reason === "unauthorized")
+    return "Your session has expired. Sign in again before continuing.";
+  if (error.reason === "not-found")
+    return `The selected ${subject} no longer exists. Reload the page and try again.`;
+  if (error.reason === "unavailable")
+    return `The notice ${subject} is temporarily unavailable. Please try again.`;
   return error.message;
 }
 
@@ -94,7 +100,8 @@ export async function saveNoticeAction(
   const scheduleEnd = getOptionalDate(formData, "scheduleEnd");
   const sortOrder = getSortOrder(formData);
 
-  if (noticeId === null || scheduleId === null) return errorState("The selected notice is invalid.");
+  if (noticeId === null || scheduleId === null)
+    return errorState("The selected notice is invalid.");
   if (!noticeFrom || !noticeTitle || !noticePerson) {
     return errorState("Please complete the required notice fields before saving.");
   }
@@ -104,30 +111,34 @@ export async function saveNoticeAction(
   }
 
   const session = await getSession();
-  if (session.status === "unavailable") return errorState("The sign-in service is temporarily unavailable. Please try again.");
-  if (session.status !== "authenticated") return errorState("Your session has expired. Sign in again before continuing.");
-  if (!hasNoticeManagementPermission(session.accessLevel)) return errorState("You do not have permission to manage notices.");
+  if (session.status === "unavailable")
+    return errorState("The sign-in service is temporarily unavailable. Please try again.");
+  if (session.status !== "authenticated")
+    return errorState("Your session has expired. Sign in again before continuing.");
+  if (!hasNoticeManagementPermission(session.accessLevel))
+    return errorState("You do not have permission to manage notices.");
 
   let savedNotice: Notice;
   let savedSchedule: NoticeSchedule;
   try {
-    savedNotice = noticeId > 0
-      ? await updateNotice(noticeId, {
-          noticeDate,
-          noticeFrom,
-          noticeTitle,
-          noticeBody: getText(formData, "noticeBody"),
-          noticePerson,
-          noticePersonTitle: getText(formData, "noticePersonTitle"),
-        })
-      : await createNotice({
-          noticeDate,
-          noticeFrom,
-          noticeTitle,
-          noticeBody: getText(formData, "noticeBody"),
-          noticePerson,
-          noticePersonTitle: getText(formData, "noticePersonTitle"),
-        });
+    savedNotice =
+      noticeId > 0
+        ? await updateNotice(noticeId, {
+            noticeDate,
+            noticeFrom,
+            noticeTitle,
+            noticeBody: getText(formData, "noticeBody"),
+            noticePerson,
+            noticePersonTitle: getText(formData, "noticePersonTitle"),
+          })
+        : await createNotice({
+            noticeDate,
+            noticeFrom,
+            noticeTitle,
+            noticeBody: getText(formData, "noticeBody"),
+            noticePerson,
+            noticePersonTitle: getText(formData, "noticePersonTitle"),
+          });
 
     const scheduleInput = {
       noticeId: savedNotice.noticeId,
@@ -136,12 +147,16 @@ export async function saveNoticeAction(
       endDate: scheduleEnd,
       sortOrder,
     };
-    savedSchedule = scheduleId > 0
-      ? await updateNoticeSchedule(scheduleId, scheduleInput)
-      : await createNoticeSchedule(scheduleInput);
+    savedSchedule =
+      scheduleId > 0
+        ? await updateNoticeSchedule(scheduleId, scheduleInput)
+        : await createNoticeSchedule(scheduleInput);
   } catch (error) {
     if (error instanceof NoticeApiError) return errorState(apiErrorMessage(error, "record"));
-    console.error("FIS notice save failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS notice save failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return errorState("The notice could not be saved. Please try again.");
   }
 
@@ -176,7 +191,10 @@ export async function deleteNoticeScheduleAction(formData: FormData) {
   } catch (error) {
     if (error instanceof NoticeApiError) query.set("error", error.reason);
     else {
-      console.error("FIS notice schedule delete failed", error instanceof Error ? error.message : "unknown error");
+      console.error(
+        "FIS notice schedule delete failed",
+        error instanceof Error ? error.message : "unknown error",
+      );
       query.set("error", "delete");
     }
   }

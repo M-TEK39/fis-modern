@@ -25,7 +25,9 @@ function getQueryValue(value: string | string[] | undefined) {
 }
 
 function hasUserAdministrationRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function normalizeAlphabet(value: string | undefined) {
@@ -40,17 +42,31 @@ function resultMessage(result: string | undefined) {
     case "forbidden":
       return { tone: "error", text: "You do not have permission to update users." } as const;
     case "invalid":
-      return { tone: "error", text: "Check the required fields and submit the complete legacy profile." } as const;
+      return {
+        tone: "error",
+        text: "Check the required fields and submit the complete legacy profile.",
+      } as const;
     case "rejected":
-      return { tone: "error", text: "The user profile update was rejected. Check the submitted values." } as const;
+      return {
+        tone: "error",
+        text: "The user profile update was rejected. Check the submitted values.",
+      } as const;
     case "not-found":
       return { tone: "error", text: "The selected user profile could not be found." } as const;
     case "unauthorized":
-      return { tone: "error", text: "Your session is no longer authorized. Sign in again." } as const;
+      return {
+        tone: "error",
+        text: "Your session is no longer authorized. Sign in again.",
+      } as const;
     case "unavailable":
-      return { tone: "error", text: "The user profile service is unavailable. Retry when the FIS API is available." } as const;
+      return {
+        tone: "error",
+        text: "The user profile service is unavailable. Retry when the FIS API is available.",
+      } as const;
     default:
-      return result ? { tone: "error", text: "The user profile update could not be completed." } as const : null;
+      return result
+        ? ({ tone: "error", text: "The user profile update could not be completed." } as const)
+        : null;
   }
 }
 
@@ -69,20 +85,33 @@ function ApiUnavailable() {
     <section className="vehicle-status-card" role="alert">
       <p className="eyebrow">API unavailable</p>
       <h2>User profiles could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
-        <Link className="button button-primary" href="/users/edit">Try again</Link>
-        <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Menu</Link>
+        <Link className="button button-primary" href="/users/edit">
+          Try again
+        </Link>
+        <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+          Menu
+        </Link>
       </div>
     </section>
   );
 }
 
 function findSelectedProfile(profiles: readonly UserAdminProfile[], username: string) {
-  return profiles.find((profile) => profile.userName?.localeCompare(username, undefined, { sensitivity: "accent" }) === 0) ?? null;
+  return (
+    profiles.find(
+      (profile) =>
+        profile.userName?.localeCompare(username, undefined, { sensitivity: "accent" }) === 0,
+    ) ?? null
+  );
 }
 
-export default async function UserAdminEditPage({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+export default async function UserAdminEditPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
 
@@ -91,20 +120,34 @@ export default async function UserAdminEditPage({ searchParams }: Readonly<{ sea
   }
 
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/users/edit" /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath="/users/edit" />
+      </main>
+    );
   }
 
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable />
+      </main>
+    );
   }
 
   if (!hasUserAdministrationRole(session.roles)) {
-    return <main className="page-shell vehicle-page-shell"><AccessRestricted /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <AccessRestricted />
+      </main>
+    );
   }
 
   const query = await searchParams;
   const username = (getQueryValue(query.Username) ?? getQueryValue(query.username) ?? "").trim();
-  const alphabet = normalizeAlphabet(getQueryValue(query.Alphabet) ?? getQueryValue(query.alphabet));
+  const alphabet = normalizeAlphabet(
+    getQueryValue(query.Alphabet) ?? getQueryValue(query.alphabet),
+  );
   const message = resultMessage(getQueryValue(query.result));
 
   try {
@@ -115,7 +158,9 @@ export default async function UserAdminEditPage({ searchParams }: Readonly<{ sea
     ]);
     const selectedProfile = username ? findSelectedProfile(profiles, username) : null;
     const userChoices = profiles.filter((profile) => profile.userName);
-    const displayName = session.email ?? (session.userAccessCode ? `User ${session.userAccessCode}` : "Authenticated User");
+    const displayName =
+      session.email ??
+      (session.userAccessCode ? `User ${session.userAccessCode}` : "Authenticated User");
 
     return (
       <main className="page-shell vehicle-page-shell">
@@ -126,10 +171,19 @@ export default async function UserAdminEditPage({ searchParams }: Readonly<{ sea
               <h1 id="user-edit-title">Update or Modify User Details</h1>
               <p>Search for a username, then update its complete legacy profile.</p>
             </div>
-            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Menu</Link>
+            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+              Menu
+            </Link>
           </header>
 
-          {message ? <div className={`notice notice-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</div> : null}
+          {message ? (
+            <div
+              className={`notice notice-${message.tone}`}
+              role={message.tone === "error" ? "alert" : "status"}
+            >
+              {message.text}
+            </div>
+          ) : null}
 
           <section className="vehicle-form-section" aria-labelledby="user-edit-search-title">
             <div className="vehicle-form-section-header">
@@ -142,7 +196,9 @@ export default async function UserAdminEditPage({ searchParams }: Readonly<{ sea
           </section>
 
           {username && !selectedProfile ? (
-            <div className="notice notice-error" role="alert">No profile could be found for user {username}.</div>
+            <div className="notice notice-error" role="alert">
+              No profile could be found for user {username}.
+            </div>
           ) : null}
           {selectedProfile ? (
             <UserEditForm
@@ -157,10 +213,16 @@ export default async function UserAdminEditPage({ searchParams }: Readonly<{ sea
           ) : null}
 
           <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Back to Menu</Link>
-            <Link className="button button-secondary" href="/home">Home</Link>
+            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+              Back to Menu
+            </Link>
+            <Link className="button button-secondary" href="/home">
+              Home
+            </Link>
             <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">Sign out</button>
+              <button className="button button-secondary" type="submit">
+                Sign out
+              </button>
             </form>
           </div>
         </section>
@@ -168,10 +230,21 @@ export default async function UserAdminEditPage({ searchParams }: Readonly<{ sea
     );
   } catch (error) {
     if (error instanceof UserAdminApiError && error.reason === "unauthorized") {
-      return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/users/edit" /></main>;
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <SessionRecovery returnPath="/users/edit" />
+        </main>
+      );
     }
 
-    console.error("FIS user administration edit reference data failed", error instanceof Error ? error.message : "unknown error");
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable /></main>;
+    console.error(
+      "FIS user administration edit reference data failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable />
+      </main>
+    );
   }
 }

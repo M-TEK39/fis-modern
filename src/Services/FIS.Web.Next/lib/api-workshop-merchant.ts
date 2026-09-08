@@ -21,7 +21,10 @@ export type WorkshopMerchantInput = {
 };
 
 export class WorkshopMerchantApiError extends Error {
-  constructor(public readonly reason: "unauthorized" | "unavailable" | "invalid-response" | "not-found", message: string) {
+  constructor(
+    public readonly reason: "unauthorized" | "unavailable" | "invalid-response" | "not-found",
+    message: string,
+  ) {
     super(message);
     this.name = "WorkshopMerchantApiError";
   }
@@ -42,7 +45,11 @@ function getValue(record: JsonRecord, ...keys: string[]) {
 }
 
 function asString(value: unknown) {
-  return typeof value === "string" ? value.trim() || null : value === null || value === undefined ? null : String(value);
+  return typeof value === "string"
+    ? value.trim() || null
+    : value === null || value === undefined
+      ? null
+      : String(value);
 }
 
 function asNumber(value: unknown) {
@@ -61,19 +68,31 @@ function getCollection(payload: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookie = await getForwardedAuthCookieHeader();
-  if (!cookie) throw new WorkshopMerchantApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookie)
+    throw new WorkshopMerchantApiError("unauthorized", "No FIS access cookie is available.");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   try {
     const response = await fetch(new URL(path.replace(/^\//, ""), getApiBaseUrl()), {
       ...init,
       cache: "no-store",
-      headers: { accept: "application/json", cookie, ...(init.body ? { "content-type": "application/json" } : {}), ...init.headers },
+      headers: {
+        accept: "application/json",
+        cookie,
+        ...(init.body ? { "content-type": "application/json" } : {}),
+        ...init.headers,
+      },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) throw new WorkshopMerchantApiError("unauthorized", "The FIS access cookie was rejected.");
-    if (response.status === 404) throw new WorkshopMerchantApiError("not-found", "The workshop merchant was not found.");
-    if (!response.ok) throw new WorkshopMerchantApiError("invalid-response", `FIS API returned HTTP ${response.status}.`);
+    if (response.status === 401 || response.status === 403)
+      throw new WorkshopMerchantApiError("unauthorized", "The FIS access cookie was rejected.");
+    if (response.status === 404)
+      throw new WorkshopMerchantApiError("not-found", "The workshop merchant was not found.");
+    if (!response.ok)
+      throw new WorkshopMerchantApiError(
+        "invalid-response",
+        `FIS API returned HTTP ${response.status}.`,
+      );
     return response;
   } catch (error) {
     if (error instanceof WorkshopMerchantApiError) throw error;
@@ -84,8 +103,11 @@ async function requestApi(path: string, init: RequestInit = {}) {
 }
 
 async function readJson(response: Response) {
-  try { return (await response.json()) as unknown; }
-  catch { throw new WorkshopMerchantApiError("invalid-response", "The FIS API returned invalid JSON."); }
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    throw new WorkshopMerchantApiError("invalid-response", "The FIS API returned invalid JSON.");
+  }
 }
 
 function mapMerchant(value: unknown): WorkshopMerchantRecord | null {
@@ -103,30 +125,52 @@ function mapMerchant(value: unknown): WorkshopMerchantRecord | null {
 
 export async function getWorkshopMerchants() {
   const response = await requestApi("api/workshop/merchants");
-  return getCollection(await readJson(response)).map(mapMerchant).filter((merchant): merchant is WorkshopMerchantRecord => merchant !== null);
+  return getCollection(await readJson(response))
+    .map(mapMerchant)
+    .filter((merchant): merchant is WorkshopMerchantRecord => merchant !== null);
 }
 
 export async function getWorkshopMerchant(merchantCode: number) {
   const response = await requestApi(`api/workshop/merchants/${encodeURIComponent(merchantCode)}`);
   const merchant = mapMerchant(await readJson(response));
-  if (!merchant) throw new WorkshopMerchantApiError("invalid-response", "The FIS API returned an invalid workshop merchant.");
+  if (!merchant)
+    throw new WorkshopMerchantApiError(
+      "invalid-response",
+      "The FIS API returned an invalid workshop merchant.",
+    );
   return merchant;
 }
 
 export async function createWorkshopMerchant(input: WorkshopMerchantInput) {
-  const response = await requestApi("api/workshop/merchants", { method: "POST", body: JSON.stringify({ Name: input.name, Tel: input.tel, Fax: input.fax, Email: input.email }) });
+  const response = await requestApi("api/workshop/merchants", {
+    method: "POST",
+    body: JSON.stringify({ Name: input.name, Tel: input.tel, Fax: input.fax, Email: input.email }),
+  });
   const merchant = mapMerchant(await readJson(response));
-  if (!merchant) throw new WorkshopMerchantApiError("invalid-response", "The FIS API returned an invalid workshop merchant.");
+  if (!merchant)
+    throw new WorkshopMerchantApiError(
+      "invalid-response",
+      "The FIS API returned an invalid workshop merchant.",
+    );
   return merchant;
 }
 
 export async function updateWorkshopMerchant(merchantCode: number, input: WorkshopMerchantInput) {
-  const response = await requestApi(`api/workshop/merchants/${encodeURIComponent(merchantCode)}`, { method: "PUT", body: JSON.stringify({ Name: input.name, Tel: input.tel, Fax: input.fax, Email: input.email }) });
+  const response = await requestApi(`api/workshop/merchants/${encodeURIComponent(merchantCode)}`, {
+    method: "PUT",
+    body: JSON.stringify({ Name: input.name, Tel: input.tel, Fax: input.fax, Email: input.email }),
+  });
   const merchant = mapMerchant(await readJson(response));
-  if (!merchant) throw new WorkshopMerchantApiError("invalid-response", "The FIS API returned an invalid workshop merchant.");
+  if (!merchant)
+    throw new WorkshopMerchantApiError(
+      "invalid-response",
+      "The FIS API returned an invalid workshop merchant.",
+    );
   return merchant;
 }
 
 export async function deleteWorkshopMerchant(merchantCode: number) {
-  await requestApi(`api/workshop/merchants/${encodeURIComponent(merchantCode)}`, { method: "DELETE" });
+  await requestApi(`api/workshop/merchants/${encodeURIComponent(merchantCode)}`, {
+    method: "DELETE",
+  });
 }

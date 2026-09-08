@@ -15,7 +15,9 @@ const INT32_MAX = 2_147_483_647;
 class UserFormValidationError extends Error {}
 
 function hasUserAdministrationRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function getText(formData: FormData, name: string) {
@@ -123,7 +125,11 @@ function buildRequest(formData: FormData): UserAdminProfileInput {
     throw new UserFormValidationError("ID must be a valid whole number.");
   }
 
-  const approverCodeAtGfleet = getRequiredInteger(formData, "approverCodeAtGfleet", "Client Approver Name");
+  const approverCodeAtGfleet = getRequiredInteger(
+    formData,
+    "approverCodeAtGfleet",
+    "Client Approver Name",
+  );
   if (approverCodeAtGfleet <= 0) {
     throw new UserFormValidationError("Client Approver Name is required.");
   }

@@ -50,14 +50,19 @@ function DeleteButton() {
   );
 }
 
-export default function GarageDeleteConfirm({ accident }: Readonly<{ accident: AccidentEditRecord }>) {
+export default function GarageDeleteConfirm({
+  accident,
+}: Readonly<{ accident: AccidentEditRecord }>) {
   const [state, formAction] = useActionState(deleteGarageAccidentAction, initialActionState);
 
   return (
     <>
       <div className="notice notice-warning" role="alert">
         <span aria-hidden="true">!</span>
-        <span>This permanently deletes the accident record from the current C# API. Review it before continuing.</span>
+        <span>
+          This permanently deletes the accident record from the current C# API. Review it before
+          continuing.
+        </span>
       </div>
 
       {state.status === "error" && state.message ? (
@@ -85,7 +90,9 @@ export default function GarageDeleteConfirm({ accident }: Readonly<{ accident: A
       <form action={formAction} className="vehicle-review-readonly">
         <input type="hidden" name="accidentCode" value={accident.accidentCode} readOnly />
         <div className="button-row">
-          <Link className="button button-secondary" href="/accidents/garage/delete">Back to Search</Link>
+          <Link className="button button-secondary" href="/accidents/garage/delete">
+            Back to Search
+          </Link>
           <DeleteButton />
         </div>
       </form>

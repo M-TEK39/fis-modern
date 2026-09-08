@@ -26,7 +26,7 @@ public sealed class MakeRepository : IMakeRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private readonly FisDbContext _context;
@@ -36,11 +36,13 @@ public sealed class MakeRepository : IMakeRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Make?> GetByIdAsync(short makeCode)
-        => (await QueryAsync(
-            "[make_code] = @makeCode",
-            command => AddParameter(command, "@makeCode", DbType.Int16, makeCode)))
-            .SingleOrDefault();
+    public async Task<Make?> GetByIdAsync(short makeCode) =>
+        (
+            await QueryAsync(
+                "[make_code] = @makeCode",
+                command => AddParameter(command, "@makeCode", DbType.Int16, makeCode)
+            )
+        ).SingleOrDefault();
 
     public async Task<Make?> GetByNameAsync(string makeName)
     {
@@ -49,14 +51,21 @@ public sealed class MakeRepository : IMakeRepository
             return null;
         }
 
-        return (await QueryAsync(
-            "LOWER([make_description]) = @makeDescription",
-            command => AddParameter(command, "@makeDescription", DbType.String, makeName.Trim().ToLowerInvariant())))
-            .SingleOrDefault();
+        return (
+            await QueryAsync(
+                "LOWER([make_description]) = @makeDescription",
+                command =>
+                    AddParameter(
+                        command,
+                        "@makeDescription",
+                        DbType.String,
+                        makeName.Trim().ToLowerInvariant()
+                    )
+            )
+        ).SingleOrDefault();
     }
 
-    public async Task<IEnumerable<Make>> GetAllMakesAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<Make>> GetAllMakesAsync() => await QueryAsync();
 
     public async Task<IEnumerable<Make>> SearchMakesAsync(string searchTerm)
     {
@@ -67,7 +76,14 @@ public sealed class MakeRepository : IMakeRepository
 
         return await QueryAsync(
             "LOWER([make_description]) LIKE @searchTerm",
-            command => AddParameter(command, "@searchTerm", DbType.String, $"%{searchTerm.Trim().ToLowerInvariant()}%"));
+            command =>
+                AddParameter(
+                    command,
+                    "@searchTerm",
+                    DbType.String,
+                    $"%{searchTerm.Trim().ToLowerInvariant()}%"
+                )
+        );
     }
 
     public async Task<MakeDeleteCheck> GetDeleteCheckAsync(short makeCode)
@@ -87,7 +103,8 @@ public sealed class MakeRepository : IMakeRepository
                     connection,
                     "SELECT COUNT(1) FROM [dbo].[model] WHERE [make_code] = @makeCode",
                     makeCode,
-                    transaction)
+                    transaction
+                )
                 : 0;
             return new MakeDeleteCheck(modelCount);
         }
@@ -108,7 +125,7 @@ public sealed class MakeRepository : IMakeRepository
         var now = DateTime.UtcNow;
         var values = new List<WriteValue>
         {
-            new("make_description", "@makeDescription", DbType.String, make.make_description)
+            new("make_description", "@makeDescription", DbType.String, make.make_description),
         };
         AddCreateAuditValues(values, availableColumns, currentUserId, now);
 
@@ -123,13 +140,16 @@ public sealed class MakeRepository : IMakeRepository
     {
         ArgumentNullException.ThrowIfNull(make);
 
-        var existing = await GetByIdAsync(make.make_code)
-            ?? throw new InvalidOperationException($"Make with make_code {make.make_code} not found");
+        var existing =
+            await GetByIdAsync(make.make_code)
+            ?? throw new InvalidOperationException(
+                $"Make with make_code {make.make_code} not found"
+            );
         var availableColumns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
         var values = new List<WriteValue>
         {
-            new("make_description", "@makeDescription", DbType.String, make.make_description)
+            new("make_description", "@makeDescription", DbType.String, make.make_description),
         };
         AddUpdateAuditValues(values, availableColumns, currentUserId, now);
 
@@ -145,7 +165,8 @@ public sealed class MakeRepository : IMakeRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The DELETE or soft-delete statement is selected from fixed compatibility branches and the make code is parameterized.")]
+        Justification = "The DELETE or soft-delete statement is selected from fixed compatibility branches and the make code is parameterized."
+    )]
     public async Task DeleteAsync(short makeCode, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -174,14 +195,21 @@ public sealed class MakeRepository : IMakeRepository
                 if (availableColumns.Contains("modified_by_user_code"))
                 {
                     assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-                    AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                    AddParameter(
+                        command,
+                        "@modifiedByUserCode",
+                        DbType.Int32,
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
-                command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [make_code] = @makeCode";
+                command.CommandText =
+                    $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [make_code] = @makeCode";
             }
             else
             {
-                command.CommandText = $"DELETE FROM [dbo].[{TableName}] WHERE [make_code] = @makeCode";
+                command.CommandText =
+                    $"DELETE FROM [dbo].[{TableName}] WHERE [make_code] = @makeCode";
             }
 
             AddParameter(command, "@makeCode", DbType.Int16, makeCode);
@@ -199,8 +227,12 @@ public sealed class MakeRepository : IMakeRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list is composed only from fixed legacy columns and allowlisted audit columns; predicates and values are parameterized.")]
-    private async Task<List<Make>> QueryAsync(string? predicate = null, Action<DbCommand>? configure = null)
+        Justification = "The SELECT list is composed only from fixed legacy columns and allowlisted audit columns; predicates and values are parameterized."
+    )]
+    private async Task<List<Make>> QueryAsync(
+        string? predicate = null,
+        Action<DbCommand>? configure = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
@@ -216,7 +248,11 @@ public sealed class MakeRepository : IMakeRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = RequiredColumns
                 .Select(column => $"[{column}] AS [{column}]")
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
                 .ToArray();
             var conditions = new List<string> { GetNotDeletedFilter(availableColumns) };
             if (!string.IsNullOrWhiteSpace(predicate))
@@ -224,7 +260,8 @@ public sealed class MakeRepository : IMakeRepository
                 conditions.Add(predicate);
             }
 
-            command.CommandText = $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [make_description], [make_code]";
+            command.CommandText =
+                $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [make_description], [make_code]";
             configure?.Invoke(command);
 
             var results = new List<Make>();
@@ -248,7 +285,8 @@ public sealed class MakeRepository : IMakeRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed from fixed legacy and allowlisted audit columns; all values are parameters.")]
+        Justification = "The INSERT statement is composed from fixed legacy and allowlisted audit columns; all values are parameters."
+    )]
     private async Task<short> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -262,7 +300,8 @@ public sealed class MakeRepository : IMakeRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[make_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+            command.CommandText =
+                $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[make_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
             AddParameters(command, values);
             return Convert.ToInt16(await command.ExecuteScalarAsync());
         }
@@ -278,7 +317,8 @@ public sealed class MakeRepository : IMakeRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed from fixed legacy and allowlisted audit columns; all values are parameters.")]
+        Justification = "The UPDATE statement is composed from fixed legacy and allowlisted audit columns; all values are parameters."
+    )]
     private async Task ExecuteUpdateAsync(short makeCode, IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -292,7 +332,8 @@ public sealed class MakeRepository : IMakeRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [make_code] = @makeCode";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [make_code] = @makeCode";
             AddParameters(command, values);
             AddParameter(command, "@makeCode", DbType.Int16, makeCode);
             await command.ExecuteNonQueryAsync();
@@ -335,10 +376,14 @@ public sealed class MakeRepository : IMakeRepository
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
-                throw new InvalidOperationException($"The required make compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                throw new InvalidOperationException(
+                    $"The required make compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             return columns;
@@ -352,20 +397,51 @@ public sealed class MakeRepository : IMakeRepository
         }
     }
 
-    private static void AddCreateAuditValues(ICollection<WriteValue> values, IReadOnlySet<string> columns, int currentUserId, DateTime now)
+    private static void AddCreateAuditValues(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        int currentUserId,
+        DateTime now
+    )
     {
         AddOptionalValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, now);
-        AddOptionalValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddOptionalValue(
+            values,
+            columns,
+            "created_by_user_code",
+            "@createdByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddOptionalValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
     }
 
-    private static void AddUpdateAuditValues(ICollection<WriteValue> values, IReadOnlySet<string> columns, int currentUserId, DateTime now)
+    private static void AddUpdateAuditValues(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        int currentUserId,
+        DateTime now
+    )
     {
         AddOptionalValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
-        AddOptionalValue(values, columns, "modified_by_user_code", "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddOptionalValue(
+            values,
+            columns,
+            "modified_by_user_code",
+            "@modifiedByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
     }
 
-    private static void AddOptionalValue(ICollection<WriteValue> values, IReadOnlySet<string> columns, string column, string parameter, DbType type, object? value)
+    private static void AddOptionalValue(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        string column,
+        string parameter,
+        DbType type,
+        object? value
+    )
     {
         if (columns.Contains(column))
         {
@@ -390,16 +466,26 @@ public sealed class MakeRepository : IMakeRepository
         command.Parameters.Add(parameter);
     }
 
-    private static Make MapMake(DbDataReader reader, IReadOnlySet<string> availableColumns)
-        => new()
+    private static Make MapMake(DbDataReader reader, IReadOnlySet<string> availableColumns) =>
+        new()
         {
             make_code = ReadInt16(reader, "make_code") ?? 0,
             make_description = ReadString(reader, "make_description") ?? string.Empty,
-            date_created = ReadDateTimeIfAvailable(reader, availableColumns, "date_created") ?? DateTime.MinValue,
+            date_created =
+                ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
+                ?? DateTime.MinValue,
             date_updated = ReadDateTimeIfAvailable(reader, availableColumns, "date_updated"),
-            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
-            modified_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "modified_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "created_by_user_code"
+            ),
+            modified_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "modified_by_user_code"
+            ),
+            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false,
         };
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
@@ -414,19 +500,25 @@ public sealed class MakeRepository : IMakeRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetNotDeletedFilter(IReadOnlySet<string> columns)
-        => columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
+    private static string GetNotDeletedFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The count query is a fixed repository statement and the make code is parameterized.")]
-    private static async Task<int> CountAsync(DbConnection connection, string sql, short makeCode, DbTransaction? transaction)
+        Justification = "The count query is a fixed repository statement and the make code is parameterized."
+    )]
+    private static async Task<int> CountAsync(
+        DbConnection connection,
+        string sql,
+        short makeCode,
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -435,7 +527,12 @@ public sealed class MakeRepository : IMakeRepository
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
-    private static async Task<bool> TableExistsAsync(DbConnection connection, string schema, string table, DbTransaction? transaction)
+    private static async Task<bool> TableExistsAsync(
+        DbConnection connection,
+        string schema,
+        string table,
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -450,18 +547,38 @@ public sealed class MakeRepository : IMakeRepository
         return Convert.ToInt32(await command.ExecuteScalarAsync()) > 0;
     }
 
-    private static string? ReadString(DbDataReader reader, string column) => reader[column] is DBNull ? null : reader[column]?.ToString();
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : reader[column]?.ToString();
 
-    private static short? ReadInt16(DbDataReader reader, string column) => reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
+    private static short? ReadInt16(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
 
-    private static bool? ReadBooleanIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) && reader[column] is not DBNull ? Convert.ToBoolean(reader[column]) : null;
+    private static bool? ReadBooleanIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) =>
+        columns.Contains(column) && reader[column] is not DBNull
+            ? Convert.ToBoolean(reader[column])
+            : null;
 
-    private static int? ReadInt32IfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) && reader[column] is not DBNull ? Convert.ToInt32(reader[column]) : null;
+    private static int? ReadInt32IfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) =>
+        columns.Contains(column) && reader[column] is not DBNull
+            ? Convert.ToInt32(reader[column])
+            : null;
 
-    private static DateTime? ReadDateTimeIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) && reader[column] is not DBNull ? Convert.ToDateTime(reader[column]) : null;
+    private static DateTime? ReadDateTimeIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) =>
+        columns.Contains(column) && reader[column] is not DBNull
+            ? Convert.ToDateTime(reader[column])
+            : null;
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 }

@@ -27,10 +27,16 @@ export type DemoVehicleActionState = {
 async function authorizeDemoVehicles() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
   if (!hasDemoVehicleRole(session.roles)) {
     return { ok: false as const, message: "You do not have permission to maintain demo vehicles." };
@@ -44,11 +50,12 @@ function getText(formData: FormData, key: string) {
 }
 
 function validateLength(value: string, label: string, maxLength: number) {
-  if (value.length > maxLength) throw new Error(`${label} must be ${maxLength} characters or fewer.`);
+  if (value.length > maxLength)
+    throw new Error(`${label} must be ${maxLength} characters or fewer.`);
 }
 
 function parseOptionalInteger(value: string, label: string, min: number, max: number) {
-  if (!value || value === "0" && label === "Site") return "";
+  if (!value || (value === "0" && label === "Site")) return "";
   if (!/^-?\d+$/.test(value)) throw new Error(`${label} must be a whole number.`);
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < min || parsed > max) {
@@ -82,7 +89,12 @@ function readWriteInput(formData: FormData): DemoVehicleWriteInput {
     registrationNumber,
     modelDescription,
     siteCode: parseOptionalInteger(getText(formData, "siteCode"), "Site", -32768, 32767),
-    yearManufactured: parseOptionalInteger(getText(formData, "yearManufactured"), "Year Manufactured", -2147483648, 2147483647),
+    yearManufactured: parseOptionalInteger(
+      getText(formData, "yearManufactured"),
+      "Year Manufactured",
+      -2147483648,
+      2147483647,
+    ),
     bankCode,
     tank: parseOptionalInteger(getText(formData, "tank"), "Tank capacity", -32768, 32767),
     colour,
@@ -93,13 +105,18 @@ function readWriteInput(formData: FormData): DemoVehicleWriteInput {
 
 function apiErrorMessage(error: unknown, fallback: string) {
   if (!(error instanceof DemoVehicleApiError)) return fallback;
-  if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
+  if (error.reason === "unauthorized")
+    return "Your session has expired. Sign in again before continuing.";
   if (error.reason === "not-found") return "The selected demo vehicle could not be found.";
-  if (error.reason === "unavailable") return "The demo vehicle service is temporarily unavailable. Please try again.";
+  if (error.reason === "unavailable")
+    return "The demo vehicle service is temporarily unavailable. Please try again.";
   return error.message || fallback;
 }
 
-export async function createDemoVehicleAction(_previousState: DemoVehicleActionState, formData: FormData): Promise<DemoVehicleActionState> {
+export async function createDemoVehicleAction(
+  _previousState: DemoVehicleActionState,
+  formData: FormData,
+): Promise<DemoVehicleActionState> {
   const access = await authorizeDemoVehicles();
   if (!access.ok) return { status: "error", message: access.message };
 
@@ -108,12 +125,24 @@ export async function createDemoVehicleAction(_previousState: DemoVehicleActionS
     revalidatePath("/vehicles/demo/report");
     return { status: "success", message: "Demo vehicle added successfully.", vehicle };
   } catch (error) {
-    console.error("FIS demo vehicle create failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: error instanceof Error && !(error instanceof DemoVehicleApiError) ? error.message : apiErrorMessage(error, "The demo vehicle could not be added.") };
+    console.error(
+      "FIS demo vehicle create failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message:
+        error instanceof Error && !(error instanceof DemoVehicleApiError)
+          ? error.message
+          : apiErrorMessage(error, "The demo vehicle could not be added."),
+    };
   }
 }
 
-export async function updateDemoVehicleAction(_previousState: DemoVehicleActionState, formData: FormData): Promise<DemoVehicleActionState> {
+export async function updateDemoVehicleAction(
+  _previousState: DemoVehicleActionState,
+  formData: FormData,
+): Promise<DemoVehicleActionState> {
   const access = await authorizeDemoVehicles();
   if (!access.ok) return { status: "error", message: access.message };
 
@@ -127,26 +156,48 @@ export async function updateDemoVehicleAction(_previousState: DemoVehicleActionS
     revalidatePath("/vehicles/demo/report");
     return { status: "success", message: "Demo vehicle updated successfully.", vehicle };
   } catch (error) {
-    console.error("FIS demo vehicle update failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: error instanceof Error && !(error instanceof DemoVehicleApiError) ? error.message : apiErrorMessage(error, "The demo vehicle could not be updated.") };
+    console.error(
+      "FIS demo vehicle update failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message:
+        error instanceof Error && !(error instanceof DemoVehicleApiError)
+          ? error.message
+          : apiErrorMessage(error, "The demo vehicle could not be updated."),
+    };
   }
 }
 
-export async function searchDemoVehiclesAction(formData: FormData): Promise<DemoVehicleActionState> {
+export async function searchDemoVehiclesAction(
+  formData: FormData,
+): Promise<DemoVehicleActionState> {
   const access = await authorizeDemoVehicles();
   if (!access.ok) return { status: "error", message: access.message };
 
   const mode = getText(formData, "mode").toUpperCase();
   const search = getText(formData, "search");
-  if (mode !== "GG" && mode !== "GP") return { status: "error", message: "Choose GG or GP before searching." };
+  if (mode !== "GG" && mode !== "GP")
+    return { status: "error", message: "Choose GG or GP before searching." };
   if (!search) return { status: "error", message: "Enter a GG or GP number before searching." };
 
   try {
     const matches = await searchDemoVehicles(search, mode as DemoVehicleSearchMode);
-    return { status: "success", matches, message: matches.length === 0 ? "No demo vehicle matched that number." : undefined };
+    return {
+      status: "success",
+      matches,
+      message: matches.length === 0 ? "No demo vehicle matched that number." : undefined,
+    };
   } catch (error) {
-    console.error("FIS demo vehicle search failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: apiErrorMessage(error, "The demo vehicle search could not be completed.") };
+    console.error(
+      "FIS demo vehicle search failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message: apiErrorMessage(error, "The demo vehicle search could not be completed."),
+    };
   }
 }
 
@@ -161,10 +212,18 @@ export async function loadDemoVehicleAction(formData: FormData): Promise<DemoVeh
 
   try {
     const vehicle = await getDemoVehicle(demoVehicleCode);
-    return vehicle ? { status: "success", vehicle } : { status: "error", message: "The selected demo vehicle could not be found." };
+    return vehicle
+      ? { status: "success", vehicle }
+      : { status: "error", message: "The selected demo vehicle could not be found." };
   } catch (error) {
-    console.error("FIS demo vehicle load failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: apiErrorMessage(error, "The demo vehicle could not be loaded.") };
+    console.error(
+      "FIS demo vehicle load failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message: apiErrorMessage(error, "The demo vehicle could not be loaded."),
+    };
   }
 }
 
@@ -182,8 +241,14 @@ export async function deleteDemoVehicleAction(formData: FormData): Promise<DemoV
     revalidatePath("/vehicles/demo/report");
     return { status: "success", message: "Demo vehicle deleted successfully." };
   } catch (error) {
-    console.error("FIS demo vehicle delete failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: apiErrorMessage(error, "The demo vehicle could not be deleted.") };
+    console.error(
+      "FIS demo vehicle delete failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message: apiErrorMessage(error, "The demo vehicle could not be deleted."),
+    };
   }
 }
 
@@ -194,7 +259,13 @@ export async function loadDemoVehicleReportAction(): Promise<DemoVehicleActionSt
   try {
     return { status: "success", matches: await getDemoVehicleReport() };
   } catch (error) {
-    console.error("FIS demo vehicle report failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: apiErrorMessage(error, "The demo vehicle report could not be loaded.") };
+    console.error(
+      "FIS demo vehicle report failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message: apiErrorMessage(error, "The demo vehicle report could not be loaded."),
+    };
   }
 }

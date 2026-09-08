@@ -22,7 +22,8 @@ namespace FIS.Api.Controllers;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "All interpolated SQL identifiers come from fixed schema constants or the fixed column set returned by INFORMATION_SCHEMA; request values are parameters.")]
+    Justification = "All interpolated SQL identifiers come from fixed schema constants or the fixed column set returned by INFORMATION_SCHEMA; request values are parameters."
+)]
 public sealed class AuthorisersController : BaseApiController
 {
     private const string ApproversTable = "approvers";
@@ -38,7 +39,9 @@ public sealed class AuthorisersController : BaseApiController
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<AuthoriserDto>>> GetAuthorisers([FromQuery] short? siteCode)
+    public async Task<ActionResult<IEnumerable<AuthoriserDto>>> GetAuthorisers(
+        [FromQuery] short? siteCode
+    )
     {
         try
         {
@@ -49,7 +52,8 @@ public sealed class AuthorisersController : BaseApiController
 
                 var siteFilter = siteCode.HasValue ? " AND [site_code] = @siteCode" : string.Empty;
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"{BuildApproverSelect(schema)} WHERE {BuildActivePredicate(schema)}{siteFilter} ORDER BY [Surname], [Firstname], [approver_code]";
+                command.CommandText =
+                    $"{BuildApproverSelect(schema)} WHERE {BuildActivePredicate(schema)}{siteFilter} ORDER BY [Surname], [Firstname], [approver_code]";
                 if (siteCode.HasValue)
                 {
                     AddParameter(command, "@siteCode", siteCode.Value);
@@ -83,7 +87,9 @@ public sealed class AuthorisersController : BaseApiController
                 return await ReadAuthoriserAsync(command, schema);
             });
 
-            return authoriser is null ? NotFound(new { message = $"Authoriser not found with code: {id}" }) : Ok(MapToDto(authoriser));
+            return authoriser is null
+                ? NotFound(new { message = $"Authoriser not found with code: {id}" })
+                : Ok(MapToDto(authoriser));
         }
         catch (Exception ex)
         {
@@ -104,9 +110,12 @@ public sealed class AuthorisersController : BaseApiController
                     return new List<AuthoriserRankDto>();
                 }
 
-                var activePredicate = schema.Has("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
+                var activePredicate = schema.Has("is_deleted")
+                    ? "([is_deleted] = 0 OR [is_deleted] IS NULL)"
+                    : "1 = 1";
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"SELECT [rank_code] AS [RankCode], [description] AS [Description] FROM [dbo].[{RanksTable}] WHERE {activePredicate} ORDER BY [description], [rank_code]";
+                command.CommandText =
+                    $"SELECT [rank_code] AS [RankCode], [description] AS [Description] FROM [dbo].[{RanksTable}] WHERE {activePredicate} ORDER BY [description], [rank_code]";
 
                 var result = new List<AuthoriserRankDto>();
                 await using var reader = await command.ExecuteReaderAsync();
@@ -116,12 +125,14 @@ public sealed class AuthorisersController : BaseApiController
                     if (rankCode.HasValue)
                     {
                         var description = ReadString(reader, "Description");
-                        result.Add(new AuthoriserRankDto
-                        {
-                            Id = rankCode.Value,
-                            RankName = description,
-                            Description = description
-                        });
+                        result.Add(
+                            new AuthoriserRankDto
+                            {
+                                Id = rankCode.Value,
+                                RankName = description,
+                                Description = description,
+                            }
+                        );
                     }
                 }
 
@@ -132,13 +143,18 @@ public sealed class AuthorisersController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Unable to retrieve authoriser ranks; returning an empty lookup");
+            _logger.LogWarning(
+                ex,
+                "Unable to retrieve authoriser ranks; returning an empty lookup"
+            );
             return Ok(Array.Empty<AuthoriserRankDto>());
         }
     }
 
     [HttpPost("ranks")]
-    public async Task<ActionResult<IEnumerable<AuthoriserRankDto>>> SaveRanks([FromBody] List<AuthoriserRankDto> ranks)
+    public async Task<ActionResult<IEnumerable<AuthoriserRankDto>>> SaveRanks(
+        [FromBody] List<AuthoriserRankDto> ranks
+    )
     {
         try
         {
@@ -160,11 +176,15 @@ public sealed class AuthorisersController : BaseApiController
                     if (rank.Id <= 0)
                     {
                         var columns = new List<string> { "description" };
-                        var values = new List<(string Name, object? Value)> { ("@description", description!.Trim()) };
+                        var values = new List<(string Name, object? Value)>
+                        {
+                            ("@description", description!.Trim()),
+                        };
                         AddOptionalRankInsertFields(schema, columns, values, GetCurrentUserId());
 
                         await using var insertCommand = connection.CreateCommand();
-                        insertCommand.CommandText = $"INSERT INTO [dbo].[{RanksTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[rank_code] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
+                        insertCommand.CommandText =
+                            $"INSERT INTO [dbo].[{RanksTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[rank_code] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
                         AddParameters(insertCommand, values);
                         await insertCommand.ExecuteScalarAsync();
                         continue;
@@ -176,16 +196,25 @@ public sealed class AuthorisersController : BaseApiController
                     }
 
                     var assignments = new List<string> { "[description] = @description" };
-                    var updateValues = new List<(string Name, object? Value)> { ("@description", description!.Trim()) };
+                    var updateValues = new List<(string Name, object? Value)>
+                    {
+                        ("@description", description!.Trim()),
+                    };
                     if (schema.Has("is_deleted"))
                     {
                         assignments.Add("[is_deleted] = @isDeleted");
                         updateValues.Add(("@isDeleted", false));
                     }
-                    AddOptionalRankUpdateFields(schema, assignments, updateValues, GetCurrentUserId());
+                    AddOptionalRankUpdateFields(
+                        schema,
+                        assignments,
+                        updateValues,
+                        GetCurrentUserId()
+                    );
 
                     await using var updateCommand = connection.CreateCommand();
-                    updateCommand.CommandText = $"UPDATE [dbo].[{RanksTable}] SET {string.Join(", ", assignments)} WHERE [rank_code] = @id";
+                    updateCommand.CommandText =
+                        $"UPDATE [dbo].[{RanksTable}] SET {string.Join(", ", assignments)} WHERE [rank_code] = @id";
                     AddParameters(updateCommand, updateValues);
                     AddParameter(updateCommand, "@id", rank.Id);
                     await updateCommand.ExecuteNonQueryAsync();
@@ -207,7 +236,9 @@ public sealed class AuthorisersController : BaseApiController
     }
 
     [HttpPost]
-    public async Task<ActionResult<AuthoriserDto>> CreateAuthoriser([FromBody] CreateAuthoriserDto dto)
+    public async Task<ActionResult<AuthoriserDto>> CreateAuthoriser(
+        [FromBody] CreateAuthoriserDto dto
+    )
     {
         try
         {
@@ -223,7 +254,7 @@ public sealed class AuthorisersController : BaseApiController
                     "department_code",
                     "rank_code",
                     "Surname",
-                    "Firstname"
+                    "Firstname",
                 };
                 var values = new List<(string Name, object? Value)>
                 {
@@ -231,13 +262,21 @@ public sealed class AuthorisersController : BaseApiController
                     ("@departmentCode", dto.DepartmentCode),
                     ("@rankCode", dto.RankCode),
                     ("@surname", dto.Surname.Trim()),
-                    ("@firstname", dto.Firstname.Trim())
+                    ("@firstname", dto.Firstname.Trim()),
                 };
 
-                AddOptionalAuthoriserFields(schema, columns, values, dto, includeCreatedAudit: true, currentUserId: GetCurrentUserId());
+                AddOptionalAuthoriserFields(
+                    schema,
+                    columns,
+                    values,
+                    dto,
+                    includeCreatedAudit: true,
+                    currentUserId: GetCurrentUserId()
+                );
 
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"INSERT INTO [dbo].[{ApproversTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[approver_code] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
+                command.CommandText =
+                    $"INSERT INTO [dbo].[{ApproversTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[approver_code] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
                 foreach (var (name, value) in values)
                 {
                     AddParameter(command, name, value);
@@ -248,8 +287,15 @@ public sealed class AuthorisersController : BaseApiController
             });
 
             return created is null
-                ? StatusCode(500, new { message = "The authoriser was created but could not be reloaded." })
-                : CreatedAtAction(nameof(GetAuthoriser), new { id = created.AuthoriserCode }, MapToDto(created));
+                ? StatusCode(
+                    500,
+                    new { message = "The authoriser was created but could not be reloaded." }
+                )
+                : CreatedAtAction(
+                    nameof(GetAuthoriser),
+                    new { id = created.AuthoriserCode },
+                    MapToDto(created)
+                );
         }
         catch (ArgumentException ex)
         {
@@ -262,7 +308,10 @@ public sealed class AuthorisersController : BaseApiController
     }
 
     [HttpPut("{id:int}")]
-    public async Task<ActionResult<AuthoriserDto>> UpdateAuthoriser(int id, [FromBody] UpdateAuthoriserDto dto)
+    public async Task<ActionResult<AuthoriserDto>> UpdateAuthoriser(
+        int id,
+        [FromBody] UpdateAuthoriserDto dto
+    )
     {
         try
         {
@@ -284,7 +333,7 @@ public sealed class AuthorisersController : BaseApiController
                     "[department_code] = @departmentCode",
                     "[rank_code] = @rankCode",
                     "[Surname] = @surname",
-                    "[Firstname] = @firstname"
+                    "[Firstname] = @firstname",
                 };
                 var values = new List<(string Name, object? Value)>
                 {
@@ -292,10 +341,17 @@ public sealed class AuthorisersController : BaseApiController
                     ("@departmentCode", dto.DepartmentCode),
                     ("@rankCode", dto.RankCode),
                     ("@surname", dto.Surname.Trim()),
-                    ("@firstname", dto.Firstname.Trim())
+                    ("@firstname", dto.Firstname.Trim()),
                 };
 
-                AddOptionalAuthoriserFields(schema, assignments, values, dto, includeCreatedAudit: false, currentUserId: GetCurrentUserId());
+                AddOptionalAuthoriserFields(
+                    schema,
+                    assignments,
+                    values,
+                    dto,
+                    includeCreatedAudit: false,
+                    currentUserId: GetCurrentUserId()
+                );
                 if (schema.Has("date_updated"))
                 {
                     assignments.Add("[date_updated] = @dateUpdated");
@@ -308,7 +364,8 @@ public sealed class AuthorisersController : BaseApiController
                 }
 
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"UPDATE [dbo].[{ApproversTable}] SET {string.Join(", ", assignments)} WHERE [approver_code] = @id";
+                command.CommandText =
+                    $"UPDATE [dbo].[{ApproversTable}] SET {string.Join(", ", assignments)} WHERE [approver_code] = @id";
                 foreach (var (name, value) in values)
                 {
                     AddParameter(command, name, value);
@@ -373,11 +430,14 @@ public sealed class AuthorisersController : BaseApiController
 
                 if (assignments.Count == 0)
                 {
-                    throw new InvalidOperationException("The authoriser table has no supported active-state column.");
+                    throw new InvalidOperationException(
+                        "The authoriser table has no supported active-state column."
+                    );
                 }
 
                 await using var command = connection.CreateCommand();
-                command.CommandText = $"UPDATE [dbo].[{ApproversTable}] SET {string.Join(", ", assignments)} WHERE [approver_code] = @id";
+                command.CommandText =
+                    $"UPDATE [dbo].[{ApproversTable}] SET {string.Join(", ", assignments)} WHERE [approver_code] = @id";
                 AddParameter(command, "@active", false);
                 AddParameter(command, "@isDeleted", true);
                 AddParameter(command, "@dateUpdated", DateTime.UtcNow);
@@ -387,7 +447,9 @@ public sealed class AuthorisersController : BaseApiController
                 return true;
             });
 
-            return deleted ? NoContent() : NotFound(new { message = $"Authoriser not found with code: {id}" });
+            return deleted
+                ? NoContent()
+                : NotFound(new { message = $"Authoriser not found with code: {id}" });
         }
         catch (Exception ex)
         {
@@ -417,10 +479,14 @@ public sealed class AuthorisersController : BaseApiController
         }
     }
 
-    private static async Task<TableSchema> ReadTableSchemaAsync(DbConnection connection, string tableName)
+    private static async Task<TableSchema> ReadTableSchemaAsync(
+        DbConnection connection,
+        string tableName
+    )
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table";
+        command.CommandText =
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table";
         AddParameter(command, "@schema", "dbo");
         AddParameter(command, "@table", tableName);
 
@@ -440,10 +506,20 @@ public sealed class AuthorisersController : BaseApiController
 
     private static void EnsureApproverTable(TableSchema schema)
     {
-        string[] requiredColumns = ["approver_code", "site_code", "department_code", "rank_code", "Surname", "Firstname"];
+        string[] requiredColumns =
+        [
+            "approver_code",
+            "site_code",
+            "department_code",
+            "rank_code",
+            "Surname",
+            "Firstname",
+        ];
         if (requiredColumns.Any(column => !schema.Has(column)))
         {
-            throw new InvalidOperationException("The dbo.approvers table is missing one or more required legacy columns.");
+            throw new InvalidOperationException(
+                "The dbo.approvers table is missing one or more required legacy columns."
+            );
         }
     }
 
@@ -451,7 +527,9 @@ public sealed class AuthorisersController : BaseApiController
     {
         if (!schema.Has("rank_code") || !schema.Has("description"))
         {
-            throw new InvalidOperationException("The dbo.ranks table is missing one or more required legacy columns.");
+            throw new InvalidOperationException(
+                "The dbo.ranks table is missing one or more required legacy columns."
+            );
         }
     }
 
@@ -465,7 +543,9 @@ public sealed class AuthorisersController : BaseApiController
         var maxLength = schema.Has("is_deleted") ? 255 : 50;
         if (description.Trim().Length > maxLength)
         {
-            throw new ArgumentException($"The rank description must be {maxLength} characters or fewer.");
+            throw new ArgumentException(
+                $"The rank description must be {maxLength} characters or fewer."
+            );
         }
     }
 
@@ -477,11 +557,17 @@ public sealed class AuthorisersController : BaseApiController
         return await command.ExecuteScalarAsync() is not null;
     }
 
-    private static async Task<List<AuthoriserRankDto>> ReadRanksAsync(DbConnection connection, TableSchema schema)
+    private static async Task<List<AuthoriserRankDto>> ReadRanksAsync(
+        DbConnection connection,
+        TableSchema schema
+    )
     {
-        var activePredicate = schema.Has("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
+        var activePredicate = schema.Has("is_deleted")
+            ? "([is_deleted] = 0 OR [is_deleted] IS NULL)"
+            : "1 = 1";
         await using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT [rank_code] AS [RankCode], [description] AS [Description] FROM [dbo].[{RanksTable}] WHERE {activePredicate} ORDER BY [description], [rank_code]";
+        command.CommandText =
+            $"SELECT [rank_code] AS [RankCode], [description] AS [Description] FROM [dbo].[{RanksTable}] WHERE {activePredicate} ORDER BY [description], [rank_code]";
 
         var result = new List<AuthoriserRankDto>();
         await using var reader = await command.ExecuteReaderAsync();
@@ -491,12 +577,14 @@ public sealed class AuthorisersController : BaseApiController
             if (rankCode.HasValue)
             {
                 var description = ReadString(reader, "Description");
-                result.Add(new AuthoriserRankDto
-                {
-                    Id = rankCode.Value,
-                    RankName = description,
-                    Description = description
-                });
+                result.Add(
+                    new AuthoriserRankDto
+                    {
+                        Id = rankCode.Value,
+                        RankName = description,
+                        Description = description,
+                    }
+                );
             }
         }
 
@@ -507,7 +595,8 @@ public sealed class AuthorisersController : BaseApiController
         TableSchema schema,
         ICollection<string> columns,
         ICollection<(string Name, object? Value)> values,
-        int currentUserId)
+        int currentUserId
+    )
     {
         if (schema.Has("date_created"))
         {
@@ -530,7 +619,8 @@ public sealed class AuthorisersController : BaseApiController
         TableSchema schema,
         ICollection<string> assignments,
         ICollection<(string Name, object? Value)> values,
-        int currentUserId)
+        int currentUserId
+    )
     {
         if (schema.Has("date_updated"))
         {
@@ -546,8 +636,12 @@ public sealed class AuthorisersController : BaseApiController
 
     private static string BuildApproverSelect(TableSchema schema)
     {
-        var persal = schema.Has("PersalNumber") ? "CAST([PersalNumber] AS nvarchar(50))" : "CAST(NULL AS nvarchar(50))";
-        var telephone = schema.Has("TelephoneNumber") ? "CAST([TelephoneNumber] AS nvarchar(50))" : "CAST(NULL AS nvarchar(50))";
+        var persal = schema.Has("PersalNumber")
+            ? "CAST([PersalNumber] AS nvarchar(50))"
+            : "CAST(NULL AS nvarchar(50))";
+        var telephone = schema.Has("TelephoneNumber")
+            ? "CAST([TelephoneNumber] AS nvarchar(50))"
+            : "CAST(NULL AS nvarchar(50))";
         var active = BuildActiveExpression(schema);
         var legacyFieldsAvailable = schema.Has("PersalNumber") && schema.Has("TelephoneNumber");
 
@@ -632,7 +726,8 @@ public sealed class AuthorisersController : BaseApiController
         ICollection<(string Name, object? Value)> values,
         CreateAuthoriserDto dto,
         bool includeCreatedAudit,
-        int currentUserId)
+        int currentUserId
+    )
     {
         if (schema.Has("PersalNumber"))
         {
@@ -641,7 +736,9 @@ public sealed class AuthorisersController : BaseApiController
         }
         if (schema.Has("TelephoneNumber"))
         {
-            sqlParts.Add(includeCreatedAudit ? "TelephoneNumber" : "[TelephoneNumber] = @telephoneNumber");
+            sqlParts.Add(
+                includeCreatedAudit ? "TelephoneNumber" : "[TelephoneNumber] = @telephoneNumber"
+            );
             values.Add(("@telephoneNumber", dto.TelephoneNumber?.Trim()));
         }
         if (schema.Has("approver_active"))
@@ -671,7 +768,10 @@ public sealed class AuthorisersController : BaseApiController
         }
     }
 
-    private static async Task<List<AuthoriserRecord>> ReadAuthorisersAsync(DbCommand command, TableSchema schema)
+    private static async Task<List<AuthoriserRecord>> ReadAuthorisersAsync(
+        DbCommand command,
+        TableSchema schema
+    )
     {
         var result = new List<AuthoriserRecord>();
         await using var reader = await command.ExecuteReaderAsync();
@@ -683,13 +783,20 @@ public sealed class AuthorisersController : BaseApiController
         return result;
     }
 
-    private static async Task<AuthoriserRecord?> ReadAuthoriserAsync(DbCommand command, TableSchema schema)
+    private static async Task<AuthoriserRecord?> ReadAuthoriserAsync(
+        DbCommand command,
+        TableSchema schema
+    )
     {
         await using var reader = await command.ExecuteReaderAsync();
         return await reader.ReadAsync() ? ReadAuthoriser(reader, schema) : null;
     }
 
-    private static async Task<AuthoriserRecord?> ReadAuthoriserByIdAsync(DbConnection connection, TableSchema schema, int id)
+    private static async Task<AuthoriserRecord?> ReadAuthoriserByIdAsync(
+        DbConnection connection,
+        TableSchema schema,
+        int id
+    )
     {
         await using var command = connection.CreateCommand();
         command.CommandText = $"{BuildApproverSelect(schema)} WHERE [approver_code] = @id";
@@ -710,7 +817,7 @@ public sealed class AuthorisersController : BaseApiController
             PersalNumber = ReadString(reader, "PersalNumber"),
             TelephoneNumber = ReadString(reader, "TelephoneNumber"),
             IsActive = ReadBool(reader, "IsActive"),
-            LegacyFieldsAvailable = ReadBool(reader, "LegacyFieldsAvailable")
+            LegacyFieldsAvailable = ReadBool(reader, "LegacyFieldsAvailable"),
         };
     }
 
@@ -727,7 +834,7 @@ public sealed class AuthorisersController : BaseApiController
             IsActive = authoriser.IsActive,
             SiteCode = authoriser.SiteCode,
             DepartmentCode = authoriser.DepartmentCode,
-            LegacyFieldsAvailable = authoriser.LegacyFieldsAvailable
+            LegacyFieldsAvailable = authoriser.LegacyFieldsAvailable,
         };
     }
 
@@ -749,7 +856,10 @@ public sealed class AuthorisersController : BaseApiController
         command.Parameters.Add(parameter);
     }
 
-    private static void AddParameters(DbCommand command, IEnumerable<(string Name, object? Value)> values)
+    private static void AddParameters(
+        DbCommand command,
+        IEnumerable<(string Name, object? Value)> values
+    )
     {
         foreach (var (name, value) in values)
         {
@@ -813,9 +923,7 @@ public class CreateAuthoriserDto
     public int DepartmentCode { get; set; }
 }
 
-public class UpdateAuthoriserDto : CreateAuthoriserDto
-{
-}
+public class UpdateAuthoriserDto : CreateAuthoriserDto { }
 
 public sealed class AuthoriserDto : CreateAuthoriserDto
 {

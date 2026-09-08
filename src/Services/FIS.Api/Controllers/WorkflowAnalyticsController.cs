@@ -34,7 +34,8 @@ public class WorkflowAnalyticsController : ControllerBase
     public async Task<ActionResult<WorkflowPerformanceReport>> GetWorkflowPerformance(
         int workflowId,
         [FromQuery] DateTime? startDate = null,
-        [FromQuery] DateTime? endDate = null)
+        [FromQuery] DateTime? endDate = null
+    )
     {
         var start = startDate ?? DateTime.UtcNow.AddDays(-30);
         var end = endDate ?? DateTime.UtcNow;
@@ -69,7 +70,8 @@ public class WorkflowAnalyticsController : ControllerBase
     [HttpPost("workflow/{workflowId}/generate-metrics")]
     public async Task<IActionResult> GenerateWorkflowMetrics(
         int workflowId,
-        [FromQuery] DateTime? date = null)
+        [FromQuery] DateTime? date = null
+    )
     {
         var targetDate = date ?? DateTime.UtcNow.Date;
         var metric = await _analyticsService.GenerateWorkflowMetricsAsync(workflowId, targetDate);
@@ -82,12 +84,17 @@ public class WorkflowAnalyticsController : ControllerBase
     [HttpGet("workflow/{workflowId}/history")]
     public async Task<ActionResult<WorkflowPerformanceReport>> GetWorkflowHistory(
         int workflowId,
-        [FromQuery] int days = 30)
+        [FromQuery] int days = 30
+    )
     {
         var endDate = DateTime.UtcNow;
         var startDate = endDate.AddDays(-days);
 
-        var report = await _analyticsService.GetWorkflowPerformanceAsync(workflowId, startDate, endDate);
+        var report = await _analyticsService.GetWorkflowPerformanceAsync(
+            workflowId,
+            startDate,
+            endDate
+        );
         return Ok(report);
     }
 }

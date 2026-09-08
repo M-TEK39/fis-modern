@@ -2,6 +2,14 @@ import { AssetVerificationReportPage } from "@/app/reports/asset-verification/[m
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-export default function LegacyAssetVerificationPerSiteResultModernAlias({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
-  return <AssetVerificationReportPage mode="per-site-province-date" searchParams={searchParams} routePath="/Asset_Verification/RPT_asset_verification_2a.aspx" />;
+export default function LegacyAssetVerificationPerSiteResultModernAlias({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <AssetVerificationReportPage
+      mode="per-site-province-date"
+      searchParams={searchParams}
+      routePath="/Asset_Verification/RPT_asset_verification_2a.aspx"
+    />
+  );
 }

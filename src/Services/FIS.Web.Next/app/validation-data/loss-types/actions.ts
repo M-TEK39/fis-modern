@@ -30,7 +30,9 @@ function getText(formData: FormData, key: string) {
 function getInput(formData: FormData): LossTypeWriteInput {
   const description = getText(formData, "description");
   if (!description || description.length > 30) {
-    throw new LossTypeValidationError("Loss description is required and must be 30 characters or fewer.");
+    throw new LossTypeValidationError(
+      "Loss description is required and must be 30 characters or fewer.",
+    );
   }
   return { description };
 }
@@ -47,21 +49,32 @@ function getCode(formData: FormData) {
 async function authorizeLossTypeMaintenance() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
   if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return { ok: false as const, message: "You do not have permission to maintain loss descriptions." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain loss descriptions.",
+    };
   }
   return { ok: true as const };
 }
 
 function apiErrorMessage(error: unknown, operation: string) {
   if (error instanceof LossTypeApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return `The loss description ${operation} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return `The loss description ${operation} service is temporarily unavailable. Please try again.`;
     return error.message;
   }
   return `The loss description could not be ${operation}. Please try again.`;
@@ -82,9 +95,19 @@ export async function createLossTypeAction(
 
   try {
     const created = await createLossType(getInput(formData));
-    if (!created) throw new LossTypeApiError("invalid-response", "The FIS API did not return the created loss description.");
+    if (!created)
+      throw new LossTypeApiError(
+        "invalid-response",
+        "The FIS API did not return the created loss description.",
+      );
   } catch (error) {
-    return { status: "error", message: error instanceof LossTypeValidationError ? error.message : apiErrorMessage(error, "created") };
+    return {
+      status: "error",
+      message:
+        error instanceof LossTypeValidationError
+          ? error.message
+          : apiErrorMessage(error, "created"),
+    };
   }
 
   revalidateLossTypeRoutes();
@@ -102,13 +125,25 @@ export async function updateLossTypeAction(
   try {
     lossTypeCode = getCode(formData);
     const updated = await updateLossType(lossTypeCode, getInput(formData));
-    if (!updated) throw new LossTypeApiError("invalid-response", "The FIS API did not return the updated loss description.");
+    if (!updated)
+      throw new LossTypeApiError(
+        "invalid-response",
+        "The FIS API did not return the updated loss description.",
+      );
   } catch (error) {
-    return { status: "error", message: error instanceof LossTypeValidationError ? error.message : apiErrorMessage(error, "updated") };
+    return {
+      status: "error",
+      message:
+        error instanceof LossTypeValidationError
+          ? error.message
+          : apiErrorMessage(error, "updated"),
+    };
   }
 
   revalidateLossTypeRoutes();
-  redirect(`/validation-data/loss-types?saved=updated&lossTypeCode=${encodeURIComponent(String(lossTypeCode))}`);
+  redirect(
+    `/validation-data/loss-types?saved=updated&lossTypeCode=${encodeURIComponent(String(lossTypeCode))}`,
+  );
 }
 
 export async function deleteLossTypeAction(formData: FormData) {
@@ -117,31 +152,43 @@ export async function deleteLossTypeAction(formData: FormData) {
   try {
     lossTypeCode = getCode(formData);
   } catch (error) {
-    redirect(`/validation-data/loss-types?error=${encodeURIComponent(error instanceof Error ? error.message : "Loss type code is invalid.")}`);
+    redirect(
+      `/validation-data/loss-types?error=${encodeURIComponent(error instanceof Error ? error.message : "Loss type code is invalid.")}`,
+    );
   }
 
   if (!access.ok) {
-    redirect(`/validation-data/loss-types/delete?code=${lossTypeCode}&error=${encodeURIComponent(access.message)}`);
+    redirect(
+      `/validation-data/loss-types/delete?code=${lossTypeCode}&error=${encodeURIComponent(access.message)}`,
+    );
   }
 
   let dependencies;
   try {
     dependencies = await getLossTypeDeleteCheck(lossTypeCode);
   } catch (error) {
-    redirect(`/validation-data/loss-types/delete?code=${lossTypeCode}&error=${encodeURIComponent(apiErrorMessage(error, "dependency check"))}`);
+    redirect(
+      `/validation-data/loss-types/delete?code=${lossTypeCode}&error=${encodeURIComponent(apiErrorMessage(error, "dependency check"))}`,
+    );
   }
 
   if (!dependencies.checkAvailable) {
-    redirect(`/validation-data/loss-types/delete?code=${lossTypeCode}&error=${encodeURIComponent("Loss records could not be verified, so the loss description was not deleted.")}`);
+    redirect(
+      `/validation-data/loss-types/delete?code=${lossTypeCode}&error=${encodeURIComponent("Loss records could not be verified, so the loss description was not deleted.")}`,
+    );
   }
   if (!dependencies.canDelete || dependencies.lossCount > 0) {
-    redirect(`/validation-data/loss-types/delete?code=${lossTypeCode}&error=${encodeURIComponent("Delete or change the linked loss records before deleting this loss description.")}`);
+    redirect(
+      `/validation-data/loss-types/delete?code=${lossTypeCode}&error=${encodeURIComponent("Delete or change the linked loss records before deleting this loss description.")}`,
+    );
   }
 
   try {
     await deleteLossType(lossTypeCode);
   } catch (error) {
-    redirect(`/validation-data/loss-types/delete?code=${lossTypeCode}&error=${encodeURIComponent(apiErrorMessage(error, "deleted"))}`);
+    redirect(
+      `/validation-data/loss-types/delete?code=${lossTypeCode}&error=${encodeURIComponent(apiErrorMessage(error, "deleted"))}`,
+    );
   }
 
   revalidateLossTypeRoutes();

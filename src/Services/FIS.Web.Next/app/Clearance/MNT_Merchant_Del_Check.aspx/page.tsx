@@ -4,7 +4,9 @@ type LegacyMerchantDeleteCheckProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default function LegacyMerchantDeleteCheckPage({ searchParams }: LegacyMerchantDeleteCheckProps) {
+export default function LegacyMerchantDeleteCheckPage({
+  searchParams,
+}: LegacyMerchantDeleteCheckProps) {
   return (
     <ClearanceMerchantPage
       deletionMode

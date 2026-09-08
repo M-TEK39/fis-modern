@@ -3,10 +3,10 @@ using FIS.Core.Domain.Entities.Auth;
 using FIS.Core.Domain.Entities.Contracts;
 using FIS.Core.Domain.Entities.Drivers;
 using FIS.Core.Domain.Entities.Financial;
-using FIS.Core.Domain.Entities.System;
-using FIS.Core.Domain.Entities.ReferenceData;
-using FIS.Core.Domain.Entities.Vehicles;
 using FIS.Core.Domain.Entities.Operations;
+using FIS.Core.Domain.Entities.ReferenceData;
+using FIS.Core.Domain.Entities.System;
+using FIS.Core.Domain.Entities.Vehicles;
 using TypeEntity = FIS.Core.Domain.Entities.ReferenceData.VehicleType;
 
 namespace FIS.Core.Application.Interfaces;
@@ -47,7 +47,8 @@ public sealed record VehicleLicenceUpdate(
     DateTime? LicenceDateTaken,
     string? CofRequired,
     DateTime? CofLastDone,
-    string? LicenceComments);
+    string? LicenceComments
+);
 
 /// <summary>
 /// Repository interface for GG block number range maintenance.
@@ -55,7 +56,11 @@ public sealed record VehicleLicenceUpdate(
 public interface IGgBlockRepository
 {
     Task<GgBlockHistoryPage> GetHistoryAsync(int page, int pageSize);
-    Task<GgBlockHistoryRecord> CreateAsync(string startGgNumber, string endGgNumber, int currentUserId);
+    Task<GgBlockHistoryRecord> CreateAsync(
+        string startGgNumber,
+        string endGgNumber,
+        int currentUserId
+    );
 }
 
 public sealed record GgBlockHistoryRecord(
@@ -63,13 +68,15 @@ public sealed record GgBlockHistoryRecord(
     string CapturedBy,
     DateTime? DateCreated,
     string StartGgNumber,
-    string EndGgNumber);
+    string EndGgNumber
+);
 
 public sealed record GgBlockHistoryPage(
     IReadOnlyList<GgBlockHistoryRecord> Items,
     int Page,
     int PageSize,
-    int TotalRecords)
+    int TotalRecords
+)
 {
     public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
 }
@@ -77,9 +84,7 @@ public sealed record GgBlockHistoryPage(
 public sealed class GgBlockRangeConflictException : Exception
 {
     public GgBlockRangeConflictException()
-        : base("The requested GG block range overlaps an existing range.")
-    {
-    }
+        : base("The requested GG block range overlaps an existing range.") { }
 }
 
 /// <summary>
@@ -91,7 +96,11 @@ public interface IVehicleSourceRepository
     Task<VehicleSourceCapabilities> GetCapabilitiesAsync();
     Task<VehicleSourceRecord?> GetByIdAsync(byte sourceCode);
     Task<VehicleSourceRecord> CreateAsync(VehicleSourceInput source, int currentUserId);
-    Task<VehicleSourceRecord> UpdateAsync(byte sourceCode, VehicleSourceInput source, int currentUserId);
+    Task<VehicleSourceRecord> UpdateAsync(
+        byte sourceCode,
+        VehicleSourceInput source,
+        int currentUserId
+    );
 }
 
 public sealed record VehicleSourceInput(
@@ -101,7 +110,8 @@ public sealed record VehicleSourceInput(
     string TelephoneNumber,
     string FaxNumber,
     string EmailAddress,
-    string ContactPerson);
+    string ContactPerson
+);
 
 public sealed record VehicleSourceRecord(
     byte SourceCode,
@@ -115,15 +125,15 @@ public sealed record VehicleSourceRecord(
     DateTime? DateCreated,
     DateTime? DateUpdated,
     int? CreatedByUserCode,
-    int? ModifiedByUserCode);
+    int? ModifiedByUserCode
+);
 
-public sealed record VehicleSourceCapabilities(
-    bool HasEmailAddress,
-    bool HasContactPerson);
+public sealed record VehicleSourceCapabilities(bool HasEmailAddress, bool HasContactPerson);
 
 public sealed record VehicleSourcePage(
     IReadOnlyList<VehicleSourceRecord> Items,
-    VehicleSourceCapabilities Capabilities);
+    VehicleSourceCapabilities Capabilities
+);
 
 public sealed class VehicleSourceFieldUnavailableException : Exception
 {
@@ -153,7 +163,8 @@ public sealed record VehicleStatusReportQuery(
     short? MakeCode = null,
     short? ModelCode = null,
     short? VehicleStatusCode = null,
-    string? Search = null);
+    string? Search = null
+);
 
 public sealed record VehicleStatusReportLookup(int Code, string Description);
 
@@ -163,7 +174,8 @@ public sealed record VehicleStatusReportRemark(
     int RemarkId,
     string? Category,
     string? Text,
-    DateTime? DateCreated);
+    DateTime? DateCreated
+);
 
 public sealed record VehicleStatusReportVehicle(
     int VmfCode,
@@ -181,7 +193,8 @@ public sealed record VehicleStatusReportVehicle(
     string? InvoiceNumber,
     DateTime? DateCreated,
     int? CurrentOdometer,
-    VehicleStatusReportRemark? ActiveRemark);
+    VehicleStatusReportRemark? ActiveRemark
+);
 
 public sealed record VehicleStatusReportPage(
     IReadOnlyList<VehicleStatusReportVehicle> Vehicles,
@@ -190,7 +203,8 @@ public sealed record VehicleStatusReportPage(
     IReadOnlyList<VehicleStatusReportLookup> Makes,
     IReadOnlyList<VehicleStatusReportModelLookup> Models,
     IReadOnlyList<VehicleStatusReportLookup> Statuses,
-    bool RemarksAvailable);
+    bool RemarksAvailable
+);
 
 /// <summary>
 /// Repository interface for the recovered-vehicle renumbering workflow.
@@ -199,9 +213,15 @@ public sealed record VehicleStatusReportPage(
 /// </summary>
 public interface IRecoveredVehicleRepository
 {
-    Task<IReadOnlyList<RecoveredVehicleSearchRecord>> SearchAsync(string searchTerm, bool byRegistration);
+    Task<IReadOnlyList<RecoveredVehicleSearchRecord>> SearchAsync(
+        string searchTerm,
+        bool byRegistration
+    );
     Task<RecoveredVehicleDetails?> GetDetailsAsync(int vmfCode);
-    Task<RecoveredVehicleUpdateResult> UpdateAsync(RecoveredVehicleUpdate update, int currentUserId);
+    Task<RecoveredVehicleUpdateResult> UpdateAsync(
+        RecoveredVehicleUpdate update,
+        int currentUserId
+    );
 }
 
 public sealed record RecoveredVehicleSearchRecord(
@@ -210,7 +230,8 @@ public sealed record RecoveredVehicleSearchRecord(
     string? RegistrationNumber,
     short VehicleStatusCode,
     string? StatusDescription,
-    string? RenumberedTo);
+    string? RenumberedTo
+);
 
 public sealed record RecoveredVehicleStatusOption(short Code, string Description);
 
@@ -223,17 +244,20 @@ public sealed record RecoveredVehicleDetails(
     string? RenumberedTo,
     string? PreviousFleetNumber,
     DateTime? PreviousDateChanged,
-    IReadOnlyList<RecoveredVehicleStatusOption> StatusOptions);
+    IReadOnlyList<RecoveredVehicleStatusOption> StatusOptions
+);
 
 public sealed record RecoveredVehicleUpdate(
     int VmfCode,
     string RecoveredFleetNumber,
     DateTime DateChanged,
-    short NewStatusCode);
+    short NewStatusCode
+);
 
 public sealed record RecoveredVehicleUpdateResult(
     RecoveredVehicleDetails UpdatedVehicle,
-    int NewVmfCode);
+    int NewVmfCode
+);
 
 /// <summary>
 /// Repository interface for the legacy Demo Vehicles module. The demo vehicle
@@ -246,7 +270,11 @@ public interface IDemoVehicleRepository
     Task<IReadOnlyList<DemoVehicleRecord>> SearchAsync(string searchTerm, bool byRegistration);
     Task<DemoVehicleRecord?> GetByIdAsync(int demoVehicleCode);
     Task<DemoVehicleRecord> CreateAsync(DemoVehicleInput input, int currentUserId);
-    Task<DemoVehicleRecord> UpdateAsync(int demoVehicleCode, DemoVehicleInput input, int currentUserId);
+    Task<DemoVehicleRecord> UpdateAsync(
+        int demoVehicleCode,
+        DemoVehicleInput input,
+        int currentUserId
+    );
     Task DeleteAsync(int demoVehicleCode, int currentUserId);
 }
 
@@ -260,7 +288,8 @@ public sealed record DemoVehicleInput(
     short? Tank,
     string? Colour,
     string? EngineNumber,
-    string? ChassisNumber);
+    string? ChassisNumber
+);
 
 public sealed record DemoVehicleRecord(
     int DemoVehicleCode,
@@ -278,7 +307,8 @@ public sealed record DemoVehicleRecord(
     DateTime? DateCreated,
     DateTime? DateUpdated,
     int? CreatedByUserCode,
-    int? ModifiedByUserCode);
+    int? ModifiedByUserCode
+);
 
 /// <summary>
 /// Repository interface for vehicle authorization (pre-capture) operations
@@ -291,12 +321,20 @@ public interface IVehicleAuthorizationRepository
     Task<IEnumerable<PreVehicleMaster>> GetAuthorizedVehiclesAsync();
     Task<IEnumerable<PreVehicleMaster>> GetRejectedVehiclesAsync();
     Task<IEnumerable<PreVehicleMaster>> GetByStatusAsync(string status);
-    Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(DateTime? startDate = null, DateTime? endDate = null);
+    Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null
+    );
     Task<IReadOnlyList<VehicleMaintenanceTypeOption>> GetMaintenanceTypesAsync();
     Task<PreVehicleMaster> CreateAsync(PreVehicleMaster vehicleAuth, int currentUserId);
     Task UpdateAsync(PreVehicleMaster vehicleAuth, int currentUserId);
     Task ApproveAsync(int tempVmfCode, int authorizedByUserId, string? comment = null);
-    Task RejectAsync(int tempVmfCode, int rejectedByUserId, string rejectionReason, string? comment = null);
+    Task RejectAsync(
+        int tempVmfCode,
+        int rejectedByUserId,
+        string rejectionReason,
+        string? comment = null
+    );
     Task AddCommentAsync(int tempVmfCode, string comment, int modifiedByUserId);
     Task DeleteAsync(int tempVmfCode, int currentUserId);
 }
@@ -309,10 +347,17 @@ public sealed record VehicleMaintenanceTypeOption(short Code, string Name);
 public interface IContractAuditLogRepository
 {
     Task<IEnumerable<ContractAuditLog>> GetByContractAsync(int contractCode);
-    Task LogAsync(int contractCode, string action, int performedByUserId,
-        short? oldStatus = null, short? newStatus = null,
+    Task LogAsync(
+        int contractCode,
+        string action,
+        int performedByUserId,
+        short? oldStatus = null,
+        short? newStatus = null,
         string? notes = null,
-        string? fieldChanged = null, string? oldValue = null, string? newValue = null);
+        string? fieldChanged = null,
+        string? oldValue = null,
+        string? newValue = null
+    );
 }
 
 /// <summary>
@@ -332,7 +377,13 @@ public interface IContractRepository
     Task<Contract> CreateAsync(Contract contract, int currentUserId);
     Task UpdateAsync(Contract contract, int currentUserId);
     Task DeleteAsync(int contractCode, int currentUserId);
-    Task EndContractAsync(int contractCode, DateTime endDate, int currentUserId, int? endOdometer = null, string? notes = null);
+    Task EndContractAsync(
+        int contractCode,
+        DateTime endDate,
+        int currentUserId,
+        int? endOdometer = null,
+        string? notes = null
+    );
 }
 
 public sealed record ContractPageQuery(
@@ -343,13 +394,15 @@ public sealed record ContractPageQuery(
     string? StillCurrent = null,
     DateTime? StartDateFrom = null,
     DateTime? StartDateTo = null,
-    int? VmfCode = null);
+    int? VmfCode = null
+);
 
 public sealed record ContractPage(
     IReadOnlyList<Contract> Items,
     int TotalRecords,
     int Page,
-    int PageSize)
+    int PageSize
+)
 {
     public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
 }
@@ -361,7 +414,8 @@ public sealed record ContractVehicleLookup(
     string? ChassisNumber,
     string? EngineNumber,
     string? InvoiceNumber,
-    short? VehicleStatusCode = null);
+    short? VehicleStatusCode = null
+);
 
 /// <summary>
 /// Repository interface for user operations
@@ -486,9 +540,15 @@ public interface ITripRepository
         IReadOnlyList<TripAuthorityDriverInput> drivers,
         IReadOnlyList<TripAuthorityPassengerInput> passengers,
         IReadOnlyList<TripAuthorityRouteInput> routes,
-        int currentUserId);
+        int currentUserId
+    );
     Task UpdateAsync(Trip trip, int currentUserId);
-    Task CloseAsync(int tripId, IReadOnlyList<TripAuthorityRouteUpdate> routes, int? endOdometer, int currentUserId);
+    Task CloseAsync(
+        int tripId,
+        IReadOnlyList<TripAuthorityRouteUpdate> routes,
+        int? endOdometer,
+        int currentUserId
+    );
     Task DeleteAsync(int tripId, int currentUserId);
 }
 
@@ -613,7 +673,10 @@ public interface IPrivateHireRepository
     Task<IEnumerable<PrivateHire>> SearchHiresAsync(string searchTerm);
     Task<IEnumerable<PrivateHireContractorRecord>> GetContractorsAsync();
     Task<PrivateHireContractorRecord?> GetContractorByIdAsync(int contractorId);
-    Task<PrivateHireContractorRecord> CreateContractorAsync(PrivateHireContractorRecord contractor, int currentUserId);
+    Task<PrivateHireContractorRecord> CreateContractorAsync(
+        PrivateHireContractorRecord contractor,
+        int currentUserId
+    );
     Task UpdateContractorAsync(PrivateHireContractorRecord contractor, int currentUserId);
     Task DeleteContractorAsync(int contractorId, int currentUserId);
 }
@@ -667,6 +730,7 @@ public interface IJournalDetailRepository
     Task UpdateAsync(JournalDetail journalDetail, int currentUserId);
     Task DeleteAsync(int journalDetailId, int currentUserId);
 }
+
 /// <summary>
 /// Repository interface for workflow operations
 /// </summary>
@@ -676,7 +740,10 @@ public interface IWorkflowRepository
     Task<FIS.Core.Domain.Entities.System.Workflow?> GetByNameAsync(string workflowName);
     Task<IEnumerable<FIS.Core.Domain.Entities.System.Workflow>> GetAllAsync();
     Task<IEnumerable<FIS.Core.Domain.Entities.System.Workflow>> GetActiveWorkflowsAsync();
-    Task<FIS.Core.Domain.Entities.System.Workflow> CreateAsync(FIS.Core.Domain.Entities.System.Workflow workflow, int currentUserId);
+    Task<FIS.Core.Domain.Entities.System.Workflow> CreateAsync(
+        FIS.Core.Domain.Entities.System.Workflow workflow,
+        int currentUserId
+    );
     Task UpdateAsync(FIS.Core.Domain.Entities.System.Workflow workflow, int currentUserId);
     Task DeleteAsync(int workflowId, int currentUserId);
 }
@@ -719,7 +786,10 @@ public interface IStatusRepository
     Task<IEnumerable<FIS.Core.Domain.Entities.System.Status>> GetByStepIdAsync(int stepId);
     Task<IEnumerable<FIS.Core.Domain.Entities.System.Status>> GetActiveStatusesAsync();
     Task<IEnumerable<FIS.Core.Domain.Entities.System.Status>> GetByUserAsync(string userName);
-    Task<FIS.Core.Domain.Entities.System.Status> CreateAsync(FIS.Core.Domain.Entities.System.Status status, int currentUserId);
+    Task<FIS.Core.Domain.Entities.System.Status> CreateAsync(
+        FIS.Core.Domain.Entities.System.Status status,
+        int currentUserId
+    );
     Task UpdateAsync(FIS.Core.Domain.Entities.System.Status status, int currentUserId);
     Task DeleteAsync(int statusId, int currentUserId);
 }
@@ -888,7 +958,8 @@ public interface IExtraCodeRepository
 public sealed record ExtraCodeDeleteCheck(
     int VehicleCount,
     IReadOnlyList<string> FleetNumbers,
-    bool CheckAvailable = true)
+    bool CheckAvailable = true
+)
 {
     public bool CanDelete => CheckAvailable && VehicleCount == 0;
 }
@@ -911,12 +982,14 @@ public interface ILossTypeRepository
 public sealed record LossTypeDeleteDependency(
     string? FleetNumber,
     DateTime? LossDate,
-    string? LossReference);
+    string? LossReference
+);
 
 public sealed record LossTypeDeleteCheck(
     int LossCount,
     IReadOnlyList<LossTypeDeleteDependency> Losses,
-    bool CheckAvailable = true)
+    bool CheckAvailable = true
+)
 {
     public bool CanDelete => CheckAvailable && LossCount == 0;
 }
@@ -951,7 +1024,6 @@ public interface IVehicleTariffRepository
     Task UpdateAsync(VehicleTariff tariff);
     Task RecalculateTariffAsync(int vmfCode);
 }
-
 
 /// <summary>
 /// Repository interface for vehicle remarks (operational notes, missing/investigation flags).
@@ -992,7 +1064,10 @@ public interface ILicenseCertificateRepository
     Task<LicenseCertificateDocument?> GetByKeyAsync(string source, int vmfCode, string documentKey);
     Task<bool> HasAnyForVehicleAsync(int vmfCode);
     Task<string?> GetPreferredWriteSourceAsync();
-    Task<LicenseCertificateDocument> CreateAsync(LicenseCertificateDocument document, int currentUserId);
+    Task<LicenseCertificateDocument> CreateAsync(
+        LicenseCertificateDocument document,
+        int currentUserId
+    );
     Task DeleteAsync(string source, int vmfCode, string documentKey, int currentUserId);
 }
 

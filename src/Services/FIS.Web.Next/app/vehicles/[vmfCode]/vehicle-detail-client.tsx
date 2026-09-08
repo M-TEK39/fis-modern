@@ -49,7 +49,9 @@ function formatDate(value: string | null) {
 }
 
 function formatAmount(value: number | null) {
-  return value === null ? "-" : new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(value);
+  return value === null
+    ? "-"
+    : new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(value);
 }
 
 function formatFileSize(value: number | null) {
@@ -65,12 +67,17 @@ function formatFileSize(value: number | null) {
 }
 
 function formatReference(document: VehicleDocumentRecord) {
-  return document.referenceType && document.referenceId ? `${document.referenceType} #${document.referenceId}` : "-";
+  return document.referenceType && document.referenceId
+    ? `${document.referenceType} #${document.referenceId}`
+    : "-";
 }
 
 function DetailSection({ title, children }: Readonly<{ title: string; children: ReactNode }>) {
   return (
-    <section className="vehicle-detail-section" aria-labelledby={`${title.toLowerCase().replaceAll(" ", "-")}-title`}>
+    <section
+      className="vehicle-detail-section"
+      aria-labelledby={`${title.toLowerCase().replaceAll(" ", "-")}-title`}
+    >
       <h2 id={`${title.toLowerCase().replaceAll(" ", "-")}-title`}>{title}</h2>
       {children}
     </section>
@@ -96,7 +103,10 @@ function ActionNotice({ state }: Readonly<{ state: VehicleDetailActionState }>) 
   }
 
   return (
-    <div className={`notice ${state.status === "error" ? "notice-error" : "notice-success"}`} role={state.status === "error" ? "alert" : "status"}>
+    <div
+      className={`notice ${state.status === "error" ? "notice-error" : "notice-success"}`}
+      role={state.status === "error" ? "alert" : "status"}
+    >
       <span aria-hidden="true">{state.status === "error" ? "!" : "✓"}</span>
       <span>{state.message}</span>
     </div>
@@ -121,16 +131,33 @@ function DeleteDocumentButton() {
   );
 }
 
-export default function VehicleDetailClient({ vehicle, documents, documentsUnavailable }: VehicleDetailClientProps) {
+export default function VehicleDetailClient({
+  vehicle,
+  documents,
+  documentsUnavailable,
+}: VehicleDetailClientProps) {
   const router = useRouter();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [invoiceState, invoiceAction] = useActionState(updateVehicleInvoiceAction, initialActionState);
+  const [invoiceState, invoiceAction] = useActionState(
+    updateVehicleInvoiceAction,
+    initialActionState,
+  );
   const [deleteState, deleteAction] = useActionState(deleteVehicleAction, initialActionState);
-  const [uploadState, uploadAction] = useActionState(uploadVehicleDocumentAction, initialActionState);
-  const [deleteDocumentState, deleteDocumentAction] = useActionState(deleteVehicleDocumentAction, initialActionState);
+  const [uploadState, uploadAction] = useActionState(
+    uploadVehicleDocumentAction,
+    initialActionState,
+  );
+  const [deleteDocumentState, deleteDocumentAction] = useActionState(
+    deleteVehicleDocumentAction,
+    initialActionState,
+  );
 
   useEffect(() => {
-    if (invoiceState.status === "success" || uploadState.status === "success" || deleteDocumentState.status === "success") {
+    if (
+      invoiceState.status === "success" ||
+      uploadState.status === "success" ||
+      deleteDocumentState.status === "success"
+    ) {
       router.refresh();
     }
   }, [deleteDocumentState.status, invoiceState.status, router, uploadState.status]);
@@ -145,22 +172,36 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
     <>
       <header className="vehicle-detail-header">
         <div>
-          <Link className="vehicle-back-link" href="/vehicles">← Vehicles</Link>
+          <Link className="vehicle-back-link" href="/vehicles">
+            ← Vehicles
+          </Link>
           <p className="eyebrow">Vehicle master detail</p>
           <h1>{valueOrDash(vehicle.registrationNumber)}</h1>
-          <p>VMF code {vehicle.vmfCode} · GG number {valueOrDash(vehicle.fleetNumber)}</p>
+          <p>
+            VMF code {vehicle.vmfCode} · GG number {valueOrDash(vehicle.fleetNumber)}
+          </p>
         </div>
         <div className="button-row">
-          <Link className="button button-secondary" href={`/vehicles/${vehicle.vmfCode}/edit`}>Edit vehicle</Link>
-          <button className="button button-danger" type="button" onClick={() => setShowDeleteDialog(true)}>Delete</button>
+          <Link className="button button-secondary" href={`/vehicles/${vehicle.vmfCode}/edit`}>
+            Edit vehicle
+          </Link>
+          <button
+            className="button button-danger"
+            type="button"
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            Delete
+          </button>
         </div>
       </header>
 
       <ActionNotice state={deleteState} />
 
       <section className="vehicle-detail-status" aria-label="Vehicle status">
-        <span className="vehicle-badge">{valueOrDash(vehicle.statusDescription) } </span>
-        <span>Location: {valueOrDash(vehicle.locationDescription)} ({valueOrDash(vehicle.locationCode)})</span>
+        <span className="vehicle-badge">{valueOrDash(vehicle.statusDescription)} </span>
+        <span>
+          Location: {valueOrDash(vehicle.locationDescription)} ({valueOrDash(vehicle.locationCode)})
+        </span>
         <span>Site: {valueOrDash(vehicle.siteCode)}</span>
       </section>
 
@@ -168,21 +209,44 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
         <DetailSection title="Identification">
           <DetailList>
             <DetailField label="Fleet number (GG)" value={valueOrDash(vehicle.fleetNumber)} />
-            <DetailField label="Registration (GP)" value={valueOrDash(vehicle.registrationNumber)} />
+            <DetailField
+              label="Registration (GP)"
+              value={valueOrDash(vehicle.registrationNumber)}
+            />
             <DetailField label="Asset number" value={valueOrDash(vehicle.assetNumber)} />
             <DetailField label="Chassis number" value={valueOrDash(vehicle.chassisNumber)} />
             <DetailField label="Engine number" value={valueOrDash(vehicle.engineNumber)} />
             <DetailField label="Previous GG number" value={valueOrDash(vehicle.previousGgNumber)} />
-            <DetailField label="Follow-up GG number" value={valueOrDash(vehicle.followupGgNumber)} />
-            <DetailField label="Recovered GG number" value={valueOrDash(vehicle.recoveredGgNumber)} />
+            <DetailField
+              label="Follow-up GG number"
+              value={valueOrDash(vehicle.followupGgNumber)}
+            />
+            <DetailField
+              label="Recovered GG number"
+              value={valueOrDash(vehicle.recoveredGgNumber)}
+            />
             <DetailField label="Renumbered to" value={valueOrDash(vehicle.renumberedTo)} />
           </DetailList>
         </DetailSection>
 
         <DetailSection title="Vehicle specifications">
           <DetailList>
-            <DetailField label="Model" value={vehicle.modelName ? `${vehicle.modelName} (${vehicle.modelCode})` : valueOrDash(vehicle.modelCode)} />
-            <DetailField label="Type" value={vehicle.typeName ? `${vehicle.typeName} (${vehicle.typeCode})` : valueOrDash(vehicle.typeCode)} />
+            <DetailField
+              label="Model"
+              value={
+                vehicle.modelName
+                  ? `${vehicle.modelName} (${vehicle.modelCode})`
+                  : valueOrDash(vehicle.modelCode)
+              }
+            />
+            <DetailField
+              label="Type"
+              value={
+                vehicle.typeName
+                  ? `${vehicle.typeName} (${vehicle.typeCode})`
+                  : valueOrDash(vehicle.typeCode)
+              }
+            />
             <DetailField label="Year manufactured" value={valueOrDash(vehicle.yearManufactured)} />
             <DetailField label="Colour" value={valueOrDash(vehicle.colour)} />
             <DetailField label="Transmission" value={valueOrDash(vehicle.transmission)} />
@@ -197,12 +261,24 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
         <DetailSection title="Odometer and dates">
           <DetailList>
             <DetailField label="Take-on date" value={formatDate(vehicle.takeOnDate)} />
-            <DetailField label="Take-on odometer" value={`${vehicle.takeOnOdo.toLocaleString("en-ZA")} km`} />
-            <DetailField label="Current odometer" value={`${vehicle.currentOdo.toLocaleString("en-ZA")} km`} />
+            <DetailField
+              label="Take-on odometer"
+              value={`${vehicle.takeOnOdo.toLocaleString("en-ZA")} km`}
+            />
+            <DetailField
+              label="Current odometer"
+              value={`${vehicle.currentOdo.toLocaleString("en-ZA")} km`}
+            />
             <DetailField label="Odometer adjustment" value={valueOrDash(vehicle.odoAdjustment)} />
             <DetailField label="Odometer last updated" value={formatDate(vehicle.odoUpdateDate)} />
-            <DetailField label="First registration date" value={formatDate(vehicle.firstRegistrationDate)} />
-            <DetailField label="Vehicle status date" value={formatDate(vehicle.vehicleStatusDate)} />
+            <DetailField
+              label="First registration date"
+              value={formatDate(vehicle.firstRegistrationDate)}
+            />
+            <DetailField
+              label="Vehicle status date"
+              value={formatDate(vehicle.vehicleStatusDate)}
+            />
           </DetailList>
         </DetailSection>
 
@@ -210,11 +286,23 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
           <DetailList>
             <DetailField label="Fuel card number" value={valueOrDash(vehicle.fuelCardNumber)} />
             <DetailField label="Fuel card date" value={formatDate(vehicle.fuelCardDate)} />
-            <DetailField label="Maintenance card number" value={valueOrDash(vehicle.maintCardNumber)} />
-            <DetailField label="Maintenance card expiry" value={formatDate(vehicle.maintCardExpiry)} />
+            <DetailField
+              label="Maintenance card number"
+              value={valueOrDash(vehicle.maintCardNumber)}
+            />
+            <DetailField
+              label="Maintenance card expiry"
+              value={formatDate(vehicle.maintCardExpiry)}
+            />
             <DetailField label="Licence due date" value={formatDate(vehicle.licenceDueDate)} />
-            <DetailField label="Licence register number" value={valueOrDash(vehicle.licenceRegisterNumber)} />
-            <DetailField label="Operator card number" value={valueOrDash(vehicle.operatorCardNumber)} />
+            <DetailField
+              label="Licence register number"
+              value={valueOrDash(vehicle.licenceRegisterNumber)}
+            />
+            <DetailField
+              label="Operator card number"
+              value={valueOrDash(vehicle.operatorCardNumber)}
+            />
           </DetailList>
         </DetailSection>
 
@@ -238,8 +326,16 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
             </div>
             <form action={invoiceAction} className="vehicle-inline-form">
               <input type="hidden" name="vmfCode" value={vehicle.vmfCode} readOnly />
-              <label className="sr-only" htmlFor="invoice-number">Invoice number</label>
-              <input id="invoice-number" name="invoiceNumber" className="form-input" maxLength={60} defaultValue={vehicle.invoiceNumber ?? ""} />
+              <label className="sr-only" htmlFor="invoice-number">
+                Invoice number
+              </label>
+              <input
+                id="invoice-number"
+                name="invoiceNumber"
+                className="form-input"
+                maxLength={60}
+                defaultValue={vehicle.invoiceNumber ?? ""}
+              />
               <SubmitButton label="Save" pendingLabel="Saving..." />
             </form>
             <ActionNotice state={invoiceState} />
@@ -248,10 +344,19 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
 
         <DetailSection title="Maintenance and fuel">
           <DetailList>
-            <DetailField label="Additional fuel tank (L)" value={valueOrDash(vehicle.additionalFuelTank)} />
-            <DetailField label="Average consumption" value={valueOrDash(vehicle.averageConsumption)} />
+            <DetailField
+              label="Additional fuel tank (L)"
+              value={valueOrDash(vehicle.additionalFuelTank)}
+            />
+            <DetailField
+              label="Average consumption"
+              value={valueOrDash(vehicle.averageConsumption)}
+            />
             <DetailField label="Service last done" value={formatDate(vehicle.serviceLastDone)} />
-            <DetailField label="Service last odometer" value={valueOrDash(vehicle.serviceLastOdo)} />
+            <DetailField
+              label="Service last odometer"
+              value={valueOrDash(vehicle.serviceLastOdo)}
+            />
             <DetailField label="COF last done" value={formatDate(vehicle.cofLastDone)} />
             <DetailField label="COF required" value={valueOrDash(vehicle.cofRequired)} />
             <DetailField label="COF number" value={valueOrDash(vehicle.cofNumber)} />
@@ -260,7 +365,10 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
         </DetailSection>
       </div>
 
-      <section className="vehicle-detail-section vehicle-documents-section" aria-labelledby="vehicle-documents-title">
+      <section
+        className="vehicle-detail-section vehicle-documents-section"
+        aria-labelledby="vehicle-documents-title"
+      >
         <div className="vehicle-detail-section-heading">
           <div>
             <h2 id="vehicle-documents-title">Vehicle documents</h2>
@@ -271,7 +379,10 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
         {documentsUnavailable ? (
           <div className="notice notice-info" role="status">
             <span aria-hidden="true">i</span>
-            <span>Document storage is unavailable on this database or service. Vehicle details remain available.</span>
+            <span>
+              Document storage is unavailable on this database or service. Vehicle details remain
+              available.
+            </span>
           </div>
         ) : null}
         <ActionNotice state={uploadState} />
@@ -279,19 +390,54 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
 
         {!documentsUnavailable ? (
           <>
-            <form action={uploadAction} className="vehicle-document-upload" encType="multipart/form-data">
+            <form
+              action={uploadAction}
+              className="vehicle-document-upload"
+              encType="multipart/form-data"
+            >
               <input type="hidden" name="vmfCode" value={vehicle.vmfCode} readOnly />
               <div className="form-field">
-                <label className="form-label" htmlFor="document-category">Category</label>
-                <select id="document-category" name="category" className="form-select" defaultValue="Other">
-                  {(["Accident", "Contract", "Fine", "Insurance", "Licence", "Logbook", "Maintenance", "Other", "Registration", "RoadWorthy"] as VehicleDocumentCategory[]).map((category) => (
-                    <option key={category} value={category}>{category}</option>
+                <label className="form-label" htmlFor="document-category">
+                  Category
+                </label>
+                <select
+                  id="document-category"
+                  name="category"
+                  className="form-select"
+                  defaultValue="Other"
+                >
+                  {(
+                    [
+                      "Accident",
+                      "Contract",
+                      "Fine",
+                      "Insurance",
+                      "Licence",
+                      "Logbook",
+                      "Maintenance",
+                      "Other",
+                      "Registration",
+                      "RoadWorthy",
+                    ] as VehicleDocumentCategory[]
+                  ).map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
                   ))}
                 </select>
               </div>
               <div className="form-field vehicle-document-file-field">
-                <label className="form-label" htmlFor="vehicle-document-file">Document</label>
-                <input id="vehicle-document-file" name="file" type="file" accept="image/jpeg,image/png,application/pdf" capture="environment" required />
+                <label className="form-label" htmlFor="vehicle-document-file">
+                  Document
+                </label>
+                <input
+                  id="vehicle-document-file"
+                  name="file"
+                  type="file"
+                  accept="image/jpeg,image/png,application/pdf"
+                  capture="environment"
+                  required
+                />
                 <span className="form-hint">JPEG, PNG, or PDF up to 20 MB.</span>
               </div>
               <SubmitButton label="Upload" pendingLabel="Uploading..." />
@@ -302,7 +448,9 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
             ) : (
               <div className="vehicle-table-wrapper">
                 <table className="vehicle-table vehicle-detail-documents-table">
-                  <caption className="sr-only">Documents linked to vehicle {vehicle.vmfCode}</caption>
+                  <caption className="sr-only">
+                    Documents linked to vehicle {vehicle.vmfCode}
+                  </caption>
                   <thead>
                     <tr>
                       <th scope="col">Category</th>
@@ -323,10 +471,27 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
                         <td>{formatDate(document.dateCreated)}</td>
                         <td>
                           <div className="button-row">
-                            <Link className="button button-secondary button-small" href={`/vehicles/${vehicle.vmfCode}/documents/${document.documentId}/download`} target="_blank" rel="noreferrer">Download</Link>
+                            <Link
+                              className="button button-secondary button-small"
+                              href={`/vehicles/${vehicle.vmfCode}/documents/${document.documentId}/download`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Download
+                            </Link>
                             <form action={deleteDocumentAction}>
-                              <input type="hidden" name="vmfCode" value={vehicle.vmfCode} readOnly />
-                              <input type="hidden" name="documentId" value={document.documentId} readOnly />
+                              <input
+                                type="hidden"
+                                name="vmfCode"
+                                value={vehicle.vmfCode}
+                                readOnly
+                              />
+                              <input
+                                type="hidden"
+                                name="documentId"
+                                value={document.documentId}
+                                readOnly
+                              />
                               <DeleteDocumentButton />
                             </form>
                           </div>
@@ -342,18 +507,41 @@ export default function VehicleDetailClient({ vehicle, documents, documentsUnava
       </section>
 
       <div className="vehicle-footer-actions">
-        <Link className="button button-secondary" href="/vehicles">Back to vehicles</Link>
-        <Link className="button button-secondary" href="/home">Home</Link>
+        <Link className="button button-secondary" href="/vehicles">
+          Back to vehicles
+        </Link>
+        <Link className="button button-secondary" href="/home">
+          Home
+        </Link>
       </div>
 
       {showDeleteDialog ? (
-        <div className="modal-overlay" role="presentation" onClick={() => setShowDeleteDialog(false)}>
-          <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="delete-vehicle-title" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="modal-overlay"
+          role="presentation"
+          onClick={() => setShowDeleteDialog(false)}
+        >
+          <section
+            className="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-vehicle-title"
+            onClick={(event) => event.stopPropagation()}
+          >
             <h2 id="delete-vehicle-title">Delete vehicle?</h2>
-            <p>This will soft-delete vehicle {valueOrDash(vehicle.registrationNumber)} from Vehicle Master.</p>
+            <p>
+              This will soft-delete vehicle {valueOrDash(vehicle.registrationNumber)} from Vehicle
+              Master.
+            </p>
             <form action={deleteAction} className="button-row">
               <input type="hidden" name="vmfCode" value={vehicle.vmfCode} readOnly />
-              <button className="button button-secondary" type="button" onClick={() => setShowDeleteDialog(false)}>Cancel</button>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => setShowDeleteDialog(false)}
+              >
+                Cancel
+              </button>
               <SubmitButton label="Delete vehicle" pendingLabel="Deleting..." />
             </form>
           </section>

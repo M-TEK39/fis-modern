@@ -12,7 +12,8 @@ export type VehicleBarcodeVehicle = {
   barcode: string | null;
 };
 
-export type VehicleBarcodeApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type VehicleBarcodeApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class VehicleBarcodeApiError extends Error {
   constructor(
@@ -142,7 +143,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
         // Keep the status-based message when the API has no JSON error body.
       }
 
-      throw new VehicleBarcodeApiError(response.status >= 500 ? "unavailable" : "invalid-response", message);
+      throw new VehicleBarcodeApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+      );
     }
 
     return response;
@@ -158,7 +162,9 @@ async function requestApi(path: string, init: RequestInit = {}) {
 }
 
 export async function searchVehiclesForBarcode(searchTerm: string) {
-  const response = await requestApi(`api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm)}`);
+  const response = await requestApi(
+    `api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm)}`,
+  );
   const payload = (await response.json()) as unknown;
   return getCollection(payload)
     .map(mapVehicle)

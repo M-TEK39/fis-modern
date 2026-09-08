@@ -16,7 +16,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "SQL identifiers are fixed compatibility allowlists; all submitted values are parameters.")]
+    Justification = "SQL identifiers are fixed compatibility allowlists; all submitted values are parameters."
+)]
 public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
 {
     private const string VehicleTableName = "vehicle_master";
@@ -29,7 +30,7 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         "fleet_number",
         "registration_number",
         "vehicle_status_code",
-        "renumbered_to"
+        "renumbered_to",
     ];
 
     private static readonly string[] RequiredCopyColumns =
@@ -57,30 +58,110 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         "Licence_receiver",
         "lic_register_number",
         "licence_comments",
-        "user_access_code"
+        "user_access_code",
     ];
 
     private static readonly string[] CopyableVehicleColumns =
     [
-        "model_code", "type_code", "location_code", "take_on_date", "take_on_odo", "current_odo",
-        "odo_adjustment", "derived_odo", "odo_update_date", "engine_number_1", "chassis_number", "tare",
-        "gvm", "year_manufactured", "optional_extras", "licence_due_date", "additional_fuel_tank",
-        "average_consumption", "fuel_card_number", "fuel_card_date", "purchase_date", "purchase_amount",
-        "book_value", "book_value_date", "maint_card_number", "maint_card_exdate", "purchased_from",
-        "sold_to", "sold_date", "sold_amount", "service_last_done", "service_last_odo", "cof_last_done",
-        "cof_required", "cof_number", "operator_card_number", "monthly_overhead", "colour", "tow_hitch",
-        "canopy", "Cof_amount", "Licence_receiver", "Licence_receiver_id", "Licence_receiver_tel",
-        "Licence_receiver_site", "Licence_date_taken", "highest_km", "fuel_ltd", "fuel_ytd",
-        "fuel_3month_average", "oil_ltd", "oil_ytd", "oil_3month_average", "maint_ltd", "maint_ytd",
-        "maint_3month_average", "repairs_ltd", "repairs_ytd", "repairs_3month_average", "tyres_ltd",
-        "tyres_ytd", "tyres_3month_average", "accident_ltd", "accident_ytd", "accident_3month_average",
-        "toll_ltd", "toll_ytd", "toll_3month_average", "other_ltd", "other_ytd", "other_3month_average",
-        "km_ltd", "km_ytd", "km_3month_average", "lic_register_number", "lic_registration_doc",
-        "licence_comments", "default_site", "previos_gg_number", "followup_gg_number", "vehicle_status_date",
-        "barcode", "user_access_code", "captured_date", "reserved", "LPG", "extended_service",
-        "destroyed_date", "destroyed_amount", "destroyed_receipt", "previos_gg_number_2", "date_First_Regist",
-        "vs_code", "invoice_number", "RelieveVehicle", "initial_site_code", "veh_site_code", "temp_vmf_code",
-        "supplier_id"
+        "model_code",
+        "type_code",
+        "location_code",
+        "take_on_date",
+        "take_on_odo",
+        "current_odo",
+        "odo_adjustment",
+        "derived_odo",
+        "odo_update_date",
+        "engine_number_1",
+        "chassis_number",
+        "tare",
+        "gvm",
+        "year_manufactured",
+        "optional_extras",
+        "licence_due_date",
+        "additional_fuel_tank",
+        "average_consumption",
+        "fuel_card_number",
+        "fuel_card_date",
+        "purchase_date",
+        "purchase_amount",
+        "book_value",
+        "book_value_date",
+        "maint_card_number",
+        "maint_card_exdate",
+        "purchased_from",
+        "sold_to",
+        "sold_date",
+        "sold_amount",
+        "service_last_done",
+        "service_last_odo",
+        "cof_last_done",
+        "cof_required",
+        "cof_number",
+        "operator_card_number",
+        "monthly_overhead",
+        "colour",
+        "tow_hitch",
+        "canopy",
+        "Cof_amount",
+        "Licence_receiver",
+        "Licence_receiver_id",
+        "Licence_receiver_tel",
+        "Licence_receiver_site",
+        "Licence_date_taken",
+        "highest_km",
+        "fuel_ltd",
+        "fuel_ytd",
+        "fuel_3month_average",
+        "oil_ltd",
+        "oil_ytd",
+        "oil_3month_average",
+        "maint_ltd",
+        "maint_ytd",
+        "maint_3month_average",
+        "repairs_ltd",
+        "repairs_ytd",
+        "repairs_3month_average",
+        "tyres_ltd",
+        "tyres_ytd",
+        "tyres_3month_average",
+        "accident_ltd",
+        "accident_ytd",
+        "accident_3month_average",
+        "toll_ltd",
+        "toll_ytd",
+        "toll_3month_average",
+        "other_ltd",
+        "other_ytd",
+        "other_3month_average",
+        "km_ltd",
+        "km_ytd",
+        "km_3month_average",
+        "lic_register_number",
+        "lic_registration_doc",
+        "licence_comments",
+        "default_site",
+        "previos_gg_number",
+        "followup_gg_number",
+        "vehicle_status_date",
+        "barcode",
+        "user_access_code",
+        "captured_date",
+        "reserved",
+        "LPG",
+        "extended_service",
+        "destroyed_date",
+        "destroyed_amount",
+        "destroyed_receipt",
+        "previos_gg_number_2",
+        "date_First_Regist",
+        "vs_code",
+        "invoice_number",
+        "RelieveVehicle",
+        "initial_site_code",
+        "veh_site_code",
+        "temp_vmf_code",
+        "supplier_id",
     ];
 
     private static readonly string[] RequiredHistoryColumns =
@@ -89,7 +170,7 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         "hist_fleet_number",
         "hist_vehicle_status_code",
         "hist_date_changed",
-        "hist_user_access_code"
+        "hist_user_access_code",
     ];
 
     private static readonly IReadOnlyList<RecoveredVehicleStatusOption> DefaultStatusOptions =
@@ -105,7 +186,7 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         new(9, "Privatised"),
         new(10, "Recovered"),
         new(11, "Missing"),
-        new(12, "Destroyed")
+        new(12, "Destroyed"),
     ];
 
     private readonly FisDbContext _context;
@@ -115,7 +196,10 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<IReadOnlyList<RecoveredVehicleSearchRecord>> SearchAsync(string searchTerm, bool byRegistration)
+    public async Task<IReadOnlyList<RecoveredVehicleSearchRecord>> SearchAsync(
+        string searchTerm,
+        bool byRegistration
+    )
     {
         if (string.IsNullOrWhiteSpace(searchTerm))
         {
@@ -132,19 +216,41 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         try
         {
             var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            var vehicleColumns = await GetColumnsAsync(connection, VehicleTableName, RequiredVehicleColumns, transaction);
+            var vehicleColumns = await GetColumnsAsync(
+                connection,
+                VehicleTableName,
+                RequiredVehicleColumns,
+                transaction
+            );
             var statusColumns = await GetColumnsAsync(connection, StatusTableName, transaction);
-            var rows = await QuerySearchAsync(connection, transaction, vehicleColumns, searchTerm.Trim(), byRegistration);
-            var statusOptions = await QueryStatusOptionsAsync(connection, transaction, statusColumns);
-            var statusDescriptions = statusOptions.ToDictionary(option => option.Code, option => option.Description);
+            var rows = await QuerySearchAsync(
+                connection,
+                transaction,
+                vehicleColumns,
+                searchTerm.Trim(),
+                byRegistration
+            );
+            var statusOptions = await QueryStatusOptionsAsync(
+                connection,
+                transaction,
+                statusColumns
+            );
+            var statusDescriptions = statusOptions.ToDictionary(
+                option => option.Code,
+                option => option.Description
+            );
 
-            return rows
-                .Select(row => row with
-                {
-                    StatusDescription = statusDescriptions.TryGetValue(row.VehicleStatusCode, out var description)
-                        ? description
-                        : GetDefaultStatusDescription(row.VehicleStatusCode)
-                })
+            return rows.Select(row =>
+                    row with
+                    {
+                        StatusDescription = statusDescriptions.TryGetValue(
+                            row.VehicleStatusCode,
+                            out var description
+                        )
+                            ? description
+                            : GetDefaultStatusDescription(row.VehicleStatusCode),
+                    }
+                )
                 .ToList();
         }
         finally
@@ -168,10 +274,22 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         try
         {
             var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            var vehicleColumns = await GetColumnsAsync(connection, VehicleTableName, RequiredVehicleColumns, transaction);
+            var vehicleColumns = await GetColumnsAsync(
+                connection,
+                VehicleTableName,
+                RequiredVehicleColumns,
+                transaction
+            );
             var historyColumns = await GetColumnsAsync(connection, HistoryTableName, transaction);
             var statusColumns = await GetColumnsAsync(connection, StatusTableName, transaction);
-            return await QueryDetailsAsync(connection, transaction, vehicleColumns, historyColumns, statusColumns, vmfCode);
+            return await QueryDetailsAsync(
+                connection,
+                transaction,
+                vehicleColumns,
+                historyColumns,
+                statusColumns,
+                vmfCode
+            );
         }
         finally
         {
@@ -182,7 +300,10 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         }
     }
 
-    public async Task<RecoveredVehicleUpdateResult> UpdateAsync(RecoveredVehicleUpdate update, int currentUserId)
+    public async Task<RecoveredVehicleUpdateResult> UpdateAsync(
+        RecoveredVehicleUpdate update,
+        int currentUserId
+    )
     {
         ArgumentNullException.ThrowIfNull(update);
 
@@ -193,15 +314,34 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
             await connection.OpenAsync();
         }
 
-        await using var ownedTransaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var ownedTransaction = await connection.BeginTransactionAsync(
+            IsolationLevel.Serializable
+        );
         try
         {
-            var vehicleColumns = await GetColumnsAsync(connection, VehicleTableName, RequiredVehicleColumns.Concat(RequiredCopyColumns).Distinct().ToArray(), ownedTransaction);
-            var historyColumns = await GetColumnsAsync(connection, HistoryTableName, RequiredHistoryColumns, ownedTransaction);
-            var oldVehicle = await QueryVehicleForUpdateAsync(connection, ownedTransaction, vehicleColumns, update.VmfCode);
+            var vehicleColumns = await GetColumnsAsync(
+                connection,
+                VehicleTableName,
+                RequiredVehicleColumns.Concat(RequiredCopyColumns).Distinct().ToArray(),
+                ownedTransaction
+            );
+            var historyColumns = await GetColumnsAsync(
+                connection,
+                HistoryTableName,
+                RequiredHistoryColumns,
+                ownedTransaction
+            );
+            var oldVehicle = await QueryVehicleForUpdateAsync(
+                connection,
+                ownedTransaction,
+                vehicleColumns,
+                update.VmfCode
+            );
             if (oldVehicle is null)
             {
-                throw new KeyNotFoundException($"Vehicle with vmf_code {update.VmfCode} was not found.");
+                throw new KeyNotFoundException(
+                    $"Vehicle with vmf_code {update.VmfCode} was not found."
+                );
             }
 
             if (!string.IsNullOrWhiteSpace(oldVehicle.RenumberedTo))
@@ -209,24 +349,49 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
                 throw new InvalidOperationException("This vehicle has already been renumbered.");
             }
 
-            if (string.Equals(oldVehicle.FleetNumber, update.RecoveredFleetNumber, StringComparison.OrdinalIgnoreCase))
+            if (
+                string.Equals(
+                    oldVehicle.FleetNumber,
+                    update.RecoveredFleetNumber,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
-                throw new InvalidOperationException("The recovered GG number must be different from the stolen vehicle's GG number.");
+                throw new InvalidOperationException(
+                    "The recovered GG number must be different from the stolen vehicle's GG number."
+                );
             }
 
-            if (await FleetNumberExistsAsync(connection, ownedTransaction, vehicleColumns, update.RecoveredFleetNumber, update.VmfCode))
+            if (
+                await FleetNumberExistsAsync(
+                    connection,
+                    ownedTransaction,
+                    vehicleColumns,
+                    update.RecoveredFleetNumber,
+                    update.VmfCode
+                )
+            )
             {
-                throw new InvalidOperationException($"The recovered GG number {update.RecoveredFleetNumber} already exists.");
+                throw new InvalidOperationException(
+                    $"The recovered GG number {update.RecoveredFleetNumber} already exists."
+                );
             }
 
-            await UpdateOriginalVehicleAsync(connection, ownedTransaction, vehicleColumns, update, currentUserId);
+            await UpdateOriginalVehicleAsync(
+                connection,
+                ownedTransaction,
+                vehicleColumns,
+                update,
+                currentUserId
+            );
             var newVmfCode = await InsertRecoveredVehicleAsync(
                 connection,
                 ownedTransaction,
                 vehicleColumns,
                 oldVehicle,
                 update,
-                currentUserId);
+                currentUserId
+            );
 
             await InsertHistoryAsync(
                 connection,
@@ -236,7 +401,8 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
                 oldVehicle.FleetNumber,
                 null,
                 update.DateChanged,
-                currentUserId);
+                currentUserId
+            );
             await InsertHistoryAsync(
                 connection,
                 ownedTransaction,
@@ -245,19 +411,28 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
                 null,
                 oldVehicle.VehicleStatusCode,
                 update.DateChanged,
-                currentUserId);
+                currentUserId
+            );
 
             await ownedTransaction.CommitAsync();
 
-            var statusColumns = await GetColumnsAsync(connection, StatusTableName, transaction: null);
-            var updatedVehicle = await QueryDetailsAsync(
+            var statusColumns = await GetColumnsAsync(
                 connection,
-                transaction: null,
-                vehicleColumns,
-                historyColumns,
-                statusColumns,
-                update.VmfCode)
-                ?? throw new InvalidOperationException("The recovered vehicle update completed but the original vehicle could not be reloaded.");
+                StatusTableName,
+                transaction: null
+            );
+            var updatedVehicle =
+                await QueryDetailsAsync(
+                    connection,
+                    transaction: null,
+                    vehicleColumns,
+                    historyColumns,
+                    statusColumns,
+                    update.VmfCode
+                )
+                ?? throw new InvalidOperationException(
+                    "The recovered vehicle update completed but the original vehicle could not be reloaded."
+                );
 
             return new RecoveredVehicleUpdateResult(updatedVehicle, newVmfCode);
         }
@@ -288,7 +463,8 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         DbTransaction? transaction,
         IReadOnlySet<string> columns,
         string searchTerm,
-        bool byRegistration)
+        bool byRegistration
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -311,13 +487,16 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            results.Add(new RecoveredVehicleSearchRecord(
-                ReadInt32(reader, "vmf_code") ?? 0,
-                ReadString(reader, "fleet_number"),
-                ReadString(reader, "registration_number"),
-                ReadInt16(reader, "vehicle_status_code") ?? 0,
-                null,
-                ReadString(reader, "renumbered_to")));
+            results.Add(
+                new RecoveredVehicleSearchRecord(
+                    ReadInt32(reader, "vmf_code") ?? 0,
+                    ReadString(reader, "fleet_number"),
+                    ReadString(reader, "registration_number"),
+                    ReadInt16(reader, "vehicle_status_code") ?? 0,
+                    null,
+                    ReadString(reader, "renumbered_to")
+                )
+            );
         }
 
         return results;
@@ -329,7 +508,8 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         IReadOnlySet<string> vehicleColumns,
         IReadOnlySet<string> historyColumns,
         IReadOnlySet<string> statusColumns,
-        int vmfCode)
+        int vmfCode
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -365,13 +545,20 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         }
 
         var statusOptions = await QueryStatusOptionsAsync(connection, transaction, statusColumns);
-        var statusDescription = statusOptions.FirstOrDefault(option => option.Code == vehicleStatusCode)?.Description;
+        var statusDescription = statusOptions
+            .FirstOrDefault(option => option.Code == vehicleStatusCode)
+            ?.Description;
         if (string.IsNullOrWhiteSpace(statusDescription))
         {
             statusDescription = GetDefaultStatusDescription(vehicleStatusCode);
         }
 
-        var previous = await QueryPreviousHistoryAsync(connection, transaction, historyColumns, vmfCode);
+        var previous = await QueryPreviousHistoryAsync(
+            connection,
+            transaction,
+            historyColumns,
+            vmfCode
+        );
         return new RecoveredVehicleDetails(
             loadedVmfCode ?? vmfCode,
             fleetNumber,
@@ -381,14 +568,16 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
             renumberedTo,
             previous.FleetNumber,
             previous.DateChanged,
-            statusOptions);
+            statusOptions
+        );
     }
 
     private static async Task<RecoveredVehicleSearchRecord?> QueryVehicleForUpdateAsync(
         DbConnection connection,
         DbTransaction transaction,
         IReadOnlySet<string> columns,
-        int vmfCode)
+        int vmfCode
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -412,7 +601,8 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
                 ReadString(reader, "registration_number"),
                 ReadInt16(reader, "vehicle_status_code") ?? 0,
                 null,
-                ReadString(reader, "renumbered_to"))
+                ReadString(reader, "renumbered_to")
+            )
             : null;
     }
 
@@ -421,7 +611,8 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         DbTransaction transaction,
         IReadOnlySet<string> columns,
         string fleetNumber,
-        int excludedVmfCode)
+        int excludedVmfCode
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -442,14 +633,15 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         DbTransaction transaction,
         IReadOnlySet<string> columns,
         RecoveredVehicleUpdate update,
-        int currentUserId)
+        int currentUserId
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         var assignments = new List<string>
         {
             "[renumbered_to] = @renumberedTo",
-            "[vehicle_status_code] = @stolenStatusCode"
+            "[vehicle_status_code] = @stolenStatusCode",
         };
         AddParameter(command, "@renumberedTo", DbType.String, update.RecoveredFleetNumber);
         AddParameter(command, "@stolenStatusCode", DbType.Int16, 10);
@@ -463,7 +655,12 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         if (columns.Contains("modified_by_user_code"))
         {
             assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-            AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+            AddParameter(
+                command,
+                "@modifiedByUserCode",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
         }
 
         command.CommandText = $"""
@@ -476,7 +673,9 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
 
         if (await command.ExecuteNonQueryAsync() == 0)
         {
-            throw new KeyNotFoundException($"Vehicle with vmf_code {update.VmfCode} was not found.");
+            throw new KeyNotFoundException(
+                $"Vehicle with vmf_code {update.VmfCode} was not found."
+            );
         }
     }
 
@@ -486,7 +685,8 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         IReadOnlySet<string> columns,
         RecoveredVehicleSearchRecord oldVehicle,
         RecoveredVehicleUpdate update,
-        int currentUserId)
+        int currentUserId
+    )
     {
         var insertColumns = new List<string>();
         var selectExpressions = new List<string>();
@@ -494,7 +694,11 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         command.Transaction = transaction;
         var now = DateTime.UtcNow;
 
-        foreach (var column in CopyableVehicleColumns.Where(columns.Contains).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (
+            var column in CopyableVehicleColumns
+                .Where(columns.Contains)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+        )
         {
             insertColumns.Add($"[{column}]");
             switch (column.ToLowerInvariant())
@@ -545,7 +749,12 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         AddParameter(command, "@vehicleStatusCode", DbType.Int16, update.NewStatusCode);
         AddParameter(command, "@vehicleStatusDate", DbType.DateTime2, update.DateChanged);
         AddParameter(command, "@dateCreated", DbType.DateTime2, now);
-        AddParameter(command, "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddParameter(
+            command,
+            "@createdByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddParameter(command, "@isDeleted", DbType.Boolean, false);
         AddParameter(command, "@sourceVmfCode", DbType.Int32, oldVehicle.VmfCode);
 
@@ -567,7 +776,8 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
         string? fleetNumber,
         short? statusCode,
         DateTime dateChanged,
-        int currentUserId)
+        int currentUserId
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -577,7 +787,7 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
             "[hist_fleet_number]",
             "[hist_vehicle_status_code]",
             "[hist_date_changed]",
-            "[hist_user_access_code]"
+            "[hist_user_access_code]",
         };
         var values = new List<string>
         {
@@ -585,7 +795,7 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
             "@histFleetNumber",
             "@histStatusCode",
             "@histDateChanged",
-            "@histUserAccessCode"
+            "@histUserAccessCode",
         };
 
         if (columns.Contains("date_created"))
@@ -606,23 +816,38 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
             values.Add("@isDeleted");
         }
 
-        command.CommandText = $"INSERT INTO [dbo].[{HistoryTableName}] ({string.Join(", ", insertColumns)}) VALUES ({string.Join(", ", values)})";
+        command.CommandText =
+            $"INSERT INTO [dbo].[{HistoryTableName}] ({string.Join(", ", insertColumns)}) VALUES ({string.Join(", ", values)})";
         AddParameter(command, "@histVmfCode", DbType.Int32, vmfCode);
         AddParameter(command, "@histFleetNumber", DbType.String, fleetNumber);
         AddParameter(command, "@histStatusCode", DbType.Int16, statusCode);
         AddParameter(command, "@histDateChanged", DbType.DateTime2, dateChanged);
-        AddParameter(command, "@histUserAccessCode", DbType.Int16, currentUserId > 0 ? currentUserId : null);
+        AddParameter(
+            command,
+            "@histUserAccessCode",
+            DbType.Int16,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddParameter(command, "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
-        AddParameter(command, "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddParameter(
+            command,
+            "@createdByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddParameter(command, "@isDeleted", DbType.Boolean, false);
         await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task<(string? FleetNumber, DateTime? DateChanged)> QueryPreviousHistoryAsync(
+    private static async Task<(
+        string? FleetNumber,
+        DateTime? DateChanged
+    )> QueryPreviousHistoryAsync(
         DbConnection connection,
         DbTransaction? transaction,
         IReadOnlySet<string> columns,
-        int vmfCode)
+        int vmfCode
+    )
     {
         if (!RequiredHistoryColumns.All(columns.Contains))
         {
@@ -631,7 +856,9 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        var deletedFilter = columns.Contains("is_deleted") ? "AND ([is_deleted] = 0 OR [is_deleted] IS NULL)" : string.Empty;
+        var deletedFilter = columns.Contains("is_deleted")
+            ? "AND ([is_deleted] = 0 OR [is_deleted] IS NULL)"
+            : string.Empty;
         var tieBreaker = columns.Contains("hist_code") ? ", [hist_code] DESC" : string.Empty;
         command.CommandText = $"""
             SELECT TOP (1) [hist_fleet_number] AS [hist_fleet_number],
@@ -653,7 +880,8 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
     private static async Task<IReadOnlyList<RecoveredVehicleStatusOption>> QueryStatusOptionsAsync(
         DbConnection connection,
         DbTransaction? transaction,
-        IReadOnlySet<string> columns)
+        IReadOnlySet<string> columns
+    )
     {
         if (!columns.Contains("vehicle_status_code") || !columns.Contains("status_description"))
         {
@@ -687,14 +915,15 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
     private static async Task<HashSet<string>> GetColumnsAsync(
         DbConnection connection,
         string tableName,
-        DbTransaction? transaction)
-        => await GetColumnsAsync(connection, tableName, null, transaction);
+        DbTransaction? transaction
+    ) => await GetColumnsAsync(connection, tableName, null, transaction);
 
     private static async Task<HashSet<string>> GetColumnsAsync(
         DbConnection connection,
         string tableName,
         IReadOnlyCollection<string>? requiredColumns,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -719,7 +948,9 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
             var missing = requiredColumns.Where(column => !columns.Contains(column)).ToArray();
             if (missing.Length > 0)
             {
-                throw new InvalidOperationException($"The required recovered vehicle compatibility columns are not available on {tableName}: {string.Join(", ", missing)}");
+                throw new InvalidOperationException(
+                    $"The required recovered vehicle compatibility columns are not available on {tableName}: {string.Join(", ", missing)}"
+                );
             }
         }
 
@@ -734,20 +965,20 @@ public sealed class RecoveredVehicleRepository : IRecoveredVehicleRepository
             : "1 = 1";
     }
 
-    private static string? GetDefaultStatusDescription(short statusCode)
-        => DefaultStatusOptions.FirstOrDefault(option => option.Code == statusCode)?.Description;
+    private static string? GetDefaultStatusDescription(short statusCode) =>
+        DefaultStatusOptions.FirstOrDefault(option => option.Code == statusCode)?.Description;
 
-    private static string? ReadString(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : reader[column]?.ToString();
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : reader[column]?.ToString();
 
-    private static int? ReadInt32(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
+    private static int? ReadInt32(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
 
-    private static short? ReadInt16(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
+    private static short? ReadInt16(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
 
-    private static DateTime? ReadDateTime(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
+    private static DateTime? ReadDateTime(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
 
     private static void AddParameter(DbCommand command, string name, DbType type, object? value)
     {

@@ -15,7 +15,8 @@ public class NotificationLogController : BaseApiController
 
     public NotificationLogController(
         INotificationLogRepository repository,
-        ILogger<NotificationLogController> logger)
+        ILogger<NotificationLogController> logger
+    )
     {
         _repository = repository;
         _logger = logger;
@@ -150,7 +151,7 @@ public class NotificationLogController : BaseApiController
             ErrorMessage = log.ErrorMessage,
             RetryCount = log.RetryCount,
             ExternalMessageId = log.ExternalMessageId,
-            DateCreated = log.date_created
+            DateCreated = log.date_created,
         };
     }
 }

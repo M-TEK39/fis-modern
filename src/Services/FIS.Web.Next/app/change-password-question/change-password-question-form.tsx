@@ -36,11 +36,14 @@ export default function ChangePasswordQuestionForm({
 }: Readonly<{
   action: (formData: FormData) => void | Promise<void>;
   canManageOthers: boolean;
-  users: ReadonlyArray<Readonly<{ userAccessCode: number; userName: string | null; email: string | null }>>;
+  users: ReadonlyArray<
+    Readonly<{ userAccessCode: number; userName: string | null; email: string | null }>
+  >;
   username: string;
   email: string;
 }>) {
-  const selectedUserIsMissing = username && !users.some((user) => user.userName?.toLowerCase() === username.toLowerCase());
+  const selectedUserIsMissing =
+    username && !users.some((user) => user.userName?.toLowerCase() === username.toLowerCase());
 
   return (
     <form className="vehicle-status-maintenance-panel" action={action}>
@@ -50,49 +53,106 @@ export default function ChangePasswordQuestionForm({
           {canManageOthers ? (
             <select id="change-question-username" name="username" defaultValue={username} required>
               <option value="">Please select a Username</option>
-              {selectedUserIsMissing ? <option value={username}>{username} (selected)</option> : null}
+              {selectedUserIsMissing ? (
+                <option value={username}>{username} (selected)</option>
+              ) : null}
               {users.map((user) => (
-                <option key={user.userAccessCode} value={user.userName ?? String(user.userAccessCode)}>
+                <option
+                  key={user.userAccessCode}
+                  value={user.userName ?? String(user.userAccessCode)}
+                >
                   {user.userName ?? `User ${user.userAccessCode}`}
                 </option>
               ))}
             </select>
           ) : (
-            <input id="change-question-username" name="username" type="text" value={username} readOnly />
+            <input
+              id="change-question-username"
+              name="username"
+              type="text"
+              value={username}
+              readOnly
+            />
           )}
         </div>
         <div className="field">
           <label htmlFor="change-question-old-password">Old Password</label>
-          <input id="change-question-old-password" name="oldPassword" type="password" autoComplete="current-password" required />
+          <input
+            id="change-question-old-password"
+            name="oldPassword"
+            type="password"
+            autoComplete="current-password"
+            required
+          />
         </div>
         <div className="field">
           <label htmlFor="change-question-new-password">New Password</label>
-          <input id="change-question-new-password" name="newPassword" type="password" autoComplete="new-password" minLength={8} required />
+          <input
+            id="change-question-new-password"
+            name="newPassword"
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            required
+          />
         </div>
         <div className="field">
           <label htmlFor="change-question-confirm-password">Confirm New Password</label>
-          <input id="change-question-confirm-password" name="confirmNewPassword" type="password" autoComplete="new-password" minLength={8} required />
+          <input
+            id="change-question-confirm-password"
+            name="confirmNewPassword"
+            type="password"
+            autoComplete="new-password"
+            minLength={8}
+            required
+          />
         </div>
         <div className="field form-group-full">
           <label htmlFor="change-question-security-question">New Password Question</label>
-          <select id="change-question-security-question" name="securityQuestion" defaultValue="Select Question..." required>
+          <select
+            id="change-question-security-question"
+            name="securityQuestion"
+            defaultValue="Select Question..."
+            required
+          >
             <option value="Select Question...">Select Question...</option>
-            {SECURITY_QUESTIONS.map((question) => <option key={question} value={question}>{question}</option>)}
+            {SECURITY_QUESTIONS.map((question) => (
+              <option key={question} value={question}>
+                {question}
+              </option>
+            ))}
           </select>
         </div>
         <div className="field">
           <label htmlFor="change-question-security-answer">New Password Answer</label>
-          <input id="change-question-security-answer" name="securityAnswer" type="text" autoComplete="off" required />
+          <input
+            id="change-question-security-answer"
+            name="securityAnswer"
+            type="text"
+            autoComplete="off"
+            required
+          />
         </div>
         <div className="field">
           <label htmlFor="change-question-email">Email Address</label>
-          <input id="change-question-email" name="email" type="email" defaultValue={email} autoComplete="email" required />
+          <input
+            id="change-question-email"
+            name="email"
+            type="email"
+            defaultValue={email}
+            autoComplete="email"
+            required
+          />
         </div>
       </div>
-      <p className="muted-copy">Use at least 8 characters with uppercase, lowercase, a number, and a special character.</p>
+      <p className="muted-copy">
+        Use at least 8 characters with uppercase, lowercase, a number, and a special character.
+      </p>
       <div className="button-row">
         <SubmitButton />
-        <Link className="button button-secondary" href="/home">Cancel</Link>
+        <Link className="button button-secondary" href="/home">
+          Cancel
+        </Link>
       </div>
     </form>
   );

@@ -24,13 +24,18 @@ public class AuditInterceptor : SaveChangesInterceptor
     private static readonly HashSet<Type> _excludedTypes = new()
     {
         typeof(Audit),
-        typeof(UserStatusHistory)
+        typeof(UserStatusHistory),
     };
 
     private static readonly HashSet<string> _sensitiveFields = new(StringComparer.OrdinalIgnoreCase)
     {
-        "password_hash", "password_salt", "password_reset_token",
-        "hash", "salt", "token", "secret"
+        "password_hash",
+        "password_salt",
+        "password_reset_token",
+        "hash",
+        "salt",
+        "token",
+        "secret",
     };
 
     public AuditInterceptor(IHttpContextAccessor httpContextAccessor)
@@ -43,7 +48,8 @@ public class AuditInterceptor : SaveChangesInterceptor
     public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         if (eventData.Context is FisDbContext ctx)
         {
@@ -59,7 +65,8 @@ public class AuditInterceptor : SaveChangesInterceptor
 
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData,
-        InterceptionResult<int> result)
+        InterceptionResult<int> result
+    )
     {
         if (eventData.Context is FisDbContext ctx)
         {
@@ -84,7 +91,10 @@ public class AuditInterceptor : SaveChangesInterceptor
             if (_excludedTypes.Contains(entry.Entity.GetType()))
                 continue;
 
-            if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted))
+            if (
+                entry.State
+                is not (EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            )
                 continue;
 
             var tableName = entry.Metadata.GetTableName() ?? entry.Entity.GetType().Name;
@@ -92,10 +102,10 @@ public class AuditInterceptor : SaveChangesInterceptor
 
             var action = entry.State switch
             {
-                EntityState.Added    => "INSERT",
+                EntityState.Added => "INSERT",
                 EntityState.Modified => "UPDATE",
-                EntityState.Deleted  => "DELETE",
-                _                    => entry.State.ToString()
+                EntityState.Deleted => "DELETE",
+                _ => entry.State.ToString(),
             };
 
             string changesJson;
@@ -104,9 +114,9 @@ public class AuditInterceptor : SaveChangesInterceptor
                 changesJson = entry.State switch
                 {
                     EntityState.Modified => BuildUpdateDiff(entry),
-                    EntityState.Added    => BuildSnapshot(entry, isDeleted: false),
-                    EntityState.Deleted  => BuildSnapshot(entry, isDeleted: true),
-                    _                    => "{}"
+                    EntityState.Added => BuildSnapshot(entry, isDeleted: false),
+                    EntityState.Deleted => BuildSnapshot(entry, isDeleted: true),
+                    _ => "{}",
                 };
             }
             catch
@@ -118,16 +128,18 @@ public class AuditInterceptor : SaveChangesInterceptor
             if (action == "UPDATE" && changesJson == "{}")
                 continue;
 
-            result.Add(new Audit
-            {
-                Action              = action,
-                TableName           = tableName,
-                PrimaryKey          = primaryKey,
-                Changes             = changesJson,
-                ActionedBy          = userEmail,
-                date_created        = now,
-                created_by_user_code = userCode > 0 ? userCode : null
-            });
+            result.Add(
+                new Audit
+                {
+                    Action = action,
+                    TableName = tableName,
+                    PrimaryKey = primaryKey,
+                    Changes = changesJson,
+                    ActionedBy = userEmail,
+                    date_created = now,
+                    created_by_user_code = userCode > 0 ? userCode : null,
+                }
+            );
         }
 
         return result;
@@ -141,14 +153,17 @@ public class AuditInterceptor : SaveChangesInterceptor
 
         foreach (var prop in entry.Properties)
         {
-            if (!prop.IsModified) continue;
-            if (IsSensitive(prop.Metadata.Name)) continue;
-            if (Equals(prop.OriginalValue, prop.CurrentValue)) continue;
+            if (!prop.IsModified)
+                continue;
+            if (IsSensitive(prop.Metadata.Name))
+                continue;
+            if (Equals(prop.OriginalValue, prop.CurrentValue))
+                continue;
 
             changes[prop.Metadata.Name] = new
             {
                 old = FormatValue(prop.OriginalValue),
-                @new = FormatValue(prop.CurrentValue)
+                @new = FormatValue(prop.CurrentValue),
             };
         }
 
@@ -161,9 +176,11 @@ public class AuditInterceptor : SaveChangesInterceptor
 
         foreach (var prop in entry.Properties)
         {
-            if (IsSensitive(prop.Metadata.Name)) continue;
+            if (IsSensitive(prop.Metadata.Name))
+                continue;
             values[prop.Metadata.Name] = FormatValue(
-                isDeleted ? (prop.OriginalValue ?? prop.CurrentValue) : prop.CurrentValue);
+                isDeleted ? (prop.OriginalValue ?? prop.CurrentValue) : prop.CurrentValue
+            );
         }
 
         var key = isDeleted ? "deleted" : "inserted";
@@ -172,41 +189,43 @@ public class AuditInterceptor : SaveChangesInterceptor
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private static bool IsSensitive(string name)
-        => _sensitiveFields.Any(s => name.Contains(s, StringComparison.OrdinalIgnoreCase));
+    private static bool IsSensitive(string name) =>
+        _sensitiveFields.Any(s => name.Contains(s, StringComparison.OrdinalIgnoreCase));
 
-    private static string? FormatValue(object? val) => val switch
-    {
-        null          => null,
-        DateTime dt   => dt.ToString("o"),
-        _             => val.ToString()
-    };
+    private static string? FormatValue(object? val) =>
+        val switch
+        {
+            null => null,
+            DateTime dt => dt.ToString("o"),
+            _ => val.ToString(),
+        };
 
     private static string ResolveKey(EntityEntry entry)
     {
-        var keys = entry.Properties
-            .Where(p => p.Metadata.IsPrimaryKey())
+        var keys = entry
+            .Properties.Where(p => p.Metadata.IsPrimaryKey())
             .Select(p => p.CurrentValue?.ToString() ?? "?")
             .ToList();
 
-        if (!keys.Any()) return "unknown";
+        if (!keys.Any())
+            return "unknown";
 
         // For identity PKs on INSERT the value is 0/temp; mark clearly.
         var raw = string.Join(",", keys);
-        return (entry.State == EntityState.Added && raw is "0" or "")
-            ? "[new]"
-            : raw;
+        return (entry.State == EntityState.Added && raw is "0" or "") ? "[new]" : raw;
     }
 
     private (int userCode, string email) ResolveCurrentUser()
     {
         var user = _httpContextAccessor.HttpContext?.User;
-        if (user == null) return (0, "system");
+        if (user == null)
+            return (0, "system");
 
         var codeClaim = user.FindFirst("user_access_code")?.Value;
-        var email = user.FindFirst(ClaimTypes.Email)?.Value
-                 ?? user.FindFirst(ClaimTypes.Name)?.Value
-                 ?? "unknown";
+        var email =
+            user.FindFirst(ClaimTypes.Email)?.Value
+            ?? user.FindFirst(ClaimTypes.Name)?.Value
+            ?? "unknown";
 
         int.TryParse(codeClaim, out int code);
         return (code, email);

@@ -66,7 +66,9 @@ function asNumber(value: unknown) {
 function mapMake(value: unknown): MakeRecord | null {
   if (!isRecord(value)) return null;
   const makeCode = asNumber(getValue(value, "makeCode", "MakeCode", "make_code"));
-  const makeDescription = asString(getValue(value, "makeDescription", "MakeDescription", "make_description"));
+  const makeDescription = asString(
+    getValue(value, "makeDescription", "MakeDescription", "make_description"),
+  );
   if (makeCode === null || makeDescription === null) return null;
 
   return {
@@ -74,8 +76,12 @@ function mapMake(value: unknown): MakeRecord | null {
     makeDescription,
     dateCreated: asString(getValue(value, "dateCreated", "DateCreated", "date_created")),
     dateUpdated: asString(getValue(value, "dateUpdated", "DateUpdated", "date_updated")),
-    createdByUserCode: asNumber(getValue(value, "createdByUserCode", "CreatedByUserCode", "created_by_user_code")),
-    modifiedByUserCode: asNumber(getValue(value, "modifiedByUserCode", "ModifiedByUserCode", "modified_by_user_code")),
+    createdByUserCode: asNumber(
+      getValue(value, "createdByUserCode", "CreatedByUserCode", "created_by_user_code"),
+    ),
+    modifiedByUserCode: asNumber(
+      getValue(value, "modifiedByUserCode", "ModifiedByUserCode", "modified_by_user_code"),
+    ),
   };
 }
 
@@ -94,17 +100,26 @@ async function requestApi(path: string, init: RequestInit = {}) {
     });
 
     if (response.status === 401 || response.status === 403) {
-      throw new MakeApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new MakeApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the API body is not JSON.
       }
-      throw new MakeApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new MakeApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -125,7 +140,8 @@ async function readJson(response: Response) {
 
 export async function getMakes() {
   const payload = await readJson(await requestApi("api/make"));
-  if (!Array.isArray(payload)) throw new MakeApiError("invalid-response", "The make response was not a list.");
+  if (!Array.isArray(payload))
+    throw new MakeApiError("invalid-response", "The make response was not a list.");
   return payload.map(mapMake).filter((make): make is MakeRecord => make !== null);
 }
 
@@ -135,27 +151,38 @@ export async function getMake(makeCode: number) {
 
 export async function getMakeDeleteCheck(makeCode: number) {
   const payload = await readJson(await requestApi(`api/make/${makeCode}/delete-check`));
-  if (!isRecord(payload)) throw new MakeApiError("invalid-response", "The make dependency response was invalid.");
+  if (!isRecord(payload))
+    throw new MakeApiError("invalid-response", "The make dependency response was invalid.");
   return {
     modelCount: asNumber(getValue(payload, "modelCount", "ModelCount")) ?? 0,
-    canDelete: getValue(payload, "canDelete", "CanDelete") === true || String(getValue(payload, "canDelete", "CanDelete")).toLowerCase() === "true",
+    canDelete:
+      getValue(payload, "canDelete", "CanDelete") === true ||
+      String(getValue(payload, "canDelete", "CanDelete")).toLowerCase() === "true",
   } satisfies MakeDeleteCheck;
 }
 
 export async function createMake(makeDescription: string) {
-  return mapMake(await readJson(await requestApi("api/make", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ make_description: makeDescription }),
-  })));
+  return mapMake(
+    await readJson(
+      await requestApi("api/make", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ make_description: makeDescription }),
+      }),
+    ),
+  );
 }
 
 export async function updateMake(makeCode: number, makeDescription: string) {
-  return mapMake(await readJson(await requestApi(`api/make/${makeCode}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ make_code: makeCode, make_description: makeDescription }),
-  })));
+  return mapMake(
+    await readJson(
+      await requestApi(`api/make/${makeCode}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ make_code: makeCode, make_description: makeDescription }),
+      }),
+    ),
+  );
 }
 
 export async function deleteMake(makeCode: number) {

@@ -46,7 +46,12 @@ export default function SessionRecovery({ returnPath = "/home" }: { returnPath?:
         <p>{pending ? "Refreshing your session..." : "Your session has expired."}</p>
       </div>
       <div className="button-row">
-        <button className="button button-primary" type="button" onClick={() => void refreshSession()} disabled={pending}>
+        <button
+          className="button button-primary"
+          type="button"
+          onClick={() => void refreshSession()}
+          disabled={pending}
+        >
           {pending ? "Retrying..." : "Try again"}
         </button>
         <Link className="button button-secondary" href="/login">

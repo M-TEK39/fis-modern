@@ -171,7 +171,9 @@ function getAmount(formData: FormData, key: string, label: string) {
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function validateAndBuildRequest(formData: FormData): CreateAccidentRequest {
@@ -179,7 +181,12 @@ function validateAndBuildRequest(formData: FormData): CreateAccidentRequest {
   const accidentDate = getDate(formData, "occurenceDate", "Accident date");
   const reportedDate = getDate(formData, "reportedDate", "Date reported");
   const accidentTime = getOptionalTime(formData, "occurenceTime");
-  const driverEmployNumber = getOptionalText(formData, "driverEmployNumber", "Driver ID number", 13);
+  const driverEmployNumber = getOptionalText(
+    formData,
+    "driverEmployNumber",
+    "Driver ID number",
+    13,
+  );
 
   if (driverEmployNumber && !/^[0-9/]+$/.test(driverEmployNumber)) {
     throw new AccidentFormValidationError("Driver ID number may contain only numbers and '/'.");
@@ -192,10 +199,16 @@ function validateAndBuildRequest(formData: FormData): CreateAccidentRequest {
     throw new AccidentFormValidationError("Notify HQ date is required when Notify HQ is Y or X.");
   }
 
-  const flagTripAuthor = getChoice(formData, "flagTripAuthor", "Notify trip authority", ["N", "Y", "X"]);
+  const flagTripAuthor = getChoice(formData, "flagTripAuthor", "Notify trip authority", [
+    "N",
+    "Y",
+    "X",
+  ]);
   const flagTripAuthDate = getOptionalDate(formData, "flagTripAuthDate", "Notify trip date");
   if ((flagTripAuthor === "Y" || flagTripAuthor === "X") && !flagTripAuthDate) {
-    throw new AccidentFormValidationError("Notify trip date is required when Notify trip authority is Y or X.");
+    throw new AccidentFormValidationError(
+      "Notify trip date is required when Notify trip authority is Y or X.",
+    );
   }
 
   return {
@@ -212,13 +225,34 @@ function validateAndBuildRequest(formData: FormData): CreateAccidentRequest {
     claim_amount: getAmount(formData, "claimAmount", "Claim amount"),
     excess_amount: getAmount(formData, "excessAmount", "Excess amount"),
     call_refer: null,
-    captured_person: getChoice(formData, "capturedPerson", "Capture person", ["?", "HM", "DF", "MDS", "CR", "JR", "MO", "AJ"]),
-    fin_year: getChoice(formData, "finYear", "Financial year", ["02/03", "01/02", "00/01", "99/00", "98/99", "97/98"]),
+    captured_person: getChoice(formData, "capturedPerson", "Capture person", [
+      "?",
+      "HM",
+      "DF",
+      "MDS",
+      "CR",
+      "JR",
+      "MO",
+      "AJ",
+    ]),
+    fin_year: getChoice(formData, "finYear", "Financial year", [
+      "02/03",
+      "01/02",
+      "00/01",
+      "99/00",
+      "98/99",
+      "97/98",
+    ]),
     garage: getChoice(formData, "garage", "Garage", ["PTA", "JHB"]),
     driver_telno: getOptionalText(formData, "driverTelno", "Driver telephone", 30),
     driver_site_code: getOptionalInteger(formData, "driverSiteCode", "Site"),
     transoffic_name: getOptionalText(formData, "transportOfficerName", "Transport officer", 30),
-    transoffic_tel: getOptionalText(formData, "transportOfficerTel", "Transport officer telephone", 20),
+    transoffic_tel: getOptionalText(
+      formData,
+      "transportOfficerTel",
+      "Transport officer telephone",
+      20,
+    ),
     accident_km: getAmount(formData, "accidentKm", "GG car km"),
     acc_type_code: getOptionalInteger(formData, "accidentTypeCode", "Accident category"),
     flag_gg_hq: flagGgHq,
@@ -230,11 +264,26 @@ function validateAndBuildRequest(formData: FormData): CreateAccidentRequest {
     damage_description: getOptionalText(formData, "damageDescription", "GG damage description", 60),
     death: getChoice(formData, "death", "Death", ["?", "N", "Y"]),
     injured: getChoice(formData, "injured", "Injured", ["?", "N", "Y"]),
-    third_party_regno: getOptionalText(formData, "thirdPartyRegistration", "Private party registration", 8),
+    third_party_regno: getOptionalText(
+      formData,
+      "thirdPartyRegistration",
+      "Private party registration",
+      8,
+    ),
     third_party_owner: getOptionalText(formData, "thirdPartyOwner", "Private party name", 30),
-    third_party_tel: getOptionalText(formData, "thirdPartyTelephone", "Private party telephone", 30),
+    third_party_tel: getOptionalText(
+      formData,
+      "thirdPartyTelephone",
+      "Private party telephone",
+      30,
+    ),
     third_party_claim: getAmount(formData, "thirdPartyClaim", "Private car damage"),
-    SecondThirdPartyRegNo: getOptionalText(formData, "secondThirdPartyRegNo", "2nd third-party registration", 8),
+    SecondThirdPartyRegNo: getOptionalText(
+      formData,
+      "secondThirdPartyRegNo",
+      "2nd third-party registration",
+      8,
+    ),
     th_claim_receive: getChoice(formData, "claimReceived", "Claim received", ["N", "Y"]),
     claim_against_dept: getAmount(formData, "claimAmount", "Claim amount"),
     letterhead: getChoice(formData, "letterhead", "Letterhead", ["N", "Y"]),
@@ -244,17 +293,48 @@ function validateAndBuildRequest(formData: FormData): CreateAccidentRequest {
     sketch: getChoice(formData, "sketch", "Sketch", ["N", "Y"]),
     iddoc: getChoice(formData, "iddoc", "ID document", ["N", "Y"]),
     drivelic: getChoice(formData, "drivelic", "Driving licence", ["N", "Y"]),
-    docs_acc_relieve: getChoice(formData, "documentsAccidentRelieve", "Documents received for relief", ["N", "Y"]),
+    docs_acc_relieve: getChoice(
+      formData,
+      "documentsAccidentRelieve",
+      "Documents received for relief",
+      ["N", "Y"],
+    ),
     flag_case_num: getChoice(formData, "flagCaseNumber", "Case number received", ["N", "Y"]),
     trip_author: getChoice(formData, "tripAuthor", "Trip authority", ["N", "Y"]),
     flag_trip_author: flagTripAuthor,
     flag_trip_auth_date: flagTripAuthDate,
-    driver_fault: getChoice(formData, "driverFault", "GG driver fault", ["Unknown", "Yes", "No", "Maybe"]),
-    attorney_insure: getChoice(formData, "attorneyInsure", "Attorney / insurance", ["?", "ATT", "INS"]),
-    insurance_claim: getChoice(formData, "insuranceClaim", "Claim against department", ["?", "Y", "N"]),
-    priv_dampay_date: getOptionalDate(formData, "privateDamagePaymentDate", "Private damage payment date"),
-    th_claim_accept_reject: getChoice(formData, "thirdPartyClaimDecision", "Claim accept/reject", ["?", "ACC", "REJ"]),
-    th_claim_reject_reason: getOptionalText(formData, "thirdPartyClaimRejectReason", "Claim reject reason", 30),
+    driver_fault: getChoice(formData, "driverFault", "GG driver fault", [
+      "Unknown",
+      "Yes",
+      "No",
+      "Maybe",
+    ]),
+    attorney_insure: getChoice(formData, "attorneyInsure", "Attorney / insurance", [
+      "?",
+      "ATT",
+      "INS",
+    ]),
+    insurance_claim: getChoice(formData, "insuranceClaim", "Claim against department", [
+      "?",
+      "Y",
+      "N",
+    ]),
+    priv_dampay_date: getOptionalDate(
+      formData,
+      "privateDamagePaymentDate",
+      "Private damage payment date",
+    ),
+    th_claim_accept_reject: getChoice(formData, "thirdPartyClaimDecision", "Claim accept/reject", [
+      "?",
+      "ACC",
+      "REJ",
+    ]),
+    th_claim_reject_reason: getOptionalText(
+      formData,
+      "thirdPartyClaimRejectReason",
+      "Claim reject reason",
+      30,
+    ),
     write_off_amount: getOptionalAmount(formData, "writeOffAmount", "Write-off amount"),
     write_off_date: getOptionalDate(formData, "writeOffDate", "Write-off date"),
     occurence_place: getOptionalText(formData, "occurencePlace", "Accident place", 50),
@@ -280,11 +360,17 @@ export async function createGarageAccidentAction(
 
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { status: "error", message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      status: "error",
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { status: "error", message: "Your session has expired. Sign in again before adding an accident." };
+    return {
+      status: "error",
+      message: "Your session has expired. Sign in again before adding an accident.",
+    };
   }
 
   if (!hasRole(session.roles, ACCIDENTS_ROLE)) {
@@ -306,7 +392,10 @@ export async function createGarageAccidentAction(
       };
     }
 
-    console.error("FIS garage accident creation failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS garage accident creation failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "error", message: "Accident creation failed. Please try again." };
   }
 

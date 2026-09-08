@@ -16,34 +16,80 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "SQL identifiers come only from fixed compatibility allowlists; all submitted values are parameters.")]
+    Justification = "SQL identifiers come only from fixed compatibility allowlists; all submitted values are parameters."
+)]
 public sealed class TaxiLogRepository : ITaxiLogRepository
 {
     private const string TableName = "Taxi_logs";
 
     private static readonly string[] BusinessColumns =
     [
-        "request_id", "rek_num", "user_start_odo", "user_end_odo", "user_start_date", "user_end_date",
-        "user_start_time", "user_end_time", "driver_start_odo", "driver_end_odo", "driver_start_date",
-        "driver_end_date", "driver_start_time", "driver_end_time", "userid", "enter_date", "invoiced_date",
-        "division", "distance", "days", "hours", "batch_num", "bas_batch", "prev_batch", "changed",
-        "quoted_tariff", "journal_detail_code", "parent_taxi_log_code", "taxi_log_note_code"
+        "request_id",
+        "rek_num",
+        "user_start_odo",
+        "user_end_odo",
+        "user_start_date",
+        "user_end_date",
+        "user_start_time",
+        "user_end_time",
+        "driver_start_odo",
+        "driver_end_odo",
+        "driver_start_date",
+        "driver_end_date",
+        "driver_start_time",
+        "driver_end_time",
+        "userid",
+        "enter_date",
+        "invoiced_date",
+        "division",
+        "distance",
+        "days",
+        "hours",
+        "batch_num",
+        "bas_batch",
+        "prev_batch",
+        "changed",
+        "quoted_tariff",
+        "journal_detail_code",
+        "parent_taxi_log_code",
+        "taxi_log_note_code",
     ];
 
-    private static readonly string[] RequiredColumns = ["log_id", "rek_num", "userid", "enter_date"];
+    private static readonly string[] RequiredColumns =
+    [
+        "log_id",
+        "rek_num",
+        "userid",
+        "enter_date",
+    ];
 
     private static readonly string[] AuditColumns =
-    ["date_created", "date_updated", "created_by_user_code", "modified_by_user_code", "is_deleted"];
+    [
+        "date_created",
+        "date_updated",
+        "created_by_user_code",
+        "modified_by_user_code",
+        "is_deleted",
+    ];
 
     private static readonly HashSet<string> DateColumns = new(StringComparer.OrdinalIgnoreCase)
     {
-        "user_start_date", "user_end_date", "driver_start_date", "driver_end_date", "enter_date", "invoiced_date",
-        "date_created", "date_updated"
+        "user_start_date",
+        "user_end_date",
+        "driver_start_date",
+        "driver_end_date",
+        "enter_date",
+        "invoiced_date",
+        "date_created",
+        "date_updated",
     };
 
     private static readonly HashSet<string> TimeColumns = new(StringComparer.OrdinalIgnoreCase)
     {
-        "user_start_time", "user_end_time", "driver_start_time", "driver_end_time"
+        "user_start_time",
+        "user_end_time",
+        "driver_start_time",
+        "driver_end_time",
     };
 
     private readonly FisDbContext _context;
@@ -53,25 +99,29 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<TaxiLog?> GetByIdAsync(int logId)
-        => (await QueryAsync(
-            "log.[log_id] = @logId",
-            command => AddParameter(command, "@logId", DbType.Int32, logId)))
-            .SingleOrDefault();
+    public async Task<TaxiLog?> GetByIdAsync(int logId) =>
+        (
+            await QueryAsync(
+                "log.[log_id] = @logId",
+                command => AddParameter(command, "@logId", DbType.Int32, logId)
+            )
+        ).SingleOrDefault();
 
     public async Task<TaxiLog?> GetLatestByRequisitionAsync(string rekNum)
     {
         var normalized = NormalizeKey(rekNum);
-        return (await QueryAsync(
-            "UPPER(RTRIM(log.[rek_num])) = @rekNum AND NOT EXISTS (" +
-            "SELECT 1 FROM [dbo].[Taxi_logs] child WHERE child.[parent_taxi_log_code] = log.[log_id] AND {CHILD_ACTIVE})",
-            command => AddParameter(command, "@rekNum", DbType.String, normalized)))
+        return (
+            await QueryAsync(
+                "UPPER(RTRIM(log.[rek_num])) = @rekNum AND NOT EXISTS ("
+                    + "SELECT 1 FROM [dbo].[Taxi_logs] child WHERE child.[parent_taxi_log_code] = log.[log_id] AND {CHILD_ACTIVE})",
+                command => AddParameter(command, "@rekNum", DbType.String, normalized)
+            )
+        )
             .OrderByDescending(log => log.log_id)
             .FirstOrDefault();
     }
 
-    public async Task<IEnumerable<TaxiLog>> GetAllAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<TaxiLog>> GetAllAsync() => await QueryAsync();
 
     public async Task<TaxiLog> CreateAsync(TaxiLog log, int currentUserId)
     {
@@ -85,38 +135,70 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
         var values = BuildValues(log, columns, currentUserId, includeAudit: true);
         log.log_id = await ExecuteInsertAsync(values);
         return await GetByIdAsync(log.log_id)
-            ?? throw new InvalidOperationException($"Taxi log {log.log_id} could not be read after creation.");
+            ?? throw new InvalidOperationException(
+                $"Taxi log {log.log_id} could not be read after creation."
+            );
     }
 
     public async Task<TaxiLog> UpdateAsync(TaxiLog log, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(log);
-        var existing = await GetByIdAsync(log.log_id)
+        var existing =
+            await GetByIdAsync(log.log_id)
             ?? throw new InvalidOperationException($"Taxi log {log.log_id} not found");
         MergeLog(log, existing);
         ValidateLog(log);
         var columns = await GetAvailableColumnsAsync(RequiredColumns);
         var values = BuildValues(log, columns, currentUserId, includeAudit: false);
-        AddValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-        AddValue(values, columns, "modified_by_user_code", "@modifiedByUserCode", DbType.Int32, UserIdOrNull(currentUserId));
+        AddValue(
+            values,
+            columns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddValue(
+            values,
+            columns,
+            "modified_by_user_code",
+            "@modifiedByUserCode",
+            DbType.Int32,
+            UserIdOrNull(currentUserId)
+        );
         await ExecuteUpdateAsync(log.log_id, values, columns);
         return await GetByIdAsync(log.log_id)
-            ?? throw new InvalidOperationException($"Taxi log {log.log_id} could not be read after update.");
+            ?? throw new InvalidOperationException(
+                $"Taxi log {log.log_id} could not be read after update."
+            );
     }
 
-    private async Task<List<TaxiLog>> QueryAsync(string? predicate = null, Action<DbCommand>? configure = null)
+    private async Task<List<TaxiLog>> QueryAsync(
+        string? predicate = null,
+        Action<DbCommand>? configure = null
+    )
     {
         var columns = await GetAvailableColumnsAsync(RequiredColumns);
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-        var effectivePredicate = predicate?.Replace("{CHILD_ACTIVE}", GetActiveFilter(columns, "child"), StringComparison.Ordinal)
-            ?? "1 = 1";
+        var effectivePredicate =
+            predicate?.Replace(
+                "{CHILD_ACTIVE}",
+                GetActiveFilter(columns, "child"),
+                StringComparison.Ordinal
+            ) ?? "1 = 1";
         var conditions = new List<string> { GetActiveFilter(columns, "log") };
-        if (!string.IsNullOrWhiteSpace(effectivePredicate)) conditions.Add($"({effectivePredicate})");
+        if (!string.IsNullOrWhiteSpace(effectivePredicate))
+            conditions.Add($"({effectivePredicate})");
 
         command.CommandText = $"""
-            SELECT {string.Join(", ", BusinessColumns.Concat(AuditColumns).Select(column => GetProjection(columns, column, "log")))},
+            SELECT {string.Join(
+                ", ",
+                BusinessColumns.Concat(AuditColumns).Select(column =>
+                    GetProjection(columns, column, "log")
+                )
+            )},
                    log.[log_id] AS [log_id]
             FROM [dbo].[{TableName}] log
             WHERE {string.Join(" AND ", conditions)}
@@ -126,11 +208,14 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
 
         var results = new List<TaxiLog>();
         await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync()) results.Add(MapLog(reader));
+        while (await reader.ReadAsync())
+            results.Add(MapLog(reader));
         return results;
     }
 
-    private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync(IReadOnlyCollection<string> requiredColumns)
+    private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync(
+        IReadOnlyCollection<string> requiredColumns
+    )
     {
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
@@ -145,9 +230,12 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
 
         var columns = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
         await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync()) columns[reader.GetString(0)] = new ColumnInfo(reader.GetString(0), reader.GetString(1));
+        while (await reader.ReadAsync())
+            columns[reader.GetString(0)] = new ColumnInfo(reader.GetString(0), reader.GetString(1));
         foreach (var required in requiredColumns.Where(column => !columns.ContainsKey(column)))
-            throw new InvalidOperationException($"The required {TableName} compatibility column {required} is not available.");
+            throw new InvalidOperationException(
+                $"The required {TableName} compatibility column {required} is not available."
+            );
         return columns;
     }
 
@@ -157,7 +245,10 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
         command.CommandText = $"""
-            INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+            INSERT INTO [dbo].[{TableName}] ({string.Join(
+                ", ",
+                values.Select(value => $"[{value.Column}]")
+            )})
             OUTPUT INSERTED.[log_id]
             VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
             """;
@@ -165,9 +256,14 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
-    private async Task ExecuteUpdateAsync(int logId, IReadOnlyList<WriteValue> values, IReadOnlyDictionary<string, ColumnInfo> columns)
+    private async Task ExecuteUpdateAsync(
+        int logId,
+        IReadOnlyList<WriteValue> values,
+        IReadOnlyDictionary<string, ColumnInfo> columns
+    )
     {
-        if (values.Count == 0) return;
+        if (values.Count == 0)
+            return;
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
@@ -181,26 +277,71 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
         await command.ExecuteNonQueryAsync();
     }
 
-    private static List<WriteValue> BuildValues(TaxiLog log, IReadOnlyDictionary<string, ColumnInfo> columns, int currentUserId, bool includeAudit)
+    private static List<WriteValue> BuildValues(
+        TaxiLog log,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        int currentUserId,
+        bool includeAudit
+    )
     {
         var values = new List<WriteValue>();
         AddRequiredValue(values, columns, "rek_num", "@rekNum", DbType.String, log.rek_num?.Trim());
         AddValue(values, columns, "request_id", "@requestId", DbType.Int32, log.request_id);
-        AddValue(values, columns, "user_start_odo", "@userStartOdo", DbType.Decimal, log.user_start_odo);
+        AddValue(
+            values,
+            columns,
+            "user_start_odo",
+            "@userStartOdo",
+            DbType.Decimal,
+            log.user_start_odo
+        );
         AddValue(values, columns, "user_end_odo", "@userEndOdo", DbType.Decimal, log.user_end_odo);
         AddDateTimeValue(values, columns, "user_start_date", "@userStartDate", log.user_start_date);
         AddDateTimeValue(values, columns, "user_end_date", "@userEndDate", log.user_end_date);
         AddDateTimeValue(values, columns, "user_start_time", "@userStartTime", log.user_start_time);
         AddDateTimeValue(values, columns, "user_end_time", "@userEndTime", log.user_end_time);
-        AddValue(values, columns, "driver_start_odo", "@driverStartOdo", DbType.Decimal, log.driver_start_odo);
-        AddValue(values, columns, "driver_end_odo", "@driverEndOdo", DbType.Decimal, log.driver_end_odo);
-        AddDateTimeValue(values, columns, "driver_start_date", "@driverStartDate", log.driver_start_date);
+        AddValue(
+            values,
+            columns,
+            "driver_start_odo",
+            "@driverStartOdo",
+            DbType.Decimal,
+            log.driver_start_odo
+        );
+        AddValue(
+            values,
+            columns,
+            "driver_end_odo",
+            "@driverEndOdo",
+            DbType.Decimal,
+            log.driver_end_odo
+        );
+        AddDateTimeValue(
+            values,
+            columns,
+            "driver_start_date",
+            "@driverStartDate",
+            log.driver_start_date
+        );
         AddDateTimeValue(values, columns, "driver_end_date", "@driverEndDate", log.driver_end_date);
-        AddDateTimeValue(values, columns, "driver_start_time", "@driverStartTime", log.driver_start_time);
+        AddDateTimeValue(
+            values,
+            columns,
+            "driver_start_time",
+            "@driverStartTime",
+            log.driver_start_time
+        );
         AddDateTimeValue(values, columns, "driver_end_time", "@driverEndTime", log.driver_end_time);
         var userId = log.userid == 0 ? ToLegacyShortUserId(currentUserId) : log.userid;
         AddRequiredValue(values, columns, "userid", "@userid", DbType.Int16, userId);
-        AddRequiredValue(values, columns, "enter_date", "@enterDate", DbType.DateTime, log.enter_date == default ? DateTime.Now : log.enter_date);
+        AddRequiredValue(
+            values,
+            columns,
+            "enter_date",
+            "@enterDate",
+            DbType.DateTime,
+            log.enter_date == default ? DateTime.Now : log.enter_date
+        );
         AddDateTimeValue(values, columns, "invoiced_date", "@invoicedDate", log.invoiced_date);
         AddValue(values, columns, "division", "@division", DbType.String, log.division);
         AddValue(values, columns, "distance", "@distance", DbType.Decimal, log.distance);
@@ -210,15 +351,57 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
         AddValue(values, columns, "bas_batch", "@basBatch", DbType.Int32, log.bas_batch);
         AddValue(values, columns, "prev_batch", "@prevBatch", DbType.Int32, log.prev_batch);
         AddValue(values, columns, "changed", "@changed", DbType.String, log.changed);
-        AddValue(values, columns, "quoted_tariff", "@quotedTariff", DbType.Single, log.quoted_tariff);
-        AddValue(values, columns, "journal_detail_code", "@journalDetailCode", DbType.Guid, log.journal_detail_code);
-        AddValue(values, columns, "parent_taxi_log_code", "@parentTaxiLogCode", DbType.Int32, log.parent_taxi_log_code);
-        AddValue(values, columns, "taxi_log_note_code", "@taxiLogNoteCode", DbType.Int16, log.taxi_log_note_code);
+        AddValue(
+            values,
+            columns,
+            "quoted_tariff",
+            "@quotedTariff",
+            DbType.Single,
+            log.quoted_tariff
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_code",
+            "@journalDetailCode",
+            DbType.Guid,
+            log.journal_detail_code
+        );
+        AddValue(
+            values,
+            columns,
+            "parent_taxi_log_code",
+            "@parentTaxiLogCode",
+            DbType.Int32,
+            log.parent_taxi_log_code
+        );
+        AddValue(
+            values,
+            columns,
+            "taxi_log_note_code",
+            "@taxiLogNoteCode",
+            DbType.Int16,
+            log.taxi_log_note_code
+        );
 
         if (includeAudit)
         {
-            AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
-            AddValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, UserIdOrNull(currentUserId));
+            AddValue(
+                values,
+                columns,
+                "date_created",
+                "@dateCreated",
+                DbType.DateTime2,
+                DateTime.UtcNow
+            );
+            AddValue(
+                values,
+                columns,
+                "created_by_user_code",
+                "@createdByUserCode",
+                DbType.Int32,
+                UserIdOrNull(currentUserId)
+            );
             AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
         }
 
@@ -227,7 +410,9 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
 
     private static void MergeLog(TaxiLog target, TaxiLog source)
     {
-        target.rek_num = string.IsNullOrWhiteSpace(target.rek_num) ? source.rek_num : target.rek_num;
+        target.rek_num = string.IsNullOrWhiteSpace(target.rek_num)
+            ? source.rek_num
+            : target.rek_num;
         target.request_id ??= source.request_id;
         target.user_start_odo ??= source.user_start_odo;
         target.user_end_odo ??= source.user_end_odo;
@@ -241,8 +426,10 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
         target.driver_end_date ??= source.driver_end_date;
         target.driver_start_time ??= source.driver_start_time;
         target.driver_end_time ??= source.driver_end_time;
-        if (target.userid == 0) target.userid = source.userid;
-        if (target.enter_date == default) target.enter_date = source.enter_date;
+        if (target.userid == 0)
+            target.userid = source.userid;
+        if (target.enter_date == default)
+            target.enter_date = source.enter_date;
         target.invoiced_date ??= source.invoiced_date;
         target.division ??= source.division;
         target.distance ??= source.distance;
@@ -260,11 +447,12 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
 
     private static void ValidateLog(TaxiLog log)
     {
-        if (string.IsNullOrWhiteSpace(log.rek_num)) throw new ArgumentException("Requisition number is required.", nameof(log));
+        if (string.IsNullOrWhiteSpace(log.rek_num))
+            throw new ArgumentException("Requisition number is required.", nameof(log));
     }
 
-    private static TaxiLog MapLog(DbDataReader reader)
-        => new()
+    private static TaxiLog MapLog(DbDataReader reader) =>
+        new()
         {
             log_id = ReadInt32(reader, "log_id") ?? 0,
             request_id = ReadInt32(reader, "request_id"),
@@ -300,55 +488,102 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
             date_updated = ReadDateTime(reader, "date_updated"),
             created_by_user_code = ReadInt32(reader, "created_by_user_code"),
             modified_by_user_code = ReadInt32(reader, "modified_by_user_code"),
-            is_deleted = ReadBoolean(reader, "is_deleted") ?? false
+            is_deleted = ReadBoolean(reader, "is_deleted") ?? false,
         };
 
-    private static void AddDateTimeValue(ICollection<WriteValue> values, IReadOnlyDictionary<string, ColumnInfo> columns, string column, string parameter, DateTime? value)
+    private static void AddDateTimeValue(
+        ICollection<WriteValue> values,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string parameter,
+        DateTime? value
+    )
     {
-        if (!columns.ContainsKey(column) || value is null) return;
-        if (TimeColumns.Contains(column) && columns[column].DataType.Equals("time", StringComparison.OrdinalIgnoreCase))
+        if (!columns.ContainsKey(column) || value is null)
+            return;
+        if (
+            TimeColumns.Contains(column)
+            && columns[column].DataType.Equals("time", StringComparison.OrdinalIgnoreCase)
+        )
             values.Add(new WriteValue(column, parameter, DbType.Time, value.Value.TimeOfDay));
         else
             values.Add(new WriteValue(column, parameter, DbType.DateTime2, value.Value));
     }
 
-    private static string GetActiveFilter(IReadOnlyDictionary<string, ColumnInfo> columns, string alias = "")
-        => columns.ContainsKey("is_deleted")
+    private static string GetActiveFilter(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string alias = ""
+    ) =>
+        columns.ContainsKey("is_deleted")
             ? $"ISNULL({(string.IsNullOrWhiteSpace(alias) ? "" : $"{alias}.")}[is_deleted], 0) = 0"
             : "1 = 1";
 
-    private static string GetProjection(IReadOnlyDictionary<string, ColumnInfo> columns, string column, string alias)
-        => columns.ContainsKey(column)
+    private static string GetProjection(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string alias
+    ) =>
+        columns.ContainsKey(column)
             ? $"{alias}.[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
 
-    private static string GetSqlType(string column)
-        => TimeColumns.Contains(column) ? "time" : DateColumns.Contains(column) ? "datetime2" : column switch
+    private static string GetSqlType(string column) =>
+        TimeColumns.Contains(column) ? "time"
+        : DateColumns.Contains(column) ? "datetime2"
+        : column switch
         {
-            "log_id" or "request_id" or "batch_num" or "bas_batch" or "prev_batch" or "parent_taxi_log_code" => "int",
+            "log_id"
+            or "request_id"
+            or "batch_num"
+            or "bas_batch"
+            or "prev_batch"
+            or "parent_taxi_log_code" => "int",
             "userid" or "days" or "taxi_log_note_code" => "smallint",
-            "user_start_odo" or "user_end_odo" or "driver_start_odo" or "driver_end_odo" or "distance" => "decimal(18, 2)",
+            "user_start_odo"
+            or "user_end_odo"
+            or "driver_start_odo"
+            or "driver_end_odo"
+            or "distance" => "decimal(18, 2)",
             "hours" => "float",
             "quoted_tariff" => "real",
             "journal_detail_code" => "uniqueidentifier",
             "is_deleted" => "bit",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
 
-    private static void AddRequiredValue(ICollection<WriteValue> values, IReadOnlyDictionary<string, ColumnInfo> columns, string column, string parameter, DbType type, object? value)
+    private static void AddRequiredValue(
+        ICollection<WriteValue> values,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string parameter,
+        DbType type,
+        object? value
+    )
     {
-        if (!columns.ContainsKey(column)) throw new InvalidOperationException($"The required compatibility column {column} is not available.");
+        if (!columns.ContainsKey(column))
+            throw new InvalidOperationException(
+                $"The required compatibility column {column} is not available."
+            );
         values.Add(new WriteValue(column, parameter, type, value));
     }
 
-    private static void AddValue(ICollection<WriteValue> values, IReadOnlyDictionary<string, ColumnInfo> columns, string column, string parameter, DbType type, object? value)
+    private static void AddValue(
+        ICollection<WriteValue> values,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string parameter,
+        DbType type,
+        object? value
+    )
     {
-        if (columns.ContainsKey(column) && value is not null) values.Add(new WriteValue(column, parameter, type, value));
+        if (columns.ContainsKey(column) && value is not null)
+            values.Add(new WriteValue(column, parameter, type, value));
     }
 
     private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)
     {
-        foreach (var value in values) AddParameter(command, value.Parameter, value.Type, value.Value);
+        foreach (var value in values)
+            AddParameter(command, value.Parameter, value.Type, value.Value);
     }
 
     private static void AddParameter(DbCommand command, string name, DbType type, object? value)
@@ -363,7 +598,9 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
     private static string? ReadString(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
     }
 
     private static short? ReadInt16(DbDataReader reader, string column)
@@ -399,15 +636,19 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
     private static Guid? ReadGuid(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        if (reader.IsDBNull(ordinal)) return null;
+        if (reader.IsDBNull(ordinal))
+            return null;
         var value = reader.GetValue(ordinal);
-        return value is Guid guid ? guid : Guid.TryParse(Convert.ToString(value), out var parsed) ? parsed : null;
+        return value is Guid guid ? guid
+            : Guid.TryParse(Convert.ToString(value), out var parsed) ? parsed
+            : null;
     }
 
     private static DateTime? ReadDateTime(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        if (reader.IsDBNull(ordinal)) return null;
+        if (reader.IsDBNull(ordinal))
+            return null;
         var value = reader.GetValue(ordinal);
         return value switch
         {
@@ -415,7 +656,7 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
             DateTimeOffset dateTimeOffset => dateTimeOffset.DateTime,
             TimeSpan timeSpan => DateTime.Today.Add(timeSpan),
             _ when DateTime.TryParse(Convert.ToString(value), out var parsed) => parsed,
-            _ => null
+            _ => null,
         };
     }
 
@@ -429,22 +670,27 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose) await connection.OpenAsync();
+        if (shouldClose)
+            await connection.OpenAsync();
         return new ConnectionScope(connection, shouldClose);
     }
 
-    private static string NormalizeKey(string? value) => (value ?? string.Empty).Trim().ToUpperInvariant();
+    private static string NormalizeKey(string? value) =>
+        (value ?? string.Empty).Trim().ToUpperInvariant();
 
     private static short ToLegacyShortUserId(int userId)
     {
         if (userId > short.MaxValue || userId < short.MinValue)
-            throw new InvalidOperationException($"User id {userId} cannot be stored in legacy taxi log userid column.");
+            throw new InvalidOperationException(
+                $"User id {userId} cannot be stored in legacy taxi log userid column."
+            );
         return (short)userId;
     }
 
     private static int? UserIdOrNull(int currentUserId) => currentUserId > 0 ? currentUserId : null;
 
     private sealed record ColumnInfo(string Name, string DataType);
+
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 
     private sealed class ConnectionScope : IAsyncDisposable
@@ -460,7 +706,8 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
 
         public async ValueTask DisposeAsync()
         {
-            if (_shouldClose) await Connection.CloseAsync();
+            if (_shouldClose)
+                await Connection.CloseAsync();
         }
     }
 }

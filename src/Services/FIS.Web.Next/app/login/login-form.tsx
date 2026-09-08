@@ -18,7 +18,10 @@ function SubmitButton() {
 }
 
 export default function LoginForm() {
-  const [state, formAction] = useActionState<LoginActionState, FormData>(loginAction, initialLoginState);
+  const [state, formAction] = useActionState<LoginActionState, FormData>(
+    loginAction,
+    initialLoginState,
+  );
 
   return (
     <form action={formAction} className="form-stack" noValidate>

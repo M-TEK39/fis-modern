@@ -158,8 +158,9 @@ export async function getNotifyLists(searchTerm = "") {
   return getCollection(payload)
     .map(mapNotifyList)
     .filter((item): item is NotifyListRecord => item !== null)
-    .sort((left, right) =>
-      (left.description ?? "").localeCompare(right.description ?? "") || left.code - right.code,
+    .sort(
+      (left, right) =>
+        (left.description ?? "").localeCompare(right.description ?? "") || left.code - right.code,
     );
 }
 
@@ -178,7 +179,10 @@ export async function getNotifyList(code: number) {
   const payload = await readJson(response);
   const item = mapNotifyList(payload);
   if (!item) {
-    throw new NotifyListApiError("invalid-response", "The FIS API returned an invalid notification section.");
+    throw new NotifyListApiError(
+      "invalid-response",
+      "The FIS API returned an invalid notification section.",
+    );
   }
 
   return item;
@@ -188,7 +192,10 @@ async function mutateNotifyList(path: string, init: RequestInit) {
   const payload = await readJson(await requestApi(path, init));
   const item = mapNotifyList(payload);
   if (!item) {
-    throw new NotifyListApiError("invalid-response", "The FIS API returned an invalid notification section.");
+    throw new NotifyListApiError(
+      "invalid-response",
+      "The FIS API returned an invalid notification section.",
+    );
   }
 
   return item;

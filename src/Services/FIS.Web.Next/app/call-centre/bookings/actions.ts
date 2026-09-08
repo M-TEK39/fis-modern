@@ -35,14 +35,26 @@ function redirectWithError(message: string, bookingId = "", sourceGmt = ""): nev
 async function authorizeCallCentre(bookingId: string, sourceGmt: string) {
   const session = await getSession();
   if (session.status === "unavailable") {
-    redirectWithError("The sign-in service is temporarily unavailable. Please try again.", bookingId, sourceGmt);
+    redirectWithError(
+      "The sign-in service is temporarily unavailable. Please try again.",
+      bookingId,
+      sourceGmt,
+    );
   }
 
   if (session.status !== "authenticated") {
-    redirectWithError("Your session has expired. Sign in again before continuing.", bookingId, sourceGmt);
+    redirectWithError(
+      "Your session has expired. Sign in again before continuing.",
+      bookingId,
+      sourceGmt,
+    );
   }
 
-  if (!session.roles.some((role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
     redirectWithError("You do not have permission to manage bookings.", bookingId, sourceGmt);
   }
 }
@@ -111,12 +123,15 @@ function getRequest(formData: FormData): BookingRequest {
     notes: getText(formData, "notes") || null,
   };
 
-  if (request.class_code < 0 || request.class_code > 32_767) throw new Error("Class code is outside the legacy range.");
-  if (request.user_id < 0 || request.user_id > 32_767) throw new Error("User ID is outside the legacy range.");
+  if (request.class_code < 0 || request.class_code > 32_767)
+    throw new Error("Class code is outside the legacy range.");
+  if (request.user_id < 0 || request.user_id > 32_767)
+    throw new Error("User ID is outside the legacy range.");
   if (request.collected !== null && (request.collected < 0 || request.collected > 32_767)) {
     throw new Error("Collected is outside the legacy range.");
   }
-  if (request.location_code < 0 || request.location_code > 2_147_483_647) throw new Error("Location code is invalid.");
+  if (request.location_code < 0 || request.location_code > 2_147_483_647)
+    throw new Error("Location code is invalid.");
   if (request.vmf_code !== null && (request.vmf_code < 0 || request.vmf_code > 2_147_483_647)) {
     throw new Error("VMF code is invalid.");
   }
@@ -126,9 +141,11 @@ function getRequest(formData: FormData): BookingRequest {
 
 function apiErrorMessage(error: unknown) {
   if (error instanceof BookingApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
     if (error.reason === "not-found") return "The booking was not found.";
-    if (error.reason === "unavailable") return "The booking service is temporarily unavailable. Please try again.";
+    if (error.reason === "unavailable")
+      return "The booking service is temporarily unavailable. Please try again.";
   }
 
   return "The booking could not be saved. Please try again.";
@@ -144,9 +161,10 @@ export async function saveBookingAction(formData: FormData) {
     await authorizeCallCentre(bookingId, sourceGmt);
     const parsedBookingId = getBookingId(formData);
     const request = getRequest(formData);
-    saved = parsedBookingId === null
-      ? await createBooking(request)
-      : await updateBooking(parsedBookingId, request);
+    saved =
+      parsedBookingId === null
+        ? await createBooking(request)
+        : await updateBooking(parsedBookingId, request);
     bookingId = String(saved.bookingId);
 
     if (parsedBookingId === null && sourceGmt) {

@@ -112,7 +112,11 @@ public class FleetManagementController : BaseApiController
     {
         try
         {
-            var result = await _fuelCardService.ReturnFuelCardAsync(fuelCardCode, request.Reason, GetCurrentUserId());
+            var result = await _fuelCardService.ReturnFuelCardAsync(
+                fuelCardCode,
+                request.Reason,
+                GetCurrentUserId()
+            );
 
             if (!result)
             {

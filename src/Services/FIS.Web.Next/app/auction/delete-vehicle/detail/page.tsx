@@ -24,7 +24,9 @@ function getPositiveQueryInt(value: string | undefined) {
 }
 
 function hasReportsRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function valueOrDash(value: string | number | null | undefined) {
@@ -35,15 +37,36 @@ function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
 }
 
-function DetailField({ label, value }: Readonly<{ label: string; value: string | number | null | undefined }>) {
-  return <div className="form-field"><span className="form-label">{label}</span><div className="form-readonly-value">{valueOrDash(value)}</div></div>;
+function DetailField({
+  label,
+  value,
+}: Readonly<{ label: string; value: string | number | null | undefined }>) {
+  return (
+    <div className="form-field">
+      <span className="form-label">{label}</span>
+      <div className="form-readonly-value">{valueOrDash(value)}</div>
+    </div>
+  );
 }
 
-function AuctionDetails({ auction, routePath }: Readonly<{ auction: AuctionRecord; routePath: string }>) {
+function AuctionDetails({
+  auction,
+  routePath,
+}: Readonly<{ auction: AuctionRecord; routePath: string }>) {
   return (
-    <section className="vehicle-status-maintenance-panel" aria-labelledby="auction-delete-detail-title">
+    <section
+      className="vehicle-status-maintenance-panel"
+      aria-labelledby="auction-delete-detail-title"
+    >
       <div className="vehicle-form-section-header">
-        <div><p className="eyebrow">Delete confirmation</p><h2 id="auction-delete-detail-title">Auction #{auction.auctionCode}</h2><p>{valueOrDash(auction.fleetNumber)} / {valueOrDash(auction.registrationNumber)} ({auction.vmfCode})</p></div>
+        <div>
+          <p className="eyebrow">Delete confirmation</p>
+          <h2 id="auction-delete-detail-title">Auction #{auction.auctionCode}</h2>
+          <p>
+            {valueOrDash(auction.fleetNumber)} / {valueOrDash(auction.registrationNumber)} (
+            {auction.vmfCode})
+          </p>
+        </div>
       </div>
       <div className="form-grid">
         <DetailField label="Auction Number" value={auction.auctionNumber} />
@@ -68,8 +91,12 @@ function AuctionDetails({ auction, routePath }: Readonly<{ auction: AuctionRecor
         <input name="auctionCode" type="hidden" value={auction.auctionCode} />
         <input name="returnPath" type="hidden" value={routePath} />
         <div className="button-row">
-          <button className="button button-danger" type="submit">DELETE</button>
-          <Link className="button button-secondary" href="/auction/delete-vehicle">Cancel</Link>
+          <button className="button button-danger" type="submit">
+            DELETE
+          </button>
+          <Link className="button button-secondary" href="/auction/delete-vehicle">
+            Cancel
+          </Link>
         </div>
       </form>
     </section>
@@ -79,35 +106,71 @@ function AuctionDetails({ auction, routePath }: Readonly<{ auction: AuctionRecor
 function ApiUnavailable() {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Auction details could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
-      <Link className="button button-primary" href="/auction/delete-vehicle">Back to Auction</Link>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
+      <Link className="button button-primary" href="/auction/delete-vehicle">
+        Back to Auction
+      </Link>
     </section>
   );
 }
 
-export default async function AuctionDeleteDetailPage({ searchParams, routePath = "/auction/delete-vehicle/detail" }: AuctionDeleteDetailPageProps) {
+export default async function AuctionDeleteDetailPage({
+  searchParams,
+  routePath = "/auction/delete-vehicle/detail",
+}: AuctionDeleteDetailPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") {
     redirect("/login");
   }
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={routePath} /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath={routePath} />
+      </main>
+    );
   }
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable />
+      </main>
+    );
   }
   if (!hasReportsRole(session.roles)) {
-    return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">Access restricted</p><h2>You do not have permission to delete Auction records.</h2></section></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <section className="vehicle-status-card" role="alert">
+          <p className="eyebrow">Access restricted</p>
+          <h2>You do not have permission to delete Auction records.</h2>
+        </section>
+      </main>
+    );
   }
 
   const query = await searchParams;
-  const auctionCode = getPositiveQueryInt(getQueryValue(query.auctionId) ?? getQueryValue(query.ACode));
+  const auctionCode = getPositiveQueryInt(
+    getQueryValue(query.auctionId) ?? getQueryValue(query.ACode),
+  );
   if (!auctionCode) {
-    return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">Auction not selected</p><h2>Select an auction record from the deletion list.</h2><Link className="button button-secondary" href="/auction/delete-vehicle">Back to Auction</Link></section></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <section className="vehicle-status-card" role="alert">
+          <p className="eyebrow">Auction not selected</p>
+          <h2>Select an auction record from the deletion list.</h2>
+          <Link className="button button-secondary" href="/auction/delete-vehicle">
+            Back to Auction
+          </Link>
+        </section>
+      </main>
+    );
   }
 
   try {
@@ -115,19 +178,49 @@ export default async function AuctionDeleteDetailPage({ searchParams, routePath 
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="auction-delete-page-title">
-          <header className="vehicle-page-header"><div><p className="eyebrow">Auction maintenance</p><h1 id="auction-delete-page-title">Delete Auction</h1><p>Review the legacy auction and vehicle fields before confirming deletion.</p></div><Link className="button button-secondary" href="/auction">Auction Menu</Link></header>
+          <header className="vehicle-page-header">
+            <div>
+              <p className="eyebrow">Auction maintenance</p>
+              <h1 id="auction-delete-page-title">Delete Auction</h1>
+              <p>Review the legacy auction and vehicle fields before confirming deletion.</p>
+            </div>
+            <Link className="button button-secondary" href="/auction">
+              Auction Menu
+            </Link>
+          </header>
           <AuctionDetails auction={auction} routePath={routePath} />
         </section>
       </main>
     );
   } catch (requestError) {
     if (requestError instanceof AuctionApiError && requestError.reason === "unauthorized") {
-      return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={`${routePath}?auctionId=${auctionCode}`} /></main>;
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <SessionRecovery returnPath={`${routePath}?auctionId=${auctionCode}`} />
+        </main>
+      );
     }
     if (requestError instanceof AuctionApiError && requestError.reason === "not-found") {
-      return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">Record not found</p><h2>Auction #{auctionCode} was not found.</h2><Link className="button button-secondary" href="/auction/delete-vehicle">Back to Auction</Link></section></main>;
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <section className="vehicle-status-card" role="alert">
+            <p className="eyebrow">Record not found</p>
+            <h2>Auction #{auctionCode} was not found.</h2>
+            <Link className="button button-secondary" href="/auction/delete-vehicle">
+              Back to Auction
+            </Link>
+          </section>
+        </main>
+      );
     }
-    console.error("FIS auction deletion detail request failed", requestError instanceof Error ? requestError.message : "unknown error");
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable /></main>;
+    console.error(
+      "FIS auction deletion detail request failed",
+      requestError instanceof Error ? requestError.message : "unknown error",
+    );
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable />
+      </main>
+    );
   }
 }

@@ -16,7 +16,9 @@ function getQueryValue(value: string | string[] | undefined) {
 }
 
 function hasUserAdministrationRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function getMessage(error: string | undefined) {
@@ -32,19 +34,40 @@ function getMessage(error: string | undefined) {
   }
 }
 
-export default async function AdminForgotPasswordPage({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+export default async function AdminForgotPasswordPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
 
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/users/admin/forgot-password" /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath="/users/admin/forgot-password" />
+      </main>
+    );
   }
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">API unavailable</p><h2>User password reset could not be opened.</h2><p className="muted-copy">Retry when the FIS API is available.</p></section></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <section className="vehicle-status-card" role="alert">
+          <p className="eyebrow">API unavailable</p>
+          <h2>User password reset could not be opened.</h2>
+          <p className="muted-copy">Retry when the FIS API is available.</p>
+        </section>
+      </main>
+    );
   }
   if (!hasUserAdministrationRole(session.roles)) {
-    return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">Access restricted</p><h2>You do not have permission to reset user passwords.</h2></section></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <section className="vehicle-status-card" role="alert">
+          <p className="eyebrow">Access restricted</p>
+          <h2>You do not have permission to reset user passwords.</h2>
+        </section>
+      </main>
+    );
   }
 
   const query = await searchParams;
@@ -62,16 +85,30 @@ export default async function AdminForgotPasswordPage({ searchParams }: Readonly
             <h1 id="admin-reset-title">Reset User Password</h1>
             <p>Send a secure, one-time reset link to the selected user.</p>
           </div>
-          <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Menu</Link>
+          <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+            Menu
+          </Link>
         </header>
 
-        {sent ? <div className="notice notice-success" role="status">If the account has a registered email address, a password reset link has been sent.</div> : null}
-        {error ? <div className="notice notice-error" role="alert">{error}</div> : null}
+        {sent ? (
+          <div className="notice notice-success" role="status">
+            If the account has a registered email address, a password reset link has been sent.
+          </div>
+        ) : null}
+        {error ? (
+          <div className="notice notice-error" role="alert">
+            {error}
+          </div>
+        ) : null}
 
         <section className="vehicle-overview" aria-labelledby="admin-reset-form-title">
           <p className="eyebrow">Account recovery</p>
           <h2 id="admin-reset-form-title">Choose a user</h2>
-          <AdminForgotPasswordForm action={sendAdminPasswordReset} username={username} alphabet={alphabet} />
+          <AdminForgotPasswordForm
+            action={sendAdminPasswordReset}
+            username={username}
+            alphabet={alphabet}
+          />
         </section>
       </section>
     </main>

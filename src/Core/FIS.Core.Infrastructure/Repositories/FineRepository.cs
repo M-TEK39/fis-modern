@@ -33,7 +33,7 @@ public class FineRepository : IFineRepository
         "Fine_pay_date",
         "Withdraw_date",
         "Pay_due_date",
-        "Issuer_notify_date"
+        "Issuer_notify_date",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -46,7 +46,7 @@ public class FineRepository : IFineRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private readonly FisDbContext _context;
@@ -58,9 +58,12 @@ public class FineRepository : IFineRepository
 
     public async Task<Fine?> GetByIdAsync(int fineCode)
     {
-        return (await QueryAsync(
-            "WHERE [Fine_code] = @fineCode",
-            command => AddParameter(command, "@fineCode", DbType.Int32, fineCode))).SingleOrDefault();
+        return (
+            await QueryAsync(
+                "WHERE [Fine_code] = @fineCode",
+                command => AddParameter(command, "@fineCode", DbType.Int32, fineCode)
+            )
+        ).SingleOrDefault();
     }
 
     public async Task<IEnumerable<Fine>> GetAllAsync()
@@ -72,14 +75,16 @@ public class FineRepository : IFineRepository
     {
         return await QueryAsync(
             "WHERE [vmf_code] = @vmfCode",
-            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode));
+            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
+        );
     }
 
     public async Task<IEnumerable<Fine>> GetBySiteAsync(short siteCode)
     {
         return await QueryAsync(
             "WHERE [Site_code] = @siteCode",
-            command => AddParameter(command, "@siteCode", DbType.Int16, siteCode));
+            command => AddParameter(command, "@siteCode", DbType.Int16, siteCode)
+        );
     }
 
     public async Task<IEnumerable<Fine>> GetUnpaidFinesAsync()
@@ -90,10 +95,12 @@ public class FineRepository : IFineRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list is composed only from fixed common columns and an allowlisted runtime column set; predicates are internal constants and values are parameters.")]
+        Justification = "The SELECT list is composed only from fixed common columns and an allowlisted runtime column set; predicates are internal constants and values are parameters."
+    )]
     private async Task<List<Fine>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
@@ -136,15 +143,78 @@ public class FineRepository : IFineRepository
         var now = DateTime.UtcNow;
         var values = BuildCommonWriteValues(fine);
 
-        AddOptionalValue(values, availableColumns, "Dept_person_name", "@deptPersonName", DbType.String, fine.Dept_person_name);
-        AddOptionalValue(values, availableColumns, "Dept_person_id", "@deptPersonId", DbType.String, fine.Dept_person_id);
-        AddOptionalValue(values, availableColumns, "Document_type", "@documentType", DbType.String, fine.Document_type);
-        AddOptionalValue(values, availableColumns, "Traffic_dept_code", "@trafficDeptCode", DbType.Int16, fine.Traffic_dept_code);
-        AddOptionalValue(values, availableColumns, "date_created", "@dateCreated", DbType.DateTime2, now);
-        AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, fine.date_updated);
-        AddOptionalValue(values, availableColumns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "modified_by_user_code", "@modifiedByUserCode", DbType.Int32, null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Dept_person_name",
+            "@deptPersonName",
+            DbType.String,
+            fine.Dept_person_name
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Dept_person_id",
+            "@deptPersonId",
+            DbType.String,
+            fine.Dept_person_id
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Document_type",
+            "@documentType",
+            DbType.String,
+            fine.Document_type
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Traffic_dept_code",
+            "@trafficDeptCode",
+            DbType.Int16,
+            fine.Traffic_dept_code
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            now
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            fine.date_updated
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "created_by_user_code",
+            "@createdByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "modified_by_user_code",
+            "@modifiedByUserCode",
+            DbType.Int32,
+            null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            false
+        );
 
         fine.date_created = now;
         fine.created_by_user_code = currentUserId > 0 ? currentUserId : null;
@@ -167,15 +237,64 @@ public class FineRepository : IFineRepository
 
         var availableColumns = await GetAvailableColumnsAsync();
         var values = BuildCommonWriteValues(fine);
-        AddOptionalValue(values, availableColumns, "Dept_person_name", "@deptPersonName", DbType.String, fine.Dept_person_name ?? existing.Dept_person_name);
-        AddOptionalValue(values, availableColumns, "Dept_person_id", "@deptPersonId", DbType.String, fine.Dept_person_id ?? existing.Dept_person_id);
-        AddOptionalValue(values, availableColumns, "Document_type", "@documentType", DbType.String, fine.Document_type ?? existing.Document_type);
-        AddOptionalValue(values, availableColumns, "Traffic_dept_code", "@trafficDeptCode", DbType.Int16, fine.Traffic_dept_code ?? existing.Traffic_dept_code);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Dept_person_name",
+            "@deptPersonName",
+            DbType.String,
+            fine.Dept_person_name ?? existing.Dept_person_name
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Dept_person_id",
+            "@deptPersonId",
+            DbType.String,
+            fine.Dept_person_id ?? existing.Dept_person_id
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Document_type",
+            "@documentType",
+            DbType.String,
+            fine.Document_type ?? existing.Document_type
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Traffic_dept_code",
+            "@trafficDeptCode",
+            DbType.Int16,
+            fine.Traffic_dept_code ?? existing.Traffic_dept_code
+        );
 
         var now = DateTime.UtcNow;
-        AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
-        AddOptionalValue(values, availableColumns, "modified_by_user_code", "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, fine.is_deleted);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            now
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "modified_by_user_code",
+            "@modifiedByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            fine.is_deleted
+        );
 
         await ExecuteUpdateAsync(fine.Fine_code, values);
         fine.date_updated = now;
@@ -186,7 +305,8 @@ public class FineRepository : IFineRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The DELETE or soft-delete statement is selected from fixed compatibility branches and the fine code is parameterized.")]
+        Justification = "The DELETE or soft-delete statement is selected from fixed compatibility branches and the fine code is parameterized."
+    )]
     public async Task DeleteAsync(int fineCode, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -214,10 +334,16 @@ public class FineRepository : IFineRepository
                 if (availableColumns.Contains("modified_by_user_code"))
                 {
                     assignments.Add("[modified_by_user_code] = @modifiedByUser");
-                    AddParameter(command, "@modifiedByUser", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                    AddParameter(
+                        command,
+                        "@modifiedByUser",
+                        DbType.Int32,
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
-                command.CommandText = $"UPDATE [dbo].[Fines] SET {string.Join(", ", assignments)} WHERE [Fine_code] = @fineCode";
+                command.CommandText =
+                    $"UPDATE [dbo].[Fines] SET {string.Join(", ", assignments)} WHERE [Fine_code] = @fineCode";
             }
             else
             {
@@ -239,7 +365,8 @@ public class FineRepository : IFineRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed only from the fixed allowlisted column/value pairs and every value is parameterized.")]
+        Justification = "The INSERT statement is composed only from the fixed allowlisted column/value pairs and every value is parameterized."
+    )]
     private async Task<int> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -253,7 +380,8 @@ public class FineRepository : IFineRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"INSERT INTO [dbo].[Fines] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))}); SELECT CAST(SCOPE_IDENTITY() AS int);";
+            command.CommandText =
+                $"INSERT INTO [dbo].[Fines] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))}); SELECT CAST(SCOPE_IDENTITY() AS int);";
             AddParameters(command, values);
             return Convert.ToInt32(await command.ExecuteScalarAsync());
         }
@@ -269,7 +397,8 @@ public class FineRepository : IFineRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed only from the fixed allowlisted column/value pairs and every value is parameterized.")]
+        Justification = "The UPDATE statement is composed only from the fixed allowlisted column/value pairs and every value is parameterized."
+    )]
     private async Task ExecuteUpdateAsync(int fineCode, IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -283,7 +412,8 @@ public class FineRepository : IFineRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"UPDATE [dbo].[Fines] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [Fine_code] = @fineCode";
+            command.CommandText =
+                $"UPDATE [dbo].[Fines] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [Fine_code] = @fineCode";
             AddParameters(command, values);
             AddParameter(command, "@fineCode", DbType.Int32, fineCode);
             await command.ExecuteNonQueryAsync();
@@ -337,7 +467,10 @@ public class FineRepository : IFineRepository
         }
     }
 
-    private static string BuildSelectCommandText(IReadOnlySet<string> availableColumns, string? predicate)
+    private static string BuildSelectCommandText(
+        IReadOnlySet<string> availableColumns,
+        string? predicate
+    )
     {
         var columns = CommonColumns
             .Concat(OptionalColumns.Where(availableColumns.Contains))
@@ -349,7 +482,8 @@ public class FineRepository : IFineRepository
     {
         var offenceDate = ReadDateTime(reader, "Offence_date");
         var receiveDate = ReadDateTime(reader, "Receive_gg_date");
-        var createdDate = ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
+        var createdDate =
+            ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
             ?? offenceDate
             ?? receiveDate
             ?? DateTime.MinValue;
@@ -377,9 +511,17 @@ public class FineRepository : IFineRepository
             Traffic_dept_code = ReadInt16IfAvailable(reader, availableColumns, "Traffic_dept_code"),
             date_created = createdDate,
             date_updated = ReadDateTimeIfAvailable(reader, availableColumns, "date_updated"),
-            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
-            modified_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "modified_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "created_by_user_code"
+            ),
+            modified_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "modified_by_user_code"
+            ),
+            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false,
         };
     }
 
@@ -400,7 +542,12 @@ public class FineRepository : IFineRepository
             new("Fine_pay_date", "@finePayDate", DbType.DateTime2, fine.Fine_pay_date),
             new("Withdraw_date", "@withdrawDate", DbType.DateTime2, fine.Withdraw_date),
             new("Pay_due_date", "@payDueDate", DbType.DateTime2, fine.Pay_due_date),
-            new("Issuer_notify_date", "@issuerNotifyDate", DbType.DateTime2, fine.Issuer_notify_date)
+            new(
+                "Issuer_notify_date",
+                "@issuerNotifyDate",
+                DbType.DateTime2,
+                fine.Issuer_notify_date
+            ),
         ];
     }
 
@@ -410,7 +557,8 @@ public class FineRepository : IFineRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -441,7 +589,11 @@ public class FineRepository : IFineRepository
         return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal).TrimEnd();
     }
 
-    private static string? ReadStringIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+    private static string? ReadStringIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    )
     {
         return columns.Contains(column) ? ReadString(reader, column) : null;
     }
@@ -452,7 +604,11 @@ public class FineRepository : IFineRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToInt32(reader.GetValue(ordinal));
     }
 
-    private static int? ReadInt32IfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+    private static int? ReadInt32IfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    )
     {
         return columns.Contains(column) ? ReadInt32(reader, column) : null;
     }
@@ -463,7 +619,11 @@ public class FineRepository : IFineRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToInt16(reader.GetValue(ordinal));
     }
 
-    private static short? ReadInt16IfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+    private static short? ReadInt16IfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    )
     {
         return columns.Contains(column) ? ReadInt16(reader, column) : null;
     }
@@ -480,12 +640,20 @@ public class FineRepository : IFineRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToDateTime(reader.GetValue(ordinal));
     }
 
-    private static DateTime? ReadDateTimeIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+    private static DateTime? ReadDateTimeIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    )
     {
         return columns.Contains(column) ? ReadDateTime(reader, column) : null;
     }
 
-    private static bool? ReadBooleanIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+    private static bool? ReadBooleanIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    )
     {
         if (!columns.Contains(column))
         {
@@ -496,9 +664,5 @@ public class FineRepository : IFineRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToBoolean(reader.GetValue(ordinal));
     }
 
-    private sealed record WriteValue(
-        string Column,
-        string Parameter,
-        DbType Type,
-        object? Value);
+    private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 }

@@ -15,11 +15,22 @@ export async function getLogsheetSession() {
 
 export function sessionMessage(session: SessionState, returnPath: string) {
   if (session.status !== "expired" && session.status !== "unavailable") return null;
-  return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={returnPath} /></main>;
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <SessionRecovery returnPath={returnPath} />
+    </main>
+  );
 }
 
 export function accessRestricted(message: string) {
-  return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">Access restricted</p><h2>{message}</h2></section></main>;
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-status-card" role="alert">
+        <p className="eyebrow">Access restricted</p>
+        <h2>{message}</h2>
+      </section>
+    </main>
+  );
 }
 
 function normalizedRole(role: string) {
@@ -30,13 +41,15 @@ export function hasLogsheetAccess(session: Extract<SessionState, { status: "auth
   return session.roles.some((role) => normalizedRole(role) === "reports");
 }
 
-export function hasLogsheetManagerAccess(session: Extract<SessionState, { status: "authenticated" }>) {
+export function hasLogsheetManagerAccess(
+  session: Extract<SessionState, { status: "authenticated" }>,
+) {
   const code = Number(session.userAccessCode);
   return Number.isInteger(code) && [279, 47, 38].includes(code);
 }
 
 export function queryValue(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
 export function parsePositiveInteger(value: string) {
@@ -49,7 +62,11 @@ export function filterVehicles(options: readonly VehicleOption[], search: string
   if (!normalized) return [];
   const isGp = mode.toLocaleUpperCase() === "GP";
   return options
-    .filter((vehicle) => (isGp ? vehicle.registrationNumber : vehicle.fleetNumber)?.toLocaleLowerCase().includes(normalized))
+    .filter((vehicle) =>
+      (isGp ? vehicle.registrationNumber : vehicle.fleetNumber)
+        ?.toLocaleLowerCase()
+        .includes(normalized),
+    )
     .sort((left, right) => {
       const leftValue = isGp ? left.registrationNumber : left.fleetNumber;
       const rightValue = isGp ? right.registrationNumber : right.fleetNumber;

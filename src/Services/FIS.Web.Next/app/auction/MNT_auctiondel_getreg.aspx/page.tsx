@@ -5,5 +5,10 @@ type LegacyAuctionDeleteProps = {
 };
 
 export default function LegacyAuctionDeletePage({ searchParams }: LegacyAuctionDeleteProps) {
-  return <AuctionDeletePage routePath="/auction/MNT_auctiondel_getreg.aspx" searchParams={searchParams} />;
+  return (
+    <AuctionDeletePage
+      routePath="/auction/MNT_auctiondel_getreg.aspx"
+      searchParams={searchParams}
+    />
+  );
 }

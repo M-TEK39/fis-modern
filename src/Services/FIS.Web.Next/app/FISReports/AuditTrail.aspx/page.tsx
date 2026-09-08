@@ -1,3 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function LegacyAuditTrailPage() { redirect("/finance/audit-trail"); }
+export default function LegacyAuditTrailPage() {
+  redirect("/finance/audit-trail");
+}

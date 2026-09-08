@@ -40,7 +40,8 @@ function getOptionalInteger(formData: FormData, name: string, label: string) {
   const value = getText(formData, name);
   if (!value) return null;
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) throw new FmlValidationError(`${label} must be a whole number.`);
+  if (!Number.isSafeInteger(parsed))
+    throw new FmlValidationError(`${label} must be a whole number.`);
   return parsed;
 }
 
@@ -81,9 +82,15 @@ function hasPermission(accessLevel: string | undefined, permission: bigint) {
 
 async function authorize(permission: bigint) {
   const session = await getSession();
-  if (session.status === "unavailable") return { ok: false as const, message: "The sign-in service is temporarily unavailable." };
-  if (session.status !== "authenticated") return { ok: false as const, message: "Your session has expired. Sign in again." };
-  if (!hasPermission(session.accessLevel, permission)) return { ok: false as const, message: "You do not have permission to maintain Full Maintenance Lease records." };
+  if (session.status === "unavailable")
+    return { ok: false as const, message: "The sign-in service is temporarily unavailable." };
+  if (session.status !== "authenticated")
+    return { ok: false as const, message: "Your session has expired. Sign in again." };
+  if (!hasPermission(session.accessLevel, permission))
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain Full Maintenance Lease records.",
+    };
   return { ok: true as const, session };
 }
 
@@ -109,7 +116,8 @@ function revalidateFmlRoutes() {
 function readTermInput(formData: FormData, authorityStatus: number): LeaseTermWriteInput {
   const startDate = getOptionalDate(formData, "startDate", "Start date");
   const endDate = getOptionalDate(formData, "endDate", "End date");
-  if (startDate && endDate && endDate < startDate) throw new FmlValidationError("End date cannot be earlier than the start date.");
+  if (startDate && endDate && endDate < startDate)
+    throw new FmlValidationError("End date cannot be earlier than the start date.");
 
   return {
     vmf_Code: getRequiredInteger(formData, "vmfCode", "Vehicle"),
@@ -137,7 +145,8 @@ export async function createLeaseTermAction(formData: FormData) {
 
   try {
     const created = await createLeaseTerm(readTermInput(formData, 1));
-    if (!created) throw new FmlValidationError("The FIS API did not return the created lease term.");
+    if (!created)
+      throw new FmlValidationError("The FIS API did not return the created lease term.");
   } catch (error) {
     redirect(resultPath(path, "error", apiMessage(error, "The lease term could not be created.")));
   }
@@ -157,18 +166,36 @@ export async function saveLeaseTermAction(formData: FormData) {
     let updated: LeaseTermRecord | null;
     if (operation === "approve" || operation === "reject") {
       if (!hasPermission(access.session.accessLevel, FINANCIAL_PERMISSION)) {
-        redirect(resultPath(`${path}?id=${termId}&mode=review`, "error", "You do not have financial authorisation for this workflow."));
+        redirect(
+          resultPath(
+            `${path}?id=${termId}&mode=review`,
+            "error",
+            "You do not have financial authorisation for this workflow.",
+          ),
+        );
       }
 
       const existing = await getLeaseTerm(termId);
       const currentUserCode = Number(access.session.userAccessCode);
-      if (Number.isSafeInteger(currentUserCode) && currentUserCode > 0 && existing.createdByUserCode === currentUserCode) {
-        redirect(resultPath(`${path}?id=${termId}&mode=review`, "error", "You cannot authorise a lease tariff that you captured yourself."));
+      if (
+        Number.isSafeInteger(currentUserCode) &&
+        currentUserCode > 0 &&
+        existing.createdByUserCode === currentUserCode
+      ) {
+        redirect(
+          resultPath(
+            `${path}?id=${termId}&mode=review`,
+            "error",
+            "You cannot authorise a lease tariff that you captured yourself.",
+          ),
+        );
       }
 
       const rejectionReason = getText(formData, "rejectionReason");
       if (operation === "reject" && !rejectionReason) {
-        redirect(resultPath(`${path}?id=${termId}&mode=review`, "error", "Rejection reason is required."));
+        redirect(
+          resultPath(`${path}?id=${termId}&mode=review`, "error", "Rejection reason is required."),
+        );
       }
 
       updated = await updateLeaseTerm(termId, {
@@ -192,13 +219,25 @@ export async function saveLeaseTermAction(formData: FormData) {
       updated = await updateLeaseTerm(termId, readTermInput(formData, 1));
     }
 
-    if (!updated) throw new FmlValidationError("The FIS API did not return the updated lease term.");
+    if (!updated)
+      throw new FmlValidationError("The FIS API did not return the updated lease term.");
   } catch (error) {
-    redirect(resultPath(`${path}?id=${termId}${operation === "approve" || operation === "reject" ? "&mode=review" : "&mode=edit"}`, "error", apiMessage(error, "The lease term could not be updated.")));
+    redirect(
+      resultPath(
+        `${path}?id=${termId}${operation === "approve" || operation === "reject" ? "&mode=review" : "&mode=edit"}`,
+        "error",
+        apiMessage(error, "The lease term could not be updated."),
+      ),
+    );
   }
 
   revalidateFmlRoutes();
-  redirect(resultPath("/full-maintenance-lease/tariffs", operation === "approve" ? "approved" : operation === "reject" ? "rejected" : "updated"));
+  redirect(
+    resultPath(
+      "/full-maintenance-lease/tariffs",
+      operation === "approve" ? "approved" : operation === "reject" ? "rejected" : "updated",
+    ),
+  );
 }
 
 export async function createLeaseTariffAction(formData: FormData) {
@@ -209,7 +248,8 @@ export async function createLeaseTariffAction(formData: FormData) {
   try {
     const startDate = getRequiredDate(formData, "startDate", "Start date");
     const endDate = getRequiredDate(formData, "endDate", "End date");
-    if (endDate < startDate) throw new FmlValidationError("End date cannot be earlier than the start date.");
+    if (endDate < startDate)
+      throw new FmlValidationError("End date cannot be earlier than the start date.");
     const created = await createLeaseTariff({
       vmf_code: getRequiredInteger(formData, "vmfCode", "Vehicle"),
       start_date: startDate,
@@ -218,9 +258,12 @@ export async function createLeaseTariffAction(formData: FormData) {
       excess_kilo_tariff: getOptionalDecimal(formData, "excessKiloTariff", "Excess kilo tariff"),
       active: true,
     });
-    if (!created) throw new FmlValidationError("The FIS API did not return the created lease tariff.");
+    if (!created)
+      throw new FmlValidationError("The FIS API did not return the created lease tariff.");
   } catch (error) {
-    redirect(resultPath(path, "error", apiMessage(error, "The lease tariff could not be created.")));
+    redirect(
+      resultPath(path, "error", apiMessage(error, "The lease tariff could not be created.")),
+    );
   }
 
   revalidateFmlRoutes();
@@ -235,18 +278,27 @@ export async function extendLeaseTariffAction(formData: FormData) {
   try {
     const startDate = getRequiredDate(formData, "startDate", "Start date");
     const endDate = getRequiredDate(formData, "endDate", "New end date");
-    if (endDate < startDate) throw new FmlValidationError("The new end date cannot be earlier than the tariff start date.");
-    const updated = await updateLeaseTariff(getRequiredInteger(formData, "leaseTariffCode", "Lease tariff"), {
-      vmf_code: getRequiredInteger(formData, "vmfCode", "Vehicle"),
-      start_date: startDate,
-      end_date: endDate,
-      fixed_tariff: getOptionalDecimal(formData, "fixedTariff", "Fixed tariff") ?? 0,
-      excess_kilo_tariff: getOptionalDecimal(formData, "excessKiloTariff", "Excess kilo tariff"),
-      active: true,
-    });
-    if (!updated) throw new FmlValidationError("The FIS API did not return the updated lease tariff.");
+    if (endDate < startDate)
+      throw new FmlValidationError(
+        "The new end date cannot be earlier than the tariff start date.",
+      );
+    const updated = await updateLeaseTariff(
+      getRequiredInteger(formData, "leaseTariffCode", "Lease tariff"),
+      {
+        vmf_code: getRequiredInteger(formData, "vmfCode", "Vehicle"),
+        start_date: startDate,
+        end_date: endDate,
+        fixed_tariff: getOptionalDecimal(formData, "fixedTariff", "Fixed tariff") ?? 0,
+        excess_kilo_tariff: getOptionalDecimal(formData, "excessKiloTariff", "Excess kilo tariff"),
+        active: true,
+      },
+    );
+    if (!updated)
+      throw new FmlValidationError("The FIS API did not return the updated lease tariff.");
   } catch (error) {
-    redirect(resultPath(path, "error", apiMessage(error, "The lease tariff could not be extended.")));
+    redirect(
+      resultPath(path, "error", apiMessage(error, "The lease tariff could not be extended.")),
+    );
   }
 
   revalidateFmlRoutes();
@@ -293,11 +345,19 @@ export async function importLeaseTariffsAction(formData: FormData) {
   if (!access.ok) redirect(resultPath(path, "error", access.message));
 
   const csv = getText(formData, "csv");
-  const lines = csv.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (lines.length < 2) redirect(resultPath(path, "error", "Provide a CSV header and at least one data row."));
+  const lines = csv
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length < 2)
+    redirect(resultPath(path, "error", "Provide a CSV header and at least one data row."));
 
   const headers = parseCsvRow(lines[0]).map(normalizeHeader);
-  const indexOf = (...names: string[]) => names.map(normalizeHeader).map((name) => headers.indexOf(name)).find((index) => index >= 0) ?? -1;
+  const indexOf = (...names: string[]) =>
+    names
+      .map(normalizeHeader)
+      .map((name) => headers.indexOf(name))
+      .find((index) => index >= 0) ?? -1;
   const vmfIndex = indexOf("vmf_code", "vmfcode");
   if (vmfIndex < 0) redirect(resultPath(path, "error", "CSV header must include VMF_Code."));
 

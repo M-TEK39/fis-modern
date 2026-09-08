@@ -9,7 +9,9 @@ const USER_ADMIN_ROLE = "User Administration";
 const RETURN_PATH = "/change-password-question";
 
 function hasUserAdministrationRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function getText(formData: FormData, name: string) {
@@ -35,7 +37,8 @@ export async function changePasswordQuestionAction(formData: FormData) {
   const securityQuestion = getText(formData, "securityQuestion");
   const securityAnswer = getText(formData, "securityAnswer");
   const email = getText(formData, "email");
-  const isAdministrator = session.status === "authenticated" && hasUserAdministrationRole(session.roles);
+  const isAdministrator =
+    session.status === "authenticated" && hasUserAdministrationRole(session.roles);
   const username = isAdministrator
     ? requestedUsername
     : session.status === "authenticated"

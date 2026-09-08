@@ -30,7 +30,9 @@ function getText(formData: FormData, key: string) {
 function getInput(formData: FormData): DriverLicenceWriteInput {
   const description = getText(formData, "description");
   if (!description || description.length > 30) {
-    throw new DriverLicenceValidationError("Driver licence description is required and must be 30 characters or fewer.");
+    throw new DriverLicenceValidationError(
+      "Driver licence description is required and must be 30 characters or fewer.",
+    );
   }
   return { description };
 }
@@ -47,21 +49,32 @@ function getCode(formData: FormData) {
 async function authorizeDriverLicenceMaintenance() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
   if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return { ok: false as const, message: "You do not have permission to maintain driver licences." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain driver licences.",
+    };
   }
   return { ok: true as const };
 }
 
 function apiErrorMessage(error: unknown, operation: string) {
   if (error instanceof DriverLicenceApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return `The driver licence ${operation} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return `The driver licence ${operation} service is temporarily unavailable. Please try again.`;
     return error.message;
   }
   return `The driver licence could not be ${operation}. Please try again.`;
@@ -82,9 +95,19 @@ export async function createDriverLicenceAction(
 
   try {
     const created = await createDriverLicence(getInput(formData));
-    if (!created) throw new DriverLicenceApiError("invalid-response", "The FIS API did not return the created driver licence.");
+    if (!created)
+      throw new DriverLicenceApiError(
+        "invalid-response",
+        "The FIS API did not return the created driver licence.",
+      );
   } catch (error) {
-    return { status: "error", message: error instanceof DriverLicenceValidationError ? error.message : apiErrorMessage(error, "created") };
+    return {
+      status: "error",
+      message:
+        error instanceof DriverLicenceValidationError
+          ? error.message
+          : apiErrorMessage(error, "created"),
+    };
   }
 
   revalidateDriverLicenceRoutes();
@@ -102,13 +125,25 @@ export async function updateDriverLicenceAction(
   try {
     licenceCode = getCode(formData);
     const updated = await updateDriverLicence(licenceCode, getInput(formData));
-    if (!updated) throw new DriverLicenceApiError("invalid-response", "The FIS API did not return the updated driver licence.");
+    if (!updated)
+      throw new DriverLicenceApiError(
+        "invalid-response",
+        "The FIS API did not return the updated driver licence.",
+      );
   } catch (error) {
-    return { status: "error", message: error instanceof DriverLicenceValidationError ? error.message : apiErrorMessage(error, "updated") };
+    return {
+      status: "error",
+      message:
+        error instanceof DriverLicenceValidationError
+          ? error.message
+          : apiErrorMessage(error, "updated"),
+    };
   }
 
   revalidateDriverLicenceRoutes();
-  redirect(`/validation-data/driver-licenses?saved=updated&licenceCode=${encodeURIComponent(String(licenceCode))}`);
+  redirect(
+    `/validation-data/driver-licenses?saved=updated&licenceCode=${encodeURIComponent(String(licenceCode))}`,
+  );
 }
 
 export async function deleteDriverLicenceAction(formData: FormData) {
@@ -117,28 +152,38 @@ export async function deleteDriverLicenceAction(formData: FormData) {
   try {
     licenceCode = getCode(formData);
   } catch (error) {
-    redirect(`/validation-data/driver-licenses?error=${encodeURIComponent(error instanceof Error ? error.message : "Driver licence code is invalid.")}`);
+    redirect(
+      `/validation-data/driver-licenses?error=${encodeURIComponent(error instanceof Error ? error.message : "Driver licence code is invalid.")}`,
+    );
   }
 
   if (!access.ok) {
-    redirect(`/Validation/MNT_DriversLicence_Del_Check.aspx?code=${licenceCode}&error=${encodeURIComponent(access.message)}`);
+    redirect(
+      `/Validation/MNT_DriversLicence_Del_Check.aspx?code=${licenceCode}&error=${encodeURIComponent(access.message)}`,
+    );
   }
 
   let dependencies;
   try {
     dependencies = await getDriverLicenceDeleteCheck(licenceCode);
   } catch (error) {
-    redirect(`/Validation/MNT_DriversLicence_Del_Check.aspx?code=${licenceCode}&error=${encodeURIComponent(apiErrorMessage(error, "checked"))}`);
+    redirect(
+      `/Validation/MNT_DriversLicence_Del_Check.aspx?code=${licenceCode}&error=${encodeURIComponent(apiErrorMessage(error, "checked"))}`,
+    );
   }
 
   if (!dependencies.canDelete || dependencies.modelCount > 0) {
-    redirect(`/Validation/MNT_DriversLicence_Del_Check.aspx?code=${licenceCode}&error=${encodeURIComponent("This driver licence cannot be deleted while models are linked to it.")}`);
+    redirect(
+      `/Validation/MNT_DriversLicence_Del_Check.aspx?code=${licenceCode}&error=${encodeURIComponent("This driver licence cannot be deleted while models are linked to it.")}`,
+    );
   }
 
   try {
     await deleteDriverLicence(licenceCode);
   } catch (error) {
-    redirect(`/Validation/MNT_DriversLicence_Del_Check.aspx?code=${licenceCode}&error=${encodeURIComponent(apiErrorMessage(error, "deleted"))}`);
+    redirect(
+      `/Validation/MNT_DriversLicence_Del_Check.aspx?code=${licenceCode}&error=${encodeURIComponent(apiErrorMessage(error, "deleted"))}`,
+    );
   }
 
   revalidateDriverLicenceRoutes();

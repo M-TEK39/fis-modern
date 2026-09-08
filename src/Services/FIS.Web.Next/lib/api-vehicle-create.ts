@@ -225,31 +225,35 @@ async function readJson(response: Response) {
 function mapMakes(payload: unknown) {
   return mapPresent(getCollection(payload), (item) => {
     if (!isRecord(item)) return null;
-      const code = asNumber(getValue(item, "make_code", "makeCode"));
-      const name = asString(getValue(item, "make_description", "makeDescription", "make_name", "makeName"));
-      return code !== null && name ? { code, name } : null;
+    const code = asNumber(getValue(item, "make_code", "makeCode"));
+    const name = asString(
+      getValue(item, "make_description", "makeDescription", "make_name", "makeName"),
+    );
+    return code !== null && name ? { code, name } : null;
   });
 }
 
 function mapModels(payload: unknown) {
   return mapPresent(getCollection(payload), (item) => {
     if (!isRecord(item)) return null;
-      const code = asNumber(getValue(item, "model_code", "modelCode"));
-      const makeCode = asNumber(getValue(item, "make_code", "makeCode"));
-      const name = asString(getValue(item, "model_description", "modelDescription", "model_name", "modelName"));
-      const typeCode = asNumber(getValue(item, "type_code", "typeCode"));
-      return code !== null && makeCode !== null && name
-        ? { code, makeCode, name, typeCode }
-        : null;
+    const code = asNumber(getValue(item, "model_code", "modelCode"));
+    const makeCode = asNumber(getValue(item, "make_code", "makeCode"));
+    const name = asString(
+      getValue(item, "model_description", "modelDescription", "model_name", "modelName"),
+    );
+    const typeCode = asNumber(getValue(item, "type_code", "typeCode"));
+    return code !== null && makeCode !== null && name ? { code, makeCode, name, typeCode } : null;
   });
 }
 
 function mapLocations(payload: unknown) {
   return mapPresent(getCollection(payload), (item) => {
     if (!isRecord(item)) return null;
-      const code = asNumber(getValue(item, "locationId", "location_id", "locationCode", "location_code"));
-      const name = asString(getValue(item, "locationName", "location_name", "description"));
-      return code !== null && name ? { code, name } : null;
+    const code = asNumber(
+      getValue(item, "locationId", "location_id", "locationCode", "location_code"),
+    );
+    const name = asString(getValue(item, "locationName", "location_name", "description"));
+    return code !== null && name ? { code, name } : null;
   });
 }
 
@@ -263,7 +267,9 @@ function mapTypes(payload: unknown) {
 }
 
 function mapSources(payload: unknown) {
-  const items = isRecord(payload) ? getCollection(getValue(payload, "items")) : getCollection(payload);
+  const items = isRecord(payload)
+    ? getCollection(getValue(payload, "items"))
+    : getCollection(payload);
   return mapPresent(items, (item) => {
     if (!isRecord(item)) return null;
     const code = asNumber(getValue(item, "vsCode", "vs_code", "sourceCode"));
@@ -293,7 +299,9 @@ function mapExtras(payload: unknown) {
 function mapMaintenanceTypes(payload: unknown) {
   return mapPresent(getCollection(payload), (item) => {
     if (!isRecord(item)) return null;
-    const code = asNumber(getValue(item, "code", "maintenanceTypeId", "maintenance_type_id", "Maintenance_TypeId"));
+    const code = asNumber(
+      getValue(item, "code", "maintenanceTypeId", "maintenance_type_id", "Maintenance_TypeId"),
+    );
     const name = asString(getValue(item, "name", "description", "Name"));
     return code !== null && name ? { code, name } : null;
   });
@@ -302,39 +310,46 @@ function mapMaintenanceTypes(payload: unknown) {
 function mapSearchResults(payload: unknown) {
   return mapPresent(getCollection(payload), (item) => {
     if (!isRecord(item)) return null;
-      const vmfCode = asNumber(getValue(item, "vmf_code", "vmfCode"));
-      if (vmfCode === null) {
-        return null;
-      }
+    const vmfCode = asNumber(getValue(item, "vmf_code", "vmfCode"));
+    if (vmfCode === null) {
+      return null;
+    }
 
-      return {
-        vmfCode,
-        fleetNumber: asString(getValue(item, "fleet_number", "fleetNumber")) || null,
-        registrationNumber: asString(getValue(item, "registration_number", "registrationNumber")) || null,
-        chassisNumber: asString(getValue(item, "chassis_number", "chassisNumber")) || null,
-        engineNumber: asString(getValue(item, "engine_number_1", "engineNumber1", "engine_number")) || null,
-        invoiceNumber: asString(getValue(item, "invoice_number", "invoiceNumber")) || null,
-      } satisfies VehicleSearchResult;
+    return {
+      vmfCode,
+      fleetNumber: asString(getValue(item, "fleet_number", "fleetNumber")) || null,
+      registrationNumber:
+        asString(getValue(item, "registration_number", "registrationNumber")) || null,
+      chassisNumber: asString(getValue(item, "chassis_number", "chassisNumber")) || null,
+      engineNumber:
+        asString(getValue(item, "engine_number_1", "engineNumber1", "engine_number")) || null,
+      invoiceNumber: asString(getValue(item, "invoice_number", "invoiceNumber")) || null,
+    } satisfies VehicleSearchResult;
   });
 }
 
 export async function getVehicleCreateReferenceData(): Promise<VehicleCreateReferenceData> {
-  const [makes, models, locations, types, sources, sites, extras, maintenanceTypes] = await Promise.all([
-    fetchApi("api/make").then(readJson).then(mapMakes),
-    fetchApi("api/model").then(readJson).then(mapModels),
-    fetchApi("api/Location").then(readJson).then(mapLocations),
-    fetchApi("api/Type").then(readJson).then(mapTypes),
-    fetchApi("api/vehicle-source").then(readJson).then(mapSources),
-    fetchApi("api/Site").then(readJson).then(mapSites),
-    fetchApi("api/ExtraCode").then(readJson).then(mapExtras),
-    fetchApi("api/vehicle/authorization/maintenance-types").then(readJson).then(mapMaintenanceTypes),
-  ]);
+  const [makes, models, locations, types, sources, sites, extras, maintenanceTypes] =
+    await Promise.all([
+      fetchApi("api/make").then(readJson).then(mapMakes),
+      fetchApi("api/model").then(readJson).then(mapModels),
+      fetchApi("api/Location").then(readJson).then(mapLocations),
+      fetchApi("api/Type").then(readJson).then(mapTypes),
+      fetchApi("api/vehicle-source").then(readJson).then(mapSources),
+      fetchApi("api/Site").then(readJson).then(mapSites),
+      fetchApi("api/ExtraCode").then(readJson).then(mapExtras),
+      fetchApi("api/vehicle/authorization/maintenance-types")
+        .then(readJson)
+        .then(mapMaintenanceTypes),
+    ]);
 
   return { makes, models, locations, types, sources, sites, extras, maintenanceTypes };
 }
 
 export async function searchVehiclesAgainstApi(searchTerm: string) {
-  const response = await fetchApi(`api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm)}`);
+  const response = await fetchApi(
+    `api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm)}`,
+  );
   return mapSearchResults(await readJson(response));
 }
 

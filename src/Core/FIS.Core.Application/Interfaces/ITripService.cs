@@ -24,7 +24,8 @@ public interface ITripService
         Trip trip,
         IReadOnlyList<TripAuthorityDriverInput> drivers,
         IReadOnlyList<TripAuthorityPassengerInput> passengers,
-        IReadOnlyList<TripAuthorityRouteInput> routes);
+        IReadOnlyList<TripAuthorityRouteInput> routes
+    );
 
     /// <summary>
     /// Update an existing trip authority
@@ -36,7 +37,11 @@ public interface ITripService
     /// <summary>
     /// Close a trip authority and persist its route end odometer readings.
     /// </summary>
-    Task CloseTripAsync(int tripAuthorityCode, IReadOnlyList<TripAuthorityRouteUpdate> routes, int? endOdometer = null);
+    Task CloseTripAsync(
+        int tripAuthorityCode,
+        IReadOnlyList<TripAuthorityRouteUpdate> routes,
+        int? endOdometer = null
+    );
 
     /// <summary>
     /// Get trip authority by ID
@@ -156,13 +161,15 @@ public sealed record TripAuthorityVehicle(
     DateTime? LicenceDueDate,
     string? MakeDescription,
     string? ModelDescription,
-    string? ContractType);
+    string? ContractType
+);
 
 public sealed record TripAuthorityDetails(
     Trip Trip,
     IReadOnlyList<TripAuthorityDriver> Drivers,
     IReadOnlyList<TripAuthorityPassenger> Passengers,
-    IReadOnlyList<TripAuthorityRoute> Routes);
+    IReadOnlyList<TripAuthorityRoute> Routes
+);
 
 public sealed record TripAuthorityDriver(
     int TripDriverCode,
@@ -180,11 +187,10 @@ public sealed record TripAuthorityDriver(
     bool HasPdp,
     DateTime? PdpExpiryDate,
     DateTime? LicenceExpiryDate,
-    bool IsActive);
+    bool IsActive
+);
 
-public sealed record TripAuthorityPassenger(
-    int TripPassengerCode,
-    string? Name);
+public sealed record TripAuthorityPassenger(int TripPassengerCode, string? Name);
 
 public sealed record TripAuthorityRoute(
     int RouteCode,
@@ -200,12 +206,10 @@ public sealed record TripAuthorityRoute(
     int? Distance,
     string? ProjectNumber,
     string? FundCode,
-    int? EditedByUserCode);
+    int? EditedByUserCode
+);
 
-public sealed record TripAuthorityRouteUpdate(
-    int RouteCode,
-    int EndOdometer,
-    int Distance);
+public sealed record TripAuthorityRouteUpdate(int RouteCode, int EndOdometer, int Distance);
 
 public sealed record TripAuthorityDriverInput(
     string? Name,
@@ -222,7 +226,8 @@ public sealed record TripAuthorityDriverInput(
     bool HasPdp,
     DateTime? PdpExpiryDate,
     DateTime? LicenceExpiryDate,
-    bool IsActive);
+    bool IsActive
+);
 
 public sealed record TripAuthorityPassengerInput(string Name);
 
@@ -236,4 +241,5 @@ public sealed record TripAuthorityRouteInput(
     string ObjectiveCode,
     string ProjectNumber,
     string FundCode,
-    int? StartOdometer = null);
+    int? StartOdometer = null
+);

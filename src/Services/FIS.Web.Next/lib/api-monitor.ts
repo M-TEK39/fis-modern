@@ -51,10 +51,15 @@ export type MonitorReportRow = {
 
 export type MonitorStatistic = { inquiryType: string; count: number };
 
-export type MonitorApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type MonitorApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class MonitorApiError extends Error {
-  constructor(public readonly reason: MonitorApiErrorReason, message: string, public readonly status?: number) {
+  constructor(
+    public readonly reason: MonitorApiErrorReason,
+    message: string,
+    public readonly status?: number,
+  ) {
     super(message);
     this.name = "MonitorApiError";
   }
@@ -106,7 +111,8 @@ function getCollection(payload: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new MonitorApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new MonitorApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -117,9 +123,20 @@ async function requestApi(path: string, init: RequestInit = {}) {
       headers: { accept: "application/json", cookie: cookieHeader, ...init.headers },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) throw new MonitorApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
-    if (response.status === 404) throw new MonitorApiError("not-found", "The monitor inquiry was not found.", response.status);
-    if (!response.ok) throw new MonitorApiError("unavailable", `FIS API returned HTTP ${response.status}.`, response.status);
+    if (response.status === 401 || response.status === 403)
+      throw new MonitorApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
+    if (response.status === 404)
+      throw new MonitorApiError("not-found", "The monitor inquiry was not found.", response.status);
+    if (!response.ok)
+      throw new MonitorApiError(
+        "unavailable",
+        `FIS API returned HTTP ${response.status}.`,
+        response.status,
+      );
     return response;
   } catch (error) {
     if (error instanceof MonitorApiError) throw error;
@@ -147,15 +164,25 @@ function mapMonitor(value: unknown): MonitorRecord | null {
     monitorCode,
     vmfCode: asNumber(getValue(value, "vmf_code", "vmfCode")),
     captureDate: asString(getValue(value, "Capture_dat", "capture_dat", "captureDate")),
-    userAccessCode: asNumber(getValue(value, "User_access_code", "user_access_code", "userAccessCode")),
+    userAccessCode: asNumber(
+      getValue(value, "User_access_code", "user_access_code", "userAccessCode"),
+    ),
     inquiryType: asString(getValue(value, "Inquiry_type", "inquiry_type", "inquiryType")),
-    inquiryDescription: asString(getValue(value, "Inquiry_Desc", "inquiry_Desc", "inquiryDescription")),
+    inquiryDescription: asString(
+      getValue(value, "Inquiry_Desc", "inquiry_Desc", "inquiryDescription"),
+    ),
     driverName: asString(getValue(value, "Driver_name", "driver_name", "driverName")),
-    driverPersalNo: asString(getValue(value, "Driver_persalno", "driver_persalno", "driverPersalNo")),
+    driverPersalNo: asString(
+      getValue(value, "Driver_persalno", "driver_persalno", "driverPersalNo"),
+    ),
     driverSite: asNumber(getValue(value, "Driver_Site", "driver_site", "driverSite")),
     isDeleted: asBoolean(getValue(value, "is_deleted", "isDeleted")),
-    fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")) ?? asString(getValue(vehicleRecord, "fleet_number", "fleetNumber")),
-    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")) ?? asString(getValue(vehicleRecord, "registration_number", "registrationNumber")),
+    fleetNumber:
+      asString(getValue(value, "fleet_number", "fleetNumber")) ??
+      asString(getValue(vehicleRecord, "fleet_number", "fleetNumber")),
+    registrationNumber:
+      asString(getValue(value, "registration_number", "registrationNumber")) ??
+      asString(getValue(vehicleRecord, "registration_number", "registrationNumber")),
   };
 }
 
@@ -177,11 +204,15 @@ function mapReportRow(value: unknown): MonitorReportRow | null {
 
 export async function getMonitors() {
   const payload = await readJson(await requestApi("api/monitor"));
-  return getCollection(payload).map(mapMonitor).filter((item): item is MonitorRecord => item !== null);
+  return getCollection(payload)
+    .map(mapMonitor)
+    .filter((item): item is MonitorRecord => item !== null);
 }
 
 export async function getMonitor(monitorCode: number) {
-  const payload = await readJson(await requestApi(`api/monitor/${encodeURIComponent(monitorCode)}`));
+  const payload = await readJson(
+    await requestApi(`api/monitor/${encodeURIComponent(monitorCode)}`),
+  );
   return mapMonitor(payload);
 }
 
@@ -190,18 +221,34 @@ export async function getMonitorDrivers() {
   return getCollection(payload)
     .map((value): MonitorDriverOption | null => {
       if (!isRecord(value)) return null;
-      const code = asNumber(getValue(value, "siteDriverCode", "SiteDriverCode", "site_driver_code"));
+      const code = asNumber(
+        getValue(value, "siteDriverCode", "SiteDriverCode", "site_driver_code"),
+      );
       if (code === null) return null;
       return {
         code,
         siteCode: asNumber(getValue(value, "siteCode", "SiteCode", "site_code")),
         surname: asString(getValue(value, "driverSurname", "DriverSurname", "driver_surname")),
-        firstname: asString(getValue(value, "driverFirstname", "DriverFirstname", "driver_firstname")),
-        persalNumber: asString(getValue(value, "driverPersonalNumber", "DriverPersonalNumber", "driver_persalnumber", "persalNumber")),
+        firstname: asString(
+          getValue(value, "driverFirstname", "DriverFirstname", "driver_firstname"),
+        ),
+        persalNumber: asString(
+          getValue(
+            value,
+            "driverPersonalNumber",
+            "DriverPersonalNumber",
+            "driver_persalnumber",
+            "persalNumber",
+          ),
+        ),
       };
     })
     .filter((item): item is MonitorDriverOption => item !== null)
-    .sort((left, right) => `${left.surname ?? ""} ${left.firstname ?? ""}`.localeCompare(`${right.surname ?? ""} ${right.firstname ?? ""}`));
+    .sort((left, right) =>
+      `${left.surname ?? ""} ${left.firstname ?? ""}`.localeCompare(
+        `${right.surname ?? ""} ${right.firstname ?? ""}`,
+      ),
+    );
 }
 
 async function mutate(path: string, method: "POST" | "PUT", input: MonitorWriteInput) {
@@ -222,7 +269,9 @@ export async function updateMonitor(monitorCode: number, input: MonitorWriteInpu
 }
 
 export async function getMonitorReportByReference(monitorCode: number) {
-  const payload = await readJson(await requestApi(`api/monitor/reports/one-reference-number/${encodeURIComponent(monitorCode)}`));
+  const payload = await readJson(
+    await requestApi(`api/monitor/reports/one-reference-number/${encodeURIComponent(monitorCode)}`),
+  );
   return getCollection(isRecord(payload) ? getValue(payload, "data", "Data") : payload)
     .map(mapReportRow)
     .filter((item): item is MonitorReportRow => item !== null);
@@ -242,5 +291,8 @@ export async function getInquiryStatistics(startDate: string, endDate: string) {
       inquiryType: asString(getValue(item, "inquiryType", "InquiryType")) ?? "(Unknown)",
       count: asNumber(getValue(item, "count", "Count")) ?? 0,
     }))
-    .sort((left, right) => right.count - left.count || left.inquiryType.localeCompare(right.inquiryType));
+    .sort(
+      (left, right) =>
+        right.count - left.count || left.inquiryType.localeCompare(right.inquiryType),
+    );
 }

@@ -78,7 +78,8 @@ const MANUAL_GROUPS: readonly ManualGroup[] = [
     title: "Tariffs",
     links: [
       {
-        label: "Training Manual - Annual Tariff Parameters & Overhead & Maintenance Values management",
+        label:
+          "Training Manual - Annual Tariff Parameters & Overhead & Maintenance Values management",
         href: "/Docs/Training_Manual_Annual_Tariff_Parameters_Overhead_Maintenance_ Values_Management.pdf",
       },
     ],
@@ -89,7 +90,9 @@ const MANUAL_GROUPS: readonly ManualGroup[] = [
   },
   {
     title: "Validation",
-    links: [{ label: "Validation Data User Manual", href: "/Validation/Doc/Doc_ValidationData.htm" }],
+    links: [
+      { label: "Validation Data User Manual", href: "/Validation/Doc/Doc_ValidationData.htm" },
+    ],
   },
   {
     title: "Workshop",
@@ -127,7 +130,9 @@ async function ManualsContent() {
         </div>
         <p className="eyebrow">API unavailable</p>
         <h1>Your session could not be checked.</h1>
-        <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+        <p className="muted-copy">
+          The application is still running. Retry when the FIS API is available.
+        </p>
         <div className="button-row">
           <Link className="button button-primary" href="/manuals">
             Try again

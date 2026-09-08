@@ -49,7 +49,9 @@ function getPositiveInt(value: string | undefined) {
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function errorMessage(error: unknown) {
@@ -69,7 +71,9 @@ function errorMessage(error: unknown) {
 function AccessRestricted() {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">Access restricted</p>
       <h2>You do not have permission to capture call centre incidents.</h2>
       <p className="muted-copy">This page requires the Call Centre role.</p>
@@ -80,13 +84,19 @@ function AccessRestricted() {
 function ApiUnavailable({ message }: Readonly<{ message: string }>) {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">Service unavailable</p>
       <h2>Incident capture could not be opened.</h2>
       <p className="muted-copy">{message}</p>
       <div className="button-row">
-        <Link className="button button-primary" href="/call-centre/incident/capture">Try again</Link>
-        <Link className="button button-secondary" href="/call-centre">Back to Call Centre</Link>
+        <Link className="button button-primary" href="/call-centre/incident/capture">
+          Try again
+        </Link>
+        <Link className="button button-secondary" href="/call-centre">
+          Back to Call Centre
+        </Link>
       </div>
     </section>
   );
@@ -117,7 +127,9 @@ function IncidentSelector({
             <label htmlFor="incident-type">Incident Type</label>
             <select id="incident-type" name="incidentType" defaultValue={incidentType}>
               {INCIDENT_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>{type.label}</option>
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
               ))}
             </select>
           </div>
@@ -147,8 +159,12 @@ function IncidentSelector({
           </select>
         </div>
         <div className="button-row">
-          <button className="button button-primary" type="submit">Find Vehicle</button>
-          <Link className="button button-secondary" href="/call-centre">Cancel</Link>
+          <button className="button button-primary" type="submit">
+            Find Vehicle
+          </button>
+          <Link className="button button-secondary" href="/call-centre">
+            Cancel
+          </Link>
         </div>
       </form>
     </section>
@@ -179,7 +195,9 @@ function VehicleMatches({
         </div>
       </div>
       {vehicles.length === 0 ? (
-        <p className="muted-copy">No vehicle matched “{identifier}”. Check the lookup type and try again.</p>
+        <p className="muted-copy">
+          No vehicle matched “{identifier}”. Check the lookup type and try again.
+        </p>
       ) : (
         <div className="vehicle-menu-links">
           {vehicles.map((vehicle) => {
@@ -224,11 +242,17 @@ function QueryIncidentForm({
     <section className="vehicle-form-section" aria-labelledby="query-form-title">
       <div className="vehicle-form-section-header">
         <div>
-          <p className="eyebrow">{incidentType} · {vehicle.displayText}</p>
+          <p className="eyebrow">
+            {incidentType} · {vehicle.displayText}
+          </p>
           <h2 id="query-form-title">Capture Incident Details</h2>
         </div>
       </div>
-      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
       <form action={saveQueryIncidentAction} className="form-stack">
         <input name="ccVMF" type="hidden" value={vehicle.vmfCode} />
         <input name="xgg" type="hidden" value={vehicle.fleetNumber ?? ""} />
@@ -258,7 +282,8 @@ function QueryIncidentForm({
             <option value="">Select site</option>
             {sites.map((site) => (
               <option key={site.code} value={site.code}>
-                {site.description}{site.departmentNumber ? ` (${site.departmentNumber})` : ""}
+                {site.description}
+                {site.departmentNumber ? ` (${site.departmentNumber})` : ""}
               </option>
             ))}
           </select>
@@ -304,7 +329,9 @@ function QueryIncidentForm({
             <select id="notify-list" name="xnotel" defaultValue="">
               <option value="">Select notification list</option>
               {notifyLists.map((item) => (
-                <option key={item.code} value={item.code}>{item.description ?? item.email ?? item.code}</option>
+                <option key={item.code} value={item.code}>
+                  {item.description ?? item.email ?? item.code}
+                </option>
               ))}
             </select>
           </div>
@@ -317,8 +344,12 @@ function QueryIncidentForm({
           </div>
         </div>
         <div className="button-row">
-          <button className="button button-primary" type="submit">Submit</button>
-          <Link className="button button-secondary" href="/call-centre/incident/capture">Cancel</Link>
+          <button className="button button-primary" type="submit">
+            Submit
+          </button>
+          <Link className="button button-secondary" href="/call-centre/incident/capture">
+            Cancel
+          </Link>
         </div>
       </form>
     </section>
@@ -347,7 +378,11 @@ function AccidentIncidentForm({
           <h2 id="accident-form-title">Capture Accident Details</h2>
         </div>
       </div>
-      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
       <form action={saveAccidentAction} className="form-stack">
         <input name="ccVMF" type="hidden" value={vehicle.vmfCode} />
         <input name="xgg" type="hidden" value={vehicle.fleetNumber ?? ""} />
@@ -368,16 +403,27 @@ function AccidentIncidentForm({
           </div>
           <div className="field">
             <label htmlFor="accident-transport-officer-email">Trans Officer Email</label>
-            <input id="accident-transport-officer-email" name="xtrseml" maxLength={30} type="email" />
+            <input
+              id="accident-transport-officer-email"
+              name="xtrseml"
+              maxLength={30}
+              type="email"
+            />
           </div>
         </div>
         <div className="field">
           <label htmlFor="accident-transport-officer-site">Trans Officer Site</label>
-          <select id="accident-transport-officer-site" name="xtrssite" defaultValue={selectedSite} required>
+          <select
+            id="accident-transport-officer-site"
+            name="xtrssite"
+            defaultValue={selectedSite}
+            required
+          >
             <option value="">Select site</option>
             {sites.map((site) => (
               <option key={site.code} value={site.code}>
-                {site.description}{site.departmentNumber ? ` (${site.departmentNumber})` : ""}
+                {site.description}
+                {site.departmentNumber ? ` (${site.departmentNumber})` : ""}
               </option>
             ))}
           </select>
@@ -511,7 +557,9 @@ function AccidentIncidentForm({
             <select id="accident-notify-list" name="xnotc" defaultValue="">
               <option value="">Select notification list</option>
               {notifyLists.map((item) => (
-                <option key={item.code} value={item.code}>{item.description ?? item.email ?? item.code}</option>
+                <option key={item.code} value={item.code}>
+                  {item.description ?? item.email ?? item.code}
+                </option>
               ))}
             </select>
           </div>
@@ -524,8 +572,12 @@ function AccidentIncidentForm({
           </div>
         </div>
         <div className="button-row">
-          <button className="button button-primary" type="submit">Submit</button>
-          <Link className="button button-secondary" href="/call-centre/incident/capture">Cancel</Link>
+          <button className="button button-primary" type="submit">
+            Submit
+          </button>
+          <Link className="button button-secondary" href="/call-centre/incident/capture">
+            Cancel
+          </Link>
         </div>
       </form>
     </section>
@@ -557,7 +609,11 @@ function LossIncidentForm({
           <h2 id="loss-form-title">Capture Loss Details</h2>
         </div>
       </div>
-      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
       <form action={saveLossAction} className="form-stack">
         <input name="ccVMF" type="hidden" value={vehicle.vmfCode} />
         <input name="xgg" type="hidden" value={vehicle.fleetNumber ?? ""} />
@@ -583,11 +639,17 @@ function LossIncidentForm({
         </div>
         <div className="field">
           <label htmlFor="loss-transport-officer-site">Trans Officer Site</label>
-          <select id="loss-transport-officer-site" name="xtrssite" defaultValue={selectedSite} required>
+          <select
+            id="loss-transport-officer-site"
+            name="xtrssite"
+            defaultValue={selectedSite}
+            required
+          >
             <option value="">Select site</option>
             {sites.map((site) => (
               <option key={site.code} value={site.code}>
-                {site.description}{site.departmentNumber ? ` (${site.departmentNumber})` : ""}
+                {site.description}
+                {site.departmentNumber ? ` (${site.departmentNumber})` : ""}
               </option>
             ))}
           </select>
@@ -660,7 +722,9 @@ function LossIncidentForm({
           <select id="loss-type" name="xlosst" defaultValue={selectedLossType} required>
             <option value="">Select loss type</option>
             {lossTypes.map((lossType) => (
-              <option key={lossType.code} value={lossType.code}>{lossType.description}</option>
+              <option key={lossType.code} value={lossType.code}>
+                {lossType.description}
+              </option>
             ))}
           </select>
         </div>
@@ -688,7 +752,9 @@ function LossIncidentForm({
             <select id="loss-notify-list" name="xnotc" defaultValue="">
               <option value="">Select notification list</option>
               {notifyLists.map((item) => (
-                <option key={item.code} value={item.code}>{item.description ?? item.email ?? item.code}</option>
+                <option key={item.code} value={item.code}>
+                  {item.description ?? item.email ?? item.code}
+                </option>
               ))}
             </select>
           </div>
@@ -701,8 +767,12 @@ function LossIncidentForm({
           </div>
         </div>
         <div className="button-row">
-          <button className="button button-primary" type="submit">Submit</button>
-          <Link className="button button-secondary" href="/call-centre/incident/capture">Cancel</Link>
+          <button className="button button-primary" type="submit">
+            Submit
+          </button>
+          <Link className="button button-secondary" href="/call-centre/incident/capture">
+            Cancel
+          </Link>
         </div>
       </form>
     </section>
@@ -731,7 +801,11 @@ function HiJackIncidentForm({
           <h2 id="hijack-form-title">Capture Hi-Jack Details</h2>
         </div>
       </div>
-      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
       <form action={saveHiJackAction} className="form-stack">
         <input name="ccVMF" type="hidden" value={vehicle.vmfCode} />
         <input name="xgg" type="hidden" value={vehicle.fleetNumber ?? ""} />
@@ -757,11 +831,17 @@ function HiJackIncidentForm({
         </div>
         <div className="field">
           <label htmlFor="hijack-transport-officer-site">Trans Officer Site</label>
-          <select id="hijack-transport-officer-site" name="xtrssite" defaultValue={selectedSite} required>
+          <select
+            id="hijack-transport-officer-site"
+            name="xtrssite"
+            defaultValue={selectedSite}
+            required
+          >
             <option value="">Select site</option>
             {sites.map((site) => (
               <option key={site.code} value={site.code}>
-                {site.description}{site.departmentNumber ? ` (${site.departmentNumber})` : ""}
+                {site.description}
+                {site.departmentNumber ? ` (${site.departmentNumber})` : ""}
               </option>
             ))}
           </select>
@@ -849,7 +929,9 @@ function HiJackIncidentForm({
             <select id="hijack-notify-list" name="xnotc" defaultValue="">
               <option value="">Select notification list</option>
               {notifyLists.map((item) => (
-                <option key={item.code} value={item.code}>{item.description ?? item.email ?? item.code}</option>
+                <option key={item.code} value={item.code}>
+                  {item.description ?? item.email ?? item.code}
+                </option>
               ))}
             </select>
           </div>
@@ -862,8 +944,12 @@ function HiJackIncidentForm({
           </div>
         </div>
         <div className="button-row">
-          <button className="button button-primary" type="submit">Submit</button>
-          <Link className="button button-secondary" href="/call-centre/incident/capture">Cancel</Link>
+          <button className="button button-primary" type="submit">
+            Submit
+          </button>
+          <Link className="button button-secondary" href="/call-centre/incident/capture">
+            Cancel
+          </Link>
         </div>
       </form>
     </section>
@@ -894,7 +980,11 @@ function RoadAssistanceForm({
           <h2 id="road-form-title">Capture Road Assistance Details</h2>
         </div>
       </div>
-      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      ) : null}
       <form action={saveRoadAssistanceAction} className="form-stack">
         <input name="ccVMF" type="hidden" value={vehicle.vmfCode} />
         <input name="xgg" type="hidden" value={vehicle.fleetNumber ?? ""} />
@@ -920,11 +1010,17 @@ function RoadAssistanceForm({
         </div>
         <div className="field">
           <label htmlFor="road-transport-officer-site">Trans Officer Site</label>
-          <select id="road-transport-officer-site" name="xtrssite" defaultValue={selectedSite} required>
+          <select
+            id="road-transport-officer-site"
+            name="xtrssite"
+            defaultValue={selectedSite}
+            required
+          >
             <option value="">Select site</option>
             {sites.map((site) => (
               <option key={site.code} value={site.code}>
-                {site.description}{site.departmentNumber ? ` (${site.departmentNumber})` : ""}
+                {site.description}
+                {site.departmentNumber ? ` (${site.departmentNumber})` : ""}
               </option>
             ))}
           </select>
@@ -977,7 +1073,13 @@ function RoadAssistanceForm({
         <div className="field-grid">
           <div className="field">
             <label htmlFor="road-incident-date">Incident Date</label>
-            <input id="road-incident-date" name="xincdat" type="date" defaultValue={today} required />
+            <input
+              id="road-incident-date"
+              name="xincdat"
+              type="date"
+              defaultValue={today}
+              required
+            />
           </div>
           <div className="field">
             <label htmlFor="road-incident-time">Incident Time</label>
@@ -1008,7 +1110,8 @@ function RoadAssistanceForm({
             <option value="">Select assistance company</option>
             {towTrucks.map((towTruck) => (
               <option key={towTruck.code} value={towTruck.code}>
-                {towTruck.name ?? `Company ${towTruck.code}`}{towTruck.telephone ? ` (${towTruck.telephone})` : ""}
+                {towTruck.name ?? `Company ${towTruck.code}`}
+                {towTruck.telephone ? ` (${towTruck.telephone})` : ""}
               </option>
             ))}
           </select>
@@ -1023,7 +1126,9 @@ function RoadAssistanceForm({
             <select id="road-notify-list" name="xnotc" defaultValue="">
               <option value="">Select notification list</option>
               {notifyLists.map((item) => (
-                <option key={item.code} value={item.code}>{item.description ?? item.email ?? item.code}</option>
+                <option key={item.code} value={item.code}>
+                  {item.description ?? item.email ?? item.code}
+                </option>
               ))}
             </select>
           </div>
@@ -1036,8 +1141,12 @@ function RoadAssistanceForm({
           </div>
         </div>
         <div className="button-row">
-          <button className="button button-primary" type="submit">Submit</button>
-          <Link className="button button-secondary" href="/call-centre/incident/capture">Cancel</Link>
+          <button className="button button-primary" type="submit">
+            Submit
+          </button>
+          <Link className="button button-secondary" href="/call-centre/incident/capture">
+            Cancel
+          </Link>
         </div>
       </form>
     </section>
@@ -1053,19 +1162,32 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
   }
 
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/call-centre/incident/capture" /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath="/call-centre/incident/capture" />
+      </main>
+    );
   }
 
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable message="The sign-in service is temporarily unavailable." /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable message="The sign-in service is temporarily unavailable." />
+      </main>
+    );
   }
 
   if (!hasRole(session.roles, CALL_CENTRE_ROLE)) {
-    return <main className="page-shell vehicle-page-shell"><AccessRestricted /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <AccessRestricted />
+      </main>
+    );
   }
 
   const params = await searchParams;
-  const incidentType = getQueryValue(params.incidentType) ?? getQueryValue(params.xinctype) ?? "Query";
+  const incidentType =
+    getQueryValue(params.incidentType) ?? getQueryValue(params.xinctype) ?? "Query";
   const lookupType = getQueryValue(params.lookupType) ?? "GG";
   const identifier = getQueryValue(params.identifier) ?? getQueryValue(params.xggnum) ?? "";
   const departmentSort = getQueryValue(params.departmentSort) ?? "description";
@@ -1097,7 +1219,8 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
       ]);
     } else if (identifier.trim()) {
       vehicles = (await searchCallCentreVehicles(identifier.trim())).filter((candidate) => {
-        const value = lookupType.toUpperCase() === "GP" ? candidate.registrationNumber : candidate.fleetNumber;
+        const value =
+          lookupType.toUpperCase() === "GP" ? candidate.registrationNumber : candidate.fleetNumber;
         return value?.toLowerCase() === identifier.trim().toLowerCase();
       });
     }
@@ -1114,13 +1237,21 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
             <h1 id="incident-capture-title">Capture a New Incident</h1>
             <p>Record the same incident details used by the legacy Call Centre workflow.</p>
           </div>
-          <Link className="button button-secondary" href="/call-centre">Back to Call Centre</Link>
+          <Link className="button button-secondary" href="/call-centre">
+            Back to Call Centre
+          </Link>
         </header>
         {saved ? (
           <section className="vehicle-status-card" role="status">
-            <div className="status-icon status-icon-success" aria-hidden="true">✓</div>
+            <div className="status-icon status-icon-success" aria-hidden="true">
+              ✓
+            </div>
             <p className="eyebrow">Incident captured</p>
-            <h2>{savedCode ? `Call Centre reference ${savedCode}` : "The incident was captured successfully."}</h2>
+            <h2>
+              {savedCode
+                ? `Call Centre reference ${savedCode}`
+                : "The incident was captured successfully."}
+            </h2>
             <p className="muted-copy">
               {incidentType === "Road_Assistance"
                 ? "The legacy Call_centre and Towing business fields were saved."
@@ -1147,7 +1278,10 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
               <section className="vehicle-status-card" role="status">
                 <p className="eyebrow">Booking incident</p>
                 <h2>Booking capture is a separate legacy workflow.</h2>
-                <p className="muted-copy">The booking form remains a separately inventoried slice and has not been guessed into this Query form.</p>
+                <p className="muted-copy">
+                  The booking form remains a separately inventoried slice and has not been guessed
+                  into this Query form.
+                </p>
               </section>
             ) : null}
             {incidentType !== "Booking" && identifier && vmfCode === null ? (
@@ -1202,11 +1336,20 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
                 error={error}
               />
             ) : null}
-            {incidentType !== "Query" && incidentType !== "Booking" && incidentType !== "Accident" && incidentType !== "Road_Assistance" && incidentType !== "Hi-Jack" && incidentType !== "Loss_Theft" && vehicle ? (
+            {incidentType !== "Query" &&
+            incidentType !== "Booking" &&
+            incidentType !== "Accident" &&
+            incidentType !== "Road_Assistance" &&
+            incidentType !== "Hi-Jack" &&
+            incidentType !== "Loss_Theft" &&
+            vehicle ? (
               <section className="vehicle-status-card" role="status">
                 <p className="eyebrow">{incidentType}</p>
                 <h2>This incident branch is next in the capture migration.</h2>
-                <p className="muted-copy">Vehicle selection is preserved. This capture branch is being completed in Next.js with the established type-specific fields and table writes.</p>
+                <p className="muted-copy">
+                  Vehicle selection is preserved. This capture branch is being completed in Next.js
+                  with the established type-specific fields and table writes.
+                </p>
               </section>
             ) : null}
           </div>

@@ -43,8 +43,12 @@ export default function UserEditSearchForm({
         <p className="muted-copy">Select a username to retrieve and update its profile.</p>
       </div>
       <div className="button-row">
-        <button className="button button-primary" type="submit">Edit</button>
-        <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Back to Menu</Link>
+        <button className="button button-primary" type="submit">
+          Edit
+        </button>
+        <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+          Back to Menu
+        </Link>
       </div>
     </form>
   );

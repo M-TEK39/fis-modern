@@ -15,7 +15,9 @@ const RETURN_PATH = "/users/deactivate";
 type UserStatusOperation = "deactivate" | "deactivate-expired" | "activate";
 
 function hasUserAdministrationRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function getText(formData: FormData, name: string) {
@@ -29,10 +31,17 @@ function getAlphabet(value: string) {
 }
 
 function getOperation(value: string): UserStatusOperation | null {
-  return value === "deactivate" || value === "deactivate-expired" || value === "activate" ? value : null;
+  return value === "deactivate" || value === "deactivate-expired" || value === "activate"
+    ? value
+    : null;
 }
 
-function resultPath(alphabet: string, username: string, operation: UserStatusOperation | "deactivate", result: string) {
+function resultPath(
+  alphabet: string,
+  username: string,
+  operation: UserStatusOperation | "deactivate",
+  result: string,
+) {
   const params = new URLSearchParams({ alphabet, username, operation, result });
   return `${RETURN_PATH}?${params.toString()}`;
 }

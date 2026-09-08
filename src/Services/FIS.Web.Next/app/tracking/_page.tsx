@@ -15,11 +15,22 @@ export async function getTrackingSession() {
 
 export function sessionMessage(session: SessionState, returnPath: string) {
   if (session.status !== "expired" && session.status !== "unavailable") return null;
-  return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={returnPath} /></main>;
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <SessionRecovery returnPath={returnPath} />
+    </main>
+  );
 }
 
 export function accessRestricted(message: string) {
-  return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">Access restricted</p><h2>{message}</h2></section></main>;
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-status-card" role="alert">
+        <p className="eyebrow">Access restricted</p>
+        <h2>{message}</h2>
+      </section>
+    </main>
+  );
 }
 
 export function hasTrackingAccess(session: Extract<SessionState, { status: "authenticated" }>) {
@@ -27,7 +38,7 @@ export function hasTrackingAccess(session: Extract<SessionState, { status: "auth
 }
 
 export function queryValue(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
 export function parsePositiveInteger(value: string) {

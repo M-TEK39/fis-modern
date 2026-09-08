@@ -4,7 +4,10 @@ export function hasNoticeManagementPermission(accessLevel?: string) {
   if (!accessLevel) return false;
 
   try {
-    return (BigInt(accessLevel) & BigInt(NOTICE_MANAGEMENT_PERMISSION)) === BigInt(NOTICE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(NOTICE_MANAGEMENT_PERMISSION)) ===
+      BigInt(NOTICE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }

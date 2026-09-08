@@ -3,8 +3,18 @@ import { connection } from "next/server";
 
 import CreateTripForm from "@/app/trips/create/create-trip-form";
 import { createTripAuthorityAction } from "@/app/trips/actions";
-import { getTripSession, hasTripAuthorityAccess, parsePositiveInteger, queryValue, tripAccessRestricted, tripSessionMessage } from "@/app/trips/_page";
-import { getDriverManagementSiteDrivers, type DriverManagementDriver } from "@/lib/api-driver-management";
+import {
+  getTripSession,
+  hasTripAuthorityAccess,
+  parsePositiveInteger,
+  queryValue,
+  tripAccessRestricted,
+  tripSessionMessage,
+} from "@/app/trips/_page";
+import {
+  getDriverManagementSiteDrivers,
+  type DriverManagementDriver,
+} from "@/lib/api-driver-management";
 import { ContractApiError, getContract, type ContractRecord } from "@/lib/api-contracts";
 import { getTripAuthorityVehicles, type TripAuthorityVehicle } from "@/lib/api-trip-authorities";
 import { getUserAdminUserChoices, type UserAdminProfile } from "@/lib/api-user-admin";
@@ -45,10 +55,14 @@ function isContractManager(user: UserAdminProfile) {
 }
 
 function filterApprovers(users: UserAdminProfile[], currentUserCode: number | null) {
-  const candidates = users.filter((user) => user.userAccessCode !== currentUserCode && user.userActive);
+  const candidates = users.filter(
+    (user) => user.userAccessCode !== currentUserCode && user.userActive,
+  );
   const contractManagers = candidates.filter(isContractManager);
   return (contractManagers.length > 0 ? contractManagers : candidates).sort((left, right) =>
-    (left.userName ?? `${left.firstName ?? ""} ${left.lastName ?? ""}`).localeCompare(right.userName ?? `${right.firstName ?? ""} ${right.lastName ?? ""}`),
+    (left.userName ?? `${left.firstName ?? ""} ${left.lastName ?? ""}`).localeCompare(
+      right.userName ?? `${right.firstName ?? ""} ${right.lastName ?? ""}`,
+    ),
   );
 }
 
@@ -61,19 +75,75 @@ function pageShell(children: React.ReactNode) {
 }
 
 function VehiclePicker({ vehicles }: Readonly<{ vehicles: TripAuthorityVehicle[] }>) {
-  return pageShell(<section className="vehicle-status-card" aria-labelledby="trip-create-select-title"><p className="eyebrow">Trip Authority</p><h1 id="trip-create-select-title">Select a current vehicle contract</h1><p className="muted-copy">Choose the vehicle context before entering the trip authority details.</p>{vehicles.length === 0 ? <p className="muted-copy">No current vehicle contracts are available.</p> : <div className="vehicle-table-wrapper"><table className="vehicle-table"><caption className="sr-only">Current vehicle contracts</caption><thead><tr><th scope="col">Fleet / registration</th><th scope="col">VMF</th><th scope="col">Contract</th><th scope="col">Site</th><th scope="col">Action</th></tr></thead><tbody>{vehicles.map((vehicle) => <tr key={`${vehicle.contractCode}-${vehicle.vmfCode}`}><td>{vehicleLabel(vehicle)}</td><td>{vehicle.vmfCode}</td><td>{vehicle.contractCode}</td><td>{vehicle.siteCode}</td><td><Link className="button button-primary" href={`/trips/create?vmfCode=${vehicle.vmfCode}&contractCode=${vehicle.contractCode}`}>Select</Link></td></tr>)}</tbody></table></div>}</section>);
+  return pageShell(
+    <section className="vehicle-status-card" aria-labelledby="trip-create-select-title">
+      <p className="eyebrow">Trip Authority</p>
+      <h1 id="trip-create-select-title">Select a current vehicle contract</h1>
+      <p className="muted-copy">
+        Choose the vehicle context before entering the trip authority details.
+      </p>
+      {vehicles.length === 0 ? (
+        <p className="muted-copy">No current vehicle contracts are available.</p>
+      ) : (
+        <div className="vehicle-table-wrapper">
+          <table className="vehicle-table">
+            <caption className="sr-only">Current vehicle contracts</caption>
+            <thead>
+              <tr>
+                <th scope="col">Fleet / registration</th>
+                <th scope="col">VMF</th>
+                <th scope="col">Contract</th>
+                <th scope="col">Site</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vehicles.map((vehicle) => (
+                <tr key={`${vehicle.contractCode}-${vehicle.vmfCode}`}>
+                  <td>{vehicleLabel(vehicle)}</td>
+                  <td>{vehicle.vmfCode}</td>
+                  <td>{vehicle.contractCode}</td>
+                  <td>{vehicle.siteCode}</td>
+                  <td>
+                    <Link
+                      className="button button-primary"
+                      href={`/trips/create?vmfCode=${vehicle.vmfCode}&contractCode=${vehicle.contractCode}`}
+                    >
+                      Select
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>,
+  );
 }
 
 function unavailablePage(message: string) {
-  return pageShell(<section className="vehicle-status-card" role="alert"><p className="eyebrow">API unavailable</p><h1>Trip authority creation is unavailable.</h1><p className="muted-copy">{message}</p><Link className="button button-secondary" href="/trip-authorities">Back to Trip Authorities</Link></section>);
+  return pageShell(
+    <section className="vehicle-status-card" role="alert">
+      <p className="eyebrow">API unavailable</p>
+      <h1>Trip authority creation is unavailable.</h1>
+      <p className="muted-copy">{message}</p>
+      <Link className="button button-secondary" href="/trip-authorities">
+        Back to Trip Authorities
+      </Link>
+    </section>,
+  );
 }
 
-export default async function CreateTripPage({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+export default async function CreateTripPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getTripSession();
   const sessionMessage = tripSessionMessage(session, "/trips/create");
   if (sessionMessage) return sessionMessage;
-  if (session.status !== "authenticated") return unavailablePage("Retry when the FIS API is available.");
+  if (session.status !== "authenticated")
+    return unavailablePage("Retry when the FIS API is available.");
   if (!hasTripAuthorityAccess(session)) return tripAccessRestricted();
 
   const query = await searchParams;
@@ -87,7 +157,10 @@ export default async function CreateTripPage({ searchParams }: Readonly<{ search
     try {
       return VehiclePicker({ vehicles: await getTripAuthorityVehicles() });
     } catch (error) {
-      console.error("FIS trip vehicle selection failed", error instanceof Error ? error.message : "unknown error");
+      console.error(
+        "FIS trip vehicle selection failed",
+        error instanceof Error ? error.message : "unknown error",
+      );
       return unavailablePage("Current vehicle contracts could not be loaded.");
     }
   }
@@ -105,7 +178,10 @@ export default async function CreateTripPage({ searchParams }: Readonly<{ search
     if (error instanceof ContractApiError && error.reason === "not-found") {
       return unavailablePage("The selected vehicle contract no longer exists.");
     }
-    console.error("FIS trip contract context failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS trip contract context failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return unavailablePage("The selected vehicle contract could not be loaded.");
   }
 
@@ -128,15 +204,66 @@ export default async function CreateTripPage({ searchParams }: Readonly<{ search
     users = userResult;
     drivers = driverResult;
   } catch (error) {
-    console.error("FIS trip creation context failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS trip creation context failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return unavailablePage("Vehicle, approver, or driver information could not be loaded.");
   }
 
   const approvers = filterApprovers(users, currentUserCode);
   if (approvers.length === 0 || drivers.length === 0) {
-    return pageShell(<section className="vehicle-status-card" role="alert"><p className="eyebrow">Trip Authority</p><h1>Trip authority cannot be created yet.</h1><p className="muted-copy">An active approver and at least one active site driver are required for this vehicle.</p><Link className="button button-secondary" href="/trip-authorities">Back to Trip Authorities</Link></section>);
+    return pageShell(
+      <section className="vehicle-status-card" role="alert">
+        <p className="eyebrow">Trip Authority</p>
+        <h1>Trip authority cannot be created yet.</h1>
+        <p className="muted-copy">
+          An active approver and at least one active site driver are required for this vehicle.
+        </p>
+        <Link className="button button-secondary" href="/trip-authorities">
+          Back to Trip Authorities
+        </Link>
+      </section>,
+    );
   }
 
   const message = resultMessage(result);
-  return pageShell(<article className="vehicle-card" aria-labelledby="trip-create-title"><header className="vehicle-page-header"><div><p className="eyebrow">{mode === "Renew" ? "Renewal" : "New request"}</p><h1 id="trip-create-title">Trip Authority</h1>{message ? <p className={result === "created" ? "notice notice-success" : "notice notice-error"} role={result === "created" ? "status" : "alert"}>{message}</p> : null}</div><Link className="button button-secondary" href="/trip-authorities">Back to Trips</Link></header><CreateTripForm action={createTripAuthorityAction} context={{ vmfCode: selectedVmfCode, contractCode: selectedContractCode, siteCode: contract.siteCode, fleetNumber: vehicle.fleetNumber ?? contract.fleetNumber, registrationNumber: vehicle.registrationNumber ?? contract.registrationNumber, modelName: vehicle.modelName, currentOdo: vehicle.currentOdo ?? contract.startOdometer }} approvers={approvers} drivers={drivers} mode={mode} result={result} today={new Date().toISOString().slice(0, 10)} /></article>);
+  return pageShell(
+    <article className="vehicle-card" aria-labelledby="trip-create-title">
+      <header className="vehicle-page-header">
+        <div>
+          <p className="eyebrow">{mode === "Renew" ? "Renewal" : "New request"}</p>
+          <h1 id="trip-create-title">Trip Authority</h1>
+          {message ? (
+            <p
+              className={result === "created" ? "notice notice-success" : "notice notice-error"}
+              role={result === "created" ? "status" : "alert"}
+            >
+              {message}
+            </p>
+          ) : null}
+        </div>
+        <Link className="button button-secondary" href="/trip-authorities">
+          Back to Trips
+        </Link>
+      </header>
+      <CreateTripForm
+        action={createTripAuthorityAction}
+        context={{
+          vmfCode: selectedVmfCode,
+          contractCode: selectedContractCode,
+          siteCode: contract.siteCode,
+          fleetNumber: vehicle.fleetNumber ?? contract.fleetNumber,
+          registrationNumber: vehicle.registrationNumber ?? contract.registrationNumber,
+          modelName: vehicle.modelName,
+          currentOdo: vehicle.currentOdo ?? contract.startOdometer,
+        }}
+        approvers={approvers}
+        drivers={drivers}
+        mode={mode}
+        result={result}
+        today={new Date().toISOString().slice(0, 10)}
+      />
+    </article>,
+  );
 }

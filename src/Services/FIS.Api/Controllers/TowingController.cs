@@ -1,9 +1,9 @@
+using System.Security.Claims;
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
-using FIS.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 
 namespace FIS.Api.Controllers;
 
@@ -19,7 +19,8 @@ public class TowingController : BaseApiController
     public TowingController(
         ITowingRepository repository,
         TowTruckCompatibilityService towTruckService,
-        ILogger<TowingController> logger)
+        ILogger<TowingController> logger
+    )
     {
         _repository = repository;
         _towTruckService = towTruckService;
@@ -29,41 +30,86 @@ public class TowingController : BaseApiController
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Towing>>> GetAll()
     {
-        if (!HasTowingRole()) return Forbid();
-        try { return Ok(await _repository.GetAllAsync()); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        if (!HasTowingRole())
+            return Forbid();
+        try
+        {
+            return Ok(await _repository.GetAllAsync());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<Towing>> GetById(short id)
     {
-        if (!HasTowingRole()) return Forbid();
-        try { var item = await _repository.GetByIdAsync(id); return item == null ? NotFound() : Ok(item); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        if (!HasTowingRole())
+            return Forbid();
+        try
+        {
+            var item = await _repository.GetByIdAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpPost]
     public async Task<ActionResult<Towing>> Create([FromBody] Towing item)
     {
-        if (!HasTowingRole()) return Forbid();
-        try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.Towing_code }, created); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        if (!HasTowingRole())
+            return Forbid();
+        try
+        {
+            var created = await _repository.CreateAsync(item, GetCurrentUserId());
+            return CreatedAtAction(nameof(GetById), new { id = created.Towing_code }, created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpPut("{id}")]
     public async Task<ActionResult<Towing>> Update(short id, [FromBody] Towing item)
     {
-        if (!HasTowingRole()) return Forbid();
-        try { if (id != item.Towing_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        if (!HasTowingRole())
+            return Forbid();
+        try
+        {
+            if (id != item.Towing_code)
+                return BadRequest();
+            return Ok(await _repository.UpdateAsync(item, GetCurrentUserId()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(short id)
     {
-        if (!HasTowingRole()) return Forbid();
-        try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        if (!HasTowingRole())
+            return Forbid();
+        try
+        {
+            await _repository.DeleteAsync(id, GetCurrentUserId());
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     #region Specialized Operations
@@ -85,7 +131,8 @@ public class TowingController : BaseApiController
     [HttpGet("tow-trucks/{id}")]
     public async Task<ActionResult<TowTruckOption>> GetTowTruck(short id)
     {
-        if (!HasTowingRole()) return Forbid();
+        if (!HasTowingRole())
+            return Forbid();
         try
         {
             var towTruck = await _towTruckService.GetByIdAsync(id, HttpContext.RequestAborted);
@@ -99,15 +146,19 @@ public class TowingController : BaseApiController
     }
 
     [HttpPost("tow-trucks")]
-    public async Task<ActionResult<TowTruckOption>> CreateTowTruck([FromBody] TowTruckRequestDto request)
+    public async Task<ActionResult<TowTruckOption>> CreateTowTruck(
+        [FromBody] TowTruckRequestDto request
+    )
     {
-        if (!HasTowingRole()) return Forbid();
+        if (!HasTowingRole())
+            return Forbid();
         try
         {
             var towTruck = await _towTruckService.CreateAsync(
                 request.ToRequest(),
                 GetCurrentUserId(),
-                HttpContext.RequestAborted);
+                HttpContext.RequestAborted
+            );
             return Ok(towTruck);
         }
         catch (Exception ex)
@@ -118,16 +169,21 @@ public class TowingController : BaseApiController
     }
 
     [HttpPut("tow-trucks/{id}")]
-    public async Task<ActionResult<TowTruckOption>> UpdateTowTruck(short id, [FromBody] TowTruckRequestDto request)
+    public async Task<ActionResult<TowTruckOption>> UpdateTowTruck(
+        short id,
+        [FromBody] TowTruckRequestDto request
+    )
     {
-        if (!HasTowingRole()) return Forbid();
+        if (!HasTowingRole())
+            return Forbid();
         try
         {
             var towTruck = await _towTruckService.UpdateAsync(
                 id,
                 request.ToRequest(),
                 GetCurrentUserId(),
-                HttpContext.RequestAborted);
+                HttpContext.RequestAborted
+            );
             return towTruck == null ? NotFound() : Ok(towTruck);
         }
         catch (Exception ex)
@@ -140,10 +196,15 @@ public class TowingController : BaseApiController
     [HttpDelete("tow-trucks/{id}")]
     public async Task<ActionResult> DeleteTowTruck(short id)
     {
-        if (!HasTowingRole()) return Forbid();
+        if (!HasTowingRole())
+            return Forbid();
         try
         {
-            return await _towTruckService.DeleteAsync(id, GetCurrentUserId(), HttpContext.RequestAborted)
+            return await _towTruckService.DeleteAsync(
+                id,
+                GetCurrentUserId(),
+                HttpContext.RequestAborted
+            )
                 ? NoContent()
                 : NotFound();
         }
@@ -155,61 +216,81 @@ public class TowingController : BaseApiController
     }
 
     [HttpGet("menu")]
-    public ActionResult<TowingMenuDto> GetMenu()
-        => HasTowingRole()
-            ? Ok(new TowingMenuDto { Options = new List<string> { "Request", "Towtruck Data", "Reports", "Help" } })
+    public ActionResult<TowingMenuDto> GetMenu() =>
+        HasTowingRole()
+            ? Ok(
+                new TowingMenuDto
+                {
+                    Options = new List<string> { "Request", "Towtruck Data", "Reports", "Help" },
+                }
+            )
             : Forbid();
 
     [HttpPost("request")]
-    public async Task<ActionResult<TowingRequestResultDto>> CreateRequest([FromBody] TowingRequestDto request)
+    public async Task<ActionResult<TowingRequestResultDto>> CreateRequest(
+        [FromBody] TowingRequestDto request
+    )
     {
-        if (!HasTowingRole()) return Forbid();
+        if (!HasTowingRole())
+            return Forbid();
         try
         {
             var item = new Towing
             {
                 vmf_code = request.VmfCode,
-                Tow_request_date = request.RequestDate == default ? DateTime.Today : request.RequestDate.Date,
-                Tow_request_time = request.RequestDate == default ? DateTime.Now : request.RequestDate,
+                Tow_request_date =
+                    request.RequestDate == default ? DateTime.Today : request.RequestDate.Date,
+                Tow_request_time =
+                    request.RequestDate == default ? DateTime.Now : request.RequestDate,
                 Tow_location_start = request.Location?.Trim(),
                 Vehicle_problem = request.Reason?.Trim(),
                 Site_code = request.SiteCode,
-                Keys = request.Keys?.Trim()
+                Keys = request.Keys?.Trim(),
             };
 
             var created = await _repository.CreateAsync(item, GetCurrentUserId());
-            return Ok(new TowingRequestResultDto
-            {
-                Success = true,
-                TowingCode = created.Towing_code,
-                Message = "Towing request created"
-            });
+            return Ok(
+                new TowingRequestResultDto
+                {
+                    Success = true,
+                    TowingCode = created.Towing_code,
+                    Message = "Towing request created",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating towing request");
-            return StatusCode(500, new TowingRequestResultDto
-            {
-                Success = false,
-                Message = "Failed to create towing request"
-            });
+            return StatusCode(
+                500,
+                new TowingRequestResultDto
+                {
+                    Success = false,
+                    Message = "Failed to create towing request",
+                }
+            );
         }
     }
 
     [HttpPut("towtruck/{id}")]
-    public async Task<ActionResult<TowtruckUpdateResultDto>> UpdateTowtruck(short id, [FromBody] TowtruckDataDto request)
+    public async Task<ActionResult<TowtruckUpdateResultDto>> UpdateTowtruck(
+        short id,
+        [FromBody] TowtruckDataDto request
+    )
     {
         try
         {
             var existing = await _repository.GetByIdAsync(id);
             if (existing == null || existing.is_deleted)
             {
-                return NotFound(new TowtruckUpdateResultDto
-                {
-                    Success = false,
-                    TowingCode = id,
-                    Message = "Towing request not found"
-                });
+                return NotFound(
+                    new TowtruckUpdateResultDto
+                    {
+                        Success = false,
+                        TowingCode = id,
+                        Message = "Towing request not found",
+                    }
+                );
             }
 
             if (!string.IsNullOrWhiteSpace(request.Location))
@@ -228,22 +309,27 @@ public class TowingController : BaseApiController
             }
 
             await _repository.UpdateAsync(existing, GetCurrentUserId());
-            return Ok(new TowtruckUpdateResultDto
-            {
-                Success = true,
-                TowingCode = id,
-                Message = "Towtruck data updated"
-            });
+            return Ok(
+                new TowtruckUpdateResultDto
+                {
+                    Success = true,
+                    TowingCode = id,
+                    Message = "Towtruck data updated",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating towtruck data for towing {TowingCode}", id);
-            return StatusCode(500, new TowtruckUpdateResultDto
-            {
-                Success = false,
-                TowingCode = id,
-                Message = "Failed to update towtruck data"
-            });
+            return StatusCode(
+                500,
+                new TowtruckUpdateResultDto
+                {
+                    Success = false,
+                    TowingCode = id,
+                    Message = "Failed to update towtruck data",
+                }
+            );
         }
     }
 
@@ -252,17 +338,36 @@ public class TowingController : BaseApiController
     #region Reports
 
     [HttpGet("reports/menu")]
-    public ActionResult<TowingReportMenuDto> GetReportsMenu()
-        => HasReportsRole()
-            ? Ok(new TowingReportMenuDto { Reports = new List<string> { "Request Report", "All Towtrucks", "Firm/Date Report" } })
+    public ActionResult<TowingReportMenuDto> GetReportsMenu() =>
+        HasReportsRole()
+            ? Ok(
+                new TowingReportMenuDto
+                {
+                    Reports = new List<string>
+                    {
+                        "Request Report",
+                        "All Towtrucks",
+                        "Firm/Date Report",
+                    },
+                }
+            )
             : Forbid();
 
     [HttpPost("reports/request")]
-    public async Task<ActionResult<TowingReportDto>> GetReportRequest([FromBody] TowingRequestReportDto request)
+    public async Task<ActionResult<TowingReportDto>> GetReportRequest(
+        [FromBody] TowingRequestReportDto request
+    )
     {
-        if (!HasReportsRole()) return Forbid();
+        if (!HasReportsRole())
+            return Forbid();
         var data = (await GetLiveItemsAsync())
-            .Where(item => IsWithinInclusiveDateRange(item.Tow_request_date, request.StartDate, request.EndDate))
+            .Where(item =>
+                IsWithinInclusiveDateRange(
+                    item.Tow_request_date,
+                    request.StartDate,
+                    request.EndDate
+                )
+            )
             .OrderByDescending(item => item.Tow_request_date)
             .Cast<object>()
             .ToList();
@@ -273,11 +378,14 @@ public class TowingController : BaseApiController
     [HttpGet("reports/towtruck/all")]
     public async Task<ActionResult<TowingReportDto>> GetReportAllTowtrucks()
     {
-        if (!HasReportsRole()) return Forbid();
+        if (!HasReportsRole())
+            return Forbid();
         var data = (await GetLiveItemsAsync())
-            .Where(item => !string.IsNullOrWhiteSpace(item.Tow_location_start) ||
-                           !string.IsNullOrWhiteSpace(item.Keys) ||
-                           !string.IsNullOrWhiteSpace(item.Vehicle_problem))
+            .Where(item =>
+                !string.IsNullOrWhiteSpace(item.Tow_location_start)
+                || !string.IsNullOrWhiteSpace(item.Keys)
+                || !string.IsNullOrWhiteSpace(item.Vehicle_problem)
+            )
             .OrderByDescending(item => item.Tow_request_date)
             .Cast<object>()
             .ToList();
@@ -286,36 +394,50 @@ public class TowingController : BaseApiController
     }
 
     [HttpPost("reports/firm-date")]
-    public async Task<ActionResult<TowingReportDto>> GetReportFirmDate([FromBody] TowingFirmDateReportDto request)
+    public async Task<ActionResult<TowingReportDto>> GetReportFirmDate(
+        [FromBody] TowingFirmDateReportDto request
+    )
     {
-        if (!HasReportsRole()) return Forbid();
+        if (!HasReportsRole())
+            return Forbid();
         var firm = request.FirmName?.Trim();
-        var query = (await GetLiveItemsAsync())
-            .Where(item => IsWithinInclusiveDateRange(item.Tow_request_date, request.StartDate, request.EndDate));
+        var query = (await GetLiveItemsAsync()).Where(item =>
+            IsWithinInclusiveDateRange(item.Tow_request_date, request.StartDate, request.EndDate)
+        );
 
         if (!string.IsNullOrWhiteSpace(firm))
         {
-            var matchingTowTruckCodes = (await _towTruckService.GetAllAsync(HttpContext.RequestAborted))
-                .Where(towTruck => !string.IsNullOrWhiteSpace(towTruck.TowName) &&
-                    towTruck.TowName.Contains(firm, StringComparison.OrdinalIgnoreCase))
+            var matchingTowTruckCodes = (
+                await _towTruckService.GetAllAsync(HttpContext.RequestAborted)
+            )
+                .Where(towTruck =>
+                    !string.IsNullOrWhiteSpace(towTruck.TowName)
+                    && towTruck.TowName.Contains(firm, StringComparison.OrdinalIgnoreCase)
+                )
                 .Select(towTruck => towTruck.TowCode)
                 .ToHashSet();
-            query = query.Where(item => item.Tow_Truck_code.HasValue && matchingTowTruckCodes.Contains(item.Tow_Truck_code.Value));
+            query = query.Where(item =>
+                item.Tow_Truck_code.HasValue
+                && matchingTowTruckCodes.Contains(item.Tow_Truck_code.Value)
+            );
         }
 
-        return Ok(new TowingReportDto
-        {
-            ReportType = "FirmDate",
-            Data = query.OrderByDescending(item => item.Tow_request_date).Cast<object>().ToList()
-        });
+        return Ok(
+            new TowingReportDto
+            {
+                ReportType = "FirmDate",
+                Data = query
+                    .OrderByDescending(item => item.Tow_request_date)
+                    .Cast<object>()
+                    .ToList(),
+            }
+        );
     }
 
     #endregion
 
-    private async Task<List<Towing>> GetLiveItemsAsync()
-        => (await _repository.GetAllAsync())
-            .Where(item => !item.is_deleted)
-            .ToList();
+    private async Task<List<Towing>> GetLiveItemsAsync() =>
+        (await _repository.GetAllAsync()).Where(item => !item.is_deleted).ToList();
 
     private bool HasTowingRole() => HasAnyRole("Towing");
 
@@ -328,16 +450,31 @@ public class TowingController : BaseApiController
             return true;
         }
 
-        var roleClaims = User.Claims
-            .Where(claim => claim.Type == ClaimTypes.Role
+        var roleClaims = User
+            .Claims.Where(claim =>
+                claim.Type == ClaimTypes.Role
                 || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
-                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
-            .SelectMany(claim => claim.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            );
 
-        return roleClaims.Any(role => expectedRoles.Any(expected => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)));
+        return roleClaims.Any(role =>
+            expectedRoles.Any(expected =>
+                string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+            )
+        );
     }
 
-    private static bool IsWithinInclusiveDateRange(DateTime? candidate, DateTime startDate, DateTime endDate)
+    private static bool IsWithinInclusiveDateRange(
+        DateTime? candidate,
+        DateTime startDate,
+        DateTime endDate
+    )
     {
         if (!candidate.HasValue)
         {
@@ -357,7 +494,11 @@ public class TowingController : BaseApiController
 }
 
 #region Towing DTOs
-public class TowingMenuDto { public List<string> Options { get; set; } = new(); }
+public class TowingMenuDto
+{
+    public List<string> Options { get; set; } = new();
+}
+
 public class TowingRequestDto
 {
     public int VmfCode { get; set; }
@@ -367,18 +508,52 @@ public class TowingRequestDto
     public short? SiteCode { get; set; }
     public string? Keys { get; set; }
 }
-public class TowingRequestResultDto { public bool Success { get; set; } public short TowingCode { get; set; } public string Message { get; set; } = ""; }
+
+public class TowingRequestResultDto
+{
+    public bool Success { get; set; }
+    public short TowingCode { get; set; }
+    public string Message { get; set; } = "";
+}
+
 public class TowtruckDataDto
 {
     public string? Location { get; set; }
     public string? VehicleProblem { get; set; }
     public string? Keys { get; set; }
 }
-public class TowtruckUpdateResultDto { public bool Success { get; set; } public short TowingCode { get; set; } public string Message { get; set; } = ""; }
-public class TowingReportMenuDto { public List<string> Reports { get; set; } = new(); }
-public class TowingRequestReportDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
-public class TowingFirmDateReportDto { public string FirmName { get; set; } = ""; public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
-public class TowingReportDto { public string ReportType { get; set; } = ""; public List<object> Data { get; set; } = new(); }
+
+public class TowtruckUpdateResultDto
+{
+    public bool Success { get; set; }
+    public short TowingCode { get; set; }
+    public string Message { get; set; } = "";
+}
+
+public class TowingReportMenuDto
+{
+    public List<string> Reports { get; set; } = new();
+}
+
+public class TowingRequestReportDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class TowingFirmDateReportDto
+{
+    public string FirmName { get; set; } = "";
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class TowingReportDto
+{
+    public string ReportType { get; set; } = "";
+    public List<object> Data { get; set; } = new();
+}
+
 public class TowTruckRequestDto
 {
     public string? TowArea { get; set; }
@@ -386,7 +561,7 @@ public class TowTruckRequestDto
     public string? TowTel { get; set; }
     public string? TowFax { get; set; }
 
-    public TowTruckRequest ToRequest()
-        => new(TowArea?.Trim(), TowName?.Trim(), TowTel?.Trim(), TowFax?.Trim());
+    public TowTruckRequest ToRequest() =>
+        new(TowArea?.Trim(), TowName?.Trim(), TowTel?.Trim(), TowFax?.Trim());
 }
 #endregion

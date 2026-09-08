@@ -51,14 +51,10 @@ public sealed class SiteRepository : ISiteRepository
         "province_code",
         "notes",
         "user_access_code",
-        "modified_by_user_code"
+        "modified_by_user_code",
     ];
 
-    private static readonly string[] OptionalColumns =
-    [
-        "created_by_user_code",
-        "is_deleted"
-    ];
+    private static readonly string[] OptionalColumns = ["created_by_user_code", "is_deleted"];
 
     private readonly FisDbContext _context;
 
@@ -67,11 +63,13 @@ public sealed class SiteRepository : ISiteRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Site?> GetByIdAsync(int siteCode)
-        => (await QueryAsync(
-            "[Site_code] = @siteCode",
-            command => AddParameter(command, "@siteCode", DbType.Int32, siteCode)))
-            .SingleOrDefault();
+    public async Task<Site?> GetByIdAsync(int siteCode) =>
+        (
+            await QueryAsync(
+                "[Site_code] = @siteCode",
+                command => AddParameter(command, "@siteCode", DbType.Int32, siteCode)
+            )
+        ).SingleOrDefault();
 
     public async Task<Site?> GetByNameAsync(string siteName)
     {
@@ -80,14 +78,16 @@ public sealed class SiteRepository : ISiteRepository
             return null;
         }
 
-        return (await QueryAsync(
-            "[description] = @description",
-            command => AddParameter(command, "@description", DbType.String, siteName.Trim())))
-            .SingleOrDefault();
+        return (
+            await QueryAsync(
+                "[description] = @description",
+                command => AddParameter(command, "@description", DbType.String, siteName.Trim())
+            )
+        ).SingleOrDefault();
     }
 
-    public async Task<IEnumerable<Site>> GetActiveSitesAsync()
-        => await QueryAsync("[site_active] = 1");
+    public async Task<IEnumerable<Site>> GetActiveSitesAsync() =>
+        await QueryAsync("[site_active] = 1");
 
     public async Task<IEnumerable<Site>> SearchSitesAsync(string searchTerm)
     {
@@ -98,11 +98,18 @@ public sealed class SiteRepository : ISiteRepository
 
         return await QueryAsync(
             "(LOWER(COALESCE([description], '')) LIKE @search OR "
-            + "LOWER(COALESCE([res_person], '')) LIKE @search OR "
-            + "LOWER(COALESCE([address1], '')) LIKE @search OR "
-            + "LOWER(COALESCE([address2], '')) LIKE @search OR "
-            + "LOWER(COALESCE([Department_number], '')) LIKE @search)",
-            command => AddParameter(command, "@search", DbType.String, $"%{searchTerm.Trim().ToLowerInvariant()}%"));
+                + "LOWER(COALESCE([res_person], '')) LIKE @search OR "
+                + "LOWER(COALESCE([address1], '')) LIKE @search OR "
+                + "LOWER(COALESCE([address2], '')) LIKE @search OR "
+                + "LOWER(COALESCE([Department_number], '')) LIKE @search)",
+            command =>
+                AddParameter(
+                    command,
+                    "@search",
+                    DbType.String,
+                    $"%{searchTerm.Trim().ToLowerInvariant()}%"
+                )
+        );
     }
 
     public async Task<SiteDeleteCheck> GetDeleteCheckAsync(int siteCode)
@@ -122,7 +129,8 @@ public sealed class SiteRepository : ISiteRepository
                     connection,
                     "SELECT COUNT(1) FROM [dbo].[contract] WHERE [site_code] = @siteCode",
                     siteCode,
-                    transaction)
+                    transaction
+                )
                 : 0;
 
             return new SiteDeleteCheck(contractCount);
@@ -154,10 +162,11 @@ public sealed class SiteRepository : ISiteRepository
             }
 
             return await CountAsync(
-                connection,
-                "SELECT COUNT(1) FROM [dbo].[contract] WHERE [site_code] = @siteCode AND [still_current] = 'Y'",
-                siteCode,
-                transaction) > 0;
+                    connection,
+                    "SELECT COUNT(1) FROM [dbo].[contract] WHERE [site_code] = @siteCode AND [still_current] = 'Y'",
+                    siteCode,
+                    transaction
+                ) > 0;
         }
         finally
         {
@@ -180,8 +189,22 @@ public sealed class SiteRepository : ISiteRepository
         site.is_deleted = false;
 
         var values = BuildLegacyValues(site);
-        AddOptionalValue(values, availableColumns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "created_by_user_code",
+            "@createdByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            false
+        );
         site.Site_code = await ExecuteInsertAsync(values);
         return site;
     }
@@ -190,19 +213,37 @@ public sealed class SiteRepository : ISiteRepository
     {
         ArgumentNullException.ThrowIfNull(site);
 
-        var existing = await GetByIdAsync(site.Site_code)
-            ?? throw new InvalidOperationException($"Site with Site_code {site.Site_code} not found");
+        var existing =
+            await GetByIdAsync(site.Site_code)
+            ?? throw new InvalidOperationException(
+                $"Site with Site_code {site.Site_code} not found"
+            );
         var availableColumns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
         site.date_created = existing.date_created;
         site.created_by_user_code = existing.created_by_user_code;
         site.date_updated = now;
-        site.modified_by_user_code = currentUserId > 0 ? currentUserId : existing.modified_by_user_code;
+        site.modified_by_user_code =
+            currentUserId > 0 ? currentUserId : existing.modified_by_user_code;
         site.is_deleted = existing.is_deleted;
 
         var values = BuildLegacyValues(site);
-        AddOptionalValue(values, availableColumns, "created_by_user_code", "@createdByUserCode", DbType.Int32, site.created_by_user_code);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, site.is_deleted);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "created_by_user_code",
+            "@createdByUserCode",
+            DbType.Int32,
+            site.created_by_user_code
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            site.is_deleted
+        );
 
         IDbContextTransaction? transaction = null;
         if (_context.Database.CurrentTransaction is null)
@@ -212,7 +253,13 @@ public sealed class SiteRepository : ISiteRepository
 
         try
         {
-            if (!string.Equals(existing.res_person?.Trim(), site.res_person?.Trim(), StringComparison.Ordinal))
+            if (
+                !string.Equals(
+                    existing.res_person?.Trim(),
+                    site.res_person?.Trim(),
+                    StringComparison.Ordinal
+                )
+            )
             {
                 await AddResponsiblePersonHistoryAsync(existing, site);
             }
@@ -250,7 +297,8 @@ public sealed class SiteRepository : ISiteRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The soft-delete statement is selected from fixed compatibility branches and the site code is parameterized.")]
+        Justification = "The soft-delete statement is selected from fixed compatibility branches and the site code is parameterized."
+    )]
     public async Task DeleteAsync(int siteCode, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -269,11 +317,16 @@ public sealed class SiteRepository : ISiteRepository
             {
                 "[site_active] = @siteActive",
                 "[date_updated] = @dateUpdated",
-                "[modified_by_user_code] = @modifiedByUserCode"
+                "[modified_by_user_code] = @modifiedByUserCode",
             };
             AddParameter(command, "@siteActive", DbType.Boolean, false);
             AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-            AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+            AddParameter(
+                command,
+                "@modifiedByUserCode",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
 
             if (availableColumns.Contains("is_deleted"))
             {
@@ -281,7 +334,8 @@ public sealed class SiteRepository : ISiteRepository
                 AddParameter(command, "@isDeleted", DbType.Boolean, true);
             }
 
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [Site_code] = @siteCode";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [Site_code] = @siteCode";
             AddParameter(command, "@siteCode", DbType.Int32, siteCode);
             await command.ExecuteNonQueryAsync();
         }
@@ -297,10 +351,12 @@ public sealed class SiteRepository : ISiteRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list is composed only from fixed legacy columns and allowlisted runtime optional columns; predicates and values are parameterized.")]
+        Justification = "The SELECT list is composed only from fixed legacy columns and allowlisted runtime optional columns; predicates and values are parameterized."
+    )]
     private async Task<List<Site>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
@@ -316,7 +372,11 @@ public sealed class SiteRepository : ISiteRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = RequiredColumns
                 .Select(column => $"[{column}] AS [{column}]")
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
                 .ToArray();
             var conditions = new List<string> { GetNotDeletedFilter(availableColumns) };
             if (!string.IsNullOrWhiteSpace(predicate))
@@ -324,7 +384,8 @@ public sealed class SiteRepository : ISiteRepository
                 conditions.Add(predicate);
             }
 
-            command.CommandText = $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [Department_number], [description], [Site_code]";
+            command.CommandText =
+                $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY [Department_number], [description], [Site_code]";
             configure?.Invoke(command);
 
             var results = new List<Site>();
@@ -348,7 +409,8 @@ public sealed class SiteRepository : ISiteRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed from fixed legacy columns and allowlisted optional columns; all values are parameters.")]
+        Justification = "The INSERT statement is composed from fixed legacy columns and allowlisted optional columns; all values are parameters."
+    )]
     private async Task<short> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -362,7 +424,8 @@ public sealed class SiteRepository : ISiteRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[Site_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+            command.CommandText =
+                $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[Site_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
             AddParameters(command, values);
             return Convert.ToInt16(await command.ExecuteScalarAsync());
         }
@@ -378,7 +441,8 @@ public sealed class SiteRepository : ISiteRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed from fixed legacy columns and allowlisted optional columns; all values are parameters.")]
+        Justification = "The UPDATE statement is composed from fixed legacy columns and allowlisted optional columns; all values are parameters."
+    )]
     private async Task ExecuteUpdateAsync(int siteCode, IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -392,7 +456,8 @@ public sealed class SiteRepository : ISiteRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [Site_code] = @siteCode";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [Site_code] = @siteCode";
             AddParameters(command, values);
             AddParameter(command, "@siteCode", DbType.Int32, siteCode);
             await command.ExecuteNonQueryAsync();
@@ -451,7 +516,12 @@ public sealed class SiteRepository : ISiteRepository
                 (@siteCode, @updatedByUserCode, @notes, @actionDate, @siteActive, @createdByUserCode, @dateSiteCreated)
             """;
         AddParameter(command, "@siteCode", DbType.Int32, existing.Site_code);
-        AddParameter(command, "@updatedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddParameter(
+            command,
+            "@updatedByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddParameter(command, "@notes", DbType.String, updated.notes);
         AddParameter(command, "@actionDate", DbType.DateTime2, DateTime.UtcNow);
         AddParameter(command, "@siteActive", DbType.Boolean, updated.site_active);
@@ -492,7 +562,9 @@ public sealed class SiteRepository : ISiteRepository
             var missing = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
             if (missing.Length > 0)
             {
-                throw new InvalidOperationException($"The legacy site table is missing required columns: {string.Join(", ", missing)}");
+                throw new InvalidOperationException(
+                    $"The legacy site table is missing required columns: {string.Join(", ", missing)}"
+                );
             }
 
             return columns;
@@ -506,8 +578,7 @@ public sealed class SiteRepository : ISiteRepository
         }
     }
 
-    private static List<WriteValue> BuildLegacyValues(Site site)
-        =>
+    private static List<WriteValue> BuildLegacyValues(Site site) =>
         [
             new("Depatrment_code", "@departmentCode", DbType.Int16, site.Depatrment_code),
             new("description", "@description", DbType.String, site.description),
@@ -526,20 +597,50 @@ public sealed class SiteRepository : ISiteRepository
             new("site_active", "@siteActive", DbType.Boolean, site.site_active),
             new("telephone2", "@telephone2", DbType.String, site.telephone2),
             new("fax1", "@fax1", DbType.String, site.fax1),
-            new("financial_system_code", "@financialSystemCode", DbType.Byte, site.financial_system_code),
-            new("financial_system_active", "@financialSystemActive", DbType.Boolean, site.financial_system_active),
-            new("financial_system_activate_date", "@financialSystemActivateDate", DbType.DateTime2, site.financial_system_activate_date),
+            new(
+                "financial_system_code",
+                "@financialSystemCode",
+                DbType.Byte,
+                site.financial_system_code
+            ),
+            new(
+                "financial_system_active",
+                "@financialSystemActive",
+                DbType.Boolean,
+                site.financial_system_active
+            ),
+            new(
+                "financial_system_activate_date",
+                "@financialSystemActivateDate",
+                DbType.DateTime2,
+                site.financial_system_activate_date
+            ),
             new("export_is_active", "@exportIsActive", DbType.Boolean, site.export_is_active),
-            new("date_last_exported", "@dateLastExported", DbType.DateTime2, site.date_last_exported),
+            new(
+                "date_last_exported",
+                "@dateLastExported",
+                DbType.DateTime2,
+                site.date_last_exported
+            ),
             new("Service_Kilometres", "@serviceKilometres", DbType.Int32, site.Service_Kilometres),
             new("Service_Years", "@serviceYears", DbType.Byte, site.Service_Years),
-            new("Overhead_Percentage", "@overheadPercentage", DbType.Decimal, site.Overhead_Percentage),
+            new(
+                "Overhead_Percentage",
+                "@overheadPercentage",
+                DbType.Decimal,
+                site.Overhead_Percentage
+            ),
             new("date_created", "@dateCreated", DbType.DateTime2, site.date_created),
             new("date_updated", "@dateUpdated", DbType.DateTime2, site.date_updated),
             new("province_code", "@provinceCode", DbType.Byte, site.province_code),
             new("notes", "@notes", DbType.String, site.notes),
             new("user_access_code", "@userAccessCode", DbType.Int32, site.user_access_code),
-            new("modified_by_user_code", "@modifiedByUserCode", DbType.Int32, site.modified_by_user_code)
+            new(
+                "modified_by_user_code",
+                "@modifiedByUserCode",
+                DbType.Int32,
+                site.modified_by_user_code
+            ),
         ];
 
     private static void AddOptionalValue(
@@ -548,7 +649,8 @@ public sealed class SiteRepository : ISiteRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -573,8 +675,8 @@ public sealed class SiteRepository : ISiteRepository
         command.Parameters.Add(parameter);
     }
 
-    private static Site MapSite(DbDataReader reader, IReadOnlySet<string> availableColumns)
-        => new()
+    private static Site MapSite(DbDataReader reader, IReadOnlySet<string> availableColumns) =>
+        new()
         {
             Site_code = ReadInt16(reader, "Site_code") ?? 0,
             Depatrment_code = ReadInt16(reader, "Depatrment_code"),
@@ -608,8 +710,12 @@ public sealed class SiteRepository : ISiteRepository
             notes = ReadString(reader, "notes"),
             user_access_code = ReadInt32(reader, "user_access_code"),
             modified_by_user_code = ReadInt32(reader, "modified_by_user_code"),
-            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "created_by_user_code"
+            ),
+            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false,
         };
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
@@ -623,23 +729,25 @@ public sealed class SiteRepository : ISiteRepository
         {
             "is_deleted" => "bit",
             "created_by_user_code" => "int",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetNotDeletedFilter(IReadOnlySet<string> columns)
-        => columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
+    private static string GetNotDeletedFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The count query is selected from a fixed repository statement and the site code is parameterized.")]
+        Justification = "The count query is selected from a fixed repository statement and the site code is parameterized."
+    )]
     private static async Task<int> CountAsync(
         DbConnection connection,
         string sql,
         int siteCode,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -652,7 +760,8 @@ public sealed class SiteRepository : ISiteRepository
         DbConnection connection,
         string schema,
         string table,
-        DbTransaction? transaction)
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -672,7 +781,9 @@ public sealed class SiteRepository : ISiteRepository
     private static string? ReadString(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
     }
 
     private static short? ReadInt16(DbDataReader reader, string column)
@@ -687,8 +798,11 @@ public sealed class SiteRepository : ISiteRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToInt32(reader.GetValue(ordinal));
     }
 
-    private static int? ReadInt32IfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) ? ReadInt32(reader, column) : null;
+    private static int? ReadInt32IfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) => columns.Contains(column) ? ReadInt32(reader, column) : null;
 
     private static byte? ReadByte(DbDataReader reader, string column)
     {
@@ -702,8 +816,11 @@ public sealed class SiteRepository : ISiteRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToBoolean(reader.GetValue(ordinal));
     }
 
-    private static bool? ReadBooleanIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) ? ReadBoolean(reader, column) : null;
+    private static bool? ReadBooleanIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) => columns.Contains(column) ? ReadBoolean(reader, column) : null;
 
     private static DateTime? ReadDateTime(DbDataReader reader, string column)
     {

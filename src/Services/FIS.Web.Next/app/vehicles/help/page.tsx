@@ -81,7 +81,8 @@ export default async function VehicleHelpPage() {
             <strong>Add a Vehicle:</strong> Louis Coetzee - Directorate Systems
           </p>
           <p>
-            <strong>Edit a Vehicle:</strong> Walter Luwes - Directorate Systems (012) 310-2279 - walterl@gpg.gov.za
+            <strong>Edit a Vehicle:</strong> Walter Luwes - Directorate Systems (012) 310-2279 -
+            walterl@gpg.gov.za
           </p>
         </section>
 
@@ -94,13 +95,16 @@ export default async function VehicleHelpPage() {
               <strong>GG Number allocated to vehicle:</strong> Delivery note of vehicle.
             </li>
             <li>
-              <strong>Current Registration Number:</strong> If a provincial registration number has been allocated, capture it here. If not, the GG number is also captured here.
+              <strong>Current Registration Number:</strong> If a provincial registration number has
+              been allocated, capture it here. If not, the GG number is also captured here.
             </li>
             <li>
-              <strong>Make &amp; Model:</strong> Choose the correct make and model from the drop-down box using the delivery note.
+              <strong>Make &amp; Model:</strong> Choose the correct make and model from the
+              drop-down box using the delivery note.
             </li>
             <li>
-              <strong>Color:</strong> Choose the color from the delivery or inspection form. If it is not listed, choose “Other”.
+              <strong>Color:</strong> Choose the color from the delivery or inspection form. If it
+              is not listed, choose “Other”.
             </li>
             <li>
               <strong>Specify Color:</strong> Enter the correct color when “Other” is selected.
@@ -112,25 +116,30 @@ export default async function VehicleHelpPage() {
               <strong>Tare:</strong> Use the delivery note or registration document.
             </li>
             <li>
-              <strong>VIN (Chassis) Number:</strong> Compare the delivery and inspection form with the vehicle at Government Garage.
+              <strong>VIN (Chassis) Number:</strong> Compare the delivery and inspection form with
+              the vehicle at Government Garage.
             </li>
             <li>
-              <strong>Engine Number:</strong> Compare the delivery and inspection form with the vehicle.
+              <strong>Engine Number:</strong> Compare the delivery and inspection form with the
+              vehicle.
             </li>
             <li>
               <strong>Take On Odo:</strong> Capture the odometer reading on the date of delivery.
             </li>
             <li>
-              <strong>Additional fuel tank:</strong> This is 0 unless an additional fuel tank is fitted.
+              <strong>Additional fuel tank:</strong> This is 0 unless an additional fuel tank is
+              fitted.
             </li>
             <li>
               <strong>Take On Date:</strong> The date the vehicle is captured on FIS.
             </li>
             <li>
-              <strong>Location:</strong> Select the Government Garage where the vehicle is allocated.
+              <strong>Location:</strong> Select the Government Garage where the vehicle is
+              allocated.
             </li>
             <li>
-              <strong>Status:</strong> A newly loaded vehicle starts as <strong>New</strong> and changes as its lifecycle progresses.
+              <strong>Status:</strong> A newly loaded vehicle starts as <strong>New</strong> and
+              changes as its lifecycle progresses.
             </li>
             <li>
               <strong>Status Date:</strong> The date of the status change.
@@ -139,7 +148,8 @@ export default async function VehicleHelpPage() {
               <strong>Hire Type:</strong> Choose the applicable hire type.
             </li>
             <li>
-              <strong>Specifications:</strong> Select applicable extras such as radio or air conditioning.
+              <strong>Specifications:</strong> Select applicable extras such as radio or air
+              conditioning.
             </li>
             <li>
               <strong>Submit:</strong> Confirm the information before saving it to FIS.
@@ -156,7 +166,9 @@ export default async function VehicleHelpPage() {
             <strong>Screen 2:</strong> Edit the vehicle information permitted by the workflow.
           </p>
           <ol>
-            <li>Only the fields supported by the Vehicle Master maintenance workflow may be changed.</li>
+            <li>
+              Only the fields supported by the Vehicle Master maintenance workflow may be changed.
+            </li>
             <li>Review the values before submitting the update.</li>
           </ol>
         </section>

@@ -20,7 +20,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "Table and column identifiers come only from fixed compatibility allowlists; all values are parameters.")]
+    Justification = "Table and column identifiers come only from fixed compatibility allowlists; all values are parameters."
+)]
 public sealed class LossRepository : ILossRepository
 {
     private const string LossTableName = "losses";
@@ -52,7 +53,7 @@ public sealed class LossRepository : ILossRepository
         "date_reported_ggmt",
         "date_reported_sapd",
         "Call_Refer",
-        "Tow_need"
+        "Tow_need",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -62,45 +63,35 @@ public sealed class LossRepository : ILossRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
-    private static readonly string[] RequiredColumns =
-    [
-        "loss_code",
-        "vmf_code",
-        "loss_date"
-    ];
+    private static readonly string[] RequiredColumns = ["loss_code", "vmf_code", "loss_date"];
 
     private static readonly string[] VehicleLookupColumns =
     [
         "vmf_code",
         "fleet_number",
-        "registration_number"
+        "registration_number",
     ];
 
-    private static readonly string[] LossTypeLookupColumns =
-    [
-        "loss_type_code",
-        "loss_description"
-    ];
+    private static readonly string[] LossTypeLookupColumns = ["loss_type_code", "loss_description"];
 
-    private static readonly string[] SiteLookupColumns =
-    [
-        "site_code",
-        "description"
-    ];
+    private static readonly string[] SiteLookupColumns = ["site_code", "description"];
 
-    private static readonly IReadOnlyDictionary<string, PropertyInfo> LossProperties =
-        typeof(Loss)
-            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-            .Select(property => new
-            {
-                Property = property,
-                Column = property.GetCustomAttribute<ColumnAttribute>()?.Name
-            })
-            .Where(item => !string.IsNullOrWhiteSpace(item.Column))
-            .ToDictionary(item => item.Column!, item => item.Property, StringComparer.OrdinalIgnoreCase);
+    private static readonly IReadOnlyDictionary<string, PropertyInfo> LossProperties = typeof(Loss)
+        .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+        .Select(property => new
+        {
+            Property = property,
+            Column = property.GetCustomAttribute<ColumnAttribute>()?.Name,
+        })
+        .Where(item => !string.IsNullOrWhiteSpace(item.Column))
+        .ToDictionary(
+            item => item.Column!,
+            item => item.Property,
+            StringComparer.OrdinalIgnoreCase
+        );
 
     private readonly FisDbContext _context;
 
@@ -112,11 +103,13 @@ public sealed class LossRepository : ILossRepository
     public async Task<Loss?> GetByIdAsync(short lossCode)
     {
         var columns = await GetAvailableColumnsAsync();
-        return (await QueryAsync(
-            $"WHERE [l].[loss_code] = @lossCode AND {GetActiveFilter("l", columns)}",
-            command => AddParameter(command, "@lossCode", DbType.Int16, lossCode),
-            columns))
-            .SingleOrDefault();
+        return (
+            await QueryAsync(
+                $"WHERE [l].[loss_code] = @lossCode AND {GetActiveFilter("l", columns)}",
+                command => AddParameter(command, "@lossCode", DbType.Int16, lossCode),
+                columns
+            )
+        ).SingleOrDefault();
     }
 
     public async Task<IEnumerable<Loss>> GetAllAsync()
@@ -124,7 +117,8 @@ public sealed class LossRepository : ILossRepository
         var columns = await GetAvailableColumnsAsync();
         return await QueryAsync(
             $"WHERE {GetActiveFilter("l", columns)} ORDER BY [l].[loss_date] DESC, [l].[loss_code] DESC",
-            knownColumns: columns);
+            knownColumns: columns
+        );
     }
 
     public async Task<IEnumerable<Loss>> GetByVehicleAsync(int vmfCode)
@@ -133,7 +127,8 @@ public sealed class LossRepository : ILossRepository
         return await QueryAsync(
             $"WHERE [l].[vmf_code] = @vmfCode AND {GetActiveFilter("l", columns)} ORDER BY [l].[loss_date] ASC, [l].[loss_code] ASC",
             command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode),
-            columns);
+            columns
+        );
     }
 
     public async Task<IEnumerable<Loss>> GetBySiteAsync(short siteCode)
@@ -147,7 +142,8 @@ public sealed class LossRepository : ILossRepository
         return await QueryAsync(
             $"WHERE [l].[site_code] = @siteCode AND {GetActiveFilter("l", columns)} ORDER BY [l].[loss_date] DESC, [l].[loss_code] DESC",
             command => AddParameter(command, "@siteCode", DbType.Int16, siteCode),
-            columns);
+            columns
+        );
     }
 
     public async Task<Loss> CreateAsync(Loss loss, int currentUserId)
@@ -176,12 +172,18 @@ public sealed class LossRepository : ILossRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{LossTableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{LossTableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[loss_code]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
             AddParameters(command, values);
-            loss.loss_code = Convert.ToInt16(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+            loss.loss_code = Convert.ToInt16(
+                await command.ExecuteScalarAsync(),
+                CultureInfo.InvariantCulture
+            );
             return loss;
         }
         finally
@@ -198,14 +200,18 @@ public sealed class LossRepository : ILossRepository
         ArgumentNullException.ThrowIfNull(loss);
 
         var columns = await GetAvailableColumnsAsync();
-        var existing = await GetByIdIncludingDeletedAsync(loss.loss_code, columns)
-            ?? throw new InvalidOperationException($"Loss with loss_code {loss.loss_code} not found");
+        var existing =
+            await GetByIdIncludingDeletedAsync(loss.loss_code, columns)
+            ?? throw new InvalidOperationException(
+                $"Loss with loss_code {loss.loss_code} not found"
+            );
 
         var now = DateTime.UtcNow;
         loss.date_created = existing.date_created;
         loss.created_by_user_code = existing.created_by_user_code;
         loss.date_updated = now;
-        loss.modified_by_user_code = currentUserId > 0 ? currentUserId : existing.modified_by_user_code;
+        loss.modified_by_user_code =
+            currentUserId > 0 ? currentUserId : existing.modified_by_user_code;
         loss.is_deleted = existing.is_deleted;
 
         var values = BuildWriteValues(loss, columns, includeKey: false);
@@ -227,7 +233,10 @@ public sealed class LossRepository : ILossRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{LossTableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [loss_code] = @lossCode
                 """;
             AddParameters(command, values);
@@ -270,7 +279,12 @@ public sealed class LossRepository : ILossRepository
                 if (columns.Contains("modified_by_user_code"))
                 {
                     assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-                    AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                    AddParameter(
+                        command,
+                        "@modifiedByUserCode",
+                        DbType.Int32,
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
                 command.CommandText = $"""
@@ -302,17 +316,23 @@ public sealed class LossRepository : ILossRepository
         }
     }
 
-    private async Task<Loss?> GetByIdIncludingDeletedAsync(short lossCode, IReadOnlySet<string> columns)
-        => (await QueryAsync(
-            "WHERE [l].[loss_code] = @lossCode",
-            command => AddParameter(command, "@lossCode", DbType.Int16, lossCode),
-            columns))
-            .SingleOrDefault();
+    private async Task<Loss?> GetByIdIncludingDeletedAsync(
+        short lossCode,
+        IReadOnlySet<string> columns
+    ) =>
+        (
+            await QueryAsync(
+                "WHERE [l].[loss_code] = @lossCode",
+                command => AddParameter(command, "@lossCode", DbType.Int16, lossCode),
+                columns
+            )
+        ).SingleOrDefault();
 
     private async Task<List<Loss>> QueryAsync(
         string? predicate = null,
         Action<DbCommand>? configure = null,
-        IReadOnlySet<string>? knownColumns = null)
+        IReadOnlySet<string>? knownColumns = null
+    )
     {
         var columns = knownColumns ?? await GetAvailableColumnsAsync();
         var vehicleColumns = await GetTableColumnsAsync("vehicle_master");
@@ -320,34 +340,69 @@ public sealed class LossRepository : ILossRepository
         var siteColumns = await GetTableColumnsAsync("Site");
 
         var hasVehicle = VehicleLookupColumns.All(vehicleColumns.Contains);
-        var hasLossType = columns.Contains("loss_type_code") && LossTypeLookupColumns.All(lossTypeColumns.Contains);
+        var hasLossType =
+            columns.Contains("loss_type_code")
+            && LossTypeLookupColumns.All(lossTypeColumns.Contains);
         var hasSite = columns.Contains("site_code") && SiteLookupColumns.All(siteColumns.Contains);
 
         var projection = LegacyColumns
             .Concat(OptionalColumns)
             .Select(column => GetColumnProjection("l", column, columns))
-            .Concat(GetLookupProjection("v", "vehicle_fleet_number", "fleet_number", vehicleColumns, hasVehicle))
-            .Concat(GetLookupProjection("v", "vehicle_registration_number", "registration_number", vehicleColumns, hasVehicle))
-            .Concat(GetLookupProjection("lt", "loss_type_description", "loss_description", lossTypeColumns, hasLossType))
-            .Concat(GetLookupProjection("s", "site_description", "description", siteColumns, hasSite))
+            .Concat(
+                GetLookupProjection(
+                    "v",
+                    "vehicle_fleet_number",
+                    "fleet_number",
+                    vehicleColumns,
+                    hasVehicle
+                )
+            )
+            .Concat(
+                GetLookupProjection(
+                    "v",
+                    "vehicle_registration_number",
+                    "registration_number",
+                    vehicleColumns,
+                    hasVehicle
+                )
+            )
+            .Concat(
+                GetLookupProjection(
+                    "lt",
+                    "loss_type_description",
+                    "loss_description",
+                    lossTypeColumns,
+                    hasLossType
+                )
+            )
+            .Concat(
+                GetLookupProjection("s", "site_description", "description", siteColumns, hasSite)
+            )
             .ToArray();
 
         var joins = string.Join(
             Environment.NewLine,
             new[]
             {
-                hasVehicle ? "LEFT JOIN [dbo].[vehicle_master] AS [v] ON [v].[vmf_code] = [l].[vmf_code]" : string.Empty,
-                hasLossType ? "LEFT JOIN [dbo].[Loss_type] AS [lt] ON [lt].[loss_type_code] = [l].[loss_type_code]" : string.Empty,
-                hasSite ? "LEFT JOIN [dbo].[Site] AS [s] ON [s].[site_code] = [l].[site_code]" : string.Empty
-            }.Where(join => !string.IsNullOrWhiteSpace(join)));
+                hasVehicle
+                    ? "LEFT JOIN [dbo].[vehicle_master] AS [v] ON [v].[vmf_code] = [l].[vmf_code]"
+                    : string.Empty,
+                hasLossType
+                    ? "LEFT JOIN [dbo].[Loss_type] AS [lt] ON [lt].[loss_type_code] = [l].[loss_type_code]"
+                    : string.Empty,
+                hasSite
+                    ? "LEFT JOIN [dbo].[Site] AS [s] ON [s].[site_code] = [l].[site_code]"
+                    : string.Empty,
+            }.Where(join => !string.IsNullOrWhiteSpace(join))
+        );
 
         var normalizedPredicate = predicate?.Trim();
-        var whereClause = string.IsNullOrWhiteSpace(normalizedPredicate)
-            ? string.Empty
+        var whereClause =
+            string.IsNullOrWhiteSpace(normalizedPredicate) ? string.Empty
             : normalizedPredicate.StartsWith("WHERE ", StringComparison.OrdinalIgnoreCase)
-                || normalizedPredicate.StartsWith("ORDER BY ", StringComparison.OrdinalIgnoreCase)
+            || normalizedPredicate.StartsWith("ORDER BY ", StringComparison.OrdinalIgnoreCase)
                 ? normalizedPredicate
-                : $"WHERE {normalizedPredicate}";
+            : $"WHERE {normalizedPredicate}";
 
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -393,7 +448,8 @@ public sealed class LossRepository : ILossRepository
         if (missingColumns.Length > 0)
         {
             throw new InvalidOperationException(
-                $"The required losses compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                $"The required losses compatibility columns are not available: {string.Join(", ", missingColumns)}"
+            );
         }
 
         return columns;
@@ -458,7 +514,8 @@ public sealed class LossRepository : ILossRepository
             property.SetValue(loss, ConvertValue(reader.GetValue(ordinal), property.PropertyType));
         }
 
-        loss.vehicle_identifier = ReadString(reader, "vehicle_fleet_number")
+        loss.vehicle_identifier =
+            ReadString(reader, "vehicle_fleet_number")
             ?? ReadString(reader, "vehicle_registration_number");
         loss.loss_type_description = ReadString(reader, "loss_type_description");
         loss.site_description = ReadString(reader, "site_description");
@@ -468,7 +525,8 @@ public sealed class LossRepository : ILossRepository
     private static List<WriteValue> BuildWriteValues(
         Loss loss,
         IReadOnlySet<string> availableColumns,
-        bool includeKey)
+        bool includeKey
+    )
     {
         var values = new List<WriteValue>();
         foreach (var column in LegacyColumns.Concat(OptionalColumns))
@@ -478,16 +536,22 @@ public sealed class LossRepository : ILossRepository
                 continue;
             }
 
-            if (!availableColumns.Contains(column) || !LossProperties.TryGetValue(column, out var property))
+            if (
+                !availableColumns.Contains(column)
+                || !LossProperties.TryGetValue(column, out var property)
+            )
             {
                 continue;
             }
 
-            values.Add(new WriteValue(
-                column,
-                $"@loss_{values.Count}",
-                GetDbType(property.PropertyType),
-                property.GetValue(loss)));
+            values.Add(
+                new WriteValue(
+                    column,
+                    $"@loss_{values.Count}",
+                    GetDbType(property.PropertyType),
+                    property.GetValue(loss)
+                )
+            );
         }
 
         return values;
@@ -498,13 +562,18 @@ public sealed class LossRepository : ILossRepository
         string outputColumn,
         string sourceColumn,
         IReadOnlySet<string> availableColumns,
-        bool tableAvailable)
-        => tableAvailable
+        bool tableAvailable
+    ) =>
+        tableAvailable
             ? [$"[{alias}].[{sourceColumn}] AS [{outputColumn}]"]
             : [$"CAST(NULL AS varchar(500)) AS [{outputColumn}]"];
 
-    private static string GetColumnProjection(string alias, string column, IReadOnlySet<string> availableColumns)
-        => availableColumns.Contains(column)
+    private static string GetColumnProjection(
+        string alias,
+        string column,
+        IReadOnlySet<string> availableColumns
+    ) =>
+        availableColumns.Contains(column)
             ? $"[{alias}].[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
 
@@ -521,16 +590,27 @@ public sealed class LossRepository : ILossRepository
         return $"ISNULL({qualifiedColumn}, 0) = 0";
     }
 
-    private static string GetSqlType(string column)
-        => column switch
+    private static string GetSqlType(string column) =>
+        column switch
         {
             "loss_code" or "loss_type_code" or "site_code" => "smallint",
             "vmf_code" or "created_by_user_code" or "modified_by_user_code" => "int",
-            "loss_amount" or "dept_claim" or "cancelled" or "cover_forfeit" or "prosecute"
-                or "compensation_order" or "garaging_authority" or "report_from_dept" or "Call_Refer" => "decimal(18, 4)",
-            "loss_date" or "date_reported_ggmt" or "date_reported_sapd" or "date_created" or "date_updated" => "datetime2",
+            "loss_amount"
+            or "dept_claim"
+            or "cancelled"
+            or "cover_forfeit"
+            or "prosecute"
+            or "compensation_order"
+            or "garaging_authority"
+            or "report_from_dept"
+            or "Call_Refer" => "decimal(18, 4)",
+            "loss_date"
+            or "date_reported_ggmt"
+            or "date_reported_sapd"
+            or "date_created"
+            or "date_updated" => "datetime2",
             "is_deleted" => "bit",
-            _ => "varchar(500)"
+            _ => "varchar(500)",
         };
 
     private static DbType GetDbType(Type propertyType)
@@ -544,7 +624,9 @@ public sealed class LossRepository : ILossRepository
             TypeCode.Decimal => DbType.Decimal,
             TypeCode.DateTime => DbType.DateTime2,
             TypeCode.String => DbType.String,
-            _ => throw new InvalidOperationException($"Unsupported loss property type: {propertyType}")
+            _ => throw new InvalidOperationException(
+                $"Unsupported loss property type: {propertyType}"
+            ),
         };
     }
 

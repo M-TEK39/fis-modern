@@ -25,8 +25,7 @@ export type ApiLoginResult =
     };
 
 export type ForgotPasswordResult =
-  | { ok: true }
-  | { ok: false; reason: "unavailable" | "invalid-response"; message?: string };
+  { ok: true } | { ok: false; reason: "unavailable" | "invalid-response"; message?: string };
 
 export type ChangePasswordResult =
   | { ok: true; message?: string }
@@ -89,7 +88,10 @@ function getSetCookieHeaders(headers: Headers) {
   return combined ? combined.split(/,(?=\s*[A-Za-z0-9_]+=[^;,]*)/) : [];
 }
 
-function extractCookie(headers: Headers, name: ForwardedAuthCookie["name"]): ForwardedAuthCookie | null {
+function extractCookie(
+  headers: Headers,
+  name: ForwardedAuthCookie["name"],
+): ForwardedAuthCookie | null {
   const prefix = `${name}=`;
   for (const header of getSetCookieHeaders(headers)) {
     if (!header.startsWith(prefix)) {
@@ -169,7 +171,10 @@ export async function loginAgainstApi(username: string, password: string): Promi
 
     const payload = await readJson<LoginPayload>(loginResponse);
     if (!loginResponse.ok) {
-      return { ok: false, reason: loginResponse.status >= 500 ? "unavailable" : "invalid-credentials" };
+      return {
+        ok: false,
+        reason: loginResponse.status >= 500 ? "unavailable" : "invalid-credentials",
+      };
     }
 
     const authCookies = [
@@ -195,7 +200,10 @@ export async function loginAgainstApi(username: string, password: string): Promi
       cookies: authCookies,
     };
   } catch (error) {
-    console.error("FIS API login request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS API login request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { ok: false, reason: "unavailable" };
   }
 }
@@ -219,7 +227,10 @@ export async function startForgotPassword(identifier: string): Promise<ForgotPas
 
     return payload?.success === true ? { ok: true } : { ok: false, reason: "invalid-response" };
   } catch (error) {
-    console.error("FIS API forgot-password request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS API forgot-password request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { ok: false, reason: "unavailable" };
   }
 }
@@ -251,7 +262,10 @@ export async function confirmForgotPassword(
 
     return { ok: true };
   } catch (error) {
-    console.error("FIS API password reset request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS API password reset request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { ok: false, reason: "unavailable" };
   }
 }
@@ -303,18 +317,30 @@ export async function validateSession(): Promise<SessionState> {
     }
 
     const claims = payload.claims ?? [];
-    const email = claims.find((claim) => claim.type?.endsWith("/emailaddress") || claim.type === "email")?.value;
-    const departmentCode = claims.find((claim) => ["department_code", "department"].includes(claim.type ?? ""))?.value;
-    const siteCode = claims.find((claim) => ["site_code", "site"].includes(claim.type ?? ""))?.value;
+    const email = claims.find(
+      (claim) => claim.type?.endsWith("/emailaddress") || claim.type === "email",
+    )?.value;
+    const departmentCode = claims.find((claim) =>
+      ["department_code", "department"].includes(claim.type ?? ""),
+    )?.value;
+    const siteCode = claims.find((claim) =>
+      ["site_code", "site"].includes(claim.type ?? ""),
+    )?.value;
     const userAccessCode = claims.find((claim) => claim.type === "user_access_code")?.value;
-    const passwordChangeRequiredValue = claims.find((claim) => claim.type === "password_change_required")?.value;
+    const passwordChangeRequiredValue = claims.find(
+      (claim) => claim.type === "password_change_required",
+    )?.value;
     const passwordChangeRequired = ["true", "1", "y", "yes"].includes(
       passwordChangeRequiredValue?.toLowerCase() ?? "",
     );
     const accessLevel = claims.find((claim) => claim.type === "access_level")?.value;
     const roles: string[] = [];
     for (const claim of claims) {
-      if (claim.type !== "role" && claim.type !== "roles" && claim.type?.endsWith("/role") !== true) {
+      if (
+        claim.type !== "role" &&
+        claim.type !== "roles" &&
+        claim.type?.endsWith("/role") !== true
+      ) {
         continue;
       }
 
@@ -326,16 +352,27 @@ export async function validateSession(): Promise<SessionState> {
       }
     }
 
-    return { status: "authenticated", email, departmentCode, siteCode, userAccessCode, accessLevel, roles, passwordChangeRequired };
+    return {
+      status: "authenticated",
+      email,
+      departmentCode,
+      siteCode,
+      userAccessCode,
+      accessLevel,
+      roles,
+      passwordChangeRequired,
+    };
   } catch (error) {
-    console.error("FIS API session validation failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS API session validation failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "unavailable" };
   }
 }
 
 export async function resolveAuthenticatedUsername(): Promise<
-  | { ok: true; username: string }
-  | { ok: false; reason: "unauthorized" | "unavailable" }
+  { ok: true; username: string } | { ok: false; reason: "unauthorized" | "unavailable" }
 > {
   const session = await validateSession();
   if (session.status === "unavailable") {
@@ -376,7 +413,12 @@ export async function changePasswordAgainstApi(
     if (!response.ok) {
       return {
         ok: false,
-        reason: response.status === 401 || response.status === 403 ? "unauthorized" : response.status >= 500 ? "unavailable" : "invalid-response",
+        reason:
+          response.status === 401 || response.status === 403
+            ? "unauthorized"
+            : response.status >= 500
+              ? "unavailable"
+              : "invalid-response",
         message: payload?.message,
       };
     }
@@ -387,7 +429,10 @@ export async function changePasswordAgainstApi(
 
     return { ok: true, message: payload.message };
   } catch (error) {
-    console.error("FIS API change-password request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS API change-password request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { ok: false, reason: "unavailable" };
   }
 }
@@ -429,7 +474,12 @@ export async function changePasswordQuestionAgainstApi(
     if (!response.ok) {
       return {
         ok: false,
-        reason: response.status === 401 || response.status === 403 ? "unauthorized" : response.status >= 500 ? "unavailable" : "invalid-response",
+        reason:
+          response.status === 401 || response.status === 403
+            ? "unauthorized"
+            : response.status >= 500
+              ? "unavailable"
+              : "invalid-response",
         message: payload?.message,
       };
     }
@@ -440,7 +490,10 @@ export async function changePasswordQuestionAgainstApi(
 
     return { ok: true, message: payload.message };
   } catch (error) {
-    console.error("FIS API change-password-question request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS API change-password-question request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { ok: false, reason: "unavailable" };
   }
 }
@@ -459,7 +512,10 @@ export async function refreshAgainstApi() {
     });
     const payload = await readJson<LoginPayload>(response);
     if (!response.ok) {
-      return { ok: false as const, reason: response.status >= 500 ? "unavailable" as const : "unauthorized" as const };
+      return {
+        ok: false as const,
+        reason: response.status >= 500 ? ("unavailable" as const) : ("unauthorized" as const),
+      };
     }
 
     const authCookies = [
@@ -481,7 +537,10 @@ export async function refreshAgainstApi() {
     await setAuthCookies(authCookies);
     return { ok: true as const };
   } catch (error) {
-    console.error("FIS API session refresh failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS API session refresh failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { ok: false as const, reason: "unavailable" as const };
   }
 }
@@ -496,7 +555,10 @@ export async function logoutAgainstApi() {
       headers: cookieHeader ? { cookie: cookieHeader } : undefined,
     });
   } catch (error) {
-    console.error("FIS API logout request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS API logout request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
   } finally {
     cookieStore.delete(ACCESS_COOKIE);
     cookieStore.delete(REFRESH_COOKIE);

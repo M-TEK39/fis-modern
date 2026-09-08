@@ -56,7 +56,11 @@ function date(formData: FormData, key: string, label: string, required = false) 
   }
   const [year, month, day] = value.split("-").map(Number);
   const parsed = new Date(Date.UTC(year, month - 1, day));
-  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
     throw new LossValidationError(`${label} is invalid.`);
   }
   return `${value}T00:00:00.000Z`;
@@ -81,10 +85,23 @@ function choice(formData: FormData, key: string, label: string) {
 async function authorized() {
   const session = await getSession();
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: session.status === "unavailable" ? "The sign-in service is temporarily unavailable." : "Your session has expired. Sign in again." };
+    return {
+      ok: false as const,
+      message:
+        session.status === "unavailable"
+          ? "The sign-in service is temporarily unavailable."
+          : "Your session has expired. Sign in again.",
+    };
   }
-  if (!session.roles.some((role) => role.localeCompare("Losses", undefined, { sensitivity: "accent" }) === 0)) {
-    return { ok: false as const, message: "You do not have permission to maintain Losses records." };
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare("Losses", undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain Losses records.",
+    };
   }
   return { ok: true as const };
 }
@@ -110,7 +127,9 @@ async function resolveVehicleCode(formData: FormData) {
   });
   const selected = exact.length === 1 ? exact[0] : matches.length === 1 ? matches[0] : null;
   if (!selected) {
-    throw new LossValidationError("The vehicle identifier did not resolve to one vehicle. Enter the exact GG or GP number, or provide its VMF code.");
+    throw new LossValidationError(
+      "The vehicle identifier did not resolve to one vehicle. Enter the exact GG or GP number, or provide its VMF code.",
+    );
   }
   return selected.vmfCode;
 }
@@ -156,7 +175,8 @@ async function buildInput(formData: FormData): Promise<LossInput> {
 function apiErrorMessage(error: unknown, operation: string) {
   if (error instanceof LossApiError) {
     if (error.reason === "unauthorized") return "Your session has expired. Sign in again.";
-    if (error.reason === "unavailable") return `The Losses ${operation} service is temporarily unavailable.`;
+    if (error.reason === "unavailable")
+      return `The Losses ${operation} service is temporarily unavailable.`;
     if (error.reason === "not-found") return "The loss record was not found.";
   }
   return `The loss record could not be ${operation}.`;
@@ -175,7 +195,10 @@ export async function saveLossAction(formData: FormData) {
   try {
     input = await buildInput(formData);
   } catch (error) {
-    redirectError(path, error instanceof LossValidationError ? error.message : apiErrorMessage(error, "save"));
+    redirectError(
+      path,
+      error instanceof LossValidationError ? error.message : apiErrorMessage(error, "save"),
+    );
   }
 
   const lossCode = integer(formData, "lossCode", "Loss record", false);
@@ -194,9 +217,11 @@ export async function saveLossAction(formData: FormData) {
   revalidatePath("/losses");
   revalidatePath("/losses/maintenance");
   revalidatePath("/losses/edit");
-  redirect(lossCode === null
-    ? `/losses/maintenance?saved=created${savedCode ? `&lossCode=${savedCode}` : ""}`
-    : `/losses/edit?lossCode=${lossCode}&saved=updated`);
+  redirect(
+    lossCode === null
+      ? `/losses/maintenance?saved=created${savedCode ? `&lossCode=${savedCode}` : ""}`
+      : `/losses/edit?lossCode=${lossCode}&saved=updated`,
+  );
 }
 
 export async function deleteLossAction(formData: FormData) {
@@ -210,7 +235,10 @@ export async function deleteLossAction(formData: FormData) {
     if (parsed === null) throw new LossValidationError("The loss record is invalid.");
     lossCode = parsed;
   } catch (error) {
-    redirectError(path, error instanceof LossValidationError ? error.message : "The loss record is invalid.");
+    redirectError(
+      path,
+      error instanceof LossValidationError ? error.message : "The loss record is invalid.",
+    );
   }
 
   try {

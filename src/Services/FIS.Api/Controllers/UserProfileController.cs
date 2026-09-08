@@ -1,16 +1,16 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
+using System.Text;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.SqlServer;
-using Microsoft.Data.SqlClient;
-using System.Data;
-using System.Data.Common;
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace FIS.Api.Controllers;
 
@@ -30,7 +30,8 @@ public class UserProfileController : BaseApiController
     public UserProfileController(
         IUserProfileRepository repository,
         FisDbContext context,
-        ILogger<UserProfileController> logger)
+        ILogger<UserProfileController> logger
+    )
     {
         _repository = repository;
         _context = context;
@@ -45,11 +46,16 @@ public class UserProfileController : BaseApiController
     {
         try
         {
-            _logger.LogInformation("Fetching user profile for code {UserAccessCode}", userAccessCode);
+            _logger.LogInformation(
+                "Fetching user profile for code {UserAccessCode}",
+                userAccessCode
+            );
             var user = await _repository.GetByIdAsync(userAccessCode);
 
             if (user == null)
-                return NotFound(new { message = $"User profile not found with code: {userAccessCode}" });
+                return NotFound(
+                    new { message = $"User profile not found with code: {userAccessCode}" }
+                );
 
             return Ok(MapToDto(user));
         }
@@ -73,13 +79,19 @@ public class UserProfileController : BaseApiController
             var user = await _repository.GetByFirstNameAsync(firstName);
 
             if (user == null)
-                return NotFound(new { message = $"User profile not found with first name: {firstName}" });
+                return NotFound(
+                    new { message = $"User profile not found with first name: {firstName}" }
+                );
 
             return Ok(MapToDto(user));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching user profile by first name {FirstName}", firstName);
+            _logger.LogError(
+                ex,
+                "Error fetching user profile by first name {FirstName}",
+                firstName
+            );
             return StatusCode(500, "Error retrieving user profile");
         }
     }
@@ -111,24 +123,39 @@ public class UserProfileController : BaseApiController
     /// </summary>
     [HttpGet("administration")]
     [Authorize(Roles = "User Administration")]
-    public async Task<ActionResult<IEnumerable<UserProfileDto>>> GetForAdministration([FromQuery] string? alphabet)
+    public async Task<ActionResult<IEnumerable<UserProfileDto>>> GetForAdministration(
+        [FromQuery] string? alphabet
+    )
     {
         try
         {
             var selectedAlphabet = NormalizeAlphabet(alphabet);
             var users = (await _repository.GetAllActiveAsync())
-                .Where(user => string.IsNullOrWhiteSpace(user.LastName)
-                    || user.LastName.StartsWith(selectedAlphabet, StringComparison.OrdinalIgnoreCase))
+                .Where(user =>
+                    string.IsNullOrWhiteSpace(user.LastName)
+                    || user.LastName.StartsWith(
+                        selectedAlphabet,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                )
                 .ToList();
 
             var siteNames = await GetLookupNamesAsync("site", "Site_code", "description");
-            var positionNames = await GetLookupNamesAsync("Positions", "Position_Code", "Position_Name");
+            var positionNames = await GetLookupNamesAsync(
+                "Positions",
+                "Position_Code",
+                "Position_Name"
+            );
 
             return Ok(users.Select(user => MapToDto(user, siteNames, positionNames)));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching User Administration rows for alphabet {Alphabet}", alphabet);
+            _logger.LogError(
+                ex,
+                "Error fetching User Administration rows for alphabet {Alphabet}",
+                alphabet
+            );
             return StatusCode(500, "Error retrieving user administration rows");
         }
     }
@@ -163,17 +190,23 @@ public class UserProfileController : BaseApiController
     {
         try
         {
-            var positionNames = await GetLookupNamesAsync("Positions", "Position_Code", "Position_Name");
+            var positionNames = await GetLookupNamesAsync(
+                "Positions",
+                "Position_Code",
+                "Position_Name"
+            );
             if (positionNames.Count > 0)
             {
-                return Ok(positionNames
-                    .Where(pair => pair.Key >= byte.MinValue && pair.Key <= byte.MaxValue)
-                    .OrderBy(pair => pair.Value)
-                    .Select(pair => new UserPositionDto
-                    {
-                        PositionCode = (byte)pair.Key,
-                        PositionName = pair.Value
-                    }));
+                return Ok(
+                    positionNames
+                        .Where(pair => pair.Key >= byte.MinValue && pair.Key <= byte.MaxValue)
+                        .OrderBy(pair => pair.Value)
+                        .Select(pair => new UserPositionDto
+                        {
+                            PositionCode = (byte)pair.Key,
+                            PositionName = pair.Value,
+                        })
+                );
             }
 
             var existingCodes = (await _repository.GetAllActiveAsync())
@@ -184,7 +217,7 @@ public class UserProfileController : BaseApiController
                 .Select(code => new UserPositionDto
                 {
                     PositionCode = code,
-                    PositionName = $"Position ({code})"
+                    PositionName = $"Position ({code})",
                 });
 
             return Ok(existingCodes);
@@ -220,13 +253,19 @@ public class UserProfileController : BaseApiController
     /// Create new user profile
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<UserProfileDto>> CreateUserProfile([FromBody] CreateUserProfileDto dto)
+    public async Task<ActionResult<UserProfileDto>> CreateUserProfile(
+        [FromBody] CreateUserProfileDto dto
+    )
     {
         try
         {
             var userId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} creating user profile for {FirstName} {LastName}",
-                userId, dto.FirstName, dto.LastName);
+            _logger.LogInformation(
+                "User {UserId} creating user profile for {FirstName} {LastName}",
+                userId,
+                dto.FirstName,
+                dto.LastName
+            );
 
             var username = dto.UserName?.Trim();
             if (username is not null && username.Length > 255)
@@ -241,31 +280,40 @@ public class UserProfileController : BaseApiController
 
             if (!string.IsNullOrWhiteSpace(username))
             {
-                var duplicateUsername = await _context.UserAccessOlds
-                    .AnyAsync(user => user.name != null && user.name.ToLower() == username.ToLower());
+                var duplicateUsername = await _context.UserAccessOlds.AnyAsync(user =>
+                    user.name != null && user.name.ToLower() == username.ToLower()
+                );
                 if (duplicateUsername)
                 {
-                    return Conflict(new { message = $"User profile already exists for username: {username}" });
+                    return Conflict(
+                        new { message = $"User profile already exists for username: {username}" }
+                    );
                 }
             }
 
             if (!string.IsNullOrWhiteSpace(dto.Email))
             {
-                var duplicateEmail = await _context.UserAccessOlds
-                    .AnyAsync(user => user.E_Mail != null && user.E_Mail.ToLower() == dto.Email.Trim().ToLower());
+                var duplicateEmail = await _context.UserAccessOlds.AnyAsync(user =>
+                    user.E_Mail != null && user.E_Mail.ToLower() == dto.Email.Trim().ToLower()
+                );
                 if (duplicateEmail)
                 {
-                    return Conflict(new { message = $"User profile already exists for email: {dto.Email}" });
+                    return Conflict(
+                        new { message = $"User profile already exists for email: {dto.Email}" }
+                    );
                 }
             }
 
             if (dto.SaIdNumber.HasValue)
             {
-                var duplicateId = await _context.UserAccessOlds
-                    .AnyAsync(user => user.sa_id_number == dto.SaIdNumber);
+                var duplicateId = await _context.UserAccessOlds.AnyAsync(user =>
+                    user.sa_id_number == dto.SaIdNumber
+                );
                 if (duplicateId)
                 {
-                    return Conflict(new { message = "A user profile already exists for this ID number" });
+                    return Conflict(
+                        new { message = "A user profile already exists for this ID number" }
+                    );
                 }
             }
 
@@ -287,23 +335,34 @@ public class UserProfileController : BaseApiController
                 approver_code_at_gfleet = dto.ApproverCodeAtGfleet,
                 // user_access_old1.password is char(32) and the legacy login
                 // contract stores the uppercase MD5 digest, not BCrypt.
-                password = HashLegacyPassword(string.IsNullOrWhiteSpace(dto.Password)
-                    ? GenerateInitialPassword()
-                    : dto.Password),
+                password = HashLegacyPassword(
+                    string.IsNullOrWhiteSpace(dto.Password)
+                        ? GenerateInitialPassword()
+                        : dto.Password
+                ),
                 user_status = "Active",
-                AccessLevel = dto.AccessLevel ?? 0
+                AccessLevel = dto.AccessLevel ?? 0,
             };
 
             var created = await _repository.CreateAsync(userProfile, userId);
-            _logger.LogInformation("User profile created with code {UserAccessCode} for {FirstName} {LastName}",
-                created.user_access_code, created.FirstName, created.LastName);
+            _logger.LogInformation(
+                "User profile created with code {UserAccessCode} for {FirstName} {LastName}",
+                created.user_access_code,
+                created.FirstName,
+                created.LastName
+            );
 
-            await TryMirrorExpandedUserAsync(created.user_access_code, created.E_Mail, created.telephone);
+            await TryMirrorExpandedUserAsync(
+                created.user_access_code,
+                created.E_Mail,
+                created.telephone
+            );
 
             return CreatedAtAction(
                 nameof(GetById),
                 new { userAccessCode = created.user_access_code },
-                MapToDto(created));
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -316,37 +375,51 @@ public class UserProfileController : BaseApiController
     /// Update user profile
     /// </summary>
     [HttpPut("{userAccessCode}")]
-    public async Task<ActionResult> UpdateUserProfile(short userAccessCode, [FromBody] UpdateUserProfileDto dto)
+    public async Task<ActionResult> UpdateUserProfile(
+        short userAccessCode,
+        [FromBody] UpdateUserProfileDto dto
+    )
     {
         try
         {
             var userId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} updating user profile {UserAccessCode}", userId, userAccessCode);
+            _logger.LogInformation(
+                "User {UserId} updating user profile {UserAccessCode}",
+                userId,
+                userAccessCode
+            );
 
             var existing = await _repository.GetByIdAsync(userAccessCode);
             if (existing == null)
-                return NotFound(new { message = $"User profile not found with code: {userAccessCode}" });
+                return NotFound(
+                    new { message = $"User profile not found with code: {userAccessCode}" }
+                );
 
             if (!string.IsNullOrWhiteSpace(dto.Email))
             {
-                var duplicateEmail = await _context.UserAccessOlds
-                    .AnyAsync(user => user.user_access_code != userAccessCode
-                        && user.E_Mail != null
-                        && user.E_Mail.ToLower() == dto.Email.Trim().ToLower());
+                var duplicateEmail = await _context.UserAccessOlds.AnyAsync(user =>
+                    user.user_access_code != userAccessCode
+                    && user.E_Mail != null
+                    && user.E_Mail.ToLower() == dto.Email.Trim().ToLower()
+                );
                 if (duplicateEmail)
                 {
-                    return Conflict(new { message = $"User profile already exists for email: {dto.Email}" });
+                    return Conflict(
+                        new { message = $"User profile already exists for email: {dto.Email}" }
+                    );
                 }
             }
 
             if (dto.SaIdNumber.HasValue)
             {
-                var duplicateId = await _context.UserAccessOlds
-                    .AnyAsync(user => user.user_access_code != userAccessCode
-                        && user.sa_id_number == dto.SaIdNumber);
+                var duplicateId = await _context.UserAccessOlds.AnyAsync(user =>
+                    user.user_access_code != userAccessCode && user.sa_id_number == dto.SaIdNumber
+                );
                 if (duplicateId)
                 {
-                    return Conflict(new { message = "A user profile already exists for this ID number" });
+                    return Conflict(
+                        new { message = "A user profile already exists for this ID number" }
+                    );
                 }
             }
 
@@ -363,18 +436,31 @@ public class UserProfileController : BaseApiController
             existing.passport_number = dto.PassportNumber ?? existing.passport_number;
             existing.Cellphone_Number = dto.CellphoneNumber ?? existing.Cellphone_Number;
             existing.Fax_Number = dto.FaxNumber ?? existing.Fax_Number;
-            existing.approver_code_at_gfleet = dto.ApproverCodeAtGfleet ?? existing.approver_code_at_gfleet;
+            existing.approver_code_at_gfleet =
+                dto.ApproverCodeAtGfleet ?? existing.approver_code_at_gfleet;
             existing.AccessLevel = dto.AccessLevel ?? existing.AccessLevel;
 
             await _repository.UpdateAsync(existing, userId);
-            await TryMirrorExpandedUserAsync(existing.user_access_code, existing.E_Mail, existing.telephone);
+            await TryMirrorExpandedUserAsync(
+                existing.user_access_code,
+                existing.E_Mail,
+                existing.telephone
+            );
 
-            _logger.LogInformation("User profile {UserAccessCode} updated by user {UserId}", userAccessCode, userId);
+            _logger.LogInformation(
+                "User profile {UserAccessCode} updated by user {UserId}",
+                userAccessCode,
+                userId
+            );
             return Ok(new { message = "User profile updated successfully", userAccessCode });
         }
         catch (KeyNotFoundException ex)
         {
-            _logger.LogWarning(ex, "User profile {UserAccessCode} not found for update", userAccessCode);
+            _logger.LogWarning(
+                ex,
+                "User profile {UserAccessCode} not found for update",
+                userAccessCode
+            );
             return NotFound(new { message = ex.Message });
         }
         catch (Exception ex)
@@ -393,16 +479,28 @@ public class UserProfileController : BaseApiController
         try
         {
             var userId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} deleting user profile {UserAccessCode}", userId, userAccessCode);
+            _logger.LogInformation(
+                "User {UserId} deleting user profile {UserAccessCode}",
+                userId,
+                userAccessCode
+            );
 
             await _repository.DeleteAsync(userAccessCode, userId);
 
-            _logger.LogInformation("User profile {UserAccessCode} deleted by user {UserId}", userAccessCode, userId);
+            _logger.LogInformation(
+                "User profile {UserAccessCode} deleted by user {UserId}",
+                userAccessCode,
+                userId
+            );
             return NoContent();
         }
         catch (KeyNotFoundException ex)
         {
-            _logger.LogWarning(ex, "User profile {UserAccessCode} not found for deletion", userAccessCode);
+            _logger.LogWarning(
+                ex,
+                "User profile {UserAccessCode} not found for deletion",
+                userAccessCode
+            );
             return NotFound(new { message = ex.Message });
         }
         catch (Exception ex)
@@ -417,33 +515,47 @@ public class UserProfileController : BaseApiController
     /// </summary>
     [HttpPost("validate")]
     [AllowAnonymous]
-    public async Task<ActionResult<ValidationResultDto>> ValidateCredentials([FromBody] CredentialsDto credentials)
+    public async Task<ActionResult<ValidationResultDto>> ValidateCredentials(
+        [FromBody] CredentialsDto credentials
+    )
     {
         try
         {
-            _logger.LogInformation("Validating credentials for user: {FirstName}", credentials.FirstName);
+            _logger.LogInformation(
+                "Validating credentials for user: {FirstName}",
+                credentials.FirstName
+            );
 
-            var isValid = await _repository.ValidateCredentialsAsync(credentials.FirstName, credentials.Password);
+            var isValid = await _repository.ValidateCredentialsAsync(
+                credentials.FirstName,
+                credentials.Password
+            );
 
             if (isValid)
             {
                 var user = await _repository.GetByFirstNameAsync(credentials.FirstName);
-                return Ok(new ValidationResultDto
-                {
-                    IsValid = true,
-                    UserAccessCode = user!.user_access_code,
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
-                    Email = user.E_Mail,
-                    SiteCode = user.Site_code
-                });
+                return Ok(
+                    new ValidationResultDto
+                    {
+                        IsValid = true,
+                        UserAccessCode = user!.user_access_code,
+                        FirstName = user.FirstName,
+                        LastName = user.LastName,
+                        Email = user.E_Mail,
+                        SiteCode = user.Site_code,
+                    }
+                );
             }
 
             return Ok(new ValidationResultDto { IsValid = false });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating credentials for user: {FirstName}", credentials.FirstName);
+            _logger.LogError(
+                ex,
+                "Error validating credentials for user: {FirstName}",
+                credentials.FirstName
+            );
             return StatusCode(500, "Error validating credentials");
         }
     }
@@ -451,7 +563,8 @@ public class UserProfileController : BaseApiController
     private UserProfileDto MapToDto(
         UserAccessOld u,
         IReadOnlyDictionary<int, string>? siteNames = null,
-        IReadOnlyDictionary<int, string>? positionNames = null)
+        IReadOnlyDictionary<int, string>? positionNames = null
+    )
     {
         return new UserProfileDto
         {
@@ -462,13 +575,17 @@ public class UserProfileController : BaseApiController
             Email = u.E_Mail,
             Telephone = u.telephone,
             SiteCode = u.Site_code,
-            SiteName = u.Site_code is short siteCode && siteNames?.TryGetValue(siteCode, out var siteName) == true
-                ? siteName
-                : null,
+            SiteName =
+                u.Site_code is short siteCode
+                && siteNames?.TryGetValue(siteCode, out var siteName) == true
+                    ? siteName
+                    : null,
             PositionCode = u.Position_Code,
-            PositionName = u.Position_Code is byte positionCode && positionNames?.TryGetValue(positionCode, out var positionName) == true
-                ? positionName
-                : null,
+            PositionName =
+                u.Position_Code is byte positionCode
+                && positionNames?.TryGetValue(positionCode, out var positionName) == true
+                    ? positionName
+                    : null,
             PersalNumber = u.Persal_Number,
             ContractNumber = u.Contract_Number,
             SaIdNumber = u.sa_id_number,
@@ -479,18 +596,20 @@ public class UserProfileController : BaseApiController
             UserStatus = u.user_status,
             AccessLevel = u.AccessLevel,
             UserActive = u.user_active,
-            LastLogOn = u.last_log_on
+            LastLogOn = u.last_log_on,
         };
     }
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The table and column identifiers are fixed by the two internal call sites; no request value is interpolated.")]
+        Justification = "The table and column identifiers are fixed by the two internal call sites; no request value is interpolated."
+    )]
     private async Task<Dictionary<int, string>> GetLookupNamesAsync(
         string tableName,
         string codeColumn,
-        string nameColumn)
+        string nameColumn
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -526,7 +645,11 @@ public class UserProfileController : BaseApiController
         {
             // Site and Positions are legacy lookup tables, but an incomplete
             // client backup must not hide the user rows themselves.
-            _logger.LogWarning(ex, "Unable to load legacy user lookup table {TableName}", tableName);
+            _logger.LogWarning(
+                ex,
+                "Unable to load legacy user lookup table {TableName}",
+                tableName
+            );
             return new Dictionary<int, string>();
         }
         finally
@@ -541,9 +664,7 @@ public class UserProfileController : BaseApiController
     private static string NormalizeAlphabet(string? alphabet)
     {
         var value = alphabet?.Trim();
-        return value?.Length == 1 && value[0] is >= 'A' and <= 'Z'
-            ? value
-            : "A";
+        return value?.Length == 1 && value[0] is >= 'A' and <= 'Z' ? value : "A";
     }
 
     private static string HashLegacyPassword(string password)
@@ -556,21 +677,28 @@ public class UserProfileController : BaseApiController
         return $"FIS-{Convert.ToHexString(RandomNumberGenerator.GetBytes(18))}!a1";
     }
 
-    private async Task TryMirrorExpandedUserAsync(short userAccessCode, string? email, string? telephone)
+    private async Task TryMirrorExpandedUserAsync(
+        short userAccessCode,
+        string? email,
+        string? telephone
+    )
     {
         try
         {
-            var modernUser = await _context.Users
-                .FirstOrDefaultAsync(user => user.user_access_code == userAccessCode);
+            var modernUser = await _context.Users.FirstOrDefaultAsync(user =>
+                user.user_access_code == userAccessCode
+            );
 
             if (modernUser is null)
             {
-                _context.Users.Add(new User
-                {
-                    user_access_code = userAccessCode,
-                    email = email,
-                    tel_no = telephone
-                });
+                _context.Users.Add(
+                    new User
+                    {
+                        user_access_code = userAccessCode,
+                        email = email,
+                        tel_no = telephone,
+                    }
+                );
             }
             else
             {
@@ -586,14 +714,16 @@ public class UserProfileController : BaseApiController
             _logger.LogInformation(
                 ex,
                 "Expanded TS_Users mirror is unavailable; legacy user_access_old1 remains authoritative for user_access_code {UserAccessCode}",
-                userAccessCode);
+                userAccessCode
+            );
         }
         catch (Exception ex)
         {
             _logger.LogWarning(
                 ex,
                 "Expanded TS_Users mirror failed; retaining successful legacy user_access_old1 write for user_access_code {UserAccessCode}",
-                userAccessCode);
+                userAccessCode
+            );
         }
     }
 }

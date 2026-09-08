@@ -40,10 +40,14 @@ export type WorkshopVehicle = {
   locationDescription: string | null;
 };
 
-export type WorkshopApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type WorkshopApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class WorkshopApiError extends Error {
-  constructor(public readonly reason: WorkshopApiErrorReason, message: string) {
+  constructor(
+    public readonly reason: WorkshopApiErrorReason,
+    message: string,
+  ) {
     super(message);
     this.name = "WorkshopApiError";
   }
@@ -203,14 +207,25 @@ export async function getWorkshops() {
 export async function getWorkshop(wwCode: number) {
   const response = await requestApi(`api/workshop/${encodeURIComponent(wwCode)}`);
   const record = mapWorkshop(await readJson(response));
-  if (!record) throw new WorkshopApiError("invalid-response", "The FIS API returned an invalid workshop record.");
+  if (!record)
+    throw new WorkshopApiError(
+      "invalid-response",
+      "The FIS API returned an invalid workshop record.",
+    );
   return record;
 }
 
 export async function createWorkshop(input: WorkshopInput) {
-  const response = await requestApi("api/workshop", { method: "POST", body: JSON.stringify(input) });
+  const response = await requestApi("api/workshop", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
   const record = mapWorkshop(await readJson(response));
-  if (!record) throw new WorkshopApiError("invalid-response", "The FIS API returned an invalid workshop record.");
+  if (!record)
+    throw new WorkshopApiError(
+      "invalid-response",
+      "The FIS API returned an invalid workshop record.",
+    );
   return record;
 }
 
@@ -220,7 +235,11 @@ export async function updateWorkshop(wwCode: number, input: WorkshopInput) {
     body: JSON.stringify({ ...input, ww_code: wwCode }),
   });
   const record = mapWorkshop(await readJson(response));
-  if (!record) throw new WorkshopApiError("invalid-response", "The FIS API returned an invalid workshop record.");
+  if (!record)
+    throw new WorkshopApiError(
+      "invalid-response",
+      "The FIS API returned an invalid workshop record.",
+    );
   return record;
 }
 
@@ -236,7 +255,9 @@ export async function getWorkshopVehicles() {
 }
 
 export async function searchWorkshopVehicles(searchTerm: string) {
-  const response = await requestApi(`api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm.trim())}`);
+  const response = await requestApi(
+    `api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm.trim())}`,
+  );
   return getCollection(await readJson(response))
     .map(mapVehicle)
     .filter((vehicle): vehicle is WorkshopVehicle => vehicle !== null);

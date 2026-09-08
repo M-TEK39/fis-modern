@@ -79,7 +79,8 @@ function asBoolean(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new LicenseFeeApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new LicenseFeeApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -91,17 +92,26 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
     if (response.status === 401 || response.status === 403) {
-      throw new LicenseFeeApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new LicenseFeeApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the API body is not JSON.
       }
-      throw new LicenseFeeApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new LicenseFeeApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -122,33 +132,52 @@ async function readJson(response: Response) {
 
 function mapLicenseFee(value: unknown): LicenseFeeRecord | null {
   if (!isRecord(value)) return null;
-  const licenceFeeCode = asNumber(getValue(value, "LicenceFeeCode", "licence_fee_code", "licenceFeeCode"));
+  const licenceFeeCode = asNumber(
+    getValue(value, "LicenceFeeCode", "licence_fee_code", "licenceFeeCode"),
+  );
   if (licenceFeeCode === null) return null;
   return {
     licenceFeeCode,
-    description: asString(getValue(value, "Description", "description", "licence_description", "licenceDescription")),
+    description: asString(
+      getValue(value, "Description", "description", "licence_description", "licenceDescription"),
+    ),
     fee: asNumber(getValue(value, "Fee", "fee", "licence_fee", "licenceFee")),
     dateCreated: asString(getValue(value, "DateCreated", "date_created", "dateCreated")),
     dateUpdated: asString(getValue(value, "DateUpdated", "date_updated", "dateUpdated")),
-    createdByUserCode: asNumber(getValue(value, "CreatedByUserCode", "created_by_user_code", "createdByUserCode")),
-    modifiedByUserCode: asNumber(getValue(value, "ModifiedByUserCode", "modified_by_user_code", "modifiedByUserCode")),
+    createdByUserCode: asNumber(
+      getValue(value, "CreatedByUserCode", "created_by_user_code", "createdByUserCode"),
+    ),
+    modifiedByUserCode: asNumber(
+      getValue(value, "ModifiedByUserCode", "modified_by_user_code", "modifiedByUserCode"),
+    ),
     isDeleted: asBoolean(getValue(value, "IsDeleted", "is_deleted", "isDeleted")),
   };
 }
 
 export async function getLicenseFees() {
   const payload = await readJson(await requestApi("api/licensefee"));
-  if (!Array.isArray(payload)) throw new LicenseFeeApiError("invalid-response", "The licence fee response was not a list.");
+  if (!Array.isArray(payload))
+    throw new LicenseFeeApiError("invalid-response", "The licence fee response was not a list.");
   return payload.map(mapLicenseFee).filter((item): item is LicenseFeeRecord => item !== null);
 }
 
 export async function getLicenseFee(licenceFeeCode: number) {
-  return mapLicenseFee(await readJson(await requestApi(`api/licensefee/${encodeURIComponent(licenceFeeCode)}`)));
+  return mapLicenseFee(
+    await readJson(await requestApi(`api/licensefee/${encodeURIComponent(licenceFeeCode)}`)),
+  );
 }
 
-export async function getLicenseFeeDeleteCheck(licenceFeeCode: number): Promise<LicenseFeeDeleteCheck> {
-  const payload = await readJson(await requestApi(`api/licensefee/${encodeURIComponent(licenceFeeCode)}/delete-check`));
-  if (!isRecord(payload)) throw new LicenseFeeApiError("invalid-response", "The licence fee dependency response was invalid.");
+export async function getLicenseFeeDeleteCheck(
+  licenceFeeCode: number,
+): Promise<LicenseFeeDeleteCheck> {
+  const payload = await readJson(
+    await requestApi(`api/licensefee/${encodeURIComponent(licenceFeeCode)}/delete-check`),
+  );
+  if (!isRecord(payload))
+    throw new LicenseFeeApiError(
+      "invalid-response",
+      "The licence fee dependency response was invalid.",
+    );
   return {
     modelCount: asNumber(getValue(payload, "modelCount", "ModelCount")) ?? 0,
     canDelete: asBoolean(getValue(payload, "canDelete", "CanDelete")),
@@ -156,19 +185,31 @@ export async function getLicenseFeeDeleteCheck(licenceFeeCode: number): Promise<
 }
 
 export async function createLicenseFee(input: LicenseFeeWriteInput) {
-  return mapLicenseFee(await readJson(await requestApi("api/licensefee", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ licence_description: input.description, licence_fee: input.fee }),
-  })));
+  return mapLicenseFee(
+    await readJson(
+      await requestApi("api/licensefee", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ licence_description: input.description, licence_fee: input.fee }),
+      }),
+    ),
+  );
 }
 
 export async function updateLicenseFee(licenceFeeCode: number, input: LicenseFeeWriteInput) {
-  return mapLicenseFee(await readJson(await requestApi(`api/licensefee/${encodeURIComponent(licenceFeeCode)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ licence_fee_code: licenceFeeCode, licence_description: input.description, licence_fee: input.fee }),
-  })));
+  return mapLicenseFee(
+    await readJson(
+      await requestApi(`api/licensefee/${encodeURIComponent(licenceFeeCode)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          licence_fee_code: licenceFeeCode,
+          licence_description: input.description,
+          licence_fee: input.fee,
+        }),
+      }),
+    ),
+  );
 }
 
 export async function deleteLicenseFee(licenceFeeCode: number) {

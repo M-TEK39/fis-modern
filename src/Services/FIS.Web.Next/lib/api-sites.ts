@@ -41,7 +41,10 @@ export type SiteRecord = {
   dateUpdated: string | null;
 };
 
-export type SiteWriteInput = Omit<SiteRecord, "siteCode" | "modifiedByUserCode" | "dateCreated" | "dateUpdated">;
+export type SiteWriteInput = Omit<
+  SiteRecord,
+  "siteCode" | "modifiedByUserCode" | "dateCreated" | "dateUpdated"
+>;
 export type SiteOption = { code: string; description: string };
 export type SiteReferenceData = { departments: DepartmentRecord[]; provinces: SiteOption[] };
 export type SiteDeleteCheck = { contractCount: number; canDelete: boolean };
@@ -118,17 +121,26 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
     if (response.status === 401 || response.status === 403) {
-      throw new SiteApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new SiteApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the API body is not JSON.
       }
-      throw new SiteApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new SiteApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -153,9 +165,13 @@ function mapSite(value: unknown): SiteRecord | null {
   if (siteCode === null) return null;
   return {
     siteCode,
-    departmentCode: asNumber(getValue(value, "departmentCode", "DepartmentCode", "Depatrment_code", "depatrment_code")),
+    departmentCode: asNumber(
+      getValue(value, "departmentCode", "DepartmentCode", "Depatrment_code", "depatrment_code"),
+    ),
     description: asString(getValue(value, "description", "Description")),
-    responsiblePerson: asString(getValue(value, "responsiblePerson", "ResponsiblePerson", "res_person")),
+    responsiblePerson: asString(
+      getValue(value, "responsiblePerson", "ResponsiblePerson", "res_person"),
+    ),
     address1: asString(getValue(value, "address1", "Address1")),
     address2: asString(getValue(value, "address2", "Address2")),
     address3: asString(getValue(value, "address3", "Address3")),
@@ -165,29 +181,75 @@ function mapSite(value: unknown): SiteRecord | null {
     fax: asString(getValue(value, "fax", "Fax")),
     fax1: asString(getValue(value, "fax1", "Fax1")),
     netAddress: asString(getValue(value, "netAddress", "NetAddress", "net_address")),
-    departmentNumber: asString(getValue(value, "departmentNumber", "DepartmentNumber", "Department_number")),
+    departmentNumber: asString(
+      getValue(value, "departmentNumber", "DepartmentNumber", "Department_number"),
+    ),
     mapReference: asString(getValue(value, "mapReference", "MapReference", "Map_reference")),
-    mapDescription: asString(getValue(value, "mapDescription", "MapDescription", "Map_description")),
+    mapDescription: asString(
+      getValue(value, "mapDescription", "MapDescription", "Map_description"),
+    ),
     cellNumber: asString(getValue(value, "cellNumber", "CellNumber", "cell_number")),
     siteActive: asBoolean(getValue(value, "siteActive", "SiteActive", "site_active")),
-    financialSystemCode: asNumber(getValue(value, "financialSystemCode", "FinancialSystemCode", "financial_system_code")),
-    financialSystemActive: getValue(value, "financialSystemActive", "FinancialSystemActive", "financial_system_active") === undefined ? null : asBoolean(getValue(value, "financialSystemActive", "FinancialSystemActive", "financial_system_active")),
-    financialSystemActivateDate: asString(getValue(value, "financialSystemActivateDate", "FinancialSystemActivateDate", "financial_system_activate_date")),
-    exportIsActive: getValue(value, "exportIsActive", "ExportIsActive", "export_is_active") === undefined ? null : asBoolean(getValue(value, "exportIsActive", "ExportIsActive", "export_is_active")),
-    dateLastExported: asString(getValue(value, "dateLastExported", "DateLastExported", "date_last_exported")),
-    serviceKilometres: asNumber(getValue(value, "serviceKilometres", "ServiceKilometres", "Service_Kilometres")) ?? 0,
+    financialSystemCode: asNumber(
+      getValue(value, "financialSystemCode", "FinancialSystemCode", "financial_system_code"),
+    ),
+    financialSystemActive:
+      getValue(
+        value,
+        "financialSystemActive",
+        "FinancialSystemActive",
+        "financial_system_active",
+      ) === undefined
+        ? null
+        : asBoolean(
+            getValue(
+              value,
+              "financialSystemActive",
+              "FinancialSystemActive",
+              "financial_system_active",
+            ),
+          ),
+    financialSystemActivateDate: asString(
+      getValue(
+        value,
+        "financialSystemActivateDate",
+        "FinancialSystemActivateDate",
+        "financial_system_activate_date",
+      ),
+    ),
+    exportIsActive:
+      getValue(value, "exportIsActive", "ExportIsActive", "export_is_active") === undefined
+        ? null
+        : asBoolean(getValue(value, "exportIsActive", "ExportIsActive", "export_is_active")),
+    dateLastExported: asString(
+      getValue(value, "dateLastExported", "DateLastExported", "date_last_exported"),
+    ),
+    serviceKilometres:
+      asNumber(getValue(value, "serviceKilometres", "ServiceKilometres", "Service_Kilometres")) ??
+      0,
     serviceYears: asNumber(getValue(value, "serviceYears", "ServiceYears", "Service_Years")) ?? 0,
-    overheadPercentage: asNumber(getValue(value, "overheadPercentage", "OverheadPercentage", "Overhead_Percentage")) ?? 0,
+    overheadPercentage:
+      asNumber(
+        getValue(value, "overheadPercentage", "OverheadPercentage", "Overhead_Percentage"),
+      ) ?? 0,
     provinceCode: asString(getValue(value, "provinceCode", "ProvinceCode", "province_code")),
     notes: asString(getValue(value, "notes", "Notes")),
-    userAccessCode: asNumber(getValue(value, "userAccessCode", "UserAccessCode", "user_access_code")),
-    modifiedByUserCode: asNumber(getValue(value, "modifiedByUserCode", "ModifiedByUserCode", "modified_by_user_code")),
+    userAccessCode: asNumber(
+      getValue(value, "userAccessCode", "UserAccessCode", "user_access_code"),
+    ),
+    modifiedByUserCode: asNumber(
+      getValue(value, "modifiedByUserCode", "ModifiedByUserCode", "modified_by_user_code"),
+    ),
     dateCreated: asString(getValue(value, "dateCreated", "DateCreated", "date_created")),
     dateUpdated: asString(getValue(value, "dateUpdated", "DateUpdated", "date_updated")),
   };
 }
 
-function mapOption(value: unknown, codeKeys: string[], descriptionKeys: string[]): SiteOption | null {
+function mapOption(
+  value: unknown,
+  codeKeys: string[],
+  descriptionKeys: string[],
+): SiteOption | null {
   if (!isRecord(value)) return null;
   const code = asString(getValue(value, ...codeKeys));
   const description = asString(getValue(value, ...descriptionKeys));
@@ -196,7 +258,8 @@ function mapOption(value: unknown, codeKeys: string[], descriptionKeys: string[]
 
 export async function getSites() {
   const payload = await readJson(await requestApi("api/site"));
-  if (!Array.isArray(payload)) throw new SiteApiError("invalid-response", "The site response was not a list.");
+  if (!Array.isArray(payload))
+    throw new SiteApiError("invalid-response", "The site response was not a list.");
   return payload.map(mapSite).filter((site): site is SiteRecord => site !== null);
 }
 
@@ -205,8 +268,11 @@ export async function getSite(siteCode: number) {
 }
 
 export async function getSiteDeleteCheck(siteCode: number): Promise<SiteDeleteCheck> {
-  const payload = await readJson(await requestApi(`api/site/${encodeURIComponent(siteCode)}/delete-check`));
-  if (!isRecord(payload)) throw new SiteApiError("invalid-response", "The site dependency response was invalid.");
+  const payload = await readJson(
+    await requestApi(`api/site/${encodeURIComponent(siteCode)}/delete-check`),
+  );
+  if (!isRecord(payload))
+    throw new SiteApiError("invalid-response", "The site dependency response was invalid.");
   return {
     contractCount: asNumber(getValue(payload, "contractCount", "ContractCount")) ?? 0,
     canDelete: asBoolean(getValue(payload, "canDelete", "CanDelete")),
@@ -214,9 +280,18 @@ export async function getSiteDeleteCheck(siteCode: number): Promise<SiteDeleteCh
 }
 
 export async function getSiteReferenceData(): Promise<SiteReferenceData> {
-  const [departments, provinceResponse] = await Promise.all([getDepartments(), requestApi("api/province")]);
+  const [departments, provinceResponse] = await Promise.all([
+    getDepartments(),
+    requestApi("api/province"),
+  ]);
   const provinces = getCollection(await readJson(provinceResponse))
-    .map((item) => mapOption(item, ["provinceCode", "ProvinceCode", "province_code"], ["provinceName", "ProvinceName", "province_name"]))
+    .map((item) =>
+      mapOption(
+        item,
+        ["provinceCode", "ProvinceCode", "province_code"],
+        ["provinceName", "ProvinceName", "province_name"],
+      ),
+    )
     .filter((item): item is SiteOption => item !== null);
   return { departments, provinces };
 }
@@ -255,19 +330,27 @@ function toRequest(input: SiteWriteInput) {
 }
 
 export async function createSite(input: SiteWriteInput) {
-  return mapSite(await readJson(await requestApi("api/site", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(toRequest(input)),
-  })));
+  return mapSite(
+    await readJson(
+      await requestApi("api/site", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(toRequest(input)),
+      }),
+    ),
+  );
 }
 
 export async function updateSite(siteCode: number, input: SiteWriteInput) {
-  return mapSite(await readJson(await requestApi(`api/site/${encodeURIComponent(siteCode)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(toRequest(input)),
-  })));
+  return mapSite(
+    await readJson(
+      await requestApi(`api/site/${encodeURIComponent(siteCode)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(toRequest(input)),
+      }),
+    ),
+  );
 }
 
 export async function deleteSite(siteCode: number) {

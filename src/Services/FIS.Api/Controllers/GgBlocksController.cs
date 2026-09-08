@@ -12,7 +12,10 @@ namespace FIS.Api.Controllers;
 public sealed class GgBlocksController : BaseApiController
 {
     private const long VehicleManagementPermission = 1;
-    private static readonly Regex GgNumberPattern = new("^[A-Z]{3}[0-9]{3}G$", RegexOptions.CultureInvariant);
+    private static readonly Regex GgNumberPattern = new(
+        "^[A-Z]{3}[0-9]{3}G$",
+        RegexOptions.CultureInvariant
+    );
 
     private readonly IGgBlockRepository _repository;
     private readonly ILogger<GgBlocksController> _logger;
@@ -24,7 +27,10 @@ public sealed class GgBlocksController : BaseApiController
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetHistory([FromQuery] int page = 1, [FromQuery] int pageSize = 12)
+    public async Task<IActionResult> GetHistory(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 12
+    )
     {
         if (!HasVehicleManagementPermission())
         {
@@ -33,20 +39,28 @@ public sealed class GgBlocksController : BaseApiController
 
         try
         {
-            var result = await _repository.GetHistoryAsync(Math.Max(1, page), Math.Clamp(pageSize, 1, 100));
-            return Ok(new
-            {
-                items = result.Items.Select(MapHistoryRecord),
-                page = result.Page,
-                pageSize = result.PageSize,
-                totalRecords = result.TotalRecords,
-                totalPages = result.TotalPages
-            });
+            var result = await _repository.GetHistoryAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, 100)
+            );
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(MapHistoryRecord),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    totalRecords = result.TotalRecords,
+                    totalPages = result.TotalPages,
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving GG block history");
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "The GG block service is unavailable." });
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = "The GG block service is unavailable." }
+            );
         }
     }
 
@@ -69,17 +83,26 @@ public sealed class GgBlocksController : BaseApiController
         var endNumber = int.Parse(end[3..6]);
         if (!string.Equals(start[..3], end[..3], StringComparison.Ordinal) || start[6] != end[6])
         {
-            return BadRequest(new { message = "The start and end GG numbers must use the same prefix and suffix." });
+            return BadRequest(
+                new
+                {
+                    message = "The start and end GG numbers must use the same prefix and suffix.",
+                }
+            );
         }
 
         if (endNumber == startNumber)
         {
-            return BadRequest(new { message = "The end GG number must be greater than the start GG number." });
+            return BadRequest(
+                new { message = "The end GG number must be greater than the start GG number." }
+            );
         }
 
         if (endNumber < startNumber)
         {
-            return BadRequest(new { message = "The end GG number cannot be before the start GG number." });
+            return BadRequest(
+                new { message = "The end GG number cannot be before the start GG number." }
+            );
         }
 
         int currentUserId;
@@ -95,17 +118,25 @@ public sealed class GgBlocksController : BaseApiController
         try
         {
             var result = await _repository.CreateAsync(start, end, currentUserId);
-            return Created(string.Empty, new
-            {
-                capturedBy = result.CapturedBy,
-                dateCreated = result.DateCreated,
-                startGgNumber = result.StartGgNumber,
-                endGgNumber = result.EndGgNumber
-            });
+            return Created(
+                string.Empty,
+                new
+                {
+                    capturedBy = result.CapturedBy,
+                    dateCreated = result.DateCreated,
+                    startGgNumber = result.StartGgNumber,
+                    endGgNumber = result.EndGgNumber,
+                }
+            );
         }
         catch (GgBlockRangeConflictException)
         {
-            return Conflict(new { message = "The requested GG block range falls within an existing GG block range." });
+            return Conflict(
+                new
+                {
+                    message = "The requested GG block range falls within an existing GG block range.",
+                }
+            );
         }
         catch (ArgumentException ex)
         {
@@ -113,8 +144,16 @@ public sealed class GgBlocksController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating GG block range {StartGgNumber} to {EndGgNumber}", start, end);
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { message = "The GG block service is unavailable." });
+            _logger.LogError(
+                ex,
+                "Error creating GG block range {StartGgNumber} to {EndGgNumber}",
+                start,
+                end
+            );
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = "The GG block service is unavailable." }
+            );
         }
     }
 
@@ -125,14 +164,14 @@ public sealed class GgBlocksController : BaseApiController
             && (accessLevel & VehicleManagementPermission) == VehicleManagementPermission;
     }
 
-    private static object MapHistoryRecord(GgBlockHistoryRecord record)
-        => new
+    private static object MapHistoryRecord(GgBlockHistoryRecord record) =>
+        new
         {
             blockId = record.BlockId,
             capturedBy = record.CapturedBy,
             dateCreated = record.DateCreated,
             startGgNumber = record.StartGgNumber,
-            endGgNumber = record.EndGgNumber
+            endGgNumber = record.EndGgNumber,
         };
 }
 

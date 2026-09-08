@@ -32,7 +32,8 @@ export type RecoveredVehicleUpdateResult = {
   newVmfCode: number;
 };
 
-export type RecoveredVehicleApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "conflict" | "not-found";
+export type RecoveredVehicleApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "conflict" | "not-found";
 
 export class RecoveredVehicleApiError extends Error {
   constructor(
@@ -132,11 +133,17 @@ async function requestApi(path: string, init: RequestInit = {}) {
     }
 
     if (response.status === 409) {
-      throw new RecoveredVehicleApiError("conflict", await readErrorMessage(response, "The recovered GG number already exists."));
+      throw new RecoveredVehicleApiError(
+        "conflict",
+        await readErrorMessage(response, "The recovered GG number already exists."),
+      );
     }
 
     if (!response.ok) {
-      throw new RecoveredVehicleApiError("unavailable", await readErrorMessage(response, `FIS API returned HTTP ${response.status}.`));
+      throw new RecoveredVehicleApiError(
+        "unavailable",
+        await readErrorMessage(response, `FIS API returned HTTP ${response.status}.`),
+      );
     }
 
     return response;
@@ -154,7 +161,9 @@ async function requestApi(path: string, init: RequestInit = {}) {
 async function readErrorMessage(response: Response, fallback: string) {
   try {
     const payload = (await response.json()) as unknown;
-    return isRecord(payload) ? asString(getValue(payload, "message", "error")) ?? fallback : fallback;
+    return isRecord(payload)
+      ? (asString(getValue(payload, "message", "error")) ?? fallback)
+      : fallback;
   } catch {
     return fallback;
   }
@@ -174,7 +183,9 @@ function mapSearchResult(value: unknown): RecoveredVehicleSearchResult | null {
   }
 
   const vmfCode = asNumber(getValue(value, "vmfCode", "VmfCode", "vmf_code"));
-  const statusCode = asNumber(getValue(value, "vehicleStatusCode", "VehicleStatusCode", "vehicle_status_code"));
+  const statusCode = asNumber(
+    getValue(value, "vehicleStatusCode", "VehicleStatusCode", "vehicle_status_code"),
+  );
   if (vmfCode === null || statusCode === null) {
     return null;
   }
@@ -182,9 +193,13 @@ function mapSearchResult(value: unknown): RecoveredVehicleSearchResult | null {
   return {
     vmfCode,
     fleetNumber: asString(getValue(value, "fleetNumber", "FleetNumber", "fleet_number")),
-    registrationNumber: asString(getValue(value, "registrationNumber", "RegistrationNumber", "registration_number")),
+    registrationNumber: asString(
+      getValue(value, "registrationNumber", "RegistrationNumber", "registration_number"),
+    ),
     vehicleStatusCode: statusCode,
-    statusDescription: asString(getValue(value, "statusDescription", "StatusDescription", "status_description")),
+    statusDescription: asString(
+      getValue(value, "statusDescription", "StatusDescription", "status_description"),
+    ),
     renumberedTo: asString(getValue(value, "renumberedTo", "RenumberedTo", "renumbered_to")),
   };
 }
@@ -215,19 +230,29 @@ function mapDetails(value: unknown): RecoveredVehicleDetails | null {
   };
 }
 
-export async function getRecoveredVehicleSearch(searchTerm: string, mode: RecoveredVehicleSearchMode) {
+export async function getRecoveredVehicleSearch(
+  searchTerm: string,
+  mode: RecoveredVehicleSearchMode,
+) {
   const query = new URLSearchParams({ mode, search: searchTerm.trim() });
-  const payload = await readJson(await requestApi(`api/vehicles/recovered/search?${query.toString()}`));
+  const payload = await readJson(
+    await requestApi(`api/vehicles/recovered/search?${query.toString()}`),
+  );
   return getCollection(payload)
     .map(mapSearchResult)
     .filter((vehicle): vehicle is RecoveredVehicleSearchResult => vehicle !== null);
 }
 
 export async function getRecoveredVehicleDetails(vmfCode: number) {
-  const payload = await readJson(await requestApi(`api/vehicles/recovered/${encodeURIComponent(vmfCode)}`));
+  const payload = await readJson(
+    await requestApi(`api/vehicles/recovered/${encodeURIComponent(vmfCode)}`),
+  );
   const details = mapDetails(payload);
   if (!details) {
-    throw new RecoveredVehicleApiError("invalid-response", "The FIS API returned invalid recovered vehicle details.");
+    throw new RecoveredVehicleApiError(
+      "invalid-response",
+      "The FIS API returned invalid recovered vehicle details.",
+    );
   }
 
   return details;
@@ -239,24 +264,32 @@ export async function updateRecoveredVehicle(input: {
   dateChanged: string;
   newStatusCode: number;
 }) {
-  const payload = await readJson(await requestApi("api/vehicles/recovered", {
-    method: "POST",
-    body: JSON.stringify({
-      vmfCode: input.vmfCode,
-      recoveredFleetNumber: input.recoveredFleetNumber,
-      dateChanged: input.dateChanged,
-      newStatusCode: input.newStatusCode,
+  const payload = await readJson(
+    await requestApi("api/vehicles/recovered", {
+      method: "POST",
+      body: JSON.stringify({
+        vmfCode: input.vmfCode,
+        recoveredFleetNumber: input.recoveredFleetNumber,
+        dateChanged: input.dateChanged,
+        newStatusCode: input.newStatusCode,
+      }),
     }),
-  }));
+  );
 
   if (!isRecord(payload)) {
-    throw new RecoveredVehicleApiError("invalid-response", "The FIS API returned invalid recovered vehicle update details.");
+    throw new RecoveredVehicleApiError(
+      "invalid-response",
+      "The FIS API returned invalid recovered vehicle update details.",
+    );
   }
 
   const updatedVehicle = mapDetails(getValue(payload, "updatedVehicle", "UpdatedVehicle"));
   const newVmfCode = asNumber(getValue(payload, "newVmfCode", "NewVmfCode"));
   if (!updatedVehicle || newVmfCode === null) {
-    throw new RecoveredVehicleApiError("invalid-response", "The FIS API returned incomplete recovered vehicle update details.");
+    throw new RecoveredVehicleApiError(
+      "invalid-response",
+      "The FIS API returned incomplete recovered vehicle update details.",
+    );
   }
 
   return { updatedVehicle, newVmfCode } satisfies RecoveredVehicleUpdateResult;

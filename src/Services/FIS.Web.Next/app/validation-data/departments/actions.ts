@@ -30,13 +30,15 @@ function getText(formData: FormData, key: string) {
 function getRequiredText(formData: FormData, key: string, label: string, maxLength: number) {
   const value = getText(formData, key);
   if (!value) throw new DepartmentValidationError(`${label} is required.`);
-  if (value.length > maxLength) throw new DepartmentValidationError(`${label} must be ${maxLength} characters or fewer.`);
+  if (value.length > maxLength)
+    throw new DepartmentValidationError(`${label} must be ${maxLength} characters or fewer.`);
   return value;
 }
 
 function getOptionalText(formData: FormData, key: string, label: string, maxLength: number) {
   const value = getText(formData, key);
-  if (value.length > maxLength) throw new DepartmentValidationError(`${label} must be ${maxLength} characters or fewer.`);
+  if (value.length > maxLength)
+    throw new DepartmentValidationError(`${label} must be ${maxLength} characters or fewer.`);
   return value || null;
 }
 
@@ -76,18 +78,28 @@ function getNullableBoolean(formData: FormData, key: string) {
 function getOptionalDate(formData: FormData, key: string, label: string) {
   const value = getText(formData, key);
   if (!value) return null;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new DepartmentValidationError(`${label} is invalid.`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
+    throw new DepartmentValidationError(`${label} is invalid.`);
 
   const [year, month, day] = value.split("-").map(Number);
   const parsed = new Date(Date.UTC(year, month - 1, day));
-  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
     throw new DepartmentValidationError(`${label} is invalid.`);
   }
   return `${value}T00:00:00.000Z`;
 }
 
 function buildInput(formData: FormData, mode: "create" | "update"): DepartmentInput {
-  const description = getRequiredText(formData, "description", "Department description", mode === "create" ? 60 : 75);
+  const description = getRequiredText(
+    formData,
+    "description",
+    "Department description",
+    mode === "create" ? 60 : 75,
+  );
   const departmentNumber = getOptionalText(formData, "departmentNumber", "Department number", 7);
   const postalCode = getOptionalText(formData, "postalCode", "Postal code", 10);
 
@@ -115,14 +127,23 @@ function buildInput(formData: FormData, mode: "create" | "update"): DepartmentIn
     cellNumber: getOptionalText(formData, "cellNumber", "Cell number", 15),
     notes: getOptionalText(formData, "notes", "Notes", 100),
     departmentAbbr: getOptionalText(formData, "departmentAbbr", "Department abbreviation", 30),
-    basInstallationCode: getOptionalText(formData, "basInstallationCode", "BAS installation code", 30),
+    basInstallationCode: getOptionalText(
+      formData,
+      "basInstallationCode",
+      "BAS installation code",
+      30,
+    ),
     deptActive: getBoolean(formData, "deptActive"),
     cloEmail: getOptionalText(formData, "cloEmail", "CLO email", 255),
     telephone2: getOptionalText(formData, "telephone2", "Telephone 2", 15),
     fax2: getOptionalText(formData, "fax2", "Fax 2", 15),
     financialSystemCode: getInteger(formData, "financialSystemCode", "Financial system code"),
     financialSystemActive: getNullableBoolean(formData, "financialSystemActive"),
-    financialSystemActivateDate: getOptionalDate(formData, "financialSystemActivateDate", "Financial system activation date"),
+    financialSystemActivateDate: getOptionalDate(
+      formData,
+      "financialSystemActivateDate",
+      "Financial system activation date",
+    ),
     defaultSite: getInteger(formData, "defaultSite", "Default site"),
     exportIsActive: getNullableBoolean(formData, "exportIsActive"),
     dateLastExported: null,
@@ -137,10 +158,16 @@ function buildInput(formData: FormData, mode: "create" | "update"): DepartmentIn
 async function authorizeDepartmentMaintenance() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
   if (!hasVehicleManagementPermission(session.accessLevel)) {
     return { ok: false as const, message: "You do not have permission to maintain departments." };
@@ -150,8 +177,10 @@ async function authorizeDepartmentMaintenance() {
 
 function apiErrorMessage(error: unknown, operation: string) {
   if (error instanceof DepartmentApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return `The department ${operation} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return `The department ${operation} service is temporarily unavailable. Please try again.`;
     return error.message;
   }
   return `The department could not be ${operation}. Please try again.`;
@@ -167,7 +196,13 @@ export async function createDepartmentAction(
   try {
     await createDepartment(buildInput(formData, "create"));
   } catch (error) {
-    return { status: "error", message: error instanceof DepartmentValidationError ? error.message : apiErrorMessage(error, "created") };
+    return {
+      status: "error",
+      message:
+        error instanceof DepartmentValidationError
+          ? error.message
+          : apiErrorMessage(error, "created"),
+    };
   }
 
   revalidatePath("/validation-data");
@@ -181,14 +216,22 @@ export async function updateDepartmentAction(
 ): Promise<DepartmentActionState> {
   const access = await authorizeDepartmentMaintenance();
   const departmentCode = getInteger(formData, "departmentCode", "Department code");
-  const returnPath = departmentCode ? `/Validation/MNT_Department_Edit.aspx?cmbdep=${departmentCode}` : "/validation-data/departments";
+  const returnPath = departmentCode
+    ? `/Validation/MNT_Department_Edit.aspx?cmbdep=${departmentCode}`
+    : "/validation-data/departments";
   if (!access.ok) redirect(`${returnPath}&error=${encodeURIComponent(access.message)}`);
   if (!departmentCode) return { status: "error", message: "Department code is required." };
 
   try {
     await updateDepartment(departmentCode, buildInput(formData, "update"));
   } catch (error) {
-    return { status: "error", message: error instanceof DepartmentValidationError ? error.message : apiErrorMessage(error, "updated") };
+    return {
+      status: "error",
+      message:
+        error instanceof DepartmentValidationError
+          ? error.message
+          : apiErrorMessage(error, "updated"),
+    };
   }
 
   revalidatePath("/validation-data/departments");
@@ -199,13 +242,19 @@ export async function updateDepartmentAction(
 export async function deleteDepartmentAction(formData: FormData) {
   const access = await authorizeDepartmentMaintenance();
   const departmentCode = getInteger(formData, "departmentCode", "Department code");
-  if (!access.ok) redirect(`/Validation/MNT_Department_Del_Check.aspx?code=${departmentCode ?? ""}&error=${encodeURIComponent(access.message)}`);
-  if (!departmentCode) redirect("/validation-data/departments?error=Department%20code%20is%20required.");
+  if (!access.ok)
+    redirect(
+      `/Validation/MNT_Department_Del_Check.aspx?code=${departmentCode ?? ""}&error=${encodeURIComponent(access.message)}`,
+    );
+  if (!departmentCode)
+    redirect("/validation-data/departments?error=Department%20code%20is%20required.");
 
   try {
     await deleteDepartment(departmentCode);
   } catch (error) {
-    redirect(`/Validation/MNT_Department_Del_Check.aspx?code=${departmentCode}&error=${encodeURIComponent(apiErrorMessage(error, "deleted"))}`);
+    redirect(
+      `/Validation/MNT_Department_Del_Check.aspx?code=${departmentCode}&error=${encodeURIComponent(apiErrorMessage(error, "deleted"))}`,
+    );
   }
 
   revalidatePath("/validation-data/departments");

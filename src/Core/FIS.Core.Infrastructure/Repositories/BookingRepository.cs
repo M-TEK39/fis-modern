@@ -33,7 +33,7 @@ public class BookingRepository : IBookingRepository
         "location_code",
         "vmf_code",
         "booking_status",
-        "notes"
+        "notes",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -42,14 +42,10 @@ public class BookingRepository : IBookingRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
-    private static readonly string[] RequiredColumns =
-    [
-        "booking_id",
-        "start_date"
-    ];
+    private static readonly string[] RequiredColumns = ["booking_id", "start_date"];
 
     private readonly FisDbContext _context;
 
@@ -60,12 +56,16 @@ public class BookingRepository : IBookingRepository
 
     public async Task<Booking?> GetByIdAsync(short bookingId)
     {
-        return (await QueryAsync(
-            columns => columns.Contains("booking_id")
-                ? new QuerySpec(
-                    "WHERE [booking_id] = @bookingId",
-                    command => AddParameter(command, "@bookingId", DbType.Int16, bookingId))
-                : QuerySpec.NoResults)).SingleOrDefault();
+        return (
+            await QueryAsync(columns =>
+                columns.Contains("booking_id")
+                    ? new QuerySpec(
+                        "WHERE [booking_id] = @bookingId",
+                        command => AddParameter(command, "@bookingId", DbType.Int16, bookingId)
+                    )
+                    : QuerySpec.NoResults
+            )
+        ).SingleOrDefault();
     }
 
     public async Task<IEnumerable<Booking>> GetAllAsync()
@@ -73,7 +73,10 @@ public class BookingRepository : IBookingRepository
         return await QueryAsync();
     }
 
-    public async Task<IEnumerable<Booking>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)
+    public async Task<IEnumerable<Booking>> GetByDateRangeAsync(
+        DateTime startDate,
+        DateTime endDate
+    )
     {
         return await QueryAsync(columns =>
             columns.Contains("start_date")
@@ -83,8 +86,10 @@ public class BookingRepository : IBookingRepository
                     {
                         AddParameter(command, "@startDate", DbType.DateTime2, startDate);
                         AddParameter(command, "@endDate", DbType.DateTime2, endDate);
-                    })
-                : QuerySpec.NoResults);
+                    }
+                )
+                : QuerySpec.NoResults
+        );
     }
 
     public async Task<IEnumerable<Booking>> GetByStatusAsync(string status)
@@ -93,8 +98,10 @@ public class BookingRepository : IBookingRepository
             columns.Contains("booking_status")
                 ? new QuerySpec(
                     "WHERE [booking_status] = @status",
-                    command => AddParameter(command, "@status", DbType.String, status))
-                : QuerySpec.NoResults);
+                    command => AddParameter(command, "@status", DbType.String, status)
+                )
+                : QuerySpec.NoResults
+        );
     }
 
     public async Task<IEnumerable<Booking>> GetByVehicleAsync(int vmfCode)
@@ -103,8 +110,10 @@ public class BookingRepository : IBookingRepository
             columns.Contains("vmf_code")
                 ? new QuerySpec(
                     "WHERE [vmf_code] = @vmfCode",
-                    command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode))
-                : QuerySpec.NoResults);
+                    command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
+                )
+                : QuerySpec.NoResults
+        );
     }
 
     public async Task<Booking> CreateAsync(Booking booking, int currentUserId)
@@ -117,15 +126,30 @@ public class BookingRepository : IBookingRepository
             .Where(value => availableColumns.Contains(value.Column))
             .ToList();
 
-        AddOptionalValue(values, availableColumns, "date_created", "@dateCreated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "created_by_user_code",
             "@createdByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            false
+        );
 
         var bookingId = await ExecuteInsertAsync(values);
         booking.booking_id = bookingId;
@@ -143,7 +167,8 @@ public class BookingRepository : IBookingRepository
         if (existing == null)
         {
             throw new InvalidOperationException(
-                $"Booking with booking_id {booking.booking_id} not found");
+                $"Booking with booking_id {booking.booking_id} not found"
+            );
         }
 
         var availableColumns = await GetAvailableColumnsAsync();
@@ -152,15 +177,30 @@ public class BookingRepository : IBookingRepository
             .ToList();
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "modified_by_user_code",
             "@modifiedByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, booking.is_deleted);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            booking.is_deleted
+        );
 
         await ExecuteUpdateAsync(booking.booking_id, values, availableColumns);
         booking.date_created = existing.date_created;
@@ -173,7 +213,8 @@ public class BookingRepository : IBookingRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "DeleteAsync selects between fixed legacy SQL statements and uses a parameter for the record identifier.")]
+        Justification = "DeleteAsync selects between fixed legacy SQL statements and uses a parameter for the record identifier."
+    )]
     public async Task DeleteAsync(short bookingId, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -205,7 +246,8 @@ public class BookingRepository : IBookingRepository
                         command,
                         "@modifiedByUserCode",
                         DbType.Int32,
-                        currentUserId > 0 ? currentUserId : null);
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
                 command.CommandText = $"""
@@ -238,9 +280,11 @@ public class BookingRepository : IBookingRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters.")]
+        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters."
+    )]
     private async Task<List<Booking>> QueryAsync(
-        Func<IReadOnlySet<string>, QuerySpec>? queryFactory = null)
+        Func<IReadOnlySet<string>, QuerySpec>? queryFactory = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var query = queryFactory?.Invoke(availableColumns) ?? QuerySpec.All;
@@ -257,7 +301,11 @@ public class BookingRepository : IBookingRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = LegacyColumns
                 .Select(column => GetColumnProjection(availableColumns, column))
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
                 .ToArray();
             var whereClause = string.IsNullOrWhiteSpace(query.Predicate)
                 ? $"WHERE {GetActiveFilter(availableColumns)}"
@@ -292,12 +340,15 @@ public class BookingRepository : IBookingRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The INSERT statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task<short> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         if (values.Count == 0)
         {
-            throw new InvalidOperationException("No compatible booking columns are available for insert.");
+            throw new InvalidOperationException(
+                "No compatible booking columns are available for insert."
+            );
         }
 
         var connection = _context.Database.GetDbConnection();
@@ -312,7 +363,10 @@ public class BookingRepository : IBookingRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{TableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[booking_id]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
@@ -331,15 +385,19 @@ public class BookingRepository : IBookingRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized.")]
+        Justification = "The UPDATE statement is composed only from fixed legacy columns and allowlisted optional values; every value is parameterized."
+    )]
     private async Task ExecuteUpdateAsync(
         short bookingId,
         IReadOnlyList<WriteValue> values,
-        IReadOnlySet<string> availableColumns)
+        IReadOnlySet<string> availableColumns
+    )
     {
         if (values.Count == 0)
         {
-            throw new InvalidOperationException("No compatible booking columns are available for update.");
+            throw new InvalidOperationException(
+                "No compatible booking columns are available for update."
+            );
         }
 
         var connection = _context.Database.GetDbConnection();
@@ -355,7 +413,10 @@ public class BookingRepository : IBookingRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{TableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [booking_id] = @bookingId
                 AND {GetActiveFilter(availableColumns)}
                 """;
@@ -401,11 +462,14 @@ public class BookingRepository : IBookingRepository
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"The required bookings compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                    $"The required bookings compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             return columns;
@@ -438,11 +502,20 @@ public class BookingRepository : IBookingRepository
             vmf_code = ReadInt32(reader, "vmf_code"),
             booking_status = ReadString(reader, "booking_status"),
             notes = ReadString(reader, "notes"),
-            date_created = ReadDateTimeIfAvailable(reader, availableColumns, "date_created") ?? startDate,
+            date_created =
+                ReadDateTimeIfAvailable(reader, availableColumns, "date_created") ?? startDate,
             date_updated = ReadDateTimeIfAvailable(reader, availableColumns, "date_updated"),
-            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
-            modified_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "modified_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "created_by_user_code"
+            ),
+            modified_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "modified_by_user_code"
+            ),
+            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false,
         };
     }
 
@@ -462,7 +535,7 @@ public class BookingRepository : IBookingRepository
             new("location_code", "@locationCode", DbType.Int32, booking.location_code),
             new("vmf_code", "@vmfCode", DbType.Int32, booking.vmf_code),
             new("booking_status", "@bookingStatus", DbType.String, booking.booking_status),
-            new("notes", "@notes", DbType.String, booking.notes)
+            new("notes", "@notes", DbType.String, booking.notes),
         ];
     }
 
@@ -472,7 +545,8 @@ public class BookingRepository : IBookingRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -497,8 +571,8 @@ public class BookingRepository : IBookingRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string GetActiveFilter(IReadOnlySet<string> availableColumns)
-        => availableColumns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+    private static string GetActiveFilter(IReadOnlySet<string> availableColumns) =>
+        availableColumns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
     {
@@ -512,7 +586,7 @@ public class BookingRepository : IBookingRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "sql_variant"
+            _ => "sql_variant",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
@@ -527,13 +601,13 @@ public class BookingRepository : IBookingRepository
         return $"CAST(NULL AS {GetLegacySqlType(column)}) AS [{column}]";
     }
 
-    private static string GetLegacySqlType(string column)
-        => column switch
+    private static string GetLegacySqlType(string column) =>
+        column switch
         {
             "booking_id" or "class_code" or "user_id" or "collected" => "smallint",
             "location_code" or "vmf_code" => "int",
             "start_date" or "end_date" or "booking_date" => "datetime2",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
 
     private static string? ReadString(DbDataReader reader, string column)
@@ -553,8 +627,8 @@ public class BookingRepository : IBookingRepository
     private static DateTime? ReadDateTimeIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadDateTime(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadDateTime(reader, column) : null;
 
     private static int? ReadInt32(DbDataReader reader, string column)
     {
@@ -565,8 +639,8 @@ public class BookingRepository : IBookingRepository
     private static int? ReadInt32IfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadInt32(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadInt32(reader, column) : null;
 
     private static short? ReadInt16(DbDataReader reader, string column)
     {
@@ -577,7 +651,8 @@ public class BookingRepository : IBookingRepository
     private static bool? ReadBooleanIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
+        string column
+    )
     {
         if (!columns.Contains(column))
         {

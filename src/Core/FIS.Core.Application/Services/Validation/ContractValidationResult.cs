@@ -28,17 +28,13 @@ public class ContractValidationResult
         return new ContractValidationResult
         {
             IsValid = false,
-            Errors = new List<string> { error }
+            Errors = new List<string> { error },
         };
     }
 
     public static ContractValidationResult Failed(List<string> errors)
     {
-        return new ContractValidationResult
-        {
-            IsValid = false,
-            Errors = errors
-        };
+        return new ContractValidationResult { IsValid = false, Errors = errors };
     }
 
     public void AddError(string error)

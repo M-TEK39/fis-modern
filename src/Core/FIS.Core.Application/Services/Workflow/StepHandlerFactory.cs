@@ -13,7 +13,8 @@ public class StepHandlerFactory : IStepHandlerFactory
 
     public StepHandlerFactory(
         IEnumerable<IStepHandler> handlers,
-        ILogger<StepHandlerFactory> logger)
+        ILogger<StepHandlerFactory> logger
+    )
     {
         _logger = logger;
 
@@ -68,7 +69,10 @@ public class StepHandlerFactory : IStepHandlerFactory
 
         if (_handlers.ContainsKey(handlerType))
         {
-            _logger.LogWarning("Handler type '{HandlerType}' is already registered. Overwriting.", handler.HandlerType);
+            _logger.LogWarning(
+                "Handler type '{HandlerType}' is already registered. Overwriting.",
+                handler.HandlerType
+            );
         }
 
         _handlers[handlerType] = handler;

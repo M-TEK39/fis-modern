@@ -9,7 +9,9 @@ const USER_ADMIN_ROLE = "User Administration";
 const RETURN_PATH = "/users/reset-login";
 
 function hasUserAdministrationRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(USER_ADMIN_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function getText(formData: FormData, name: string) {

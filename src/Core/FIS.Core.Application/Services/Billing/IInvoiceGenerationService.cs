@@ -35,9 +35,7 @@ public interface IInvoiceGenerationService
     /// <param name="departmentCode">Department identifier</param>
     /// <param name="batchDate">Batch/invoice date</param>
     /// <returns>Complete invoice with items</returns>
-    Task<InvoiceWithItems> GenerateCompleteInvoiceAsync(
-        int departmentCode,
-        DateTime batchDate);
+    Task<InvoiceWithItems> GenerateCompleteInvoiceAsync(int departmentCode, DateTime batchDate);
 
     /// <summary>
     /// Generate invoices for all departments for a month.
@@ -69,7 +67,8 @@ public interface IInvoiceGenerationService
     /// </remarks>
     Task<StatementDetailedInvoiceReport> GetDetailedInvoiceAsync(
         int departmentCode,
-        DateTime batchDate);
+        DateTime batchDate
+    );
 
     /// <summary>
     /// Get vehicle billing history report.
@@ -81,7 +80,8 @@ public interface IInvoiceGenerationService
     /// <returns>Vehicle billing history report</returns>
     Task<VehicleBillingHistoryReport> GetVehicleBillingHistoryAsync(
         int vmfCode,
-        string financialYear);
+        string financialYear
+    );
 
     /// <summary>
     /// Get fuel detailed invoice report.
@@ -95,7 +95,8 @@ public interface IInvoiceGenerationService
     Task<FuelDetailedInvoiceReport> GetFuelDetailedInvoiceAsync(
         int departmentCode,
         DateTime startDate,
-        DateTime endDate);
+        DateTime endDate
+    );
 
     #endregion
 
@@ -110,7 +111,8 @@ public interface IInvoiceGenerationService
     /// <returns>List of department invoice summaries</returns>
     Task<List<DepartmentInvoiceSummary>> GetInvoicedAmountsByDepartmentAsync(
         DateTime startDate,
-        DateTime endDate);
+        DateTime endDate
+    );
 
     /// <summary>
     /// Get invoiced amounts by site for a date range.
@@ -122,7 +124,8 @@ public interface IInvoiceGenerationService
     Task<List<SiteInvoiceSummary>> GetInvoicedAmountsBySiteAsync(
         int? siteCode,
         DateTime startDate,
-        DateTime endDate);
+        DateTime endDate
+    );
 
     /// <summary>
     /// Get invoiced amounts by vehicle for a department.
@@ -132,7 +135,8 @@ public interface IInvoiceGenerationService
     /// <returns>List of vehicle invoice summaries</returns>
     Task<List<VehicleInvoiceSummary>> GetInvoicedAmountsByVehicleAsync(
         int departmentCode,
-        string financialYear);
+        string financialYear
+    );
 
     /// <summary>
     /// Get invoiced amounts by journal detail type.
@@ -145,7 +149,8 @@ public interface IInvoiceGenerationService
     Task<List<TypeInvoiceSummary>> GetInvoicedAmountsByTypeAsync(
         int departmentCode,
         DateTime startDate,
-        DateTime endDate);
+        DateTime endDate
+    );
 
     #endregion
 
@@ -158,9 +163,7 @@ public interface IInvoiceGenerationService
     /// <param name="departmentCode">Department identifier</param>
     /// <param name="batchDate">Batch date</param>
     /// <returns>List of fixed charge items</returns>
-    Task<List<FixedChargeItem>> GetFixedChargeItemsAsync(
-        int departmentCode,
-        DateTime batchDate);
+    Task<List<FixedChargeItem>> GetFixedChargeItemsAsync(int departmentCode, DateTime batchDate);
 
     /// <summary>
     /// Get kilometer charge items for an invoice.
@@ -171,7 +174,8 @@ public interface IInvoiceGenerationService
     /// <returns>List of kilometer charge items</returns>
     Task<List<KilometerChargeItem>> GetKilometerChargeItemsAsync(
         int departmentCode,
-        DateTime batchDate);
+        DateTime batchDate
+    );
 
     /// <summary>
     /// Get fuel charge items for an invoice.
@@ -180,9 +184,7 @@ public interface IInvoiceGenerationService
     /// <param name="departmentCode">Department identifier</param>
     /// <param name="batchDate">Batch date</param>
     /// <returns>List of fuel charge items</returns>
-    Task<List<FuelChargeItem>> GetFuelChargeItemsAsync(
-        int departmentCode,
-        DateTime batchDate);
+    Task<List<FuelChargeItem>> GetFuelChargeItemsAsync(int departmentCode, DateTime batchDate);
 
     #endregion
 
@@ -203,7 +205,8 @@ public interface IInvoiceGenerationService
     /// <returns>List of invoices</returns>
     Task<List<Invoice>> GetDepartmentInvoicesAsync(
         int departmentCode,
-        string? financialYear = null);
+        string? financialYear = null
+    );
 
     /// <summary>
     /// Mark invoice as sent to department.
@@ -218,10 +221,7 @@ public interface IInvoiceGenerationService
     /// <param name="invoiceCode">Invoice identifier</param>
     /// <param name="paidDate">Date invoice was paid</param>
     /// <param name="paymentReference">Payment reference number</param>
-    Task MarkInvoicePaidAsync(
-        int invoiceCode,
-        DateTime paidDate,
-        string? paymentReference = null);
+    Task MarkInvoicePaidAsync(int invoiceCode, DateTime paidDate, string? paymentReference = null);
 
     /// <summary>
     /// Cancel/void an invoice.
@@ -250,7 +250,8 @@ public interface IInvoiceGenerationService
     /// <returns>Totals breakdown by type</returns>
     Task<InvoiceTotalsByType> CalculateInvoiceTotalsByTypeAsync(
         int departmentCode,
-        DateTime batchDate);
+        DateTime batchDate
+    );
 
     /// <summary>
     /// Calculate invoice item cost components.
@@ -261,7 +262,8 @@ public interface IInvoiceGenerationService
     /// <returns>Cost component breakdown</returns>
     Task<InvoiceItemCostComponents> CalculateCostComponentsAsync(
         Guid journalDetailCode,
-        int contractCode);
+        int contractCode
+    );
 
     #endregion
 
@@ -276,7 +278,8 @@ public interface IInvoiceGenerationService
     /// <returns>Validation result</returns>
     Task<InvoiceValidationResult> ValidateInvoiceGenerationAsync(
         int departmentCode,
-        DateTime batchDate);
+        DateTime batchDate
+    );
 
     /// <summary>
     /// Get unposted journal details that will prevent invoice generation.
@@ -284,9 +287,7 @@ public interface IInvoiceGenerationService
     /// <param name="departmentCode">Department identifier</param>
     /// <param name="batchDate">Batch date</param>
     /// <returns>List of unposted journal details</returns>
-    Task<List<JournalDetail>> GetUnpostedTransactionsAsync(
-        int departmentCode,
-        DateTime batchDate);
+    Task<List<JournalDetail>> GetUnpostedTransactionsAsync(int departmentCode, DateTime batchDate);
 
     #endregion
 }
@@ -566,11 +567,7 @@ public class InvoiceValidationResult
 
     public static InvoiceValidationResult Invalid(params string[] errors)
     {
-        return new InvoiceValidationResult
-        {
-            IsValid = false,
-            Errors = errors.ToList()
-        };
+        return new InvoiceValidationResult { IsValid = false, Errors = errors.ToList() };
     }
 }
 

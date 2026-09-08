@@ -6,9 +6,7 @@ function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function LegacyLossSplitPage({
-  searchParams,
-}: IncidentCapturePageProps) {
+export default async function LegacyLossSplitPage({ searchParams }: IncidentCapturePageProps) {
   const values = await searchParams;
   const towNeed = first(values.xtowneed) ?? "N";
   const callCentreCode = first(values.cccode) ?? "";

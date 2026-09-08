@@ -28,16 +28,28 @@ async function authorizeVehicleDetail() {
   const session = await getSession();
 
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
 
   try {
-    if ((BigInt(session.accessLevel ?? "0") & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) !== BigInt(VEHICLE_MANAGEMENT_PERMISSION)) {
-      return { ok: false as const, message: "You do not have permission to maintain Vehicle Master records." };
+    if (
+      (BigInt(session.accessLevel ?? "0") & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) !==
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    ) {
+      return {
+        ok: false as const,
+        message: "You do not have permission to maintain Vehicle Master records.",
+      };
     }
   } catch {
     return { ok: false as const, message: "Your Vehicle Master permission could not be verified." };
@@ -105,8 +117,14 @@ export async function updateVehicleInvoiceAction(
     revalidateVehicle(vmfCode);
     return { status: "success", message: "Invoice number updated successfully." };
   } catch (error) {
-    console.error("FIS vehicle invoice update failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: apiErrorMessage(error, "The invoice number could not be updated.") };
+    console.error(
+      "FIS vehicle invoice update failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message: apiErrorMessage(error, "The invoice number could not be updated."),
+    };
   }
 }
 
@@ -129,8 +147,14 @@ export async function deleteVehicleAction(
     revalidateVehicle(vmfCode);
     return { status: "success", message: "Vehicle deleted successfully." };
   } catch (error) {
-    console.error("FIS vehicle delete failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: apiErrorMessage(error, "The vehicle could not be deleted.") };
+    console.error(
+      "FIS vehicle delete failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message: apiErrorMessage(error, "The vehicle could not be deleted."),
+    };
   }
 }
 
@@ -171,8 +195,14 @@ export async function uploadVehicleDocumentAction(
     revalidateVehicle(vmfCode);
     return { status: "success", message: "Document uploaded successfully." };
   } catch (error) {
-    console.error("FIS vehicle document upload failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: apiErrorMessage(error, "The vehicle document could not be uploaded.") };
+    console.error(
+      "FIS vehicle document upload failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message: apiErrorMessage(error, "The vehicle document could not be uploaded."),
+    };
   }
 }
 
@@ -196,7 +226,13 @@ export async function deleteVehicleDocumentAction(
     revalidateVehicle(vmfCode);
     return { status: "success", message: "Document deleted successfully." };
   } catch (error) {
-    console.error("FIS vehicle document delete failed", error instanceof Error ? error.message : "unknown error");
-    return { status: "error", message: apiErrorMessage(error, "The vehicle document could not be deleted.") };
+    console.error(
+      "FIS vehicle document delete failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return {
+      status: "error",
+      message: apiErrorMessage(error, "The vehicle document could not be deleted."),
+    };
   }
 }

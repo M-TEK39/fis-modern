@@ -23,7 +23,8 @@ public class ThirdPartyController : BaseApiController
         IDepartmentRepository departmentRepository,
         ISiteRepository siteRepository,
         IClassRepository classRepository,
-        ILogger<ThirdPartyController> logger)
+        ILogger<ThirdPartyController> logger
+    )
     {
         _rentalRepository = rentalRepository;
         _departmentRepository = departmentRepository;
@@ -33,24 +34,29 @@ public class ThirdPartyController : BaseApiController
     }
 
     [HttpGet]
-    public ActionResult GetRoot() => Ok(new
-    {
-        module = "Third Party Rentals",
-        endpoints = new[]
-        {
-            "suppliers",
-            "services",
-            "projects",
-            "allocations/project/{projectId}",
-            "departments",
-            "sites/{departmentCode}",
-            "vehicles/{supplierId}",
-            "classes"
-        }
-    });
+    public ActionResult GetRoot() =>
+        Ok(
+            new
+            {
+                module = "Third Party Rentals",
+                endpoints = new[]
+                {
+                    "suppliers",
+                    "services",
+                    "projects",
+                    "allocations/project/{projectId}",
+                    "departments",
+                    "sites/{departmentCode}",
+                    "vehicles/{supplierId}",
+                    "classes",
+                },
+            }
+        );
 
     [HttpGet("suppliers")]
-    public async Task<ActionResult<IEnumerable<ThirdPartySupplierRecord>>> GetSuppliers(CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<ThirdPartySupplierRecord>>> GetSuppliers(
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -64,7 +70,10 @@ public class ThirdPartyController : BaseApiController
     }
 
     [HttpGet("suppliers/{id:int}")]
-    public async Task<ActionResult<ThirdPartySupplierRecord>> GetSupplier(int id, CancellationToken cancellationToken)
+    public async Task<ActionResult<ThirdPartySupplierRecord>> GetSupplier(
+        int id,
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -81,12 +90,18 @@ public class ThirdPartyController : BaseApiController
     [HttpPost("suppliers")]
     public async Task<ActionResult<ThirdPartySupplierRecord>> CreateSupplier(
         [FromBody] ThirdPartySupplierRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
-        if (!TryCreateSupplierWrite(request, out var input, out var error)) return BadRequest(error);
+        if (!TryCreateSupplierWrite(request, out var input, out var error))
+            return BadRequest(error);
         try
         {
-            var created = await _rentalRepository.CreateSupplierAsync(input!, GetCurrentUserId(), cancellationToken);
+            var created = await _rentalRepository.CreateSupplierAsync(
+                input!,
+                GetCurrentUserId(),
+                cancellationToken
+            );
             return CreatedAtAction(nameof(GetSupplier), new { id = created.supplier_id }, created);
         }
         catch (ArgumentException ex)
@@ -104,12 +119,21 @@ public class ThirdPartyController : BaseApiController
     public async Task<ActionResult<ThirdPartySupplierRecord>> UpdateSupplier(
         int id,
         [FromBody] ThirdPartySupplierRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
-        if (!TryCreateSupplierWrite(request, out var input, out var error)) return BadRequest(error);
+        if (!TryCreateSupplierWrite(request, out var input, out var error))
+            return BadRequest(error);
         try
         {
-            return Ok(await _rentalRepository.UpdateSupplierAsync(id, input!, GetCurrentUserId(), cancellationToken));
+            return Ok(
+                await _rentalRepository.UpdateSupplierAsync(
+                    id,
+                    input!,
+                    GetCurrentUserId(),
+                    cancellationToken
+                )
+            );
         }
         catch (KeyNotFoundException)
         {
@@ -127,7 +151,9 @@ public class ThirdPartyController : BaseApiController
     }
 
     [HttpGet("services")]
-    public async Task<ActionResult<IEnumerable<ThirdPartyServiceOption>>> GetServices(CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<ThirdPartyServiceOption>>> GetServices(
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -141,7 +167,9 @@ public class ThirdPartyController : BaseApiController
     }
 
     [HttpGet("projects")]
-    public async Task<ActionResult<IEnumerable<ThirdPartyProjectRecord>>> GetProjects(CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<ThirdPartyProjectRecord>>> GetProjects(
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -155,7 +183,10 @@ public class ThirdPartyController : BaseApiController
     }
 
     [HttpGet("projects/{id:int}")]
-    public async Task<ActionResult<ThirdPartyProjectRecord>> GetProject(int id, CancellationToken cancellationToken)
+    public async Task<ActionResult<ThirdPartyProjectRecord>> GetProject(
+        int id,
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -170,15 +201,27 @@ public class ThirdPartyController : BaseApiController
     }
 
     [HttpGet("projects/department/{departmentCode:short}")]
-    public async Task<ActionResult<IEnumerable<ThirdPartyProjectRecord>>> GetProjectsByDepartment(short departmentCode, CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<ThirdPartyProjectRecord>>> GetProjectsByDepartment(
+        short departmentCode,
+        CancellationToken cancellationToken
+    )
     {
         try
         {
-            return Ok(await _rentalRepository.GetProjectsByDepartmentAsync(departmentCode, cancellationToken));
+            return Ok(
+                await _rentalRepository.GetProjectsByDepartmentAsync(
+                    departmentCode,
+                    cancellationToken
+                )
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving third-party projects for department {DepartmentCode}", departmentCode);
+            _logger.LogError(
+                ex,
+                "Error retrieving third-party projects for department {DepartmentCode}",
+                departmentCode
+            );
             return StatusCode(500);
         }
     }
@@ -186,12 +229,18 @@ public class ThirdPartyController : BaseApiController
     [HttpPost("projects")]
     public async Task<ActionResult<ThirdPartyProjectRecord>> CreateProject(
         [FromBody] ThirdPartyProjectRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
-        if (!TryCreateProjectWrite(request, out var input, out var error)) return BadRequest(error);
+        if (!TryCreateProjectWrite(request, out var input, out var error))
+            return BadRequest(error);
         try
         {
-            var created = await _rentalRepository.CreateProjectAsync(input!, GetCurrentUserId(), cancellationToken);
+            var created = await _rentalRepository.CreateProjectAsync(
+                input!,
+                GetCurrentUserId(),
+                cancellationToken
+            );
             return CreatedAtAction(nameof(GetProject), new { id = created.project_id }, created);
         }
         catch (ArgumentException ex)
@@ -209,12 +258,21 @@ public class ThirdPartyController : BaseApiController
     public async Task<ActionResult<ThirdPartyProjectRecord>> UpdateProject(
         int id,
         [FromBody] ThirdPartyProjectRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
-        if (!TryCreateProjectWrite(request, out var input, out var error)) return BadRequest(error);
+        if (!TryCreateProjectWrite(request, out var input, out var error))
+            return BadRequest(error);
         try
         {
-            return Ok(await _rentalRepository.UpdateProjectAsync(id, input!, GetCurrentUserId(), cancellationToken));
+            return Ok(
+                await _rentalRepository.UpdateProjectAsync(
+                    id,
+                    input!,
+                    GetCurrentUserId(),
+                    cancellationToken
+                )
+            );
         }
         catch (KeyNotFoundException)
         {
@@ -232,29 +290,45 @@ public class ThirdPartyController : BaseApiController
     }
 
     [HttpGet("projects/{projectId:int}/requirements")]
-    public async Task<ActionResult<IEnumerable<ThirdPartyClassRequirementRecord>>> GetProjectRequirements(int projectId, CancellationToken cancellationToken)
+    public async Task<
+        ActionResult<IEnumerable<ThirdPartyClassRequirementRecord>>
+    > GetProjectRequirements(int projectId, CancellationToken cancellationToken)
     {
         try
         {
-            return Ok(await _rentalRepository.GetClassRequirementsAsync(projectId, cancellationToken));
+            return Ok(
+                await _rentalRepository.GetClassRequirementsAsync(projectId, cancellationToken)
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving class requirements for project {ProjectId}", projectId);
+            _logger.LogError(
+                ex,
+                "Error retrieving class requirements for project {ProjectId}",
+                projectId
+            );
             return StatusCode(500);
         }
     }
 
     [HttpGet("allocations/project/{projectId:int}")]
-    public async Task<ActionResult<IEnumerable<ThirdPartyAllocationRecord>>> GetAllocationsByProject(int projectId, CancellationToken cancellationToken)
+    public async Task<
+        ActionResult<IEnumerable<ThirdPartyAllocationRecord>>
+    > GetAllocationsByProject(int projectId, CancellationToken cancellationToken)
     {
         try
         {
-            return Ok(await _rentalRepository.GetAllocationsByProjectAsync(projectId, cancellationToken));
+            return Ok(
+                await _rentalRepository.GetAllocationsByProjectAsync(projectId, cancellationToken)
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving third-party allocations for project {ProjectId}", projectId);
+            _logger.LogError(
+                ex,
+                "Error retrieving third-party allocations for project {ProjectId}",
+                projectId
+            );
             return StatusCode(500);
         }
     }
@@ -262,12 +336,20 @@ public class ThirdPartyController : BaseApiController
     [HttpPost("allocations")]
     public async Task<ActionResult<ThirdPartyAllocationRecord>> CreateAllocation(
         [FromBody] ThirdPartyAllocationRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
-        if (!TryCreateAllocationWrite(request, out var input, out var error)) return BadRequest(error);
+        if (!TryCreateAllocationWrite(request, out var input, out var error))
+            return BadRequest(error);
         try
         {
-            return Ok(await _rentalRepository.CreateAllocationAsync(input!, GetCurrentUserId(), cancellationToken));
+            return Ok(
+                await _rentalRepository.CreateAllocationAsync(
+                    input!,
+                    GetCurrentUserId(),
+                    cancellationToken
+                )
+            );
         }
         catch (ArgumentException ex)
         {
@@ -281,11 +363,18 @@ public class ThirdPartyController : BaseApiController
     }
 
     [HttpDelete("allocations/{allocationId:int}")]
-    public async Task<ActionResult> DeleteAllocation(int allocationId, CancellationToken cancellationToken)
+    public async Task<ActionResult> DeleteAllocation(
+        int allocationId,
+        CancellationToken cancellationToken
+    )
     {
         try
         {
-            await _rentalRepository.DeleteAllocationAsync(allocationId, GetCurrentUserId(), cancellationToken);
+            await _rentalRepository.DeleteAllocationAsync(
+                allocationId,
+                GetCurrentUserId(),
+                cancellationToken
+            );
             return NoContent();
         }
         catch (KeyNotFoundException)
@@ -294,7 +383,11 @@ public class ThirdPartyController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting third-party allocation {AllocationId}", allocationId);
+            _logger.LogError(
+                ex,
+                "Error deleting third-party allocation {AllocationId}",
+                allocationId
+            );
             return StatusCode(500);
         }
     }
@@ -323,21 +416,34 @@ public class ThirdPartyController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving sites for department {DepartmentCode}", departmentCode);
+            _logger.LogError(
+                ex,
+                "Error retrieving sites for department {DepartmentCode}",
+                departmentCode
+            );
             return StatusCode(500);
         }
     }
 
     [HttpGet("vehicles/{supplierId:int}")]
-    public async Task<ActionResult<IEnumerable<ThirdPartyVehicleRecord>>> GetVehiclesBySupplier(int supplierId, CancellationToken cancellationToken)
+    public async Task<ActionResult<IEnumerable<ThirdPartyVehicleRecord>>> GetVehiclesBySupplier(
+        int supplierId,
+        CancellationToken cancellationToken
+    )
     {
         try
         {
-            return Ok(await _rentalRepository.GetVehiclesBySupplierAsync(supplierId, cancellationToken));
+            return Ok(
+                await _rentalRepository.GetVehiclesBySupplierAsync(supplierId, cancellationToken)
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving vehicles for third-party supplier {SupplierId}", supplierId);
+            _logger.LogError(
+                ex,
+                "Error retrieving vehicles for third-party supplier {SupplierId}",
+                supplierId
+            );
             return StatusCode(500);
         }
     }
@@ -356,7 +462,11 @@ public class ThirdPartyController : BaseApiController
         }
     }
 
-    private static bool TryCreateSupplierWrite(ThirdPartySupplierRequest request, out ThirdPartySupplierWrite? input, out object error)
+    private static bool TryCreateSupplierWrite(
+        ThirdPartySupplierRequest request,
+        out ThirdPartySupplierWrite? input,
+        out object error
+    )
     {
         if (string.IsNullOrWhiteSpace(request.name))
         {
@@ -366,32 +476,71 @@ public class ThirdPartyController : BaseApiController
         }
 
         input = new ThirdPartySupplierWrite(
-            request.name.Trim(), request.address, request.postal_address, request.tel, request.fax,
-            request.cell, request.email, request.contact_person, request.notes, request.service_code,
-            request.active ?? true, request.ctg_code ?? 2, request.is_third_party ?? true);
+            request.name.Trim(),
+            request.address,
+            request.postal_address,
+            request.tel,
+            request.fax,
+            request.cell,
+            request.email,
+            request.contact_person,
+            request.notes,
+            request.service_code,
+            request.active ?? true,
+            request.ctg_code ?? 2,
+            request.is_third_party ?? true
+        );
         error = new { message = string.Empty };
         return true;
     }
 
-    private static bool TryCreateProjectWrite(ThirdPartyProjectRequest request, out ThirdPartyProjectWrite? input, out object error)
+    private static bool TryCreateProjectWrite(
+        ThirdPartyProjectRequest request,
+        out ThirdPartyProjectWrite? input,
+        out object error
+    )
     {
-        if (!request.department_code.HasValue || !request.start_date.HasValue || !request.end_date.HasValue || string.IsNullOrWhiteSpace(request.description))
+        if (
+            !request.department_code.HasValue
+            || !request.start_date.HasValue
+            || !request.end_date.HasValue
+            || string.IsNullOrWhiteSpace(request.description)
+        )
         {
             input = null;
-            error = new { message = "Department, description, start date, and end date are required." };
+            error = new
+            {
+                message = "Department, description, start date, and end date are required.",
+            };
             return false;
         }
 
         input = new ThirdPartyProjectWrite(
-            request.department_code.Value, request.site_code, request.description.Trim(), request.start_date.Value,
-            request.end_date.Value, request.responsible_person, request.rp_physical_address, request.rp_postal_address,
-            request.rp_tel, request.rp_fax, request.rp_email, request.rp_cell, request.notes, request.order_reference,
-            request.class_configuration);
+            request.department_code.Value,
+            request.site_code,
+            request.description.Trim(),
+            request.start_date.Value,
+            request.end_date.Value,
+            request.responsible_person,
+            request.rp_physical_address,
+            request.rp_postal_address,
+            request.rp_tel,
+            request.rp_fax,
+            request.rp_email,
+            request.rp_cell,
+            request.notes,
+            request.order_reference,
+            request.class_configuration
+        );
         error = new { message = string.Empty };
         return true;
     }
 
-    private static bool TryCreateAllocationWrite(ThirdPartyAllocationRequest request, out ThirdPartyAllocationWrite? input, out object error)
+    private static bool TryCreateAllocationWrite(
+        ThirdPartyAllocationRequest request,
+        out ThirdPartyAllocationWrite? input,
+        out object error
+    )
     {
         if (!request.project_id.HasValue || request.project_id <= 0)
         {
@@ -400,7 +549,13 @@ public class ThirdPartyController : BaseApiController
             return false;
         }
 
-        input = new ThirdPartyAllocationWrite(request.project_id.Value, request.supplier_id, request.vehicle_id, request.class_id, request.quantity ?? 1);
+        input = new ThirdPartyAllocationWrite(
+            request.project_id.Value,
+            request.supplier_id,
+            request.vehicle_id,
+            request.class_id,
+            request.quantity ?? 1
+        );
         error = new { message = string.Empty };
         return true;
     }
@@ -408,7 +563,8 @@ public class ThirdPartyController : BaseApiController
 
 public sealed class ThirdPartySupplierRequest
 {
-    [Required] public string? name { get; set; }
+    [Required]
+    public string? name { get; set; }
     public string? address { get; set; }
     public string? postal_address { get; set; }
     public string? tel { get; set; }

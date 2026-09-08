@@ -126,9 +126,27 @@ export default function NoticeDetailForm({
           <span className="vehicle-required-note">* Required</span>
         </div>
         <div className="vehicle-create-grid">
-          <Field id="notice-schedule-start" label="Starting display date" name="scheduleStart" type="date" defaultValue={scheduleStart} />
-          <Field id="notice-schedule-end" label="Ending display date" name="scheduleEnd" type="date" defaultValue={scheduleEnd} />
-          <Field id="notice-schedule-order" label="Display order" name="sortOrder" type="number" defaultValue={String(sortOrder)} />
+          <Field
+            id="notice-schedule-start"
+            label="Starting display date"
+            name="scheduleStart"
+            type="date"
+            defaultValue={scheduleStart}
+          />
+          <Field
+            id="notice-schedule-end"
+            label="Ending display date"
+            name="scheduleEnd"
+            type="date"
+            defaultValue={scheduleEnd}
+          />
+          <Field
+            id="notice-schedule-order"
+            label="Display order"
+            name="sortOrder"
+            type="number"
+            defaultValue={String(sortOrder)}
+          />
         </div>
       </section>
 
@@ -140,20 +158,54 @@ export default function NoticeDetailForm({
           </div>
         </div>
         <div className="vehicle-create-grid">
-          <Field id="notice-date" label="Date" name="noticeDate" type="date" defaultValue={noticeDate} />
-          <Field id="notice-from" label="From" name="noticeFrom" defaultValue={noticeFrom} required maxLength={255} />
+          <Field
+            id="notice-date"
+            label="Date"
+            name="noticeDate"
+            type="date"
+            defaultValue={noticeDate}
+          />
+          <Field
+            id="notice-from"
+            label="From"
+            name="noticeFrom"
+            defaultValue={noticeFrom}
+            required
+            maxLength={255}
+          />
           <div className="field field-wide">
             <label htmlFor="notice-title">
-              Title <span aria-hidden="true">*</span><span className="sr-only"> required</span>
+              Title <span aria-hidden="true">*</span>
+              <span className="sr-only"> required</span>
             </label>
-            <input id="notice-title" name="noticeTitle" type="text" defaultValue={noticeTitle} maxLength={255} required />
+            <input
+              id="notice-title"
+              name="noticeTitle"
+              type="text"
+              defaultValue={noticeTitle}
+              maxLength={255}
+              required
+            />
           </div>
           <div className="field field-wide">
             <label htmlFor="notice-body">Body</label>
             <textarea id="notice-body" name="noticeBody" defaultValue={noticeBody} rows={7} />
           </div>
-          <Field id="notice-person" label="Responsible person" name="noticePerson" defaultValue={noticePerson} required maxLength={255} />
-          <Field id="notice-person-title" label="Person's title" name="noticePersonTitle" defaultValue={noticePersonTitle} maxLength={255} />
+          <Field
+            id="notice-person"
+            label="Responsible person"
+            name="noticePerson"
+            defaultValue={noticePerson}
+            required
+            maxLength={255}
+          />
+          <Field
+            id="notice-person-title"
+            label="Person's title"
+            name="noticePersonTitle"
+            defaultValue={noticePersonTitle}
+            maxLength={255}
+          />
           <div className="field">
             <label htmlFor="notice-created-date">Created date</label>
             <input id="notice-created-date" type="date" value={createdDate} disabled readOnly />
@@ -162,7 +214,14 @@ export default function NoticeDetailForm({
       </section>
 
       <div className="vehicle-create-actions">
-        <Link className="button button-secondary" href={returnPath === "/Admin/NoticeDetailManagement.aspx" ? "/Admin/NoticeManagement.aspx" : "/notice-management"}>
+        <Link
+          className="button button-secondary"
+          href={
+            returnPath === "/Admin/NoticeDetailManagement.aspx"
+              ? "/Admin/NoticeManagement.aspx"
+              : "/notice-management"
+          }
+        >
           Back to main management screen
         </Link>
         <SubmitButton editing={editing} />

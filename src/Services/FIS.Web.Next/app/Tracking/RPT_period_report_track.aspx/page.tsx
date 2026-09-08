@@ -1,3 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function LegacyTrackingInstallPeriodReport() { redirect("/tracking/reports/install-period"); }
+export default function LegacyTrackingInstallPeriodReport() {
+  redirect("/tracking/reports/install-period");
+}

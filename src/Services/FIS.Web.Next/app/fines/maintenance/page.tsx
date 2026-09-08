@@ -29,7 +29,9 @@ function getSearchType(value: string | undefined): FineSearchType {
 }
 
 function hasReportsRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function valueOrDash(value: string | number | null | undefined) {
@@ -53,16 +55,21 @@ function buildDetailHref(searchType: FineSearchType, searchQuery: string, vmfCod
   return `/fines/maintenance/detail${query ? `?${query}` : ""}`;
 }
 
-function FineSearchForm({ searchType, searchQuery }: Readonly<{ searchType: FineSearchType; searchQuery: string }>) {
+function FineSearchForm({
+  searchType,
+  searchQuery,
+}: Readonly<{ searchType: FineSearchType; searchQuery: string }>) {
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
       <fieldset className="vehicle-search-options">
         <legend>Search by</legend>
         <label className="vehicle-checkbox-label">
-          <input type="radio" name="searchType" value="GG" defaultChecked={searchType === "GG"} /> GG
+          <input type="radio" name="searchType" value="GG" defaultChecked={searchType === "GG"} />{" "}
+          GG
         </label>
         <label className="vehicle-checkbox-label">
-          <input type="radio" name="searchType" value="GP" defaultChecked={searchType === "GP"} /> GP
+          <input type="radio" name="searchType" value="GP" defaultChecked={searchType === "GP"} />{" "}
+          GP
         </label>
       </fieldset>
       <div className="vehicle-search-row">
@@ -74,31 +81,44 @@ function FineSearchForm({ searchType, searchQuery }: Readonly<{ searchType: Fine
           id="fine-vehicle-search"
           maxLength={8}
           name="searchQuery"
-          placeholder={searchType === "GG" ? "Enter GG number" : "Enter current or historical GP number"}
+          placeholder={
+            searchType === "GG" ? "Enter GG number" : "Enter current or historical GP number"
+          }
           defaultValue={searchQuery}
         />
       </div>
       <div className="button-row">
-        <button className="button button-primary" type="submit">Submit</button>
-        <Link className="button button-secondary" href="/fines">Menu</Link>
+        <button className="button button-primary" type="submit">
+          Submit
+        </button>
+        <Link className="button button-secondary" href="/fines">
+          Menu
+        </Link>
       </div>
     </form>
   );
 }
 
-function VehicleResolution({ searchType, vehicles }: Readonly<{ searchType: FineSearchType; vehicles: FineVehicleOption[] }>) {
+function VehicleResolution({
+  searchType,
+  vehicles,
+}: Readonly<{ searchType: FineSearchType; vehicles: FineVehicleOption[] }>) {
   if (vehicles.length === 0) {
     return null;
   }
 
   return (
-    <section className="vehicle-status-maintenance-panel" aria-labelledby="fine-vehicle-resolution-title">
+    <section
+      className="vehicle-status-maintenance-panel"
+      aria-labelledby="fine-vehicle-resolution-title"
+    >
       <p className="eyebrow">Vehicle resolution</p>
       <h2 id="fine-vehicle-resolution-title">Matched vehicle{vehicles.length === 1 ? "" : "s"}</h2>
       <ul className="form-hint fis-list-pad">
         {vehicles.slice(0, 5).map((vehicle) => (
           <li key={vehicle.vmfCode}>
-            {valueOrDash(vehicle.fleetNumber)} / {valueOrDash(vehicle.registrationNumber)} ({vehicle.vmfCode})
+            {valueOrDash(vehicle.fleetNumber)} / {valueOrDash(vehicle.registrationNumber)} (
+            {vehicle.vmfCode})
             {searchType === "GP" && vehicle.isHistoricalMatch && vehicle.matchedRegistration
               ? ` — historical GP ${vehicle.matchedRegistration}`
               : ""}
@@ -109,13 +129,19 @@ function VehicleResolution({ searchType, vehicles }: Readonly<{ searchType: Fine
   );
 }
 
-function FineTable({ fines, searchType, searchQuery }: Readonly<{ fines: FineRecord[]; searchType: FineSearchType; searchQuery: string }>) {
+function FineTable({
+  fines,
+  searchType,
+  searchQuery,
+}: Readonly<{ fines: FineRecord[]; searchType: FineSearchType; searchQuery: string }>) {
   if (fines.length === 0) {
     return (
       <div className="vehicle-empty-state">
         <p className="eyebrow">No records found</p>
         <h2>{searchQuery ? `No fines matched “${searchQuery}”.` : "No fines are available."}</h2>
-        <p className="muted-copy">Try another GG or GP number, or add a fine for a selected vehicle.</p>
+        <p className="muted-copy">
+          Try another GG or GP number, or add a fine for a selected vehicle.
+        </p>
       </div>
     );
   }
@@ -139,7 +165,10 @@ function FineTable({ fines, searchType, searchQuery }: Readonly<{ fines: FineRec
               <td>{valueOrDash(fine.documentType ?? fine.offenceName)}</td>
               <td>{formatDate(fine.receiveGgDate)}</td>
               <td>
-                <Link className="button button-secondary button-small" href={`/fines/maintenance/detail?fineId=${fine.fineCode}`}>
+                <Link
+                  className="button button-secondary button-small"
+                  href={`/fines/maintenance/detail?fineId=${fine.fineCode}`}
+                >
                   Mod
                 </Link>
               </td>
@@ -154,19 +183,30 @@ function FineTable({ fines, searchType, searchQuery }: Readonly<{ fines: FineRec
 function ApiUnavailable() {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Fines maintenance could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
       <div className="button-row">
-        <Link className="button button-primary" href="/fines/maintenance">Try again</Link>
-        <Link className="button button-secondary" href="/login">Sign in</Link>
+        <Link className="button button-primary" href="/fines/maintenance">
+          Try again
+        </Link>
+        <Link className="button button-secondary" href="/login">
+          Sign in
+        </Link>
       </div>
     </section>
   );
 }
 
-export default async function FineMaintenancePage({ searchParams, routePath = "/fines/maintenance" }: FineMaintenancePageProps) {
+export default async function FineMaintenancePage({
+  searchParams,
+  routePath = "/fines/maintenance",
+}: FineMaintenancePageProps) {
   await connection();
   const session = await getSession();
 
@@ -185,7 +225,9 @@ export default async function FineMaintenancePage({ searchParams, routePath = "/
   if (!hasReportsRole(session.roles)) {
     return (
       <section className="vehicle-status-card" role="alert">
-        <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+        <div className="status-icon status-icon-error" aria-hidden="true">
+          !
+        </div>
         <p className="eyebrow">Access restricted</p>
         <h2>You do not have permission to maintain Fines.</h2>
       </section>
@@ -194,36 +236,58 @@ export default async function FineMaintenancePage({ searchParams, routePath = "/
 
   const query = await searchParams;
   const searchType = getSearchType(getQueryValue(query.searchType) ?? getQueryValue(query.Radio1));
-  const searchQuery = (getQueryValue(query.searchQuery) ?? getQueryValue(query.txtGGNum) ?? "").trim().slice(0, 8);
-  const notice = getQueryValue(query.saved) === "1"
-    ? "Fine captured successfully."
-    : getQueryValue(query.updated) === "1"
-      ? "Fine updated successfully."
-      : getQueryValue(query.error);
+  const searchQuery = (getQueryValue(query.searchQuery) ?? getQueryValue(query.txtGGNum) ?? "")
+    .trim()
+    .slice(0, 8);
+  const notice =
+    getQueryValue(query.saved) === "1"
+      ? "Fine captured successfully."
+      : getQueryValue(query.updated) === "1"
+        ? "Fine updated successfully."
+        : getQueryValue(query.error);
 
   try {
     const [allFines, vehicles] = await Promise.all([
       getFines(),
-      searchQuery ? searchFineVehicles(searchType, searchQuery) : Promise.resolve([] as FineVehicleOption[]),
+      searchQuery
+        ? searchFineVehicles(searchType, searchQuery)
+        : Promise.resolve([] as FineVehicleOption[]),
     ]);
     const matchingCodes = searchQuery ? new Set(vehicles.map((vehicle) => vehicle.vmfCode)) : null;
-    const fines = matchingCodes === null
-      ? allFines
-      : allFines.filter((fine) => fine.vmfCode !== null && matchingCodes.has(fine.vmfCode));
-    const addHref = buildDetailHref(searchType, searchQuery, vehicles.length === 1 ? vehicles[0].vmfCode : null);
+    const fines =
+      matchingCodes === null
+        ? allFines
+        : allFines.filter((fine) => fine.vmfCode !== null && matchingCodes.has(fine.vmfCode));
+    const addHref = buildDetailHref(
+      searchType,
+      searchQuery,
+      vehicles.length === 1 ? vehicles[0].vmfCode : null,
+    );
 
     return (
       <>
-        {notice ? <div className={getQueryValue(query.error) ? "notice notice-error" : "notice notice-success"} role="status">{notice}</div> : null}
+        {notice ? (
+          <div
+            className={getQueryValue(query.error) ? "notice notice-error" : "notice notice-success"}
+            role="status"
+          >
+            {notice}
+          </div>
+        ) : null}
         <FineSearchForm searchType={searchType} searchQuery={searchQuery} />
         <VehicleResolution searchType={searchType} vehicles={vehicles} />
-        <section className="vehicle-status-maintenance-panel" aria-labelledby="fine-maintenance-results-title">
+        <section
+          className="vehicle-status-maintenance-panel"
+          aria-labelledby="fine-maintenance-results-title"
+        >
           <div className="vehicle-form-section-header">
             <div>
               <p className="eyebrow">Fine maintenance</p>
               <h2 id="fine-maintenance-results-title">Fines found</h2>
             </div>
-            <Link className="button button-primary" href={addHref}>Add</Link>
+            <Link className="button button-primary" href={addHref}>
+              Add
+            </Link>
           </div>
           <FineTable fines={fines} searchType={searchType} searchQuery={searchQuery} />
         </section>
@@ -234,7 +298,10 @@ export default async function FineMaintenancePage({ searchParams, routePath = "/
       return <SessionRecovery returnPath={routePath} />;
     }
 
-    console.error("FIS fine maintenance request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS fine maintenance request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return <ApiUnavailable />;
   }
 }

@@ -91,7 +91,8 @@ function asStringList(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new ExtraCodeApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new ExtraCodeApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -103,7 +104,11 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
     if (response.status === 401 || response.status === 403) {
-      throw new ExtraCodeApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new ExtraCodeApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
@@ -117,7 +122,12 @@ async function requestApi(path: string, init: RequestInit = {}) {
       } catch {
         // Keep the status-based message when the API body is not JSON.
       }
-      throw new ExtraCodeApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status, fleetNumbers);
+      throw new ExtraCodeApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+        fleetNumbers,
+      );
     }
     return response;
   } catch (error) {
@@ -143,30 +153,45 @@ function mapExtraCode(value: unknown): ExtraCodeRecord | null {
   return {
     extraCode,
     description: asString(getValue(value, "extra_description", "Description", "description")),
-    categoryTypeCode: asNumber(getValue(value, "category_type_code", "CategoryTypeCode", "categoryTypeCode")),
+    categoryTypeCode: asNumber(
+      getValue(value, "category_type_code", "CategoryTypeCode", "categoryTypeCode"),
+    ),
     specific: asNumber(getValue(value, "specific", "Specific")),
     additional: asNumber(getValue(value, "additional", "Additional")),
     dateCreated: asString(getValue(value, "date_created", "DateCreated", "dateCreated")),
     dateUpdated: asString(getValue(value, "date_updated", "DateUpdated", "dateUpdated")),
-    createdByUserCode: asNumber(getValue(value, "created_by_user_code", "CreatedByUserCode", "createdByUserCode")),
-    modifiedByUserCode: asNumber(getValue(value, "modified_by_user_code", "ModifiedByUserCode", "modifiedByUserCode")),
+    createdByUserCode: asNumber(
+      getValue(value, "created_by_user_code", "CreatedByUserCode", "createdByUserCode"),
+    ),
+    modifiedByUserCode: asNumber(
+      getValue(value, "modified_by_user_code", "ModifiedByUserCode", "modifiedByUserCode"),
+    ),
     isDeleted: asBoolean(getValue(value, "is_deleted", "IsDeleted", "isDeleted")),
   };
 }
 
 export async function getExtraCodes() {
   const payload = await readJson(await requestApi("api/extracode"));
-  if (!Array.isArray(payload)) throw new ExtraCodeApiError("invalid-response", "The extra code response was not a list.");
+  if (!Array.isArray(payload))
+    throw new ExtraCodeApiError("invalid-response", "The extra code response was not a list.");
   return payload.map(mapExtraCode).filter((item): item is ExtraCodeRecord => item !== null);
 }
 
 export async function getExtraCode(extraCode: number) {
-  return mapExtraCode(await readJson(await requestApi(`api/extracode/${encodeURIComponent(extraCode)}`)));
+  return mapExtraCode(
+    await readJson(await requestApi(`api/extracode/${encodeURIComponent(extraCode)}`)),
+  );
 }
 
 export async function getExtraCodeDeleteCheck(extraCode: number): Promise<ExtraCodeDeleteCheck> {
-  const payload = await readJson(await requestApi(`api/extracode/${encodeURIComponent(extraCode)}/delete-check`));
-  if (!isRecord(payload)) throw new ExtraCodeApiError("invalid-response", "The extra code dependency response was invalid.");
+  const payload = await readJson(
+    await requestApi(`api/extracode/${encodeURIComponent(extraCode)}/delete-check`),
+  );
+  if (!isRecord(payload))
+    throw new ExtraCodeApiError(
+      "invalid-response",
+      "The extra code dependency response was invalid.",
+    );
   return {
     vehicleCount: asNumber(getValue(payload, "vehicleCount", "VehicleCount")) ?? 0,
     fleetNumbers: asStringList(getValue(payload, "fleetNumbers", "FleetNumbers")),
@@ -176,16 +201,20 @@ export async function getExtraCodeDeleteCheck(extraCode: number): Promise<ExtraC
 }
 
 export async function createExtraCode(input: ExtraCodeWriteInput) {
-  return mapExtraCode(await readJson(await requestApi("api/extracode", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      extra_description: input.description,
-      category_type_code: input.categoryTypeCode ?? null,
-      specific: input.specific ?? null,
-      additional: input.additional ?? null,
-    }),
-  })));
+  return mapExtraCode(
+    await readJson(
+      await requestApi("api/extracode", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          extra_description: input.description,
+          category_type_code: input.categoryTypeCode ?? null,
+          specific: input.specific ?? null,
+          additional: input.additional ?? null,
+        }),
+      }),
+    ),
+  );
 }
 
 export async function deleteExtraCode(extraCode: number) {

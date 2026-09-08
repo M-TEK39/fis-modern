@@ -21,11 +21,12 @@ export async function removeTripsWithoutRoutesAction() {
     revalidatePath(routePath);
     redirect(`${routePath}?result=success&removed=${removed}`);
   } catch (error) {
-    const result = error instanceof TripToolsApiError && error.reason === "unauthorized"
-      ? "unauthorized"
-      : error instanceof TripToolsApiError && error.reason === "unavailable"
-        ? "unavailable"
-        : "error";
+    const result =
+      error instanceof TripToolsApiError && error.reason === "unauthorized"
+        ? "unauthorized"
+        : error instanceof TripToolsApiError && error.reason === "unavailable"
+          ? "unavailable"
+          : "error";
     redirect(`${routePath}?result=${result}`);
   }
 }

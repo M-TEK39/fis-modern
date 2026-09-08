@@ -18,7 +18,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "Table, column, and stored procedure identifiers come from fixed compatibility allowlists; values are parameters.")]
+    Justification = "Table, column, and stored procedure identifiers come from fixed compatibility allowlists; values are parameters."
+)]
 public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationRepository
 {
     private const string PreVehicleTableName = "pre_vehicle_master";
@@ -68,7 +69,7 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private static readonly string[] StringColumns =
@@ -89,7 +90,7 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         "damage_status",
         "damages_comment",
         "rejection_reason",
-        "authorization_comment"
+        "authorization_comment",
     ];
 
     private static readonly string[] DateColumns =
@@ -100,7 +101,7 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         "captured_date",
         "authorization_date",
         "date_created",
-        "date_updated"
+        "date_updated",
     ];
 
     private static readonly string[] IntegerColumns =
@@ -110,7 +111,7 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         "authorized_by_user_code",
         "vmf_code",
         "created_by_user_code",
-        "modified_by_user_code"
+        "modified_by_user_code",
     ];
 
     private static readonly string[] ShortColumns =
@@ -121,7 +122,7 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         "vehicle_status_code",
         "type_code",
         "action_user_access_code",
-        "site_code"
+        "site_code",
     ];
 
     private static readonly string[] ByteColumns = ["vs_code"];
@@ -134,30 +135,34 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public Task<PreVehicleMaster?> GetByIdAsync(int tempVmfCode)
-        => WithConnectionAsync(async connection =>
+    public Task<PreVehicleMaster?> GetByIdAsync(int tempVmfCode) =>
+        WithConnectionAsync(async connection =>
         {
             var schema = await GetSchemaAsync(connection, null);
-            return (await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)).SingleOrDefault();
+            return (
+                await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)
+            ).SingleOrDefault();
         });
 
-    public Task<PreVehicleMaster?> GetByChassisNumberAsync(string chassisNumber)
-        => string.IsNullOrWhiteSpace(chassisNumber)
+    public Task<PreVehicleMaster?> GetByChassisNumberAsync(string chassisNumber) =>
+        string.IsNullOrWhiteSpace(chassisNumber)
             ? Task.FromResult<PreVehicleMaster?>(null)
             : WithConnectionAsync(async connection =>
             {
                 var schema = await GetSchemaAsync(connection, null);
-                return (await QueryAsync(connection, null, schema, chassisNumber: chassisNumber.Trim())).SingleOrDefault();
+                return (
+                    await QueryAsync(connection, null, schema, chassisNumber: chassisNumber.Trim())
+                ).SingleOrDefault();
             });
 
-    public Task<IEnumerable<PreVehicleMaster>> GetPendingAuthorizationsAsync()
-        => GetByStatusAsync("Awaiting Authorization");
+    public Task<IEnumerable<PreVehicleMaster>> GetPendingAuthorizationsAsync() =>
+        GetByStatusAsync("Awaiting Authorization");
 
-    public Task<IEnumerable<PreVehicleMaster>> GetAuthorizedVehiclesAsync()
-        => GetByStatusAsync("Authorized");
+    public Task<IEnumerable<PreVehicleMaster>> GetAuthorizedVehiclesAsync() =>
+        GetByStatusAsync("Authorized");
 
-    public Task<IEnumerable<PreVehicleMaster>> GetRejectedVehiclesAsync()
-        => GetByStatusAsync("Rejected");
+    public Task<IEnumerable<PreVehicleMaster>> GetRejectedVehiclesAsync() =>
+        GetByStatusAsync("Rejected");
 
     public async Task<IEnumerable<PreVehicleMaster>> GetByStatusAsync(string status)
     {
@@ -169,12 +174,16 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         return await WithConnectionAsync(async connection =>
         {
             var schema = await GetSchemaAsync(connection, null);
-            return (IEnumerable<PreVehicleMaster>)await QueryAsync(connection, null, schema, status: status);
+            return (IEnumerable<PreVehicleMaster>)
+                await QueryAsync(connection, null, schema, status: status);
         });
     }
 
-    public async Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(DateTime? startDate = null, DateTime? endDate = null)
-        => await WithConnectionAsync(async connection =>
+    public async Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null
+    ) =>
+        await WithConnectionAsync(async connection =>
         {
             var schema = await GetSchemaAsync(connection, null);
             var historyStatuses = schema.Columns.Contains("Authority_Status")
@@ -186,12 +195,13 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 schema,
                 statuses: historyStatuses,
                 startDate: startDate,
-                endDate: endDate);
+                endDate: endDate
+            );
             return (IEnumerable<PreVehicleMaster>)rows;
         });
 
-    public async Task<IReadOnlyList<VehicleMaintenanceTypeOption>> GetMaintenanceTypesAsync()
-        => await WithConnectionAsync(async connection =>
+    public async Task<IReadOnlyList<VehicleMaintenanceTypeOption>> GetMaintenanceTypesAsync() =>
+        await WithConnectionAsync(async connection =>
         {
             if (!await ProcedureExistsAsync(connection, null, "DEV_SEL_AllMaintenanceTypes"))
             {
@@ -219,7 +229,10 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 }
 
                 var name = reader.GetValue(nameOrdinal.Value)?.ToString()?.Trim();
-                if (!short.TryParse(reader.GetValue(codeOrdinal.Value)?.ToString(), out var code) || string.IsNullOrWhiteSpace(name))
+                if (
+                    !short.TryParse(reader.GetValue(codeOrdinal.Value)?.ToString(), out var code)
+                    || string.IsNullOrWhiteSpace(name)
+                )
                 {
                     continue;
                 }
@@ -237,7 +250,9 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         return await WithConnectionAsync(async connection =>
         {
             var schema = await GetSchemaAsync(connection, null);
-            await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+            await using var transaction = await connection.BeginTransactionAsync(
+                IsolationLevel.Serializable
+            );
             var committed = false;
 
             try
@@ -246,29 +261,65 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
 
                 var existing = string.IsNullOrWhiteSpace(vehicleAuth.chassis_number)
                     ? null
-                    : (await QueryAsync(connection, transaction, schema, chassisNumber: vehicleAuth.chassis_number.Trim())).SingleOrDefault();
+                    : (
+                        await QueryAsync(
+                            connection,
+                            transaction,
+                            schema,
+                            chassisNumber: vehicleAuth.chassis_number.Trim()
+                        )
+                    ).SingleOrDefault();
 
                 int tempVmfCode;
                 if (existing is not null)
                 {
-                    if (string.Equals(existing.Authority_Status, "Authorized", StringComparison.OrdinalIgnoreCase))
+                    if (
+                        string.Equals(
+                            existing.Authority_Status,
+                            "Authorized",
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
                     {
-                        throw new InvalidOperationException($"Vehicle authorization already exists for chassis number: {vehicleAuth.chassis_number}");
+                        throw new InvalidOperationException(
+                            $"Vehicle authorization already exists for chassis number: {vehicleAuth.chassis_number}"
+                        );
                     }
 
                     tempVmfCode = existing.temp_vmf_code;
-                    await UpdateRowAsync(connection, transaction, schema, tempVmfCode, vehicleAuth, currentUserId);
+                    await UpdateRowAsync(
+                        connection,
+                        transaction,
+                        schema,
+                        tempVmfCode,
+                        vehicleAuth,
+                        currentUserId
+                    );
                 }
                 else
                 {
-                    tempVmfCode = await InsertRowAsync(connection, transaction, schema, vehicleAuth, currentUserId);
+                    tempVmfCode = await InsertRowAsync(
+                        connection,
+                        transaction,
+                        schema,
+                        vehicleAuth,
+                        currentUserId
+                    );
                 }
 
-                await WriteLegacyCaptureSideEffectsAsync(connection, transaction, tempVmfCode, vehicleAuth, currentUserId);
+                await WriteLegacyCaptureSideEffectsAsync(
+                    connection,
+                    transaction,
+                    tempVmfCode,
+                    vehicleAuth,
+                    currentUserId
+                );
                 await transaction.CommitAsync();
                 committed = true;
 
-                return (await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)).Single();
+                return (
+                    await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)
+                ).Single();
             }
             catch
             {
@@ -289,7 +340,14 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         await WithConnectionAsync(async connection =>
         {
             var schema = await GetSchemaAsync(connection, null);
-            await UpdateRowAsync(connection, null, schema, vehicleAuth.temp_vmf_code, vehicleAuth, currentUserId);
+            await UpdateRowAsync(
+                connection,
+                null,
+                schema,
+                vehicleAuth.temp_vmf_code,
+                vehicleAuth,
+                currentUserId
+            );
             return true;
         });
     }
@@ -299,22 +357,42 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         await WithConnectionAsync(async connection =>
         {
             var schema = await GetSchemaAsync(connection, null);
-            var vehicle = (await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)).SingleOrDefault();
+            var vehicle = (
+                await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)
+            ).SingleOrDefault();
             if (vehicle is null)
             {
-                throw new KeyNotFoundException($"Vehicle authorization with ID {tempVmfCode} not found");
+                throw new KeyNotFoundException(
+                    $"Vehicle authorization with ID {tempVmfCode} not found"
+                );
             }
 
-            if (string.Equals(vehicle.Authority_Status, "Authorized", StringComparison.OrdinalIgnoreCase))
+            if (
+                string.Equals(
+                    vehicle.Authority_Status,
+                    "Authorized",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
             {
-                throw new InvalidOperationException($"Vehicle authorization {tempVmfCode} is already approved");
+                throw new InvalidOperationException(
+                    $"Vehicle authorization {tempVmfCode} is already approved"
+                );
             }
 
-            await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+            await using var transaction = await connection.BeginTransactionAsync(
+                IsolationLevel.Serializable
+            );
             var committed = false;
             try
             {
-                if (await ProcedureExistsAsync(connection, transaction, "DEV_INS_VehicleFromPre_Vehicle_Master"))
+                if (
+                    await ProcedureExistsAsync(
+                        connection,
+                        transaction,
+                        "DEV_INS_VehicleFromPre_Vehicle_Master"
+                    )
+                )
                 {
                     // This procedure owns the legacy GG allocation and the
                     // promotion into vehicle_master. Do not replace it on a
@@ -325,11 +403,21 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                         "DEV_INS_VehicleFromPre_Vehicle_Master",
                         new ProcedureParameter("@ChassisNo", DbType.String, vehicle.chassis_number),
                         new ProcedureParameter("@comment", DbType.String, comment ?? string.Empty),
-                        new ProcedureParameter("@captured_by_user_code", DbType.Int16, authorizedByUserId));
+                        new ProcedureParameter(
+                            "@captured_by_user_code",
+                            DbType.Int16,
+                            authorizedByUserId
+                        )
+                    );
                 }
                 else
                 {
-                    await PromoteWithoutLegacyProcedureAsync(connection, transaction, vehicle, authorizedByUserId);
+                    await PromoteWithoutLegacyProcedureAsync(
+                        connection,
+                        transaction,
+                        vehicle,
+                        authorizedByUserId
+                    );
                 }
 
                 await UpdateAuthorizationStatusAsync(
@@ -341,7 +429,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                     authorizedByUserId,
                     comment,
                     null,
-                    vehicle.vmf_code);
+                    vehicle.vmf_code
+                );
                 await transaction.CommitAsync();
                 committed = true;
             }
@@ -359,7 +448,12 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         });
     }
 
-    public async Task RejectAsync(int tempVmfCode, int rejectedByUserId, string rejectionReason, string? comment = null)
+    public async Task RejectAsync(
+        int tempVmfCode,
+        int rejectedByUserId,
+        string rejectionReason,
+        string? comment = null
+    )
     {
         if (string.IsNullOrWhiteSpace(rejectionReason))
         {
@@ -369,9 +463,16 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         await WithConnectionAsync(async connection =>
         {
             var schema = await GetSchemaAsync(connection, null);
-            if ((await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)).SingleOrDefault() is null)
+            if (
+                (
+                    await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)
+                ).SingleOrDefault()
+                is null
+            )
             {
-                throw new KeyNotFoundException($"Vehicle authorization with ID {tempVmfCode} not found");
+                throw new KeyNotFoundException(
+                    $"Vehicle authorization with ID {tempVmfCode} not found"
+                );
             }
 
             await UpdateAuthorizationStatusAsync(
@@ -383,7 +484,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 rejectedByUserId,
                 comment,
                 rejectionReason,
-                null);
+                null
+            );
             return true;
         });
     }
@@ -398,10 +500,14 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         await WithConnectionAsync(async connection =>
         {
             var schema = await GetSchemaAsync(connection, null);
-            var vehicle = (await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)).SingleOrDefault();
+            var vehicle = (
+                await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)
+            ).SingleOrDefault();
             if (vehicle is null)
             {
-                throw new KeyNotFoundException($"Vehicle authorization with ID {tempVmfCode} not found");
+                throw new KeyNotFoundException(
+                    $"Vehicle authorization with ID {tempVmfCode} not found"
+                );
             }
 
             var timestampedComment = $"[{DateTime.Now:yyyy-MM-dd HH:mm}] {comment.Trim()}";
@@ -409,9 +515,21 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 ? timestampedComment
                 : $"{vehicle.authorization_comment}\n{timestampedComment}";
             var values = new List<WriteValue>();
-            AddValue(values, schema.Columns, "authorization_comment", DbType.String, combinedComment);
+            AddValue(
+                values,
+                schema.Columns,
+                "authorization_comment",
+                DbType.String,
+                combinedComment
+            );
             AddValue(values, schema.Columns, "date_updated", DbType.DateTime2, DateTime.Now);
-            AddValue(values, schema.Columns, "modified_by_user_code", DbType.Int32, modifiedByUserId > 0 ? modifiedByUserId : null);
+            AddValue(
+                values,
+                schema.Columns,
+                "modified_by_user_code",
+                DbType.Int32,
+                modifiedByUserId > 0 ? modifiedByUserId : null
+            );
             await ExecuteUpdateAsync(connection, null, tempVmfCode, values);
 
             if (await ProcedureExistsAsync(connection, null, "DEV_INS_PreVehicle_master_Notes"))
@@ -421,8 +539,13 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                     null,
                     "DEV_INS_PreVehicle_master_Notes",
                     new ProcedureParameter("@comment", DbType.String, comment.Trim()),
-                    new ProcedureParameter("@chassis_number", DbType.String, vehicle.chassis_number),
-                    new ProcedureParameter("@added_by_user_code", DbType.Int16, modifiedByUserId));
+                    new ProcedureParameter(
+                        "@chassis_number",
+                        DbType.String,
+                        vehicle.chassis_number
+                    ),
+                    new ProcedureParameter("@added_by_user_code", DbType.Int16, modifiedByUserId)
+                );
             }
 
             return true;
@@ -445,10 +568,21 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             }
 
             AddValue(values, schema.Columns, "date_updated", DbType.DateTime2, DateTime.Now);
-            AddValue(values, schema.Columns, "modified_by_user_code", DbType.Int32, currentUserId > 0 ? currentUserId : null);
-            if (values.Count == 0 || await ExecuteUpdateAsync(connection, null, tempVmfCode, values) == 0)
+            AddValue(
+                values,
+                schema.Columns,
+                "modified_by_user_code",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
+            if (
+                values.Count == 0
+                || await ExecuteUpdateAsync(connection, null, tempVmfCode, values) == 0
+            )
             {
-                throw new KeyNotFoundException($"Vehicle authorization with ID {tempVmfCode} not found");
+                throw new KeyNotFoundException(
+                    $"Vehicle authorization with ID {tempVmfCode} not found"
+                );
             }
 
             return true;
@@ -477,27 +611,38 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         }
     }
 
-    private static async Task<VehicleAuthorizationSchema> GetSchemaAsync(DbConnection connection, DbTransaction? transaction)
+    private static async Task<VehicleAuthorizationSchema> GetSchemaAsync(
+        DbConnection connection,
+        DbTransaction? transaction
+    )
     {
         var columns = await GetColumnsAsync(connection, transaction, "dbo", PreVehicleTableName);
         if (!columns.Contains("temp_vmf_code"))
         {
-            throw new InvalidOperationException("The pre_vehicle_master compatibility table is not available.");
+            throw new InvalidOperationException(
+                "The pre_vehicle_master compatibility table is not available."
+            );
         }
 
         var modelColumns = await GetColumnsAsync(connection, transaction, "dbo", ModelTableName);
         await using var identityCommand = connection.CreateCommand();
         identityCommand.Transaction = transaction;
-        identityCommand.CommandText = $"SELECT COLUMNPROPERTY(OBJECT_ID(N'[dbo].[{PreVehicleTableName}]'), N'temp_vmf_code', 'IsIdentity')";
+        identityCommand.CommandText =
+            $"SELECT COLUMNPROPERTY(OBJECT_ID(N'[dbo].[{PreVehicleTableName}]'), N'temp_vmf_code', 'IsIdentity')";
         var identityValue = await identityCommand.ExecuteScalarAsync();
-        return new VehicleAuthorizationSchema(columns, modelColumns, Convert.ToInt32(identityValue) == 1);
+        return new VehicleAuthorizationSchema(
+            columns,
+            modelColumns,
+            Convert.ToInt32(identityValue) == 1
+        );
     }
 
     private static async Task<HashSet<string>> GetColumnsAsync(
         DbConnection connection,
         DbTransaction? transaction,
         string schemaName,
-        string tableName)
+        string tableName
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -529,10 +674,14 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         string? status = null,
         IReadOnlyCollection<string>? statuses = null,
         DateTime? startDate = null,
-        DateTime? endDate = null)
+        DateTime? endDate = null
+    )
     {
-        if (status is not null && !schema.Columns.Contains("Authority_Status") &&
-            !string.Equals(status, "Awaiting Authorization", StringComparison.OrdinalIgnoreCase))
+        if (
+            status is not null
+            && !schema.Columns.Contains("Authority_Status")
+            && !string.Equals(status, "Awaiting Authorization", StringComparison.OrdinalIgnoreCase)
+        )
         {
             return [];
         }
@@ -568,18 +717,28 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             }
             else if (statuses is not null && statuses.Count > 0)
             {
-                var statusParameters = statuses.Select((_, index) => $"@historyStatus{index}").ToArray();
-                conditions.Add($"[p].[Authority_Status] IN ({string.Join(", ", statusParameters)})");
+                var statusParameters = statuses
+                    .Select((_, index) => $"@historyStatus{index}")
+                    .ToArray();
+                conditions.Add(
+                    $"[p].[Authority_Status] IN ({string.Join(", ", statusParameters)})"
+                );
                 for (var index = 0; index < statuses.Count; index++)
                 {
-                    AddParameter(command, statusParameters[index], DbType.String, statuses.ElementAt(index));
+                    AddParameter(
+                        command,
+                        statusParameters[index],
+                        DbType.String,
+                        statuses.ElementAt(index)
+                    );
                 }
             }
         }
 
-        var dateColumn = schema.Columns.Contains("authorization_date")
-            ? "authorization_date"
-            : schema.Columns.Contains("date_created") ? "date_created" : null;
+        var dateColumn =
+            schema.Columns.Contains("authorization_date") ? "authorization_date"
+            : schema.Columns.Contains("date_created") ? "date_created"
+            : null;
         if (startDate.HasValue && dateColumn is not null)
         {
             conditions.Add($"[p].[{dateColumn}] >= @startDate");
@@ -592,19 +751,31 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             AddParameter(command, "@endDate", DbType.DateTime2, endDate.Value);
         }
 
-        var modelProjection = schema.ModelColumns.Contains("model_code") && schema.ModelColumns.Contains("model_description")
-            ? "[m].[model_description] AS [model_description]"
-            : "CAST(NULL AS nvarchar(255)) AS [model_description]";
-        if (schema.ModelColumns.Contains("model_code") && schema.ModelColumns.Contains("model_description"))
+        var modelProjection =
+            schema.ModelColumns.Contains("model_code")
+            && schema.ModelColumns.Contains("model_description")
+                ? "[m].[model_description] AS [model_description]"
+                : "CAST(NULL AS nvarchar(255)) AS [model_description]";
+        if (
+            schema.ModelColumns.Contains("model_code")
+            && schema.ModelColumns.Contains("model_description")
+        )
         {
             joins = "LEFT JOIN [dbo].[model] AS [m] ON [m].[model_code] = [p].[model_code]";
         }
 
-        var projection = string.Join(", ", SelectedColumns.Select(column => GetProjection("p", schema.Columns, column)).Append(modelProjection));
-        var orderColumn = schema.Columns.Contains("authorization_date")
-            ? "authorization_date"
-            : schema.Columns.Contains("date_created") ? "date_created" : "temp_vmf_code";
-        command.CommandText = $"SELECT {projection} FROM [dbo].[{PreVehicleTableName}] AS [p] {joins} WHERE {string.Join(" AND ", conditions)} ORDER BY [p].[{orderColumn}] DESC, [p].[temp_vmf_code] DESC";
+        var projection = string.Join(
+            ", ",
+            SelectedColumns
+                .Select(column => GetProjection("p", schema.Columns, column))
+                .Append(modelProjection)
+        );
+        var orderColumn =
+            schema.Columns.Contains("authorization_date") ? "authorization_date"
+            : schema.Columns.Contains("date_created") ? "date_created"
+            : "temp_vmf_code";
+        command.CommandText =
+            $"SELECT {projection} FROM [dbo].[{PreVehicleTableName}] AS [p] {joins} WHERE {string.Join(" AND ", conditions)} ORDER BY [p].[{orderColumn}] DESC, [p].[temp_vmf_code] DESC";
 
         var rows = new List<PreVehicleMaster>();
         await using var reader = await command.ExecuteReaderAsync();
@@ -616,8 +787,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         return rows;
     }
 
-    private static PreVehicleMaster Map(DbDataReader reader)
-        => new()
+    private static PreVehicleMaster Map(DbDataReader reader) =>
+        new()
         {
             temp_vmf_code = ReadInt32(reader, "temp_vmf_code") ?? 0,
             fleet_number = ReadString(reader, "fleet_number"),
@@ -658,9 +829,11 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             vmf_code = ReadInt32(reader, "vmf_code"),
             date_created = ReadDateTime(reader, "date_created") ?? DateTime.MinValue,
             date_updated = ReadDateTime(reader, "date_updated"),
-            created_by_user_code = ReadInt32(reader, "created_by_user_code") ?? ReadInt16(reader, "captured_by_user_code"),
+            created_by_user_code =
+                ReadInt32(reader, "created_by_user_code")
+                ?? ReadInt16(reader, "captured_by_user_code"),
             modified_by_user_code = ReadInt32(reader, "modified_by_user_code"),
-            is_deleted = ReadBoolean(reader, "is_deleted") ?? false
+            is_deleted = ReadBoolean(reader, "is_deleted") ?? false,
         };
 
     private static FIS.Core.Domain.Entities.Model? ReadModel(DbDataReader reader)
@@ -676,7 +849,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         DbTransaction transaction,
         VehicleAuthorizationSchema schema,
         PreVehicleMaster vehicle,
-        int currentUserId)
+        int currentUserId
+    )
     {
         var values = BuildValues(vehicle, schema.Columns, currentUserId, includeCreateAudit: true);
         if (!schema.IsIdentity)
@@ -693,19 +867,23 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
     private static async Task EnsureNoVehicleDuplicateAsync(
         DbConnection connection,
         DbTransaction transaction,
-        PreVehicleMaster vehicle)
+        PreVehicleMaster vehicle
+    )
     {
         var columns = await GetColumnsAsync(connection, transaction, "dbo", VehicleTableName);
         var checks = new List<(string Column, string Parameter, object? Value)>();
 
-        if (!string.IsNullOrWhiteSpace(vehicle.chassis_number) && columns.Contains("chassis_number"))
+        if (
+            !string.IsNullOrWhiteSpace(vehicle.chassis_number) && columns.Contains("chassis_number")
+        )
         {
             checks.Add(("chassis_number", "@chassisNumber", vehicle.chassis_number.Trim()));
         }
 
-        var engineColumn = columns.Contains("engine_number_1")
-            ? "engine_number_1"
-            : columns.Contains("engine_number") ? "engine_number" : null;
+        var engineColumn =
+            columns.Contains("engine_number_1") ? "engine_number_1"
+            : columns.Contains("engine_number") ? "engine_number"
+            : null;
         if (!string.IsNullOrWhiteSpace(vehicle.engine_number) && engineColumn is not null)
         {
             checks.Add((engineColumn, "@engineNumber", vehicle.engine_number.Trim()));
@@ -716,7 +894,9 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             checks.Add(("fleet_number", "@fleetNumber", vehicle.fleet_number.Trim()));
         }
 
-        if (!string.IsNullOrWhiteSpace(vehicle.gp_number) && columns.Contains("registration_number"))
+        if (
+            !string.IsNullOrWhiteSpace(vehicle.gp_number) && columns.Contains("registration_number")
+        )
         {
             checks.Add(("registration_number", "@registrationNumber", vehicle.gp_number.Trim()));
         }
@@ -728,7 +908,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"SELECT TOP (1) [v].[vmf_code] FROM [dbo].[{VehicleTableName}] AS [v] WHERE {GetNotDeletedFilter("v", columns)} AND ({string.Join(" OR ", checks.Select(check => $"[v].[{check.Column}] = {check.Parameter}"))})";
+        command.CommandText =
+            $"SELECT TOP (1) [v].[vmf_code] FROM [dbo].[{VehicleTableName}] AS [v] WHERE {GetNotDeletedFilter("v", columns)} AND ({string.Join(" OR ", checks.Select(check => $"[v].[{check.Column}] = {check.Parameter}"))})";
         foreach (var check in checks)
         {
             AddParameter(command, check.Parameter, DbType.String, check.Value);
@@ -737,7 +918,9 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         var existingCode = await command.ExecuteScalarAsync();
         if (existingCode is not null and not DBNull)
         {
-            throw new InvalidOperationException($"A vehicle already exists with one of the supplied identifying values (VMF {existingCode}).");
+            throw new InvalidOperationException(
+                $"A vehicle already exists with one of the supplied identifying values (VMF {existingCode})."
+            );
         }
     }
 
@@ -747,12 +930,18 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         VehicleAuthorizationSchema schema,
         int tempVmfCode,
         PreVehicleMaster vehicle,
-        int currentUserId)
+        int currentUserId
+    )
     {
         var values = BuildValues(vehicle, schema.Columns, currentUserId, includeCreateAudit: false);
-        if (values.Count == 0 || await ExecuteUpdateAsync(connection, transaction, tempVmfCode, values) == 0)
+        if (
+            values.Count == 0
+            || await ExecuteUpdateAsync(connection, transaction, tempVmfCode, values) == 0
+        )
         {
-            throw new KeyNotFoundException($"Vehicle authorization with ID {tempVmfCode} not found");
+            throw new KeyNotFoundException(
+                $"Vehicle authorization with ID {tempVmfCode} not found"
+            );
         }
     }
 
@@ -760,13 +949,20 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         PreVehicleMaster vehicle,
         IReadOnlySet<string> columns,
         int currentUserId,
-        bool includeCreateAudit)
+        bool includeCreateAudit
+    )
     {
         var takeOnDate = vehicle.take_on_date ?? DateTime.Now;
         var purchaseDate = vehicle.purchase_date ?? takeOnDate;
         var values = new List<WriteValue>();
         AddValue(values, columns, "fleet_number", DbType.String, vehicle.fleet_number);
-        AddValue(values, columns, "registration_number", DbType.String, vehicle.registration_number);
+        AddValue(
+            values,
+            columns,
+            "registration_number",
+            DbType.String,
+            vehicle.registration_number
+        );
         AddValue(values, columns, "replaced_gg_number", DbType.String, vehicle.replaced_gg_number);
         AddValue(values, columns, "model_code", DbType.Int16, vehicle.model_code);
         AddValue(values, columns, "colour", DbType.String, vehicle.colour ?? "UNKNOWN");
@@ -776,19 +972,55 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         AddValue(values, columns, "take_on_odo", DbType.Int32, vehicle.take_on_odo ?? 0);
         AddValue(values, columns, "take_on_date", DbType.DateTime2, takeOnDate);
         AddValue(values, columns, "location_code", DbType.Int16, vehicle.location_code ?? 0);
-        AddValue(values, columns, "vehicle_status_code", DbType.Int16, vehicle.vehicle_status_code ?? 0);
-        AddValue(values, columns, "vehicle_status_date", DbType.DateTime2, vehicle.vehicle_status_date ?? takeOnDate);
+        AddValue(
+            values,
+            columns,
+            "vehicle_status_code",
+            DbType.Int16,
+            vehicle.vehicle_status_code ?? 0
+        );
+        AddValue(
+            values,
+            columns,
+            "vehicle_status_date",
+            DbType.DateTime2,
+            vehicle.vehicle_status_date ?? takeOnDate
+        );
         AddValue(values, columns, "type_code", DbType.Int16, vehicle.type_code ?? 1);
         AddValue(values, columns, "vs_code", DbType.Byte, vehicle.vs_code ?? 1);
         AddValue(values, columns, "comment", DbType.String, vehicle.comment ?? string.Empty);
         AddValue(values, columns, "purchase_amount", DbType.Decimal, vehicle.purchase_amount ?? 0m);
-        AddValue(values, columns, "purchase_from", DbType.String, vehicle.purchase_from ?? string.Empty);
+        AddValue(
+            values,
+            columns,
+            "purchase_from",
+            DbType.String,
+            vehicle.purchase_from ?? string.Empty
+        );
         AddValue(values, columns, "purchase_date", DbType.DateTime2, purchaseDate);
-        AddValue(values, columns, "captured_by_user_code", DbType.Int16, vehicle.captured_by_user_code ?? ToShortUserCode(currentUserId));
-        AddValue(values, columns, "action_user_access_code", DbType.Int16, vehicle.action_user_access_code ?? ToShortUserCode(currentUserId));
+        AddValue(
+            values,
+            columns,
+            "captured_by_user_code",
+            DbType.Int16,
+            vehicle.captured_by_user_code ?? ToShortUserCode(currentUserId)
+        );
+        AddValue(
+            values,
+            columns,
+            "action_user_access_code",
+            DbType.Int16,
+            vehicle.action_user_access_code ?? ToShortUserCode(currentUserId)
+        );
         AddValue(values, columns, "site_code", DbType.Int16, vehicle.site_code);
         AddValue(values, columns, "Authority_Status", DbType.String, "Awaiting Authorization");
-        AddValue(values, columns, "captured_date", DbType.DateTime2, vehicle.captured_date ?? DateTime.Now);
+        AddValue(
+            values,
+            columns,
+            "captured_date",
+            DbType.DateTime2,
+            vehicle.captured_date ?? DateTime.Now
+        );
         AddValue(values, columns, "printed", DbType.String, vehicle.printed ?? "N");
         AddValue(values, columns, "invoice_number", DbType.String, vehicle.invoice_number);
         AddValue(values, columns, "gp_number", DbType.String, vehicle.gp_number);
@@ -798,14 +1030,32 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
 
         if (includeCreateAudit)
         {
-            AddValue(values, columns, "date_created", DbType.DateTime2, vehicle.date_created == default ? DateTime.Now : vehicle.date_created);
-            AddValue(values, columns, "created_by_user_code", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+            AddValue(
+                values,
+                columns,
+                "date_created",
+                DbType.DateTime2,
+                vehicle.date_created == default ? DateTime.Now : vehicle.date_created
+            );
+            AddValue(
+                values,
+                columns,
+                "created_by_user_code",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
             AddValue(values, columns, "is_deleted", DbType.Boolean, false);
         }
         else
         {
             AddValue(values, columns, "date_updated", DbType.DateTime2, DateTime.Now);
-            AddValue(values, columns, "modified_by_user_code", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+            AddValue(
+                values,
+                columns,
+                "modified_by_user_code",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
         }
 
         return values;
@@ -820,7 +1070,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         int actingUserId,
         string? comment,
         string? rejectionReason,
-        int? vmfCode)
+        int? vmfCode
+    )
     {
         var values = new List<WriteValue>();
         AddValue(values, schema.Columns, "Authority_Status", DbType.String, status);
@@ -837,9 +1088,14 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         }
         AddValue(values, schema.Columns, "date_updated", DbType.DateTime2, DateTime.Now);
         AddValue(values, schema.Columns, "modified_by_user_code", DbType.Int32, actingUserId);
-        if (values.Count == 0 || await ExecuteUpdateAsync(connection, transaction, tempVmfCode, values) == 0)
+        if (
+            values.Count == 0
+            || await ExecuteUpdateAsync(connection, transaction, tempVmfCode, values) == 0
+        )
         {
-            throw new KeyNotFoundException($"Vehicle authorization with ID {tempVmfCode} not found");
+            throw new KeyNotFoundException(
+                $"Vehicle authorization with ID {tempVmfCode} not found"
+            );
         }
     }
 
@@ -848,9 +1104,13 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         DbTransaction transaction,
         int tempVmfCode,
         PreVehicleMaster vehicle,
-        int currentUserId)
+        int currentUserId
+    )
     {
-        if (await ProcedureExistsAsync(connection, transaction, "DEV_INS_PreVehicle_master_Notes") && !string.IsNullOrWhiteSpace(vehicle.comment))
+        if (
+            await ProcedureExistsAsync(connection, transaction, "DEV_INS_PreVehicle_master_Notes")
+            && !string.IsNullOrWhiteSpace(vehicle.comment)
+        )
         {
             await ExecuteProcedureAsync(
                 connection,
@@ -858,30 +1118,45 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 "DEV_INS_PreVehicle_master_Notes",
                 new ProcedureParameter("@comment", DbType.String, vehicle.comment),
                 new ProcedureParameter("@chassis_number", DbType.String, vehicle.chassis_number),
-                new ProcedureParameter("@added_by_user_code", DbType.Int16, currentUserId));
+                new ProcedureParameter("@added_by_user_code", DbType.Int16, currentUserId)
+            );
         }
 
-        if (await ProcedureExistsAsync(connection, transaction, "DEV_INS_Vehicle_Damages") &&
-            (!string.IsNullOrWhiteSpace(vehicle.damage_status) || !string.IsNullOrWhiteSpace(vehicle.damages_comment)))
+        if (
+            await ProcedureExistsAsync(connection, transaction, "DEV_INS_Vehicle_Damages")
+            && (
+                !string.IsNullOrWhiteSpace(vehicle.damage_status)
+                || !string.IsNullOrWhiteSpace(vehicle.damages_comment)
+            )
+        )
         {
             await ExecuteProcedureAsync(
                 connection,
                 transaction,
                 "DEV_INS_Vehicle_Damages",
                 new ProcedureParameter("@chassisno", DbType.String, vehicle.chassis_number),
-                new ProcedureParameter("@comment", DbType.String, vehicle.damages_comment ?? string.Empty),
+                new ProcedureParameter(
+                    "@comment",
+                    DbType.String,
+                    vehicle.damages_comment ?? string.Empty
+                ),
                 new ProcedureParameter("@userid", DbType.Int16, currentUserId),
-                new ProcedureParameter("@status", DbType.String, vehicle.damage_status ?? "N"));
+                new ProcedureParameter("@status", DbType.String, vehicle.damage_status ?? "N")
+            );
         }
 
-        if (await ProcedureExistsAsync(connection, transaction, "DEV_INS_temp_fleet_notes") && !string.IsNullOrWhiteSpace(vehicle.Fleet_Notes))
+        if (
+            await ProcedureExistsAsync(connection, transaction, "DEV_INS_temp_fleet_notes")
+            && !string.IsNullOrWhiteSpace(vehicle.Fleet_Notes)
+        )
         {
             await ExecuteProcedureAsync(
                 connection,
                 transaction,
                 "DEV_INS_temp_fleet_notes",
                 new ProcedureParameter("@chassisno", DbType.String, vehicle.chassis_number),
-                new ProcedureParameter("@fleet_notes", DbType.String, vehicle.Fleet_Notes));
+                new ProcedureParameter("@fleet_notes", DbType.String, vehicle.Fleet_Notes)
+            );
         }
 
         if (await ProcedureExistsAsync(connection, transaction, "DEV_INS_NewVehicle_Extras"))
@@ -893,12 +1168,19 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                     transaction,
                     "DEV_INS_NewVehicle_Extras",
                     new ProcedureParameter("@chassis_no", DbType.String, vehicle.chassis_number),
-                    new ProcedureParameter("@extra_code", DbType.Int16, extraCode));
+                    new ProcedureParameter("@extra_code", DbType.Int16, extraCode)
+                );
             }
         }
 
-        if (vehicle.MaintenanceTypeCode is > 0 &&
-            await ProcedureExistsAsync(connection, transaction, "DEV_UPD_VehicleMaintenanceOptions"))
+        if (
+            vehicle.MaintenanceTypeCode is > 0
+            && await ProcedureExistsAsync(
+                connection,
+                transaction,
+                "DEV_UPD_VehicleMaintenanceOptions"
+            )
+        )
         {
             await ExecuteProcedureAsync(
                 connection,
@@ -907,11 +1189,20 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 new ProcedureParameter("@vmfCode", DbType.Int32, 0),
                 new ProcedureParameter("@tempVmfCode", DbType.Int32, tempVmfCode),
                 new ProcedureParameter("@maintType", DbType.Int16, vehicle.MaintenanceTypeCode),
-                new ProcedureParameter("@startDate", DbType.String, vehicle.MaintenanceStartDate?.ToString("yyyy/MM/dd")),
-                new ProcedureParameter("@period", DbType.Int32, vehicle.MaintenancePeriodMonths ?? 0),
+                new ProcedureParameter(
+                    "@startDate",
+                    DbType.String,
+                    vehicle.MaintenanceStartDate?.ToString("yyyy/MM/dd")
+                ),
+                new ProcedureParameter(
+                    "@period",
+                    DbType.Int32,
+                    vehicle.MaintenancePeriodMonths ?? 0
+                ),
                 new ProcedureParameter("@kilos", DbType.Int32, vehicle.MaintenanceKilos ?? 0),
                 new ProcedureParameter("@maintValue", DbType.Decimal, vehicle.MaintenanceValue),
-                new ProcedureParameter("@userCode", DbType.Int32, currentUserId));
+                new ProcedureParameter("@userCode", DbType.Int32, currentUserId)
+            );
         }
     }
 
@@ -919,15 +1210,23 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         DbConnection connection,
         DbTransaction transaction,
         PreVehicleMaster preVehicle,
-        int actingUserId)
+        int actingUserId
+    )
     {
         var columns = await GetColumnsAsync(connection, transaction, "dbo", VehicleTableName);
         if (!columns.Contains("vmf_code"))
         {
-            throw new InvalidOperationException("The vehicle_master compatibility table is not available for authorization.");
+            throw new InvalidOperationException(
+                "The vehicle_master compatibility table is not available for authorization."
+            );
         }
 
-        var existingCode = await FindVehicleCodeAsync(connection, transaction, columns, preVehicle.chassis_number);
+        var existingCode = await FindVehicleCodeAsync(
+            connection,
+            transaction,
+            columns,
+            preVehicle.chassis_number
+        );
         if (existingCode.HasValue)
         {
             preVehicle.vmf_code = existingCode.Value;
@@ -943,26 +1242,110 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         var values = new List<WriteValue>();
         AddVehicleValue(values, columns, "model_code", DbType.Int16, preVehicle.model_code);
         AddVehicleValue(values, columns, "type_code", DbType.Int16, preVehicle.type_code ?? 1);
-        AddVehicleValue(values, columns, "vehicle_status_code", DbType.Int16, preVehicle.vehicle_status_code ?? 0);
-        AddVehicleValue(values, columns, "location_code", DbType.Int16, preVehicle.location_code ?? 0);
+        AddVehicleValue(
+            values,
+            columns,
+            "vehicle_status_code",
+            DbType.Int16,
+            preVehicle.vehicle_status_code ?? 0
+        );
+        AddVehicleValue(
+            values,
+            columns,
+            "location_code",
+            DbType.Int16,
+            preVehicle.location_code ?? 0
+        );
         AddVehicleValue(values, columns, "fleet_number", DbType.String, fleetNumber);
-        AddVehicleValue(values, columns, "registration_number", DbType.String, preVehicle.registration_number ?? fleetNumber);
-        AddVehicleValue(values, columns, "take_on_date", DbType.DateTime2, preVehicle.take_on_date ?? DateTime.Now);
+        AddVehicleValue(
+            values,
+            columns,
+            "registration_number",
+            DbType.String,
+            preVehicle.registration_number ?? fleetNumber
+        );
+        AddVehicleValue(
+            values,
+            columns,
+            "take_on_date",
+            DbType.DateTime2,
+            preVehicle.take_on_date ?? DateTime.Now
+        );
         AddVehicleValue(values, columns, "take_on_odo", DbType.Int32, preVehicle.take_on_odo ?? 0);
         AddVehicleValue(values, columns, "current_odo", DbType.Int32, preVehicle.take_on_odo ?? 0);
-        AddVehicleValue(values, columns, "engine_number_1", DbType.String, preVehicle.engine_number);
-        AddVehicleValue(values, columns, "chassis_number", DbType.String, preVehicle.chassis_number);
-        AddVehicleValue(values, columns, "year_manufactured", DbType.Int16, preVehicle.year_manufactured);
-        AddVehicleValue(values, columns, "purchase_date", DbType.DateTime2, preVehicle.purchase_date);
-        AddVehicleValue(values, columns, "purchase_amount", DbType.Decimal, preVehicle.purchase_amount);
+        AddVehicleValue(
+            values,
+            columns,
+            "engine_number_1",
+            DbType.String,
+            preVehicle.engine_number
+        );
+        AddVehicleValue(
+            values,
+            columns,
+            "chassis_number",
+            DbType.String,
+            preVehicle.chassis_number
+        );
+        AddVehicleValue(
+            values,
+            columns,
+            "year_manufactured",
+            DbType.Int16,
+            preVehicle.year_manufactured
+        );
+        AddVehicleValue(
+            values,
+            columns,
+            "purchase_date",
+            DbType.DateTime2,
+            preVehicle.purchase_date
+        );
+        AddVehicleValue(
+            values,
+            columns,
+            "purchase_amount",
+            DbType.Decimal,
+            preVehicle.purchase_amount
+        );
         AddVehicleValue(values, columns, "purchased_from", DbType.String, preVehicle.purchase_from);
         AddVehicleValue(values, columns, "colour", DbType.String, preVehicle.colour);
-        AddVehicleValue(values, columns, "previos_gg_number", DbType.String, preVehicle.replaced_gg_number);
-        AddVehicleValue(values, columns, "vehicle_status_date", DbType.DateTime2, preVehicle.vehicle_status_date ?? preVehicle.take_on_date);
-        AddVehicleValue(values, columns, "user_access_code", DbType.Int16, preVehicle.captured_by_user_code ?? ToShortUserCode(actingUserId));
-        AddVehicleValue(values, columns, "captured_date", DbType.DateTime2, preVehicle.captured_date ?? DateTime.Now);
+        AddVehicleValue(
+            values,
+            columns,
+            "previos_gg_number",
+            DbType.String,
+            preVehicle.replaced_gg_number
+        );
+        AddVehicleValue(
+            values,
+            columns,
+            "vehicle_status_date",
+            DbType.DateTime2,
+            preVehicle.vehicle_status_date ?? preVehicle.take_on_date
+        );
+        AddVehicleValue(
+            values,
+            columns,
+            "user_access_code",
+            DbType.Int16,
+            preVehicle.captured_by_user_code ?? ToShortUserCode(actingUserId)
+        );
+        AddVehicleValue(
+            values,
+            columns,
+            "captured_date",
+            DbType.DateTime2,
+            preVehicle.captured_date ?? DateTime.Now
+        );
         AddVehicleValue(values, columns, "vs_code", DbType.Byte, preVehicle.vs_code);
-        AddVehicleValue(values, columns, "invoice_number", DbType.String, preVehicle.invoice_number);
+        AddVehicleValue(
+            values,
+            columns,
+            "invoice_number",
+            DbType.String,
+            preVehicle.invoice_number
+        );
         AddVehicleValue(values, columns, "veh_site_code", DbType.Int16, preVehicle.site_code);
         AddVehicleValue(values, columns, "Site_code", DbType.Int16, preVehicle.site_code);
         AddVehicleValue(values, columns, "initial_site_code", DbType.Int16, preVehicle.site_code);
@@ -983,7 +1366,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         DbConnection connection,
         DbTransaction transaction,
         IReadOnlySet<string> columns,
-        string? chassisNumber)
+        string? chassisNumber
+    )
     {
         if (!columns.Contains("chassis_number") || string.IsNullOrWhiteSpace(chassisNumber))
         {
@@ -992,7 +1376,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"SELECT TOP (1) [vmf_code] FROM [dbo].[{VehicleTableName}] WHERE [chassis_number] = @chassisNumber";
+        command.CommandText =
+            $"SELECT TOP (1) [vmf_code] FROM [dbo].[{VehicleTableName}] WHERE [chassis_number] = @chassisNumber";
         AddParameter(command, "@chassisNumber", DbType.String, chassisNumber);
         var result = await command.ExecuteScalarAsync();
         return result is null or DBNull ? null : Convert.ToInt32(result);
@@ -1001,14 +1386,20 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
     private static async Task<string?> AllocateGgNumberAsync(
         DbConnection connection,
         DbTransaction transaction,
-        IReadOnlySet<string> vehicleColumns)
+        IReadOnlySet<string> vehicleColumns
+    )
     {
         if (!vehicleColumns.Contains("fleet_number"))
         {
             return null;
         }
 
-        var numberColumns = await GetColumnsAsync(connection, transaction, "dbo", GgNumberTableName);
+        var numberColumns = await GetColumnsAsync(
+            connection,
+            transaction,
+            "dbo",
+            GgNumberTableName
+        );
         if (!numberColumns.Contains("GG_Number"))
         {
             return null;
@@ -1016,7 +1407,9 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        var notDeleted = numberColumns.Contains("is_deleted") ? " AND ([n].[is_deleted] = 0 OR [n].[is_deleted] IS NULL)" : string.Empty;
+        var notDeleted = numberColumns.Contains("is_deleted")
+            ? " AND ([n].[is_deleted] = 0 OR [n].[is_deleted] IS NULL)"
+            : string.Empty;
         command.CommandText = $"""
             SELECT TOP (1) [n].[GG_Number]
             FROM [dbo].[{GgNumberTableName}] AS [n]
@@ -1035,12 +1428,18 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
     private static async Task<int> ExecuteVehicleInsertAsync(
         DbConnection connection,
         DbTransaction transaction,
-        IReadOnlyList<WriteValue> values)
+        IReadOnlyList<WriteValue> values
+    )
     {
-        var insertValues = values.Where(value => !string.Equals(value.Column, "vmf_code", StringComparison.OrdinalIgnoreCase)).ToArray();
+        var insertValues = values
+            .Where(value =>
+                !string.Equals(value.Column, "vmf_code", StringComparison.OrdinalIgnoreCase)
+            )
+            .ToArray();
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"INSERT INTO [dbo].[{VehicleTableName}] ({string.Join(", ", insertValues.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[vmf_code] VALUES ({string.Join(", ", insertValues.Select(value => value.Parameter))})";
+        command.CommandText =
+            $"INSERT INTO [dbo].[{VehicleTableName}] ({string.Join(", ", insertValues.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[vmf_code] VALUES ({string.Join(", ", insertValues.Select(value => value.Parameter))})";
         AddParameters(command, insertValues);
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
@@ -1049,7 +1448,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         DbConnection connection,
         DbTransaction transaction,
         IReadOnlyList<WriteValue> values,
-        bool outputKey)
+        bool outputKey
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -1070,25 +1470,35 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         DbConnection connection,
         DbTransaction? transaction,
         int tempVmfCode,
-        IReadOnlyList<WriteValue> values)
+        IReadOnlyList<WriteValue> values
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"UPDATE [dbo].[{PreVehicleTableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [temp_vmf_code] = @tempVmfCode";
+        command.CommandText =
+            $"UPDATE [dbo].[{PreVehicleTableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [temp_vmf_code] = @tempVmfCode";
         AddParameters(command, values);
         AddParameter(command, "@tempVmfCode", DbType.Int32, tempVmfCode);
         return await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task<int> GetNextCodeAsync(DbConnection connection, DbTransaction transaction)
+    private static async Task<int> GetNextCodeAsync(
+        DbConnection connection,
+        DbTransaction transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"SELECT COALESCE(MAX([temp_vmf_code]), 0) + 1 FROM [dbo].[{PreVehicleTableName}] WITH (UPDLOCK, HOLDLOCK)";
+        command.CommandText =
+            $"SELECT COALESCE(MAX([temp_vmf_code]), 0) + 1 FROM [dbo].[{PreVehicleTableName}] WITH (UPDLOCK, HOLDLOCK)";
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
-    private static async Task<bool> ProcedureExistsAsync(DbConnection connection, DbTransaction? transaction, string procedureName)
+    private static async Task<bool> ProcedureExistsAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        string procedureName
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -1107,7 +1517,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         DbConnection connection,
         DbTransaction? transaction,
         string procedureName,
-        params ProcedureParameter[] parameters)
+        params ProcedureParameter[] parameters
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -1128,19 +1539,15 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             return $"[{alias}].[{column}] AS [{column}]";
         }
 
-        var sqlType = StringColumns.Contains(column, StringComparer.OrdinalIgnoreCase)
-            ? "nvarchar(4000)"
-            : DateColumns.Contains(column, StringComparer.OrdinalIgnoreCase)
-                ? "datetime2"
-                : DecimalColumns.Contains(column, StringComparer.OrdinalIgnoreCase)
-                    ? "decimal(18, 2)"
-                    : ByteColumns.Contains(column, StringComparer.OrdinalIgnoreCase)
-                        ? "tinyint"
-                        : ShortColumns.Contains(column, StringComparer.OrdinalIgnoreCase)
-                            ? "smallint"
-                            : IntegerColumns.Contains(column, StringComparer.OrdinalIgnoreCase)
-                                ? "int"
-                                : column.Equals("is_deleted", StringComparison.OrdinalIgnoreCase) ? "bit" : "nvarchar(4000)";
+        var sqlType =
+            StringColumns.Contains(column, StringComparer.OrdinalIgnoreCase) ? "nvarchar(4000)"
+            : DateColumns.Contains(column, StringComparer.OrdinalIgnoreCase) ? "datetime2"
+            : DecimalColumns.Contains(column, StringComparer.OrdinalIgnoreCase) ? "decimal(18, 2)"
+            : ByteColumns.Contains(column, StringComparer.OrdinalIgnoreCase) ? "tinyint"
+            : ShortColumns.Contains(column, StringComparer.OrdinalIgnoreCase) ? "smallint"
+            : IntegerColumns.Contains(column, StringComparer.OrdinalIgnoreCase) ? "int"
+            : column.Equals("is_deleted", StringComparison.OrdinalIgnoreCase) ? "bit"
+            : "nvarchar(4000)";
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
@@ -1152,7 +1559,13 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             : "1 = 1";
     }
 
-    private static void AddValue(ICollection<WriteValue> values, IReadOnlySet<string> columns, string column, DbType type, object? value)
+    private static void AddValue(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        string column,
+        DbType type,
+        object? value
+    )
     {
         if (columns.Contains(column))
         {
@@ -1160,8 +1573,13 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         }
     }
 
-    private static void AddVehicleValue(ICollection<WriteValue> values, IReadOnlySet<string> columns, string column, DbType type, object? value)
-        => AddValue(values, columns, column, type, value);
+    private static void AddVehicleValue(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        string column,
+        DbType type,
+        object? value
+    ) => AddValue(values, columns, column, type, value);
 
     private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)
     {
@@ -1180,8 +1598,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         command.Parameters.Add(parameter);
     }
 
-    private static short? ToShortUserCode(int userId)
-        => userId is > 0 and <= short.MaxValue ? (short)userId : null;
+    private static short? ToShortUserCode(int userId) =>
+        userId is > 0 and <= short.MaxValue ? (short)userId : null;
 
     private static int? FindOrdinal(DbDataReader reader, params string[] columnNames)
     {
@@ -1201,31 +1619,32 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         return null;
     }
 
-    private static string? ReadString(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : reader[column]?.ToString();
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : reader[column]?.ToString();
 
-    private static int? ReadInt32(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
+    private static int? ReadInt32(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt32(reader[column]);
 
-    private static short? ReadInt16(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
+    private static short? ReadInt16(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToInt16(reader[column]);
 
-    private static byte? ReadByte(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToByte(reader[column]);
+    private static byte? ReadByte(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToByte(reader[column]);
 
-    private static decimal? ReadDecimal(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToDecimal(reader[column]);
+    private static decimal? ReadDecimal(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToDecimal(reader[column]);
 
-    private static DateTime? ReadDateTime(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
+    private static DateTime? ReadDateTime(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
 
-    private static bool? ReadBoolean(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : Convert.ToBoolean(reader[column]);
+    private static bool? ReadBoolean(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : Convert.ToBoolean(reader[column]);
 
     private sealed record VehicleAuthorizationSchema(
         HashSet<string> Columns,
         HashSet<string> ModelColumns,
-        bool IsIdentity);
+        bool IsIdentity
+    );
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 

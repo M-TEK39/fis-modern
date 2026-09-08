@@ -20,7 +20,8 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
         IConfiguration configuration,
         ILogger<MicrosoftAuthenticationController> logger,
         ISessionTokenStore sessionTokenStore,
-        MicrosoftIdentityCompatibilityService identityCompatibility)
+        MicrosoftIdentityCompatibilityService identityCompatibility
+    )
     {
         _configuration = configuration;
         _logger = logger;
@@ -42,7 +43,8 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
             nameof(Complete),
             "MicrosoftAuthentication",
             new { returnUrl = safeReturnUrl },
-            Request.Scheme);
+            Request.Scheme
+        );
 
         if (string.IsNullOrWhiteSpace(callbackUrl))
         {
@@ -51,30 +53,39 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
 
         return Challenge(
             new AuthenticationProperties { RedirectUri = callbackUrl },
-            MicrosoftAuthenticationDefaults.OpenIdConnectScheme);
+            MicrosoftAuthenticationDefaults.OpenIdConnectScheme
+        );
     }
 
     [HttpGet("complete")]
     [Authorize(AuthenticationSchemes = MicrosoftAuthenticationDefaults.CookieScheme)]
     public async Task<IActionResult> Complete(
         [FromQuery] string? returnUrl = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var safeReturnUrl = GetSafeReturnUrl(returnUrl);
 
         try
         {
             var resolvedUser = await _identityCompatibility.ResolveAsync(User, cancellationToken);
-            if (resolvedUser is null || !resolvedUser.IsActive || string.IsNullOrWhiteSpace(resolvedUser.Email))
+            if (
+                resolvedUser is null
+                || !resolvedUser.IsActive
+                || string.IsNullOrWhiteSpace(resolvedUser.Email)
+            )
             {
-                _logger.LogWarning("Microsoft sign-in was rejected because no active FIS account could be resolved");
+                _logger.LogWarning(
+                    "Microsoft sign-in was rejected because no active FIS account could be resolved"
+                );
                 return await RejectSignInAsync();
             }
 
             var claims = AuthController.BuildAuthClaims(
                 resolvedUser.UserAccessCode,
                 resolvedUser.Email,
-                resolvedUser.AccessLevel);
+                resolvedUser.AccessLevel
+            );
             var tokens = _sessionTokenStore.IssueTokens(claims);
             WriteAuthCookies(tokens);
 
@@ -108,8 +119,10 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
     private string BuildFrontendRedirect(string path)
     {
         var configuredBaseUrl = _configuration["ApiSettings:WebBaseUrl"]?.TrimEnd('/');
-        if (Uri.TryCreate(configuredBaseUrl, UriKind.Absolute, out var baseUri)
-            && (baseUri.Scheme == Uri.UriSchemeHttp || baseUri.Scheme == Uri.UriSchemeHttps))
+        if (
+            Uri.TryCreate(configuredBaseUrl, UriKind.Absolute, out var baseUri)
+            && (baseUri.Scheme == Uri.UriSchemeHttp || baseUri.Scheme == Uri.UriSchemeHttps)
+        )
         {
             return $"{configuredBaseUrl}{path}";
         }
@@ -119,9 +132,11 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
 
     private static string GetSafeReturnUrl(string? returnUrl)
     {
-        if (string.IsNullOrWhiteSpace(returnUrl)
+        if (
+            string.IsNullOrWhiteSpace(returnUrl)
             || !returnUrl.StartsWith("/", StringComparison.Ordinal)
-            || returnUrl.StartsWith("//", StringComparison.Ordinal))
+            || returnUrl.StartsWith("//", StringComparison.Ordinal)
+        )
         {
             return "/home";
         }
@@ -130,17 +145,25 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
     }
 
     private void WriteAuthCookies(
-        (string AccessToken, DateTimeOffset AccessExpiresAt, string RefreshToken, DateTimeOffset RefreshExpiresAt) tokens)
+        (
+            string AccessToken,
+            DateTimeOffset AccessExpiresAt,
+            string RefreshToken,
+            DateTimeOffset RefreshExpiresAt
+        ) tokens
+    )
     {
         var isHttps = Request.IsHttps;
         Response.Cookies.Append(
             SessionCookieAuthenticationHandler.AccessCookieName,
             tokens.AccessToken,
-            CreateCookieOptions(tokens.AccessExpiresAt, isHttps));
+            CreateCookieOptions(tokens.AccessExpiresAt, isHttps)
+        );
         Response.Cookies.Append(
             "FIS_Refresh_Token",
             tokens.RefreshToken,
-            CreateCookieOptions(tokens.RefreshExpiresAt, isHttps));
+            CreateCookieOptions(tokens.RefreshExpiresAt, isHttps)
+        );
     }
 
     private static CookieOptions CreateCookieOptions(DateTimeOffset expiresAt, bool isHttps)
@@ -152,7 +175,7 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
             SameSite = SameSiteMode.Lax,
             Expires = expiresAt,
             Path = "/",
-            IsEssential = true
+            IsEssential = true,
         };
     }
 }

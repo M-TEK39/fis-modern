@@ -60,7 +60,11 @@ function getOptionalDate(formData: FormData, key: string, label: string) {
 
   const [year, month, day] = value.split("-").map(Number);
   const parsed = new Date(Date.UTC(year, month - 1, day));
-  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
     throw new AuctionValidationError(`${label} is invalid.`);
   }
 
@@ -77,21 +81,32 @@ function getOptionalText(formData: FormData, key: string, label: string, maxLeng
 }
 
 function hasReportsRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 async function authorizeReports() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
 
   if (!hasReportsRole(session.roles)) {
-    return { ok: false as const, message: "You do not have permission to maintain Auction records." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain Auction records.",
+    };
   }
 
   return { ok: true as const };
@@ -124,7 +139,9 @@ function buildAuctionRequest(formData: FormData): AuctionMaintenanceRequest {
   const reasonSold = getText(formData, "reasonSold");
 
   if (!auctionNumber || auctionNumber.length > 7) {
-    throw new AuctionValidationError("Auction number is required and must be 7 characters or fewer.");
+    throw new AuctionValidationError(
+      "Auction number is required and must be 7 characters or fewer.",
+    );
   }
 
   if (camp !== "Camp1" && camp !== "Camp2") {
@@ -177,7 +194,9 @@ function buildAuctionRequest(formData: FormData): AuctionMaintenanceRequest {
 }
 
 function redirectError(returnPath: string, message: string) {
-  redirect(`${returnPath}${returnPath.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`);
+  redirect(
+    `${returnPath}${returnPath.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`,
+  );
 }
 
 export async function saveAuctionMaintenanceAction(formData: FormData) {

@@ -1,7 +1,7 @@
+using System.ComponentModel.DataAnnotations;
 using FIS.Core.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.ComponentModel.DataAnnotations;
 
 namespace FIS.Api.Controllers;
 
@@ -20,7 +20,8 @@ public class NotificationController : ControllerBase
 
     public NotificationController(
         IEmailNotificationService emailService,
-        ILogger<NotificationController> logger)
+        ILogger<NotificationController> logger
+    )
     {
         _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -41,7 +42,11 @@ public class NotificationController : ControllerBase
 
         try
         {
-            var success = await _emailService.SendEmailAsync(request.To, request.Subject, request.Body);
+            var success = await _emailService.SendEmailAsync(
+                request.To,
+                request.Subject,
+                request.Body
+            );
 
             if (success)
                 return Ok(new { message = "Email sent successfully" });
@@ -68,7 +73,11 @@ public class NotificationController : ControllerBase
 
         try
         {
-            var success = await _emailService.SendHtmlEmailAsync(request.To, request.Subject, request.Body);
+            var success = await _emailService.SendHtmlEmailAsync(
+                request.To,
+                request.Subject,
+                request.Body
+            );
 
             if (success)
                 return Ok(new { message = "HTML email sent successfully" });
@@ -88,7 +97,9 @@ public class NotificationController : ControllerBase
     [HttpPost("send/attachments")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult> SendEmailWithAttachments([FromBody] EmailWithAttachmentsRequest request)
+    public async Task<ActionResult> SendEmailWithAttachments(
+        [FromBody] EmailWithAttachmentsRequest request
+    )
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
@@ -99,7 +110,8 @@ public class NotificationController : ControllerBase
                 request.To,
                 request.Subject,
                 request.Body,
-                request.Attachments);
+                request.Attachments
+            );
 
             if (success)
                 return Ok(new { message = "Email with attachments sent successfully" });
@@ -108,7 +120,11 @@ public class NotificationController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending email with attachments to {EmailAddress}", request.To);
+            _logger.LogError(
+                ex,
+                "Error sending email with attachments to {EmailAddress}",
+                request.To
+            );
             return StatusCode(500, new { error = "Failed to send email", message = ex.Message });
         }
     }
@@ -123,7 +139,9 @@ public class NotificationController : ControllerBase
     [HttpPost("maintenance/reminder")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult> SendMaintenanceReminder([FromBody] VehicleNotificationRequest request)
+    public async Task<ActionResult> SendMaintenanceReminder(
+        [FromBody] VehicleNotificationRequest request
+    )
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
@@ -133,7 +151,8 @@ public class NotificationController : ControllerBase
             var success = await _emailService.SendMaintenanceReminderAsync(
                 request.VmfCode,
                 request.EmailAddress,
-                request.RecipientName);
+                request.RecipientName
+            );
 
             if (success)
                 return Ok(new { message = "Maintenance reminder sent successfully" });
@@ -142,8 +161,15 @@ public class NotificationController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending maintenance reminder for VMF {VmfCode}", request.VmfCode);
-            return StatusCode(500, new { error = "Failed to send maintenance reminder", message = ex.Message });
+            _logger.LogError(
+                ex,
+                "Error sending maintenance reminder for VMF {VmfCode}",
+                request.VmfCode
+            );
+            return StatusCode(
+                500,
+                new { error = "Failed to send maintenance reminder", message = ex.Message }
+            );
         }
     }
 
@@ -153,7 +179,9 @@ public class NotificationController : ControllerBase
     [HttpPost("licence/reminder")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult> SendLicenceReminder([FromBody] VehicleNotificationRequest request)
+    public async Task<ActionResult> SendLicenceReminder(
+        [FromBody] VehicleNotificationRequest request
+    )
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
@@ -163,7 +191,8 @@ public class NotificationController : ControllerBase
             var success = await _emailService.SendLicenceReminderAsync(
                 request.VmfCode,
                 request.EmailAddress,
-                request.RecipientName);
+                request.RecipientName
+            );
 
             if (success)
                 return Ok(new { message = "Licence reminder sent successfully" });
@@ -172,8 +201,15 @@ public class NotificationController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending licence reminder for VMF {VmfCode}", request.VmfCode);
-            return StatusCode(500, new { error = "Failed to send licence reminder", message = ex.Message });
+            _logger.LogError(
+                ex,
+                "Error sending licence reminder for VMF {VmfCode}",
+                request.VmfCode
+            );
+            return StatusCode(
+                500,
+                new { error = "Failed to send licence reminder", message = ex.Message }
+            );
         }
     }
 
@@ -193,7 +229,8 @@ public class NotificationController : ControllerBase
             var success = await _emailService.SendCofReminderAsync(
                 request.VmfCode,
                 request.EmailAddress,
-                request.RecipientName);
+                request.RecipientName
+            );
 
             if (success)
                 return Ok(new { message = "COF reminder sent successfully" });
@@ -203,7 +240,10 @@ public class NotificationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending COF reminder for VMF {VmfCode}", request.VmfCode);
-            return StatusCode(500, new { error = "Failed to send COF reminder", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to send COF reminder", message = ex.Message }
+            );
         }
     }
 
@@ -213,7 +253,9 @@ public class NotificationController : ControllerBase
     [HttpPost("contract/expiry")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult> SendContractExpiryNotification([FromBody] ContractNotificationRequest request)
+    public async Task<ActionResult> SendContractExpiryNotification(
+        [FromBody] ContractNotificationRequest request
+    )
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
@@ -223,17 +265,28 @@ public class NotificationController : ControllerBase
             var success = await _emailService.SendContractExpiryNotificationAsync(
                 request.ContractId,
                 request.EmailAddress,
-                request.RecipientName);
+                request.RecipientName
+            );
 
             if (success)
                 return Ok(new { message = "Contract expiry notification sent successfully" });
             else
-                return StatusCode(500, new { error = "Failed to send contract expiry notification" });
+                return StatusCode(
+                    500,
+                    new { error = "Failed to send contract expiry notification" }
+                );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending contract expiry notification for contract {ContractId}", request.ContractId);
-            return StatusCode(500, new { error = "Failed to send contract expiry notification", message = ex.Message });
+            _logger.LogError(
+                ex,
+                "Error sending contract expiry notification for contract {ContractId}",
+                request.ContractId
+            );
+            return StatusCode(
+                500,
+                new { error = "Failed to send contract expiry notification", message = ex.Message }
+            );
         }
     }
 
@@ -257,7 +310,8 @@ public class NotificationController : ControllerBase
             var success = await _emailService.SendVehicleReportAsync(
                 request.VmfCode,
                 request.EmailAddress,
-                request.RecipientName);
+                request.RecipientName
+            );
 
             if (success)
                 return Ok(new { message = "Vehicle report sent successfully" });
@@ -267,7 +321,10 @@ public class NotificationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending vehicle report for VMF {VmfCode}", request.VmfCode);
-            return StatusCode(500, new { error = "Failed to send vehicle report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to send vehicle report", message = ex.Message }
+            );
         }
     }
 
@@ -289,7 +346,8 @@ public class NotificationController : ControllerBase
                 request.StartDate,
                 request.EndDate,
                 request.EmailAddress,
-                request.RecipientName);
+                request.RecipientName
+            );
 
             if (success)
                 return Ok(new { message = "Trip summary report sent successfully" });
@@ -299,7 +357,10 @@ public class NotificationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending trip summary report");
-            return StatusCode(500, new { error = "Failed to send trip summary report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to send trip summary report", message = ex.Message }
+            );
         }
     }
 
@@ -309,7 +370,9 @@ public class NotificationController : ControllerBase
     [HttpPost("report/maintenance-cost")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult> SendMaintenanceCostReport([FromBody] DateRangeReportRequest request)
+    public async Task<ActionResult> SendMaintenanceCostReport(
+        [FromBody] DateRangeReportRequest request
+    )
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
@@ -321,7 +384,8 @@ public class NotificationController : ControllerBase
                 request.StartDate,
                 request.EndDate,
                 request.EmailAddress,
-                request.RecipientName);
+                request.RecipientName
+            );
 
             if (success)
                 return Ok(new { message = "Maintenance cost report sent successfully" });
@@ -331,7 +395,10 @@ public class NotificationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending maintenance cost report");
-            return StatusCode(500, new { error = "Failed to send maintenance cost report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to send maintenance cost report", message = ex.Message }
+            );
         }
     }
 
@@ -354,7 +421,8 @@ public class NotificationController : ControllerBase
                 request.ReportType,
                 request.FinancialYear,
                 emailAddress,
-                request.RecipientName);
+                request.RecipientName
+            );
 
             if (success)
                 return Ok(new { message = "Financial report sent successfully" });
@@ -364,7 +432,10 @@ public class NotificationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending financial report");
-            return StatusCode(500, new { error = "Failed to send financial report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to send financial report", message = ex.Message }
+            );
         }
     }
 
@@ -387,7 +458,10 @@ public class NotificationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending bulk maintenance reminders");
-            return StatusCode(500, new { error = "Failed to send bulk maintenance reminders", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to send bulk maintenance reminders", message = ex.Message }
+            );
         }
     }
 
@@ -406,7 +480,10 @@ public class NotificationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending bulk licence reminders");
-            return StatusCode(500, new { error = "Failed to send bulk licence reminders", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to send bulk licence reminders", message = ex.Message }
+            );
         }
     }
 
@@ -425,7 +502,10 @@ public class NotificationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending bulk COF reminders");
-            return StatusCode(500, new { error = "Failed to send bulk COF reminders", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to send bulk COF reminders", message = ex.Message }
+            );
         }
     }
 
@@ -444,7 +524,14 @@ public class NotificationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error sending bulk contract expiry notifications");
-            return StatusCode(500, new { error = "Failed to send bulk contract expiry notifications", message = ex.Message });
+            return StatusCode(
+                500,
+                new
+                {
+                    error = "Failed to send bulk contract expiry notifications",
+                    message = ex.Message,
+                }
+            );
         }
     }
 
@@ -467,7 +554,10 @@ public class NotificationController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving email service status");
-            return StatusCode(500, new { error = "Failed to retrieve email service status", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to retrieve email service status", message = ex.Message }
+            );
         }
     }
 

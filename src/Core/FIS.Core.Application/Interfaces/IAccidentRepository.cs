@@ -1,21 +1,34 @@
 using FIS.Core.Domain.Entities;
+
 namespace FIS.Core.Application.Interfaces;
+
 public interface IAccidentRepository
 {
     Task<Accident?> GetByIdAsync(int accidentCode);
     Task<IEnumerable<Accident>> GetAllAsync();
     Task<IEnumerable<Accident>> GetByVehicleAsync(int vmfCode);
-    Task<IEnumerable<AccidentDriverReportRow>> GetDriverReportAsync(string searchTerm, bool searchById);
-    Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportAsync(string searchTerm, bool searchByFleet);
+    Task<IEnumerable<AccidentDriverReportRow>> GetDriverReportAsync(
+        string searchTerm,
+        bool searchById
+    );
+    Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportAsync(
+        string searchTerm,
+        bool searchByFleet
+    );
     Task<IEnumerable<AccidentOutstandingDocumentLookupRow>> GetOutstandingDocumentLookupAsync(
         string searchTerm,
-        bool searchByFleet);
+        bool searchByFleet
+    );
     Task<AccidentOutstandingDocumentReport?> GetOutstandingDocumentReportAsync(int accidentCode);
     Task<IEnumerable<AccidentOutstandingDocumentLookupRow>> GetInspectionLetterLookupAsync(
         string searchTerm,
-        bool searchByFleet);
+        bool searchByFleet
+    );
     Task<AccidentOutstandingDocumentReport?> GetInspectionLetterReportAsync(int accidentCode);
-    Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription);
+    Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(
+        string searchTerm,
+        bool searchByDescription
+    );
     Task<IEnumerable<AccidentVehicleReportRow>> GetNewAccidentsReportAsync(string mode);
     Task<IEnumerable<AccidentVehicleReportRow>> GetAllAccidentsReportAsync(string mode);
     Task<IEnumerable<AccidentVehicleReportRow>> GetGarageAccidentsReportAsync(string mode);
@@ -23,28 +36,35 @@ public interface IAccidentRepository
     Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodReportAsync(
         string departmentNumber,
         DateTime startDate,
-        DateTime endDate);
+        DateTime endDate
+    );
     Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodVipReportAsync(
         string departmentNumber,
         DateTime startDate,
         DateTime endDate,
-        string hireTypeMode);
+        string hireTypeMode
+    );
     Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentMonthReportAsync(
         string departmentNumber,
         string garageMode,
         string periodMode,
         int? year,
-        int? month);
+        int? month
+    );
     Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentFinancialYearReportAsync(
         string departmentNumber,
         string garageMode,
-        string financialYear);
-    Task<IEnumerable<AccidentVehicleReportRow>> GetAccidentCostsFinancialYearReportAsync(string financialYear);
+        string financialYear
+    );
+    Task<IEnumerable<AccidentVehicleReportRow>> GetAccidentCostsFinancialYearReportAsync(
+        string financialYear
+    );
     Task<IEnumerable<AccidentPeriodReportRow>> GetPeriodReportAsync(
         string departmentNumber,
         DateTime startDate,
         DateTime endDate,
-        bool closed);
+        bool closed
+    );
     Task<IEnumerable<Accident>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
     Task<AccidentClaimsSummary> GetClaimsSummaryAsync();
     Task<IEnumerable<AccidentReport>> GetRecentReportsAsync(int limit = 10);

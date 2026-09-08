@@ -1,7 +1,12 @@
 import Link from "next/link";
 
 import { LicenseShell } from "@/app/licenses/_components";
-import { accessRestricted, getLicenseSession, hasLicenseAccess, sessionMessage } from "@/app/licenses/_page";
+import {
+  accessRestricted,
+  getLicenseSession,
+  hasLicenseAccess,
+  sessionMessage,
+} from "@/app/licenses/_page";
 
 const REPORT_GROUPS = [
   {
@@ -38,8 +43,34 @@ export default async function LicenseReportsPage() {
   const session = await getLicenseSession();
   const problem = sessionMessage(session, "/licenses/reports");
   if (problem) return problem;
-  if (session.status !== "authenticated") return accessRestricted("Your session could not be loaded.");
+  if (session.status !== "authenticated")
+    return accessRestricted("Your session could not be loaded.");
   if (!hasLicenseAccess(session)) return accessRestricted();
 
-  return <LicenseShell title="Licence Reports Menu" description="Licence reports grouped by category."><div className="vehicle-menu-tiles">{REPORT_GROUPS.map((group) => <section className="vehicle-menu-tile" key={group.title}><h2 className="vehicle-menu-header">{group.title}</h2><div className="vehicle-menu-body">{group.links.map(([mode, label]) => <Link className="vehicle-menu-link" href={`/licenses/reports/${mode}`} key={mode}>{label}</Link>)}</div></section>)}</div><div className="vehicle-footer-actions"><Link className="button button-secondary" href="/licenses">Licence Menu</Link><Link className="button button-secondary" href="/home">Home</Link></div></LicenseShell>;
+  return (
+    <LicenseShell title="Licence Reports Menu" description="Licence reports grouped by category.">
+      <div className="vehicle-menu-tiles">
+        {REPORT_GROUPS.map((group) => (
+          <section className="vehicle-menu-tile" key={group.title}>
+            <h2 className="vehicle-menu-header">{group.title}</h2>
+            <div className="vehicle-menu-body">
+              {group.links.map(([mode, label]) => (
+                <Link className="vehicle-menu-link" href={`/licenses/reports/${mode}`} key={mode}>
+                  {label}
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+      <div className="vehicle-footer-actions">
+        <Link className="button button-secondary" href="/licenses">
+          Licence Menu
+        </Link>
+        <Link className="button button-secondary" href="/home">
+          Home
+        </Link>
+      </div>
+    </LicenseShell>
+  );
 }

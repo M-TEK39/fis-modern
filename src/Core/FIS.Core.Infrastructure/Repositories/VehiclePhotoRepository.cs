@@ -23,7 +23,7 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
         "VehicleMasterCode",
         "FileUrl",
         "Orientation",
-        "Description"
+        "Description",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -32,7 +32,7 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private static readonly string[] RequiredColumns =
@@ -41,7 +41,7 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
         "VehicleMasterCode",
         "FileUrl",
         "Orientation",
-        "Description"
+        "Description",
     ];
 
     private readonly FisDbContext _context;
@@ -51,19 +51,21 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<VehiclePhoto?> GetByIdAsync(int code)
-        => (await QueryAsync(
-            "WHERE [VehiclePhotoInfoCode] = @photoCode",
-            command => AddParameter(command, "@photoCode", DbType.Int32, code)))
-            .SingleOrDefault();
+    public async Task<VehiclePhoto?> GetByIdAsync(int code) =>
+        (
+            await QueryAsync(
+                "WHERE [VehiclePhotoInfoCode] = @photoCode",
+                command => AddParameter(command, "@photoCode", DbType.Int32, code)
+            )
+        ).SingleOrDefault();
 
-    public async Task<IEnumerable<VehiclePhoto>> GetAllAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<VehiclePhoto>> GetAllAsync() => await QueryAsync();
 
-    public async Task<IEnumerable<VehiclePhoto>> GetByVehicleAsync(int vmfCode)
-        => await QueryAsync(
+    public async Task<IEnumerable<VehiclePhoto>> GetByVehicleAsync(int vmfCode) =>
+        await QueryAsync(
             "WHERE [VehicleMasterCode] = @vmfCode",
-            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode));
+            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
+        );
 
     public async Task<VehiclePhoto> CreateAsync(VehiclePhoto item, int currentUserId)
     {
@@ -75,15 +77,30 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
             .ToList();
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_created", "@dateCreated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "created_by_user_code",
             "@createdByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            false
+        );
 
         item.VehiclePhotoInfoCode = await ExecuteInsertAsync(values);
         item.date_created = now;
@@ -96,9 +113,11 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        var existing = await GetByIdAsync(item.VehiclePhotoInfoCode)
+        var existing =
+            await GetByIdAsync(item.VehiclePhotoInfoCode)
             ?? throw new InvalidOperationException(
-                $"VehiclePhoto with VehiclePhotoInfoCode {item.VehiclePhotoInfoCode} not found");
+                $"VehiclePhoto with VehiclePhotoInfoCode {item.VehiclePhotoInfoCode} not found"
+            );
 
         var availableColumns = await GetAvailableColumnsAsync();
         var values = BuildLegacyWriteValues(item)
@@ -106,14 +125,22 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
             .ToList();
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "modified_by_user_code",
             "@modifiedByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
+            currentUserId > 0 ? currentUserId : null
+        );
 
         await ExecuteUpdateAsync(item.VehiclePhotoInfoCode, values, availableColumns);
         item.date_created = existing.date_created;
@@ -126,7 +153,8 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The statement is selected from fixed compatibility branches and uses a parameter for the record identifier.")]
+        Justification = "The statement is selected from fixed compatibility branches and uses a parameter for the record identifier."
+    )]
     public async Task DeleteAsync(int code, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -157,7 +185,8 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
                         command,
                         "@modifiedByUserCode",
                         DbType.Int32,
-                        currentUserId > 0 ? currentUserId : null);
+                        currentUserId > 0 ? currentUserId : null
+                    );
                 }
 
                 command.CommandText = $"""
@@ -190,10 +219,12 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The projection and filter use only fixed legacy columns and allowlisted optional columns; values are parameters.")]
+        Justification = "The projection and filter use only fixed legacy columns and allowlisted optional columns; values are parameters."
+    )]
     private async Task<List<VehiclePhoto>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
@@ -209,7 +240,11 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = LegacyColumns
                 .Select(column => GetColumnProjection(availableColumns, column))
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
                 .ToArray();
             var whereClause = string.IsNullOrWhiteSpace(predicate)
                 ? $"WHERE {GetActiveFilter(availableColumns)}"
@@ -244,7 +279,8 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed from fixed compatibility columns and parameterized values.")]
+        Justification = "The INSERT statement is composed from fixed compatibility columns and parameterized values."
+    )]
     private async Task<int> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -259,7 +295,10 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{TableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[VehiclePhotoInfoCode]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
@@ -278,11 +317,13 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed from fixed compatibility columns and parameterized values.")]
+        Justification = "The UPDATE statement is composed from fixed compatibility columns and parameterized values."
+    )]
     private async Task ExecuteUpdateAsync(
         int code,
         IReadOnlyList<WriteValue> values,
-        IReadOnlySet<string> availableColumns)
+        IReadOnlySet<string> availableColumns
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -297,7 +338,10 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{TableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [VehiclePhotoInfoCode] = @photoCode
                 AND {GetActiveFilter(availableColumns)}
                 """;
@@ -343,11 +387,14 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"The required VehiclePhotoInfo compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                    $"The required VehiclePhotoInfo compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             return columns;
@@ -361,28 +408,40 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
         }
     }
 
-    private static VehiclePhoto MapPhoto(DbDataReader reader, IReadOnlySet<string> availableColumns)
-        => new()
+    private static VehiclePhoto MapPhoto(
+        DbDataReader reader,
+        IReadOnlySet<string> availableColumns
+    ) =>
+        new()
         {
             VehiclePhotoInfoCode = ReadInt32(reader, "VehiclePhotoInfoCode") ?? 0,
             VehicleMasterCode = ReadInt32(reader, "VehicleMasterCode") ?? 0,
             FileUrl = ReadString(reader, "FileUrl"),
             Orientation = ReadInt32(reader, "Orientation"),
             Description = ReadString(reader, "Description"),
-            date_created = ReadDateTimeIfAvailable(reader, availableColumns, "date_created") ?? DateTime.MinValue,
+            date_created =
+                ReadDateTimeIfAvailable(reader, availableColumns, "date_created")
+                ?? DateTime.MinValue,
             date_updated = ReadDateTimeIfAvailable(reader, availableColumns, "date_updated"),
-            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
-            modified_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "modified_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "created_by_user_code"
+            ),
+            modified_by_user_code = ReadInt32IfAvailable(
+                reader,
+                availableColumns,
+                "modified_by_user_code"
+            ),
+            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false,
         };
 
-    private static List<WriteValue> BuildLegacyWriteValues(VehiclePhoto item)
-        =>
+    private static List<WriteValue> BuildLegacyWriteValues(VehiclePhoto item) =>
         [
             new("VehicleMasterCode", "@vmfCode", DbType.Int32, item.VehicleMasterCode),
             new("FileUrl", "@fileUrl", DbType.String, item.FileUrl),
             new("Orientation", "@orientation", DbType.Int32, item.Orientation),
-            new("Description", "@description", DbType.String, item.Description)
+            new("Description", "@description", DbType.String, item.Description),
         ];
 
     private static void AddOptionalValue(
@@ -391,7 +450,8 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -416,8 +476,8 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string GetActiveFilter(IReadOnlySet<string> availableColumns)
-        => availableColumns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+    private static string GetActiveFilter(IReadOnlySet<string> availableColumns) =>
+        availableColumns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
     {
@@ -431,29 +491,31 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "sql_variant"
+            _ => "sql_variant",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetColumnProjection(IReadOnlySet<string> columns, string column)
-        => columns.Contains(column)
+    private static string GetColumnProjection(IReadOnlySet<string> columns, string column) =>
+        columns.Contains(column)
             ? $"[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetLegacySqlType(column)}) AS [{column}]";
 
-    private static string GetLegacySqlType(string column)
-        => column switch
+    private static string GetLegacySqlType(string column) =>
+        column switch
         {
             "VehiclePhotoInfoCode" or "VehicleMasterCode" or "Orientation" => "int",
             "FileUrl" => "varchar(500)",
             "Description" => "varchar(200)",
-            _ => "sql_variant"
+            _ => "sql_variant",
         };
 
     private static string? ReadString(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
     }
 
     private static int? ReadInt32(DbDataReader reader, string column)
@@ -468,13 +530,23 @@ public class VehiclePhotoRepository : IVehiclePhotoRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToDateTime(reader.GetValue(ordinal));
     }
 
-    private static DateTime? ReadDateTimeIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) ? ReadDateTime(reader, column) : null;
+    private static DateTime? ReadDateTimeIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) => columns.Contains(column) ? ReadDateTime(reader, column) : null;
 
-    private static int? ReadInt32IfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) ? ReadInt32(reader, column) : null;
+    private static int? ReadInt32IfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) => columns.Contains(column) ? ReadInt32(reader, column) : null;
 
-    private static bool? ReadBooleanIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+    private static bool? ReadBooleanIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    )
     {
         if (!columns.Contains(column))
         {

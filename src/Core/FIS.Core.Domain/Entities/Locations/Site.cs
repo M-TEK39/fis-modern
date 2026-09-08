@@ -108,7 +108,6 @@ public class Site
     public virtual ICollection<Contract> Contracts { get; set; } = new List<Contract>();
 
     // Global audit fields (AI_CODING_RULES.md - Section 4.5)
-    
 
     [Column("date_updated")]
     public DateTime? date_updated { get; set; }

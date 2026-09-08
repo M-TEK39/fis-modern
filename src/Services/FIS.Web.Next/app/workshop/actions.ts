@@ -69,21 +69,36 @@ function redirectWithMessage(path: string, key: string, message: string): never 
 async function authorizeWorkshop() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
-  if (!session.roles.some((role) => role.localeCompare(WORKSHOP_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
-    return { ok: false as const, message: "You do not have permission to maintain Workshop records." };
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(WORKSHOP_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain Workshop records.",
+    };
   }
   return { ok: true as const };
 }
 
 function apiErrorMessage(error: unknown, subject: string) {
   if (error instanceof WorkshopApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return `The ${subject} service is temporarily unavailable. Please try again.`;
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return `The ${subject} service is temporarily unavailable. Please try again.`;
     if (error.reason === "not-found") return `The ${subject} record was not found.`;
   }
   return `${subject[0].toUpperCase()}${subject.slice(1)} operation failed. Please try again.`;
@@ -92,7 +107,8 @@ function apiErrorMessage(error: unknown, subject: string) {
 function buildWorkshopInput(formData: FormData): WorkshopInput {
   const vmfCode = getInteger(formData, "vmfCode", "Vehicle");
   const receiveDate = getDate(formData, "receiveDate", "Receive date", true);
-  if (vmfCode === null || receiveDate === null) throw new WorkshopValidationError("Vehicle and receive date are required.");
+  if (vmfCode === null || receiveDate === null)
+    throw new WorkshopValidationError("Vehicle and receive date are required.");
 
   return {
     vmf_code: vmfCode,
@@ -113,7 +129,8 @@ export async function saveWorkshopAction(formData: FormData) {
     const rawCode = getText(formData, "wwCode");
     if (rawCode) {
       const code = Number(rawCode);
-      if (!Number.isInteger(code) || code <= 0) throw new WorkshopValidationError("Workshop entry is invalid.");
+      if (!Number.isInteger(code) || code <= 0)
+        throw new WorkshopValidationError("Workshop entry is invalid.");
       await updateWorkshop(code, input);
       revalidatePath("/workshop");
       revalidatePath("/workshop/entry");
@@ -125,7 +142,8 @@ export async function saveWorkshopAction(formData: FormData) {
     revalidatePath("/workshop/entry");
     redirectWithMessage("/workshop/entry", "saved", "1");
   } catch (error) {
-    if (error instanceof WorkshopValidationError) redirectWithMessage(returnPath, "error", error.message);
+    if (error instanceof WorkshopValidationError)
+      redirectWithMessage(returnPath, "error", error.message);
     redirectWithMessage(returnPath, "error", apiErrorMessage(error, "workshop"));
   }
 }
@@ -143,7 +161,8 @@ export async function deleteWorkshopAction(formData: FormData) {
     revalidatePath("/workshop/entry");
     redirectWithMessage(returnPath, "deleted", "1");
   } catch (error) {
-    if (error instanceof WorkshopValidationError) redirectWithMessage(returnPath, "error", error.message);
+    if (error instanceof WorkshopValidationError)
+      redirectWithMessage(returnPath, "error", error.message);
     redirectWithMessage(returnPath, "error", apiErrorMessage(error, "workshop"));
   }
 }
@@ -156,7 +175,8 @@ export async function reopenWorkshopAction(formData: FormData) {
   try {
     const code = getInteger(formData, "wwCode", "Workshop entry");
     if (code === null) throw new WorkshopValidationError("Select a closed workshop entry.");
-    if (!getText(formData, "password")) throw new WorkshopValidationError("Authorizer password is required.");
+    if (!getText(formData, "password"))
+      throw new WorkshopValidationError("Authorizer password is required.");
     const existing = await getWorkshop(code);
     await updateWorkshop(code, {
       vmf_code: existing.vmfCode,
@@ -169,7 +189,8 @@ export async function reopenWorkshopAction(formData: FormData) {
     revalidatePath("/workshop/open-job-card");
     redirectWithMessage(returnPath, "reopened", "1");
   } catch (error) {
-    if (error instanceof WorkshopValidationError) redirectWithMessage(returnPath, "error", error.message);
+    if (error instanceof WorkshopValidationError)
+      redirectWithMessage(returnPath, "error", error.message);
     redirectWithMessage(returnPath, "error", apiErrorMessage(error, "workshop"));
   }
 }
@@ -177,7 +198,8 @@ export async function reopenWorkshopAction(formData: FormData) {
 function buildMerchantInput(formData: FormData): WorkshopMerchantInput {
   const name = getText(formData, "merchantName");
   if (!name) throw new WorkshopValidationError("Merchant name is required.");
-  if (name.length > 40) throw new WorkshopValidationError("Merchant name must be 40 characters or fewer.");
+  if (name.length > 40)
+    throw new WorkshopValidationError("Merchant name must be 40 characters or fewer.");
   return {
     name,
     tel: getText(formData, "merchantTel") || null,
@@ -196,7 +218,8 @@ export async function saveWorkshopMerchantAction(formData: FormData) {
     const rawCode = getText(formData, "merchantCode");
     if (rawCode) {
       const code = Number(rawCode);
-      if (!Number.isInteger(code) || code <= 0) throw new WorkshopValidationError("Merchant is invalid.");
+      if (!Number.isInteger(code) || code <= 0)
+        throw new WorkshopValidationError("Merchant is invalid.");
       await updateWorkshopMerchant(code, input);
       revalidatePath("/workshop/merchant");
       redirectWithMessage(returnPath, "updated", "1");
@@ -205,7 +228,8 @@ export async function saveWorkshopMerchantAction(formData: FormData) {
     revalidatePath("/workshop/merchant");
     redirectWithMessage(returnPath, "saved", "1");
   } catch (error) {
-    if (error instanceof WorkshopValidationError) redirectWithMessage(returnPath, "error", error.message);
+    if (error instanceof WorkshopValidationError)
+      redirectWithMessage(returnPath, "error", error.message);
     redirectWithMessage(returnPath, "error", apiErrorMessage(error, "merchant"));
   }
 }
@@ -222,7 +246,8 @@ export async function deleteWorkshopMerchantAction(formData: FormData) {
     revalidatePath("/workshop/merchant");
     redirectWithMessage(returnPath, "deleted", "1");
   } catch (error) {
-    if (error instanceof WorkshopValidationError) redirectWithMessage(returnPath, "error", error.message);
+    if (error instanceof WorkshopValidationError)
+      redirectWithMessage(returnPath, "error", error.message);
     redirectWithMessage(returnPath, "error", apiErrorMessage(error, "merchant"));
   }
 }

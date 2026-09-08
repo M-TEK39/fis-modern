@@ -43,11 +43,26 @@ function mapSummaryLine(value: Record<string, unknown>, index: number): TripQuer
   const vmfCode = asNumber(getValue(value, "vmfCode", "VmfCode"));
   const tripCount = asNumber(getValue(value, "tripCount", "TripCount")) ?? 0;
   return {
-    key: tripId && tripId > 0 ? String(tripId) : vmfCode && vmfCode > 0 ? `VMF ${vmfCode}` : `Summary ${index + 1}`,
-    vehicle: asString(getValue(value, "vehicleRegistration", "VehicleRegistration", "registrationNumber", "RegistrationNumber")) ?? (vmfCode ? `VMF ${vmfCode}` : "Unknown"),
+    key:
+      tripId && tripId > 0
+        ? String(tripId)
+        : vmfCode && vmfCode > 0
+          ? `VMF ${vmfCode}`
+          : `Summary ${index + 1}`,
+    vehicle:
+      asString(
+        getValue(
+          value,
+          "vehicleRegistration",
+          "VehicleRegistration",
+          "registrationNumber",
+          "RegistrationNumber",
+        ),
+      ) ?? (vmfCode ? `VMF ${vmfCode}` : "Unknown"),
     department: asString(getValue(value, "department", "Department")) ?? "-",
     tripCount,
-    kilometres: asNumber(getValue(value, "totalKilometers", "TotalKilometers", "distance", "Distance")) ?? 0,
+    kilometres:
+      asNumber(getValue(value, "totalKilometers", "TotalKilometers", "distance", "Distance")) ?? 0,
     firstTrip: asString(getValue(value, "firstTrip", "FirstTrip", "date", "Date")),
     lastTrip: asString(getValue(value, "lastTrip", "LastTrip", "date", "Date")),
   };
@@ -59,7 +74,9 @@ function mapLegacySummary(value: Record<string, unknown>, index: number): TripQu
   const date = asString(getValue(value, "tripDate", "TripDate", "date", "Date"));
   return {
     key: tripId && tripId > 0 ? String(tripId) : `Summary ${index + 1}`,
-    vehicle: asString(getValue(value, "vehicleRegistration", "VehicleRegistration")) ?? (vmfCode ? `VMF ${vmfCode}` : "Unknown"),
+    vehicle:
+      asString(getValue(value, "vehicleRegistration", "VehicleRegistration")) ??
+      (vmfCode ? `VMF ${vmfCode}` : "Unknown"),
     department: "-",
     tripCount: 1,
     kilometres: asNumber(getValue(value, "distance", "Distance")) ?? 0,
@@ -74,7 +91,8 @@ export async function getTripQueryRows() {
   const query = new URLSearchParams({ startDate, endDate });
   const payload = await getFinanceJson(`api/report/trip/summary?${query.toString()}`);
   if (Array.isArray(payload)) return payload.filter(isRecord).map(mapLegacySummary);
-  if (!isRecord(payload)) throw new FinanceApiError("invalid-response", "The FIS API returned an invalid trip summary.");
+  if (!isRecord(payload))
+    throw new FinanceApiError("invalid-response", "The FIS API returned an invalid trip summary.");
 
   const tripLines = rows(getValue(payload, "tripLines", "TripLines"));
   if (tripLines.length > 0) return tripLines.map(mapSummaryLine);

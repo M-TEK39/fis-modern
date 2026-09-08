@@ -52,11 +52,17 @@ function SubmitButton({ mode }: Readonly<{ mode: "add" | "edit" }>) {
 }
 
 function vehicleLabel(vehicle: AccidentVehicleOption) {
-  return [vehicle.fleetNumber, vehicle.registrationNumber].filter(Boolean).join(" / ") || `VMF ${vehicle.vmfCode}`;
+  return (
+    [vehicle.fleetNumber, vehicle.registrationNumber].filter(Boolean).join(" / ") ||
+    `VMF ${vehicle.vmfCode}`
+  );
 }
 
 function accidentVehicleLabel(accident: AccidentEditRecord) {
-  return [accident.vehicleFleetNumber, accident.vehicleRegistrationNumber].filter(Boolean).join(" / ") || `VMF ${accident.vmfCode}`;
+  return (
+    [accident.vehicleFleetNumber, accident.vehicleRegistrationNumber].filter(Boolean).join(" / ") ||
+    `VMF ${accident.vmfCode}`
+  );
 }
 
 export default function HqAccidentForm({
@@ -73,7 +79,9 @@ export default function HqAccidentForm({
 
   return (
     <form action={formAction} className="vehicle-create-form">
-      {mode === "edit" && accident ? <input type="hidden" name="accidentCode" value={accident.accidentCode} readOnly /> : null}
+      {mode === "edit" && accident ? (
+        <input type="hidden" name="accidentCode" value={accident.accidentCode} readOnly />
+      ) : null}
 
       {state.status === "error" && state.message ? (
         <div className="notice notice-error" role="alert">
@@ -104,7 +112,12 @@ export default function HqAccidentForm({
             </Field>
           ) : accident ? (
             <Field id="vehicleLabel" label="Vehicle">
-              <input id="vehicleLabel" type="text" value={`${accidentVehicleLabel(accident)} (${accident.vmfCode})`} readOnly />
+              <input
+                id="vehicleLabel"
+                type="text"
+                value={`${accidentVehicleLabel(accident)} (${accident.vmfCode})`}
+                readOnly
+              />
             </Field>
           ) : null}
         </div>

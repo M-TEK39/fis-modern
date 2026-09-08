@@ -19,7 +19,8 @@ public class PrivateHireController : BaseApiController
 
     public PrivateHireController(
         IPrivateHireRepository privateHireRepository,
-        ILogger<PrivateHireController> logger)
+        ILogger<PrivateHireController> logger
+    )
     {
         _privateHireRepository = privateHireRepository;
         _logger = logger;
@@ -59,17 +60,27 @@ public class PrivateHireController : BaseApiController
             var privateHire = await _privateHireRepository.GetByIdAsync(privateHireCode);
             if (privateHire == null)
             {
-                _logger.LogWarning("Private hire with code {PrivateHireCode} not found", privateHireCode);
+                _logger.LogWarning(
+                    "Private hire with code {PrivateHireCode} not found",
+                    privateHireCode
+                );
                 return NotFound($"Private hire with code {privateHireCode} not found");
             }
 
-            _logger.LogInformation("Retrieved private hire {PrivateHireCode}: {Registration}", 
-                privateHireCode, privateHire.registration_number);
+            _logger.LogInformation(
+                "Retrieved private hire {PrivateHireCode}: {Registration}",
+                privateHireCode,
+                privateHire.registration_number
+            );
             return Ok(privateHire);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving private hire {PrivateHireCode}", privateHireCode);
+            _logger.LogError(
+                ex,
+                "Error retrieving private hire {PrivateHireCode}",
+                privateHireCode
+            );
             return StatusCode(500, "An error occurred while retrieving the private hire vehicle");
         }
     }
@@ -85,13 +96,20 @@ public class PrivateHireController : BaseApiController
             int currentUserId = GetCurrentUserId();
 
             var privateHires = await _privateHireRepository.GetByVehicleAsync(vmfCode);
-            _logger.LogInformation("Found {Count} private hires for vehicle {VmfCode}", privateHires.Count(), vmfCode);
+            _logger.LogInformation(
+                "Found {Count} private hires for vehicle {VmfCode}",
+                privateHires.Count(),
+                vmfCode
+            );
             return Ok(privateHires);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving private hires for vehicle {VmfCode}", vmfCode);
-            return StatusCode(500, "An error occurred while retrieving private hires for the vehicle");
+            return StatusCode(
+                500,
+                "An error occurred while retrieving private hires for the vehicle"
+            );
         }
     }
 
@@ -100,7 +118,9 @@ public class PrivateHireController : BaseApiController
     /// </summary>
     [HttpGet("daterange")]
     public async Task<ActionResult<IEnumerable<PrivateHire>>> GetPrivateHiresByDateRange(
-        [FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate
+    )
     {
         try
         {
@@ -112,15 +132,26 @@ public class PrivateHireController : BaseApiController
             }
 
             var privateHires = await _privateHireRepository.GetByDateRangeAsync(startDate, endDate);
-            _logger.LogInformation("Found {Count} private hires between {StartDate} and {EndDate}", 
-                privateHires.Count(), startDate.ToShortDateString(), endDate.ToShortDateString());
+            _logger.LogInformation(
+                "Found {Count} private hires between {StartDate} and {EndDate}",
+                privateHires.Count(),
+                startDate.ToShortDateString(),
+                endDate.ToShortDateString()
+            );
             return Ok(privateHires);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving private hires for date range {StartDate} - {EndDate}", 
-                startDate, endDate);
-            return StatusCode(500, "An error occurred while retrieving private hires for the date range");
+            _logger.LogError(
+                ex,
+                "Error retrieving private hires for date range {StartDate} - {EndDate}",
+                startDate,
+                endDate
+            );
+            return StatusCode(
+                500,
+                "An error occurred while retrieving private hires for the date range"
+            );
         }
     }
 
@@ -128,20 +159,29 @@ public class PrivateHireController : BaseApiController
     /// Search private hire vehicles by registration or details
     /// </summary>
     [HttpGet("search")]
-    public async Task<ActionResult<IEnumerable<PrivateHire>>> SearchPrivateHires([FromQuery] string? searchTerm)
+    public async Task<ActionResult<IEnumerable<PrivateHire>>> SearchPrivateHires(
+        [FromQuery] string? searchTerm
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
 
             var privateHires = await _privateHireRepository.SearchHiresAsync(searchTerm ?? "");
-            _logger.LogInformation("Found {Count} private hires matching search term '{SearchTerm}'", 
-                privateHires.Count(), searchTerm);
+            _logger.LogInformation(
+                "Found {Count} private hires matching search term '{SearchTerm}'",
+                privateHires.Count(),
+                searchTerm
+            );
             return Ok(privateHires);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching private hires with term '{SearchTerm}'", searchTerm);
+            _logger.LogError(
+                ex,
+                "Error searching private hires with term '{SearchTerm}'",
+                searchTerm
+            );
             return StatusCode(500, "An error occurred while searching private hires");
         }
     }
@@ -150,22 +190,37 @@ public class PrivateHireController : BaseApiController
     /// Create a new private hire vehicle
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<PrivateHire>> CreatePrivateHire([FromBody] PrivateHire privateHire)
+    public async Task<ActionResult<PrivateHire>> CreatePrivateHire(
+        [FromBody] PrivateHire privateHire
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
 
-            var createdPrivateHire = await _privateHireRepository.CreateAsync(privateHire, currentUserId);
-            _logger.LogInformation("Created private hire {PrivateHireCode}: {Registration}", 
-                createdPrivateHire.PHV_code, createdPrivateHire.registration_number);
-            
-            return CreatedAtAction(nameof(GetPrivateHire), 
-                new { privateHireCode = createdPrivateHire.PHV_code }, createdPrivateHire);
+            var createdPrivateHire = await _privateHireRepository.CreateAsync(
+                privateHire,
+                currentUserId
+            );
+            _logger.LogInformation(
+                "Created private hire {PrivateHireCode}: {Registration}",
+                createdPrivateHire.PHV_code,
+                createdPrivateHire.registration_number
+            );
+
+            return CreatedAtAction(
+                nameof(GetPrivateHire),
+                new { privateHireCode = createdPrivateHire.PHV_code },
+                createdPrivateHire
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating private hire {Registration}", privateHire.registration_number);
+            _logger.LogError(
+                ex,
+                "Error creating private hire {Registration}",
+                privateHire.registration_number
+            );
             return StatusCode(500, "An error occurred while creating the private hire vehicle");
         }
     }
@@ -174,7 +229,10 @@ public class PrivateHireController : BaseApiController
     /// Update an existing private hire vehicle
     /// </summary>
     [HttpPut("{privateHireCode}")]
-    public async Task<ActionResult<PrivateHire>> UpdatePrivateHire(int privateHireCode, [FromBody] PrivateHire privateHire)
+    public async Task<ActionResult<PrivateHire>> UpdatePrivateHire(
+        int privateHireCode,
+        [FromBody] PrivateHire privateHire
+    )
     {
         try
         {
@@ -188,14 +246,20 @@ public class PrivateHireController : BaseApiController
             var existingPrivateHire = await _privateHireRepository.GetByIdAsync(privateHireCode);
             if (existingPrivateHire == null)
             {
-                _logger.LogWarning("Private hire with code {PrivateHireCode} not found for update", privateHireCode);
+                _logger.LogWarning(
+                    "Private hire with code {PrivateHireCode} not found for update",
+                    privateHireCode
+                );
                 return NotFound($"Private hire with code {privateHireCode} not found");
             }
 
             await _privateHireRepository.UpdateAsync(privateHire, currentUserId);
-            _logger.LogInformation("Updated private hire {PrivateHireCode}: {Registration}", 
-                privateHireCode, privateHire.registration_number);
-            
+            _logger.LogInformation(
+                "Updated private hire {PrivateHireCode}: {Registration}",
+                privateHireCode,
+                privateHire.registration_number
+            );
+
             return Ok(privateHire);
         }
         catch (Exception ex)
@@ -218,14 +282,20 @@ public class PrivateHireController : BaseApiController
             var existingPrivateHire = await _privateHireRepository.GetByIdAsync(privateHireCode);
             if (existingPrivateHire == null)
             {
-                _logger.LogWarning("Private hire with code {PrivateHireCode} not found for deletion", privateHireCode);
+                _logger.LogWarning(
+                    "Private hire with code {PrivateHireCode} not found for deletion",
+                    privateHireCode
+                );
                 return NotFound($"Private hire with code {privateHireCode} not found");
             }
 
             await _privateHireRepository.DeleteAsync(privateHireCode, currentUserId);
-            _logger.LogInformation("Deleted private hire {PrivateHireCode}: {Registration}", 
-                privateHireCode, existingPrivateHire.registration_number);
-            
+            _logger.LogInformation(
+                "Deleted private hire {PrivateHireCode}: {Registration}",
+                privateHireCode,
+                existingPrivateHire.registration_number
+            );
+
             return NoContent();
         }
         catch (Exception ex)
@@ -255,16 +325,22 @@ public class PrivateHireController : BaseApiController
     }
 
     [HttpPost("contractors")]
-    public async Task<ActionResult<PrivateHireContractorDto>> CreateContractor([FromBody] PrivateHireContractorDto request)
+    public async Task<ActionResult<PrivateHireContractorDto>> CreateContractor(
+        [FromBody] PrivateHireContractorDto request
+    )
     {
         var contractor = await _privateHireRepository.CreateContractorAsync(
             ToContractorRecord(request),
-            GetCurrentUserId());
+            GetCurrentUserId()
+        );
         return Ok(ToContractorDto(contractor));
     }
 
     [HttpPut("contractors/{contractorId:int}")]
-    public async Task<ActionResult<PrivateHireContractorDto>> UpdateContractor(int contractorId, [FromBody] PrivateHireContractorDto request)
+    public async Task<ActionResult<PrivateHireContractorDto>> UpdateContractor(
+        int contractorId,
+        [FromBody] PrivateHireContractorDto request
+    )
     {
         if (contractorId != request.contractor_id)
         {
@@ -315,12 +391,14 @@ public class PrivateHireController : BaseApiController
             type = contractor.type ?? string.Empty,
             project_name = contractor.project_name ?? string.Empty,
             project_begdat = contractor.project_begdat,
-            project_enddat = contractor.project_enddat
+            project_enddat = contractor.project_enddat,
         };
     }
 
-    private static PrivateHireContractorRecord ToContractorRecord(PrivateHireContractorDto request)
-        => new()
+    private static PrivateHireContractorRecord ToContractorRecord(
+        PrivateHireContractorDto request
+    ) =>
+        new()
         {
             contractor_id = checked((short)request.contractor_id),
             contractor_name = request.company_name?.Trim(),
@@ -332,12 +410,14 @@ public class PrivateHireController : BaseApiController
                 : request.fax_number.Trim(),
             email_address = request.email?.Trim(),
             contact_person = request.contact_person?.Trim(),
-            active = string.Equals(request.status, "Inactive", StringComparison.OrdinalIgnoreCase) ? (short)0 : (short)1,
+            active = string.Equals(request.status, "Inactive", StringComparison.OrdinalIgnoreCase)
+                ? (short)0
+                : (short)1,
             quotations = request.quotations,
             type = request.type?.Trim(),
             project_name = request.project_name?.Trim(),
             project_begdat = request.project_begdat,
-            project_enddat = request.project_enddat
+            project_enddat = request.project_enddat,
         };
 }
 

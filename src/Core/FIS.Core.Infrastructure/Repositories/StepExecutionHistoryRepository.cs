@@ -16,48 +16,48 @@ public class StepExecutionHistoryRepository : IStepExecutionHistoryRepository
 
     public async Task<StepExecutionHistory?> GetByIdAsync(int executionHistoryId)
     {
-        return await _context.StepExecutionHistories
-            .Include(h => h.Step)
+        return await _context
+            .StepExecutionHistories.Include(h => h.Step)
             .Include(h => h.Workflow)
             .FirstOrDefaultAsync(h => h.ExecutionHistoryID == executionHistoryId && !h.is_deleted);
     }
 
     public async Task<IEnumerable<StepExecutionHistory>> GetAllAsync()
     {
-        return await _context.StepExecutionHistories
-            .Where(h => !h.is_deleted)
+        return await _context
+            .StepExecutionHistories.Where(h => !h.is_deleted)
             .OrderByDescending(h => h.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<StepExecutionHistory>> GetByWorkflowIdAsync(int workflowId)
     {
-        return await _context.StepExecutionHistories
-            .Where(h => h.WorkflowID == workflowId && !h.is_deleted)
+        return await _context
+            .StepExecutionHistories.Where(h => h.WorkflowID == workflowId && !h.is_deleted)
             .OrderBy(h => h.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<StepExecutionHistory>> GetByStepIdAsync(int stepId)
     {
-        return await _context.StepExecutionHistories
-            .Where(h => h.StepID == stepId && !h.is_deleted)
+        return await _context
+            .StepExecutionHistories.Where(h => h.StepID == stepId && !h.is_deleted)
             .OrderByDescending(h => h.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<StepExecutionHistory>> GetByStatusAsync(string status)
     {
-        return await _context.StepExecutionHistories
-            .Where(h => h.ExecutionStatus == status && !h.is_deleted)
+        return await _context
+            .StepExecutionHistories.Where(h => h.ExecutionStatus == status && !h.is_deleted)
             .OrderByDescending(h => h.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<StepExecutionHistory>> GetRecentExecutionsAsync(int count)
     {
-        return await _context.StepExecutionHistories
-            .Where(h => !h.is_deleted)
+        return await _context
+            .StepExecutionHistories.Where(h => !h.is_deleted)
             .OrderByDescending(h => h.StartedAt)
             .Take(count)
             .ToListAsync();
@@ -76,11 +76,14 @@ public class StepExecutionHistoryRepository : IStepExecutionHistoryRepository
 
     public async Task UpdateAsync(StepExecutionHistory history)
     {
-        var existing = await _context.StepExecutionHistories
-            .FirstOrDefaultAsync(h => h.ExecutionHistoryID == history.ExecutionHistoryID);
+        var existing = await _context.StepExecutionHistories.FirstOrDefaultAsync(h =>
+            h.ExecutionHistoryID == history.ExecutionHistoryID
+        );
 
         if (existing == null)
-            throw new InvalidOperationException($"StepExecutionHistory {history.ExecutionHistoryID} not found");
+            throw new InvalidOperationException(
+                $"StepExecutionHistory {history.ExecutionHistoryID} not found"
+            );
 
         _context.Entry(existing).CurrentValues.SetValues(history);
         await _context.SaveChangesAsync();

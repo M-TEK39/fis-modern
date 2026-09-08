@@ -46,7 +46,7 @@ public class UserController : BaseApiController
             {
                 UserAccessCode = u.user_access_code,
                 TelephoneNumber = u.tel_no,
-                Email = u.email
+                Email = u.email,
             });
             return Ok(userDtos);
         }
@@ -74,7 +74,7 @@ public class UserController : BaseApiController
             {
                 UserAccessCode = user.user_access_code,
                 TelephoneNumber = user.tel_no,
-                Email = user.email
+                Email = user.email,
             };
 
             return Ok(userDto);
@@ -103,7 +103,7 @@ public class UserController : BaseApiController
             {
                 UserAccessCode = user.user_access_code,
                 TelephoneNumber = user.tel_no,
-                Email = user.email
+                Email = user.email,
             };
 
             return Ok(userDto);
@@ -132,7 +132,7 @@ public class UserController : BaseApiController
             {
                 UserAccessCode = user.user_access_code,
                 TelephoneNumber = user.tel_no,
-                Email = user.email
+                Email = user.email,
             };
 
             return Ok(userDto);
@@ -154,7 +154,7 @@ public class UserController : BaseApiController
             var user = new User
             {
                 tel_no = createUserDto.TelephoneNumber,
-                email = createUserDto.Email
+                email = createUserDto.Email,
             };
 
             var createdUser = await _userRepository.CreateAsync(user, currentUserId);
@@ -163,10 +163,14 @@ public class UserController : BaseApiController
             {
                 UserAccessCode = createdUser.user_access_code,
                 TelephoneNumber = createdUser.tel_no,
-                Email = createdUser.email
+                Email = createdUser.email,
             };
 
-            return CreatedAtAction(nameof(GetUser), new { id = createdUser.user_access_code }, userDto);
+            return CreatedAtAction(
+                nameof(GetUser),
+                new { id = createdUser.user_access_code },
+                userDto
+            );
         }
         catch (Exception ex)
         {
@@ -176,7 +180,10 @@ public class UserController : BaseApiController
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<UserDto>> UpdateUser(int id, [FromBody] UpdateUserDto updateUserDto)
+    public async Task<ActionResult<UserDto>> UpdateUser(
+        int id,
+        [FromBody] UpdateUserDto updateUserDto
+    )
     {
         try
         {
@@ -197,7 +204,7 @@ public class UserController : BaseApiController
             {
                 UserAccessCode = existingUser.user_access_code,
                 TelephoneNumber = existingUser.tel_no,
-                Email = existingUser.email
+                Email = existingUser.email,
             };
 
             return Ok(userDto);

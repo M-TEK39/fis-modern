@@ -165,7 +165,8 @@ function toVehicleSnapshot(value: unknown): VehicleSnapshotRow | null {
     invoiceNumber: asString(getValue(value, "invoice_number", "invoiceNumber")),
     modelName: asString(getValue(value, "model_name", "modelName")),
     statusDescription:
-      asString(getValue(value, "status_description", "statusDescription")) ?? statusDescriptionForCode(statusCode),
+      asString(getValue(value, "status_description", "statusDescription")) ??
+      statusDescriptionForCode(statusCode),
     recoveredGgNumber: asString(getValue(value, "recovered_gg_number", "recoveredGgNumber")),
     renumberedTo: asString(getValue(value, "renumbered_to", "renumberedTo")),
   };
@@ -273,20 +274,30 @@ function toContractSnapshot(value: unknown): ContractSnapshot {
 }
 
 async function getLatestContract(vmfCode: number): Promise<ContractSnapshot> {
-  const payload = await requestApi(`api/contracts?page=1&pageSize=25&vmfCode=${encodeURIComponent(vmfCode)}`);
+  const payload = await requestApi(
+    `api/contracts?page=1&pageSize=25&vmfCode=${encodeURIComponent(vmfCode)}`,
+  );
   const contracts = getCollection(payload).filter(isRecord);
   const latest = contracts.toSorted((left, right) => {
     const leftCode = asNumber(getValue(left, "contractCode", "contract_id", "contract_code")) ?? 0;
-    const rightCode = asNumber(getValue(right, "contractCode", "contract_id", "contract_code")) ?? 0;
+    const rightCode =
+      asNumber(getValue(right, "contractCode", "contract_id", "contract_code")) ?? 0;
     return rightCode - leftCode;
   })[0];
 
   return latest
     ? toContractSnapshot(latest)
-    : { label: "No Contract", badgeClass: "badge", targetReturnDate: null } satisfies ContractSnapshot;
+    : ({
+        label: "No Contract",
+        badgeClass: "badge",
+        targetReturnDate: null,
+      } satisfies ContractSnapshot);
 }
 
-export async function getVehicleSnapshotPage(page: number, pageSize = PAGE_SIZE): Promise<VehicleSnapshotPage> {
+export async function getVehicleSnapshotPage(
+  page: number,
+  pageSize = PAGE_SIZE,
+): Promise<VehicleSnapshotPage> {
   const payload = await requestApi("api/vehicles");
   const vehicles = getCollection(payload)
     .map(toVehicleSnapshot)
@@ -297,7 +308,10 @@ export async function getVehicleSnapshotPage(page: number, pageSize = PAGE_SIZE)
   const rows = vehicles.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const contractEntries = await Promise.all(
-    rows.map(async (vehicle) => [String(vehicle.vmfCode), await getLatestContract(vehicle.vmfCode)] as const),
+    rows.map(
+      async (vehicle) =>
+        [String(vehicle.vmfCode), await getLatestContract(vehicle.vmfCode)] as const,
+    ),
   );
 
   return {
@@ -330,7 +344,10 @@ export async function getVehicleOptions(): Promise<VehicleOption[]> {
 export async function getRenumberedVehicleReport(): Promise<RenumberedVehicleReportRow[]> {
   const payload = await requestApi("api/vehicles");
   if (isRecord(payload) && !["data", "items", "results"].some((key) => key in payload)) {
-    throw new VehicleApiError("invalid-response", "The FIS API returned an unexpected vehicle collection.");
+    throw new VehicleApiError(
+      "invalid-response",
+      "The FIS API returned an unexpected vehicle collection.",
+    );
   }
 
   const vehicles = mapPresent(getCollection(payload), toVehicleSnapshot);
@@ -341,12 +358,15 @@ export async function getRenumberedVehicleReport(): Promise<RenumberedVehicleRep
     }
   }
 
-  return vehicles.reduce<RenumberedVehicleReportRow[]>((rows, vehicle) => {
-    if (!vehicle.renumberedTo) {
-      return rows;
-    }
+  return vehicles
+    .reduce<RenumberedVehicleReportRow[]>((rows, vehicle) => {
+      if (!vehicle.renumberedTo) {
+        return rows;
+      }
 
-      const replacement = vehiclesByFleetNumber.get(vehicle.renumberedTo!.trim().toLocaleLowerCase());
+      const replacement = vehiclesByFleetNumber.get(
+        vehicle.renumberedTo!.trim().toLocaleLowerCase(),
+      );
 
       rows.push({
         oldVmfCode: vehicle.vmfCode,

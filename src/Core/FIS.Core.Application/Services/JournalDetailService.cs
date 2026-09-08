@@ -28,14 +28,22 @@ public class JournalDetailService : IJournalDetailService
         IDepartmentRepository departmentRepository,
         ITariffCalculationService tariffCalculationService,
         ICurrentUserContext currentUserContext,
-        ILogger<JournalDetailService> logger)
+        ILogger<JournalDetailService> logger
+    )
     {
-        _journalDetailRepository = journalDetailRepository ?? throw new ArgumentNullException(nameof(journalDetailRepository));
-        _vehicleRepository = vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
+        _journalDetailRepository =
+            journalDetailRepository
+            ?? throw new ArgumentNullException(nameof(journalDetailRepository));
+        _vehicleRepository =
+            vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
         _siteRepository = siteRepository ?? throw new ArgumentNullException(nameof(siteRepository));
-        _departmentRepository = departmentRepository ?? throw new ArgumentNullException(nameof(departmentRepository));
-        _tariffCalculationService = tariffCalculationService ?? throw new ArgumentNullException(nameof(tariffCalculationService));
-        _currentUserContext = currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
+        _departmentRepository =
+            departmentRepository ?? throw new ArgumentNullException(nameof(departmentRepository));
+        _tariffCalculationService =
+            tariffCalculationService
+            ?? throw new ArgumentNullException(nameof(tariffCalculationService));
+        _currentUserContext =
+            currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -47,8 +55,11 @@ public class JournalDetailService : IJournalDetailService
     {
         try
         {
-            _logger.LogInformation("Creating journal detail for vehicle: {VmfCode}, Site: {SiteCode}",
-                journalDetail.vmf_code, journalDetail.site_code);
+            _logger.LogInformation(
+                "Creating journal detail for vehicle: {VmfCode}, Site: {SiteCode}",
+                journalDetail.vmf_code,
+                journalDetail.site_code
+            );
 
             // Set defaults
             if (journalDetail.journal_detail_code == Guid.Empty)
@@ -63,18 +74,30 @@ public class JournalDetailService : IJournalDetailService
             journalDetail.journal_detail_type_code = 1; // Default type
 
             // Calculate financial year
-            journalDetail.journal_detail_financial_year = CalculateFinancialYear(journalDetail.journal_detail_date);
+            journalDetail.journal_detail_financial_year = CalculateFinancialYear(
+                journalDetail.journal_detail_date
+            );
 
-            var created = await _journalDetailRepository.CreateAsync(journalDetail, _currentUserContext.GetCurrentUserIdOrDefault());
+            var created = await _journalDetailRepository.CreateAsync(
+                journalDetail,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Journal detail created: {JournalDetailCode}, Amount: {Amount}",
-                created.journal_detail_code, created.journal_detail_amount);
+            _logger.LogInformation(
+                "Journal detail created: {JournalDetailCode}, Amount: {Amount}",
+                created.journal_detail_code,
+                created.journal_detail_amount
+            );
 
             return created;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating journal detail for vehicle: {VmfCode}", journalDetail.vmf_code);
+            _logger.LogError(
+                ex,
+                "Error creating journal detail for vehicle: {VmfCode}",
+                journalDetail.vmf_code
+            );
             throw;
         }
     }
@@ -87,20 +110,35 @@ public class JournalDetailService : IJournalDetailService
     {
         try
         {
-            _logger.LogInformation("Updating journal detail: {JournalDetailCode}", journalDetail.journal_detail_code);
+            _logger.LogInformation(
+                "Updating journal detail: {JournalDetailCode}",
+                journalDetail.journal_detail_code
+            );
 
             journalDetail.journal_detail_date_updated = DateTime.Now;
 
             // Recalculate financial year if date changed
-            journalDetail.journal_detail_financial_year = CalculateFinancialYear(journalDetail.journal_detail_date);
+            journalDetail.journal_detail_financial_year = CalculateFinancialYear(
+                journalDetail.journal_detail_date
+            );
 
-            await _journalDetailRepository.UpdateAsync(journalDetail, _currentUserContext.GetCurrentUserIdOrDefault());
+            await _journalDetailRepository.UpdateAsync(
+                journalDetail,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Journal detail updated: {JournalDetailCode}", journalDetail.journal_detail_code);
+            _logger.LogInformation(
+                "Journal detail updated: {JournalDetailCode}",
+                journalDetail.journal_detail_code
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating journal detail: {JournalDetailCode}", journalDetail.journal_detail_code);
+            _logger.LogError(
+                ex,
+                "Error updating journal detail: {JournalDetailCode}",
+                journalDetail.journal_detail_code
+            );
             throw;
         }
     }
@@ -131,7 +169,10 @@ public class JournalDetailService : IJournalDetailService
     {
         try
         {
-            _logger.LogInformation("Generating reversal for journal detail: {JournalDetailCode}", journalDetailCode);
+            _logger.LogInformation(
+                "Generating reversal for journal detail: {JournalDetailCode}",
+                journalDetailCode
+            );
 
             // Get original journal detail
             var originalJournal = await _journalDetailRepository.GetByCodeAsync(journalDetailCode);
@@ -141,11 +182,18 @@ public class JournalDetailService : IJournalDetailService
             }
 
             // Check if already reversed
-            var existingReversals = await _journalDetailRepository.GetReversalsForJournalAsync(journalDetailCode);
+            var existingReversals = await _journalDetailRepository.GetReversalsForJournalAsync(
+                journalDetailCode
+            );
             if (existingReversals.Any())
             {
-                _logger.LogWarning("Journal detail {JournalDetailCode} already has reversals", journalDetailCode);
-                throw new InvalidOperationException($"Journal detail {journalDetailCode} already has reversal entries");
+                _logger.LogWarning(
+                    "Journal detail {JournalDetailCode} already has reversals",
+                    journalDetailCode
+                );
+                throw new InvalidOperationException(
+                    $"Journal detail {journalDetailCode} already has reversal entries"
+                );
             }
 
             // Create reversal entry (opposite debit/credit)
@@ -167,19 +215,29 @@ public class JournalDetailService : IJournalDetailService
                 journal_detail_date = DateTime.Now,
                 journal_detail_isaccepted = false,
                 journal_detail_financial_year = CalculateFinancialYear(DateTime.Now),
-                journal_detail_isreversaldenied = false
+                journal_detail_isreversaldenied = false,
             };
 
-            var createdReversal = await _journalDetailRepository.CreateAsync(reversal, _currentUserContext.GetCurrentUserIdOrDefault());
+            var createdReversal = await _journalDetailRepository.CreateAsync(
+                reversal,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Reversal created: {ReversalCode} for original {OriginalCode}",
-                createdReversal.journal_detail_code, journalDetailCode);
+            _logger.LogInformation(
+                "Reversal created: {ReversalCode} for original {OriginalCode}",
+                createdReversal.journal_detail_code,
+                journalDetailCode
+            );
 
             return createdReversal;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating reversal for journal detail: {JournalDetailCode}", journalDetailCode);
+            _logger.LogError(
+                ex,
+                "Error generating reversal for journal detail: {JournalDetailCode}",
+                journalDetailCode
+            );
             throw;
         }
     }
@@ -198,33 +256,56 @@ public class JournalDetailService : IJournalDetailService
         short siteCode,
         int departmentCode,
         string contractType,
-        DateTime checkDate)
+        DateTime checkDate
+    )
     {
         try
         {
-            _logger.LogInformation("Calculating journal amount for vehicle {VmfCode}, period {StartDate} to {EndDate}",
-                vmfCode, startDate, endDate);
+            _logger.LogInformation(
+                "Calculating journal amount for vehicle {VmfCode}, period {StartDate} to {EndDate}",
+                vmfCode,
+                startDate,
+                endDate
+            );
 
             // Get tariff rate
             var tariff = await GetVehicleTariffAsync(
-                startDate, endDate, startOdometer, endOdometer,
-                vmfCode, siteCode, departmentCode, contractType, checkDate, "FIXED");
+                startDate,
+                endDate,
+                startOdometer,
+                endOdometer,
+                vmfCode,
+                siteCode,
+                departmentCode,
+                contractType,
+                checkDate,
+                "FIXED"
+            );
 
             // Calculate quantity (number of days)
             int quantity = (endDate - startDate).Days;
-            if (quantity < 0) quantity = 0;
+            if (quantity < 0)
+                quantity = 0;
 
             // Calculate amount
             decimal amount = Math.Round(quantity * tariff, 2);
 
-            _logger.LogInformation("Calculated amount: {Amount} (Quantity: {Quantity} days * Tariff: {Tariff})",
-                amount, quantity, tariff);
+            _logger.LogInformation(
+                "Calculated amount: {Amount} (Quantity: {Quantity} days * Tariff: {Tariff})",
+                amount,
+                quantity,
+                tariff
+            );
 
             return amount;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating journal amount for vehicle: {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error calculating journal amount for vehicle: {VmfCode}",
+                vmfCode
+            );
             throw;
         }
     }
@@ -244,24 +325,41 @@ public class JournalDetailService : IJournalDetailService
         int departmentCode,
         string contractType,
         DateTime checkDate,
-        string tariffType = "FIXED")
+        string tariffType = "FIXED"
+    )
     {
         try
         {
-            _logger.LogInformation("Getting tariff for vehicle {VmfCode}, type {TariffType}", vmfCode, tariffType);
+            _logger.LogInformation(
+                "Getting tariff for vehicle {VmfCode}, type {TariffType}",
+                vmfCode,
+                tariffType
+            );
 
             // Use the comprehensive TariffCalculationService
-            var tariffTypeEnum = tariffType.ToUpper() == "KILOS" ? TariffType.Kilos : TariffType.Fixed;
+            var tariffTypeEnum =
+                tariffType.ToUpper() == "KILOS" ? TariffType.Kilos : TariffType.Fixed;
 
             var result = await _tariffCalculationService.GetVehicleTariffAsync(
-                startDate, endDate, startOdometer, endOdometer,
-                vmfCode, siteCode, departmentCode, contractType,
-                checkDate, tariffTypeEnum);
+                startDate,
+                endDate,
+                startOdometer,
+                endOdometer,
+                vmfCode,
+                siteCode,
+                departmentCode,
+                contractType,
+                checkDate,
+                tariffTypeEnum
+            );
 
             if (result.Status != TariffStatus.Valid)
             {
-                _logger.LogWarning("Tariff calculation returned status {Status}: {Message}",
-                    result.Status, result.Message);
+                _logger.LogWarning(
+                    "Tariff calculation returned status {Status}: {Message}",
+                    result.Status,
+                    result.Message
+                );
 
                 // Return error code or 0.00 based on status
                 return result.Status switch
@@ -269,12 +367,16 @@ public class JournalDetailService : IJournalDetailService
                     TariffStatus.YearNotFound => -1m,
                     TariffStatus.NoMatch => -2m,
                     TariffStatus.Incomplete => -3m,
-                    _ => 0.00m
+                    _ => 0.00m,
                 };
             }
 
-            _logger.LogInformation("Tariff retrieved: {Tariff} for vehicle {VmfCode} from {Source}",
-                result.Amount, vmfCode, result.Source);
+            _logger.LogInformation(
+                "Tariff retrieved: {Tariff} for vehicle {VmfCode} from {Source}",
+                result.Amount,
+                vmfCode,
+                result.Source
+            );
 
             return result.Amount;
         }
@@ -304,7 +406,9 @@ public class JournalDetailService : IJournalDetailService
     /// <summary>
     /// Get journal details by financial year
     /// </summary>
-    public async Task<IEnumerable<JournalDetail>> GetJournalDetailsByFinancialYearAsync(string financialYear)
+    public async Task<IEnumerable<JournalDetail>> GetJournalDetailsByFinancialYearAsync(
+        string financialYear
+    )
     {
         return await _journalDetailRepository.GetByFinancialYearAsync(financialYear);
     }
@@ -333,13 +437,20 @@ public class JournalDetailService : IJournalDetailService
         {
             _logger.LogInformation("Deleting journal detail: {JournalDetailId}", journalDetailId);
 
-            await _journalDetailRepository.DeleteAsync(journalDetailId, _currentUserContext.GetCurrentUserIdOrDefault());
+            await _journalDetailRepository.DeleteAsync(
+                journalDetailId,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
             _logger.LogInformation("Journal detail deleted: {JournalDetailId}", journalDetailId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting journal detail: {JournalDetailId}", journalDetailId);
+            _logger.LogError(
+                ex,
+                "Error deleting journal detail: {JournalDetailId}",
+                journalDetailId
+            );
             throw;
         }
     }

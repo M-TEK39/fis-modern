@@ -28,7 +28,10 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -37,7 +40,9 @@ function hasVehicleManagementPermission(accessLevel?: string) {
 function StatusCard({ title, message }: Readonly<{ title: string; message: string }>) {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">{title}</p>
       <h2>{message}</h2>
     </section>
@@ -63,7 +68,9 @@ function HistoryTable({ history }: Readonly<{ history: GgBlockHistoryPage }>) {
     </div>
   ) : (
     <div className="table-container fis-mt-1">
-      <div className="table-header"><span className="table-title">GG Block Number History...</span></div>
+      <div className="table-header">
+        <span className="table-title">GG Block Number History...</span>
+      </div>
       <div className="table-wrapper">
         <table className="data-table">
           <thead>
@@ -90,22 +97,46 @@ function HistoryTable({ history }: Readonly<{ history: GgBlockHistoryPage }>) {
   );
 }
 
-function Pagination({ history, routePath }: Readonly<{ history: GgBlockHistoryPage; routePath: string }>) {
+function Pagination({
+  history,
+  routePath,
+}: Readonly<{ history: GgBlockHistoryPage; routePath: string }>) {
   if (history.totalPages <= 1) {
     return null;
   }
 
-  const pageHref = (page: number) => page === 1 ? routePath : `${routePath}?page=${page}`;
+  const pageHref = (page: number) => (page === 1 ? routePath : `${routePath}?page=${page}`);
   return (
     <nav className="pagination-controls" aria-label="GG block number history pagination">
-      {history.page <= 1 ? <span className="button button-secondary" aria-disabled="true">Previous</span> : <Link className="button button-secondary" href={pageHref(history.page - 1)}>Previous</Link>}
-      <span aria-live="polite">Page {history.page} of {history.totalPages}</span>
-      {history.page >= history.totalPages ? <span className="button button-secondary" aria-disabled="true">Next</span> : <Link className="button button-secondary" href={pageHref(history.page + 1)}>Next</Link>}
+      {history.page <= 1 ? (
+        <span className="button button-secondary" aria-disabled="true">
+          Previous
+        </span>
+      ) : (
+        <Link className="button button-secondary" href={pageHref(history.page - 1)}>
+          Previous
+        </Link>
+      )}
+      <span aria-live="polite">
+        Page {history.page} of {history.totalPages}
+      </span>
+      {history.page >= history.totalPages ? (
+        <span className="button button-secondary" aria-disabled="true">
+          Next
+        </span>
+      ) : (
+        <Link className="button button-secondary" href={pageHref(history.page + 1)}>
+          Next
+        </Link>
+      )}
     </nav>
   );
 }
 
-async function GgBlockHistoryContent({ page, routePath }: Readonly<{ page: number; routePath: string }>) {
+async function GgBlockHistoryContent({
+  page,
+  routePath,
+}: Readonly<{ page: number; routePath: string }>) {
   let history: GgBlockHistoryPage;
   try {
     history = await getGgBlockHistory(page, PAGE_SIZE);
@@ -114,13 +145,18 @@ async function GgBlockHistoryContent({ page, routePath }: Readonly<{ page: numbe
       return <SessionRecovery returnPath={routePath} />;
     }
 
-    console.error("FIS GG block history request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS GG block history request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return (
       <div className="vehicle-status-card" role="alert">
         <p className="eyebrow">API unavailable</p>
         <h2>GG block number history could not be loaded.</h2>
         <p className="muted-copy">Retry when the FIS API is available.</p>
-        <Link className="button button-primary" href={routePath}>Try again</Link>
+        <Link className="button button-primary" href={routePath}>
+          Try again
+        </Link>
       </div>
     );
   }
@@ -133,7 +169,10 @@ async function GgBlockHistoryContent({ page, routePath }: Readonly<{ page: numbe
   );
 }
 
-export default async function GgBlockNumbersPage({ searchParams, routePath = "/vehicles/gg-block-numbers" }: GgBlockNumbersPageProps) {
+export default async function GgBlockNumbersPage({
+  searchParams,
+  routePath = "/vehicles/gg-block-numbers",
+}: GgBlockNumbersPageProps) {
   await connection();
   const session = await getSession();
 
@@ -142,15 +181,30 @@ export default async function GgBlockNumbersPage({ searchParams, routePath = "/v
   }
 
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={routePath} /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath={routePath} />
+      </main>
+    );
   }
 
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><StatusCard title="API unavailable" message="The GG block service is unavailable." /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <StatusCard title="API unavailable" message="The GG block service is unavailable." />
+      </main>
+    );
   }
 
   if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return <main className="page-shell vehicle-page-shell"><StatusCard title="Access restricted" message="You do not have permission to maintain GG block numbers." /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <StatusCard
+          title="Access restricted"
+          message="You do not have permission to maintain GG block numbers."
+        />
+      </main>
+    );
   }
 
   const query = await searchParams;
@@ -167,20 +221,40 @@ export default async function GgBlockNumbersPage({ searchParams, routePath = "/v
             <h1 id="gg-block-title">GG Block Number Maintenance</h1>
             <p>Capture and review GG block number ranges.</p>
           </div>
-          <Link className="button button-secondary" href="/vehicles">&lt; Previous Menu</Link>
+          <Link className="button button-secondary" href="/vehicles">
+            &lt; Previous Menu
+          </Link>
         </header>
 
-        {saved ? <div className="notice notice-success" role="status"><span aria-hidden="true">✓</span><span>GG block number range saved successfully.</span></div> : null}
+        {saved ? (
+          <div className="notice notice-success" role="status">
+            <span aria-hidden="true">✓</span>
+            <span>GG block number range saved successfully.</span>
+          </div>
+        ) : null}
 
         <GgBlockForm action={createGgBlockAction} returnPath={routePath} />
 
-        <Suspense fallback={<div className="loading-card" aria-busy="true"><span className="spinner" aria-hidden="true" /><p>Loading GG block history...</p></div>}>
+        <Suspense
+          fallback={
+            <div className="loading-card" aria-busy="true">
+              <span className="spinner" aria-hidden="true" />
+              <p>Loading GG block history...</p>
+            </div>
+          }
+        >
           <GgBlockHistoryContent page={page} routePath={routePath} />
         </Suspense>
 
         <div className="vehicle-footer-actions">
-          <Link className="button button-secondary" href="/vehicles">Back to Vehicle Master</Link>
-          <form action={logoutAction}><button className="button button-secondary" type="submit">Sign out</button></form>
+          <Link className="button button-secondary" href="/vehicles">
+            Back to Vehicle Master
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
         </div>
       </section>
     </main>

@@ -17,24 +17,53 @@ namespace FIS.Core.Infrastructure.Repositories;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "SQL identifiers come only from fixed compatibility allowlists; all submitted values are parameters.")]
+    Justification = "SQL identifiers come only from fixed compatibility allowlists; all submitted values are parameters."
+)]
 public sealed class FuelCardRepository : IFuelCardRepository
 {
     private const string TableName = "Fuel_card";
 
     private static readonly string[] BusinessColumns =
     [
-        "Fuel_card_code", "vmf_code", "Counter", "card_number", "PAN_number", "PetReceiver", "PetRecTel",
-        "PetTaken", "PetExpire", "ExpReason", "PetComment", "LinkGGNum", "Status_date", "PetRecId",
-        "PetRecFax", "Bank_cnt", "Inciddat", "Petrecsite", "Petprint", "Garage"
+        "Fuel_card_code",
+        "vmf_code",
+        "Counter",
+        "card_number",
+        "PAN_number",
+        "PetReceiver",
+        "PetRecTel",
+        "PetTaken",
+        "PetExpire",
+        "ExpReason",
+        "PetComment",
+        "LinkGGNum",
+        "Status_date",
+        "PetRecId",
+        "PetRecFax",
+        "Bank_cnt",
+        "Inciddat",
+        "Petrecsite",
+        "Petprint",
+        "Garage",
     ];
 
     private static readonly string[] OptionalAuditColumns =
-    ["date_created", "date_updated", "created_by_user_code", "modified_by_user_code", "is_deleted"];
+    [
+        "date_created",
+        "date_updated",
+        "created_by_user_code",
+        "modified_by_user_code",
+        "is_deleted",
+    ];
 
     private static readonly HashSet<string> DateColumns = new(StringComparer.OrdinalIgnoreCase)
     {
-        "PetTaken", "PetExpire", "Status_date", "Inciddat", "date_created", "date_updated"
+        "PetTaken",
+        "PetExpire",
+        "Status_date",
+        "Inciddat",
+        "date_created",
+        "date_updated",
     };
 
     private readonly FisDbContext _context;
@@ -44,28 +73,33 @@ public sealed class FuelCardRepository : IFuelCardRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<FuelCard?> GetByIdAsync(int fuelCardId)
-        => (await QueryAsync(
-            "[Fuel_card_code] = @fuelCardCode",
-            command => AddParameter(command, "@fuelCardCode", DbType.Int32, fuelCardId)))
-            .SingleOrDefault();
+    public async Task<FuelCard?> GetByIdAsync(int fuelCardId) =>
+        (
+            await QueryAsync(
+                "[Fuel_card_code] = @fuelCardCode",
+                command => AddParameter(command, "@fuelCardCode", DbType.Int32, fuelCardId)
+            )
+        ).SingleOrDefault();
 
     public async Task<FuelCard?> GetByCardNumberAsync(string cardNumber)
     {
-        if (string.IsNullOrWhiteSpace(cardNumber)) return null;
-        return (await QueryAsync(
-            "[card_number] = @cardNumber",
-            command => AddParameter(command, "@cardNumber", DbType.String, cardNumber.Trim())))
-            .SingleOrDefault();
+        if (string.IsNullOrWhiteSpace(cardNumber))
+            return null;
+        return (
+            await QueryAsync(
+                "[card_number] = @cardNumber",
+                command => AddParameter(command, "@cardNumber", DbType.String, cardNumber.Trim())
+            )
+        ).SingleOrDefault();
     }
 
-    public async Task<IEnumerable<FuelCard>> GetActiveFuelCardsAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<FuelCard>> GetActiveFuelCardsAsync() => await QueryAsync();
 
-    public async Task<IEnumerable<FuelCard>> GetFuelCardsByVehicleAsync(int vmfCode)
-        => await QueryAsync(
+    public async Task<IEnumerable<FuelCard>> GetFuelCardsByVehicleAsync(int vmfCode) =>
+        await QueryAsync(
             "[vmf_code] = @vmfCode",
-            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode));
+            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
+        );
 
     public async Task<FuelCard> CreateAsync(FuelCard fuelCard, int currentUserId)
     {
@@ -75,37 +109,84 @@ public sealed class FuelCardRepository : IFuelCardRepository
 
         AddValue(values, columns, "vmf_code", "@vmfCode", DbType.Int32, fuelCard.vmf_code);
         AddValue(values, columns, "Counter", "@counter", DbType.Int32, fuelCard.Counter);
-        AddValue(values, columns, "card_number", "@cardNumber", DbType.String, fuelCard.card_number);
+        AddValue(
+            values,
+            columns,
+            "card_number",
+            "@cardNumber",
+            DbType.String,
+            fuelCard.card_number
+        );
         AddValue(values, columns, "PAN_number", "@panNumber", DbType.String, fuelCard.PAN_number);
-        AddValue(values, columns, "PetReceiver", "@petReceiver", DbType.String, fuelCard.PetReceiver);
+        AddValue(
+            values,
+            columns,
+            "PetReceiver",
+            "@petReceiver",
+            DbType.String,
+            fuelCard.PetReceiver
+        );
         AddValue(values, columns, "PetRecTel", "@petRecTel", DbType.String, fuelCard.PetRecTel);
         AddValue(values, columns, "PetTaken", "@petTaken", DbType.DateTime2, fuelCard.PetTaken);
         AddValue(values, columns, "PetExpire", "@petExpire", DbType.DateTime2, fuelCard.PetExpire);
         AddValue(values, columns, "ExpReason", "@expReason", DbType.String, fuelCard.ExpReason);
         AddValue(values, columns, "PetComment", "@petComment", DbType.String, fuelCard.PetComment);
         AddValue(values, columns, "LinkGGNum", "@linkGgNum", DbType.String, fuelCard.LinkGGNum);
-        AddValue(values, columns, "Status_date", "@statusDate", DbType.DateTime2, fuelCard.Status_date);
+        AddValue(
+            values,
+            columns,
+            "Status_date",
+            "@statusDate",
+            DbType.DateTime2,
+            fuelCard.Status_date
+        );
         AddValue(values, columns, "PetRecId", "@petRecId", DbType.String, fuelCard.PetRecId);
         AddValue(values, columns, "PetRecFax", "@petRecFax", DbType.String, fuelCard.PetRecFax);
         AddValue(values, columns, "Bank_cnt", "@bankCount", DbType.String, fuelCard.Bank_cnt);
         AddValue(values, columns, "Inciddat", "@incidentDate", DbType.DateTime2, fuelCard.Inciddat);
-        AddValue(values, columns, "Petrecsite", "@petReceiverSite", DbType.Int16, fuelCard.Petrecsite);
+        AddValue(
+            values,
+            columns,
+            "Petrecsite",
+            "@petReceiverSite",
+            DbType.Int16,
+            fuelCard.Petrecsite
+        );
         AddValue(values, columns, "Petprint", "@petPrint", DbType.String, fuelCard.Petprint);
         AddValue(values, columns, "Garage", "@garage", DbType.String, fuelCard.Garage);
-        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
-        AddValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddValue(
+            values,
+            columns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddValue(
+            values,
+            columns,
+            "created_by_user_code",
+            "@createdByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
         AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
 
         var code = await ExecuteInsertAsync(values);
         return await GetByIdAsync(code)
-            ?? throw new InvalidOperationException($"Fuel card {code} could not be read after creation.");
+            ?? throw new InvalidOperationException(
+                $"Fuel card {code} could not be read after creation."
+            );
     }
 
     public async Task UpdateAsync(FuelCard fuelCard, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(fuelCard);
-        _ = await GetByIdAsync(fuelCard.Fuel_card_code)
-            ?? throw new InvalidOperationException($"Fuel card {fuelCard.Fuel_card_code} not found");
+        _ =
+            await GetByIdAsync(fuelCard.Fuel_card_code)
+            ?? throw new InvalidOperationException(
+                $"Fuel card {fuelCard.Fuel_card_code} not found"
+            );
 
         var columns = await GetAvailableColumnsAsync();
         var values = new List<WriteValue>();
@@ -113,25 +194,67 @@ public sealed class FuelCardRepository : IFuelCardRepository
         // only the fields it knows about.
         AddValue(values, columns, "vmf_code", "@vmfCode", DbType.Int32, fuelCard.vmf_code);
         AddValue(values, columns, "Counter", "@counter", DbType.Int32, fuelCard.Counter);
-        AddValue(values, columns, "card_number", "@cardNumber", DbType.String, fuelCard.card_number);
+        AddValue(
+            values,
+            columns,
+            "card_number",
+            "@cardNumber",
+            DbType.String,
+            fuelCard.card_number
+        );
         AddValue(values, columns, "PAN_number", "@panNumber", DbType.String, fuelCard.PAN_number);
-        AddValue(values, columns, "PetReceiver", "@petReceiver", DbType.String, fuelCard.PetReceiver);
+        AddValue(
+            values,
+            columns,
+            "PetReceiver",
+            "@petReceiver",
+            DbType.String,
+            fuelCard.PetReceiver
+        );
         AddValue(values, columns, "PetRecTel", "@petRecTel", DbType.String, fuelCard.PetRecTel);
         AddValue(values, columns, "PetTaken", "@petTaken", DbType.DateTime2, fuelCard.PetTaken);
         AddValue(values, columns, "PetExpire", "@petExpire", DbType.DateTime2, fuelCard.PetExpire);
         AddValue(values, columns, "ExpReason", "@expReason", DbType.String, fuelCard.ExpReason);
         AddValue(values, columns, "PetComment", "@petComment", DbType.String, fuelCard.PetComment);
         AddValue(values, columns, "LinkGGNum", "@linkGgNum", DbType.String, fuelCard.LinkGGNum);
-        AddValue(values, columns, "Status_date", "@statusDate", DbType.DateTime2, fuelCard.Status_date);
+        AddValue(
+            values,
+            columns,
+            "Status_date",
+            "@statusDate",
+            DbType.DateTime2,
+            fuelCard.Status_date
+        );
         AddValue(values, columns, "PetRecId", "@petRecId", DbType.String, fuelCard.PetRecId);
         AddValue(values, columns, "PetRecFax", "@petRecFax", DbType.String, fuelCard.PetRecFax);
         AddValue(values, columns, "Bank_cnt", "@bankCount", DbType.String, fuelCard.Bank_cnt);
         AddValue(values, columns, "Inciddat", "@incidentDate", DbType.DateTime2, fuelCard.Inciddat);
-        AddValue(values, columns, "Petrecsite", "@petReceiverSite", DbType.Int16, fuelCard.Petrecsite);
+        AddValue(
+            values,
+            columns,
+            "Petrecsite",
+            "@petReceiverSite",
+            DbType.Int16,
+            fuelCard.Petrecsite
+        );
         AddValue(values, columns, "Petprint", "@petPrint", DbType.String, fuelCard.Petprint);
         AddValue(values, columns, "Garage", "@garage", DbType.String, fuelCard.Garage);
-        AddValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-        AddValue(values, columns, "modified_by_user_code", "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddValue(
+            values,
+            columns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddValue(
+            values,
+            columns,
+            "modified_by_user_code",
+            "@modifiedByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null
+        );
 
         await ExecuteUpdateAsync(fuelCard.Fuel_card_code, values, columns);
     }
@@ -154,7 +277,12 @@ public sealed class FuelCardRepository : IFuelCardRepository
             if (columns.ContainsKey("modified_by_user_code"))
             {
                 assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-                AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                AddParameter(
+                    command,
+                    "@modifiedByUserCode",
+                    DbType.Int32,
+                    currentUserId > 0 ? currentUserId : null
+                );
             }
             command.CommandText = $"""
                 UPDATE [dbo].[{TableName}]
@@ -175,7 +303,10 @@ public sealed class FuelCardRepository : IFuelCardRepository
         await command.ExecuteNonQueryAsync();
     }
 
-    private async Task<List<FuelCard>> QueryAsync(string? predicate = null, Action<DbCommand>? configure = null)
+    private async Task<List<FuelCard>> QueryAsync(
+        string? predicate = null,
+        Action<DbCommand>? configure = null
+    )
     {
         var columns = await GetAvailableColumnsAsync();
         await using var scope = await OpenConnectionAsync();
@@ -183,10 +314,16 @@ public sealed class FuelCardRepository : IFuelCardRepository
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
 
         var conditions = new List<string> { GetActiveFilter(columns) };
-        if (!string.IsNullOrWhiteSpace(predicate)) conditions.Insert(0, predicate);
+        if (!string.IsNullOrWhiteSpace(predicate))
+            conditions.Insert(0, predicate);
         var order = columns.ContainsKey("Status_date") ? "[Status_date] DESC, " : string.Empty;
         command.CommandText = $"""
-            SELECT {string.Join(", ", BusinessColumns.Concat(OptionalAuditColumns).Select(column => GetProjection(columns, column)))}
+            SELECT {string.Join(
+                ", ",
+                BusinessColumns.Concat(OptionalAuditColumns).Select(column =>
+                    GetProjection(columns, column)
+                )
+            )}
             FROM [dbo].[{TableName}]
             WHERE {string.Join(" AND ", conditions)}
             ORDER BY {order}[Fuel_card_code] DESC
@@ -195,7 +332,8 @@ public sealed class FuelCardRepository : IFuelCardRepository
 
         var results = new List<FuelCard>();
         await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync()) results.Add(MapFuelCard(reader, columns));
+        while (await reader.ReadAsync())
+            results.Add(MapFuelCard(reader, columns));
         return results;
     }
 
@@ -205,7 +343,10 @@ public sealed class FuelCardRepository : IFuelCardRepository
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
         command.CommandText = $"""
-            INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+            INSERT INTO [dbo].[{TableName}] ({string.Join(
+                ", ",
+                values.Select(value => $"[{value.Column}]")
+            )})
             OUTPUT INSERTED.[Fuel_card_code]
             VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
             """;
@@ -213,9 +354,14 @@ public sealed class FuelCardRepository : IFuelCardRepository
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
-    private async Task ExecuteUpdateAsync(int fuelCardId, IReadOnlyList<WriteValue> values, IReadOnlyDictionary<string, ColumnInfo> columns)
+    private async Task ExecuteUpdateAsync(
+        int fuelCardId,
+        IReadOnlyList<WriteValue> values,
+        IReadOnlyDictionary<string, ColumnInfo> columns
+    )
     {
-        if (values.Count == 0) return;
+        if (values.Count == 0)
+            return;
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
@@ -250,19 +396,30 @@ public sealed class FuelCardRepository : IFuelCardRepository
             var name = reader.GetString(0);
             columns[name] = new ColumnInfo(name, reader.GetString(1));
         }
-        foreach (var required in BusinessColumns.Where(column => column != "Fuel_card_code" && !columns.ContainsKey(column)))
+        foreach (
+            var required in BusinessColumns.Where(column =>
+                column != "Fuel_card_code" && !columns.ContainsKey(column)
+            )
+        )
         {
-            throw new InvalidOperationException($"The required Fuel_card compatibility column {required} is not available.");
+            throw new InvalidOperationException(
+                $"The required Fuel_card compatibility column {required} is not available."
+            );
         }
         if (!columns.ContainsKey("Fuel_card_code"))
         {
-            throw new InvalidOperationException("The required Fuel_card compatibility key is not available.");
+            throw new InvalidOperationException(
+                "The required Fuel_card compatibility key is not available."
+            );
         }
         return columns;
     }
 
-    private static FuelCard MapFuelCard(DbDataReader reader, IReadOnlyDictionary<string, ColumnInfo> columns)
-        => new()
+    private static FuelCard MapFuelCard(
+        DbDataReader reader,
+        IReadOnlyDictionary<string, ColumnInfo> columns
+    ) =>
+        new()
         {
             Fuel_card_code = ReadInt32(reader, "Fuel_card_code") ?? 0,
             vmf_code = ReadInt32(reader, "vmf_code"),
@@ -284,21 +441,31 @@ public sealed class FuelCardRepository : IFuelCardRepository
             Petrecsite = ReadInt16(reader, "Petrecsite"),
             Petprint = ReadString(reader, "Petprint"),
             Garage = ReadString(reader, "Garage"),
-            date_created = ReadDateTimeIfAvailable(reader, columns, "date_created") ?? DateTime.MinValue,
+            date_created =
+                ReadDateTimeIfAvailable(reader, columns, "date_created") ?? DateTime.MinValue,
             date_updated = ReadDateTimeIfAvailable(reader, columns, "date_updated"),
             created_by_user_code = ReadInt32IfAvailable(reader, columns, "created_by_user_code"),
             modified_by_user_code = ReadInt32IfAvailable(reader, columns, "modified_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, columns, "is_deleted") ?? false
+            is_deleted = ReadBooleanIfAvailable(reader, columns, "is_deleted") ?? false,
         };
 
-    private static void AddValue(ICollection<WriteValue> values, IReadOnlyDictionary<string, ColumnInfo> columns, string column, string parameter, DbType type, object? value)
+    private static void AddValue(
+        ICollection<WriteValue> values,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string parameter,
+        DbType type,
+        object? value
+    )
     {
-        if (columns.ContainsKey(column) && value is not null) values.Add(new WriteValue(column, parameter, type, value));
+        if (columns.ContainsKey(column) && value is not null)
+            values.Add(new WriteValue(column, parameter, type, value));
     }
 
     private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)
     {
-        foreach (var value in values) AddParameter(command, value.Parameter, value.Type, value.Value);
+        foreach (var value in values)
+            AddParameter(command, value.Parameter, value.Type, value.Value);
     }
 
     private static void AddParameter(DbCommand command, string name, DbType type, object? value)
@@ -310,27 +477,37 @@ public sealed class FuelCardRepository : IFuelCardRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string GetActiveFilter(IReadOnlyDictionary<string, ColumnInfo> columns)
-        => columns.ContainsKey("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+    private static string GetActiveFilter(IReadOnlyDictionary<string, ColumnInfo> columns) =>
+        columns.ContainsKey("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
 
-    private static string GetProjection(IReadOnlyDictionary<string, ColumnInfo> columns, string column)
-        => columns.ContainsKey(column) ? $"[{column}] AS [{column}]" : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
+    private static string GetProjection(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column
+    ) =>
+        columns.ContainsKey(column)
+            ? $"[{column}] AS [{column}]"
+            : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
 
-    private static string GetSqlType(string column)
-        => DateColumns.Contains(column)
+    private static string GetSqlType(string column) =>
+        DateColumns.Contains(column)
             ? "datetime2"
             : column switch
             {
-                "Fuel_card_code" or "vmf_code" or "created_by_user_code" or "modified_by_user_code" => "int",
+                "Fuel_card_code"
+                or "vmf_code"
+                or "created_by_user_code"
+                or "modified_by_user_code" => "int",
                 "Counter" or "Petrecsite" => "smallint",
                 "is_deleted" => "bit",
-                _ => "varchar(1)"
+                _ => "varchar(1)",
             };
 
     private static string? ReadString(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
     }
 
     private static int? ReadInt32(DbDataReader reader, string column)
@@ -348,26 +525,38 @@ public sealed class FuelCardRepository : IFuelCardRepository
     private static DateTime? ReadDateTime(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        if (reader.IsDBNull(ordinal)) return null;
+        if (reader.IsDBNull(ordinal))
+            return null;
         var value = reader.GetValue(ordinal);
         return value switch
         {
             DateTime dateTime => dateTime,
             DateTimeOffset dateTimeOffset => dateTimeOffset.DateTime,
             _ when DateTime.TryParse(Convert.ToString(value), out var parsed) => parsed,
-            _ => null
+            _ => null,
         };
     }
 
-    private static DateTime? ReadDateTimeIfAvailable(DbDataReader reader, IReadOnlyDictionary<string, ColumnInfo> columns, string column)
-        => columns.ContainsKey(column) ? ReadDateTime(reader, column) : null;
+    private static DateTime? ReadDateTimeIfAvailable(
+        DbDataReader reader,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column
+    ) => columns.ContainsKey(column) ? ReadDateTime(reader, column) : null;
 
-    private static int? ReadInt32IfAvailable(DbDataReader reader, IReadOnlyDictionary<string, ColumnInfo> columns, string column)
-        => columns.ContainsKey(column) ? ReadInt32(reader, column) : null;
+    private static int? ReadInt32IfAvailable(
+        DbDataReader reader,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column
+    ) => columns.ContainsKey(column) ? ReadInt32(reader, column) : null;
 
-    private static bool? ReadBooleanIfAvailable(DbDataReader reader, IReadOnlyDictionary<string, ColumnInfo> columns, string column)
+    private static bool? ReadBooleanIfAvailable(
+        DbDataReader reader,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column
+    )
     {
-        if (!columns.ContainsKey(column)) return null;
+        if (!columns.ContainsKey(column))
+            return null;
         var ordinal = reader.GetOrdinal(column);
         return reader.IsDBNull(ordinal) ? null : Convert.ToBoolean(reader.GetValue(ordinal));
     }
@@ -376,11 +565,13 @@ public sealed class FuelCardRepository : IFuelCardRepository
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose) await connection.OpenAsync();
+        if (shouldClose)
+            await connection.OpenAsync();
         return new ConnectionScope(connection, shouldClose);
     }
 
     private sealed record ColumnInfo(string Name, string DataType);
+
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 
     private sealed class ConnectionScope : IAsyncDisposable
@@ -396,7 +587,8 @@ public sealed class FuelCardRepository : IFuelCardRepository
 
         public async ValueTask DisposeAsync()
         {
-            if (_shouldClose) await Connection.CloseAsync();
+            if (_shouldClose)
+                await Connection.CloseAsync();
         }
     }
 }

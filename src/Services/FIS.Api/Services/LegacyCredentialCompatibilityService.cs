@@ -22,7 +22,8 @@ public sealed class LegacyCredentialCompatibilityService
 
     public LegacyCredentialCompatibilityService(
         FisDbContext context,
-        ILogger<LegacyCredentialCompatibilityService> logger)
+        ILogger<LegacyCredentialCompatibilityService> logger
+    )
     {
         _context = context;
         _logger = logger;
@@ -49,9 +50,11 @@ public sealed class LegacyCredentialCompatibilityService
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "Command text is selected from fixed statements containing only allowlisted schema identifiers.")]
+        Justification = "Command text is selected from fixed statements containing only allowlisted schema identifiers."
+    )]
     public async Task<IReadOnlyDictionary<int, LegacyCredentialOptionalFields>> ReadManyAsync(
-        IEnumerable<int> credentialIds)
+        IEnumerable<int> credentialIds
+    )
     {
         var ids = credentialIds.Distinct().ToArray();
         if (ids.Length == 0)
@@ -92,7 +95,10 @@ public sealed class LegacyCredentialCompatibilityService
                         var credentialId = reader.GetInt32(reader.GetOrdinal("credential_id"));
                         var expiry = ReadDateTime(reader, availableColumns, "password_expiry_date");
                         var changedBy = ReadInt32(reader, availableColumns, "changed_by_user_code");
-                        result[credentialId] = new LegacyCredentialOptionalFields(expiry, changedBy);
+                        result[credentialId] = new LegacyCredentialOptionalFields(
+                            expiry,
+                            changedBy
+                        );
                     }
                 }
 
@@ -111,7 +117,8 @@ public sealed class LegacyCredentialCompatibilityService
             // Optional expanded columns must never stop the legacy login path.
             _logger.LogWarning(
                 ex,
-                "Could not read optional Legacy_User_Credentials columns; continuing with legacy credential data");
+                "Could not read optional Legacy_User_Credentials columns; continuing with legacy credential data"
+            );
             return new Dictionary<int, LegacyCredentialOptionalFields>();
         }
     }
@@ -119,7 +126,8 @@ public sealed class LegacyCredentialCompatibilityService
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "Command text is selected from fixed statements containing only allowlisted schema identifiers.")]
+        Justification = "Command text is selected from fixed statements containing only allowlisted schema identifiers."
+    )]
     public async Task PersistAsync(LegacyUserCredential credential)
     {
         try
@@ -150,7 +158,8 @@ public sealed class LegacyCredentialCompatibilityService
                         command,
                         "@passwordExpiryDate",
                         DbType.DateTime2,
-                        credential.password_expiry_date ?? (object)DBNull.Value);
+                        credential.password_expiry_date ?? (object)DBNull.Value
+                    );
                 }
 
                 if (availableColumns.Contains("changed_by_user_code"))
@@ -159,7 +168,8 @@ public sealed class LegacyCredentialCompatibilityService
                         command,
                         "@changedByUserCode",
                         DbType.Int32,
-                        credential.changed_by_user_code ?? (object)DBNull.Value);
+                        credential.changed_by_user_code ?? (object)DBNull.Value
+                    );
                 }
 
                 await command.ExecuteNonQueryAsync();
@@ -176,7 +186,8 @@ public sealed class LegacyCredentialCompatibilityService
         {
             _logger.LogWarning(
                 ex,
-                "Could not persist optional Legacy_User_Credentials columns; legacy credential state remains authoritative");
+                "Could not persist optional Legacy_User_Credentials columns; legacy credential state remains authoritative"
+            );
         }
     }
 
@@ -285,7 +296,8 @@ public sealed class LegacyCredentialCompatibilityService
     private static DateTime? ReadDateTime(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string columnName)
+        string columnName
+    )
     {
         if (!columns.Contains(columnName))
         {
@@ -299,7 +311,8 @@ public sealed class LegacyCredentialCompatibilityService
     private static int? ReadInt32(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string columnName)
+        string columnName
+    )
     {
         if (!columns.Contains(columnName))
         {
@@ -310,11 +323,7 @@ public sealed class LegacyCredentialCompatibilityService
         return reader.IsDBNull(ordinal) ? null : Convert.ToInt32(reader.GetValue(ordinal));
     }
 
-    private static void AddParameter(
-        DbCommand command,
-        string name,
-        DbType type,
-        object value)
+    private static void AddParameter(DbCommand command, string name, DbType type, object value)
     {
         var parameter = command.CreateParameter();
         parameter.ParameterName = name;
@@ -326,4 +335,5 @@ public sealed class LegacyCredentialCompatibilityService
 
 public sealed record LegacyCredentialOptionalFields(
     DateTime? PasswordExpiryDate,
-    int? ChangedByUserCode);
+    int? ChangedByUserCode
+);

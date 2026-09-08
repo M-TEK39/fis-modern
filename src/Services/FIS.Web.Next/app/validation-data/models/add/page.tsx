@@ -40,23 +40,79 @@ const emptyModel: ModelRecord = {
 };
 
 function ErrorCard({ message }: Readonly<{ message: string }>) {
-  return <section className="vehicle-status-card" role="alert"><p className="eyebrow">Model maintenance</p><h2>{message}</h2><Link className="button button-secondary" href="/Validation/MNT_model.aspx">Model Maintenance</Link></section>;
+  return (
+    <section className="vehicle-status-card" role="alert">
+      <p className="eyebrow">Model maintenance</p>
+      <h2>{message}</h2>
+      <Link className="button button-secondary" href="/Validation/MNT_model.aspx">
+        Model Maintenance
+      </Link>
+    </section>
+  );
 }
 
 export default async function ModelAddPage() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
-  if (session.status === "expired") return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/Validation/MNT_Model_Add.aspx" /></main>;
-  if (session.status === "unavailable") return <main className="page-shell vehicle-page-shell"><ErrorCard message="Model maintenance is temporarily unavailable." /></main>;
-  if (!hasVehicleManagementPermission(session.accessLevel)) return <main className="page-shell vehicle-page-shell"><ErrorCard message="You do not have permission to add vehicle models." /></main>;
+  if (session.status === "expired")
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath="/Validation/MNT_Model_Add.aspx" />
+      </main>
+    );
+  if (session.status === "unavailable")
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ErrorCard message="Model maintenance is temporarily unavailable." />
+      </main>
+    );
+  if (!hasVehicleManagementPermission(session.accessLevel))
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ErrorCard message="You do not have permission to add vehicle models." />
+      </main>
+    );
 
   try {
     const referenceData = await getModelReferenceData();
-    return <main className="page-shell vehicle-page-shell"><section className="vehicle-card" aria-labelledby="model-add-title"><header className="vehicle-page-header"><div><p className="eyebrow">Validation / Vehicle</p><h1 id="model-add-title">Add New Model</h1><p>Add a complete vehicle model record to the legacy model table.</p></div><Link className="button button-secondary" href="/Validation/MNT_model.aspx">Model Maintenance</Link></header><ModelForm action={createModelAction} model={emptyModel} mode="create" referenceData={referenceData} /></section></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <section className="vehicle-card" aria-labelledby="model-add-title">
+          <header className="vehicle-page-header">
+            <div>
+              <p className="eyebrow">Validation / Vehicle</p>
+              <h1 id="model-add-title">Add New Model</h1>
+              <p>Add a complete vehicle model record to the legacy model table.</p>
+            </div>
+            <Link className="button button-secondary" href="/Validation/MNT_model.aspx">
+              Model Maintenance
+            </Link>
+          </header>
+          <ModelForm
+            action={createModelAction}
+            model={emptyModel}
+            mode="create"
+            referenceData={referenceData}
+          />
+        </section>
+      </main>
+    );
   } catch (error) {
-    if (error instanceof ModelApiError && error.reason === "unauthorized") return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/Validation/MNT_Model_Add.aspx" /></main>;
-    console.error("FIS model add reference data request failed", error instanceof Error ? error.message : "unknown error");
-    return <main className="page-shell vehicle-page-shell"><ErrorCard message="The model reference data could not be loaded." /></main>;
+    if (error instanceof ModelApiError && error.reason === "unauthorized")
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <SessionRecovery returnPath="/Validation/MNT_Model_Add.aspx" />
+        </main>
+      );
+    console.error(
+      "FIS model add reference data request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ErrorCard message="The model reference data could not be loaded." />
+      </main>
+    );
   }
 }

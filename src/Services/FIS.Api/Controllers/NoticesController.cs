@@ -52,7 +52,7 @@ public class NoticesController : BaseApiController
             notice_title = request.NoticeTitle,
             notice_body = request.NoticeBody,
             notice_person = request.NoticePerson,
-            notice_person_title = request.NoticePersonTitle
+            notice_person_title = request.NoticePersonTitle,
         };
 
         var created = await _noticeRepository.CreateAsync(notice, GetCurrentUserId());
@@ -102,7 +102,7 @@ public class NoticesController : BaseApiController
             NoticeBody = notice.notice_body,
             NoticePerson = notice.notice_person,
             NoticePersonTitle = notice.notice_person_title,
-            CreatedDate = notice.date_created
+            CreatedDate = notice.date_created,
         };
     }
 }

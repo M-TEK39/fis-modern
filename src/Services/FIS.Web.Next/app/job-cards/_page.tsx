@@ -13,38 +13,64 @@ export async function getJobCardSession() {
 }
 
 export function SessionProblem({ returnPath }: Readonly<{ returnPath: string }>) {
-  return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={returnPath} /></main>;
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <SessionRecovery returnPath={returnPath} />
+    </main>
+  );
 }
 
 export function hasJobCardRole(roles: readonly string[], kind: "capturer" | "authorizer") {
   return roles.some((role) => {
     const normalized = role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
-    return normalized.includes("jobcard") && normalized.includes(kind === "capturer" ? "captur" : "author");
+    return (
+      normalized.includes("jobcard") &&
+      normalized.includes(kind === "capturer" ? "captur" : "author")
+    );
   });
 }
 
-export function hasLegacyJobCardAccess(session: Extract<SessionState, { status: "authenticated" }>) {
+export function hasLegacyJobCardAccess(
+  session: Extract<SessionState, { status: "authenticated" }>,
+) {
   const accessLevel = Number(session.accessLevel);
   return Number.isInteger(accessLevel) && (accessLevel & (1 | 32)) !== 0;
 }
 
 export function canUseJobCardArea(session: Extract<SessionState, { status: "authenticated" }>) {
-  return hasLegacyJobCardAccess(session) || hasJobCardRole(session.roles, "capturer") || hasJobCardRole(session.roles, "authorizer");
+  return (
+    hasLegacyJobCardAccess(session) ||
+    hasJobCardRole(session.roles, "capturer") ||
+    hasJobCardRole(session.roles, "authorizer")
+  );
 }
 
 export function accessRestricted(message: string) {
-  return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">Access restricted</p><h2>{message}</h2></section></main>;
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-status-card" role="alert">
+        <p className="eyebrow">Access restricted</p>
+        <h2>{message}</h2>
+      </section>
+    </main>
+  );
 }
 
 export function sessionMessage(session: SessionState, returnPath: string) {
-  return session.status === "expired" || session.status === "unavailable" ? <SessionProblem returnPath={returnPath} /> : null;
+  return session.status === "expired" || session.status === "unavailable" ? (
+    <SessionProblem returnPath={returnPath} />
+  ) : null;
 }
 
 export function queryValue(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
-export function filterByVehicle(cards: Awaited<ReturnType<typeof import("@/lib/api-job-cards").getJobCards>>, query: string, mode: string) {
+export function filterByVehicle(
+  cards: Awaited<ReturnType<typeof import("@/lib/api-job-cards").getJobCards>>,
+  query: string,
+  mode: string,
+) {
   const normalized = query.trim().toLocaleLowerCase();
   if (!normalized) return cards;
   return cards.filter((card) => {

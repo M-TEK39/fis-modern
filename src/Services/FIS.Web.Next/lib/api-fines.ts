@@ -270,22 +270,32 @@ function mapFine(value: unknown): FineRecord | null {
     fineCode,
     vmfCode: asNumber(getValue(value, "vmf_code", "vmfCode")),
     offenceDate: asString(getValue(value, "Offence_date", "offence_date", "offenceDate")),
-    offenceReference: asString(getValue(value, "Offence_reference", "offence_reference", "offenceReference")),
+    offenceReference: asString(
+      getValue(value, "Offence_reference", "offence_reference", "offenceReference"),
+    ),
     offenceIssuer: asString(getValue(value, "Offence_issuer", "offence_issuer", "offenceIssuer")),
     fineAmount: asNumber(getValue(value, "Fine_amount", "fine_amount", "fineAmount")),
     appearDate: asString(getValue(value, "Appear_date", "appear_date", "appearDate")),
     receiveGgDate: asString(getValue(value, "Receive_gg_date", "receive_gg_date", "receiveGgDate")),
-    notifyDeptDate: asString(getValue(value, "Notify_dept_date", "notify_dept_date", "notifyDeptDate")),
+    notifyDeptDate: asString(
+      getValue(value, "Notify_dept_date", "notify_dept_date", "notifyDeptDate"),
+    ),
     siteCode: asNumber(getValue(value, "Site_code", "site_code", "siteCode")),
     offenceName: asString(getValue(value, "Offence_name", "offence_name", "offenceName")),
     finePayDate: asString(getValue(value, "Fine_pay_date", "fine_pay_date", "finePayDate")),
     withdrawDate: asString(getValue(value, "Withdraw_date", "withdraw_date", "withdrawDate")),
     payDueDate: asString(getValue(value, "Pay_due_date", "pay_due_date", "payDueDate")),
-    issuerNotifyDate: asString(getValue(value, "Issuer_notify_date", "issuer_notify_date", "issuerNotifyDate")),
-    deptPersonName: asString(getValue(value, "Dept_person_name", "dept_person_name", "deptPersonName")),
+    issuerNotifyDate: asString(
+      getValue(value, "Issuer_notify_date", "issuer_notify_date", "issuerNotifyDate"),
+    ),
+    deptPersonName: asString(
+      getValue(value, "Dept_person_name", "dept_person_name", "deptPersonName"),
+    ),
     deptPersonId: asString(getValue(value, "Dept_person_id", "dept_person_id", "deptPersonId")),
     documentType: asString(getValue(value, "Document_type", "document_type", "documentType")),
-    trafficDeptCode: asNumber(getValue(value, "Traffic_dept_code", "traffic_dept_code", "trafficDeptCode")),
+    trafficDeptCode: asNumber(
+      getValue(value, "Traffic_dept_code", "traffic_dept_code", "trafficDeptCode"),
+    ),
   };
 }
 
@@ -302,7 +312,15 @@ function mapVehicle(value: unknown): FineVehicleOption | null {
   return {
     vmfCode,
     fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
-    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber", "current_registration", "currentRegistration")),
+    registrationNumber: asString(
+      getValue(
+        value,
+        "registration_number",
+        "registrationNumber",
+        "current_registration",
+        "currentRegistration",
+      ),
+    ),
     matchedRegistration: asString(getValue(value, "matched_registration", "matchedRegistration")),
     isHistoricalMatch: getValue(value, "is_historical_match", "isHistoricalMatch") === true,
   };
@@ -313,7 +331,9 @@ function mapTrafficDept(value: unknown): TrafficDeptRecord | null {
     return null;
   }
 
-  const trafficDeptCode = asNumber(getValue(value, "Traffic_dept_code", "traffic_dept_code", "trafficDeptCode"));
+  const trafficDeptCode = asNumber(
+    getValue(value, "Traffic_dept_code", "traffic_dept_code", "trafficDeptCode"),
+  );
   if (trafficDeptCode === null) {
     return null;
   }
@@ -321,9 +341,15 @@ function mapTrafficDept(value: unknown): TrafficDeptRecord | null {
   return {
     trafficDeptCode,
     name: asString(getValue(value, "Traf_name", "traf_name", "name")),
-    responsiblePerson: asString(getValue(value, "Traf_res_person", "traf_res_person", "responsiblePerson")),
-    postalAddress1: asString(getValue(value, "Traf_post_address1", "traf_post_address1", "postalAddress1")),
-    postalAddress2: asString(getValue(value, "Traf_post_address2", "traf_post_address2", "postalAddress2")),
+    responsiblePerson: asString(
+      getValue(value, "Traf_res_person", "traf_res_person", "responsiblePerson"),
+    ),
+    postalAddress1: asString(
+      getValue(value, "Traf_post_address1", "traf_post_address1", "postalAddress1"),
+    ),
+    postalAddress2: asString(
+      getValue(value, "Traf_post_address2", "traf_post_address2", "postalAddress2"),
+    ),
     postalCode: asString(getValue(value, "Traf_post_code", "traf_post_code", "postalCode")),
     telephone: asString(getValue(value, "Traf_telephone", "traf_telephone", "telephone")),
     fax: asString(getValue(value, "Traf_fax", "traf_fax", "fax")),
@@ -345,18 +371,18 @@ function mapFineReport(value: unknown): FineReport | null {
 
   const columns = mapPresent(rawColumns, (column) => {
     if (!isRecord(column)) return null;
-      const key = asString(getValue(column, "Key", "key"));
-      const header = asString(getValue(column, "Header", "header"));
-      return key && header ? { key, header } : null;
+    const key = asString(getValue(column, "Key", "key"));
+    const header = asString(getValue(column, "Header", "header"));
+    return key && header ? { key, header } : null;
   });
 
   const rows = mapPresent(rawRows, (row) => {
     if (!isRecord(row)) return null;
-      const mapped: Record<string, string | null> = {};
-      for (const [key, value] of Object.entries(row)) {
-        mapped[key] = asString(value);
-      }
-      return mapped;
+    const mapped: Record<string, string | null> = {};
+    for (const [key, value] of Object.entries(row)) {
+      mapped[key] = asString(value);
+    }
+    return mapped;
   });
 
   const title = asString(getValue(value, "Title", "title"));
@@ -387,7 +413,9 @@ function mapSite(value: unknown): FineSite | null {
 
   return {
     siteCode,
-    departmentNumber: asString(getValue(value, "DepartmentNumber", "departmentNumber", "Department_number")),
+    departmentNumber: asString(
+      getValue(value, "DepartmentNumber", "departmentNumber", "Department_number"),
+    ),
     description: asString(getValue(value, "Description", "description")),
   };
 }
@@ -430,9 +458,10 @@ export async function searchFineVehicles(searchType: FineSearchType, searchTerm:
     return [];
   }
 
-  const path = searchType === "GP"
-    ? `api/registration/search?q=${encodeURIComponent(normalized)}`
-    : `api/vehicles/search?searchTerm=${encodeURIComponent(normalized)}`;
+  const path =
+    searchType === "GP"
+      ? `api/registration/search?q=${encodeURIComponent(normalized)}`
+      : `api/vehicles/search?searchTerm=${encodeURIComponent(normalized)}`;
   const vehicles = getCollection(await readJson(await requestApi(path)))
     .map(mapVehicle)
     .filter((vehicle): vehicle is FineVehicleOption => vehicle !== null);
@@ -440,7 +469,10 @@ export async function searchFineVehicles(searchType: FineSearchType, searchTerm:
   const normalizedLower = normalized.toLocaleLowerCase();
   return vehicles
     .filter((vehicle) => {
-      const value = searchType === "GP" ? vehicle.matchedRegistration ?? vehicle.registrationNumber : vehicle.fleetNumber;
+      const value =
+        searchType === "GP"
+          ? (vehicle.matchedRegistration ?? vehicle.registrationNumber)
+          : vehicle.fleetNumber;
       return value?.trim().toLocaleLowerCase() === normalizedLower;
     })
     .toSorted((left, right) => {
@@ -494,7 +526,10 @@ export async function getTrafficDept(code: number) {
   const response = await requestApi(`api/TrafficDept/${encodeURIComponent(code)}`);
   const dept = mapTrafficDept(await readJson(response));
   if (!dept) {
-    throw new FineApiError("invalid-response", "The FIS API returned an invalid traffic department record.");
+    throw new FineApiError(
+      "invalid-response",
+      "The FIS API returned an invalid traffic department record.",
+    );
   }
 
   return dept;
@@ -518,7 +553,10 @@ export async function deleteFineAgainstApi(fineCode: number) {
 }
 
 export async function createTrafficDeptAgainstApi(request: TrafficDeptRequest) {
-  const response = await requestApi("api/TrafficDept", { method: "POST", body: JSON.stringify(request) });
+  const response = await requestApi("api/TrafficDept", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
   return mapTrafficDept(await readJson(response));
 }
 

@@ -37,7 +37,7 @@ public class AuctionRepository : IAuctionRepository
         "estimate_amount",
         "reserve_amount",
         "sold_id",
-        "remark"
+        "remark",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -46,7 +46,7 @@ public class AuctionRepository : IAuctionRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private static readonly string[] VehicleProjectionColumns =
@@ -56,7 +56,7 @@ public class AuctionRepository : IAuctionRepository
         "barcode",
         "sold_to",
         "sold_date",
-        "sold_amount"
+        "sold_amount",
     ];
 
     private static readonly string[] RequiredAuctionColumns =
@@ -75,7 +75,7 @@ public class AuctionRepository : IAuctionRepository
         "estimate_amount",
         "reserve_amount",
         "sold_id",
-        "remark"
+        "remark",
     ];
 
     private readonly FisDbContext _context;
@@ -85,19 +85,21 @@ public class AuctionRepository : IAuctionRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Auction?> GetByIdAsync(short auctionCode)
-        => (await QueryAsync(
-            "WHERE [a].[auction_code] = @auctionCode",
-            command => AddParameter(command, "@auctionCode", DbType.Int16, auctionCode)))
-            .SingleOrDefault();
+    public async Task<Auction?> GetByIdAsync(short auctionCode) =>
+        (
+            await QueryAsync(
+                "WHERE [a].[auction_code] = @auctionCode",
+                command => AddParameter(command, "@auctionCode", DbType.Int16, auctionCode)
+            )
+        ).SingleOrDefault();
 
-    public async Task<IEnumerable<Auction>> GetAllAsync()
-        => await QueryAsync();
+    public async Task<IEnumerable<Auction>> GetAllAsync() => await QueryAsync();
 
-    public async Task<IEnumerable<Auction>> GetByVehicleAsync(int vmfCode)
-        => await QueryAsync(
+    public async Task<IEnumerable<Auction>> GetByVehicleAsync(int vmfCode) =>
+        await QueryAsync(
             "WHERE [a].[vmf_code] = @vmfCode",
-            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode));
+            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
+        );
 
     public async Task<Auction> CreateAsync(Auction auction, int currentUserId)
     {
@@ -109,15 +111,30 @@ public class AuctionRepository : IAuctionRepository
             .ToList();
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_created", "@dateCreated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "created_by_user_code",
             "@createdByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            false
+        );
 
         auction.auction_code = await ExecuteInsertAsync(values);
         auction.date_created = now;
@@ -154,7 +171,8 @@ public class AuctionRepository : IAuctionRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The DELETE statement is fixed SQL and uses a parameter for the record identifier.")]
+        Justification = "The DELETE statement is fixed SQL and uses a parameter for the record identifier."
+    )]
     public async Task DeleteAsync(short auctionCode, int currentUserId)
     {
         var connection = _context.Database.GetDbConnection();
@@ -168,7 +186,8 @@ public class AuctionRepository : IAuctionRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"DELETE FROM [dbo].[{AuctionTableName}] WHERE [auction_code] = @auctionCode";
+            command.CommandText =
+                $"DELETE FROM [dbo].[{AuctionTableName}] WHERE [auction_code] = @auctionCode";
             AddParameter(command, "@auctionCode", DbType.Int16, auctionCode);
             await command.ExecuteNonQueryAsync();
         }
@@ -184,12 +203,17 @@ public class AuctionRepository : IAuctionRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters.")]
+        Justification = "The SELECT list and filters are composed only from fixed legacy columns and allowlisted optional columns; values are parameters."
+    )]
     private async Task<List<Auction>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null)
+        Action<DbCommand>? configure = null
+    )
     {
-        var availableColumns = await GetAvailableColumnsAsync(AuctionTableName, RequiredAuctionColumns);
+        var availableColumns = await GetAvailableColumnsAsync(
+            AuctionTableName,
+            RequiredAuctionColumns
+        );
         var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -204,8 +228,16 @@ public class AuctionRepository : IAuctionRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = LegacyColumns
                 .Select(column => $"[a].[{column}] AS [{column}]")
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column, "a")))
-                .Concat(VehicleProjectionColumns.Select(column => GetColumnProjection(vehicleColumns, column, "v")))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column, "a")
+                    )
+                )
+                .Concat(
+                    VehicleProjectionColumns.Select(column =>
+                        GetColumnProjection(vehicleColumns, column, "v")
+                    )
+                )
                 .ToArray();
             var whereClause = string.IsNullOrWhiteSpace(predicate)
                 ? $"WHERE {GetActiveFilter(availableColumns, "a")}"
@@ -245,7 +277,8 @@ public class AuctionRepository : IAuctionRepository
         if (existing == null)
         {
             throw new InvalidOperationException(
-                $"Auction with auction_code {auction.auction_code} not found");
+                $"Auction with auction_code {auction.auction_code} not found"
+            );
         }
 
         var availableColumns = await GetAvailableColumnsAsync(AuctionTableName);
@@ -254,15 +287,30 @@ public class AuctionRepository : IAuctionRepository
             .ToList();
         var now = DateTime.UtcNow;
 
-        AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            now
+        );
         AddOptionalValue(
             values,
             availableColumns,
             "modified_by_user_code",
             "@modifiedByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
-        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, auction.is_deleted);
+            currentUserId > 0 ? currentUserId : null
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            auction.is_deleted
+        );
 
         await ExecuteUpdateAsync(auction.auction_code, values);
         auction.date_created = existing.date_created;
@@ -275,7 +323,8 @@ public class AuctionRepository : IAuctionRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed only from fixed legacy vehicle columns; values are parameters.")]
+        Justification = "The UPDATE statement is composed only from fixed legacy vehicle columns; values are parameters."
+    )]
     private async Task UpdateVehicleMaintenanceAsync(Auction auction)
     {
         var availableColumns = await GetAvailableColumnsAsync(VehicleTableName);
@@ -283,18 +332,26 @@ public class AuctionRepository : IAuctionRepository
             .Where(value => availableColumns.Contains(value.Column))
             .ToList();
 
-        if (availableColumns.Contains("vehicle_status_code") && !string.IsNullOrWhiteSpace(auction.sold_to))
+        if (
+            availableColumns.Contains("vehicle_status_code")
+            && !string.IsNullOrWhiteSpace(auction.sold_to)
+        )
         {
-            values.Add(new WriteValue("vehicle_status_code", "@vehicleStatusCode", DbType.Int16, 5));
+            values.Add(
+                new WriteValue("vehicle_status_code", "@vehicleStatusCode", DbType.Int16, 5)
+            );
         }
 
         if (availableColumns.Contains("vehicle_status_date") && auction.sold_date.HasValue)
         {
-            values.Add(new WriteValue(
-                "vehicle_status_date",
-                "@vehicleStatusDate",
-                DbType.DateTime2,
-                auction.sold_date.Value));
+            values.Add(
+                new WriteValue(
+                    "vehicle_status_date",
+                    "@vehicleStatusDate",
+                    DbType.DateTime2,
+                    auction.sold_date.Value
+                )
+            );
         }
 
         if (values.Count == 0)
@@ -315,7 +372,10 @@ public class AuctionRepository : IAuctionRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{VehicleTableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [vmf_code] = @vmfCode
                 """;
             AddParameters(command, values);
@@ -334,7 +394,8 @@ public class AuctionRepository : IAuctionRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed only from fixed allowlisted column/value pairs and every value is parameterized.")]
+        Justification = "The INSERT statement is composed only from fixed allowlisted column/value pairs and every value is parameterized."
+    )]
     private async Task<short> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -349,7 +410,10 @@ public class AuctionRepository : IAuctionRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
-                INSERT INTO [dbo].[{AuctionTableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                INSERT INTO [dbo].[{AuctionTableName}] ({string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}]")
+                )})
                 OUTPUT INSERTED.[auction_code]
                 VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
                 """;
@@ -368,7 +432,8 @@ public class AuctionRepository : IAuctionRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed only from fixed allowlisted column/value pairs and every value is parameterized.")]
+        Justification = "The UPDATE statement is composed only from fixed allowlisted column/value pairs and every value is parameterized."
+    )]
     private async Task ExecuteUpdateAsync(short auctionCode, IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -384,7 +449,10 @@ public class AuctionRepository : IAuctionRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{AuctionTableName}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [auction_code] = @auctionCode
                 """;
             AddParameters(command, values);
@@ -402,7 +470,8 @@ public class AuctionRepository : IAuctionRepository
 
     private async Task<HashSet<string>> GetAvailableColumnsAsync(
         string tableName,
-        IReadOnlyCollection<string>? requiredColumns = null)
+        IReadOnlyCollection<string>? requiredColumns = null
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -433,11 +502,14 @@ public class AuctionRepository : IAuctionRepository
 
             if (requiredColumns is not null)
             {
-                var missingColumns = requiredColumns.Where(column => !columns.Contains(column)).ToArray();
+                var missingColumns = requiredColumns
+                    .Where(column => !columns.Contains(column))
+                    .ToArray();
                 if (missingColumns.Length > 0)
                 {
                     throw new InvalidOperationException(
-                        $"The required Auction compatibility columns are not available on {tableName}: {string.Join(", ", missingColumns)}");
+                        $"The required Auction compatibility columns are not available on {tableName}: {string.Join(", ", missingColumns)}"
+                    );
                 }
             }
 
@@ -452,9 +524,7 @@ public class AuctionRepository : IAuctionRepository
         }
     }
 
-    private static Auction MapAuction(
-        DbDataReader reader,
-        IReadOnlySet<string> auctionColumns)
+    private static Auction MapAuction(DbDataReader reader, IReadOnlySet<string> auctionColumns)
     {
         var authDate = ReadDateTime(reader, "auth_date");
         return new Auction
@@ -478,18 +548,26 @@ public class AuctionRepository : IAuctionRepository
             sold_to = ReadString(reader, "sold_to"),
             sold_date = ReadDateTime(reader, "sold_date"),
             sold_amount = ReadDecimal(reader, "sold_amount"),
-            date_created = ReadDateTimeIfAvailable(reader, auctionColumns, "date_created")
+            date_created =
+                ReadDateTimeIfAvailable(reader, auctionColumns, "date_created")
                 ?? authDate
                 ?? DateTime.MinValue,
             date_updated = ReadDateTimeIfAvailable(reader, auctionColumns, "date_updated"),
-            created_by_user_code = ReadInt32IfAvailable(reader, auctionColumns, "created_by_user_code"),
-            modified_by_user_code = ReadInt32IfAvailable(reader, auctionColumns, "modified_by_user_code"),
-            is_deleted = ReadBooleanIfAvailable(reader, auctionColumns, "is_deleted") ?? false
+            created_by_user_code = ReadInt32IfAvailable(
+                reader,
+                auctionColumns,
+                "created_by_user_code"
+            ),
+            modified_by_user_code = ReadInt32IfAvailable(
+                reader,
+                auctionColumns,
+                "modified_by_user_code"
+            ),
+            is_deleted = ReadBooleanIfAvailable(reader, auctionColumns, "is_deleted") ?? false,
         };
     }
 
-    private static List<WriteValue> BuildAuctionWriteValues(Auction auction)
-        =>
+    private static List<WriteValue> BuildAuctionWriteValues(Auction auction) =>
         [
             new("vmf_code", "@vmfCode", DbType.Int32, auction.vmf_code),
             new("auction_number", "@auctionNumber", DbType.String, auction.auction_number),
@@ -504,16 +582,15 @@ public class AuctionRepository : IAuctionRepository
             new("estimate_amount", "@estimateAmount", DbType.Decimal, auction.estimate_amount),
             new("reserve_amount", "@reserveAmount", DbType.Decimal, auction.reserve_amount),
             new("sold_id", "@soldId", DbType.String, auction.sold_id),
-            new("remark", "@remark", DbType.String, auction.remark)
+            new("remark", "@remark", DbType.String, auction.remark),
         ];
 
-    private static List<WriteValue> BuildVehicleWriteValues(Auction auction)
-        =>
+    private static List<WriteValue> BuildVehicleWriteValues(Auction auction) =>
         [
             new("barcode", "@barcode", DbType.String, auction.barcode),
             new("sold_to", "@soldTo", DbType.String, auction.sold_to),
             new("sold_date", "@soldDate", DbType.DateTime2, auction.sold_date),
-            new("sold_amount", "@soldAmount", DbType.Decimal, auction.sold_amount)
+            new("sold_amount", "@soldAmount", DbType.Decimal, auction.sold_amount),
         ];
 
     private static void AddOptionalValue(
@@ -522,7 +599,8 @@ public class AuctionRepository : IAuctionRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (availableColumns.Contains(column))
         {
@@ -547,15 +625,16 @@ public class AuctionRepository : IAuctionRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string GetActiveFilter(IReadOnlySet<string> availableColumns, string alias)
-        => availableColumns.Contains("is_deleted")
+    private static string GetActiveFilter(IReadOnlySet<string> availableColumns, string alias) =>
+        availableColumns.Contains("is_deleted")
             ? $"ISNULL([{alias}].[is_deleted], 0) = 0"
             : "1 = 1";
 
     private static string GetOptionalProjection(
         IReadOnlySet<string> columns,
         string column,
-        string alias)
+        string alias
+    )
     {
         if (columns.Contains(column))
         {
@@ -567,7 +646,7 @@ public class AuctionRepository : IAuctionRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "sql_variant"
+            _ => "sql_variant",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
@@ -575,24 +654,27 @@ public class AuctionRepository : IAuctionRepository
     private static string GetColumnProjection(
         IReadOnlySet<string> columns,
         string column,
-        string alias)
-        => columns.Contains(column)
+        string alias
+    ) =>
+        columns.Contains(column)
             ? $"[{alias}].[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetLegacySqlType(column)}) AS [{column}]";
 
-    private static string GetLegacySqlType(string column)
-        => column switch
+    private static string GetLegacySqlType(string column) =>
+        column switch
         {
             "fleet_number" or "registration_number" or "barcode" or "sold_to" => "varchar(1)",
             "sold_date" => "datetime",
             "sold_amount" => "numeric(18, 0)",
-            _ => "varchar(1)"
+            _ => "varchar(1)",
         };
 
     private static string? ReadString(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
-        return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
     }
 
     private static DateTime? ReadDateTime(DbDataReader reader, string column)
@@ -604,8 +686,8 @@ public class AuctionRepository : IAuctionRepository
     private static DateTime? ReadDateTimeIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadDateTime(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadDateTime(reader, column) : null;
 
     private static int? ReadInt32(DbDataReader reader, string column)
     {
@@ -616,8 +698,8 @@ public class AuctionRepository : IAuctionRepository
     private static int? ReadInt32IfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
-        => columns.Contains(column) ? ReadInt32(reader, column) : null;
+        string column
+    ) => columns.Contains(column) ? ReadInt32(reader, column) : null;
 
     private static short? ReadInt16(DbDataReader reader, string column)
     {
@@ -634,7 +716,8 @@ public class AuctionRepository : IAuctionRepository
     private static bool? ReadBooleanIfAvailable(
         DbDataReader reader,
         IReadOnlySet<string> columns,
-        string column)
+        string column
+    )
     {
         if (!columns.Contains(column))
         {

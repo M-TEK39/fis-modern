@@ -4,7 +4,13 @@ import { connection } from "next/server";
 
 import { deleteFineAction } from "@/app/fines/actions";
 import SessionRecovery from "@/app/home/session-recovery";
-import { FineApiError, getFine, getFineVehicle, type FineRecord, type FineVehicleOption } from "@/lib/api-fines";
+import {
+  FineApiError,
+  getFine,
+  getFineVehicle,
+  type FineRecord,
+  type FineVehicleOption,
+} from "@/lib/api-fines";
 import { getSession } from "@/lib/session";
 
 const REPORTS_ROLE = "Reports";
@@ -24,7 +30,9 @@ function getPositiveQueryInt(value: string | undefined) {
 }
 
 function hasReportsRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function valueOrDash(value: string | number | null | undefined) {
@@ -35,18 +43,38 @@ function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
 }
 
-function DetailField({ label, value }: Readonly<{ label: string; value: string | number | null | undefined }>) {
-  return <div className="form-field"><span className="form-label">{label}</span><div className="form-readonly-value">{valueOrDash(value)}</div></div>;
+function DetailField({
+  label,
+  value,
+}: Readonly<{ label: string; value: string | number | null | undefined }>) {
+  return (
+    <div className="form-field">
+      <span className="form-label">{label}</span>
+      <div className="form-readonly-value">{valueOrDash(value)}</div>
+    </div>
+  );
 }
 
-function FineDetails({ fine, vehicle }: Readonly<{ fine: FineRecord; vehicle: FineVehicleOption | null }>) {
+function FineDetails({
+  fine,
+  vehicle,
+}: Readonly<{ fine: FineRecord; vehicle: FineVehicleOption | null }>) {
   return (
-    <section className="vehicle-status-maintenance-panel" aria-labelledby="fine-delete-detail-title">
+    <section
+      className="vehicle-status-maintenance-panel"
+      aria-labelledby="fine-delete-detail-title"
+    >
       <div className="vehicle-form-section-header">
-        <div><p className="eyebrow">Delete confirmation</p><h2 id="fine-delete-detail-title">Fine #{fine.fineCode}</h2></div>
+        <div>
+          <p className="eyebrow">Delete confirmation</p>
+          <h2 id="fine-delete-detail-title">Fine #{fine.fineCode}</h2>
+        </div>
       </div>
       <div className="form-grid">
-        <DetailField label="Vehicle" value={`${valueOrDash(vehicle?.fleetNumber)} / ${valueOrDash(vehicle?.registrationNumber)} (${valueOrDash(fine.vmfCode)})`} />
+        <DetailField
+          label="Vehicle"
+          value={`${valueOrDash(vehicle?.fleetNumber)} / ${valueOrDash(vehicle?.registrationNumber)} (${valueOrDash(fine.vmfCode)})`}
+        />
         <DetailField label="Offence Date" value={formatDate(fine.offenceDate)} />
         <DetailField label="Reference Number" value={fine.offenceReference} />
         <DetailField label="Issuer" value={fine.offenceIssuer} />
@@ -68,8 +96,12 @@ function FineDetails({ fine, vehicle }: Readonly<{ fine: FineRecord; vehicle: Fi
       <form action={deleteFineAction}>
         <input name="fineCode" type="hidden" value={fine.fineCode} />
         <div className="button-row">
-          <button className="button button-danger" type="submit">DELETE</button>
-          <Link className="button button-secondary" href="/fines/delete">Cancel</Link>
+          <button className="button button-danger" type="submit">
+            DELETE
+          </button>
+          <Link className="button button-secondary" href="/fines/delete">
+            Cancel
+          </Link>
         </div>
       </form>
     </section>
@@ -79,35 +111,69 @@ function FineDetails({ fine, vehicle }: Readonly<{ fine: FineRecord; vehicle: Fi
 function ApiUnavailable() {
   return (
     <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">!</div>
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
       <p className="eyebrow">API unavailable</p>
       <h2>Fine details could not be loaded.</h2>
-      <p className="muted-copy">The application is still running. Retry when the FIS API is available.</p>
-      <Link className="button button-primary" href="/fines/delete">Back to Fines</Link>
+      <p className="muted-copy">
+        The application is still running. Retry when the FIS API is available.
+      </p>
+      <Link className="button button-primary" href="/fines/delete">
+        Back to Fines
+      </Link>
     </section>
   );
 }
 
-export default async function FineDeleteDetailPage({ searchParams, routePath = "/fines/delete/detail" }: FineDeleteDetailPageProps) {
+export default async function FineDeleteDetailPage({
+  searchParams,
+  routePath = "/fines/delete/detail",
+}: FineDeleteDetailPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") {
     redirect("/login");
   }
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={routePath} /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath={routePath} />
+      </main>
+    );
   }
   if (session.status === "unavailable") {
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable /></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable />
+      </main>
+    );
   }
   if (!hasReportsRole(session.roles)) {
-    return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">Access restricted</p><h2>You do not have permission to delete Fines.</h2></section></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <section className="vehicle-status-card" role="alert">
+          <p className="eyebrow">Access restricted</p>
+          <h2>You do not have permission to delete Fines.</h2>
+        </section>
+      </main>
+    );
   }
 
   const query = await searchParams;
   const fineCode = getPositiveQueryInt(getQueryValue(query.fineId) ?? getQueryValue(query.FCode));
   if (!fineCode) {
-    return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">Fine not selected</p><h2>Select a fine from the deletion list.</h2><Link className="button button-secondary" href="/fines/delete">Back to Fines</Link></section></main>;
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <section className="vehicle-status-card" role="alert">
+          <p className="eyebrow">Fine not selected</p>
+          <h2>Select a fine from the deletion list.</h2>
+          <Link className="button button-secondary" href="/fines/delete">
+            Back to Fines
+          </Link>
+        </section>
+      </main>
+    );
   }
 
   try {
@@ -116,16 +182,36 @@ export default async function FineDeleteDetailPage({ searchParams, routePath = "
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="fine-delete-page-title">
-          <header className="vehicle-page-header"><div><p className="eyebrow">Fines maintenance</p><h1 id="fine-delete-page-title">Delete Fine</h1><p>Review the legacy fine fields before confirming deletion.</p></div><Link className="button button-secondary" href="/fines">Fines Menu</Link></header>
+          <header className="vehicle-page-header">
+            <div>
+              <p className="eyebrow">Fines maintenance</p>
+              <h1 id="fine-delete-page-title">Delete Fine</h1>
+              <p>Review the legacy fine fields before confirming deletion.</p>
+            </div>
+            <Link className="button button-secondary" href="/fines">
+              Fines Menu
+            </Link>
+          </header>
           <FineDetails fine={fine} vehicle={vehicle} />
         </section>
       </main>
     );
   } catch (error) {
     if (error instanceof FineApiError && error.reason === "unauthorized") {
-      return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={`${routePath}?fineId=${fineCode}`} /></main>;
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <SessionRecovery returnPath={`${routePath}?fineId=${fineCode}`} />
+        </main>
+      );
     }
-    console.error("FIS fine deletion detail request failed", error instanceof Error ? error.message : "unknown error");
-    return <main className="page-shell vehicle-page-shell"><ApiUnavailable /></main>;
+    console.error(
+      "FIS fine deletion detail request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ApiUnavailable />
+      </main>
+    );
   }
 }

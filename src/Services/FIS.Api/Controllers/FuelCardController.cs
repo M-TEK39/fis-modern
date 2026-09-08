@@ -18,7 +18,8 @@ public class FuelCardController : BaseApiController
     public FuelCardController(
         IFuelCardRepository repository,
         IPrivateHireFuelCardRepository privateHireFuelCardRepository,
-        ILogger<FuelCardController> logger)
+        ILogger<FuelCardController> logger
+    )
     {
         _repository = repository;
         _privateHireFuelCardRepository = privateHireFuelCardRepository;
@@ -136,8 +137,8 @@ public class FuelCardController : BaseApiController
                 "Private Hire Maintenance",
                 "Private Hire Collection",
                 "Private Hire Delete",
-                "Reports"
-            }
+                "Reports",
+            },
         };
         return Ok(menu);
     }
@@ -146,7 +147,9 @@ public class FuelCardController : BaseApiController
     /// Search fuel cards for vehicle maintenance
     /// </summary>
     [HttpPost("maintenance/vehicle/search")]
-    public async Task<ActionResult<FuelCardSearchResultDto>> SearchVehicleForMaintenance([FromBody] FuelCardVehicleSearchDto request)
+    public async Task<ActionResult<FuelCardSearchResultDto>> SearchVehicleForMaintenance(
+        [FromBody] FuelCardVehicleSearchDto request
+    )
     {
         try
         {
@@ -156,42 +159,57 @@ public class FuelCardController : BaseApiController
                 var cards = await _repository.GetFuelCardsByVehicleAsync(vmfCode);
                 var cardsList = cards.ToList();
 
-                return Ok(new FuelCardSearchResultDto
-                {
-                    Found = cardsList.Any(),
-                    Message = cardsList.Any() ? $"Found {cardsList.Count} fuel card(s)" : "No fuel cards found for this vehicle",
-                    FuelCards = cardsList.Select(c => new FuelCardSummaryDto
+                return Ok(
+                    new FuelCardSearchResultDto
                     {
-                        FuelCardCode = c.Fuel_card_code,
-                        CardNumber = c.card_number,
-                        VmfCode = c.vmf_code,
-                        Status = !c.is_deleted ? "Active" : "Inactive"
-                    }).ToList()
-                });
+                        Found = cardsList.Any(),
+                        Message = cardsList.Any()
+                            ? $"Found {cardsList.Count} fuel card(s)"
+                            : "No fuel cards found for this vehicle",
+                        FuelCards = cardsList
+                            .Select(c => new FuelCardSummaryDto
+                            {
+                                FuelCardCode = c.Fuel_card_code,
+                                CardNumber = c.card_number,
+                                VmfCode = c.vmf_code,
+                                Status = !c.is_deleted ? "Active" : "Inactive",
+                            })
+                            .ToList(),
+                    }
+                );
             }
             else
             {
                 var card = await _repository.GetByCardNumberAsync(request.VehicleIdentifier);
-                return Ok(new FuelCardSearchResultDto
-                {
-                    Found = card != null,
-                    Message = card != null ? "Fuel card found" : "Fuel card not found",
-                    FuelCards = card != null ? new List<FuelCardSummaryDto>
+                return Ok(
+                    new FuelCardSearchResultDto
                     {
-                        new FuelCardSummaryDto
-                        {
-                            FuelCardCode = card.Fuel_card_code,
-                            CardNumber = card.card_number,
-                            VmfCode = card.vmf_code,
-                            Status = !card.is_deleted ? "Active" : "Inactive"
-                        }
-                    } : new List<FuelCardSummaryDto>()
-                });
+                        Found = card != null,
+                        Message = card != null ? "Fuel card found" : "Fuel card not found",
+                        FuelCards =
+                            card != null
+                                ? new List<FuelCardSummaryDto>
+                                {
+                                    new FuelCardSummaryDto
+                                    {
+                                        FuelCardCode = card.Fuel_card_code,
+                                        CardNumber = card.card_number,
+                                        VmfCode = card.vmf_code,
+                                        Status = !card.is_deleted ? "Active" : "Inactive",
+                                    },
+                                }
+                                : new List<FuelCardSummaryDto>(),
+                    }
+                );
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching fuel cards for vehicle {VehicleIdentifier}", request.VehicleIdentifier);
+            _logger.LogError(
+                ex,
+                "Error searching fuel cards for vehicle {VehicleIdentifier}",
+                request.VehicleIdentifier
+            );
             return StatusCode(500, "Error searching fuel cards");
         }
     }
@@ -200,7 +218,9 @@ public class FuelCardController : BaseApiController
     /// Search fuel cards for multiple collection
     /// </summary>
     [HttpPost("collection/multiple/search")]
-    public async Task<ActionResult<FuelCardCollectionResultDto>> SearchCollectionMultiple([FromBody] FuelCardCollectionSearchDto request)
+    public async Task<ActionResult<FuelCardCollectionResultDto>> SearchCollectionMultiple(
+        [FromBody] FuelCardCollectionSearchDto request
+    )
     {
         try
         {
@@ -208,22 +228,28 @@ public class FuelCardController : BaseApiController
 
             // Filter by date range and site if provided
             var filteredCards = allCards
-                .Where(c => c.date_created >= request.StartDate && c.date_created <= request.EndDate)
+                .Where(c =>
+                    c.date_created >= request.StartDate && c.date_created <= request.EndDate
+                )
                 .Where(c => !request.SiteCode.HasValue || c.Petrecsite == request.SiteCode)
                 .ToList();
 
-            return Ok(new FuelCardCollectionResultDto
-            {
-                Success = true,
-                Message = $"Found {filteredCards.Count} fuel card(s) for collection",
-                Cards = filteredCards.Select(c => new FuelCardSummaryDto
+            return Ok(
+                new FuelCardCollectionResultDto
                 {
-                    FuelCardCode = c.Fuel_card_code,
-                    CardNumber = c.card_number,
-                    VmfCode = c.vmf_code,
-                    Status = !c.is_deleted ? "Active" : "Inactive"
-                }).ToList()
-            });
+                    Success = true,
+                    Message = $"Found {filteredCards.Count} fuel card(s) for collection",
+                    Cards = filteredCards
+                        .Select(c => new FuelCardSummaryDto
+                        {
+                            FuelCardCode = c.Fuel_card_code,
+                            CardNumber = c.card_number,
+                            VmfCode = c.vmf_code,
+                            Status = !c.is_deleted ? "Active" : "Inactive",
+                        })
+                        .ToList(),
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -236,31 +262,45 @@ public class FuelCardController : BaseApiController
     /// Search fuel cards for deletion
     /// </summary>
     [HttpPost("delete/search")]
-    public async Task<ActionResult<FuelCardSearchResultDto>> SearchForDelete([FromBody] FuelCardDeleteSearchDto request)
+    public async Task<ActionResult<FuelCardSearchResultDto>> SearchForDelete(
+        [FromBody] FuelCardDeleteSearchDto request
+    )
     {
         try
         {
             var card = await _repository.GetByCardNumberAsync(request.CardNumber);
 
-            return Ok(new FuelCardSearchResultDto
-            {
-                Found = card != null,
-                Message = card != null ? "Fuel card found and ready for deletion" : "Fuel card not found",
-                FuelCards = card != null ? new List<FuelCardSummaryDto>
+            return Ok(
+                new FuelCardSearchResultDto
                 {
-                    new FuelCardSummaryDto
-                    {
-                        FuelCardCode = card.Fuel_card_code,
-                        CardNumber = card.card_number,
-                        VmfCode = card.vmf_code,
-                        Status = !card.is_deleted ? "Active" : "Inactive"
-                    }
-                } : new List<FuelCardSummaryDto>()
-            });
+                    Found = card != null,
+                    Message =
+                        card != null
+                            ? "Fuel card found and ready for deletion"
+                            : "Fuel card not found",
+                    FuelCards =
+                        card != null
+                            ? new List<FuelCardSummaryDto>
+                            {
+                                new FuelCardSummaryDto
+                                {
+                                    FuelCardCode = card.Fuel_card_code,
+                                    CardNumber = card.card_number,
+                                    VmfCode = card.vmf_code,
+                                    Status = !card.is_deleted ? "Active" : "Inactive",
+                                },
+                            }
+                            : new List<FuelCardSummaryDto>(),
+                }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching fuel card for deletion: {CardNumber}", request.CardNumber);
+            _logger.LogError(
+                ex,
+                "Error searching fuel card for deletion: {CardNumber}",
+                request.CardNumber
+            );
             return StatusCode(500, "Error searching fuel card");
         }
     }
@@ -269,7 +309,9 @@ public class FuelCardController : BaseApiController
     /// Search private hire fuel cards for maintenance
     /// </summary>
     [HttpPost("privatehire/maintenance/vehicle/search")]
-    public async Task<ActionResult<FuelCardSearchResultDto>> SearchPrivateHireVehicleForMaintenance([FromBody] FuelCardVehicleSearchDto request)
+    public async Task<ActionResult<FuelCardSearchResultDto>> SearchPrivateHireVehicleForMaintenance(
+        [FromBody] FuelCardVehicleSearchDto request
+    )
     {
         try
         {
@@ -283,52 +325,72 @@ public class FuelCardController : BaseApiController
 
             if (int.TryParse(identifier, out var privateHireCode))
             {
-                var cards = await _privateHireFuelCardRepository.GetByPrivateHireCodeAsync(privateHireCode);
-                summaries = cards.Select(c => new FuelCardSummaryDto
-                {
-                    FuelCardCode = c.PHFuel_card_code,
-                    CardNumber = c.card_number,
-                    VmfCode = c.phv_code,
-                    Status = !c.is_deleted ? "Active" : "Inactive"
-                }).ToList();
+                var cards = await _privateHireFuelCardRepository.GetByPrivateHireCodeAsync(
+                    privateHireCode
+                );
+                summaries = cards
+                    .Select(c => new FuelCardSummaryDto
+                    {
+                        FuelCardCode = c.PHFuel_card_code,
+                        CardNumber = c.card_number,
+                        VmfCode = c.phv_code,
+                        Status = !c.is_deleted ? "Active" : "Inactive",
+                    })
+                    .ToList();
             }
             else
             {
-                var cardsByRegistration = await _privateHireFuelCardRepository.GetByRegistrationNumberAsync(identifier);
-                summaries = cardsByRegistration.Select(c => new FuelCardSummaryDto
-                {
-                    FuelCardCode = c.PHFuel_card_code,
-                    CardNumber = c.card_number,
-                    VmfCode = c.phv_code,
-                    Status = !c.is_deleted ? "Active" : "Inactive"
-                }).ToList();
+                var cardsByRegistration =
+                    await _privateHireFuelCardRepository.GetByRegistrationNumberAsync(identifier);
+                summaries = cardsByRegistration
+                    .Select(c => new FuelCardSummaryDto
+                    {
+                        FuelCardCode = c.PHFuel_card_code,
+                        CardNumber = c.card_number,
+                        VmfCode = c.phv_code,
+                        Status = !c.is_deleted ? "Active" : "Inactive",
+                    })
+                    .ToList();
 
                 if (summaries.Count == 0)
                 {
-                    var cardByNumber = await _privateHireFuelCardRepository.GetByCardNumberAsync(identifier);
+                    var cardByNumber = await _privateHireFuelCardRepository.GetByCardNumberAsync(
+                        identifier
+                    );
                     if (cardByNumber != null)
                     {
-                        summaries.Add(new FuelCardSummaryDto
-                        {
-                            FuelCardCode = cardByNumber.PHFuel_card_code,
-                            CardNumber = cardByNumber.card_number,
-                            VmfCode = cardByNumber.phv_code,
-                            Status = !cardByNumber.is_deleted ? "Active" : "Inactive"
-                        });
+                        summaries.Add(
+                            new FuelCardSummaryDto
+                            {
+                                FuelCardCode = cardByNumber.PHFuel_card_code,
+                                CardNumber = cardByNumber.card_number,
+                                VmfCode = cardByNumber.phv_code,
+                                Status = !cardByNumber.is_deleted ? "Active" : "Inactive",
+                            }
+                        );
                     }
                 }
             }
 
-            return Ok(new FuelCardSearchResultDto
-            {
-                Found = summaries.Count > 0,
-                Message = summaries.Count > 0 ? $"Found {summaries.Count} private hire fuel card(s)" : "No private hire fuel cards found",
-                FuelCards = summaries
-            });
+            return Ok(
+                new FuelCardSearchResultDto
+                {
+                    Found = summaries.Count > 0,
+                    Message =
+                        summaries.Count > 0
+                            ? $"Found {summaries.Count} private hire fuel card(s)"
+                            : "No private hire fuel cards found",
+                    FuelCards = summaries,
+                }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching private hire fuel cards for vehicle {VehicleIdentifier}", request.VehicleIdentifier);
+            _logger.LogError(
+                ex,
+                "Error searching private hire fuel cards for vehicle {VehicleIdentifier}",
+                request.VehicleIdentifier
+            );
             return StatusCode(500, "Error searching private hire fuel cards");
         }
     }
@@ -337,37 +399,48 @@ public class FuelCardController : BaseApiController
     /// Search private hire fuel cards for multiple collection
     /// </summary>
     [HttpPost("privatehire/collection/multiple/search")]
-    public async Task<ActionResult<FuelCardCollectionResultDto>> SearchPrivateHireCollectionMultiple([FromBody] FuelCardCollectionSearchDto request)
+    public async Task<
+        ActionResult<FuelCardCollectionResultDto>
+    > SearchPrivateHireCollectionMultiple([FromBody] FuelCardCollectionSearchDto request)
     {
         try
         {
             var allCards = await _privateHireFuelCardRepository.GetActiveFuelCardsAsync();
 
-            var filteredCards = allCards
-                .Where(c => c.date_created >= request.StartDate && c.date_created <= request.EndDate);
+            var filteredCards = allCards.Where(c =>
+                c.date_created >= request.StartDate && c.date_created <= request.EndDate
+            );
 
             if (request.SiteCode.HasValue)
             {
                 var siteCode = request.SiteCode.Value;
-                var siteCards = await _privateHireFuelCardRepository.GetActiveFuelCardsBySiteAsync(siteCode);
+                var siteCards = await _privateHireFuelCardRepository.GetActiveFuelCardsBySiteAsync(
+                    siteCode
+                );
                 var siteCardCodes = siteCards.Select(card => card.PHFuel_card_code).ToHashSet();
-                filteredCards = filteredCards.Where(card => siteCardCodes.Contains(card.PHFuel_card_code));
+                filteredCards = filteredCards.Where(card =>
+                    siteCardCodes.Contains(card.PHFuel_card_code)
+                );
             }
 
             var resultCards = filteredCards.ToList();
 
-            return Ok(new FuelCardCollectionResultDto
-            {
-                Success = true,
-                Message = $"Found {resultCards.Count} private hire fuel card(s) for collection",
-                Cards = resultCards.Select(c => new FuelCardSummaryDto
+            return Ok(
+                new FuelCardCollectionResultDto
                 {
-                    FuelCardCode = c.PHFuel_card_code,
-                    CardNumber = c.card_number,
-                    VmfCode = c.phv_code,
-                    Status = !c.is_deleted ? "Active" : "Inactive"
-                }).ToList()
-            });
+                    Success = true,
+                    Message = $"Found {resultCards.Count} private hire fuel card(s) for collection",
+                    Cards = resultCards
+                        .Select(c => new FuelCardSummaryDto
+                        {
+                            FuelCardCode = c.PHFuel_card_code,
+                            CardNumber = c.card_number,
+                            VmfCode = c.phv_code,
+                            Status = !c.is_deleted ? "Active" : "Inactive",
+                        })
+                        .ToList(),
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -380,31 +453,47 @@ public class FuelCardController : BaseApiController
     /// Search private hire fuel cards for deletion
     /// </summary>
     [HttpPost("privatehire/delete/search")]
-    public async Task<ActionResult<FuelCardSearchResultDto>> SearchPrivateHireForDelete([FromBody] FuelCardDeleteSearchDto request)
+    public async Task<ActionResult<FuelCardSearchResultDto>> SearchPrivateHireForDelete(
+        [FromBody] FuelCardDeleteSearchDto request
+    )
     {
         try
         {
-            var card = await _privateHireFuelCardRepository.GetByCardNumberAsync(request.CardNumber);
+            var card = await _privateHireFuelCardRepository.GetByCardNumberAsync(
+                request.CardNumber
+            );
 
-            return Ok(new FuelCardSearchResultDto
-            {
-                Found = card != null,
-                Message = card != null ? "Private hire fuel card found and ready for deletion" : "Private hire fuel card not found",
-                FuelCards = card != null ? new List<FuelCardSummaryDto>
+            return Ok(
+                new FuelCardSearchResultDto
                 {
-                    new FuelCardSummaryDto
-                    {
-                        FuelCardCode = card.PHFuel_card_code,
-                        CardNumber = card.card_number,
-                        VmfCode = card.phv_code,
-                        Status = !card.is_deleted ? "Active" : "Inactive"
-                    }
-                } : new List<FuelCardSummaryDto>()
-            });
+                    Found = card != null,
+                    Message =
+                        card != null
+                            ? "Private hire fuel card found and ready for deletion"
+                            : "Private hire fuel card not found",
+                    FuelCards =
+                        card != null
+                            ? new List<FuelCardSummaryDto>
+                            {
+                                new FuelCardSummaryDto
+                                {
+                                    FuelCardCode = card.PHFuel_card_code,
+                                    CardNumber = card.card_number,
+                                    VmfCode = card.phv_code,
+                                    Status = !card.is_deleted ? "Active" : "Inactive",
+                                },
+                            }
+                            : new List<FuelCardSummaryDto>(),
+                }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching private hire fuel card for deletion: {CardNumber}", request.CardNumber);
+            _logger.LogError(
+                ex,
+                "Error searching private hire fuel card for deletion: {CardNumber}",
+                request.CardNumber
+            );
             return StatusCode(500, "Error searching private hire fuel card");
         }
     }
@@ -426,8 +515,8 @@ public class FuelCardController : BaseApiController
                 "Latest Report",
                 "One Vehicle",
                 "All Vehicles",
-                "Private Hire - All Vehicles"
-            }
+                "Private Hire - All Vehicles",
+            },
         };
         return Ok(menu);
     }
@@ -436,7 +525,9 @@ public class FuelCardController : BaseApiController
     /// Generate latest fuel card report
     /// </summary>
     [HttpPost("reports/latest")]
-    public async Task<ActionResult<FuelCardReportDto>> GetReportLatest([FromBody] FuelCardLatestReportRequestDto request)
+    public async Task<ActionResult<FuelCardReportDto>> GetReportLatest(
+        [FromBody] FuelCardLatestReportRequestDto request
+    )
     {
         try
         {
@@ -455,15 +546,11 @@ public class FuelCardController : BaseApiController
                     SiteCode = c.Petrecsite,
                     IsActive = !c.is_deleted,
                     CreatedDate = c.date_created,
-                    c.date_updated
+                    c.date_updated,
                 })
                 .ToList<object>();
 
-            return Ok(new FuelCardReportDto
-            {
-                ReportType = "Latest",
-                Data = reportCards
-            });
+            return Ok(new FuelCardReportDto { ReportType = "Latest", Data = reportCards });
         }
         catch (Exception ex)
         {
@@ -476,7 +563,9 @@ public class FuelCardController : BaseApiController
     /// Generate fuel card report for one vehicle
     /// </summary>
     [HttpPost("reports/one-vehicle")]
-    public async Task<ActionResult<FuelCardReportDto>> GetReportOneVehicle([FromBody] FuelCardOneVehicleReportRequestDto request)
+    public async Task<ActionResult<FuelCardReportDto>> GetReportOneVehicle(
+        [FromBody] FuelCardOneVehicleReportRequestDto request
+    )
     {
         try
         {
@@ -484,7 +573,9 @@ public class FuelCardController : BaseApiController
 
             // Filter by date range
             var reportCards = cards
-                .Where(c => c.date_created >= request.StartDate && c.date_created <= request.EndDate)
+                .Where(c =>
+                    c.date_created >= request.StartDate && c.date_created <= request.EndDate
+                )
                 .OrderBy(c => c.date_created)
                 .Select(c => new
                 {
@@ -496,19 +587,19 @@ public class FuelCardController : BaseApiController
                     CreatedDate = c.date_created,
                     UpdatedDate = c.date_updated,
                     c.created_by_user_code,
-                    c.modified_by_user_code
+                    c.modified_by_user_code,
                 })
                 .ToList<object>();
 
-            return Ok(new FuelCardReportDto
-            {
-                ReportType = "OneVehicle",
-                Data = reportCards
-            });
+            return Ok(new FuelCardReportDto { ReportType = "OneVehicle", Data = reportCards });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating one vehicle fuel card report for VMF {VmfCode}", request.VmfCode);
+            _logger.LogError(
+                ex,
+                "Error generating one vehicle fuel card report for VMF {VmfCode}",
+                request.VmfCode
+            );
             return StatusCode(500, "Error generating report");
         }
     }
@@ -517,7 +608,9 @@ public class FuelCardController : BaseApiController
     /// Generate fuel card report for all vehicles
     /// </summary>
     [HttpPost("reports/all-vehicles")]
-    public async Task<ActionResult<FuelCardReportDto>> GetReportAllVehicles([FromBody] FuelCardAllVehiclesReportRequestDto request)
+    public async Task<ActionResult<FuelCardReportDto>> GetReportAllVehicles(
+        [FromBody] FuelCardAllVehiclesReportRequestDto request
+    )
     {
         try
         {
@@ -525,7 +618,9 @@ public class FuelCardController : BaseApiController
 
             // Filter by date range (department filtering removed - not in FuelCard entity)
             var reportCards = cards
-                .Where(c => c.date_created >= request.StartDate && c.date_created <= request.EndDate)
+                .Where(c =>
+                    c.date_created >= request.StartDate && c.date_created <= request.EndDate
+                )
                 .OrderBy(c => c.vmf_code)
                 .ThenBy(c => c.date_created)
                 .Select(c => new
@@ -536,15 +631,11 @@ public class FuelCardController : BaseApiController
                     SiteCode = c.Petrecsite,
                     IsActive = !c.is_deleted,
                     CreatedDate = c.date_created,
-                    UpdatedDate = c.date_updated
+                    UpdatedDate = c.date_updated,
                 })
                 .ToList<object>();
 
-            return Ok(new FuelCardReportDto
-            {
-                ReportType = "AllVehicles",
-                Data = reportCards
-            });
+            return Ok(new FuelCardReportDto { ReportType = "AllVehicles", Data = reportCards });
         }
         catch (Exception ex)
         {
@@ -557,7 +648,9 @@ public class FuelCardController : BaseApiController
     /// Generate private hire fuel card report for all vehicles
     /// </summary>
     [HttpPost("privatehire/reports/all")]
-    public async Task<ActionResult<FuelCardReportDto>> GetReportPrivateHireAll([FromBody] FuelCardPrivateHireReportRequestDto request)
+    public async Task<ActionResult<FuelCardReportDto>> GetReportPrivateHireAll(
+        [FromBody] FuelCardPrivateHireReportRequestDto request
+    )
     {
         try
         {
@@ -565,7 +658,9 @@ public class FuelCardController : BaseApiController
 
             // Filter by date range (private hire specific filtering would require vehicle type check)
             var reportCards = cards
-                .Where(c => c.date_created >= request.StartDate && c.date_created <= request.EndDate)
+                .Where(c =>
+                    c.date_created >= request.StartDate && c.date_created <= request.EndDate
+                )
                 .OrderBy(c => c.vmf_code)
                 .ThenBy(c => c.date_created)
                 .Select(c => new
@@ -576,15 +671,11 @@ public class FuelCardController : BaseApiController
                     SiteCode = c.Petrecsite,
                     IsActive = !c.is_deleted,
                     CreatedDate = c.date_created,
-                    UpdatedDate = c.date_updated
+                    UpdatedDate = c.date_updated,
                 })
                 .ToList<object>();
 
-            return Ok(new FuelCardReportDto
-            {
-                ReportType = "PrivateHireAll",
-                Data = reportCards
-            });
+            return Ok(new FuelCardReportDto { ReportType = "PrivateHireAll", Data = reportCards });
         }
         catch (Exception ex)
         {
@@ -597,17 +688,83 @@ public class FuelCardController : BaseApiController
 }
 
 #region Fuel Card DTOs
-public class FuelCardMenuDto { public List<string> Options { get; set; } = new(); }
-public class FuelCardVehicleSearchDto { public string VehicleIdentifier { get; set; } = ""; }
-public class FuelCardSearchResultDto { public bool Found { get; set; } public string Message { get; set; } = ""; public List<FuelCardSummaryDto> FuelCards { get; set; } = new(); }
-public class FuelCardSummaryDto { public int FuelCardCode { get; set; } public string? CardNumber { get; set; } public int? VmfCode { get; set; } public string? Status { get; set; } }
-public class FuelCardCollectionSearchDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } public int? SiteCode { get; set; } }
-public class FuelCardCollectionResultDto { public bool Success { get; set; } public string Message { get; set; } = ""; public List<FuelCardSummaryDto> Cards { get; set; } = new(); }
-public class FuelCardDeleteSearchDto { public string CardNumber { get; set; } = ""; }
-public class FuelCardReportMenuDto { public List<string> Reports { get; set; } = new(); }
-public class FuelCardLatestReportRequestDto { public DateTime? AsOfDate { get; set; } }
-public class FuelCardOneVehicleReportRequestDto { public int VmfCode { get; set; } public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
-public class FuelCardAllVehiclesReportRequestDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } public int? DepartmentCode { get; set; } }
-public class FuelCardPrivateHireReportRequestDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
-public class FuelCardReportDto { public string ReportType { get; set; } = ""; public List<object> Data { get; set; } = new(); }
+public class FuelCardMenuDto
+{
+    public List<string> Options { get; set; } = new();
+}
+
+public class FuelCardVehicleSearchDto
+{
+    public string VehicleIdentifier { get; set; } = "";
+}
+
+public class FuelCardSearchResultDto
+{
+    public bool Found { get; set; }
+    public string Message { get; set; } = "";
+    public List<FuelCardSummaryDto> FuelCards { get; set; } = new();
+}
+
+public class FuelCardSummaryDto
+{
+    public int FuelCardCode { get; set; }
+    public string? CardNumber { get; set; }
+    public int? VmfCode { get; set; }
+    public string? Status { get; set; }
+}
+
+public class FuelCardCollectionSearchDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public int? SiteCode { get; set; }
+}
+
+public class FuelCardCollectionResultDto
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
+    public List<FuelCardSummaryDto> Cards { get; set; } = new();
+}
+
+public class FuelCardDeleteSearchDto
+{
+    public string CardNumber { get; set; } = "";
+}
+
+public class FuelCardReportMenuDto
+{
+    public List<string> Reports { get; set; } = new();
+}
+
+public class FuelCardLatestReportRequestDto
+{
+    public DateTime? AsOfDate { get; set; }
+}
+
+public class FuelCardOneVehicleReportRequestDto
+{
+    public int VmfCode { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class FuelCardAllVehiclesReportRequestDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public int? DepartmentCode { get; set; }
+}
+
+public class FuelCardPrivateHireReportRequestDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class FuelCardReportDto
+{
+    public string ReportType { get; set; } = "";
+    public List<object> Data { get; set; } = new();
+}
 #endregion

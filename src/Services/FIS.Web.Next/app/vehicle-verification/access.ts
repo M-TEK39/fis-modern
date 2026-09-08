@@ -1,5 +1,10 @@
 export function hasAssetVerificationAccess(roles: readonly string[], accessLevel?: string) {
-  if (roles.some((role) => role.localeCompare("Asset Verification", undefined, { sensitivity: "accent" }) === 0)) {
+  if (
+    roles.some(
+      (role) =>
+        role.localeCompare("Asset Verification", undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
     return true;
   }
 

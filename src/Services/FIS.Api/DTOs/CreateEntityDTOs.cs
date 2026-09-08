@@ -200,9 +200,7 @@ namespace FIS.Api.DTOs
     /// DTO for updating an existing Class entity
     /// Excludes audit fields (auto-populated by repository)
     /// </summary>
-    public class UpdateClassDto : CreateClassDto
-    {
-    }
+    public class UpdateClassDto : CreateClassDto { }
 
     /// <summary>
     /// DTO for creating a new FuelType entity

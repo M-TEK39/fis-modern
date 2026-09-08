@@ -73,6 +73,7 @@ public class UniversalReport
     public Dictionary<string, object> ReportData { get; set; } = new();
     public List<Dictionary<string, object>> DataRows { get; set; } = new();
     public Dictionary<string, object> Summary { get; set; } = new();
+
     /// <summary>
     /// True when every DataRow contains "Month" (month name) and "Year" (int)
     /// fields so the frontend can reliably filter by posting month.

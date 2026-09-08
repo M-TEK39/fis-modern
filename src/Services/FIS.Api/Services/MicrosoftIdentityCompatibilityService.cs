@@ -21,7 +21,8 @@ public sealed class MicrosoftIdentityCompatibilityService
 
     public MicrosoftIdentityCompatibilityService(
         FisDbContext context,
-        ILogger<MicrosoftIdentityCompatibilityService> logger)
+        ILogger<MicrosoftIdentityCompatibilityService> logger
+    )
     {
         _context = context;
         _logger = logger;
@@ -29,16 +30,15 @@ public sealed class MicrosoftIdentityCompatibilityService
 
     public async Task<LegacyMicrosoftIdentityUser?> ResolveAsync(
         ClaimsPrincipal principal,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
-        var objectId = ResolveClaim(principal,
+        var objectId = ResolveClaim(
+            principal,
             "oid",
-            "http://schemas.microsoft.com/identity/claims/objectidentifier");
-        var email = ResolveClaim(principal,
-            ClaimTypes.Email,
-            "email",
-            "preferred_username",
-            "upn");
+            "http://schemas.microsoft.com/identity/claims/objectidentifier"
+        );
+        var email = ResolveClaim(principal, ClaimTypes.Email, "email", "preferred_username", "upn");
 
         var mapping = !string.IsNullOrWhiteSpace(objectId)
             ? await TryGetMappingAsync(objectId, cancellationToken)
@@ -48,12 +48,14 @@ public sealed class MicrosoftIdentityCompatibilityService
         {
             var mappedUser = await GetLegacyUserByCodeAsync(
                 mapping.UserAccessCode.Value,
-                cancellationToken);
+                cancellationToken
+            );
             if (mappedUser is null)
             {
                 _logger.LogWarning(
                     "Microsoft identity mapping points to a missing legacy user_access_code {UserAccessCode}",
-                    mapping.UserAccessCode.Value);
+                    mapping.UserAccessCode.Value
+                );
                 return null;
             }
 
@@ -66,8 +68,8 @@ public sealed class MicrosoftIdentityCompatibilityService
         }
 
         var normalizedEmail = email.ToLowerInvariant();
-        var emailMatches = await _context.UserAccessOlds
-            .AsNoTracking()
+        var emailMatches = await _context
+            .UserAccessOlds.AsNoTracking()
             .Where(user => user.E_Mail != null && user.E_Mail.ToLower() == normalizedEmail)
             .Take(2)
             .ToListAsync(cancellationToken);
@@ -77,7 +79,8 @@ public sealed class MicrosoftIdentityCompatibilityService
             if (emailMatches.Count > 1)
             {
                 _logger.LogWarning(
-                    "Microsoft sign-in email matched multiple legacy user_access_code records; refusing automatic account resolution");
+                    "Microsoft sign-in email matched multiple legacy user_access_code records; refusing automatic account resolution"
+                );
             }
 
             return null;
@@ -86,7 +89,8 @@ public sealed class MicrosoftIdentityCompatibilityService
         if (mapping.Available)
         {
             _logger.LogInformation(
-                "No Entra mapping was found; using the unique legacy email match for Microsoft sign-in");
+                "No Entra mapping was found; using the unique legacy email match for Microsoft sign-in"
+            );
         }
 
         return CreateResolvedUser(emailMatches[0], email);
@@ -94,7 +98,8 @@ public sealed class MicrosoftIdentityCompatibilityService
 
     private async Task<MappingLookup> TryGetMappingAsync(
         string objectId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -123,14 +128,14 @@ public sealed class MicrosoftIdentityCompatibilityService
             var value = await command.ExecuteScalarAsync(cancellationToken);
             return new MappingLookup(
                 Available: true,
-                UserAccessCode: value is null or DBNull
-                    ? null
-                    : Convert.ToInt32(value));
+                UserAccessCode: value is null or DBNull ? null : Convert.ToInt32(value)
+            );
         }
         catch (SqlException ex) when (IsMissingSchemaObject(ex))
         {
             _logger.LogInformation(
-                "Entra identity mapping table is unavailable; Microsoft sign-in will use the legacy email compatibility path");
+                "Entra identity mapping table is unavailable; Microsoft sign-in will use the legacy email compatibility path"
+            );
             return new MappingLookup(false, null);
         }
         finally
@@ -144,23 +149,26 @@ public sealed class MicrosoftIdentityCompatibilityService
 
     private async Task<UserAccessOld?> GetLegacyUserByCodeAsync(
         int userAccessCode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         if (userAccessCode is <= 0 or > short.MaxValue)
         {
             return null;
         }
 
-        return await _context.UserAccessOlds
-            .AsNoTracking()
+        return await _context
+            .UserAccessOlds.AsNoTracking()
             .FirstOrDefaultAsync(
                 user => user.user_access_code == userAccessCode,
-                cancellationToken);
+                cancellationToken
+            );
     }
 
     private static LegacyMicrosoftIdentityUser CreateResolvedUser(
         UserAccessOld user,
-        string? identityEmail)
+        string? identityEmail
+    )
     {
         var email = string.IsNullOrWhiteSpace(user.E_Mail)
             ? identityEmail?.Trim() ?? string.Empty
@@ -170,7 +178,8 @@ public sealed class MicrosoftIdentityCompatibilityService
             UserAccessCode: user.user_access_code,
             Email: email,
             AccessLevel: user.AccessLevel,
-            IsActive: user.user_active);
+            IsActive: user.user_active
+        );
     }
 
     private static string? ResolveClaim(ClaimsPrincipal principal, params string[] claimTypes)
@@ -199,4 +208,5 @@ public sealed record LegacyMicrosoftIdentityUser(
     short UserAccessCode,
     string Email,
     long AccessLevel,
-    bool IsActive);
+    bool IsActive
+);

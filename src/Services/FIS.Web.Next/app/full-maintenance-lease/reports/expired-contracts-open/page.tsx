@@ -2,8 +2,20 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
-import { AccessRestricted, FmlFrame, hasFmlPermission } from "@/app/full-maintenance-lease/_components";
-import { ReportEmpty, ReportFooter, ReportTable, formatCurrency, formatDate, reportError, valueOrDash } from "@/app/full-maintenance-lease/reports/_components";
+import {
+  AccessRestricted,
+  FmlFrame,
+  hasFmlPermission,
+} from "@/app/full-maintenance-lease/_components";
+import {
+  ReportEmpty,
+  ReportFooter,
+  ReportTable,
+  formatCurrency,
+  formatDate,
+  reportError,
+  valueOrDash,
+} from "@/app/full-maintenance-lease/reports/_components";
 import { FmlApiError, getFmlExpiredOpenContracts } from "@/lib/api-fml";
 import { getSession } from "@/lib/session";
 
@@ -11,13 +23,78 @@ export default async function FmlExpiredContractsOpenPage() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
-  if (session.status === "expired") return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/full-maintenance-lease/reports/expired-contracts-open" /></main>;
-  if (session.status === "unavailable") return <main className="page-shell vehicle-page-shell"><ReportEmpty message="The FML report session is unavailable." /></main>;
-  if (!hasFmlPermission(session.accessLevel)) return <main className="page-shell vehicle-page-shell"><AccessRestricted /></main>;
+  if (session.status === "expired")
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath="/full-maintenance-lease/reports/expired-contracts-open" />
+      </main>
+    );
+  if (session.status === "unavailable")
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <ReportEmpty message="The FML report session is unavailable." />
+      </main>
+    );
+  if (!hasFmlPermission(session.accessLevel))
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <AccessRestricted />
+      </main>
+    );
   try {
     const report = await getFmlExpiredOpenContracts();
-    return <FmlFrame title="Expired FML Contracts Still Open" description="Expired FML contracts that still have open client contracts.">{report.contracts.length === 0 ? <ReportEmpty message="No expired FML contracts with open client contracts were found." /> : <ReportTable caption="Expired FML contracts still open" headers={["No.", "GG Number", "GP Number", "Model", "Year Model", "Hired From", "Hire Type", "Still Current", "Contract Start Date", "Target Return Date", "Contract Type", "Site Name", "Fixed Tariff"]}>{report.contracts.map((row, index) => <tr key={`${row.ggNumber ?? "row"}-${index}`}><td>{valueOrDash(row.rowNumber)}</td><td>{valueOrDash(row.ggNumber)}</td><td>{valueOrDash(row.gpNumber)}</td><td>{valueOrDash(row.model)}</td><td>{valueOrDash(row.yearModel)}</td><td>{valueOrDash(row.hiredFrom)}</td><td>{valueOrDash(row.hireType)}</td><td>{valueOrDash(row.stillCurrent)}</td><td>{formatDate(row.contractStartDate)}</td><td>{formatDate(row.targetReturnDate)}</td><td>{valueOrDash(row.contractType)}</td><td>{valueOrDash(row.siteName)}</td><td>{formatCurrency(row.fixedTariff)}</td></tr>)}</ReportTable>}<ReportFooter /></FmlFrame>;
+    return (
+      <FmlFrame
+        title="Expired FML Contracts Still Open"
+        description="Expired FML contracts that still have open client contracts."
+      >
+        {report.contracts.length === 0 ? (
+          <ReportEmpty message="No expired FML contracts with open client contracts were found." />
+        ) : (
+          <ReportTable
+            caption="Expired FML contracts still open"
+            headers={[
+              "No.",
+              "GG Number",
+              "GP Number",
+              "Model",
+              "Year Model",
+              "Hired From",
+              "Hire Type",
+              "Still Current",
+              "Contract Start Date",
+              "Target Return Date",
+              "Contract Type",
+              "Site Name",
+              "Fixed Tariff",
+            ]}
+          >
+            {report.contracts.map((row, index) => (
+              <tr key={`${row.ggNumber ?? "row"}-${index}`}>
+                <td>{valueOrDash(row.rowNumber)}</td>
+                <td>{valueOrDash(row.ggNumber)}</td>
+                <td>{valueOrDash(row.gpNumber)}</td>
+                <td>{valueOrDash(row.model)}</td>
+                <td>{valueOrDash(row.yearModel)}</td>
+                <td>{valueOrDash(row.hiredFrom)}</td>
+                <td>{valueOrDash(row.hireType)}</td>
+                <td>{valueOrDash(row.stillCurrent)}</td>
+                <td>{formatDate(row.contractStartDate)}</td>
+                <td>{formatDate(row.targetReturnDate)}</td>
+                <td>{valueOrDash(row.contractType)}</td>
+                <td>{valueOrDash(row.siteName)}</td>
+                <td>{formatCurrency(row.fixedTariff)}</td>
+              </tr>
+            ))}
+          </ReportTable>
+        )}
+        <ReportFooter />
+      </FmlFrame>
+    );
   } catch (error) {
-    return reportError(error instanceof FmlApiError ? error : undefined, "The expired-contract report could not be loaded.");
+    return reportError(
+      error instanceof FmlApiError ? error : undefined,
+      "The expired-contract report could not be loaded.",
+    );
   }
 }

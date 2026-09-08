@@ -16,38 +16,41 @@ public class NotificationTemplateRepository : INotificationTemplateRepository
 
     public async Task<NotificationTemplate?> GetByIdAsync(int templateId)
     {
-        return await _context.NotificationTemplates
-            .FirstOrDefaultAsync(t => t.TemplateID == templateId && !t.is_deleted);
+        return await _context.NotificationTemplates.FirstOrDefaultAsync(t =>
+            t.TemplateID == templateId && !t.is_deleted
+        );
     }
 
     public async Task<NotificationTemplate?> GetByNameAsync(string templateName)
     {
-        return await _context.NotificationTemplates
-            .FirstOrDefaultAsync(t => t.TemplateName == templateName && !t.is_deleted);
+        return await _context.NotificationTemplates.FirstOrDefaultAsync(t =>
+            t.TemplateName == templateName && !t.is_deleted
+        );
     }
 
     public async Task<IEnumerable<NotificationTemplate>> GetAllAsync()
     {
-        return await _context.NotificationTemplates
-            .Where(t => !t.is_deleted)
-            .ToListAsync();
+        return await _context.NotificationTemplates.Where(t => !t.is_deleted).ToListAsync();
     }
 
     public async Task<IEnumerable<NotificationTemplate>> GetActiveTemplatesAsync()
     {
-        return await _context.NotificationTemplates
-            .Where(t => t.IsActive && !t.is_deleted)
+        return await _context
+            .NotificationTemplates.Where(t => t.IsActive && !t.is_deleted)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<NotificationTemplate>> GetByTypeAsync(string templateType)
     {
-        return await _context.NotificationTemplates
-            .Where(t => t.TemplateType == templateType && !t.is_deleted)
+        return await _context
+            .NotificationTemplates.Where(t => t.TemplateType == templateType && !t.is_deleted)
             .ToListAsync();
     }
 
-    public async Task<NotificationTemplate> CreateAsync(NotificationTemplate template, int currentUserId)
+    public async Task<NotificationTemplate> CreateAsync(
+        NotificationTemplate template,
+        int currentUserId
+    )
     {
         template.date_created = DateTime.UtcNow;
         template.created_by_user_code = currentUserId;
@@ -61,11 +64,14 @@ public class NotificationTemplateRepository : INotificationTemplateRepository
 
     public async Task UpdateAsync(NotificationTemplate template, int currentUserId)
     {
-        var existing = await _context.NotificationTemplates
-            .FirstOrDefaultAsync(t => t.TemplateID == template.TemplateID);
+        var existing = await _context.NotificationTemplates.FirstOrDefaultAsync(t =>
+            t.TemplateID == template.TemplateID
+        );
 
         if (existing == null)
-            throw new InvalidOperationException($"NotificationTemplate {template.TemplateID} not found");
+            throw new InvalidOperationException(
+                $"NotificationTemplate {template.TemplateID} not found"
+            );
 
         // Tracking-safe update pattern
         _context.Entry(existing).CurrentValues.SetValues(template);
@@ -77,8 +83,9 @@ public class NotificationTemplateRepository : INotificationTemplateRepository
 
     public async Task DeleteAsync(int templateId, int currentUserId)
     {
-        var template = await _context.NotificationTemplates
-            .FirstOrDefaultAsync(t => t.TemplateID == templateId);
+        var template = await _context.NotificationTemplates.FirstOrDefaultAsync(t =>
+            t.TemplateID == templateId
+        );
 
         if (template != null)
         {

@@ -88,7 +88,8 @@ export async function forgotPasswordAction(
 
   return {
     status: "success",
-    message: "If an account with a registered email address exists, a password reset link has been sent.",
+    message:
+      "If an account with a registered email address exists, a password reset link has been sent.",
   };
 }
 
@@ -101,7 +102,8 @@ export async function resetPasswordAction(
   const confirmNewPasswordValue = formData.get("confirmNewPassword");
   const token = typeof tokenValue === "string" ? tokenValue.trim() : "";
   const newPassword = typeof newPasswordValue === "string" ? newPasswordValue : "";
-  const confirmNewPassword = typeof confirmNewPasswordValue === "string" ? confirmNewPasswordValue : "";
+  const confirmNewPassword =
+    typeof confirmNewPasswordValue === "string" ? confirmNewPasswordValue : "";
 
   if (!token) {
     return { status: "error", message: "This password reset link is invalid or has expired." };
@@ -150,7 +152,8 @@ export async function changePasswordAction(
   const confirmNewPasswordValue = formData.get("confirmNewPassword");
   const currentPassword = typeof currentPasswordValue === "string" ? currentPasswordValue : "";
   const newPassword = typeof newPasswordValue === "string" ? newPasswordValue : "";
-  const confirmNewPassword = typeof confirmNewPasswordValue === "string" ? confirmNewPasswordValue : "";
+  const confirmNewPassword =
+    typeof confirmNewPasswordValue === "string" ? confirmNewPasswordValue : "";
 
   if (!currentPassword || !newPassword || !confirmNewPassword) {
     return { status: "error", message: "Complete all password fields to continue." };
@@ -189,7 +192,8 @@ export async function changePasswordAction(
           ? "Your session has expired. Sign in again to change your password."
           : result.reason === "unavailable"
             ? "The sign-in service is temporarily unavailable. Please try again."
-            : result.message || "Password change failed. Check your current password and try again.",
+            : result.message ||
+              "Password change failed. Check your current password and try again.",
     };
   }
 

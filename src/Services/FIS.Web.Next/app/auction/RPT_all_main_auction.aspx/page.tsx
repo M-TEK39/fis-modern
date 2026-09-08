@@ -5,5 +5,11 @@ type LegacyAuctionReportProps = {
 };
 
 export default function LegacyAllAuctionReportPage({ searchParams }: LegacyAuctionReportProps) {
-  return <AuctionReportPage routePath="/auction/RPT_all_main_auction.aspx" params={Promise.resolve({ mode: "all-vehicles" })} searchParams={searchParams} />;
+  return (
+    <AuctionReportPage
+      routePath="/auction/RPT_all_main_auction.aspx"
+      params={Promise.resolve({ mode: "all-vehicles" })}
+      searchParams={searchParams}
+    />
+  );
 }

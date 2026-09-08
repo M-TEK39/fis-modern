@@ -39,7 +39,8 @@ export type DemoVehicleWriteInput = {
   chassisNumber: string;
 };
 
-export type DemoVehicleApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type DemoVehicleApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class DemoVehicleApiError extends Error {
   constructor(
@@ -85,7 +86,8 @@ function asString(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new DemoVehicleApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new DemoVehicleApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -98,20 +100,33 @@ async function requestApi(path: string, init: RequestInit = {}) {
     });
 
     if (response.status === 401 || response.status === 403) {
-      throw new DemoVehicleApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new DemoVehicleApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
     if (response.status === 404) {
-      throw new DemoVehicleApiError("not-found", "The requested demo vehicle was not found.", response.status);
+      throw new DemoVehicleApiError(
+        "not-found",
+        "The requested demo vehicle was not found.",
+        response.status,
+      );
     }
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the API body is not JSON.
       }
-      throw new DemoVehicleApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new DemoVehicleApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -132,17 +147,25 @@ async function readJson(response: Response) {
 
 function mapDemoVehicle(value: unknown): DemoVehicleRecord | null {
   if (!isRecord(value)) return null;
-  const demoVehicleCode = asNumber(getValue(value, "demo_vehicle_code", "demoVehicleCode", "DemoVehicleCode"));
+  const demoVehicleCode = asNumber(
+    getValue(value, "demo_vehicle_code", "demoVehicleCode", "DemoVehicleCode"),
+  );
   if (demoVehicleCode === null) return null;
 
   return {
     demoVehicleCode,
     ggNumber: asString(getValue(value, "gg_number", "ggNumber", "GgNumber")),
-    registrationNumber: asString(getValue(value, "reg_number", "registrationNumber", "RegistrationNumber")),
-    modelDescription: asString(getValue(value, "model_description", "modelDescription", "ModelDescription")),
+    registrationNumber: asString(
+      getValue(value, "reg_number", "registrationNumber", "RegistrationNumber"),
+    ),
+    modelDescription: asString(
+      getValue(value, "model_description", "modelDescription", "ModelDescription"),
+    ),
     yearManufactured: asNumber(getValue(value, "year_mnf", "yearManufactured", "YearManufactured")),
     siteCode: asNumber(getValue(value, "site_code", "siteCode", "SiteCode")),
-    siteDescription: asString(getValue(value, "site_description", "siteDescription", "SiteDescription")),
+    siteDescription: asString(
+      getValue(value, "site_description", "siteDescription", "SiteDescription"),
+    ),
     bankCode: asString(getValue(value, "bank_code", "bankCode", "BankCode")),
     tank: asNumber(getValue(value, "tank", "Tank")),
     colour: asString(getValue(value, "colour", "color", "Colour")),
@@ -150,8 +173,12 @@ function mapDemoVehicle(value: unknown): DemoVehicleRecord | null {
     chassisNumber: asString(getValue(value, "chassis_number", "chassisNumber", "ChassisNumber")),
     dateCreated: asString(getValue(value, "date_created", "dateCreated", "DateCreated")),
     dateUpdated: asString(getValue(value, "date_updated", "dateUpdated", "DateUpdated")),
-    createdByUserCode: asNumber(getValue(value, "created_by_user_code", "createdByUserCode", "CreatedByUserCode")),
-    modifiedByUserCode: asNumber(getValue(value, "modified_by_user_code", "modifiedByUserCode", "ModifiedByUserCode")),
+    createdByUserCode: asNumber(
+      getValue(value, "created_by_user_code", "createdByUserCode", "CreatedByUserCode"),
+    ),
+    modifiedByUserCode: asNumber(
+      getValue(value, "modified_by_user_code", "modifiedByUserCode", "ModifiedByUserCode"),
+    ),
   };
 }
 
@@ -160,7 +187,9 @@ async function readCollection(response: Response) {
   if (!Array.isArray(payload)) {
     throw new DemoVehicleApiError("invalid-response", "The demo vehicle response was not a list.");
   }
-  return payload.map(mapDemoVehicle).filter((vehicle): vehicle is DemoVehicleRecord => vehicle !== null);
+  return payload
+    .map(mapDemoVehicle)
+    .filter((vehicle): vehicle is DemoVehicleRecord => vehicle !== null);
 }
 
 export async function getDemoVehicles() {
@@ -177,7 +206,9 @@ export async function searchDemoVehicles(search: string, mode: DemoVehicleSearch
 }
 
 export async function getDemoVehicle(demoVehicleCode: number) {
-  return mapDemoVehicle(await readJson(await requestApi(`api/demo-vehicles/${encodeURIComponent(demoVehicleCode)}`)));
+  return mapDemoVehicle(
+    await readJson(await requestApi(`api/demo-vehicles/${encodeURIComponent(demoVehicleCode)}`)),
+  );
 }
 
 function toRequest(input: DemoVehicleWriteInput) {
@@ -196,25 +227,43 @@ function toRequest(input: DemoVehicleWriteInput) {
 }
 
 export async function createDemoVehicle(input: DemoVehicleWriteInput) {
-  const vehicle = mapDemoVehicle(await readJson(await requestApi("api/demo-vehicles", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(toRequest(input)),
-  })));
-  if (!vehicle) throw new DemoVehicleApiError("invalid-response", "The created demo vehicle response was invalid.");
+  const vehicle = mapDemoVehicle(
+    await readJson(
+      await requestApi("api/demo-vehicles", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(toRequest(input)),
+      }),
+    ),
+  );
+  if (!vehicle)
+    throw new DemoVehicleApiError(
+      "invalid-response",
+      "The created demo vehicle response was invalid.",
+    );
   return vehicle;
 }
 
 export async function updateDemoVehicle(demoVehicleCode: number, input: DemoVehicleWriteInput) {
-  const vehicle = mapDemoVehicle(await readJson(await requestApi(`api/demo-vehicles/${encodeURIComponent(demoVehicleCode)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(toRequest(input)),
-  })));
-  if (!vehicle) throw new DemoVehicleApiError("invalid-response", "The updated demo vehicle response was invalid.");
+  const vehicle = mapDemoVehicle(
+    await readJson(
+      await requestApi(`api/demo-vehicles/${encodeURIComponent(demoVehicleCode)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(toRequest(input)),
+      }),
+    ),
+  );
+  if (!vehicle)
+    throw new DemoVehicleApiError(
+      "invalid-response",
+      "The updated demo vehicle response was invalid.",
+    );
   return vehicle;
 }
 
 export async function deleteDemoVehicle(demoVehicleCode: number) {
-  await requestApi(`api/demo-vehicles/${encodeURIComponent(demoVehicleCode)}`, { method: "DELETE" });
+  await requestApi(`api/demo-vehicles/${encodeURIComponent(demoVehicleCode)}`, {
+    method: "DELETE",
+  });
 }

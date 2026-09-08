@@ -16,23 +16,27 @@ namespace FIS.Api.Services;
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
-    Justification = "Table and column identifiers come only from fixed definitions; all values are parameterized.")]
+    Justification = "Table and column identifiers come only from fixed definitions; all values are parameterized."
+)]
 public sealed class CallCentreEditCompatibilityService
 {
     private static readonly ChildTableDefinition AccidentTable = new(
         "accident",
         "accident_code",
-        "Call_Refer");
+        "Call_Refer"
+    );
 
     private static readonly ChildTableDefinition LossTable = new(
         "losses",
         "loss_code",
-        "Call_Refer");
+        "Call_Refer"
+    );
 
     private static readonly ChildTableDefinition TowingTable = new(
         "Towing",
         "Towing_code",
-        "Call_refer");
+        "Call_refer"
+    );
 
     private readonly FisDbContext _context;
 
@@ -43,7 +47,8 @@ public sealed class CallCentreEditCompatibilityService
 
     public async Task<CallCentreEditDetails> GetAsync(
         short callCentreCode,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         var accident = await ReadRowAsync(AccidentTable, callCentreCode, cancellationToken);
         var loss = await ReadRowAsync(LossTable, callCentreCode, cancellationToken);
@@ -56,7 +61,7 @@ public sealed class CallCentreEditCompatibilityService
             LossTableAvailable = loss.TableAvailable,
             Loss = loss.Values,
             TowingTableAvailable = towing.TableAvailable,
-            Towing = towing.Values
+            Towing = towing.Values,
         };
     }
 
@@ -64,7 +69,8 @@ public sealed class CallCentreEditCompatibilityService
         short callCentreCode,
         CallCentreEditUpdate update,
         int currentUserId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(update);
 
@@ -74,16 +80,13 @@ public sealed class CallCentreEditCompatibilityService
                 callCentreCode,
                 update.Accident,
                 currentUserId,
-                cancellationToken);
+                cancellationToken
+            );
         }
 
         if (update.Loss is not null)
         {
-            await UpdateLossAsync(
-                callCentreCode,
-                update.Loss,
-                currentUserId,
-                cancellationToken);
+            await UpdateLossAsync(callCentreCode, update.Loss, currentUserId, cancellationToken);
         }
 
         if (update.Towing is not null)
@@ -92,7 +95,8 @@ public sealed class CallCentreEditCompatibilityService
                 callCentreCode,
                 update.Towing,
                 currentUserId,
-                cancellationToken);
+                cancellationToken
+            );
         }
     }
 
@@ -100,7 +104,8 @@ public sealed class CallCentreEditCompatibilityService
         short callCentreCode,
         AccidentEditUpdate update,
         int currentUserId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var row = await ReadRowAsync(AccidentTable, callCentreCode, cancellationToken);
         if (!row.TableAvailable || row.Values is null)
@@ -110,23 +115,121 @@ public sealed class CallCentreEditCompatibilityService
 
         var now = DateTime.UtcNow;
         var values = new List<WriteValue>();
-        AddValue(values, row.Columns, "occurence_date", "@occurenceDate", DbType.Date, update.OccurenceDate?.Date);
-        AddValue(values, row.Columns, "occurence_time", "@occurenceTime", DbType.DateTime2, update.OccurenceTime);
-        AddValue(values, row.Columns, "description", "@description", DbType.String, update.Description);
-        AddValue(values, row.Columns, "driver_name", "@driverName", DbType.String, update.DriverName);
-        AddValue(values, row.Columns, "driver_employ_number", "@driverEmployNumber", DbType.String, update.DriverEmployNumber);
-        AddValue(values, row.Columns, "driver_telno", "@driverTelno", DbType.String, update.DriverTelno);
-        AddValue(values, row.Columns, "driver_site_code", "@driverSiteCode", DbType.Int16, update.DriverSiteCode);
-        AddValue(values, row.Columns, "transoffic_name", "@transportOfficerName", DbType.String, update.TransportOfficerName);
-        AddValue(values, row.Columns, "transoffic_tel", "@transportOfficerTel", DbType.String, update.TransportOfficerTel);
+        AddValue(
+            values,
+            row.Columns,
+            "occurence_date",
+            "@occurenceDate",
+            DbType.Date,
+            update.OccurenceDate?.Date
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "occurence_time",
+            "@occurenceTime",
+            DbType.DateTime2,
+            update.OccurenceTime
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "description",
+            "@description",
+            DbType.String,
+            update.Description
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "driver_name",
+            "@driverName",
+            DbType.String,
+            update.DriverName
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "driver_employ_number",
+            "@driverEmployNumber",
+            DbType.String,
+            update.DriverEmployNumber
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "driver_telno",
+            "@driverTelno",
+            DbType.String,
+            update.DriverTelno
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "driver_site_code",
+            "@driverSiteCode",
+            DbType.Int16,
+            update.DriverSiteCode
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "transoffic_name",
+            "@transportOfficerName",
+            DbType.String,
+            update.TransportOfficerName
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "transoffic_tel",
+            "@transportOfficerTel",
+            DbType.String,
+            update.TransportOfficerTel
+        );
         AddValue(values, row.Columns, "death", "@death", DbType.String, update.Death);
         AddValue(values, row.Columns, "injured", "@injured", DbType.String, update.Injured);
-        AddValue(values, row.Columns, "third_party_regno", "@thirdPartyRegistration", DbType.String, update.ThirdPartyRegistration);
-        AddValue(values, row.Columns, "third_party_owner", "@thirdPartyOwner", DbType.String, update.ThirdPartyOwner);
-        AddValue(values, row.Columns, "third_party_tel", "@thirdPartyTelephone", DbType.String, update.ThirdPartyTelephone);
-        AddValue(values, row.Columns, "damage_description", "@damageDescription", DbType.String, update.DamageDescription);
+        AddValue(
+            values,
+            row.Columns,
+            "third_party_regno",
+            "@thirdPartyRegistration",
+            DbType.String,
+            update.ThirdPartyRegistration
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "third_party_owner",
+            "@thirdPartyOwner",
+            DbType.String,
+            update.ThirdPartyOwner
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "third_party_tel",
+            "@thirdPartyTelephone",
+            DbType.String,
+            update.ThirdPartyTelephone
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "damage_description",
+            "@damageDescription",
+            DbType.String,
+            update.DamageDescription
+        );
         AddValue(values, row.Columns, "notes", "@notes", DbType.String, update.Notes);
-        AddValue(values, row.Columns, "occurence_place", "@occurencePlace", DbType.String, update.OccurencePlace);
+        AddValue(
+            values,
+            row.Columns,
+            "occurence_place",
+            "@occurencePlace",
+            DbType.String,
+            update.OccurencePlace
+        );
         AddValue(values, row.Columns, "Tow_need", "@towNeed", DbType.String, update.TowNeed);
 
         // The legacy update path marks an edited accident as captured by the
@@ -141,21 +244,18 @@ public sealed class CallCentreEditCompatibilityService
             "modified_by_user_code",
             "@modifiedByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
+            currentUserId > 0 ? currentUserId : null
+        );
 
-        await ExecuteUpdateAsync(
-            AccidentTable,
-            row.Columns,
-            row.Values,
-            values,
-            cancellationToken);
+        await ExecuteUpdateAsync(AccidentTable, row.Columns, row.Values, values, cancellationToken);
     }
 
     private async Task UpdateLossAsync(
         short callCentreCode,
         LossEditUpdate update,
         int currentUserId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var row = await ReadRowAsync(LossTable, callCentreCode, cancellationToken);
         if (!row.TableAvailable || row.Values is null)
@@ -165,35 +265,67 @@ public sealed class CallCentreEditCompatibilityService
 
         var values = new List<WriteValue>();
         AddValue(values, row.Columns, "loss_date", "@lossDate", DbType.Date, update.LossDate?.Date);
-        AddValue(values, row.Columns, "loss_type_code", "@lossTypeCode", DbType.Int16, update.LossTypeCode);
+        AddValue(
+            values,
+            row.Columns,
+            "loss_type_code",
+            "@lossTypeCode",
+            DbType.Int16,
+            update.LossTypeCode
+        );
         AddValue(values, row.Columns, "Site_code", "@siteCode", DbType.Int16, update.SiteCode);
-        AddValue(values, row.Columns, "dept_contact", "@departmentContact", DbType.String, update.DepartmentContact);
-        AddValue(values, row.Columns, "place_of_loss", "@placeOfLoss", DbType.String, update.PlaceOfLoss);
-        AddValue(values, row.Columns, "driver_name", "@driverName", DbType.String, update.DriverName);
+        AddValue(
+            values,
+            row.Columns,
+            "dept_contact",
+            "@departmentContact",
+            DbType.String,
+            update.DepartmentContact
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "place_of_loss",
+            "@placeOfLoss",
+            DbType.String,
+            update.PlaceOfLoss
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "driver_name",
+            "@driverName",
+            DbType.String,
+            update.DriverName
+        );
         AddValue(values, row.Columns, "Remarks", "@remarks", DbType.String, update.Remarks);
         AddValue(values, row.Columns, "Tow_need", "@towNeed", DbType.String, update.TowNeed);
-        AddValue(values, row.Columns, "date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
+        AddValue(
+            values,
+            row.Columns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
         AddValue(
             values,
             row.Columns,
             "modified_by_user_code",
             "@modifiedByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
+            currentUserId > 0 ? currentUserId : null
+        );
 
-        await ExecuteUpdateAsync(
-            LossTable,
-            row.Columns,
-            row.Values,
-            values,
-            cancellationToken);
+        await ExecuteUpdateAsync(LossTable, row.Columns, row.Values, values, cancellationToken);
     }
 
     private async Task UpdateTowingAsync(
         short callCentreCode,
         TowingEditUpdate update,
         int currentUserId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var row = await ReadRowAsync(TowingTable, callCentreCode, cancellationToken);
         if (!row.TableAvailable || row.Values is null)
@@ -202,34 +334,73 @@ public sealed class CallCentreEditCompatibilityService
         }
 
         var values = new List<WriteValue>();
-        AddValue(values, row.Columns, "Tow_location_start", "@location", DbType.String, update.Location);
-        AddValue(values, row.Columns, "Vehicle_problem", "@vehicleProblem", DbType.String, update.VehicleProblem);
+        AddValue(
+            values,
+            row.Columns,
+            "Tow_location_start",
+            "@location",
+            DbType.String,
+            update.Location
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "Vehicle_problem",
+            "@vehicleProblem",
+            DbType.String,
+            update.VehicleProblem
+        );
         AddValue(values, row.Columns, "Site_code", "@siteCode", DbType.Int16, update.SiteCode);
-        AddValue(values, row.Columns, "Tow_Truck_code", "@towTruckCode", DbType.Int16, update.TowTruckCode);
-        AddValue(values, row.Columns, "Contact_person_name", "@contactPersonName", DbType.String, update.ContactPersonName);
-        AddValue(values, row.Columns, "Contact_person_tel", "@contactPersonTel", DbType.String, update.ContactPersonTel);
+        AddValue(
+            values,
+            row.Columns,
+            "Tow_Truck_code",
+            "@towTruckCode",
+            DbType.Int16,
+            update.TowTruckCode
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "Contact_person_name",
+            "@contactPersonName",
+            DbType.String,
+            update.ContactPersonName
+        );
+        AddValue(
+            values,
+            row.Columns,
+            "Contact_person_tel",
+            "@contactPersonTel",
+            DbType.String,
+            update.ContactPersonTel
+        );
         AddValue(values, row.Columns, "Remaks", "@remarks", DbType.String, update.Remarks);
-        AddValue(values, row.Columns, "date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
+        AddValue(
+            values,
+            row.Columns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
         AddValue(
             values,
             row.Columns,
             "modified_by_user_code",
             "@modifiedByUserCode",
             DbType.Int32,
-            currentUserId > 0 ? currentUserId : null);
+            currentUserId > 0 ? currentUserId : null
+        );
 
-        await ExecuteUpdateAsync(
-            TowingTable,
-            row.Columns,
-            row.Values,
-            values,
-            cancellationToken);
+        await ExecuteUpdateAsync(TowingTable, row.Columns, row.Values, values, cancellationToken);
     }
 
     private async Task<ChildRow> ReadRowAsync(
         ChildTableDefinition table,
         short callCentreCode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var columns = await GetAvailableColumnsAsync(table.Name, cancellationToken);
         var referenceColumn = ResolveColumn(columns, table.ReferenceColumn);
@@ -285,7 +456,8 @@ public sealed class CallCentreEditCompatibilityService
 
     private async Task<HashSet<string>> GetAvailableColumnsAsync(
         string tableName,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -330,15 +502,19 @@ public sealed class CallCentreEditCompatibilityService
         IReadOnlySet<string> columns,
         IReadOnlyDictionary<string, object?> row,
         IReadOnlyList<WriteValue> values,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         if (values.Count == 0)
         {
             return;
         }
 
-        var keyColumn = ResolveColumn(columns, table.KeyColumn)
-            ?? throw new InvalidOperationException($"The {table.Name} compatibility key is not available.");
+        var keyColumn =
+            ResolveColumn(columns, table.KeyColumn)
+            ?? throw new InvalidOperationException(
+                $"The {table.Name} compatibility key is not available."
+            );
         if (!row.TryGetValue(keyColumn, out var keyValue) || keyValue is null || keyValue is DBNull)
         {
             return;
@@ -357,7 +533,10 @@ public sealed class CallCentreEditCompatibilityService
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
                 UPDATE [dbo].[{table.Name}]
-                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                SET {string.Join(
+                    ", ",
+                    values.Select(value => $"[{value.Column}] = {value.Parameter}")
+                )}
                 WHERE [{keyColumn}] = @recordCode
                   AND {GetActiveFilter(columns)}
                 """;
@@ -366,7 +545,8 @@ public sealed class CallCentreEditCompatibilityService
                 command,
                 "@recordCode",
                 table == AccidentTable ? DbType.Int32 : DbType.Int16,
-                keyValue);
+                keyValue
+            );
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         finally
@@ -384,7 +564,8 @@ public sealed class CallCentreEditCompatibilityService
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         var availableColumn = ResolveColumn(columns, column);
         if (availableColumn is not null)
@@ -393,11 +574,13 @@ public sealed class CallCentreEditCompatibilityService
         }
     }
 
-    private static string? ResolveColumn(IReadOnlySet<string> columns, string requested)
-        => columns.FirstOrDefault(column => string.Equals(column, requested, StringComparison.OrdinalIgnoreCase));
+    private static string? ResolveColumn(IReadOnlySet<string> columns, string requested) =>
+        columns.FirstOrDefault(column =>
+            string.Equals(column, requested, StringComparison.OrdinalIgnoreCase)
+        );
 
-    private static string GetActiveFilter(IReadOnlySet<string> columns)
-        => columns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+    private static string GetActiveFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
 
     private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)
     {
@@ -419,18 +602,16 @@ public sealed class CallCentreEditCompatibilityService
     private sealed record ChildTableDefinition(
         string Name,
         string KeyColumn,
-        string ReferenceColumn);
+        string ReferenceColumn
+    );
 
     private sealed record ChildRow(
         bool TableAvailable,
         IReadOnlySet<string> Columns,
-        IReadOnlyDictionary<string, object?>? Values);
+        IReadOnlyDictionary<string, object?>? Values
+    );
 
-    private sealed record WriteValue(
-        string Column,
-        string Parameter,
-        DbType Type,
-        object? Value);
+    private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 }
 
 public sealed class CallCentreEditDetails

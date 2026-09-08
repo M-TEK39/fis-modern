@@ -24,7 +24,7 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         "physical_address",
         "postal_address",
         "tel_number",
-        "fax_number"
+        "fax_number",
     ];
 
     private static readonly string[] OptionalColumns =
@@ -35,7 +35,7 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         "date_updated",
         "created_by_user_code",
         "modified_by_user_code",
-        "is_deleted"
+        "is_deleted",
     ];
 
     private readonly FisDbContext _context;
@@ -49,9 +49,13 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
     {
         var schema = await GetSchemaAsync();
         var items = await QueryAsync(schema);
-        return new(items, new VehicleSourceCapabilities(
-            schema.Columns.Contains("email_address"),
-            schema.Columns.Contains("contact_person")));
+        return new(
+            items,
+            new VehicleSourceCapabilities(
+                schema.Columns.Contains("email_address"),
+                schema.Columns.Contains("contact_person")
+            )
+        );
     }
 
     public async Task<VehicleSourceCapabilities> GetCapabilitiesAsync()
@@ -59,7 +63,8 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         var schema = await GetSchemaAsync();
         return new(
             schema.Columns.Contains("email_address"),
-            schema.Columns.Contains("contact_person"));
+            schema.Columns.Contains("contact_person")
+        );
     }
 
     public async Task<VehicleSourceRecord?> GetByIdAsync(byte sourceCode)
@@ -89,7 +94,9 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         {
             if (transaction is null && !schema.IsIdentity)
             {
-                ownedTransaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+                ownedTransaction = await connection.BeginTransactionAsync(
+                    IsolationLevel.Serializable
+                );
                 transaction = ownedTransaction;
             }
 
@@ -136,7 +143,11 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         }
     }
 
-    public async Task<VehicleSourceRecord> UpdateAsync(byte sourceCode, VehicleSourceInput source, int currentUserId)
+    public async Task<VehicleSourceRecord> UpdateAsync(
+        byte sourceCode,
+        VehicleSourceInput source,
+        int currentUserId
+    )
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -144,11 +155,19 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         var existing = (await QueryAsync(schema, sourceCode)).SingleOrDefault();
         if (existing is null)
         {
-            throw new KeyNotFoundException($"Vehicle source with vs_code {sourceCode} was not found.");
+            throw new KeyNotFoundException(
+                $"Vehicle source with vs_code {sourceCode} was not found."
+            );
         }
 
         EnsureOptionalFieldsAvailable(source, schema);
-        var values = BuildValues(source, schema, currentUserId, DateTime.UtcNow, includeCreateAudit: false);
+        var values = BuildValues(
+            source,
+            schema,
+            currentUserId,
+            DateTime.UtcNow,
+            includeCreateAudit: false
+        );
         await ExecuteUpdateAsync(sourceCode, values);
         return (await QueryAsync(schema, sourceCode)).Single();
     }
@@ -156,8 +175,12 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The table, columns, and predicates are selected only from fixed compatibility branches; values are parameterized.")]
-    private async Task<List<VehicleSourceRecord>> QueryAsync(SourceSchema schema, byte? sourceCode = null)
+        Justification = "The table, columns, and predicates are selected only from fixed compatibility branches; values are parameterized."
+    )]
+    private async Task<List<VehicleSourceRecord>> QueryAsync(
+        SourceSchema schema,
+        byte? sourceCode = null
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -172,7 +195,9 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = RequiredColumns
                 .Select(column => $"[{column}] AS [{column}]")
-                .Concat(OptionalColumns.Select(column => GetOptionalProjection(schema.Columns, column)))
+                .Concat(
+                    OptionalColumns.Select(column => GetOptionalProjection(schema.Columns, column))
+                )
                 .ToArray();
             var conditions = new List<string> { GetNotDeletedFilter(schema.Columns) };
             if (sourceCode.HasValue)
@@ -181,7 +206,8 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
                 AddParameter(command, "@sourceCode", DbType.Byte, sourceCode.Value);
             }
 
-            command.CommandText = $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY COALESCE([name], ''), [vs_code]";
+            command.CommandText =
+                $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", conditions)} ORDER BY COALESCE([name], ''), [vs_code]";
 
             var results = new List<VehicleSourceRecord>();
             await using var reader = await command.ExecuteReaderAsync();
@@ -204,15 +230,18 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed only from fixed compatibility columns and all values are parameters.")]
+        Justification = "The INSERT statement is composed only from fixed compatibility columns and all values are parameters."
+    )]
     private static async Task<byte> ExecuteInsertAsync(
         DbConnection connection,
         DbTransaction? transaction,
-        IReadOnlyList<WriteValue> values)
+        IReadOnlyList<WriteValue> values
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[vs_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+        command.CommandText =
+            $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[vs_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
         AddParameters(command, values);
         return Convert.ToByte(await command.ExecuteScalarAsync());
     }
@@ -220,15 +249,18 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The INSERT statement is composed only from fixed compatibility columns and all values are parameters.")]
+        Justification = "The INSERT statement is composed only from fixed compatibility columns and all values are parameters."
+    )]
     private static async Task ExecuteInsertWithoutOutputAsync(
         DbConnection connection,
         DbTransaction? transaction,
-        IReadOnlyList<WriteValue> values)
+        IReadOnlyList<WriteValue> values
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+        command.CommandText =
+            $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
         AddParameters(command, values);
         await command.ExecuteNonQueryAsync();
     }
@@ -236,7 +268,8 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The UPDATE statement is composed only from fixed compatibility columns and all values are parameters.")]
+        Justification = "The UPDATE statement is composed only from fixed compatibility columns and all values are parameters."
+    )]
     private async Task ExecuteUpdateAsync(byte sourceCode, IReadOnlyList<WriteValue> values)
     {
         var connection = _context.Database.GetDbConnection();
@@ -250,12 +283,15 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [vs_code] = @sourceCode";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [vs_code] = @sourceCode";
             AddParameters(command, values);
             AddParameter(command, "@sourceCode", DbType.Byte, sourceCode);
             if (await command.ExecuteNonQueryAsync() == 0)
             {
-                throw new KeyNotFoundException($"Vehicle source with vs_code {sourceCode} was not found.");
+                throw new KeyNotFoundException(
+                    $"Vehicle source with vs_code {sourceCode} was not found."
+                );
             }
         }
         finally
@@ -298,15 +334,20 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
                 }
             }
 
-            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            var missingColumns = RequiredColumns
+                .Where(column => !columns.Contains(column))
+                .ToArray();
             if (missingColumns.Length > 0)
             {
-                throw new InvalidOperationException($"The required vehicle source compatibility columns are not available: {string.Join(", ", missingColumns)}");
+                throw new InvalidOperationException(
+                    $"The required vehicle source compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                );
             }
 
             await using var identityCommand = connection.CreateCommand();
             identityCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            identityCommand.CommandText = "SELECT COLUMNPROPERTY(OBJECT_ID(N'[dbo].[vehicle_source]'), N'vs_code', 'IsIdentity')";
+            identityCommand.CommandText =
+                "SELECT COLUMNPROPERTY(OBJECT_ID(N'[dbo].[vehicle_source]'), N'vs_code', 'IsIdentity')";
             var identityValue = await identityCommand.ExecuteScalarAsync();
             return new SourceSchema(columns, Convert.ToInt32(identityValue) == 1);
         }
@@ -319,11 +360,15 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         }
     }
 
-    private static async Task<byte> GetNextSourceCodeAsync(DbConnection connection, DbTransaction? transaction)
+    private static async Task<byte> GetNextSourceCodeAsync(
+        DbConnection connection,
+        DbTransaction? transaction
+    )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        command.CommandText = "SELECT COALESCE(MAX(CAST([vs_code] AS int)), 0) + 1 FROM [dbo].[vehicle_source] WITH (UPDLOCK, HOLDLOCK)";
+        command.CommandText =
+            "SELECT COALESCE(MAX(CAST([vs_code] AS int)), 0) + 1 FROM [dbo].[vehicle_source] WITH (UPDLOCK, HOLDLOCK)";
         var nextValue = Convert.ToInt32(await command.ExecuteScalarAsync());
         if (nextValue > byte.MaxValue)
         {
@@ -338,7 +383,8 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         SourceSchema schema,
         int currentUserId,
         DateTime now,
-        bool includeCreateAudit = true)
+        bool includeCreateAudit = true
+    )
     {
         var values = new List<WriteValue>
         {
@@ -346,35 +392,91 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
             new("physical_address", "@physicalAddress", DbType.String, source.PhysicalAddress),
             new("postal_address", "@postalAddress", DbType.String, source.PostalAddress),
             new("tel_number", "@telephoneNumber", DbType.String, source.TelephoneNumber),
-            new("fax_number", "@faxNumber", DbType.String, source.FaxNumber)
+            new("fax_number", "@faxNumber", DbType.String, source.FaxNumber),
         };
 
-        AddOptionalStringValue(values, schema.Columns, "email_address", "@emailAddress", source.EmailAddress);
-        AddOptionalStringValue(values, schema.Columns, "contact_person", "@contactPerson", source.ContactPerson);
+        AddOptionalStringValue(
+            values,
+            schema.Columns,
+            "email_address",
+            "@emailAddress",
+            source.EmailAddress
+        );
+        AddOptionalStringValue(
+            values,
+            schema.Columns,
+            "contact_person",
+            "@contactPerson",
+            source.ContactPerson
+        );
 
         if (includeCreateAudit)
         {
-            AddOptionalValue(values, schema.Columns, "date_created", "@dateCreated", DbType.DateTime2, now);
-            AddOptionalValue(values, schema.Columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
-            AddOptionalValue(values, schema.Columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+            AddOptionalValue(
+                values,
+                schema.Columns,
+                "date_created",
+                "@dateCreated",
+                DbType.DateTime2,
+                now
+            );
+            AddOptionalValue(
+                values,
+                schema.Columns,
+                "created_by_user_code",
+                "@createdByUserCode",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
+            AddOptionalValue(
+                values,
+                schema.Columns,
+                "is_deleted",
+                "@isDeleted",
+                DbType.Boolean,
+                false
+            );
         }
         else
         {
-            AddOptionalValue(values, schema.Columns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
-            AddOptionalValue(values, schema.Columns, "modified_by_user_code", "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+            AddOptionalValue(
+                values,
+                schema.Columns,
+                "date_updated",
+                "@dateUpdated",
+                DbType.DateTime2,
+                now
+            );
+            AddOptionalValue(
+                values,
+                schema.Columns,
+                "modified_by_user_code",
+                "@modifiedByUserCode",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
         }
 
         return values;
     }
 
-    private static void EnsureOptionalFieldsAvailable(VehicleSourceInput source, SourceSchema schema)
+    private static void EnsureOptionalFieldsAvailable(
+        VehicleSourceInput source,
+        SourceSchema schema
+    )
     {
-        if (!schema.Columns.Contains("email_address") && !string.IsNullOrWhiteSpace(source.EmailAddress))
+        if (
+            !schema.Columns.Contains("email_address")
+            && !string.IsNullOrWhiteSpace(source.EmailAddress)
+        )
         {
             throw new VehicleSourceFieldUnavailableException("email_address");
         }
 
-        if (!schema.Columns.Contains("contact_person") && !string.IsNullOrWhiteSpace(source.ContactPerson))
+        if (
+            !schema.Columns.Contains("contact_person")
+            && !string.IsNullOrWhiteSpace(source.ContactPerson)
+        )
         {
             throw new VehicleSourceFieldUnavailableException("contact_person");
         }
@@ -385,7 +487,8 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         IReadOnlySet<string> columns,
         string column,
         string parameter,
-        string value)
+        string value
+    )
     {
         if (columns.Contains(column))
         {
@@ -399,7 +502,8 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         string column,
         string parameter,
         DbType type,
-        object? value)
+        object? value
+    )
     {
         if (columns.Contains(column))
         {
@@ -424,8 +528,11 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
         command.Parameters.Add(parameter);
     }
 
-    private static VehicleSourceRecord MapRecord(DbDataReader reader, IReadOnlySet<string> columns)
-        => new(
+    private static VehicleSourceRecord MapRecord(
+        DbDataReader reader,
+        IReadOnlySet<string> columns
+    ) =>
+        new(
             ReadByte(reader, "vs_code"),
             ReadString(reader, "name"),
             ReadString(reader, "physical_address"),
@@ -437,7 +544,8 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
             ReadDateTimeIfAvailable(reader, columns, "date_created"),
             ReadDateTimeIfAvailable(reader, columns, "date_updated"),
             ReadInt32IfAvailable(reader, columns, "created_by_user_code"),
-            ReadInt32IfAvailable(reader, columns, "modified_by_user_code"));
+            ReadInt32IfAvailable(reader, columns, "modified_by_user_code")
+        );
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
     {
@@ -451,28 +559,43 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
             "date_created" or "date_updated" => "datetime2",
             "created_by_user_code" or "modified_by_user_code" => "int",
             "is_deleted" => "bit",
-            _ => "nvarchar(255)"
+            _ => "nvarchar(255)",
         };
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetNotDeletedFilter(IReadOnlySet<string> columns)
-        => columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
+    private static string GetNotDeletedFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
 
-    private static string? ReadString(DbDataReader reader, string column)
-        => reader[column] is DBNull ? null : reader[column]?.ToString();
+    private static string? ReadString(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? null : reader[column]?.ToString();
 
-    private static string? ReadStringIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) ? ReadString(reader, column) : null;
+    private static string? ReadStringIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) => columns.Contains(column) ? ReadString(reader, column) : null;
 
-    private static byte ReadByte(DbDataReader reader, string column)
-        => reader[column] is DBNull ? (byte)0 : Convert.ToByte(reader[column]);
+    private static byte ReadByte(DbDataReader reader, string column) =>
+        reader[column] is DBNull ? (byte)0 : Convert.ToByte(reader[column]);
 
-    private static DateTime? ReadDateTimeIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) && reader[column] is not DBNull ? Convert.ToDateTime(reader[column]) : null;
+    private static DateTime? ReadDateTimeIfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) =>
+        columns.Contains(column) && reader[column] is not DBNull
+            ? Convert.ToDateTime(reader[column])
+            : null;
 
-    private static int? ReadInt32IfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
-        => columns.Contains(column) && reader[column] is not DBNull ? Convert.ToInt32(reader[column]) : null;
+    private static int? ReadInt32IfAvailable(
+        DbDataReader reader,
+        IReadOnlySet<string> columns,
+        string column
+    ) =>
+        columns.Contains(column) && reader[column] is not DBNull
+            ? Convert.ToInt32(reader[column])
+            : null;
 
     private sealed record SourceSchema(IReadOnlySet<string> Columns, bool IsIdentity);
 

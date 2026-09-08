@@ -5,5 +5,10 @@ type LegacyMerchantEditProps = {
 };
 
 export default function LegacyMerchantEditPage({ searchParams }: LegacyMerchantEditProps) {
-  return <ClearanceMerchantPage routePath="/clearance/MNT_Merchant_Edit.aspx" searchParams={searchParams} />;
+  return (
+    <ClearanceMerchantPage
+      routePath="/clearance/MNT_Merchant_Edit.aspx"
+      searchParams={searchParams}
+    />
+  );
 }

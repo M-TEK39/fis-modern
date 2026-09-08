@@ -17,8 +17,10 @@ function resultPath(result: string, message: string) {
 
 function apiMessage(error: unknown) {
   if (error instanceof FinanceApiError) {
-    if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
-    if (error.reason === "unavailable") return "The Finance service is temporarily unavailable. Please try again.";
+    if (error.reason === "unauthorized")
+      return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "unavailable")
+      return "The Finance service is temporarily unavailable. Please try again.";
     return error.message;
   }
   return "The missing-kilometres operation could not be completed.";
@@ -36,11 +38,18 @@ function responseMessage(value: unknown) {
 export async function closeMissingKilometresAction(formData: FormData) {
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
-  if (session.status !== "authenticated") redirect(resultPath("error", "The sign-in service is temporarily unavailable. Please try again."));
-  if (!hasFinanceRole(session.roles)) redirect(resultPath("forbidden", "Your account does not have permission to close kilometre gaps."));
+  if (session.status !== "authenticated")
+    redirect(
+      resultPath("error", "The sign-in service is temporarily unavailable. Please try again."),
+    );
+  if (!hasFinanceRole(session.roles))
+    redirect(
+      resultPath("forbidden", "Your account does not have permission to close kilometre gaps."),
+    );
 
   const financialYear = text(formData, "financialYear");
-  if (!/^\d{4}$/.test(financialYear)) redirect(resultPath("error", "Select a valid financial year before closing kilometre gaps."));
+  if (!/^\d{4}$/.test(financialYear))
+    redirect(resultPath("error", "Select a valid financial year before closing kilometre gaps."));
 
   let result: unknown;
   try {

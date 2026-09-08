@@ -39,7 +39,12 @@ function getText(formData: FormData, ...keys: string[]) {
   return "";
 }
 
-function redirectWithError(message: string, vmfCode = "", incidentType = "", path = CAPTURE_PATH): never {
+function redirectWithError(
+  message: string,
+  vmfCode = "",
+  incidentType = "",
+  path = CAPTURE_PATH,
+): never {
   const params = new URLSearchParams({ error: message });
   if (vmfCode) {
     params.set("vmfCode", vmfCode);
@@ -106,15 +111,34 @@ function redirectLossWithError(
 async function authorizeCallCentre(vmfCode: string, incidentType = "", path = CAPTURE_PATH) {
   const session = await getSession();
   if (session.status === "unavailable") {
-    redirectWithError("The sign-in service is temporarily unavailable. Please try again.", vmfCode, incidentType, path);
+    redirectWithError(
+      "The sign-in service is temporarily unavailable. Please try again.",
+      vmfCode,
+      incidentType,
+      path,
+    );
   }
 
   if (session.status !== "authenticated") {
-    redirectWithError("Your session has expired. Sign in again before continuing.", vmfCode, incidentType, path);
+    redirectWithError(
+      "Your session has expired. Sign in again before continuing.",
+      vmfCode,
+      incidentType,
+      path,
+    );
   }
 
-  if (!session.roles.some((role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
-    redirectWithError("You do not have permission to capture call centre incidents.", vmfCode, incidentType, path);
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
+    redirectWithError(
+      "You do not have permission to capture call centre incidents.",
+      vmfCode,
+      incidentType,
+      path,
+    );
   }
 }
 
@@ -138,7 +162,11 @@ async function authorizeAccidentTowing(vmfCode: string, callCentreCode: string) 
     );
   }
 
-  if (!session.roles.some((role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
     redirectAccidentWithError(
       "You do not have permission to capture call centre incidents.",
       vmfCode,
@@ -168,7 +196,11 @@ async function authorizeLossTowing(vmfCode: string, callCentreCode: string) {
     );
   }
 
-  if (!session.roles.some((role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
+  if (
+    !session.roles.some(
+      (role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    )
+  ) {
     redirectLossWithError(
       "You do not have permission to capture call centre incidents.",
       vmfCode,
@@ -196,7 +228,12 @@ function validateRoadMaxLength(value: string, field: string, maxLength: number, 
   }
 }
 
-function validateAccidentMaxLength(value: string, field: string, maxLength: number, vmfCode: string) {
+function validateAccidentMaxLength(
+  value: string,
+  field: string,
+  maxLength: number,
+  vmfCode: string,
+) {
   if (value.length > maxLength) {
     redirectAccidentWithError(`${field} must be ${maxLength} characters or fewer.`, vmfCode);
   }
@@ -286,16 +323,41 @@ export async function saveQueryIncidentAction(formData: FormData) {
   }
 
   const croRemarks = getText(formData, "xcrem", "croRemarks");
-  validateMaxLength(getText(formData, "xtrsname", "transportOfficerName"), "Transport officer name", 60, vmfCodeText);
-  validateMaxLength(getText(formData, "xtrstel", "transportOfficerTel"), "Transport officer telephone", 15, vmfCodeText);
-  validateMaxLength(getText(formData, "xtrsfax", "transportOfficerFax"), "Transport officer fax", 15, vmfCodeText);
-  validateMaxLength(getText(formData, "xtrseml", "transportOfficerEmail"), "Transport officer email", 30, vmfCodeText);
+  validateMaxLength(
+    getText(formData, "xtrsname", "transportOfficerName"),
+    "Transport officer name",
+    60,
+    vmfCodeText,
+  );
+  validateMaxLength(
+    getText(formData, "xtrstel", "transportOfficerTel"),
+    "Transport officer telephone",
+    15,
+    vmfCodeText,
+  );
+  validateMaxLength(
+    getText(formData, "xtrsfax", "transportOfficerFax"),
+    "Transport officer fax",
+    15,
+    vmfCodeText,
+  );
+  validateMaxLength(
+    getText(formData, "xtrseml", "transportOfficerEmail"),
+    "Transport officer email",
+    30,
+    vmfCodeText,
+  );
   validateMaxLength(getText(formData, "xcalname", "callerName"), "Caller name", 30, vmfCodeText);
   validateMaxLength(getText(formData, "xcaltel", "callerTel"), "Caller telephone", 30, vmfCodeText);
   validateMaxLength(getText(formData, "xcalfax", "callerFax"), "Caller fax", 15, vmfCodeText);
   validateMaxLength(getText(formData, "xcaleml", "callerEmail"), "Caller email", 30, vmfCodeText);
   validateMaxLength(croRemarks, "CLO remarks", 60, vmfCodeText);
-  validateMaxLength(getText(formData, "xirem", "incidentRemarks"), "Incident notes", 80, vmfCodeText);
+  validateMaxLength(
+    getText(formData, "xirem", "incidentRemarks"),
+    "Incident notes",
+    80,
+    vmfCodeText,
+  );
   if (informCro === "Y" && !croRemarks) {
     redirectWithError("Remarks for the CLO are required when informing the CLO.", String(vmfCode));
   }
@@ -333,7 +395,6 @@ export async function saveQueryIncidentAction(formData: FormData) {
       NotifyListCode: getPositiveInt(formData, "xnotel", "notifyListCode"),
       CallClosed: callClosed,
     });
-
   } catch (error) {
     redirectWithError(apiErrorMessage(error), String(vmfCode));
   }
@@ -351,7 +412,10 @@ export async function saveRoadAssistanceAction(formData: FormData) {
 
   const vmfCode = getPositiveInt(formData, "ccVMF", "vmfCode");
   if (vmfCode === null) {
-    redirectRoadWithError("A valid vehicle must be selected before capturing an incident.", vmfCodeText);
+    redirectRoadWithError(
+      "A valid vehicle must be selected before capturing an incident.",
+      vmfCodeText,
+    );
   }
 
   const incidentType = getText(formData, "xinctype", "incidentType") || "Road_Assistance";
@@ -416,7 +480,10 @@ export async function saveRoadAssistanceAction(formData: FormData) {
   validateRoadMaxLength(towingRemarks, "Towing remarks", 50, vmfCodeText);
   validateRoadMaxLength(location, "Location", 50, vmfCodeText);
   if (informCro === "Y" && !croRemarks) {
-    redirectRoadWithError("Remarks for the CLO are required when informing the CLO.", String(vmfCode));
+    redirectRoadWithError(
+      "Remarks for the CLO are required when informing the CLO.",
+      String(vmfCode),
+    );
   }
 
   let result: Awaited<ReturnType<typeof createRoadAssistanceIncident>>;
@@ -451,7 +518,6 @@ export async function saveRoadAssistanceAction(formData: FormData) {
       TowingRemarks: towingRemarks || null,
       TowTruckCode: getPositiveInt(formData, "xtruckcod", "towTruckCode"),
     });
-
   } catch (error) {
     redirectRoadWithError(apiErrorMessage(error), String(vmfCode));
   }
@@ -471,7 +537,10 @@ export async function saveAccidentAction(formData: FormData) {
 
   const vmfCode = getPositiveInt(formData, "ccVMF", "vmfCode");
   if (vmfCode === null) {
-    redirectAccidentWithError("A valid vehicle must be selected before capturing an incident.", vmfCodeText);
+    redirectAccidentWithError(
+      "A valid vehicle must be selected before capturing an incident.",
+      vmfCodeText,
+    );
   }
 
   const incidentType = getText(formData, "xinctype", "incidentType") || "Accident";
@@ -554,7 +623,10 @@ export async function saveAccidentAction(formData: FormData) {
   validateAccidentMaxLength(street, "Street name", 30, vmfCodeText);
   validateAccidentMaxLength(accidentNotes, "Accident notes", 55, vmfCodeText);
   if (informCro === "Y" && !croRemarks) {
-    redirectAccidentWithError("Remarks for the CLO are required when informing the CLO.", String(vmfCode));
+    redirectAccidentWithError(
+      "Remarks for the CLO are required when informing the CLO.",
+      String(vmfCode),
+    );
   }
 
   let result: Awaited<ReturnType<typeof createAccidentIncident>>;
@@ -618,7 +690,10 @@ export async function saveHiJackAction(formData: FormData) {
 
   const vmfCode = getPositiveInt(formData, "ccVMF", "vmfCode");
   if (vmfCode === null) {
-    redirectHiJackWithError("A valid vehicle must be selected before capturing an incident.", vmfCodeText);
+    redirectHiJackWithError(
+      "A valid vehicle must be selected before capturing an incident.",
+      vmfCodeText,
+    );
   }
 
   const incidentType = getText(formData, "xinctype", "incidentType") || "Hi-Jack";
@@ -683,7 +758,10 @@ export async function saveHiJackAction(formData: FormData) {
   validateHiJackMaxLength(incidentDescription, "Hi-Jack description", 60, vmfCodeText);
   validateHiJackMaxLength(incidentRemarks, "Remarks", 80, vmfCodeText);
   if (informCro === "Y" && !croRemarks) {
-    redirectHiJackWithError("Remarks for the CLO are required when informing the CLO.", String(vmfCode));
+    redirectHiJackWithError(
+      "Remarks for the CLO are required when informing the CLO.",
+      String(vmfCode),
+    );
   }
 
   let result: Awaited<ReturnType<typeof createHiJackIncident>>;
@@ -714,7 +792,6 @@ export async function saveHiJackAction(formData: FormData) {
       DriverPersalno: driverPersalno || null,
       IncidentDesc: incidentDescription || null,
     });
-
   } catch (error) {
     redirectHiJackWithError(apiErrorMessage(error), String(vmfCode));
   }
@@ -734,7 +811,10 @@ export async function saveLossAction(formData: FormData) {
 
   const vmfCode = getPositiveInt(formData, "ccVMF", "vmfCode");
   if (vmfCode === null) {
-    redirectLossWithError("A valid vehicle must be selected before capturing an incident.", vmfCodeText);
+    redirectLossWithError(
+      "A valid vehicle must be selected before capturing an incident.",
+      vmfCodeText,
+    );
   }
 
   const incidentType = getText(formData, "xinctype", "incidentType") || "Loss_Theft";
@@ -809,7 +889,10 @@ export async function saveLossAction(formData: FormData) {
   validateLossMaxLength(incidentDescription, "Loss description", 60, vmfCodeText);
   validateLossMaxLength(incidentRemarks, "Remarks", 50, vmfCodeText);
   if (informCro === "Y" && !croRemarks) {
-    redirectLossWithError("Remarks for the CLO are required when informing the CLO.", String(vmfCode));
+    redirectLossWithError(
+      "Remarks for the CLO are required when informing the CLO.",
+      String(vmfCode),
+    );
   }
 
   let result: Awaited<ReturnType<typeof createLossIncident>>;
@@ -841,7 +924,6 @@ export async function saveLossAction(formData: FormData) {
       LossTypeCode: lossTypeCode,
       TowNeed: towNeed,
     });
-
   } catch (error) {
     redirectLossWithError(apiErrorMessage(error), String(vmfCode));
   }
@@ -885,7 +967,13 @@ export async function saveLossTowingAction(formData: FormData) {
 
   validateLossTowMaxLength(vehicleProblem, "Vehicle problem", 60, vmfCodeText, callCentreCodeText);
   validateLossTowMaxLength(contactName, "Contact person name", 30, vmfCodeText, callCentreCodeText);
-  validateLossTowMaxLength(contactTel, "Contact person telephone", 20, vmfCodeText, callCentreCodeText);
+  validateLossTowMaxLength(
+    contactTel,
+    "Contact person telephone",
+    20,
+    vmfCodeText,
+    callCentreCodeText,
+  );
   validateLossTowMaxLength(contactCell, "Contact person cell", 10, vmfCodeText, callCentreCodeText);
   validateLossTowMaxLength(location, "Tow location", 50, vmfCodeText, callCentreCodeText);
   validateLossTowMaxLength(remarks, "Towing remarks", 50, vmfCodeText, callCentreCodeText);
@@ -907,7 +995,6 @@ export async function saveLossTowingAction(formData: FormData) {
       ContactPersonCell: contactCell || null,
       Remarks: remarks || null,
     });
-
   } catch (error) {
     redirectLossWithError(
       apiErrorMessage(error),
@@ -951,10 +1038,34 @@ export async function saveAccidentTowingAction(formData: FormData) {
   const contactCell = getText(formData, "xconcell", "contactPersonCell");
   const location = getText(formData, "xtown", "location");
   const remarks = getText(formData, "xrem", "remarks");
-  validateAccidentTowMaxLength(damageDescription, "Vehicle problem", 60, vmfCodeText, callCentreCodeText);
-  validateAccidentTowMaxLength(contactName, "Contact person name", 30, vmfCodeText, callCentreCodeText);
-  validateAccidentTowMaxLength(contactTel, "Contact person telephone", 20, vmfCodeText, callCentreCodeText);
-  validateAccidentTowMaxLength(contactCell, "Contact person cell", 10, vmfCodeText, callCentreCodeText);
+  validateAccidentTowMaxLength(
+    damageDescription,
+    "Vehicle problem",
+    60,
+    vmfCodeText,
+    callCentreCodeText,
+  );
+  validateAccidentTowMaxLength(
+    contactName,
+    "Contact person name",
+    30,
+    vmfCodeText,
+    callCentreCodeText,
+  );
+  validateAccidentTowMaxLength(
+    contactTel,
+    "Contact person telephone",
+    20,
+    vmfCodeText,
+    callCentreCodeText,
+  );
+  validateAccidentTowMaxLength(
+    contactCell,
+    "Contact person cell",
+    10,
+    vmfCodeText,
+    callCentreCodeText,
+  );
   validateAccidentTowMaxLength(location, "Tow location", 50, vmfCodeText, callCentreCodeText);
   validateAccidentTowMaxLength(remarks, "Towing remarks", 50, vmfCodeText, callCentreCodeText);
 
@@ -975,7 +1086,6 @@ export async function saveAccidentTowingAction(formData: FormData) {
       ContactPersonCell: contactCell || null,
       Remarks: remarks || null,
     });
-
   } catch (error) {
     redirectAccidentWithError(
       apiErrorMessage(error),

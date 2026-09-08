@@ -57,7 +57,10 @@ export default function VehicleEditSearchClient({
   initialState = initialSearchState,
   searchAction,
 }: VehicleEditSearchClientProps) {
-  const [state, formAction] = useActionState<VehicleEditSearchActionState, FormData>(searchAction, initialState);
+  const [state, formAction] = useActionState<VehicleEditSearchActionState, FormData>(
+    searchAction,
+    initialState,
+  );
 
   return (
     <div className="vehicle-create-form">

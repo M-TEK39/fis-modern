@@ -88,7 +88,8 @@ export type DriverManagementLicenceType = {
   description: string | null;
 };
 
-export type DriverManagementApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "rejected";
+export type DriverManagementApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "rejected";
 
 export class DriverManagementApiError extends Error {
   constructor(
@@ -192,7 +193,11 @@ async function requestApi(path: string, init: RequestInit = {}) {
     });
 
     if (response.status === 401 || response.status === 403) {
-      throw new DriverManagementApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new DriverManagementApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
 
     if (!response.ok) {
@@ -207,7 +212,13 @@ async function requestApi(path: string, init: RequestInit = {}) {
       }
 
       throw new DriverManagementApiError(
-        response.status === 404 ? "not-found" : response.status === 400 || response.status === 409 ? "rejected" : response.status >= 500 ? "unavailable" : "invalid-response",
+        response.status === 404
+          ? "not-found"
+          : response.status === 400 || response.status === 409
+            ? "rejected"
+            : response.status >= 500
+              ? "unavailable"
+              : "invalid-response",
         message,
         response.status,
       );
@@ -238,8 +249,18 @@ function mapDepartment(value: unknown): DriverManagementDepartment | null {
     return null;
   }
 
-  const code = asNumber(getValue(value, "code", "Code", "departmentCode", "DepartmentCode", "department_code"));
-  const description = asString(getValue(value, "description", "Description", "departmentDescription", "department_description"));
+  const code = asNumber(
+    getValue(value, "code", "Code", "departmentCode", "DepartmentCode", "department_code"),
+  );
+  const description = asString(
+    getValue(
+      value,
+      "description",
+      "Description",
+      "departmentDescription",
+      "department_description",
+    ),
+  );
   return code !== null && description ? { code, description } : null;
 }
 
@@ -249,7 +270,9 @@ function mapSite(value: unknown): DriverManagementSite | null {
   }
 
   const code = asNumber(getValue(value, "code", "Code", "siteCode", "SiteCode", "Site_code"));
-  const departmentCode = asNumber(getValue(value, "departmentCode", "DepartmentCode", "Depatrment_code"));
+  const departmentCode = asNumber(
+    getValue(value, "departmentCode", "DepartmentCode", "Depatrment_code"),
+  );
   const description = asString(getValue(value, "description", "Description"));
   return code !== null && description ? { code, departmentCode, description } : null;
 }
@@ -259,7 +282,9 @@ function mapAuthoriser(value: unknown): DriverManagementAuthoriser | null {
     return null;
   }
 
-  const authoriserCode = asNumber(getValue(value, "authoriserCode", "AuthoriserCode", "approver_code"));
+  const authoriserCode = asNumber(
+    getValue(value, "authoriserCode", "AuthoriserCode", "approver_code"),
+  );
   if (authoriserCode === null) {
     return null;
   }
@@ -273,8 +298,11 @@ function mapAuthoriser(value: unknown): DriverManagementAuthoriser | null {
     telephoneNumber: asString(getValue(value, "telephoneNumber", "TelephoneNumber", "telephone")),
     isActive: asBoolean(getValue(value, "isActive", "IsActive", "approver_active")),
     siteCode: asNumber(getValue(value, "siteCode", "SiteCode", "site_code")),
-    departmentCode: asNumber(getValue(value, "departmentCode", "DepartmentCode", "department_code")) ?? 0,
-    legacyFieldsAvailable: asBoolean(getValue(value, "legacyFieldsAvailable", "LegacyFieldsAvailable")),
+    departmentCode:
+      asNumber(getValue(value, "departmentCode", "DepartmentCode", "department_code")) ?? 0,
+    legacyFieldsAvailable: asBoolean(
+      getValue(value, "legacyFieldsAvailable", "LegacyFieldsAvailable"),
+    ),
   };
 }
 
@@ -284,7 +312,9 @@ function mapRank(value: unknown): DriverManagementRank | null {
   }
 
   const id = asNumber(getValue(value, "id", "Id", "rankCode", "RankCode", "rank_code"));
-  return id === null ? null : { id, description: asString(getValue(value, "description", "Description")) };
+  return id === null
+    ? null
+    : { id, description: asString(getValue(value, "description", "Description")) };
 }
 
 function mapDriver(value: unknown): DriverManagementDriver | null {
@@ -292,7 +322,9 @@ function mapDriver(value: unknown): DriverManagementDriver | null {
     return null;
   }
 
-  const siteDriverCode = asNumber(getValue(value, "siteDriverCode", "SiteDriverCode", "site_driver_code"));
+  const siteDriverCode = asNumber(
+    getValue(value, "siteDriverCode", "SiteDriverCode", "site_driver_code"),
+  );
   if (siteDriverCode === null) {
     return null;
   }
@@ -300,19 +332,90 @@ function mapDriver(value: unknown): DriverManagementDriver | null {
   return {
     siteDriverCode,
     siteCode: asNumber(getValue(value, "siteCode", "SiteCode", "site_code")) ?? 0,
-    driverLicenceTypeId: asNumber(getValue(value, "driverLicenceTypeId", "DriverLicenceTypeId", "driver_licence_type_id")) ?? 0,
+    driverLicenceTypeId:
+      asNumber(
+        getValue(value, "driverLicenceTypeId", "DriverLicenceTypeId", "driver_licence_type_id"),
+      ) ?? 0,
     driverSurname: asString(getValue(value, "driverSurname", "DriverSurname", "driver_surname")),
-    driverFirstname: asString(getValue(value, "driverFirstname", "DriverFirstname", "driver_firstname")),
-    driverSAId: asString(getValue(value, "driverSAId", "DriverSAId", "driver_SA_id", "southAfricanId")),
-    driverPassportNumber: asString(getValue(value, "driverPassportNumber", "DriverPassportNumber", "driver_passportnumber", "passportNumber")),
-    driverPersonalNumber: asString(getValue(value, "driverPersonalNumber", "DriverPersonalNumber", "driver_persalnumber", "persalNumber")),
-    driverContractNumber: asString(getValue(value, "driverContractNumber", "DriverContractNumber", "driver_contractnumber", "contractNumber")),
-    driverLicenceNumber: asString(getValue(value, "driverLicenceNumber", "DriverLicenceNumber", "driver_licence_number", "licenceNumber")),
-    driverLicenceIssueDate: asString(getValue(value, "driverLicenceIssueDate", "DriverLicenceIssueDate", "driver_licence_issuedate", "licenceIssueDate")),
-    driverLicenceLastVerifiedDate: asString(getValue(value, "driverLicenceLastVerifiedDate", "DriverLicenceLastVerifiedDate", "driver_licence_lastVerifiedDate", "licenceLastVerifiedDate")),
+    driverFirstname: asString(
+      getValue(value, "driverFirstname", "DriverFirstname", "driver_firstname"),
+    ),
+    driverSAId: asString(
+      getValue(value, "driverSAId", "DriverSAId", "driver_SA_id", "southAfricanId"),
+    ),
+    driverPassportNumber: asString(
+      getValue(
+        value,
+        "driverPassportNumber",
+        "DriverPassportNumber",
+        "driver_passportnumber",
+        "passportNumber",
+      ),
+    ),
+    driverPersonalNumber: asString(
+      getValue(
+        value,
+        "driverPersonalNumber",
+        "DriverPersonalNumber",
+        "driver_persalnumber",
+        "persalNumber",
+      ),
+    ),
+    driverContractNumber: asString(
+      getValue(
+        value,
+        "driverContractNumber",
+        "DriverContractNumber",
+        "driver_contractnumber",
+        "contractNumber",
+      ),
+    ),
+    driverLicenceNumber: asString(
+      getValue(
+        value,
+        "driverLicenceNumber",
+        "DriverLicenceNumber",
+        "driver_licence_number",
+        "licenceNumber",
+      ),
+    ),
+    driverLicenceIssueDate: asString(
+      getValue(
+        value,
+        "driverLicenceIssueDate",
+        "DriverLicenceIssueDate",
+        "driver_licence_issuedate",
+        "licenceIssueDate",
+      ),
+    ),
+    driverLicenceLastVerifiedDate: asString(
+      getValue(
+        value,
+        "driverLicenceLastVerifiedDate",
+        "DriverLicenceLastVerifiedDate",
+        "driver_licence_lastVerifiedDate",
+        "licenceLastVerifiedDate",
+      ),
+    ),
     driverHasPDP: asBoolean(getValue(value, "driverHasPDP", "DriverHasPDP", "driver_hasPDP")),
-    driverPDPExpiryDate: asString(getValue(value, "driverPDPExpiryDate", "DriverPDPExpiryDate", "driver_PDP_ExpiryDate", "pdpExpiryDate")),
-    driverLicenceExpiryDate: asString(getValue(value, "driverLicenceExpiryDate", "DriverLicenceExpiryDate", "driver_licence_ExpiryDate", "licenceExpiryDate")),
+    driverPDPExpiryDate: asString(
+      getValue(
+        value,
+        "driverPDPExpiryDate",
+        "DriverPDPExpiryDate",
+        "driver_PDP_ExpiryDate",
+        "pdpExpiryDate",
+      ),
+    ),
+    driverLicenceExpiryDate: asString(
+      getValue(
+        value,
+        "driverLicenceExpiryDate",
+        "DriverLicenceExpiryDate",
+        "driver_licence_ExpiryDate",
+        "licenceExpiryDate",
+      ),
+    ),
     driverActive: asBoolean(getValue(value, "driverActive", "DriverActive", "driver_active")),
   };
 }
@@ -327,29 +430,48 @@ function mapLicenceType(value: unknown): DriverManagementLicenceType | null {
     ? null
     : {
         id,
-        code: asString(getValue(value, "code", "Code", "driverLicenceTypeCode", "driver_licence_type_code")),
-        description: asString(getValue(value, "description", "Description", "driverLicenceTypeDescription", "driver_licence_type_description")),
+        code: asString(
+          getValue(value, "code", "Code", "driverLicenceTypeCode", "driver_licence_type_code"),
+        ),
+        description: asString(
+          getValue(
+            value,
+            "description",
+            "Description",
+            "driverLicenceTypeDescription",
+            "driver_licence_type_description",
+          ),
+        ),
       };
 }
 
 function mapCollection<T>(payload: unknown, mapper: (value: unknown) => T | null) {
-  return getCollection(payload).map(mapper).filter((value): value is T => value !== null);
+  return getCollection(payload)
+    .map(mapper)
+    .filter((value): value is T => value !== null);
 }
 
 export async function getDriverManagementDepartments() {
   const response = await requestApi("api/department");
-  return mapCollection(await readJson(response), mapDepartment).sort((left, right) => left.description.localeCompare(right.description));
+  return mapCollection(await readJson(response), mapDepartment).sort((left, right) =>
+    left.description.localeCompare(right.description),
+  );
 }
 
 export async function getDriverManagementSites() {
   const response = await requestApi("api/site");
-  return mapCollection(await readJson(response), mapSite).sort((left, right) => left.description.localeCompare(right.description));
+  return mapCollection(await readJson(response), mapSite).sort((left, right) =>
+    left.description.localeCompare(right.description),
+  );
 }
 
 export async function getDriverManagementAuthorisers(siteCode: number) {
   const response = await requestApi(`api/authorisers?siteCode=${encodeURIComponent(siteCode)}`);
   return mapCollection(await readJson(response), mapAuthoriser).sort(
-    (left, right) => (left.surname ?? "").localeCompare(right.surname ?? "") || (left.firstname ?? "").localeCompare(right.firstname ?? "") || left.authoriserCode - right.authoriserCode,
+    (left, right) =>
+      (left.surname ?? "").localeCompare(right.surname ?? "") ||
+      (left.firstname ?? "").localeCompare(right.firstname ?? "") ||
+      left.authoriserCode - right.authoriserCode,
   );
 }
 
@@ -368,14 +490,20 @@ export async function getDriverManagementAuthoriser(authoriserCode: number) {
 
 export async function getDriverManagementRanks() {
   const response = await requestApi("api/authorisers/ranks");
-  return mapCollection(await readJson(response), mapRank).sort((left, right) => (left.description ?? "").localeCompare(right.description ?? "") || left.id - right.id);
+  return mapCollection(await readJson(response), mapRank).sort(
+    (left, right) =>
+      (left.description ?? "").localeCompare(right.description ?? "") || left.id - right.id,
+  );
 }
 
 export async function getDriverManagementSiteDrivers(siteCode?: number) {
   const query = siteCode === undefined ? "" : `?siteCode=${encodeURIComponent(siteCode)}`;
   const response = await requestApi(`api/site-drivers${query}`);
   return mapCollection(await readJson(response), mapDriver).sort(
-    (left, right) => (left.driverSurname ?? "").localeCompare(right.driverSurname ?? "") || (left.driverFirstname ?? "").localeCompare(right.driverFirstname ?? "") || left.siteDriverCode - right.siteDriverCode,
+    (left, right) =>
+      (left.driverSurname ?? "").localeCompare(right.driverSurname ?? "") ||
+      (left.driverFirstname ?? "").localeCompare(right.driverFirstname ?? "") ||
+      left.siteDriverCode - right.siteDriverCode,
   );
 }
 
@@ -394,7 +522,10 @@ export async function getDriverManagementSiteDriver(siteDriverCode: number) {
 
 export async function getDriverManagementLicenceTypes() {
   const response = await requestApi("api/site-drivers/licence-types");
-  return mapCollection(await readJson(response), mapLicenceType).sort((left, right) => (left.description ?? "").localeCompare(right.description ?? "") || left.id - right.id);
+  return mapCollection(await readJson(response), mapLicenceType).sort(
+    (left, right) =>
+      (left.description ?? "").localeCompare(right.description ?? "") || left.id - right.id,
+  );
 }
 
 async function runMutation(path: string, method: "POST" | "PUT" | "DELETE", body?: unknown) {
@@ -404,13 +535,19 @@ async function runMutation(path: string, method: "POST" | "PUT" | "DELETE", body
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       headers: body === undefined ? undefined : { "content-type": "application/json" },
     });
-    return { ok: true as const, payload: response.status === 204 ? null : await readJson(response) };
+    return {
+      ok: true as const,
+      payload: response.status === 204 ? null : await readJson(response),
+    };
   } catch (error) {
     if (error instanceof DriverManagementApiError) {
       return { ok: false as const, error };
     }
 
-    return { ok: false as const, error: new DriverManagementApiError("unavailable", "The FIS API could not be reached.") };
+    return {
+      ok: false as const,
+      error: new DriverManagementApiError("unavailable", "The FIS API could not be reached."),
+    };
   }
 }
 
@@ -427,7 +564,10 @@ export async function createDriverManagementAuthoriser(input: DriverManagementAu
   });
 }
 
-export async function updateDriverManagementAuthoriser(authoriserCode: number, input: DriverManagementAuthoriserInput) {
+export async function updateDriverManagementAuthoriser(
+  authoriserCode: number,
+  input: DriverManagementAuthoriserInput,
+) {
   return runMutation(`api/authorisers/${encodeURIComponent(authoriserCode)}`, "PUT", {
     RankCode: input.rankCode,
     Surname: input.surname,
@@ -448,7 +588,10 @@ export async function createDriverManagementSiteDriver(input: DriverManagementDr
   return runMutation("api/site-drivers", "POST", input);
 }
 
-export async function updateDriverManagementSiteDriver(siteDriverCode: number, input: DriverManagementDriverInput) {
+export async function updateDriverManagementSiteDriver(
+  siteDriverCode: number,
+  input: DriverManagementDriverInput,
+) {
   return runMutation(`api/site-drivers/${encodeURIComponent(siteDriverCode)}`, "PUT", input);
 }
 

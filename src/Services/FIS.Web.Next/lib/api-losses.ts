@@ -40,7 +40,15 @@ export type LossRecord = {
   vehicleIdentifier: string | null;
 };
 
-export type LossInput = Omit<LossRecord, "lossCode" | "lossTypeDescription" | "siteDescription" | "vehicleIdentifier" | "dateCreated" | "dateUpdated">;
+export type LossInput = Omit<
+  LossRecord,
+  | "lossCode"
+  | "lossTypeDescription"
+  | "siteDescription"
+  | "vehicleIdentifier"
+  | "dateCreated"
+  | "dateUpdated"
+>;
 
 export type LossVehicleMatch = {
   vmfCode: number;
@@ -121,17 +129,30 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
     if (response.status === 401 || response.status === 403) {
-      throw new LossApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new LossApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the API body is not JSON.
       }
-      throw new LossApiError(response.status === 404 ? "not-found" : response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new LossApiError(
+        response.status === 404
+          ? "not-found"
+          : response.status >= 500
+            ? "unavailable"
+            : "invalid-response",
+        message,
+        response.status,
+      );
     }
     return response;
   } catch (error) {
@@ -188,7 +209,9 @@ function mapLoss(value: unknown): LossRecord | null {
     lossStatus: asString(getValue(value, "loss_status", "lossStatus")),
     dateCreated: asString(getValue(value, "date_created", "dateCreated")),
     dateUpdated: asString(getValue(value, "date_updated", "dateUpdated")),
-    vehicleIdentifier: asString(getValue(value, "vehicle_identifier", "vehicleIdentifier", "vehicle_fleet_number")),
+    vehicleIdentifier: asString(
+      getValue(value, "vehicle_identifier", "vehicleIdentifier", "vehicle_fleet_number"),
+    ),
   };
 }
 
@@ -199,7 +222,9 @@ function mapVehicle(value: unknown): LossVehicleMatch | null {
   return {
     vmfCode,
     fleetNumber: asString(getValue(value, "FleetNumber", "fleetNumber", "fleet_number")),
-    registrationNumber: asString(getValue(value, "RegistrationNumber", "registrationNumber", "registration_number")),
+    registrationNumber: asString(
+      getValue(value, "RegistrationNumber", "registrationNumber", "registration_number"),
+    ),
   };
 }
 
@@ -236,7 +261,9 @@ function toApiInput(input: LossInput) {
 
 export async function getLosses() {
   const payload = await readJson(await requestApi("api/loss"));
-  return getCollection(payload).map(mapLoss).filter((item): item is LossRecord => item !== null);
+  return getCollection(payload)
+    .map(mapLoss)
+    .filter((item): item is LossRecord => item !== null);
 }
 
 export async function getLoss(lossCode: number) {
@@ -249,34 +276,52 @@ export async function getLoss(lossCode: number) {
 }
 
 export async function getLossesByVehicleIdentifier(identifier: string, mode: "GG" | "GP" = "GG") {
-  const payload = await readJson(await requestApi(`api/loss/vehicle/${encodeURIComponent(identifier)}?mode=${mode}`));
-  return getCollection(payload).map(mapLoss).filter((item): item is LossRecord => item !== null);
+  const payload = await readJson(
+    await requestApi(`api/loss/vehicle/${encodeURIComponent(identifier)}?mode=${mode}`),
+  );
+  return getCollection(payload)
+    .map(mapLoss)
+    .filter((item): item is LossRecord => item !== null);
 }
 
 export async function getLossesByVmfCode(vmfCode: number) {
   const payload = await readJson(await requestApi(`api/loss/vmf/${encodeURIComponent(vmfCode)}`));
-  return getCollection(payload).map(mapLoss).filter((item): item is LossRecord => item !== null);
+  return getCollection(payload)
+    .map(mapLoss)
+    .filter((item): item is LossRecord => item !== null);
 }
 
 export async function getLossVehicleMatches(identifier: string) {
-  const payload = await readJson(await requestApi(`api/vehiclelookup?keyword=${encodeURIComponent(identifier)}&limit=20`));
-  return getCollection(payload).map(mapVehicle).filter((item): item is LossVehicleMatch => item !== null);
+  const payload = await readJson(
+    await requestApi(`api/vehiclelookup?keyword=${encodeURIComponent(identifier)}&limit=20`),
+  );
+  return getCollection(payload)
+    .map(mapVehicle)
+    .filter((item): item is LossVehicleMatch => item !== null);
 }
 
 export async function createLoss(input: LossInput) {
-  return mapLoss(await readJson(await requestApi("api/loss", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(toApiInput(input)),
-  })));
+  return mapLoss(
+    await readJson(
+      await requestApi("api/loss", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(toApiInput(input)),
+      }),
+    ),
+  );
 }
 
 export async function updateLoss(lossCode: number, input: LossInput) {
-  return mapLoss(await readJson(await requestApi(`api/loss/${encodeURIComponent(lossCode)}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ loss_code: lossCode, ...toApiInput(input) }),
-  })));
+  return mapLoss(
+    await readJson(
+      await requestApi(`api/loss/${encodeURIComponent(lossCode)}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ loss_code: lossCode, ...toApiInput(input) }),
+      }),
+    ),
+  );
 }
 
 export async function deleteLoss(lossCode: number) {

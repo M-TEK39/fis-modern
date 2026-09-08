@@ -36,10 +36,14 @@ export type LogsheetWriteInput = {
   bund_num: number | null;
 };
 
-export type LogsheetApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type LogsheetApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class LogsheetApiError extends Error {
-  constructor(public readonly reason: LogsheetApiErrorReason, message: string) {
+  constructor(
+    public readonly reason: LogsheetApiErrorReason,
+    message: string,
+  ) {
     super(message);
     this.name = "LogsheetApiError";
   }
@@ -91,7 +95,8 @@ function getCollection(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new LogsheetApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new LogsheetApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -110,8 +115,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
     if (response.status === 401 || response.status === 403) {
       throw new LogsheetApiError("unauthorized", "The FIS access cookie was rejected.");
     }
-    if (response.status === 404) throw new LogsheetApiError("not-found", "The logsheet was not found.");
-    if (!response.ok) throw new LogsheetApiError("invalid-response", `FIS API returned HTTP ${response.status}.`);
+    if (response.status === 404)
+      throw new LogsheetApiError("not-found", "The logsheet was not found.");
+    if (!response.ok)
+      throw new LogsheetApiError("invalid-response", `FIS API returned HTTP ${response.status}.`);
     return response;
   } catch (error) {
     if (error instanceof LogsheetApiError) throw error;
@@ -149,7 +156,9 @@ function mapLogsheet(value: unknown): LogsheetRecord | null {
       asString(vehicleRecord && getValue(vehicleRecord, "fleet_number", "fleetNumber")),
     registrationNumber:
       asString(getValue(value, "registration_number", "registrationNumber")) ??
-      asString(vehicleRecord && getValue(vehicleRecord, "registration_number", "registrationNumber")),
+      asString(
+        vehicleRecord && getValue(vehicleRecord, "registration_number", "registrationNumber"),
+      ),
     startOdometer: asNumber(getValue(value, "start_odo", "startOdo")) ?? 0,
     endOdometer: asNumber(getValue(value, "end_odo", "endOdo")) ?? 0,
     month,
@@ -183,24 +192,33 @@ export async function getLogsheets() {
 }
 
 export async function getLogsheet(logCode: number) {
-  const record = mapLogsheet(await readJson(await requestApi(`api/logsheet/${encodeURIComponent(logCode)}`)));
-  if (!record) throw new LogsheetApiError("invalid-response", "The FIS API returned an invalid logsheet.");
+  const record = mapLogsheet(
+    await readJson(await requestApi(`api/logsheet/${encodeURIComponent(logCode)}`)),
+  );
+  if (!record)
+    throw new LogsheetApiError("invalid-response", "The FIS API returned an invalid logsheet.");
   return record;
 }
 
 export async function createLogsheet(input: LogsheetWriteInput) {
-  const payload = await readJson(await mutate("api/logsheet/entry", "POST", {
-    vmfCode: input.vmf_code,
-    startOdometer: input.start_odo,
-    endOdometer: input.end_odo,
-    month: input.month,
-    siteCode: input.site_code,
-    requisitionNumber: input.rek_num,
-    daysUsed: input.days_used,
-    bundleNumber: input.bund_num,
-  }));
+  const payload = await readJson(
+    await mutate("api/logsheet/entry", "POST", {
+      vmfCode: input.vmf_code,
+      startOdometer: input.start_odo,
+      endOdometer: input.end_odo,
+      month: input.month,
+      siteCode: input.site_code,
+      requisitionNumber: input.rek_num,
+      daysUsed: input.days_used,
+      bundleNumber: input.bund_num,
+    }),
+  );
   const logCode = isRecord(payload) ? asNumber(getValue(payload, "logCode", "LogCode")) : null;
-  if (logCode === null) throw new LogsheetApiError("invalid-response", "The FIS API returned an invalid created logsheet.");
+  if (logCode === null)
+    throw new LogsheetApiError(
+      "invalid-response",
+      "The FIS API returned an invalid created logsheet.",
+    );
   return getLogsheet(logCode);
 }
 
@@ -217,7 +235,10 @@ export async function updateLogsheet(logCode: number, input: LogsheetWriteInput)
   });
   const payload = await readJson(response);
   if (isRecord(payload) && getValue(payload, "success", "Success") === false) {
-    throw new LogsheetApiError("invalid-response", asString(getValue(payload, "message", "Message")) ?? "The logsheet could not be updated.");
+    throw new LogsheetApiError(
+      "invalid-response",
+      asString(getValue(payload, "message", "Message")) ?? "The logsheet could not be updated.",
+    );
   }
   return getLogsheet(logCode);
 }

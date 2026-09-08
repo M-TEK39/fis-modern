@@ -14,13 +14,34 @@ export async function getLicenseSession() {
 }
 
 export function sessionMessage(session: SessionState, returnPath: string) {
-  if (session.status === "expired") return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={returnPath} /></main>;
-  if (session.status === "unavailable") return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">API unavailable</p><h2>The sign-in service is temporarily unavailable.</h2><p className="muted-copy">Retry when the FIS API is available.</p></section></main>;
+  if (session.status === "expired")
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <SessionRecovery returnPath={returnPath} />
+      </main>
+    );
+  if (session.status === "unavailable")
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <section className="vehicle-status-card" role="alert">
+          <p className="eyebrow">API unavailable</p>
+          <h2>The sign-in service is temporarily unavailable.</h2>
+          <p className="muted-copy">Retry when the FIS API is available.</p>
+        </section>
+      </main>
+    );
   return null;
 }
 
 export function accessRestricted(message = "Your profile does not include Licence access.") {
-  return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">Access restricted</p><h2>{message}</h2></section></main>;
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-status-card" role="alert">
+        <p className="eyebrow">Access restricted</p>
+        <h2>{message}</h2>
+      </section>
+    </main>
+  );
 }
 
 export function hasLicenseAccess(session: Extract<SessionState, { status: "authenticated" }>) {
@@ -28,7 +49,7 @@ export function hasLicenseAccess(session: Extract<SessionState, { status: "authe
 }
 
 export function queryValue(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
 export function dateInput(value: string | null | undefined) {

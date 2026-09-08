@@ -14,13 +14,17 @@ public interface IContractValidationService
     /// Validates if a contract exists for the given registration number
     /// Legacy SP: NEW_DEV_SEL_ContractByReg
     /// </summary>
-    Task<ContractValidationResult> ValidateContractRegistrationNumberAsync(string registrationNumber);
+    Task<ContractValidationResult> ValidateContractRegistrationNumberAsync(
+        string registrationNumber
+    );
 
     /// <summary>
     /// Validates if the registration number exists in the vehicle table
     /// Legacy SP: NEW_DEV_VAL_Registration
     /// </summary>
-    Task<ContractValidationResult> ValidateVehicleRegistrationNumberAsync(string registrationNumber);
+    Task<ContractValidationResult> ValidateVehicleRegistrationNumberAsync(
+        string registrationNumber
+    );
 
     /// <summary>
     /// Checks for duplicate open contracts for a vehicle

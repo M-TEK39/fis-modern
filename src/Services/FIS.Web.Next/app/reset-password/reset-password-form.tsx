@@ -19,7 +19,10 @@ function SubmitButton() {
 }
 
 export default function ResetPasswordForm({ token }: { token: string }) {
-  const [state, formAction] = useActionState<ForgotPasswordActionState, FormData>(resetPasswordAction, initialState);
+  const [state, formAction] = useActionState<ForgotPasswordActionState, FormData>(
+    resetPasswordAction,
+    initialState,
+  );
 
   if (state.status === "success") {
     return (
@@ -72,7 +75,9 @@ export default function ResetPasswordForm({ token }: { token: string }) {
         />
       </div>
 
-      <p className="auth-footnote">Use at least 8 characters with uppercase, lowercase, a number, and a special character.</p>
+      <p className="auth-footnote">
+        Use at least 8 characters with uppercase, lowercase, a number, and a special character.
+      </p>
       <SubmitButton />
     </form>
   );

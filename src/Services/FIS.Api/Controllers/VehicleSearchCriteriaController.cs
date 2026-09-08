@@ -15,7 +15,8 @@ public class VehicleSearchCriteriaController : BaseApiController
 
     public VehicleSearchCriteriaController(
         IVehicleRepository vehicleRepository,
-        ILogger<VehicleSearchCriteriaController> logger)
+        ILogger<VehicleSearchCriteriaController> logger
+    )
     {
         _vehicleRepository = vehicleRepository;
         _logger = logger;
@@ -33,11 +34,7 @@ public class VehicleSearchCriteriaController : BaseApiController
             var vehicles = await _vehicleRepository.GetActiveVehiclesAsync();
 
             var keywords = vehicles
-                .SelectMany(v => new[]
-                {
-                    v.fleet_number,
-                    v.registration_number
-                })
+                .SelectMany(v => new[] { v.fleet_number, v.registration_number })
                 .Where(k => !string.IsNullOrWhiteSpace(k))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(k => k)
@@ -48,7 +45,10 @@ public class VehicleSearchCriteriaController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching vehicle search criteria");
-            return StatusCode(500, new { error = "Failed to fetch search criteria", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to fetch search criteria", message = ex.Message }
+            );
         }
     }
 }

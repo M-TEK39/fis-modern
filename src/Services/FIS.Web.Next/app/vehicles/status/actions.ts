@@ -11,7 +11,13 @@ import {
 import { getSession } from "@/lib/session";
 
 const VEHICLE_MANAGEMENT_PERMISSION = 1;
-const REMARK_CATEGORIES = new Set(["General", "Missing", "UnderInvestigation", "AccidentHold", "Other"]);
+const REMARK_CATEGORIES = new Set([
+  "General",
+  "Missing",
+  "UnderInvestigation",
+  "AccidentHold",
+  "Other",
+]);
 
 export type VehicleStatusReportActionResult = {
   status: "success" | "error";
@@ -25,7 +31,10 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 
   try {
-    return (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) === BigInt(VEHICLE_MANAGEMENT_PERMISSION);
+    return (
+      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
+      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
+    );
   } catch {
     return false;
   }
@@ -34,15 +43,24 @@ function hasVehicleManagementPermission(accessLevel?: string) {
 async function authorizeReport() {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { ok: false as const, message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      ok: false as const,
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { ok: false as const, message: "Your session has expired. Sign in again before continuing." };
+    return {
+      ok: false as const,
+      message: "Your session has expired. Sign in again before continuing.",
+    };
   }
 
   if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return { ok: false as const, message: "You do not have permission to view vehicle status reports." };
+    return {
+      ok: false as const,
+      message: "You do not have permission to view vehicle status reports.",
+    };
   }
 
   return { ok: true as const };
@@ -105,7 +123,10 @@ export async function loadVehicleStatusReportAction(
     const report = await getVehicleStatusReport(getReportFilters(formData));
     return { status: "success", report };
   } catch (error) {
-    console.error("FIS vehicle status report request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle status report request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return {
       status: "error",
       message: apiErrorMessage(error, "The vehicle status report could not be loaded."),
@@ -129,7 +150,8 @@ export async function submitVehicleStatusRemarkAction(
   if (!remarkText) {
     return {
       status: "error",
-      message: operation === "resolve" ? "Resolution notes are required." : "Remark text is required.",
+      message:
+        operation === "resolve" ? "Resolution notes are required." : "Remark text is required.",
     };
   }
 
@@ -162,11 +184,17 @@ export async function submitVehicleStatusRemarkAction(
     const report = await getVehicleStatusReport(getReportFilters(formData));
     return {
       status: "success",
-      message: operation === "resolve" ? "Vehicle remark resolved successfully." : "Vehicle remark added successfully.",
+      message:
+        operation === "resolve"
+          ? "Vehicle remark resolved successfully."
+          : "Vehicle remark added successfully.",
       report,
     };
   } catch (error) {
-    console.error("FIS vehicle status remark request failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS vehicle status remark request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return {
       status: "error",
       message: apiErrorMessage(error, "The vehicle remark could not be saved."),

@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { hasAssetVerificationAccess } from "@/app/vehicle-verification/access";
-import { createAssetVerification, updateAssetVerification, type AssetVerificationInput } from "@/lib/api-asset-verification";
+import {
+  createAssetVerification,
+  updateAssetVerification,
+  type AssetVerificationInput,
+} from "@/lib/api-asset-verification";
 import { getSession } from "@/lib/session";
 
 class AssetVerificationValidationError extends Error {}
@@ -17,20 +21,23 @@ function text(formData: FormData, key: string) {
 function requiredText(formData: FormData, key: string, label: string, maxLength: number) {
   const value = text(formData, key);
   if (!value) throw new AssetVerificationValidationError(`${label} is required.`);
-  if (value.length > maxLength) throw new AssetVerificationValidationError(`${label} cannot exceed ${maxLength} characters.`);
+  if (value.length > maxLength)
+    throw new AssetVerificationValidationError(`${label} cannot exceed ${maxLength} characters.`);
   return value;
 }
 
 function optionalText(formData: FormData, key: string, maxLength: number) {
   const value = text(formData, key);
-  if (value.length > maxLength) throw new AssetVerificationValidationError(`${key} cannot exceed ${maxLength} characters.`);
+  if (value.length > maxLength)
+    throw new AssetVerificationValidationError(`${key} cannot exceed ${maxLength} characters.`);
   return value || null;
 }
 
 function requiredInteger(formData: FormData, key: string, label: string) {
   const value = text(formData, key);
   const parsed = Number(value);
-  if (!value || !Number.isInteger(parsed) || parsed <= 0) throw new AssetVerificationValidationError(`${label} must be a positive whole number.`);
+  if (!value || !Number.isInteger(parsed) || parsed <= 0)
+    throw new AssetVerificationValidationError(`${label} must be a positive whole number.`);
   return parsed;
 }
 
@@ -38,19 +45,22 @@ function optionalInteger(formData: FormData, key: string) {
   const value = text(formData, key);
   if (!value) return null;
   const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) throw new AssetVerificationValidationError(`${key} must be a whole number.`);
+  if (!Number.isInteger(parsed) || parsed < 0)
+    throw new AssetVerificationValidationError(`${key} must be a whole number.`);
   return parsed;
 }
 
 function requiredDate(formData: FormData, key: string, label: string) {
   const value = text(formData, key);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new AssetVerificationValidationError(`${label} is required.`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
+    throw new AssetVerificationValidationError(`${label} is required.`);
   return value;
 }
 
 function selectedValue(formData: FormData, key: string, label: string) {
   const value = requiredText(formData, key, label, 100);
-  if (value.toLocaleLowerCase() === "select...") throw new AssetVerificationValidationError(`${label} must be selected.`);
+  if (value.toLocaleLowerCase() === "select...")
+    throw new AssetVerificationValidationError(`${label} must be selected.`);
   return value;
 }
 
@@ -67,26 +77,42 @@ export async function saveAssetVerificationAction(formData: FormData) {
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status !== "authenticated") redirect(resultPath(failurePath, gg, "unavailable"));
-  if (!hasAssetVerificationAccess(session.roles, session.accessLevel)) redirect(resultPath(failurePath, gg, "forbidden"));
+  if (!hasAssetVerificationAccess(session.roles, session.accessLevel))
+    redirect(resultPath(failurePath, gg, "forbidden"));
 
   let saved: Awaited<ReturnType<typeof createAssetVerification>> = null;
   try {
     const code = optionalInteger(formData, "assetVerificationCode");
-    if (mode === "edit" && !code) throw new AssetVerificationValidationError("The asset verification record is missing.");
-    if (mode !== "add" && mode !== "edit") throw new AssetVerificationValidationError("The asset verification action is invalid.");
+    if (mode === "edit" && !code)
+      throw new AssetVerificationValidationError("The asset verification record is missing.");
+    if (mode !== "add" && mode !== "edit")
+      throw new AssetVerificationValidationError("The asset verification action is invalid.");
 
     const vmfCode = requiredInteger(formData, "vmfCode", "Vehicle VMF code");
     const siteCode = requiredInteger(formData, "siteCode", "Site");
     const province = selectedValue(formData, "province", "Province");
-    const responsibleManager = requiredText(formData, "responsibleManager", "Responsible manager", 100);
+    const responsibleManager = requiredText(
+      formData,
+      "responsibleManager",
+      "Responsible manager",
+      100,
+    );
     const telNo = requiredText(formData, "telNo", "Telephone number", 50);
     const faxNo = requiredText(formData, "faxNo", "Fax number", 50);
     const yesNoFields = [
-      ["mobitrackFitted", "Mobitrack fitted"], ["petrolCard", "Petrol card"], ["lamination", "Lamination"],
-      ["tyreBands", "Tyre bands"], ["barcode", "Barcode"], ["logbook", "Logbook"], ["gearlock", "Gearlock"],
-      ["radio", "Radio"], ["carKeys", "Car keys"],
+      ["mobitrackFitted", "Mobitrack fitted"],
+      ["petrolCard", "Petrol card"],
+      ["lamination", "Lamination"],
+      ["tyreBands", "Tyre bands"],
+      ["barcode", "Barcode"],
+      ["logbook", "Logbook"],
+      ["gearlock", "Gearlock"],
+      ["radio", "Radio"],
+      ["carKeys", "Car keys"],
     ] as const;
-    const values = Object.fromEntries(yesNoFields.map(([key, label]) => [key, selectedValue(formData, key, label)])) as Record<string, string>;
+    const values = Object.fromEntries(
+      yesNoFields.map(([key, label]) => [key, selectedValue(formData, key, label)]),
+    ) as Record<string, string>;
     const currentKm = requiredInteger(formData, "currentKm", "Current km");
     const lastVerified = requiredDate(formData, "lastVerified", "Last verified date");
     const comments = requiredText(formData, "comments", "Comments", 2000);
@@ -126,11 +152,18 @@ export async function saveAssetVerificationAction(formData: FormData) {
       comments,
     };
 
-    saved = mode === "edit" ? await updateAssetVerification(code!, input) : await createAssetVerification(input);
+    saved =
+      mode === "edit"
+        ? await updateAssetVerification(code!, input)
+        : await createAssetVerification(input);
     if (!saved) throw new Error("The API did not return the saved asset verification record.");
   } catch (error) {
-    if (error instanceof AssetVerificationValidationError) redirect(resultPath(failurePath, gg, "invalid", error.message));
-    console.error("FIS asset verification save failed", error instanceof Error ? error.message : "unknown error");
+    if (error instanceof AssetVerificationValidationError)
+      redirect(resultPath(failurePath, gg, "invalid", error.message));
+    console.error(
+      "FIS asset verification save failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     redirect(resultPath(failurePath, gg, "unavailable"));
   }
 

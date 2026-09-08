@@ -65,7 +65,8 @@ export type TowTruckRequest = {
   TowFax: string | null;
 };
 
-export type TowingApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type TowingApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class TowingApiError extends Error {
   constructor(
@@ -192,15 +193,29 @@ function mapTowing(value: unknown): TowingRecord | null {
     callReference: asNumber(getValue(value, "Call_refer", "callReference", "call_refer")),
     requestDate: asString(getValue(value, "Tow_request_date", "requestDate", "tow_request_date")),
     requestTime: asString(getValue(value, "Tow_request_time", "requestTime", "tow_request_time")),
-    locationStart: asString(getValue(value, "Tow_location_start", "locationStart", "tow_location_start")),
-    vehicleProblem: asString(getValue(value, "Vehicle_problem", "vehicleProblem", "vehicle_problem")),
+    locationStart: asString(
+      getValue(value, "Tow_location_start", "locationStart", "tow_location_start"),
+    ),
+    vehicleProblem: asString(
+      getValue(value, "Vehicle_problem", "vehicleProblem", "vehicle_problem"),
+    ),
     keys: asString(getValue(value, "Keys", "keys")),
     siteCode: asNumber(getValue(value, "Site_code", "siteCode", "site_code")),
-    contactPersonName: asString(getValue(value, "Contact_person_name", "contactPersonName", "contact_person_name")),
-    contactPersonTel: asString(getValue(value, "Contact_person_tel", "contactPersonTel", "contact_person_tel")),
-    contactPersonCell: asString(getValue(value, "Contact_person_cell", "contactPersonCell", "contact_person_cell")),
-    personAtVehicleName: asString(getValue(value, "Person_at_vehicle_name", "personAtVehicleName", "person_at_vehicle_name")),
-    personAtVehicleCell: asString(getValue(value, "Person_at_vehicle_cell", "personAtVehicleCell", "person_at_vehicle_cell")),
+    contactPersonName: asString(
+      getValue(value, "Contact_person_name", "contactPersonName", "contact_person_name"),
+    ),
+    contactPersonTel: asString(
+      getValue(value, "Contact_person_tel", "contactPersonTel", "contact_person_tel"),
+    ),
+    contactPersonCell: asString(
+      getValue(value, "Contact_person_cell", "contactPersonCell", "contact_person_cell"),
+    ),
+    personAtVehicleName: asString(
+      getValue(value, "Person_at_vehicle_name", "personAtVehicleName", "person_at_vehicle_name"),
+    ),
+    personAtVehicleCell: asString(
+      getValue(value, "Person_at_vehicle_cell", "personAtVehicleCell", "person_at_vehicle_cell"),
+    ),
     remarks: asString(getValue(value, "Remaks", "remarks", "remaks")),
     towTruckCode: asNumber(getValue(value, "Tow_Truck_code", "towTruckCode", "tow_truck_code")),
   };
@@ -225,7 +240,9 @@ function mapSite(value: unknown): TowingSite | null {
   if (siteCode === null) return null;
   return {
     siteCode,
-    departmentNumber: asString(getValue(value, "DepartmentNumber", "Department_number", "department_number")),
+    departmentNumber: asString(
+      getValue(value, "DepartmentNumber", "Department_number", "department_number"),
+    ),
     description: asString(getValue(value, "Description", "description", "site_description")),
   };
 }
@@ -239,8 +256,11 @@ export async function getTowings() {
 }
 
 export async function getTowing(towingCode: number) {
-  const record = mapTowing(await readJson(await requestApi(`api/towing/${encodeURIComponent(towingCode)}`)));
-  if (!record) throw new TowingApiError("invalid-response", "The FIS API returned an invalid towing record.");
+  const record = mapTowing(
+    await readJson(await requestApi(`api/towing/${encodeURIComponent(towingCode)}`)),
+  );
+  if (!record)
+    throw new TowingApiError("invalid-response", "The FIS API returned an invalid towing record.");
   return record;
 }
 
@@ -249,18 +269,20 @@ export async function searchTowingVehicles(searchType: TowingSearchType, searchT
   const values = getCollection(await readJson(response));
   const vehicles = mapPresent(values, (value) => {
     if (!isRecord(value)) return null;
-      const vmfCode = asNumber(getValue(value, "VmfCode", "vmfCode", "vmf_code"));
-      if (vmfCode === null) return null;
-      return {
-        vmfCode,
-        fleetNumber: asString(getValue(value, "FleetNumber", "fleetNumber", "fleet_number")),
-        registrationNumber: asString(getValue(value, "RegistrationNumber", "registrationNumber", "registration_number")),
-      };
+    const vmfCode = asNumber(getValue(value, "VmfCode", "vmfCode", "vmf_code"));
+    if (vmfCode === null) return null;
+    return {
+      vmfCode,
+      fleetNumber: asString(getValue(value, "FleetNumber", "fleetNumber", "fleet_number")),
+      registrationNumber: asString(
+        getValue(value, "RegistrationNumber", "registrationNumber", "registration_number"),
+      ),
+    };
   });
   return vehicles.filter((vehicle) => {
-      const value = searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber;
-      return value?.toLocaleLowerCase().includes(searchTerm.trim().toLocaleLowerCase()) === true;
-    });
+    const value = searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber;
+    return value?.toLocaleLowerCase().includes(searchTerm.trim().toLocaleLowerCase()) === true;
+  });
 }
 
 export async function getTowingSites() {
@@ -278,14 +300,22 @@ export async function getTowTrucks() {
 }
 
 export async function createTowingAgainstApi(request: TowingRequest) {
-  return mapTowing(await readJson(await requestApi("api/towing", { method: "POST", body: JSON.stringify(request) })));
+  return mapTowing(
+    await readJson(
+      await requestApi("api/towing", { method: "POST", body: JSON.stringify(request) }),
+    ),
+  );
 }
 
 export async function updateTowingAgainstApi(towingCode: number, request: TowingRequest) {
-  return mapTowing(await readJson(await requestApi(`api/towing/${encodeURIComponent(towingCode)}`, {
-    method: "PUT",
-    body: JSON.stringify({ Towing_code: towingCode, ...request }),
-  })));
+  return mapTowing(
+    await readJson(
+      await requestApi(`api/towing/${encodeURIComponent(towingCode)}`, {
+        method: "PUT",
+        body: JSON.stringify({ Towing_code: towingCode, ...request }),
+      }),
+    ),
+  );
 }
 
 export async function deleteTowingAgainstApi(towingCode: number) {
@@ -293,14 +323,22 @@ export async function deleteTowingAgainstApi(towingCode: number) {
 }
 
 export async function createTowTruckAgainstApi(request: TowTruckRequest) {
-  return mapTowTruck(await readJson(await requestApi("api/towing/tow-trucks", { method: "POST", body: JSON.stringify(request) })));
+  return mapTowTruck(
+    await readJson(
+      await requestApi("api/towing/tow-trucks", { method: "POST", body: JSON.stringify(request) }),
+    ),
+  );
 }
 
 export async function updateTowTruckAgainstApi(towCode: number, request: TowTruckRequest) {
-  return mapTowTruck(await readJson(await requestApi(`api/towing/tow-trucks/${encodeURIComponent(towCode)}`, {
-    method: "PUT",
-    body: JSON.stringify(request),
-  })));
+  return mapTowTruck(
+    await readJson(
+      await requestApi(`api/towing/tow-trucks/${encodeURIComponent(towCode)}`, {
+        method: "PUT",
+        body: JSON.stringify(request),
+      }),
+    ),
+  );
 }
 
 export async function deleteTowTruckAgainstApi(towCode: number) {
@@ -308,10 +346,14 @@ export async function deleteTowTruckAgainstApi(towCode: number) {
 }
 
 export async function getTowingRequestReport(startDate: string, endDate: string) {
-  return mapTowingCollection((await readJson(await requestApi("api/towing/reports/request", {
-    method: "POST",
-    body: JSON.stringify({ StartDate: startDate, EndDate: endDate }),
-  }))) as JsonRecord).filter((item) => item !== null);
+  return mapTowingCollection(
+    (await readJson(
+      await requestApi("api/towing/reports/request", {
+        method: "POST",
+        body: JSON.stringify({ StartDate: startDate, EndDate: endDate }),
+      }),
+    )) as JsonRecord,
+  ).filter((item) => item !== null);
 }
 
 export async function getAllTowtruckReport() {
@@ -319,9 +361,17 @@ export async function getAllTowtruckReport() {
   return mapTowingCollection(payload);
 }
 
-export async function getFirmDateTowingReport(firmName: string, startDate: string, endDate: string) {
-  return mapTowingCollection(await readJson(await requestApi("api/towing/reports/firm-date", {
-    method: "POST",
-    body: JSON.stringify({ FirmName: firmName, StartDate: startDate, EndDate: endDate }),
-  })));
+export async function getFirmDateTowingReport(
+  firmName: string,
+  startDate: string,
+  endDate: string,
+) {
+  return mapTowingCollection(
+    await readJson(
+      await requestApi("api/towing/reports/firm-date", {
+        method: "POST",
+        body: JSON.stringify({ FirmName: firmName, StartDate: startDate, EndDate: endDate }),
+      }),
+    ),
+  );
 }

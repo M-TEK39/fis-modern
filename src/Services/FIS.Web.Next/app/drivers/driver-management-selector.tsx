@@ -27,9 +27,18 @@ export default function DriverManagementSelector({
   );
   const selectedDepartment = Number(departmentCode);
   const selectedSite = Number(siteCode);
-  const validSelection = Number.isSafeInteger(selectedDepartment) && selectedDepartment > 0 && Number.isSafeInteger(selectedSite) && selectedSite > 0 && availableSites.some((site) => site.code === selectedSite);
-  const authorisersPath = validSelection ? contextPath("/drivers/authorisers", selectedDepartment, selectedSite) : "#";
-  const driversPath = validSelection ? contextPath("/drivers/site-drivers", selectedDepartment, selectedSite) : "#";
+  const validSelection =
+    Number.isSafeInteger(selectedDepartment) &&
+    selectedDepartment > 0 &&
+    Number.isSafeInteger(selectedSite) &&
+    selectedSite > 0 &&
+    availableSites.some((site) => site.code === selectedSite);
+  const authorisersPath = validSelection
+    ? contextPath("/drivers/authorisers", selectedDepartment, selectedSite)
+    : "#";
+  const driversPath = validSelection
+    ? contextPath("/drivers/site-drivers", selectedDepartment, selectedSite)
+    : "#";
 
   function changeDepartment(value: string) {
     setDepartmentCode(value);
@@ -49,7 +58,9 @@ export default function DriverManagementSelector({
       </div>
       <div className="form-grid">
         <div className="form-field">
-          <label className="form-label" htmlFor="driver-management-department">Department</label>
+          <label className="form-label" htmlFor="driver-management-department">
+            Department
+          </label>
           <select
             className="form-select"
             id="driver-management-department"
@@ -58,12 +69,16 @@ export default function DriverManagementSelector({
           >
             <option value="">Select department</option>
             {departments.map((department) => (
-              <option key={department.code} value={department.code}>{department.description} ({department.code})</option>
+              <option key={department.code} value={department.code}>
+                {department.description} ({department.code})
+              </option>
             ))}
           </select>
         </div>
         <div className="form-field">
-          <label className="form-label" htmlFor="driver-management-site">Site</label>
+          <label className="form-label" htmlFor="driver-management-site">
+            Site
+          </label>
           <select
             className="form-select"
             disabled={!departmentCode}
@@ -73,7 +88,9 @@ export default function DriverManagementSelector({
           >
             <option value="">{departmentCode ? "Select site" : "Select department first"}</option>
             {availableSites.map((site) => (
-              <option key={site.code} value={site.code}>{site.description} ({site.code})</option>
+              <option key={site.code} value={site.code}>
+                {site.description} ({site.code})
+              </option>
             ))}
           </select>
         </div>
@@ -84,8 +101,26 @@ export default function DriverManagementSelector({
         </div>
       ) : null}
       <div className="button-row">
-        <Link aria-disabled={!validSelection} className={`button button-primary${validSelection ? "" : " button-disabled"}`} href={authorisersPath} onClick={(event) => { if (!validSelection) event.preventDefault(); }}>Authoriser Management</Link>
-        <Link aria-disabled={!validSelection} className={`button button-primary${validSelection ? "" : " button-disabled"}`} href={driversPath} onClick={(event) => { if (!validSelection) event.preventDefault(); }}>Site Driver Management</Link>
+        <Link
+          aria-disabled={!validSelection}
+          className={`button button-primary${validSelection ? "" : " button-disabled"}`}
+          href={authorisersPath}
+          onClick={(event) => {
+            if (!validSelection) event.preventDefault();
+          }}
+        >
+          Authoriser Management
+        </Link>
+        <Link
+          aria-disabled={!validSelection}
+          className={`button button-primary${validSelection ? "" : " button-disabled"}`}
+          href={driversPath}
+          onClick={(event) => {
+            if (!validSelection) event.preventDefault();
+          }}
+        >
+          Site Driver Management
+        </Link>
       </div>
     </section>
   );

@@ -94,10 +94,14 @@ export type RepairCostLine = {
   closedDate: string | null;
 };
 
-export type JobCardApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type JobCardApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class JobCardApiError extends Error {
-  constructor(public readonly reason: JobCardApiErrorReason, message: string) {
+  constructor(
+    public readonly reason: JobCardApiErrorReason,
+    message: string,
+  ) {
     super(message);
     this.name = "JobCardApiError";
   }
@@ -145,7 +149,8 @@ function getCollection(value: unknown) {
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new JobCardApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new JobCardApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -164,8 +169,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
     if (response.status === 401 || response.status === 403) {
       throw new JobCardApiError("unauthorized", "The FIS access cookie was rejected.");
     }
-    if (response.status === 404) throw new JobCardApiError("not-found", "The job card was not found.");
-    if (!response.ok) throw new JobCardApiError("invalid-response", `FIS API returned HTTP ${response.status}.`);
+    if (response.status === 404)
+      throw new JobCardApiError("not-found", "The job card was not found.");
+    if (!response.ok)
+      throw new JobCardApiError("invalid-response", `FIS API returned HTTP ${response.status}.`);
     return response;
   } catch (error) {
     if (error instanceof JobCardApiError) throw error;
@@ -209,7 +216,9 @@ function mapJobCard(value: unknown): JobCardRecord | null {
     authorizerName: asString(getValue(value, "authorizer_name", "authorizerName")),
     reviewed: asString(getValue(value, "reviewed", "Reviewed")),
     capturedByUserCode: asNumber(getValue(value, "captured_by_user_code", "capturedByUserCode")),
-    authorizedByUserCode: asNumber(getValue(value, "authorized_by_user_code", "authorizedByUserCode")),
+    authorizedByUserCode: asNumber(
+      getValue(value, "authorized_by_user_code", "authorizedByUserCode"),
+    ),
     dateCreated: asString(getValue(value, "date_created", "dateCreated")),
     dateUpdated: asString(getValue(value, "date_updated", "dateUpdated")),
     labourCost: asNumber(getValue(value, "labour_cost", "labourCost")),
@@ -224,7 +233,8 @@ function mapJobCard(value: unknown): JobCardRecord | null {
 
 async function readJobCard(response: Response) {
   const record = mapJobCard(await readJson(response));
-  if (!record) throw new JobCardApiError("invalid-response", "The FIS API returned an invalid job card.");
+  if (!record)
+    throw new JobCardApiError("invalid-response", "The FIS API returned an invalid job card.");
   return record;
 }
 
@@ -247,7 +257,9 @@ export async function getJobCard(jobCardId: number) {
 }
 
 export async function getJobCardsByVehicle(vehicleNumber: string) {
-  const payload = await readJson(await requestApi(`api/jobcards/by-gg/${encodeURIComponent(vehicleNumber.trim())}`));
+  const payload = await readJson(
+    await requestApi(`api/jobcards/by-gg/${encodeURIComponent(vehicleNumber.trim())}`),
+  );
   return getCollection(payload)
     .map(mapJobCard)
     .filter((item): item is JobCardRecord => item !== null);
@@ -269,23 +281,40 @@ export async function updateJobCard(jobCardId: number, input: JobCardUpdateInput
 }
 
 export async function authorizeJobCard(jobCardId: number, comment: string | null) {
-  return readJobCard(await mutate(`api/jobcards/${encodeURIComponent(jobCardId)}/authorize`, "POST", { comment }));
+  return readJobCard(
+    await mutate(`api/jobcards/${encodeURIComponent(jobCardId)}/authorize`, "POST", { comment }),
+  );
 }
 
 export async function declineJobCard(jobCardId: number, declineReason: string) {
-  return readJobCard(await mutate(`api/jobcards/${encodeURIComponent(jobCardId)}/decline`, "POST", { decline_reason: declineReason }));
+  return readJobCard(
+    await mutate(`api/jobcards/${encodeURIComponent(jobCardId)}/decline`, "POST", {
+      decline_reason: declineReason,
+    }),
+  );
 }
 
 export async function cancelJobCard(jobCardId: number, cancelReason: string | null) {
-  return readJobCard(await mutate(`api/jobcards/${encodeURIComponent(jobCardId)}/cancel`, "POST", { cancel_reason: cancelReason }));
+  return readJobCard(
+    await mutate(`api/jobcards/${encodeURIComponent(jobCardId)}/cancel`, "POST", {
+      cancel_reason: cancelReason,
+    }),
+  );
 }
 
-export async function closeJobCard(jobCardId: number, input: JobCardCostInput & { close_notes?: string | null }) {
-  return readJobCard(await mutate(`api/jobcards/${encodeURIComponent(jobCardId)}/close`, "POST", input));
+export async function closeJobCard(
+  jobCardId: number,
+  input: JobCardCostInput & { close_notes?: string | null },
+) {
+  return readJobCard(
+    await mutate(`api/jobcards/${encodeURIComponent(jobCardId)}/close`, "POST", input),
+  );
 }
 
 export async function updateJobCardCosts(jobCardId: number, input: JobCardCostInput) {
-  return readJobCard(await mutate(`api/jobcards/${encodeURIComponent(jobCardId)}/costs`, "PATCH", input));
+  return readJobCard(
+    await mutate(`api/jobcards/${encodeURIComponent(jobCardId)}/costs`, "PATCH", input),
+  );
 }
 
 export async function deleteJobCard(jobCardId: number) {
@@ -301,7 +330,9 @@ function mapRepairCostLine(value: unknown): RepairCostLine | null {
     jobCardId,
     vmfCode,
     fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber", "gg_number", "ggNumber")),
-    registration: asString(getValue(value, "registration", "registration_number", "registrationNumber")),
+    registration: asString(
+      getValue(value, "registration", "registration_number", "registrationNumber"),
+    ),
     damages: asString(getValue(value, "damages", "Damages")),
     serviceProvider: asString(getValue(value, "service_provider", "serviceProvider")),
     invoiceNumber: asString(getValue(value, "invoice_number", "invoiceNumber")),
@@ -325,8 +356,11 @@ export async function getRepairCostReport(filters: {
   if (filters.siteCode) params.set("siteCode", String(filters.siteCode));
   if (filters.fromDate) params.set("fromDate", filters.fromDate);
   if (filters.toDate) params.set("toDate", filters.toDate);
-  const payload = await readJson(await requestApi(`api/jobcards/repair-cost-report?${params.toString()}`));
-  if (!isRecord(payload)) throw new JobCardApiError("invalid-response", "The repair cost report response was invalid.");
+  const payload = await readJson(
+    await requestApi(`api/jobcards/repair-cost-report?${params.toString()}`),
+  );
+  if (!isRecord(payload))
+    throw new JobCardApiError("invalid-response", "The repair cost report response was invalid.");
   return {
     filtersApplied: {
       vmfCode: asNumber(getValue(payload, "vmf_code", "vmfCode")),

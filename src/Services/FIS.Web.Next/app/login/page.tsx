@@ -36,7 +36,8 @@ function getQueryValue(value: string | string[] | undefined) {
 
 async function LoginContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   const [query, session] = await Promise.all([searchParams, getSession()]);
-  const microsoftSignInUrl = process.env.MICROSOFT_SIGN_IN_URL?.trim() || "/api/auth/microsoft/sign-in";
+  const microsoftSignInUrl =
+    process.env.MICROSOFT_SIGN_IN_URL?.trim() || "/api/auth/microsoft/sign-in";
   const microsoftSignInEnabled = Boolean(process.env.MICROSOFT_SIGN_IN_ENABLED?.trim());
   const microsoftSignInFailed = getQueryValue(query.error) === "microsoft-sign-in";
 
@@ -45,7 +46,9 @@ async function LoginContent({ searchParams }: Readonly<{ searchParams: SearchPar
       {microsoftSignInFailed ? (
         <div className="notice notice-error" role="alert">
           <span aria-hidden="true">!</span>
-          <span>Microsoft sign-in could not be completed. Use your FIS credentials or try again.</span>
+          <span>
+            Microsoft sign-in could not be completed. Use your FIS credentials or try again.
+          </span>
         </div>
       ) : null}
 
@@ -68,7 +71,9 @@ async function LoginContent({ searchParams }: Readonly<{ searchParams: SearchPar
           <div className="auth-header">
             <p className="eyebrow">Session active</p>
             <h1>Already signed in</h1>
-            <p>{session.email ? `Signed in as ${session.email}.` : "You are already authenticated."}</p>
+            <p>
+              {session.email ? `Signed in as ${session.email}.` : "You are already authenticated."}
+            </p>
           </div>
           <div className="auth-actions">
             <Link className="button button-primary button-wide" href="/home">
@@ -98,7 +103,9 @@ async function LoginContent({ searchParams }: Readonly<{ searchParams: SearchPar
             <Link className="text-link" href="/forgot-password">
               Forgot your password?
             </Link>
-            <span className="auth-footnote">Authorized Gauteng Provincial Government staff only.</span>
+            <span className="auth-footnote">
+              Authorized Gauteng Provincial Government staff only.
+            </span>
           </div>
         </>
       )}

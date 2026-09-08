@@ -11,28 +11,34 @@ public class VehicleDocumentRepository : IVehicleDocumentRepository
 
     public VehicleDocumentRepository(FisDbContext context) => _context = context;
 
-    public async Task<IEnumerable<VehicleDocument>> GetByVehicleAsync(int vmfCode, string? category = null)
+    public async Task<IEnumerable<VehicleDocument>> GetByVehicleAsync(
+        int vmfCode,
+        string? category = null
+    )
     {
-        var query = _context.VehicleDocuments
-            .Where(d => d.vmf_code == vmfCode && !d.is_deleted);
+        var query = _context.VehicleDocuments.Where(d => d.vmf_code == vmfCode && !d.is_deleted);
 
         if (!string.IsNullOrWhiteSpace(category))
             query = query.Where(d => d.document_category == category);
 
-        return await query
-            .OrderByDescending(d => d.date_created)
-            .ToListAsync();
+        return await query.OrderByDescending(d => d.date_created).ToListAsync();
     }
 
-    public async Task<IEnumerable<VehicleDocument>> GetByReferenceAsync(string referenceType, int referenceId) =>
-        await _context.VehicleDocuments
-            .Where(d => d.reference_type == referenceType && d.reference_id == referenceId && !d.is_deleted)
+    public async Task<IEnumerable<VehicleDocument>> GetByReferenceAsync(
+        string referenceType,
+        int referenceId
+    ) =>
+        await _context
+            .VehicleDocuments.Where(d =>
+                d.reference_type == referenceType && d.reference_id == referenceId && !d.is_deleted
+            )
             .OrderByDescending(d => d.date_created)
             .ToListAsync();
 
     public async Task<VehicleDocument?> GetByIdAsync(int documentId) =>
-        await _context.VehicleDocuments
-            .FirstOrDefaultAsync(d => d.document_id == documentId && !d.is_deleted);
+        await _context.VehicleDocuments.FirstOrDefaultAsync(d =>
+            d.document_id == documentId && !d.is_deleted
+        );
 
     public async Task<VehicleDocument> CreateAsync(VehicleDocument document)
     {

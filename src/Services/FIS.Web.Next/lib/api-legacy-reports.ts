@@ -64,13 +64,15 @@ function asNumber(value: unknown) {
 
 function asBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
-  if (typeof value === "string") return ["true", "1", "yes", "y"].includes(value.trim().toLowerCase());
+  if (typeof value === "string")
+    return ["true", "1", "yes", "y"].includes(value.trim().toLowerCase());
   return null;
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new LegacyReportApiError("unauthorized", "No FIS access cookie is available.");
+  if (!cookieHeader)
+    throw new LegacyReportApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -83,19 +85,28 @@ async function requestApi(path: string, init: RequestInit = {}) {
     });
 
     if (response.status === 401 || response.status === 403) {
-      throw new LegacyReportApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+      throw new LegacyReportApiError(
+        "unauthorized",
+        "The FIS access cookie was rejected.",
+        response.status,
+      );
     }
 
     if (!response.ok) {
       let message = `FIS API returned HTTP ${response.status}.`;
       try {
         const payload = await response.clone().json();
-        if (isRecord(payload)) message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        if (isRecord(payload))
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
       } catch {
         // Keep the status-based message when the API has no JSON body.
       }
 
-      throw new LegacyReportApiError(response.status >= 500 ? "unavailable" : "invalid-response", message, response.status);
+      throw new LegacyReportApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+        response.status,
+      );
     }
 
     try {
@@ -156,8 +167,14 @@ export async function getLegacyReport(
   }
 
   const query = params.size > 0 ? `?${params.toString()}` : "";
-  const report = mapReport(await requestApi(`api/report/dynamic/${encodeURIComponent(reportKey)}${query}`));
-  if (!report) throw new LegacyReportApiError("invalid-response", "The FIS API returned an invalid legacy report.");
+  const report = mapReport(
+    await requestApi(`api/report/dynamic/${encodeURIComponent(reportKey)}${query}`),
+  );
+  if (!report)
+    throw new LegacyReportApiError(
+      "invalid-response",
+      "The FIS API returned an invalid legacy report.",
+    );
   return report;
 }
 
@@ -197,21 +214,35 @@ export async function getReportHelp(): Promise<ReportHelp> {
   };
 }
 
-export async function submitAdditionalReportRequest(input: AdditionalReportRequestInput): Promise<ReportRequestResult> {
+export async function submitAdditionalReportRequest(
+  input: AdditionalReportRequestInput,
+): Promise<ReportRequestResult> {
   const value = await requestApi("api/report/request-additional", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
   });
 
-  if (!isRecord(value)) throw new LegacyReportApiError("invalid-response", "The FIS API returned an invalid report request result.");
+  if (!isRecord(value))
+    throw new LegacyReportApiError(
+      "invalid-response",
+      "The FIS API returned an invalid report request result.",
+    );
   const success = asBoolean(getValue(value, "success", "Success"));
-  if (success === null) throw new LegacyReportApiError("invalid-response", "The FIS API returned an invalid report request result.");
+  if (success === null)
+    throw new LegacyReportApiError(
+      "invalid-response",
+      "The FIS API returned an invalid report request result.",
+    );
 
   return {
     success,
     requestId: asString(getValue(value, "requestId", "RequestId")) ?? "",
-    message: asString(getValue(value, "message", "Message")) ?? (success ? "Report request submitted successfully." : "Report request failed."),
-    estimatedCompletionTime: asString(getValue(value, "estimatedCompletionTime", "EstimatedCompletionTime")),
+    message:
+      asString(getValue(value, "message", "Message")) ??
+      (success ? "Report request submitted successfully." : "Report request failed."),
+    estimatedCompletionTime: asString(
+      getValue(value, "estimatedCompletionTime", "EstimatedCompletionTime"),
+    ),
   };
 }

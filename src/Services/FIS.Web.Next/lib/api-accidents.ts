@@ -205,7 +205,8 @@ export type AccidentUpdateRequest = AccidentLegacyWriteFields & {
   is_deleted: boolean;
 };
 
-export type AccidentApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type AccidentApiErrorReason =
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export type AccidentDriverReportMode = "name" | "id";
 
@@ -528,11 +529,14 @@ export async function getAccidentVehicleOptions(
       const value = searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber;
       return (value?.trim().toLowerCase() ?? "") === normalizedLowerTerm;
     })
-    .map((vehicle) => ({
-      vmfCode: vehicle.vmfCode,
-      fleetNumber: vehicle.fleetNumber,
-      registrationNumber: vehicle.registrationNumber,
-    }) satisfies AccidentVehicleOption)
+    .map(
+      (vehicle) =>
+        ({
+          vmfCode: vehicle.vmfCode,
+          fleetNumber: vehicle.fleetNumber,
+          registrationNumber: vehicle.registrationNumber,
+        }) satisfies AccidentVehicleOption,
+    )
     .toSorted((left, right) => {
       const leftLabel = left.fleetNumber ?? left.registrationNumber ?? String(left.vmfCode);
       const rightLabel = right.fleetNumber ?? right.registrationNumber ?? String(right.vmfCode);
@@ -542,7 +546,10 @@ export async function getAccidentVehicleOptions(
 
 function mapAccidentEditRecord(value: unknown): AccidentEditRecord {
   if (!isRecord(value)) {
-    throw new AccidentApiError("invalid-response", "The FIS API returned an invalid accident record.");
+    throw new AccidentApiError(
+      "invalid-response",
+      "The FIS API returned an invalid accident record.",
+    );
   }
 
   const accidentCode = asNumber(getValue(value, "accident_code", "accidentCode"));
@@ -553,7 +560,10 @@ function mapAccidentEditRecord(value: unknown): AccidentEditRecord {
     asString(getValue(value, "reported_date", "reportedDate")) ??
     asString(getValue(value, "occurence_date", "occurrence_date", "occurenceDate"));
   if (accidentCode === null || vmfCode === null || !dateCreated) {
-    throw new AccidentApiError("invalid-response", "The FIS API returned an incomplete accident record.");
+    throw new AccidentApiError(
+      "invalid-response",
+      "The FIS API returned an incomplete accident record.",
+    );
   }
 
   const vehicle = getValue(value, "vehicle", "Vehicle");
@@ -602,7 +612,9 @@ function mapAccidentEditRecord(value: unknown): AccidentEditRecord {
     thirdPartyOwner: asString(getValue(value, "third_party_owner", "thirdPartyOwner")),
     thirdPartyTelephone: asString(getValue(value, "third_party_tel", "thirdPartyTel")),
     thirdPartyClaim: asNumber(getValue(value, "third_party_claim", "thirdPartyClaim")),
-    secondThirdPartyRegNo: asString(getValue(value, "SecondThirdPartyRegNo", "secondThirdPartyRegNo")),
+    secondThirdPartyRegNo: asString(
+      getValue(value, "SecondThirdPartyRegNo", "secondThirdPartyRegNo"),
+    ),
     claimReceived: asString(getValue(value, "th_claim_receive", "claimReceived")),
     claimAgainstDepartment:
       asNumber(getValue(value, "claim_amount", "claimAmount")) ??
@@ -614,20 +626,32 @@ function mapAccidentEditRecord(value: unknown): AccidentEditRecord {
     sketch: asString(getValue(value, "sketch")),
     iddoc: asString(getValue(value, "iddoc")),
     drivelic: asString(getValue(value, "drivelic")),
-    documentsAccidentRelieve: asString(getValue(value, "docs_acc_relieve", "documentsAccidentRelieve")),
+    documentsAccidentRelieve: asString(
+      getValue(value, "docs_acc_relieve", "documentsAccidentRelieve"),
+    ),
     flagCaseNumber: asString(getValue(value, "flag_case_num", "flagCaseNumber")),
     tripAuthor: asString(getValue(value, "trip_author", "tripAuthor")),
-    flagTripAuthor: asString(getValue(value, "Flag_trip_author", "flag_trip_author", "flagTripAuthor")),
+    flagTripAuthor: asString(
+      getValue(value, "Flag_trip_author", "flag_trip_author", "flagTripAuthor"),
+    ),
     flagTripAuthDate: asString(getValue(value, "flag_trip_auth_date", "flagTripAuthDate")),
     driverFault: asString(getValue(value, "driver_fault", "driverFault")),
     attorneyInsure: asString(getValue(value, "attorney_insure", "attorneyInsure")),
     insuranceClaim: asString(getValue(value, "insurance_claim", "insuranceClaim")),
-    privateDamagePaymentDate: asString(getValue(value, "priv_dampay_date", "privateDamagePaymentDate")),
-    thirdPartyClaimDecision: asString(getValue(value, "th_claim_accept_reject", "thirdPartyClaimDecision")),
-    thirdPartyClaimRejectReason: asString(getValue(value, "th_claim_reject_reason", "thirdPartyClaimRejectReason")),
+    privateDamagePaymentDate: asString(
+      getValue(value, "priv_dampay_date", "privateDamagePaymentDate"),
+    ),
+    thirdPartyClaimDecision: asString(
+      getValue(value, "th_claim_accept_reject", "thirdPartyClaimDecision"),
+    ),
+    thirdPartyClaimRejectReason: asString(
+      getValue(value, "th_claim_reject_reason", "thirdPartyClaimRejectReason"),
+    ),
     writeOffAmount: asNumber(getValue(value, "write_off_amount", "writeOffAmount")),
     writeOffDate: asString(getValue(value, "write_off_date", "writeOffDate")),
-    occurencePlace: asString(getValue(value, "occurence_place", "occurrence_place", "occurencePlace")),
+    occurencePlace: asString(
+      getValue(value, "occurence_place", "occurrence_place", "occurencePlace"),
+    ),
     towNeed: asString(getValue(value, "Tow_need", "tow_need", "towNeed")),
     notes: asString(getValue(value, "notes")),
     vehicleFleetNumber: vehicleRecord
@@ -640,7 +664,9 @@ function mapAccidentEditRecord(value: unknown): AccidentEditRecord {
 }
 
 export async function getAccidentForEdit(accidentCode: number) {
-  return mapAccidentEditRecord(await requestApi(`api/accidents/${encodeURIComponent(accidentCode)}`));
+  return mapAccidentEditRecord(
+    await requestApi(`api/accidents/${encodeURIComponent(accidentCode)}`),
+  );
 }
 
 function mapAccidentDriverReportRow(value: unknown): AccidentDriverReportRow | null {
@@ -660,7 +686,9 @@ function mapAccidentDriverReportRow(value: unknown): AccidentDriverReportRow | n
   };
 }
 
-function mapAccidentOutstandingDocumentLookupRow(value: unknown): AccidentOutstandingDocumentLookupRow | null {
+function mapAccidentOutstandingDocumentLookupRow(
+  value: unknown,
+): AccidentOutstandingDocumentLookupRow | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -681,12 +709,18 @@ function mapAccidentOutstandingDocumentLookupRow(value: unknown): AccidentOutsta
 
 function mapAccidentOutstandingDocumentReport(value: unknown): AccidentOutstandingDocumentReport {
   if (!isRecord(value)) {
-    throw new AccidentApiError("invalid-response", "The FIS API returned an invalid outstanding document report.");
+    throw new AccidentApiError(
+      "invalid-response",
+      "The FIS API returned an invalid outstanding document report.",
+    );
   }
 
   const accidentCode = asNumber(getValue(value, "accident_code", "accidentCode"));
   if (accidentCode === null) {
-    throw new AccidentApiError("invalid-response", "The FIS API returned an incomplete outstanding document report.");
+    throw new AccidentApiError(
+      "invalid-response",
+      "The FIS API returned an incomplete outstanding document report.",
+    );
   }
 
   const outstandingDocuments = getValue(value, "outstanding_documents", "outstandingDocuments");
@@ -705,7 +739,9 @@ function mapAccidentOutstandingDocumentReport(value: unknown): AccidentOutstandi
     fax: asString(getValue(value, "fax")),
     reportedDate: asString(getValue(value, "reported_date", "reportedDate")),
     damageDescription: asString(getValue(value, "damage_description", "damageDescription")),
-    documentStatusTrackingAvailable: getValue(value, "document_status_tracking_available", "documentStatusTrackingAvailable") === true,
+    documentStatusTrackingAvailable:
+      getValue(value, "document_status_tracking_available", "documentStatusTrackingAvailable") ===
+      true,
     outstandingDocuments: Array.isArray(outstandingDocuments)
       ? outstandingDocuments.filter((document): document is string => typeof document === "string")
       : [],
@@ -730,15 +766,15 @@ function mapAccidentLastGgReferenceRow(value: unknown): AccidentLastGgReferenceR
   };
 }
 
-export async function getAccidentDriverReport(
-  searchTerm: string,
-  mode: AccidentDriverReportMode,
-) {
+export async function getAccidentDriverReport(searchTerm: string, mode: AccidentDriverReportMode) {
   const query = new URLSearchParams({
     searchTerm: searchTerm.trim(),
     mode,
   });
-  return mapPresent(getCollection(await requestApi(`api/accidents/reports/driver?${query.toString()}`)), mapAccidentDriverReportRow);
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/driver?${query.toString()}`)),
+    mapAccidentDriverReportRow,
+  );
 }
 
 function mapAccidentVehicleReportRow(value: unknown): AccidentVehicleReportRow | null {
@@ -758,25 +794,37 @@ function mapAccidentVehicleReportRow(value: unknown): AccidentVehicleReportRow |
     locationDescription: asString(getValue(value, "location_description", "locationDescription")),
     accidentDate: asString(getValue(value, "occurence_date", "occurrence_date", "occurenceDate")),
     accidentTime: asString(getValue(value, "occurence_time", "occurrence_time", "occurenceTime")),
-    accidentPlace: asString(getValue(value, "occurence_place", "occurrence_place", "occurencePlace")),
+    accidentPlace: asString(
+      getValue(value, "occurence_place", "occurrence_place", "occurencePlace"),
+    ),
     financialYear: asString(getValue(value, "fin_year", "financialYear")),
     callRefer: asNumber(getValue(value, "Call_Refer", "call_Refer", "call_refer", "callRefer")),
     hireType: asString(getValue(value, "hire_type", "hireType")),
     dateUpdated: asString(getValue(value, "date_updated", "dateUpdated")),
     reportedDate: asString(getValue(value, "reported_date", "reportedDate")),
     notifiedGarage: asString(getValue(value, "Flag_gg_hq", "flag_gg_hq", "notifiedGarage")),
-    notifiedGarageDate: asString(getValue(value, "Flag_gg_hq_date", "flag_gg_hq_date", "notifiedGarageDate")),
-    notifiedTripAuthority: asString(getValue(value, "Flag_trip_author", "flag_trip_author", "notifiedTripAuthority")),
-    notifiedTripAuthorityDate: asString(getValue(value, "flag_trip_auth_date", "Flag_trip_auth_date", "notifiedTripAuthorityDate")),
+    notifiedGarageDate: asString(
+      getValue(value, "Flag_gg_hq_date", "flag_gg_hq_date", "notifiedGarageDate"),
+    ),
+    notifiedTripAuthority: asString(
+      getValue(value, "Flag_trip_author", "flag_trip_author", "notifiedTripAuthority"),
+    ),
+    notifiedTripAuthorityDate: asString(
+      getValue(value, "flag_trip_auth_date", "Flag_trip_auth_date", "notifiedTripAuthorityDate"),
+    ),
     description: asString(getValue(value, "description")),
-    accidentTypeDescription: asString(getValue(value, "accident_type_description", "accidentTypeDescription")),
+    accidentTypeDescription: asString(
+      getValue(value, "accident_type_description", "accidentTypeDescription"),
+    ),
     tripAuthority: asString(getValue(value, "trip_author", "tripAuthority")),
     driverName: asString(getValue(value, "driver_name", "driverName")),
     driverEmployNumber: asString(getValue(value, "driver_employ_number", "driverEmployNumber")),
     departmentNumber: asString(getValue(value, "department_number", "departmentNumber")),
     siteDescription: asString(getValue(value, "site_description", "siteDescription")),
     transportOfficerName: asString(getValue(value, "transoffic_name", "transportOfficerName")),
-    transportOfficerTelephone: asString(getValue(value, "transoffic_tel", "transportOfficerTelephone")),
+    transportOfficerTelephone: asString(
+      getValue(value, "transoffic_tel", "transportOfficerTelephone"),
+    ),
     hqReference: asString(getValue(value, "hq_reference", "hqReference")),
     ggReference: asString(getValue(value, "gg_reference", "ggReference")),
     saReference: asString(getValue(value, "sa_reference", "saReference")),
@@ -786,13 +834,19 @@ function mapAccidentVehicleReportRow(value: unknown): AccidentVehicleReportRow |
     driverFault: asString(getValue(value, "driver_fault", "driverFault")),
     death: asString(getValue(value, "death")),
     injured: asString(getValue(value, "Injured", "injured")),
-    thirdPartyRegistration: asString(getValue(value, "third_party_regno", "thirdPartyRegistration")),
+    thirdPartyRegistration: asString(
+      getValue(value, "third_party_regno", "thirdPartyRegistration"),
+    ),
     thirdPartyOwner: asString(getValue(value, "third_party_owner", "thirdPartyOwner")),
     thirdPartyClaim: asNumber(getValue(value, "third_party_claim", "thirdPartyClaim")),
-    privateDamagePaymentDate: asString(getValue(value, "priv_dampay_date", "privateDamagePaymentDate")),
+    privateDamagePaymentDate: asString(
+      getValue(value, "priv_dampay_date", "privateDamagePaymentDate"),
+    ),
     insuranceClaim: asString(getValue(value, "insurance_claim", "insuranceClaim")),
     claimReceived: asString(getValue(value, "th_claim_receive", "claimReceived")),
-    claimAgainstDepartment: asNumber(getValue(value, "claim_against_dept", "claimAgainstDepartment")),
+    claimAgainstDepartment: asNumber(
+      getValue(value, "claim_against_dept", "claimAgainstDepartment"),
+    ),
     claimDecision: asString(getValue(value, "th_claim_accept_reject", "claimDecision")),
     claimRejectReason: asString(getValue(value, "th_claim_reject_reason", "claimRejectReason")),
     writeOffAmount: asNumber(getValue(value, "write_off_amount", "writeOffAmount")),
@@ -812,7 +866,10 @@ export async function getAccidentVehicleReport(
     searchTerm: searchTerm.trim(),
     mode,
   });
-  return mapPresent(getCollection(await requestApi(`api/accidents/reports/vehicle?${query.toString()}`)), mapAccidentVehicleReportRow);
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/vehicle?${query.toString()}`)),
+    mapAccidentVehicleReportRow,
+  );
 }
 
 export async function getAccidentOutstandingDocumentLookup(
@@ -824,14 +881,18 @@ export async function getAccidentOutstandingDocumentLookup(
     mode,
   });
   return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/outstanding-documents?${query.toString()}`)),
+    getCollection(
+      await requestApi(`api/accidents/reports/outstanding-documents?${query.toString()}`),
+    ),
     mapAccidentOutstandingDocumentLookupRow,
   );
 }
 
 export async function getAccidentOutstandingDocumentReport(accidentCode: number) {
   return mapAccidentOutstandingDocumentReport(
-    await requestApi(`api/accidents/reports/outstanding-documents/${encodeURIComponent(accidentCode)}`),
+    await requestApi(
+      `api/accidents/reports/outstanding-documents/${encodeURIComponent(accidentCode)}`,
+    ),
   );
 }
 
@@ -870,27 +931,42 @@ export async function getAccidentPrivateVehicleReport(
     searchTerm: searchTerm.trim(),
     mode,
   });
-  return mapPresent(getCollection(await requestApi(`api/accidents/reports/private-vehicle?${query.toString()}`)), mapAccidentVehicleReportRow);
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/private-vehicle?${query.toString()}`)),
+    mapAccidentVehicleReportRow,
+  );
 }
 
 export async function getAccidentNewAccidentsReport(mode: AccidentNewAccidentReportMode) {
   const query = new URLSearchParams({ mode });
-  return mapPresent(getCollection(await requestApi(`api/accidents/reports/new-accidents?${query.toString()}`)), mapAccidentVehicleReportRow);
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/new-accidents?${query.toString()}`)),
+    mapAccidentVehicleReportRow,
+  );
 }
 
 export async function getAccidentAllReport(mode: AccidentAllReportDateMode) {
   const query = new URLSearchParams({ mode });
-  return mapPresent(getCollection(await requestApi(`api/accidents/reports/all?${query.toString()}`)), mapAccidentVehicleReportRow);
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/all?${query.toString()}`)),
+    mapAccidentVehicleReportRow,
+  );
 }
 
 export async function getAccidentGarageReport(mode: AccidentGarageReportMode) {
   const query = new URLSearchParams({ mode });
-  return mapPresent(getCollection(await requestApi(`api/accidents/reports/garage-detail?${query.toString()}`)), mapAccidentVehicleReportRow);
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/garage-detail?${query.toString()}`)),
+    mapAccidentVehicleReportRow,
+  );
 }
 
 export async function getAccidentDuplicateReport(mode: AccidentGarageReportMode) {
   const query = new URLSearchParams({ garage: mode });
-  return mapPresent(getCollection(await requestApi(`api/accidents/reports/duplicates?${query.toString()}`)), mapAccidentVehicleReportRow);
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/duplicates?${query.toString()}`)),
+    mapAccidentVehicleReportRow,
+  );
 }
 
 export async function getAccidentDepartmentPeriodReport(
@@ -922,7 +998,9 @@ export async function getAccidentDepartmentPeriodVipReport(
     mode,
   });
   return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/department-period-vip?${query.toString()}`)),
+    getCollection(
+      await requestApi(`api/accidents/reports/department-period-vip?${query.toString()}`),
+    ),
     mapAccidentVehicleReportRow,
   );
 }
@@ -966,7 +1044,9 @@ export async function getAccidentDepartmentFinancialYearReport(
 export async function getAccidentCostsFinancialYearReport(financialYear: string) {
   const query = new URLSearchParams({ financialYear: financialYear.trim() });
   return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/accident-costs-finyear?${query.toString()}`)),
+    getCollection(
+      await requestApi(`api/accidents/reports/accident-costs-finyear?${query.toString()}`),
+    ),
     mapAccidentVehicleReportRow,
   );
 }
@@ -983,7 +1063,9 @@ function mapAccidentPeriodReportRow(value: unknown): AccidentPeriodReportRow | n
     departmentNumber: asString(getValue(value, "department_number", "departmentNumber")),
     siteDescription: asString(getValue(value, "site_description", "siteDescription")),
     hireType: asString(getValue(value, "hire_type", "hireType")),
-    accidentDescription: asString(getValue(value, "accident_description", "accidentDescription", "acc_type_description")),
+    accidentDescription: asString(
+      getValue(value, "accident_description", "accidentDescription", "acc_type_description"),
+    ),
     driverName: asString(getValue(value, "driver_name", "driverName")),
     transportOfficerName: asString(getValue(value, "transoffic_name", "transportOfficerName")),
     callRefer: asNumber(getValue(value, "Call_Refer", "call_refer", "callRefer")),
@@ -1004,7 +1086,10 @@ export async function getAccidentPeriodReport(
     endDate,
     status,
   });
-  return mapPresent(getCollection(await requestApi(`api/accidents/reports/period?${query.toString()}`)), mapAccidentPeriodReportRow);
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/period?${query.toString()}`)),
+    mapAccidentPeriodReportRow,
+  );
 }
 
 export async function updateAccidentAgainstApi(request: AccidentUpdateRequest) {
@@ -1060,7 +1145,9 @@ function mapAccidentSite(value: unknown): AccidentSiteOption | null {
 
   return {
     siteCode,
-    departmentNumber: asString(getValue(value, "departmentNumber", "DepartmentNumber", "Department_number")),
+    departmentNumber: asString(
+      getValue(value, "departmentNumber", "DepartmentNumber", "Department_number"),
+    ),
     description: asString(getValue(value, "description", "Description")),
   };
 }
@@ -1078,9 +1165,10 @@ function mapAccidentType(value: unknown): AccidentTypeOption | null {
 }
 
 export async function getAccidentTypes() {
-  return mapPresent(getCollection(await requestApi("api/accidents/types")), mapAccidentType).toSorted((left, right) =>
-    left.typeCode - right.typeCode,
-  );
+  return mapPresent(
+    getCollection(await requestApi("api/accidents/types")),
+    mapAccidentType,
+  ).toSorted((left, right) => left.typeCode - right.typeCode);
 }
 
 export async function getAccidentReferenceData() {
@@ -1121,7 +1209,9 @@ function mapAccident(value: unknown): AccidentLookup | null {
   return {
     accidentCode,
     vmfCode: asNumber(getValue(value, "vmf_code", "vmfCode")),
-    accidentDate: asString(getValue(value, "occurence_date", "occurrence_date", "occurenceDate", "accident_date")),
+    accidentDate: asString(
+      getValue(value, "occurence_date", "occurrence_date", "occurenceDate", "accident_date"),
+    ),
     reference: asString(getValue(value, "gg_reference", "ggReference")),
   };
 }
@@ -1164,22 +1254,30 @@ export async function getGarageAccidentPage(
     }
   }
 
-  const allRows = mapPresent(getCollection(accidentPayload), mapAccident).reduce<GarageAccidentRow[]>((rows, accident) => {
-    if (matchingVehicleCodes !== null && (accident.vmfCode === null || !matchingVehicleCodes.has(accident.vmfCode))) {
-      return rows;
-    }
+  const allRows = mapPresent(getCollection(accidentPayload), mapAccident)
+    .reduce<GarageAccidentRow[]>((rows, accident) => {
+      if (
+        matchingVehicleCodes !== null &&
+        (accident.vmfCode === null || !matchingVehicleCodes.has(accident.vmfCode))
+      ) {
+        return rows;
+      }
 
       const vehicle = accident.vmfCode === null ? undefined : vehicleByCode.get(accident.vmfCode);
       if (locationCode !== undefined && vehicle === undefined) {
         return rows;
       }
 
-      const vehicleNumber = searchType === "GG" ? vehicle?.fleetNumber : vehicle?.registrationNumber;
+      const vehicleNumber =
+        searchType === "GG" ? vehicle?.fleetNumber : vehicle?.registrationNumber;
 
       rows.push({
         accidentCode: accident.accidentCode,
         vehicleNumber: vehicleNumber ?? null,
-        hireType: vehicle?.typeCode === null || vehicle?.typeCode === undefined ? null : typesByCode.get(vehicle.typeCode) ?? null,
+        hireType:
+          vehicle?.typeCode === null || vehicle?.typeCode === undefined
+            ? null
+            : (typesByCode.get(vehicle.typeCode) ?? null),
         accidentDate: accident.accidentDate,
         reference: accident.reference,
       });

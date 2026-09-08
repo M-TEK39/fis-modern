@@ -1,8 +1,8 @@
+using System.Text.Json.Serialization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.ReferenceData;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Text.Json.Serialization;
 
 namespace FIS.Api.Controllers;
 
@@ -14,7 +14,10 @@ public class LicenseFeeController : BaseApiController
     private readonly ILogger<LicenseFeeController> _logger;
     private readonly ILicenseFeeRepository _repository;
 
-    public LicenseFeeController(ILogger<LicenseFeeController> logger, ILicenseFeeRepository repository)
+    public LicenseFeeController(
+        ILogger<LicenseFeeController> logger,
+        ILicenseFeeRepository repository
+    )
     {
         _logger = logger;
         _repository = repository;
@@ -81,12 +84,19 @@ public class LicenseFeeController : BaseApiController
                 return BadRequest(new { message = validationError });
             }
 
-            var created = await _repository.CreateAsync(new LicenseFee
-            {
-                licence_description = request.Description?.Trim(),
-                licence_fee = request.Fee
-            }, GetCurrentUserId());
-            return CreatedAtAction(nameof(GetByCode), new { code = created.licence_fee_code }, MapToDto(created));
+            var created = await _repository.CreateAsync(
+                new LicenseFee
+                {
+                    licence_description = request.Description?.Trim(),
+                    licence_fee = request.Fee,
+                },
+                GetCurrentUserId()
+            );
+            return CreatedAtAction(
+                nameof(GetByCode),
+                new { code = created.licence_fee_code },
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -96,7 +106,10 @@ public class LicenseFeeController : BaseApiController
     }
 
     [HttpPut("{code:int}")]
-    public async Task<ActionResult<LicenseFeeDto>> Update(short code, [FromBody] UpdateLicenseFeeDto request)
+    public async Task<ActionResult<LicenseFeeDto>> Update(
+        short code,
+        [FromBody] UpdateLicenseFeeDto request
+    )
     {
         try
         {
@@ -142,11 +155,13 @@ public class LicenseFeeController : BaseApiController
             var deleteCheck = await _repository.GetDeleteCheckAsync(code);
             if (!deleteCheck.CanDelete)
             {
-                return Conflict(new
-                {
-                    message = "Models using this licence fee must be changed before deleting it.",
-                    modelCount = deleteCheck.ModelCount
-                });
+                return Conflict(
+                    new
+                    {
+                        message = "Models using this licence fee must be changed before deleting it.",
+                        modelCount = deleteCheck.ModelCount,
+                    }
+                );
             }
 
             await _repository.DeleteAsync(code, GetCurrentUserId());
@@ -159,8 +174,8 @@ public class LicenseFeeController : BaseApiController
         }
     }
 
-    private static LicenseFeeDto MapToDto(LicenseFee fee)
-        => new()
+    private static LicenseFeeDto MapToDto(LicenseFee fee) =>
+        new()
         {
             LicenceFeeCode = fee.licence_fee_code,
             Description = fee.licence_description,
@@ -169,12 +184,15 @@ public class LicenseFeeController : BaseApiController
             DateUpdated = fee.date_updated,
             CreatedByUserCode = fee.created_by_user_code,
             ModifiedByUserCode = fee.modified_by_user_code,
-            IsDeleted = fee.is_deleted
+            IsDeleted = fee.is_deleted,
         };
 
     private static string? ValidateWriteDto(CreateLicenseFeeDto request)
     {
-        if (string.IsNullOrWhiteSpace(request.Description) || request.Description.Trim().Length > 50)
+        if (
+            string.IsNullOrWhiteSpace(request.Description)
+            || request.Description.Trim().Length > 50
+        )
         {
             return "Licence fee description is required and must be 50 characters or fewer.";
         }
@@ -209,12 +227,12 @@ public class CreateLicenseFeeDto
 {
     [JsonPropertyName("licence_fee_code")]
     public short LicenceFeeCode { get; set; }
+
     [JsonPropertyName("licence_description")]
     public string? Description { get; set; }
+
     [JsonPropertyName("licence_fee")]
     public decimal? Fee { get; set; }
 }
 
-public class UpdateLicenseFeeDto : CreateLicenseFeeDto
-{
-}
+public class UpdateLicenseFeeDto : CreateLicenseFeeDto { }

@@ -13,7 +13,11 @@ namespace FIS.Core.Infrastructure.Repositories;
 /// Append-only repository for the contract audit log.
 /// Records every state transition and field-level edit on a contract.
 /// </summary>
-[SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "The SQL statement uses fixed metadata identifiers and parameterized values.")]
+[SuppressMessage(
+    "Security",
+    "CA2100:Review SQL queries for security vulnerabilities",
+    Justification = "The SQL statement uses fixed metadata identifiers and parameterized values."
+)]
 public class ContractAuditLogRepository : IContractAuditLogRepository
 {
     private readonly FisDbContext _context;
@@ -30,8 +34,8 @@ public class ContractAuditLogRepository : IContractAuditLogRepository
             return [];
         }
 
-        return await _context.ContractAuditLogs
-            .Where(l => l.contract_code == contractCode)
+        return await _context
+            .ContractAuditLogs.Where(l => l.contract_code == contractCode)
             .OrderBy(l => l.performed_at)
             .ToListAsync();
     }
@@ -45,7 +49,8 @@ public class ContractAuditLogRepository : IContractAuditLogRepository
         string? notes = null,
         string? fieldChanged = null,
         string? oldValue = null,
-        string? newValue = null)
+        string? newValue = null
+    )
     {
         if (!await AuditTableExistsAsync())
         {
@@ -63,7 +68,7 @@ public class ContractAuditLogRepository : IContractAuditLogRepository
             notes = notes,
             field_changed = fieldChanged,
             old_value = oldValue,
-            new_value = newValue
+            new_value = newValue,
         };
 
         _context.ContractAuditLogs.Add(entry);

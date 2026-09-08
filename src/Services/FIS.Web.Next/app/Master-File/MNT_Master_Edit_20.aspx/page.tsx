@@ -11,6 +11,8 @@ function getQueryValue(value: string | string[] | undefined) {
 export default async function LegacyEditFormPage({ searchParams }: LegacyEditFormPageProps) {
   const query = await searchParams;
   const ggNumber = getQueryValue(query.GGnum)?.trim();
-  const target = ggNumber ? `/vehicles/edit?searchTerm=${encodeURIComponent(ggNumber)}` : "/vehicles/edit";
+  const target = ggNumber
+    ? `/vehicles/edit?searchTerm=${encodeURIComponent(ggNumber)}`
+    : "/vehicles/edit";
   redirect(target);
 }

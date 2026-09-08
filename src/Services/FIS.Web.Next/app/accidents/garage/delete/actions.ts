@@ -26,7 +26,9 @@ function getAccidentCode(formData: FormData) {
 }
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function apiErrorMessage(error: AccidentApiError) {
@@ -51,11 +53,17 @@ export async function deleteGarageAccidentAction(
 ): Promise<GarageDeleteActionState> {
   const session = await getSession();
   if (session.status === "unavailable") {
-    return { status: "error", message: "The sign-in service is temporarily unavailable. Please try again." };
+    return {
+      status: "error",
+      message: "The sign-in service is temporarily unavailable. Please try again.",
+    };
   }
 
   if (session.status !== "authenticated") {
-    return { status: "error", message: "Your session has expired. Sign in again before deleting an accident." };
+    return {
+      status: "error",
+      message: "Your session has expired. Sign in again before deleting an accident.",
+    };
   }
 
   if (!hasRole(session.roles, ACCIDENTS_ROLE)) {
@@ -79,7 +87,10 @@ export async function deleteGarageAccidentAction(
       return { status: "error", message: apiErrorMessage(error) };
     }
 
-    console.error("FIS garage accident deletion failed", error instanceof Error ? error.message : "unknown error");
+    console.error(
+      "FIS garage accident deletion failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
     return { status: "error", message: "Accident deletion failed. Please try again." };
   }
 

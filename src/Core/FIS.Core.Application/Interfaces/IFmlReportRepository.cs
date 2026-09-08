@@ -6,7 +6,8 @@ public interface IFmlReportRepository
         DateTime? startDate,
         DateTime? endDate,
         int? financialYear,
-        string? vehicleNumber);
+        string? vehicleNumber
+    );
 
     Task<FmlContractsReport> GetContractsExpiringAsync();
 
@@ -19,7 +20,8 @@ public interface IFmlReportRepository
 
 public sealed record FmlMaintenanceHistoryReport(
     IReadOnlyList<FmlMaintenanceHistoryRecord> Records,
-    decimal GrandTotal)
+    decimal GrandTotal
+)
 {
     public int TotalCount => Records.Count;
 }
@@ -32,7 +34,8 @@ public sealed record FmlMaintenanceHistoryRecord(
     DateTime? CurrentStatusDate,
     string? HiredFrom,
     string? MaintenanceExpenseType,
-    decimal? TotalCostOverDateRange);
+    decimal? TotalCostOverDateRange
+);
 
 public sealed record FmlContractsReport(IReadOnlyList<FmlContractRecord> Contracts)
 {
@@ -52,9 +55,12 @@ public sealed record FmlContractRecord(
     DateTime? TargetReturnDate,
     string? ContractType,
     string? SiteName,
-    decimal? FixedTariff);
+    decimal? FixedTariff
+);
 
-public sealed record FmlVehiclesNoContractsReport(IReadOnlyList<FmlVehicleNoContractRecord> Vehicles)
+public sealed record FmlVehiclesNoContractsReport(
+    IReadOnlyList<FmlVehicleNoContractRecord> Vehicles
+)
 {
     public int TotalCount => Vehicles.Count;
 }
@@ -69,7 +75,8 @@ public sealed record FmlVehicleNoContractRecord(
     short? YearModel,
     string? ModelDescription,
     string? ClassDescription,
-    decimal? PurchaseAmount);
+    decimal? PurchaseAmount
+);
 
 public sealed record FmlOverUtilizedReport(IReadOnlyList<FmlOverUtilizedRecord> Vehicles)
 {
@@ -97,4 +104,5 @@ public sealed record FmlOverUtilizedRecord(
     DateTime? ProjectedEndDate,
     short? YearModel,
     string? ModelDescription,
-    decimal? PurchaseAmount);
+    decimal? PurchaseAmount
+);

@@ -153,19 +153,28 @@ function toVehicleAuthorization(value: unknown): VehicleAuthorization | null {
     purchaseFrom: asString(getValue(value, "purchaseFrom", "purchase_from")),
     takeOnDate: asString(getValue(value, "takeOnDate", "take_on_date")),
     takeOnOdo: asNumber(getValue(value, "takeOnOdo", "take_on_odo")),
-    replacedGgNumber: asString(getValue(value, "replacedGGNumber", "replacedGgNumber", "replaced_gg_number")),
+    replacedGgNumber: asString(
+      getValue(value, "replacedGGNumber", "replacedGgNumber", "replaced_gg_number"),
+    ),
     siteCode: asNumber(getValue(value, "siteCode", "site_code")),
     invoiceNumber: asString(getValue(value, "invoiceNumber", "invoice_number")),
     gpNumber: asString(getValue(value, "gpNumber", "gp_number")),
     fleetNotes: asString(getValue(value, "fleetNotes", "Fleet_Notes", "fleet_notes")),
     damageStatus: asString(getValue(value, "damageStatus", "damage_status")),
     damagesComment: asString(getValue(value, "damagesComment", "damages_comment")),
-    authorityStatus: asString(getValue(value, "authorityStatus", "authority_status", "Authority_Status")) ?? "",
-    authorizedByUserCode: asNumber(getValue(value, "authorizedByUserCode", "authorized_by_user_code")),
-    authorizedByUserName: asString(getValue(value, "authorizedByUserName", "authorized_by_user_name")),
+    authorityStatus:
+      asString(getValue(value, "authorityStatus", "authority_status", "Authority_Status")) ?? "",
+    authorizedByUserCode: asNumber(
+      getValue(value, "authorizedByUserCode", "authorized_by_user_code"),
+    ),
+    authorizedByUserName: asString(
+      getValue(value, "authorizedByUserName", "authorized_by_user_name"),
+    ),
     authorizationDate: asString(getValue(value, "authorizationDate", "authorization_date")),
     rejectionReason: asString(getValue(value, "rejectionReason", "rejection_reason")),
-    authorizationComment: asString(getValue(value, "authorizationComment", "authorization_comment")),
+    authorizationComment: asString(
+      getValue(value, "authorizationComment", "authorization_comment"),
+    ),
     vmfCode: asNumber(getValue(value, "vmfCode", "vmf_code")),
     dateCreated: asString(getValue(value, "dateCreated", "date_created")),
     createdByUserCode: asNumber(getValue(value, "createdByUserCode", "created_by_user_code")),
@@ -220,7 +229,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
     try {
       return (await response.json()) as unknown;
     } catch {
-      throw new VehicleAuthorizationApiError("invalid-response", "The FIS API returned invalid JSON.");
+      throw new VehicleAuthorizationApiError(
+        "invalid-response",
+        "The FIS API returned invalid JSON.",
+      );
     }
   } catch (error) {
     if (error instanceof VehicleAuthorizationApiError) {
@@ -259,13 +271,22 @@ export async function getVehicleAuthorizationQueues(): Promise<VehicleAuthorizat
   ]);
 
   return {
-    awaiting: awaiting.toSorted((left, right) => left.chassisNumber.localeCompare(right.chassisNumber)),
-    rejected: rejected.toSorted((left, right) => dateValue(right.authorizationDate) - dateValue(left.authorizationDate)),
-    authorized: authorized.toSorted((left, right) => dateValue(right.authorizationDate) - dateValue(left.authorizationDate)),
+    awaiting: awaiting.toSorted((left, right) =>
+      left.chassisNumber.localeCompare(right.chassisNumber),
+    ),
+    rejected: rejected.toSorted(
+      (left, right) => dateValue(right.authorizationDate) - dateValue(left.authorizationDate),
+    ),
+    authorized: authorized.toSorted(
+      (left, right) => dateValue(right.authorizationDate) - dateValue(left.authorizationDate),
+    ),
   };
 }
 
-async function postAuthorizationAction(path: string, body: JsonRecord): Promise<VehicleAuthorizationMutation> {
+async function postAuthorizationAction(
+  path: string,
+  body: JsonRecord,
+): Promise<VehicleAuthorizationMutation> {
   const payload = await requestApi(`${AUTHORIZATION_BASE_PATH}/${path}`, {
     method: "POST",
     body: JSON.stringify(body),

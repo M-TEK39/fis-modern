@@ -19,11 +19,13 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
   },
   {
     term: "Delete a Vehicle on Auction",
-    description: "Removes an identified vehicle and its auction-related information when it is no longer required for withdrawal.",
+    description:
+      "Removes an identified vehicle and its auction-related information when it is no longer required for withdrawal.",
   },
   {
     term: "Auction Number",
-    description: "Identifies the date or auction event on which the specified vehicle is proposed to be auctioned.",
+    description:
+      "Identifies the date or auction event on which the specified vehicle is proposed to be auctioned.",
   },
   {
     term: "Camp",
@@ -31,7 +33,8 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
   },
   {
     term: "Lot Number",
-    description: "The unique number allocated to the vehicle, usually indicating the sequence in which vehicles will be auctioned.",
+    description:
+      "The unique number allocated to the vehicle, usually indicating the sequence in which vehicles will be auctioned.",
   },
   {
     term: "Bar Code",
@@ -39,7 +42,8 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
   },
   {
     term: "Auth. Number",
-    description: "The authority number given by the Board of Surveys to dispose of the specified vehicle.",
+    description:
+      "The authority number given by the Board of Surveys to dispose of the specified vehicle.",
   },
   {
     term: "Auth Date",
@@ -51,11 +55,13 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
   },
   {
     term: "Sold Reason",
-    description: "The reason for withdrawing the vehicle, such as uneconomical repair or another approved reason.",
+    description:
+      "The reason for withdrawing the vehicle, such as uneconomical repair or another approved reason.",
   },
   {
     term: "Estimated Price",
-    description: "The price estimated by the specialist according to the applicable valuation guidance.",
+    description:
+      "The price estimated by the specialist according to the applicable valuation guidance.",
   },
   {
     term: "Reserve Price",
@@ -84,7 +90,9 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
 ];
 
 function hasRole(roles: readonly string[], role: string) {
-  return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
+  return roles.some(
+    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function AccessRestricted() {
@@ -164,18 +172,21 @@ export default async function AuctionHelpPage() {
         <section aria-labelledby="auction-help-purpose-title">
           <h2 id="auction-help-purpose-title">Purpose of Program</h2>
           <p>
-            The Auctions program provides a uniform process for capturing auction information and analysing the
-            outcome of vehicles proposed for disposal.
+            The Auctions program provides a uniform process for capturing auction information and
+            analysing the outcome of vehicles proposed for disposal.
           </p>
           <p>
-            Users of the GGMT administrative functions are expected to have received on-the-job training for the
-            fields relevant to their division.
+            Users of the GGMT administrative functions are expected to have received on-the-job
+            training for the fields relevant to their division.
           </p>
         </section>
 
         <section aria-labelledby="auction-help-fields-title">
           <h2 id="auction-help-fields-title">Term / Field Analysis</h2>
-          <p>The required data fields are mostly self-explanatory; the definitions below specify their intended meaning.</p>
+          <p>
+            The required data fields are mostly self-explanatory; the definitions below specify
+            their intended meaning.
+          </p>
           <div className="vehicle-table-wrapper">
             <table className="vehicle-table">
               <caption className="sr-only">Auction maintenance terms and field definitions</caption>
