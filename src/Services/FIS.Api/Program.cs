@@ -40,6 +40,11 @@ foreach (var pair in dotEnvValues)
 
 builder.Configuration.AddInMemoryCollection(dotEnvConfig);
 
+// Shell and container environment must override the optional local .env file.
+// This lets host-local development target Docker SQL Server without changing
+// tracked application settings, while preserving .env as a fallback only.
+builder.Configuration.AddEnvironmentVariables();
+
 // Add services to the container.
 builder.Services.AddControllers();
 

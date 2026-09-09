@@ -1,0 +1,42 @@
+{
+  "name": "fis-modern",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=11.25.0"
+  },
+  "scripts": {
+    "postinstall": "node -e \"process.env.FIS_SKIP_DOTNET_RESTORE === '1' || require('node:child_process').execFileSync('bash', ['scripts/restore-dotnet.sh'], { stdio: 'inherit' })\"",
+    "dev": "bash scripts/dev-local.sh dev",
+    "dev:api": "bash scripts/dev-api.sh",
+    "dev:web": "pnpm --filter @fis/web-next run dev:web",
+    "start": "bash scripts/dev-local.sh start",
+    "start:api": "bash scripts/dev-api.sh start",
+    "start:web": "pnpm --filter @fis/web-next run start:web",
+    "dev:docker": "docker compose -f docker/docker-compose.dev.yml up --build fis-api-dev fis-web-next-dev",
+    "dev:docker:down": "docker compose -f docker/docker-compose.dev.yml down",
+    "dev:down": "pnpm run dev:docker:down",
+    "build": "pnpm run build:web && pnpm run build:api",
+    "build:web": "pnpm --filter @fis/web-next run build",
+    "build:api": "dotnet build FIS.sln --no-restore",
+    "check-types": "pnpm --filter @fis/web-next run typecheck",
+    "typecheck": "pnpm run check-types",
+    "lint": "bash scripts/lint.sh",
+    "lint:web": "pnpm --filter @fis/web-next run format:check",
+    "lint:dotnet": "dotnet build FIS.sln --no-restore",
+    "format": "pnpm --filter @fis/web-next run format && bash scripts/run-csharpier.sh format .",
+    "formatter": "pnpm run format",
+    "format:check": "bash scripts/check-format.sh",
+    "db:start": "docker compose -f docker/docker-compose.dev.yml up -d mssql && docker compose -f docker/docker-compose.dev.yml up db-bootstrap",
+    "db:seed": "docker compose -f docker/docker-compose.dev.yml --profile seed run --rm db-seed",
+    "db:status": "docker compose -f docker/docker-compose.dev.yml ps mssql",
+    "db:stop": "docker compose -f docker/docker-compose.dev.yml stop mssql",
+    "db:bootstrap": "docker compose -f docker/docker-compose.dev.yml up db-bootstrap",
+    "db:migrations": "bash scripts/run-db-tool.sh migrations",
+    "db:audit": "bash scripts/run-db-tool.sh audit",
+    "db:backfix": "bash scripts/run-db-tool.sh backfix",
+    "db:inspect": "bash scripts/run-db-tool.sh inspect"
+  }
+}
