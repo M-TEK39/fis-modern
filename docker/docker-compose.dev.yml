@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # SQL Server 2019 Database Only - for local development
   mssql:
@@ -77,6 +75,59 @@ services:
       - seed
     restart: "no"
 
+  # Local API runtime. Production Compose uses the external client SQL Server;
+  # this service connects only to the disposable local mssql service above.
+  fis-api-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: fis-api-dev
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+      TZ: "Africa/Johannesburg"
+      ConnectionStrings__Default: "Server=mssql,1433;Database=${MSSQL_DB_NAME:-fis_dev};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Behox@1903};Encrypt=False;TrustServerCertificate=True;"
+      ApiSettings__WebBaseUrl: "http://localhost:${FIS_WEB_HOST_PORT:-3000}"
+      Cors__Origins__0: "http://localhost:${FIS_WEB_HOST_PORT:-3000}"
+    ports:
+      - "${FIS_API_HOST_PORT:-5010}:8080"
+    volumes:
+      - fis-uploads-dev:/app/uploads
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+  # Local Next.js runtime. The API base URL is internal to the Compose network.
+  fis-web-next-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web-next
+    container_name: fis-web-next-dev
+    environment:
+      NODE_ENV: "production"
+      NEXT_TELEMETRY_DISABLED: "1"
+      API_BASE_URL: "http://fis-api-dev:8080"
+      MICROSOFT_SIGN_IN_ENABLED: "${AzureAd__ClientId:-}"
+      MICROSOFT_SIGN_IN_URL: "/api/auth/microsoft/sign-in"
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      TZ: "Africa/Johannesburg"
+    ports:
+      - "${FIS_WEB_HOST_PORT:-3000}:3000"
+    depends_on:
+      fis-api-dev:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   fis-mssql-dev-data:
+    driver: local
+  fis-uploads-dev:
     driver: local

@@ -96,20 +96,32 @@ refuses non-local SQL Server hosts, non-development database names, and any
 database that already contains tables without EF migration history.
 
 ```bash
-./scripts/docker-dev.sh start-db
+cd src/Services/FIS.Web.Next
+pnpm db:start
 ```
 
 Demo data is a separate explicit operation and is never included in production
 Compose or the production API image:
 
 ```bash
-./scripts/docker-dev.sh seed-db
+pnpm db:seed
 ```
 
 The seed command is restricted to local `fis_dev`/`fis_test` databases and
 requires both Development mode and explicit confirmation. Use a restored or
 sanitized client database separately when testing legacy-schema compatibility;
 never run the development bootstrap or seed command against that database.
+
+The complete local Docker application stack is started through the Next package:
+
+```bash
+pnpm dev
+```
+
+This starts the guarded database bootstrap, API, and Next.js services. The
+database seed remains explicit and is not run automatically. Open the frontend
+at `http://localhost:3000`; the API is available at `http://localhost:5010`.
+Use `pnpm dev:down` to stop the local stack.
 
 ## 4. Prepare and validate a back-fix plan
 

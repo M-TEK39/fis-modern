@@ -4,7 +4,10 @@
   "private": true,
   "packageManager": "pnpm@11.25.0",
   "scripts": {
-    "dev": "next dev",
+    "dev": "docker compose -f ../../../docker/docker-compose.dev.yml up --build fis-api-dev fis-web-next-dev",
+    "dev:down": "docker compose -f ../../../docker/docker-compose.dev.yml down",
+    "db:start": "docker compose -f ../../../docker/docker-compose.dev.yml up -d mssql && docker compose -f ../../../docker/docker-compose.dev.yml up db-bootstrap",
+    "db:seed": "docker compose -f ../../../docker/docker-compose.dev.yml --profile seed run --rm db-seed",
     "build": "next build",
     "build:safe": "next build",
     "format": "prettier --write .",
