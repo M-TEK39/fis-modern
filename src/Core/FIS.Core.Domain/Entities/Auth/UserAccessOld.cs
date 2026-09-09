@@ -122,6 +122,10 @@ public class UserAccessOld
     [Column("date_updated")]
     public DateTime? date_updated { get; set; }
 
-    [Column("approver_code_at_gfleet")]
+    // This column was added to some expanded databases but is absent from the
+    // client's current user_access_old1 table. It is read and written through
+    // the guarded compatibility service so the core EF mapping never selects
+    // an optional column that may not exist.
+    [NotMapped]
     public int? approver_code_at_gfleet { get; set; }
 }

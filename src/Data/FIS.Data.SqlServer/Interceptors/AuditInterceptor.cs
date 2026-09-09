@@ -1,3 +1,5 @@
+using System.Data;
+using System.Data.Common;
 using System.Security.Claims;
 using System.Text.Json;
 using FIS.Core.Domain.Entities.Auth;
@@ -6,11 +8,13 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 
 namespace FIS.Data.SqlServer.Interceptors;
 
 /// <summary>
-/// EF Core interceptor that automatically writes a row to Workflow.Audit for every
+/// EF Core interceptor that automatically writes a row to the available audit table for every
 /// INSERT / UPDATE / DELETE across all entities (except Audit and UserStatusHistory themselves).
 ///
 /// Sensitive fields (password, hash, salt, token) are redacted from snapshots.
@@ -19,11 +23,13 @@ namespace FIS.Data.SqlServer.Interceptors;
 public class AuditInterceptor : SaveChangesInterceptor
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ILogger<AuditInterceptor> _logger;
 
     // These entity CLR types are never audited – they ARE the audit infrastructure.
     private static readonly HashSet<Type> _excludedTypes = new()
     {
         typeof(Audit),
+        typeof(LegacyAudit),
         typeof(UserStatusHistory),
     };
 
@@ -38,9 +44,13 @@ public class AuditInterceptor : SaveChangesInterceptor
         "secret",
     };
 
-    public AuditInterceptor(IHttpContextAccessor httpContextAccessor)
+    public AuditInterceptor(
+        IHttpContextAccessor httpContextAccessor,
+        ILogger<AuditInterceptor> logger
+    )
     {
         _httpContextAccessor = httpContextAccessor;
+        _logger = logger;
     }
 
     // ── Async path ────────────────────────────────────────────────────────────
@@ -55,7 +65,10 @@ public class AuditInterceptor : SaveChangesInterceptor
         {
             var entries = BuildAuditEntries(ctx);
             if (entries.Count > 0)
-                await ctx.Audits.AddRangeAsync(entries, cancellationToken);
+            {
+                var auditStore = await ResolveAuditStoreAsync(ctx, cancellationToken);
+                AddAuditEntries(ctx, entries, auditStore);
+            }
         }
 
         return await base.SavingChangesAsync(eventData, result, cancellationToken);
@@ -72,13 +85,182 @@ public class AuditInterceptor : SaveChangesInterceptor
         {
             var entries = BuildAuditEntries(ctx);
             if (entries.Count > 0)
-                ctx.Audits.AddRange(entries);
+            {
+                var auditStore = ResolveAuditStore(ctx);
+                AddAuditEntries(ctx, entries, auditStore);
+            }
         }
 
         return base.SavingChanges(eventData, result);
     }
 
     // ── Core logic ────────────────────────────────────────────────────────────
+
+    private void AddAuditEntries(
+        FisDbContext context,
+        IReadOnlyCollection<Audit> entries,
+        AuditStore auditStore
+    )
+    {
+        switch (auditStore)
+        {
+            case AuditStore.Workflow:
+                context.Audits.AddRange(entries);
+                break;
+            case AuditStore.Legacy:
+                context.LegacyAudits.AddRange(entries.Select(MapLegacyAudit));
+                break;
+            case AuditStore.Unavailable:
+                _logger.LogWarning(
+                    "No compatible audit table was found; continuing without persisting {AuditCount} audit entries",
+                    entries.Count
+                );
+                break;
+        }
+    }
+
+    private async Task<AuditStore> ResolveAuditStoreAsync(
+        FisDbContext context,
+        CancellationToken cancellationToken
+    )
+    {
+        if (await TableExistsAsync(context, "Workflow", "Audit", cancellationToken))
+        {
+            return AuditStore.Workflow;
+        }
+
+        if (await TableExistsAsync(context, "dbo", "Audit", cancellationToken))
+        {
+            return AuditStore.Legacy;
+        }
+
+        return AuditStore.Unavailable;
+    }
+
+    private AuditStore ResolveAuditStore(FisDbContext context)
+    {
+        if (TableExists(context, "Workflow", "Audit"))
+        {
+            return AuditStore.Workflow;
+        }
+
+        if (TableExists(context, "dbo", "Audit"))
+        {
+            return AuditStore.Legacy;
+        }
+
+        return AuditStore.Unavailable;
+    }
+
+    private static LegacyAudit MapLegacyAudit(Audit entry) =>
+        new()
+        {
+            Action = entry.Action,
+            TableName = entry.TableName,
+            PrimaryKey = entry.PrimaryKey,
+            Changes = entry.Changes,
+            ActionedBy = entry.ActionedBy,
+            date_created = entry.date_created,
+            date_updated = entry.date_updated,
+            created_by_user_code = entry.created_by_user_code,
+            modified_by_user_code = entry.modified_by_user_code,
+            is_deleted = entry.is_deleted,
+        };
+
+    private static async Task<bool> TableExistsAsync(
+        FisDbContext context,
+        string schema,
+        string table,
+        CancellationToken cancellationToken
+    )
+    {
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1
+                    FROM [INFORMATION_SCHEMA].[TABLES]
+                    WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table
+                ) THEN 1 ELSE 0 END
+                """;
+            AddParameter(command, "@schema", DbType.String, schema);
+            AddParameter(command, "@table", DbType.String, table);
+            return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) == 1;
+        }
+        catch (DbException)
+        {
+            return false;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static bool TableExists(FisDbContext context, string schema, string table)
+    {
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            connection.Open();
+        }
+
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1
+                    FROM [INFORMATION_SCHEMA].[TABLES]
+                    WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table
+                ) THEN 1 ELSE 0 END
+                """;
+            AddParameter(command, "@schema", DbType.String, schema);
+            AddParameter(command, "@table", DbType.String, table);
+            return Convert.ToInt32(command.ExecuteScalar()) == 1;
+        }
+        catch (DbException)
+        {
+            return false;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                connection.Close();
+            }
+        }
+    }
+
+    private static void AddParameter(DbCommand command, string name, DbType type, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
+
+    private enum AuditStore
+    {
+        Unavailable,
+        Workflow,
+        Legacy,
+    }
 
     private List<Audit> BuildAuditEntries(FisDbContext context)
     {
