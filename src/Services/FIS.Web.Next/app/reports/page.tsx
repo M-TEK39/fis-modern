@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import { AccessRestricted, hasReportsRole, ReportsFrame } from "@/app/reports/_components";
+import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/session";
 
 const QUICK_LINKS = [
@@ -73,35 +74,26 @@ export default async function ReportsPage() {
       description="Reports maintenance and frequently used report shortcuts."
     >
       <div className="vehicle-menu-tiles">
-        <section className="vehicle-menu-tile">
-          <h2 className="vehicle-menu-header">Reports Maintenance Menu</h2>
-          <div className="vehicle-menu-body">
-            <Link className="vehicle-menu-link" href="/reports/help">
-              Reports Maintenance Information / Help
+        <MenuSection title="Reports Maintenance Menu">
+          <Link className="vehicle-menu-link" href="/reports/help">
+            Reports Maintenance Information / Help
+          </Link>
+        </MenuSection>
+        <MenuSection title="Available Reports">
+          <Link className="vehicle-menu-link" href="/reports/trip-authority">
+            Trip Authority Reports
+          </Link>
+          <Link className="vehicle-menu-link" href="/reports/fis-report">
+            FIS Reports
+          </Link>
+        </MenuSection>
+        <MenuSection title="Quick Links - Frequently Used Reports">
+          {QUICK_LINKS.map(([label, href]) => (
+            <Link className="vehicle-menu-link" href={href} key={href}>
+              {label}
             </Link>
-          </div>
-        </section>
-        <section className="vehicle-menu-tile">
-          <h2 className="vehicle-menu-header">Available Reports</h2>
-          <div className="vehicle-menu-body">
-            <Link className="vehicle-menu-link" href="/reports/trip-authority">
-              Trip Authority Reports
-            </Link>
-            <Link className="vehicle-menu-link" href="/reports/fis-report">
-              FIS Reports
-            </Link>
-          </div>
-        </section>
-        <section className="vehicle-menu-tile">
-          <h2 className="vehicle-menu-header">Quick Links - Frequently Used Reports</h2>
-          <div className="vehicle-menu-body">
-            {QUICK_LINKS.map(([label, href]) => (
-              <Link className="vehicle-menu-link" href={href} key={href}>
-                {label}
-              </Link>
-            ))}
-          </div>
-        </section>
+          ))}
+        </MenuSection>
         <div className="vehicle-footer-actions">
           <Link className="button button-secondary" href="/home">
             Home

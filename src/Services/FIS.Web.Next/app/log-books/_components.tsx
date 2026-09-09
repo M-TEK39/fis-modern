@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { deleteLogbookAction } from "@/app/log-books/actions";
+import { MenuSection } from "@/components/ui/menu-section";
 import type { LogbookRecord } from "@/lib/api-logbooks";
 
 export function valueOrDash(value: string | number | null | undefined) {
@@ -37,25 +38,20 @@ export function LogbookShell({
 
 export function LogbookMenu() {
   return (
-    <section className="vehicle-menu-tile" aria-labelledby="logbook-menu-title">
-      <h2 className="vehicle-menu-header" id="logbook-menu-title">
-        Logbook Maintenance Menu
-      </h2>
-      <div className="vehicle-menu-body">
-        <Link className="vehicle-menu-link" href="/log-books/help">
-          Logbook Maintenance Information / Help
-        </Link>
-        <Link className="vehicle-menu-link" href="/log-books/maintenance">
-          1) Logbook Maintenance
-        </Link>
-        <Link className="vehicle-menu-link" href="/log-books/collection">
-          2) Collection for TWO or More Logbooks
-        </Link>
-        <Link className="vehicle-menu-link" href="/log-books/delete">
-          3) Delete a Logbook Handout
-        </Link>
-      </div>
-    </section>
+    <MenuSection title="Logbook Maintenance Menu">
+      <Link className="vehicle-menu-link" href="/log-books/help">
+        Logbook Maintenance Information / Help
+      </Link>
+      <Link className="vehicle-menu-link" href="/log-books/maintenance">
+        1) Logbook Maintenance
+      </Link>
+      <Link className="vehicle-menu-link" href="/log-books/collection">
+        2) Collection for TWO or More Logbooks
+      </Link>
+      <Link className="vehicle-menu-link" href="/log-books/delete">
+        3) Delete a Logbook Handout
+      </Link>
+    </MenuSection>
   );
 }
 

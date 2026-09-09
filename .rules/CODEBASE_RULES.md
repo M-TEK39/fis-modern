@@ -45,6 +45,8 @@ From the repository root, use `pnpm dev` for the host-local API and Next servers
 
 Keep `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, and `next.config.ts` consistent. Dependencies must be intentional, versioned, and approved by the task.
 
+When Cache Components are enabled, an authenticated route's request-time session, authorization, and protected data work must stream below a route-level `loading.tsx` or local `<Suspense>` boundary. A shared layout may stream its authenticated chrome, but must not put `{children}` inside the same session-loading boundary. Do not trade instant navigation for cached authorization, an `instant = false` escape hatch, or a global Cache Components disablement.
+
 ## Backend package
 
 Use the solution's existing project references and .NET 8 conventions:

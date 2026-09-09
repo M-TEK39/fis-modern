@@ -9,6 +9,7 @@ import {
   updateJobCardAction,
   updateJobCardCostsAction,
 } from "@/app/job-cards/actions";
+import { MenuSection } from "@/components/ui/menu-section";
 import type { JobCardRecord, RepairCostLine } from "@/lib/api-job-cards";
 
 export function valueOrDash(value: string | number | null | undefined) {
@@ -79,23 +80,18 @@ export function JobCardMenu({
   canAuthorizer,
 }: Readonly<{ canCapturer: boolean; canAuthorizer: boolean }>) {
   return (
-    <section className="vehicle-menu-tile" aria-labelledby="job-card-menu-title">
-      <h2 className="vehicle-menu-header" id="job-card-menu-title">
-        Job Cards Menu
-      </h2>
-      <div className="vehicle-menu-body">
-        {canAuthorizer ? (
-          <Link className="vehicle-menu-link" href="/job-cards/authorizer-dashboard">
-            Authorizers
-          </Link>
-        ) : null}
-        {canCapturer ? (
-          <Link className="vehicle-menu-link" href="/job-cards/capturer-default">
-            Capturer
-          </Link>
-        ) : null}
-      </div>
-    </section>
+    <MenuSection title="Job Cards Menu">
+      {canAuthorizer ? (
+        <Link className="vehicle-menu-link" href="/job-cards/authorizer-dashboard">
+          Authorizers
+        </Link>
+      ) : null}
+      {canCapturer ? (
+        <Link className="vehicle-menu-link" href="/job-cards/capturer-default">
+          Capturer
+        </Link>
+      ) : null}
+    </MenuSection>
   );
 }
 

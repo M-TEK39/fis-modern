@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense, type ReactNode } from "react";
 
-import AppShell from "@/app/_components/app-shell";
+import { logoutAction } from "@/app/actions/auth";
+import { AppShellFrame, getAppShellData } from "@/app/_components/app-shell";
+import SiteHeader from "@/app/_components/site-header";
+import { AppSidebar16 } from "@/components/ui/sidebar/app-sidebar-16";
 import { ThemeProvider } from "@/components/theme-provider";
 import { getSession } from "@/lib/session";
 
@@ -16,23 +19,27 @@ export const metadata: Metadata = {
   description: "Fleet Information System",
 };
 
-async function SessionShell({ children }: Readonly<{ children: ReactNode }>) {
+async function AuthenticatedHeader() {
   await connection();
   const session = await getSession();
 
   if (session.status !== "authenticated") {
-    return children;
+    return null;
   }
 
-  return <AppShell session={session}>{children}</AppShell>;
+  return <SiteHeader groups={getAppShellData(session).groups} />;
 }
 
-function SessionShellFallback() {
-  return (
-    <main className="flex min-h-screen items-center justify-center p-6" aria-busy="true">
-      <p className="text-sm text-muted-foreground">Loading Fleet Information System...</p>
-    </main>
-  );
+async function AuthenticatedSidebar() {
+  await connection();
+  const session = await getSession();
+
+  if (session.status !== "authenticated") {
+    return null;
+  }
+
+  const { groups, user } = getAppShellData(session);
+  return <AppSidebar16 groups={groups} user={user} logoutAction={logoutAction} />;
 }
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
@@ -40,9 +47,20 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          <Suspense fallback={<SessionShellFallback />}>
-            <SessionShell>{children}</SessionShell>
-          </Suspense>
+          <AppShellFrame
+            header={
+              <Suspense fallback={null}>
+                <AuthenticatedHeader />
+              </Suspense>
+            }
+            sidebar={
+              <Suspense fallback={null}>
+                <AuthenticatedSidebar />
+              </Suspense>
+            }
+          >
+            {children}
+          </AppShellFrame>
         </ThemeProvider>
       </body>
     </html>

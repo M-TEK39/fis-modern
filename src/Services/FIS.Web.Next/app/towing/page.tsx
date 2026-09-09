@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
+import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/session";
 
 const TOWING_ROLE = "Towing";
@@ -70,9 +71,8 @@ export default async function TowingPage() {
           </Link>
         </header>
 
-        <section className="vehicle-menu-tile">
-          <h2 className="vehicle-menu-header">Road Side Assistance Section</h2>
-          <div className="vehicle-menu-body">
+        <div className="vehicle-menu-tiles">
+          <MenuSection title="Road Side Assistance Section">
             <Link className="vehicle-menu-link" href="/towing/request">
               1) Capture a New Request
             </Link>
@@ -82,20 +82,17 @@ export default async function TowingPage() {
             <Link className="vehicle-menu-link" href="/towing/reports">
               3) Road Side Request Reports
             </Link>
-          </div>
-        </section>
+          </MenuSection>
 
-        <section className="vehicle-menu-tile">
-          <h2 className="vehicle-menu-header">Tow Truck Section</h2>
-          <div className="vehicle-menu-body">
+          <MenuSection title="Tow Truck Section">
             <Link className="vehicle-menu-link" href="/towing/tow-truck-data">
               4) Capture / Edit / Update Road Assistance Data
             </Link>
             <Link className="vehicle-menu-link" href="/towing/tow-truck-data/report">
               5) Show All Road Assistance Data
             </Link>
-          </div>
-        </section>
+          </MenuSection>
+        </div>
       </section>
     </main>
   );

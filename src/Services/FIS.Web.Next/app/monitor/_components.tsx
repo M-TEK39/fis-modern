@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { saveMonitorAction } from "@/app/monitor/actions";
+import { MenuSection } from "@/components/ui/menu-section";
 import type { MonitorDriverOption, MonitorRecord } from "@/lib/api-monitor";
 import type { SiteRecord } from "@/lib/api-sites";
 
@@ -59,28 +60,22 @@ export function MonitorNotice({
 export function MonitorMenu() {
   return (
     <div className="vehicle-menu-tiles">
-      <section className="vehicle-menu-tile">
-        <h2 className="vehicle-menu-header">Monitor Maintenance Menu</h2>
-        <div className="vehicle-menu-body">
-          <Link className="vehicle-menu-link" href="/monitor/help">
-            MONITOR INQUIRY Information / Help
-          </Link>
-        </div>
-      </section>
-      <section className="vehicle-menu-tile">
-        <h2 className="vehicle-menu-header">INQUIRY Section</h2>
-        <div className="vehicle-menu-body">
-          <Link className="vehicle-menu-link" href="/monitor/capture">
-            1) Capture a New Inquiry
-          </Link>
-          <Link className="vehicle-menu-link" href="/monitor/edit">
-            2) Edit / Update an Existing Inquiry
-          </Link>
-          <Link className="vehicle-menu-link" href="/monitor/reports">
-            3) Reports
-          </Link>
-        </div>
-      </section>
+      <MenuSection title="Monitor Maintenance Menu">
+        <Link className="vehicle-menu-link" href="/monitor/help">
+          MONITOR INQUIRY Information / Help
+        </Link>
+      </MenuSection>
+      <MenuSection title="INQUIRY Section">
+        <Link className="vehicle-menu-link" href="/monitor/capture">
+          1) Capture a New Inquiry
+        </Link>
+        <Link className="vehicle-menu-link" href="/monitor/edit">
+          2) Edit / Update an Existing Inquiry
+        </Link>
+        <Link className="vehicle-menu-link" href="/monitor/reports">
+          3) Reports
+        </Link>
+      </MenuSection>
     </div>
   );
 }

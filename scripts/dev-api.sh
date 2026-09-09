@@ -6,6 +6,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 server_mode="${1:-dev}"
 
+# shellcheck source=load-local-env.sh
+source "$SCRIPT_DIR/load-local-env.sh"
+load_local_mssql_environment "$PROJECT_ROOT"
+
 case "$server_mode" in
   dev) dotnet_configuration="Debug" ;;
   start) dotnet_configuration="Release" ;;

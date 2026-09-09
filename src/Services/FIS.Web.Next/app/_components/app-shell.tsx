@@ -1,11 +1,7 @@
 import type { ReactNode } from "react";
 
-import { logoutAction } from "@/app/actions/auth";
-import { AppSidebar16 } from "@/components/ui/sidebar/app-sidebar-16";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar/sidebar";
 import type { SessionState } from "@/lib/api-auth";
-
-import SiteHeader from "./site-header";
 
 type AuthenticatedSession = Extract<SessionState, { status: "authenticated" }>;
 
@@ -194,18 +190,23 @@ function getSidebarUser(session: AuthenticatedSession) {
   };
 }
 
-export default function AppShell({
-  children,
-  session,
-}: Readonly<{ children: ReactNode; session: AuthenticatedSession }>) {
-  const groups = visibleGroups(session);
-  const user = getSidebarUser(session);
+export function getAppShellData(session: AuthenticatedSession) {
+  return {
+    groups: visibleGroups(session),
+    user: getSidebarUser(session),
+  };
+}
 
+export function AppShellFrame({
+  children,
+  header,
+  sidebar,
+}: Readonly<{ children: ReactNode; header: ReactNode; sidebar: ReactNode }>) {
   return (
     <SidebarProvider className="flex-col bg-background [--header-height:3.5rem]">
-      <SiteHeader groups={groups} />
+      {header}
       <div className="flex min-h-0 flex-1">
-        <AppSidebar16 groups={groups} user={user} logoutAction={logoutAction} />
+        {sidebar}
         <SidebarInset>
           <div className="fis-app-content flex min-w-0 flex-1 flex-col gap-4 p-4 md:p-6">
             {children}

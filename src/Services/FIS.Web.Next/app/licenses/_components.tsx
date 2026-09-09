@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { saveLicenseVehicleAction } from "@/app/licenses/actions";
+import { MenuSection } from "@/components/ui/menu-section";
 import type { LicenseHistoryEntry, LicenseVehicleDetails } from "@/lib/api-licenses";
 import type { SiteRecord } from "@/lib/api-sites";
 
@@ -56,45 +57,36 @@ export function LicenseNotice({
 export function LicenseMenu() {
   return (
     <div className="vehicle-menu-tiles">
-      <section className="vehicle-menu-tile">
-        <h2 className="vehicle-menu-header">Licence Maintenance Menu</h2>
-        <div className="vehicle-menu-body">
-          <Link className="vehicle-menu-link" href="/licenses/help">
-            Licence Maintenance Information / Help
-          </Link>
-          <Link className="vehicle-menu-link" href="/licenses/one-vehicle">
-            1) Licence Maintenance for ONE Vehicle
-          </Link>
-          <Link className="vehicle-menu-link" href="/licenses/multi-collection">
-            2) Collection for TWO or MORE Licences
-          </Link>
-          <Link className="vehicle-menu-link" href="/licenses/garage">
-            3) Licence Available at Garage
-          </Link>
-        </div>
-      </section>
-      <section className="vehicle-menu-tile">
-        <h2 className="vehicle-menu-header">Other Licence Options</h2>
-        <div className="vehicle-menu-body">
-          <Link className="vehicle-menu-link" href="/licenses/model-fees">
-            4) Table: Make &amp; Model with Licence Fees
-          </Link>
-          <Link className="vehicle-menu-link" href="/licenses/scan-certificate">
-            5) Scan Licence Certificate
-          </Link>
-          <Link className="vehicle-menu-link" href="/licenses/reports/workgroup-latest">
-            6) Workgroup Report
-          </Link>
-        </div>
-      </section>
-      <section className="vehicle-menu-tile">
-        <h2 className="vehicle-menu-header">Licence Reports</h2>
-        <div className="vehicle-menu-body">
-          <Link className="vehicle-menu-link" href="/licenses/reports">
-            Licence Reports Menu
-          </Link>
-        </div>
-      </section>
+      <MenuSection title="Licence Maintenance Menu">
+        <Link className="vehicle-menu-link" href="/licenses/help">
+          Licence Maintenance Information / Help
+        </Link>
+        <Link className="vehicle-menu-link" href="/licenses/one-vehicle">
+          1) Licence Maintenance for ONE Vehicle
+        </Link>
+        <Link className="vehicle-menu-link" href="/licenses/multi-collection">
+          2) Collection for TWO or MORE Licences
+        </Link>
+        <Link className="vehicle-menu-link" href="/licenses/garage">
+          3) Licence Available at Garage
+        </Link>
+      </MenuSection>
+      <MenuSection title="Other Licence Options">
+        <Link className="vehicle-menu-link" href="/licenses/model-fees">
+          4) Table: Make &amp; Model with Licence Fees
+        </Link>
+        <Link className="vehicle-menu-link" href="/licenses/scan-certificate">
+          5) Scan Licence Certificate
+        </Link>
+        <Link className="vehicle-menu-link" href="/licenses/reports/workgroup-latest">
+          6) Workgroup Report
+        </Link>
+      </MenuSection>
+      <MenuSection title="Licence Reports">
+        <Link className="vehicle-menu-link" href="/licenses/reports">
+          Licence Reports Menu
+        </Link>
+      </MenuSection>
     </div>
   );
 }

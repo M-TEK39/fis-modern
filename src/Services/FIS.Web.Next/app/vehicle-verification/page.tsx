@@ -4,6 +4,7 @@ import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
 import { hasAssetVerificationAccess } from "@/app/vehicle-verification/access";
+import { MenuSection } from "@/components/ui/menu-section";
 import { AssetVerificationApiError, getAssetVerifications } from "@/lib/api-asset-verification";
 import { getSession } from "@/lib/session";
 
@@ -67,57 +68,42 @@ export default async function VehicleVerificationPage() {
             </Link>
           </header>
           <div className="vehicle-menu-tiles">
-            <section className="vehicle-menu-tile">
-              <h2 className="vehicle-menu-header">
-                <Link href="/vehicle-verification/help">
-                  Asset Verification Maintenance Information / Help
+            <MenuSection title="Asset Verification Maintenance Information / Help">
+              <p className="muted-copy">
+                Read the original asset verification maintenance guidance.
+              </p>
+              <Link
+                className="button button-secondary button-small"
+                href="/vehicle-verification/help"
+              >
+                Open help
+              </Link>
+            </MenuSection>
+            <MenuSection title="Asset Verification Maintenance">
+              <div className="button-row">
+                <Link
+                  className="button button-primary button-small"
+                  href="/vehicle-verification/add"
+                >
+                  1) Add Asset Verification Details
                 </Link>
-              </h2>
-              <div className="vehicle-menu-body">
-                <p className="muted-copy">
-                  Read the original asset verification maintenance guidance.
-                </p>
                 <Link
                   className="button button-secondary button-small"
-                  href="/vehicle-verification/help"
+                  href="/vehicle-verification/edit"
                 >
-                  Open help
+                  2) Edit Asset Verification Details
                 </Link>
               </div>
-            </section>
-            <section className="vehicle-menu-tile">
-              <h2 className="vehicle-menu-header">Asset Verification Maintenance</h2>
-              <div className="vehicle-menu-body">
-                <div className="button-row">
-                  <Link
-                    className="button button-primary button-small"
-                    href="/vehicle-verification/add"
-                  >
-                    1) Add Asset Verification Details
-                  </Link>
-                  <Link
-                    className="button button-secondary button-small"
-                    href="/vehicle-verification/edit"
-                  >
-                    2) Edit Asset Verification Details
-                  </Link>
-                </div>
-              </div>
-            </section>
-            <section className="vehicle-menu-tile">
-              <h2 className="vehicle-menu-header">
-                <Link href="/reports/asset-verification">Asset Verification Reports</Link>
-              </h2>
-              <div className="vehicle-menu-body">
-                <p className="muted-copy">Open the existing Asset Verification report menu.</p>
-                <Link
-                  className="button button-secondary button-small"
-                  href="/reports/asset-verification"
-                >
-                  Open reports
-                </Link>
-              </div>
-            </section>
+            </MenuSection>
+            <MenuSection title="Asset Verification Reports">
+              <p className="muted-copy">Open the existing Asset Verification report menu.</p>
+              <Link
+                className="button button-secondary button-small"
+                href="/reports/asset-verification"
+              >
+                Open reports
+              </Link>
+            </MenuSection>
           </div>
           <section
             className="vehicle-status-maintenance-panel"

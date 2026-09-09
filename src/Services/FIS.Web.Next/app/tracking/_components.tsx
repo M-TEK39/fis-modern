@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { saveTrackingAction } from "@/app/tracking/actions";
+import { MenuSection } from "@/components/ui/menu-section";
 import type { TrackingRecord } from "@/lib/api-tracking";
 import type { VehicleOption } from "@/lib/api-vehicles";
 
@@ -59,25 +60,19 @@ export function TrackingNotice({
 export function TrackingMenu() {
   return (
     <div className="vehicle-menu-tiles">
-      <section className="vehicle-menu-tile">
-        <h2 className="vehicle-menu-header">Tracking Maintenance Menu</h2>
-        <div className="vehicle-menu-body">
-          <Link className="vehicle-menu-link" href="/tracking/maintenance">
-            1) Tracking Maintenance
-          </Link>
-          <Link className="vehicle-menu-link" href="/tracking/help">
-            2) Tracking Information / Help
-          </Link>
-        </div>
-      </section>
-      <section className="vehicle-menu-tile">
-        <h2 className="vehicle-menu-header">Tracking Reports</h2>
-        <div className="vehicle-menu-body">
-          <Link className="vehicle-menu-link" href="/tracking/reports">
-            3) Tracking Reports
-          </Link>
-        </div>
-      </section>
+      <MenuSection title="Tracking Maintenance Menu">
+        <Link className="vehicle-menu-link" href="/tracking/maintenance">
+          1) Tracking Maintenance
+        </Link>
+        <Link className="vehicle-menu-link" href="/tracking/help">
+          2) Tracking Information / Help
+        </Link>
+      </MenuSection>
+      <MenuSection title="Tracking Reports">
+        <Link className="vehicle-menu-link" href="/tracking/reports">
+          3) Tracking Reports
+        </Link>
+      </MenuSection>
     </div>
   );
 }

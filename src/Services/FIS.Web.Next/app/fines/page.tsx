@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
+import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/session";
 
 const REPORTS_ROLE = "Reports";
@@ -96,33 +97,24 @@ export default async function FinesPage() {
         </header>
 
         <div className="vehicle-menu-tiles">
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Fines Maintenance Information</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/fines/help">
-                Fines Maintenance Information / Help
-              </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Fine Maintenance</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/fines/maintenance">
-                1) Fine Maintenance
-              </Link>
-              <Link className="vehicle-menu-link" href="/fines/delete">
-                2) Delete a Fine
-              </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Traffic Dept Maintenance</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/fines/traffic-dept">
-                3) Add / Update &amp; Delete Traffic Dept
-              </Link>
-            </div>
-          </section>
+          <MenuSection title="Fines Maintenance Information">
+            <Link className="vehicle-menu-link" href="/fines/help">
+              Fines Maintenance Information / Help
+            </Link>
+          </MenuSection>
+          <MenuSection title="Fine Maintenance">
+            <Link className="vehicle-menu-link" href="/fines/maintenance">
+              1) Fine Maintenance
+            </Link>
+            <Link className="vehicle-menu-link" href="/fines/delete">
+              2) Delete a Fine
+            </Link>
+          </MenuSection>
+          <MenuSection title="Traffic Dept Maintenance">
+            <Link className="vehicle-menu-link" href="/fines/traffic-dept">
+              3) Add / Update &amp; Delete Traffic Dept
+            </Link>
+          </MenuSection>
         </div>
       </section>
     </main>

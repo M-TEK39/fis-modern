@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
+import { MenuSection } from "@/components/ui/menu-section";
 import {
   AccessRestricted,
   ActionNotice,
@@ -97,34 +98,28 @@ export default async function FullMaintenanceLeasePage({
     >
       <ActionNotice result={result} message={message} />
       <div className="vehicle-menu-tiles">
-        <section className="vehicle-menu-tile">
-          <h2 className="vehicle-menu-header">Full Maintenance Lease Information / Help</h2>
-          <div className="vehicle-menu-body">
-            <Link className="vehicle-menu-link" href="/full-maintenance-lease/help">
-              Open FML information and help
-            </Link>
-          </div>
-        </section>
-        <section className="vehicle-menu-tile">
-          <h2 className="vehicle-menu-header">Lease Vehicle Section</h2>
-          <div className="vehicle-menu-body">
-            <Link className="vehicle-menu-link" href="/full-maintenance-lease/tariffs">
-              1) Capturing of Tariffs for Lease Vehicles
-            </Link>
-            <Link className="vehicle-menu-link" href="/full-maintenance-lease/upload">
-              2) Import the Tariff File
-            </Link>
-            <Link className="vehicle-menu-link" href="/full-maintenance-lease/extend">
-              3) Extend Latest Lease Tariff Period
-            </Link>
-            <Link className="vehicle-menu-link" href="/full-maintenance-lease/add-lease">
-              4) Add Lease Tariff for In Service Vehicles
-            </Link>
-            <Link className="vehicle-menu-link" href="/full-maintenance-lease/reports">
-              5) FML Reports
-            </Link>
-          </div>
-        </section>
+        <MenuSection title="Full Maintenance Lease Information / Help">
+          <Link className="vehicle-menu-link" href="/full-maintenance-lease/help">
+            Open FML information and help
+          </Link>
+        </MenuSection>
+        <MenuSection title="Lease Vehicle Section">
+          <Link className="vehicle-menu-link" href="/full-maintenance-lease/tariffs">
+            1) Capturing of Tariffs for Lease Vehicles
+          </Link>
+          <Link className="vehicle-menu-link" href="/full-maintenance-lease/upload">
+            2) Import the Tariff File
+          </Link>
+          <Link className="vehicle-menu-link" href="/full-maintenance-lease/extend">
+            3) Extend Latest Lease Tariff Period
+          </Link>
+          <Link className="vehicle-menu-link" href="/full-maintenance-lease/add-lease">
+            4) Add Lease Tariff for In Service Vehicles
+          </Link>
+          <Link className="vehicle-menu-link" href="/full-maintenance-lease/reports">
+            5) FML Reports
+          </Link>
+        </MenuSection>
       </div>
 
       <section className="vehicle-status-maintenance-panel" aria-labelledby="fml-lookup-title">

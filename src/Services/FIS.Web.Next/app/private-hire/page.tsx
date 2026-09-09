@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
+import { MenuSection } from "@/components/ui/menu-section";
 import {
   ApiUnavailable,
   PrivateHireNotice,
@@ -80,39 +81,30 @@ export default async function PrivateHirePage({
           </header>
           <PrivateHireNotice query={query} />
           <div className="vehicle-menu-tiles">
-            <section className="vehicle-menu-tile">
-              <h2 className="vehicle-menu-header">Maintenance</h2>
-              <div className="vehicle-menu-body">
-                <Link className="vehicle-menu-link" href="/private-hire/maintenance-menu">
-                  1) Maintain Private Hire Information
-                </Link>
-                <Link className="vehicle-menu-link" href="/vehicles/demo/menu">
-                  2) Maintain Demo Vehicle Information
-                </Link>
-              </div>
-            </section>
-            <section className="vehicle-menu-tile">
-              <h2 className="vehicle-menu-header">Reports</h2>
-              <div className="vehicle-menu-body">
-                <Link className="vehicle-menu-link" href="/private-hire/reports/all-vehicles">
-                  Report on all Private Hire vehicles
-                </Link>
-                <Link className="vehicle-menu-link" href="/private-hire/reports/one-vehicle">
-                  Report on one Private Hire vehicle
-                </Link>
-                <Link className="vehicle-menu-link" href="/private-hire/reports/contractors">
-                  Report on Private Hire contractors
-                </Link>
-              </div>
-            </section>
-            <section className="vehicle-menu-tile">
-              <h2 className="vehicle-menu-header">Help</h2>
-              <div className="vehicle-menu-body">
-                <Link className="vehicle-menu-link" href="/private-hire/help">
-                  Open Private Hire help
-                </Link>
-              </div>
-            </section>
+            <MenuSection title="Maintenance">
+              <Link className="vehicle-menu-link" href="/private-hire/maintenance-menu">
+                1) Maintain Private Hire Information
+              </Link>
+              <Link className="vehicle-menu-link" href="/vehicles/demo/menu">
+                2) Maintain Demo Vehicle Information
+              </Link>
+            </MenuSection>
+            <MenuSection title="Reports">
+              <Link className="vehicle-menu-link" href="/private-hire/reports/all-vehicles">
+                Report on all Private Hire vehicles
+              </Link>
+              <Link className="vehicle-menu-link" href="/private-hire/reports/one-vehicle">
+                Report on one Private Hire vehicle
+              </Link>
+              <Link className="vehicle-menu-link" href="/private-hire/reports/contractors">
+                Report on Private Hire contractors
+              </Link>
+            </MenuSection>
+            <MenuSection title="Help">
+              <Link className="vehicle-menu-link" href="/private-hire/help">
+                Open Private Hire help
+              </Link>
+            </MenuSection>
           </div>
           <section
             className="vehicle-status-maintenance-panel"

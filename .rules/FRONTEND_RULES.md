@@ -10,6 +10,8 @@ These rules apply to `src/Services/FIS.Web.Next`.
 - Keep `cacheComponents: true` and `partialPrefetching: true` in `next.config.ts` unless a measured, documented compatibility issue requires a change.
 - Design loading, error, and empty states with `loading.tsx`, `error.tsx`, Suspense, or route-local states as appropriate.
 - Instant navigation and prefetched output must never make protected data or authorization stale. Do not cache session lookup, permission checks, or user-specific responses.
+- When a route calls `connection()`, reads cookies/session state, checks permissions, or fetches protected data, it must be behind a route-segment `loading.tsx` boundary or a local `<Suspense>` boundary with a generic, non-sensitive fallback. A shared-layout session boundary must contain only the authenticated chrome, never the layout's `{children}` tree.
+- Keep the outer page/layout static where practical and stream the async authenticated child. Do not suppress the Cache Components diagnostic with `export const instant = false`, remove `cacheComponents`, or cache session/authorization data. Redirects and access checks stay inside the streamed server child; the fallback must never reveal protected labels, records, roles, or identifiers.
 
 ## Data and authentication
 

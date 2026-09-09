@@ -1,15 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  Bell,
-  CheckCheck,
-  Command as CommandIcon,
-  Monitor,
-  Moon,
-  Search,
-  Sun,
-} from "lucide-react";
+import { Bell, CheckCheck, Command as CommandIcon, Monitor, Moon, Search, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -73,10 +65,7 @@ function HeaderSearch({ groups }: Readonly<{ groups: readonly NavigationGroup[] 
   const pathname = usePathname();
   const router = useRouter();
 
-  const commandGroups = useMemo(
-    () => groups.filter((group) => group.items.length > 0),
-    [groups],
-  );
+  const commandGroups = useMemo(() => groups.filter((group) => group.items.length > 0), [groups]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -156,7 +145,15 @@ function HeaderSearch({ groups }: Readonly<{ groups: readonly NavigationGroup[] 
 
 function HeaderThemeMenu() {
   const { setTheme, theme } = useTheme();
-  const activeTheme: ThemeMode = theme === "light" || theme === "dark" ? theme : "system";
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  // next-themes reads the persisted preference in the browser. Keep the first
+  // client render on the same system icon/value as SSR, then reveal that
+  // preference after hydration to avoid mismatching the Radix trigger markup.
+  const activeTheme: ThemeMode =
+    mounted && (theme === "light" || theme === "dark") ? theme : "system";
 
   return (
     <DropdownMenu>
