@@ -33,13 +33,15 @@ No application project is off-limits by blanket policy. A feature or compatibili
 
 ## Frontend package
 
-`src/Services/FIS.Web.Next` is a standalone package managed with pnpm. Use its declared scripts and do not add a root JavaScript workspace, task runner, or package alias layer for convenience.
+`src/Services/FIS.Web.Next` is the frontend package managed with pnpm. The root pnpm workspace is the developer control plane for shared scripts and future developer tooling; it must list only real JavaScript packages and must not turn C# projects or arbitrary directories into fake Node packages. Keep application dependencies in their owning package unless a shared root development tool genuinely needs them.
 
 ```bash
 pnpm --dir src/Services/FIS.Web.Next dev
 pnpm --dir src/Services/FIS.Web.Next typecheck
 pnpm --dir src/Services/FIS.Web.Next build
 ```
+
+From the repository root, use `pnpm dev` for the host-local API and Next servers, `pnpm dev:docker` for the Compose application stack, and `pnpm db:*` for Docker-backed local SQL Server and the guarded database tools.
 
 Keep `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, and `next.config.ts` consistent. Dependencies must be intentional, versioned, and approved by the task.
 

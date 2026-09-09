@@ -15,18 +15,21 @@ RUN corepack enable \
 # source-only changes; the cache mount speeds up a cold builder without being
 # copied into the final image.
 FROM base AS deps
-COPY src/Services/FIS.Web.Next/package.json src/Services/FIS.Web.Next/pnpm-lock.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY src/Services/FIS.Web.Next/package.json src/Services/FIS.Web.Next/package.json
 RUN --mount=type=cache,id=fis-web-pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+    FIS_SKIP_DOTNET_RESTORE=1 pnpm install --frozen-lockfile --filter @fis/web-next...
 
 # Build stage
 FROM base AS build
 ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY src/Services/FIS.Web.Next/package.json src/Services/FIS.Web.Next/pnpm-lock.yaml ./
-COPY src/Services/FIS.Web.Next/ ./
+COPY --from=deps /app/src/Services/FIS.Web.Next/node_modules src/Services/FIS.Web.Next/node_modules
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY src/Services/FIS.Web.Next/ src/Services/FIS.Web.Next/
 
+WORKDIR /app/src/Services/FIS.Web.Next
 RUN pnpm build
 
 # Production stage. Next standalone output contains the traced server files
@@ -43,11 +46,12 @@ RUN apk add --no-cache tzdata \
     && addgroup -S -g 1001 nextjs \
     && adduser -S -u 1001 -G nextjs nextjs
 
-COPY --from=build --chown=nextjs:nextjs /app/.next/standalone ./
-COPY --from=build --chown=nextjs:nextjs /app/.next/static ./.next/static
-COPY --from=build --chown=nextjs:nextjs /app/public ./public
+COPY --from=build --chown=nextjs:nextjs /app/src/Services/FIS.Web.Next/.next/standalone ./
+COPY --from=build --chown=nextjs:nextjs /app/src/Services/FIS.Web.Next/.next/static ./src/Services/FIS.Web.Next/.next/static
+COPY --from=build --chown=nextjs:nextjs /app/src/Services/FIS.Web.Next/public ./src/Services/FIS.Web.Next/public
 
 USER nextjs
+WORKDIR /app/src/Services/FIS.Web.Next
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

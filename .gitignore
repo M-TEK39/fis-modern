@@ -2,6 +2,8 @@
 
 # Dependencies
 node_modules
+.cache/
+.playwright-cli/
 /packages/
 .pnp
 .pnp.js
@@ -18,6 +20,7 @@ node_modules
 
 # Local Markdown files
 *.md
+!README.md
 !AGENTS.md
 !CLAUDE.md
 !.rules/
@@ -115,7 +118,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 pnpm-lock.yaml
-!src/Services/FIS.Web.Next/pnpm-lock.yaml
+!pnpm-lock.yaml
 
 # csv files
 *.csv
