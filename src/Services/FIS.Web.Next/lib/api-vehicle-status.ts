@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/api-auth";
 import {
   VEHICLE_STATUS_OPTIONS,
+  VEHICLE_STATUS_REPORT_PAGE_SIZE,
   type VehicleStatusOption,
   type VehicleStatusReport,
   type VehicleStatusReportFilters,
@@ -12,7 +13,7 @@ import {
   type VehicleStatusType,
 } from "@/app/vehicles/status/status-types";
 
-export { VEHICLE_STATUS_OPTIONS };
+export { VEHICLE_STATUS_OPTIONS, VEHICLE_STATUS_REPORT_PAGE_SIZE };
 export type {
   VehicleStatusOption,
   VehicleStatusReport,
@@ -101,14 +102,6 @@ function asString(value: unknown) {
   return "";
 }
 
-function asBoolean(value: unknown) {
-  if (typeof value === "boolean") {
-    return value;
-  }
-
-  return ["true", "1", "yes", "y"].includes(String(value).trim().toLowerCase());
-}
-
 function asNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -120,6 +113,55 @@ function asNumber(value: unknown) {
   }
 
   return null;
+}
+
+function requiredInteger(record: JsonRecord, key: string, minimum: number, label: string) {
+  const value = asNumber(record[key]);
+  if (value === null || !Number.isSafeInteger(value) || value < minimum) {
+    throw new VehicleStatusApiError(
+      "invalid-response",
+      `The FIS API returned an invalid ${label}.`,
+    );
+  }
+
+  return value;
+}
+
+function requiredBoolean(record: JsonRecord, key: string, label: string) {
+  const value = record[key];
+  if (typeof value !== "boolean") {
+    throw new VehicleStatusApiError(
+      "invalid-response",
+      `The FIS API returned an invalid ${label}.`,
+    );
+  }
+
+  return value;
+}
+
+function requiredNullableString(record: JsonRecord, key: string, label: string) {
+  const value = record[key];
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new VehicleStatusApiError(
+      "invalid-response",
+      `The FIS API returned an invalid ${label}.`,
+    );
+  }
+
+  return value.trim() || null;
+}
+
+function requiredCollection(record: JsonRecord, key: string, label: string) {
+  const value = record[key];
+  if (!Array.isArray(value)) {
+    throw new VehicleStatusApiError("invalid-response", `The FIS API returned invalid ${label}.`);
+  }
+
+  return value;
 }
 
 function getCollection(payload: unknown) {
@@ -386,8 +428,12 @@ export async function getVehicleTypesForStatus(): Promise<VehicleStatusType[]> {
 
 export async function getVehicleStatusReport(
   filters: VehicleStatusReportFilters = {},
+  page = 1,
 ): Promise<VehicleStatusReport> {
   const query = new URLSearchParams();
+  const requestedPage = Number.isSafeInteger(page) && page > 0 ? page : 1;
+  query.set("page", String(requestedPage));
+  query.set("pageSize", String(VEHICLE_STATUS_REPORT_PAGE_SIZE));
   if (filters.search?.trim()) {
     query.set("search", filters.search.trim());
   }
@@ -413,20 +459,38 @@ export async function getVehicleStatusReport(
     );
   }
 
-  const rows = getCollection(getValue(payload, "vehicles", "rows", "data"))
+  const totalCount = requiredInteger(payload, "total_count", 0, "total vehicle count");
+  const responsePage = requiredInteger(payload, "page", 1, "report page");
+  const pageSize = requiredInteger(payload, "page_size", 1, "report page size");
+  const totalPages = requiredInteger(payload, "total_pages", 1, "report page count");
+  const vehicles = requiredCollection(payload, "vehicles", "vehicle results");
+  const availableFilters = getValue(payload, "available_filters");
+  if (!isRecord(availableFilters)) {
+    throw new VehicleStatusApiError(
+      "invalid-response",
+      "The FIS API returned invalid vehicle status filters.",
+    );
+  }
+
+  const rows = vehicles
     .map(mapReportRow)
     .filter((row): row is VehicleStatusReportRow => row !== null);
 
-  const availableFilters = getValue(payload, "available_filters", "availableFilters");
-  const filterRecord = isRecord(availableFilters) ? availableFilters : {};
-  const sites = mapReportLookups(getValue(filterRecord, "sites")) as VehicleStatusSite[];
-  const types = mapReportLookups(getValue(filterRecord, "types")) as VehicleStatusType[];
-  const makes = mapReportLookups(getValue(filterRecord, "makes"));
+  const sites = mapReportLookups(
+    requiredCollection(availableFilters, "sites", "site filters"),
+  ) as VehicleStatusSite[];
+  const types = mapReportLookups(
+    requiredCollection(availableFilters, "types", "type filters"),
+  ) as VehicleStatusType[];
+  const makes = mapReportLookups(requiredCollection(availableFilters, "makes", "make filters"));
 
   return {
-    totalCount: asNumber(getValue(payload, "total_count", "totalCount")) ?? rows.length,
-    remarksAvailable: asBoolean(getValue(payload, "remarks_available", "remarksAvailable")),
-    assumptionNote: asString(getValue(payload, "assumption_note", "assumptionNote")) || null,
+    totalCount,
+    page: responsePage,
+    pageSize,
+    totalPages,
+    remarksAvailable: requiredBoolean(payload, "remarks_available", "remarks availability"),
+    assumptionNote: requiredNullableString(payload, "assumption_note", "assumption note"),
     sites,
     types,
     makes,

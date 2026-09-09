@@ -9,6 +9,7 @@ import { getVehicleStatusReport, VehicleStatusApiError } from "@/lib/api-vehicle
 import { getSession } from "@/lib/session";
 
 const VEHICLE_MANAGEMENT_PERMISSION = 1;
+const REPORTS_ROLE = "Reports";
 
 type VehicleStatusReportPageProps = {
   routePath?: "/vehicles/status" | "/Vehicles/VehicleStatus.aspx";
@@ -27,6 +28,12 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   } catch {
     return false;
   }
+}
+
+function hasReportsRole(roles: readonly string[]) {
+  return roles.some(
+    (role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function isUnauthorizedError(error: unknown) {
@@ -128,6 +135,18 @@ export default async function VehicleStatusReportPage({
   }
 
   if (!hasVehicleManagementPermission(session.accessLevel)) {
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <StatusCard
+          title="Access restricted"
+          message="You do not have permission to view vehicle status reports."
+          href="/vehicles"
+        />
+      </main>
+    );
+  }
+
+  if (!hasReportsRole(session.roles)) {
     return (
       <main className="page-shell vehicle-page-shell">
         <StatusCard

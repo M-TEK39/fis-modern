@@ -8,16 +8,17 @@ import {
   FinanceUnavailable,
   hasFinanceRole,
 } from "@/app/finance/_components";
+import { departmentOptions, siteOptions } from "@/app/finance/_location-options";
+import { DepartmentApiError, getDepartments } from "@/lib/api-departments";
 import { FinanceReportTable } from "@/app/finance/report-table";
 import {
   FinanceApiError,
-  getFinanceDepartments,
-  getFinanceSites,
   getFinanceYears,
   runFinanceAction,
   type FinanceOption,
 } from "@/lib/api-finance";
 import { mapFinanceReport, type FinanceReport } from "@/lib/api-finance-reports";
+import { SiteApiError, getSites } from "@/lib/api-sites";
 import { getSession } from "@/lib/session";
 
 type Query = Record<string, string | string[] | undefined>;
@@ -102,13 +103,21 @@ export default async function FinanceOutstandingActionPage({ params, searchParam
   let years: FinanceOption[] = [];
   let error: string | null = null;
   try {
-    [departments, sites, years] = await Promise.all([
-      getFinanceDepartments(),
-      getFinanceSites(),
+    const [departmentRecords, siteRecords, loadedYears] = await Promise.all([
+      getDepartments(),
+      getSites(),
       getFinanceYears(),
     ]);
+    departments = departmentOptions(departmentRecords);
+    sites = siteOptions(siteRecords);
+    years = loadedYears;
   } catch (caught) {
-    if (caught instanceof FinanceApiError) error = caught.message;
+    if (
+      caught instanceof FinanceApiError ||
+      caught instanceof DepartmentApiError ||
+      caught instanceof SiteApiError
+    )
+      error = caught.message;
     else throw caught;
   }
   let report: FinanceReport | null = null;

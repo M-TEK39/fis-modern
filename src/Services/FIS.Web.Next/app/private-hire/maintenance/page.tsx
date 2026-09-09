@@ -25,6 +25,8 @@ import {
   PrivateHireApiError,
   searchPrivateHireVehicles,
 } from "@/lib/api-private-hire";
+import { getModels } from "@/lib/api-models";
+import { getSites } from "@/lib/api-sites";
 import { getSession } from "@/lib/session";
 
 const ROLE = "Private Hire Vehicles";
@@ -204,6 +206,10 @@ export async function PrivateHireMaintenancePage({
         ? []
         : await getPrivateHireVehicles();
     const selected = phvCode ? await getPrivateHireVehicle(phvCode) : null;
+    const shouldLoadVehicleLookups = mode === "add" || (mode === "edit" && selected !== null);
+    const [models, sites, contractors] = shouldLoadVehicleLookups
+      ? await Promise.all([getModels(), getSites(), getPrivateHireContractors()])
+      : [[], [], []];
     const isDelete = mode === "delete";
     const isEdit = mode === "edit";
     return (
@@ -229,6 +235,9 @@ export async function PrivateHireMaintenancePage({
             <PrivateHireVehicleForm
               action={savePrivateHireVehicleAction}
               returnPath={`${routePath}?mode=add`}
+              models={models}
+              sites={sites}
+              contractors={contractors}
             />
           ) : (
             <>
@@ -301,6 +310,9 @@ export async function PrivateHireMaintenancePage({
                     vehicle={selected}
                     action={savePrivateHireVehicleAction}
                     returnPath={`${routePath}?mode=edit&phvCode=${selected.phvCode}`}
+                    models={models}
+                    sites={sites}
+                    contractors={contractors}
                   />
                 ) : null
               ) : null}

@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
+import { TriangleAlert } from "lucide-react";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
 import { logoutAction } from "@/app/actions/auth";
+import ModulePageHeader from "@/app/_components/module-page-header";
 import SessionRecovery from "@/app/home/session-recovery";
+import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/session";
 
 const ACCIDENTS_ROLE = "Accidents";
@@ -83,53 +86,25 @@ async function AccidentMenuContent() {
   return (
     <>
       <div className="vehicle-menu-tiles">
-        <section className="vehicle-menu-tile">
-          <h2 className="sr-only">Accident help</h2>
-          <details open>
-            <summary className="vehicle-menu-header">
-              Accident Maintenance Information / Help
-            </summary>
-            <div className="vehicle-menu-body">
-              <AccidentMenuLink href="/accidents/help">
-                Accident Maintenance Information / Help
-              </AccidentMenuLink>
-            </div>
-          </details>
-        </section>
+        <MenuSection title="Accident Maintenance Information / Help">
+          <AccidentMenuLink href="/accidents/help">
+            Accident Maintenance Information / Help
+          </AccidentMenuLink>
+        </MenuSection>
 
-        <section className="vehicle-menu-tile">
-          <h2 className="sr-only">Garage accident maintenance</h2>
-          <details open>
-            <summary className="vehicle-menu-header">Accident Maintenance for Garage</summary>
-            <div className="vehicle-menu-body">
-              <AccidentMenuLink href="/accidents/garage">1) Accident Maintenance</AccidentMenuLink>
-              <AccidentMenuLink href="/accidents/garage/delete">
-                2) Delete an Accident
-              </AccidentMenuLink>
-            </div>
-          </details>
-        </section>
+        <MenuSection title="Accident Maintenance for Garage">
+          <AccidentMenuLink href="/accidents/garage">1) Accident Maintenance</AccidentMenuLink>
+          <AccidentMenuLink href="/accidents/garage/delete">2) Delete an Accident</AccidentMenuLink>
+        </MenuSection>
 
-        <section className="vehicle-menu-tile">
-          <h2 className="sr-only">HQ accident maintenance</h2>
-          <details open>
-            <summary className="vehicle-menu-header">Accident Maintenance for HQ</summary>
-            <div className="vehicle-menu-body">
-              <AccidentMenuLink href="/accidents/hq">3) Accident Maintenance</AccidentMenuLink>
-              <AccidentMenuLink href="/accidents/hq/delete">4) Delete an Accident</AccidentMenuLink>
-            </div>
-          </details>
-        </section>
+        <MenuSection title="Accident Maintenance for HQ">
+          <AccidentMenuLink href="/accidents/hq">3) Accident Maintenance</AccidentMenuLink>
+          <AccidentMenuLink href="/accidents/hq/delete">4) Delete an Accident</AccidentMenuLink>
+        </MenuSection>
 
-        <section className="vehicle-menu-tile">
-          <h2 className="sr-only">Accident reports</h2>
-          <details open>
-            <summary className="vehicle-menu-header">Accident Reports</summary>
-            <div className="vehicle-menu-body">
-              <AccidentMenuLink href="/accidents/reports">1) Accidents Reports</AccidentMenuLink>
-            </div>
-          </details>
-        </section>
+        <MenuSection title="Accident Reports">
+          <AccidentMenuLink href="/accidents/reports">1) Accidents Reports</AccidentMenuLink>
+        </MenuSection>
       </div>
 
       <div className="vehicle-footer-actions">
@@ -161,13 +136,13 @@ export default async function AccidentsPage() {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="accident-menu-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Fleet operations</p>
-            <h1 id="accident-menu-title">Accident Maintenance Menu</h1>
-            <p>Accident maintenance workflows and reports.</p>
-          </div>
-        </header>
+        <ModulePageHeader
+          icon={TriangleAlert}
+          eyebrow="Fleet operations"
+          title="Accident Maintenance Menu"
+          titleId="accident-menu-title"
+          description="Accident maintenance workflows and reports."
+        />
         <Suspense fallback={<AccidentMenuFallback />}>
           <AccidentMenuContent />
         </Suspense>

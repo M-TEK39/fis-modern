@@ -2,51 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import {
+  hasContractAccess,
+  hasContractHistoryBackdatingRole,
+  hasContractReviewerRole,
+  isContractAdministrator,
+} from "@/app/contracts/access";
+import { MenuSection } from "@/components/ui/menu-section";
 import SessionRecovery from "@/app/home/session-recovery";
 import { getSession } from "@/lib/session";
-
-const CONTRACT_PERMISSION = BigInt(2);
-
-function hasContractAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  if (
-    roles.some((role) =>
-      ["contracts", "contract", "admin", "administrator"].includes(role.trim().toLowerCase()),
-    )
-  ) {
-    return true;
-  }
-
-  try {
-    return accessLevel
-      ? (BigInt(accessLevel) & CONTRACT_PERMISSION) === CONTRACT_PERMISSION
-      : false;
-  } catch {
-    return false;
-  }
-}
-
-function hasApproverRole(roles: readonly string[]) {
-  return roles.some((role) =>
-    [
-      "contracts approver",
-      "contracts_approver",
-      "back dating contract (approver)",
-      "admin",
-      "administrator",
-    ].includes(role.trim().toLowerCase()),
-  );
-}
-
-function hasHistoryRole(roles: readonly string[]) {
-  return roles.some((role) =>
-    [
-      "contract history back dating",
-      "contract_history_backdating",
-      "admin",
-      "administrator",
-    ].includes(role.trim().toLowerCase()),
-  );
-}
 
 function AccessRestricted() {
   return (
@@ -104,35 +68,29 @@ export default async function ContractsPage() {
         </header>
 
         <div className="vehicle-menu-tiles">
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Contracts Information / Help</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/contracts/help">
-                Contracts Information / Help
+          <MenuSection title="Contracts Information / Help">
+            <Link className="vehicle-menu-link" href="/contracts/help">
+              Contracts Information / Help
+            </Link>
+          </MenuSection>
+          <MenuSection title="Contract Maintenance">
+            <Link className="vehicle-menu-link" href="/contracts/maintenance">
+              1) Vehicle Contract Maintenance
+            </Link>
+            {isContractAdministrator(session.roles) || hasContractReviewerRole(session.roles) ? (
+              <Link className="vehicle-menu-link" href="/contracts/backdating-approval">
+                2) Vehicle Contract Back Date Requests - Approval
               </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Contract Maintenance</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/contracts/maintenance">
-                1) Vehicle Contract Maintenance
+            ) : null}
+            {hasContractHistoryBackdatingRole(session.roles) ? (
+              <Link className="vehicle-menu-link" href="/contracts/backdating-history">
+                3) Vehicle Contract History Backdating
               </Link>
-              {hasApproverRole(session.roles) ? (
-                <Link className="vehicle-menu-link" href="/contracts/backdating-approval">
-                  2) Vehicle Contract Back Date Requests - Approval
-                </Link>
-              ) : null}
-              {hasHistoryRole(session.roles) ? (
-                <Link className="vehicle-menu-link" href="/contracts/backdating-history">
-                  3) Vehicle Contract History Backdating
-                </Link>
-              ) : null}
-              <Link className="vehicle-menu-link" href="/contracts/print-menu">
-                4) Contract Print Out Menu
-              </Link>
-            </div>
-          </section>
+            ) : null}
+            <Link className="vehicle-menu-link" href="/contracts/print-menu">
+              4) Contract Print Out Menu
+            </Link>
+          </MenuSection>
         </div>
       </section>
     </main>

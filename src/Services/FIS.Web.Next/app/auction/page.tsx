@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { Gavel } from "lucide-react";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import ModulePageHeader from "@/app/_components/module-page-header";
+import { MenuSection } from "@/components/ui/menu-section";
 import SessionRecovery from "@/app/home/session-recovery";
 import { getSession } from "@/lib/session";
 
@@ -56,44 +59,37 @@ export default async function AuctionPage() {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="auction-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Auction</p>
-            <h1 id="auction-title">Auction Maintenance Menu</h1>
-            <p>Maintain Johannesburg auction records and open the associated reports.</p>
-          </div>
-          <Link className="button button-secondary" href="/home">
-            Home
-          </Link>
-        </header>
+        <ModulePageHeader
+          icon={Gavel}
+          eyebrow="Auction"
+          title="Auction Maintenance Menu"
+          titleId="auction-title"
+          description="Maintain Johannesburg auction records and open the associated reports."
+          actions={
+            <Link className="button button-secondary" href="/home">
+              Home
+            </Link>
+          }
+        />
         <div className="vehicle-menu-tiles">
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Auction Maintenance Information</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/auction/help">
-                Auction Maintenance Information / Help
-              </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Auction Maintenance for Johannesburg Garage</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/auction/maintenance">
-                1) Auction Maintenance
-              </Link>
-              <Link className="vehicle-menu-link" href="/auction/delete-vehicle">
-                2) Delete a Vehicle on Auction
-              </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Auction Reports Menu</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/auction/reports">
-                Open Auction Reports Menu
-              </Link>
-            </div>
-          </section>
+          <MenuSection title="Auction Maintenance Information">
+            <Link className="vehicle-menu-link" href="/auction/help">
+              Auction Maintenance Information / Help
+            </Link>
+          </MenuSection>
+          <MenuSection title="Auction Maintenance for Johannesburg Garage">
+            <Link className="vehicle-menu-link" href="/auction/maintenance">
+              1) Auction Maintenance
+            </Link>
+            <Link className="vehicle-menu-link" href="/auction/delete-vehicle">
+              2) Delete a Vehicle on Auction
+            </Link>
+          </MenuSection>
+          <MenuSection title="Auction Reports Menu">
+            <Link className="vehicle-menu-link" href="/auction/reports">
+              Open Auction Reports Menu
+            </Link>
+          </MenuSection>
         </div>
       </section>
     </main>

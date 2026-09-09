@@ -8,10 +8,11 @@ import {
   FinanceUnavailable,
   hasFinanceRole,
 } from "@/app/finance/_components";
+import { departmentOptions } from "@/app/finance/_location-options";
 import { FinanceReportTable } from "@/app/finance/report-table";
+import { getDepartments } from "@/lib/api-departments";
 import {
   FinanceApiError,
-  getFinanceDepartments,
   getFinanceProvinces,
   getFinanceYears,
   type FinanceOption,
@@ -112,7 +113,7 @@ export default async function MissingKilometresPage({ params, searchParams }: Pr
     normalizedAction === "kilo-gaps-pdf" ||
     normalizedAction === "kilo-gaps-xls" ||
     normalizedAction === "close-gaps";
-  let departments: FinanceOption[] = [];
+  let departments: ReturnType<typeof departmentOptions> = [];
   let provinces: FinanceOption[] = [];
   let years: FinanceOption[] = [];
   let error: string | null = validAction
@@ -121,13 +122,15 @@ export default async function MissingKilometresPage({ params, searchParams }: Pr
   try {
     const lookups: Promise<unknown>[] = [];
     if (normalizedAction === "fuel-consumption") {
-      lookups.push(getFinanceDepartments(), getFinanceProvinces());
+      lookups.push(getDepartments(), getFinanceProvinces());
     }
     if (financialYearAction) lookups.push(getFinanceYears());
     const values = await Promise.all(lookups);
     let index = 0;
     if (normalizedAction === "fuel-consumption") {
-      departments = values[index++] as FinanceOption[];
+      departments = departmentOptions(
+        values[index++] as Awaited<ReturnType<typeof getDepartments>>,
+      );
       provinces = values[index++] as FinanceOption[];
     }
     if (financialYearAction) years = values[index] as FinanceOption[];

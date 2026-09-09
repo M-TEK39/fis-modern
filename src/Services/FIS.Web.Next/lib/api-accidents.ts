@@ -1189,14 +1189,7 @@ export async function getAccidentReferenceData() {
   };
 }
 
-type AccidentLookup = {
-  accidentCode: number;
-  vmfCode: number | null;
-  accidentDate: string | null;
-  reference: string | null;
-};
-
-function mapAccident(value: unknown): AccidentLookup | null {
+function mapMaintenanceAccident(value: unknown): GarageAccidentRow | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -1208,7 +1201,8 @@ function mapAccident(value: unknown): AccidentLookup | null {
 
   return {
     accidentCode,
-    vmfCode: asNumber(getValue(value, "vmf_code", "vmfCode")),
+    vehicleNumber: asString(getValue(value, "vehicle_number", "vehicleNumber")),
+    hireType: asString(getValue(value, "hire_type", "hireType")),
     accidentDate: asString(
       getValue(value, "occurence_date", "occurrence_date", "occurenceDate", "accident_date"),
     ),
@@ -1220,81 +1214,44 @@ export async function getGarageAccidentPage(
   page: number,
   searchType: GarageSearchType,
   searchTerm: string,
-  pageSize = 12,
+  pageSize = 24,
   locationCode?: number,
 ): Promise<GarageAccidentPage> {
   const normalizedSearchTerm = searchTerm.trim();
-  const vehiclePath = normalizedSearchTerm
-    ? `api/vehicles/search?searchTerm=${encodeURIComponent(normalizedSearchTerm)}`
-    : "api/vehicles";
-
-  const [accidentPayload, vehiclePayload, typePayload] = await Promise.all([
-    requestApi("api/accidents"),
-    requestApi(vehiclePath),
-    requestApi("api/type"),
-  ]);
-
-  const vehicles = mapPresent(getCollection(vehiclePayload), mapVehicle).filter(
-    (vehicle) => locationCode === undefined || vehicle.locationCode === locationCode,
-  );
-  const vehicleByCode = new Map(vehicles.map((vehicle) => [vehicle.vmfCode, vehicle]));
-  const typesByCode = new Map<number, string>();
-  for (const type of mapPresent(getCollection(typePayload), mapType)) {
-    typesByCode.set(type.code, type.description);
+  const params = new URLSearchParams({
+    page: String(Math.max(1, Math.trunc(page) || 1)),
+    pageSize: String(Math.min(100, Math.max(1, Math.trunc(pageSize) || 24))),
+    searchType,
+  });
+  if (normalizedSearchTerm) {
+    params.set("searchTerm", normalizedSearchTerm);
+  }
+  if (locationCode !== undefined) {
+    params.set("locationCode", String(locationCode));
   }
 
-  const matchingVehicleCodes = normalizedSearchTerm ? new Set<number>() : null;
-  if (matchingVehicleCodes) {
-    const normalizedLowerTerm = normalizedSearchTerm.toLocaleLowerCase();
-    for (const vehicle of vehicles) {
-      const value = searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber;
-      if ((value?.trim().toLocaleLowerCase() ?? "") === normalizedLowerTerm) {
-        matchingVehicleCodes.add(vehicle.vmfCode);
-      }
-    }
+  const payload = await requestApi(`api/accidents/maintenance?${params.toString()}`);
+  if (!isRecord(payload)) {
+    throw new AccidentApiError("invalid-response", "The FIS API returned an invalid accident page.");
   }
 
-  const allRows = mapPresent(getCollection(accidentPayload), mapAccident)
-    .reduce<GarageAccidentRow[]>((rows, accident) => {
-      if (
-        matchingVehicleCodes !== null &&
-        (accident.vmfCode === null || !matchingVehicleCodes.has(accident.vmfCode))
-      ) {
-        return rows;
-      }
-
-      const vehicle = accident.vmfCode === null ? undefined : vehicleByCode.get(accident.vmfCode);
-      if (locationCode !== undefined && vehicle === undefined) {
-        return rows;
-      }
-
-      const vehicleNumber =
-        searchType === "GG" ? vehicle?.fleetNumber : vehicle?.registrationNumber;
-
-      rows.push({
-        accidentCode: accident.accidentCode,
-        vehicleNumber: vehicleNumber ?? null,
-        hireType:
-          vehicle?.typeCode === null || vehicle?.typeCode === undefined
-            ? null
-            : (typesByCode.get(vehicle.typeCode) ?? null),
-        accidentDate: accident.accidentDate,
-        reference: accident.reference,
-      });
-      return rows;
-    }, [])
-    .toSorted((left, right) => (right.accidentDate ?? "").localeCompare(left.accidentDate ?? ""));
-
-  const totalRecords = allRows.length;
-  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
-  const safePage = Math.min(Math.max(page, 1), totalPages);
+  const parsedPage = asNumber(getValue(payload, "page"));
+  const parsedPageSize = asNumber(getValue(payload, "pageSize", "page_size"));
+  const totalRecords = asNumber(getValue(payload, "totalRecords", "total_records"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "total_pages"));
+  if (parsedPage === null || parsedPageSize === null || totalRecords === null || totalPages === null) {
+    throw new AccidentApiError(
+      "invalid-response",
+      "The FIS API returned incomplete accident pagination metadata.",
+    );
+  }
 
   return {
-    rows: allRows.slice((safePage - 1) * pageSize, safePage * pageSize),
-    page: safePage,
-    pageSize,
-    totalRecords,
-    totalPages,
+    rows: mapPresent(getCollection(payload), mapMaintenanceAccident),
+    page: Math.max(1, Math.trunc(parsedPage)),
+    pageSize: Math.max(1, Math.trunc(parsedPageSize)),
+    totalRecords: Math.max(0, Math.trunc(totalRecords)),
+    totalPages: Math.max(1, Math.trunc(totalPages)),
     searchTerm: normalizedSearchTerm,
     searchType,
   };
@@ -1304,7 +1261,7 @@ export async function getHqAccidentPage(
   page: number,
   searchType: GarageSearchType,
   searchTerm: string,
-  pageSize = 12,
+  pageSize = 24,
   locationCode?: number,
 ) {
   return getGarageAccidentPage(page, searchType, searchTerm, pageSize, locationCode);

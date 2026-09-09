@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
+import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/session";
 
 const CLEARANCE_ROLE = "Clearance";
@@ -87,22 +88,16 @@ export default async function ClearancePage() {
         </header>
 
         <div className="vehicle-menu-tiles">
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Clearance Maintenance Menu</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/clearance/entry">
-                1) Enter Clearance
-              </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Merchants</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/clearance/merchant">
-                1) Merchant Maintenance
-              </Link>
-            </div>
-          </section>
+          <MenuSection title="Clearance Maintenance Menu">
+            <Link className="vehicle-menu-link" href="/clearance/entry">
+              1) Enter Clearance
+            </Link>
+          </MenuSection>
+          <MenuSection title="Merchants">
+            <Link className="vehicle-menu-link" href="/clearance/merchant">
+              1) Merchant Maintenance
+            </Link>
+          </MenuSection>
         </div>
       </section>
     </main>

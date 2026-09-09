@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
+import { MenuSection } from "@/components/ui/menu-section";
 import type { VehicleSnapshotPage } from "@/lib/api-vehicles";
 
 type VehicleMasterClientProps = {
@@ -30,23 +31,12 @@ function contains(value: string | null, search: string) {
 function MenuTile({
   title,
   children,
-  defaultOpen = true,
+  defaultOpen = false,
 }: Readonly<{ title: string; children: React.ReactNode; defaultOpen?: boolean }>) {
-  const [open, setOpen] = useState(defaultOpen);
-
   return (
-    <section className="vehicle-menu-tile">
-      <button
-        className="vehicle-menu-header"
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        <span>{title}</span>
-        <span aria-hidden="true">{open ? "⌃" : "⌄"}</span>
-      </button>
-      {open ? <div className="vehicle-menu-body">{children}</div> : null}
-    </section>
+    <MenuSection title={title} defaultOpen={defaultOpen}>
+      {children}
+    </MenuSection>
   );
 }
 
@@ -289,7 +279,8 @@ export default function VehicleMasterClient({
               )}
             </nav>
             <p className="vehicle-pagination-meta">
-              Total records: {filteredRows.length} on this page | Page size: {pageData.pageSize}
+              Total records: {pageData.totalRecords} | Showing {filteredRows.length} on this page |
+              Page size: {pageData.pageSize}
             </p>
           </>
         )}

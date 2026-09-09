@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { logoutAction } from "@/app/actions/auth";
@@ -176,6 +177,7 @@ function AccessRestricted() {
 }
 
 async function AccidentHelpContent() {
+  await connection();
   const session = await getSession();
 
   if (session.status === "anonymous") {

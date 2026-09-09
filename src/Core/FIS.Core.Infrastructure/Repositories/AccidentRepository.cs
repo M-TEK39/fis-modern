@@ -190,6 +190,154 @@ public sealed class AccidentRepository : IAccidentRepository
 
     public async Task<IEnumerable<Accident>> GetAllAsync() => await QueryAsync();
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The maintenance list is composed from fixed table names and allowlisted runtime columns; all user values are parameters."
+    )]
+    public async Task<AccidentMaintenancePage> GetMaintenancePageAsync(
+        AccidentMaintenancePageQuery query
+    )
+    {
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var normalizedSearchType = string.Equals(query.SearchType, "GG", StringComparison.OrdinalIgnoreCase)
+            ? "GG"
+            : "GP";
+        var searchTerm = query.SearchTerm?.Trim() ?? string.Empty;
+        var accidentColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName, ["vmf_code"]);
+        var typeColumns = await GetAvailableColumnsAsync("type");
+        var vehicleNumberColumn = normalizedSearchType == "GG"
+            ? "fleet_number"
+            : "registration_number";
+        var hasSearch = searchTerm.Length > 0;
+        var requiresVehicle = hasSearch || query.LocationCode.HasValue;
+        var typeJoinAvailable = vehicleColumns.Contains("type_code")
+            && typeColumns.Contains("type_code");
+
+        var vehicleJoinConditions = new List<string> { "[v].[vmf_code] = [a].[vmf_code]" };
+
+        var vehicleJoin = $"{(requiresVehicle ? "INNER" : "LEFT")} JOIN [dbo].[{VehicleTableName}] AS [v] ON {string.Join(" AND ", vehicleJoinConditions)}";
+        var typeJoin = typeJoinAvailable
+            ? "LEFT JOIN [dbo].[type] AS [t] ON [t].[type_code] = [v].[type_code]"
+            : string.Empty;
+        var conditions = new List<string> { GetActiveFilter(accidentColumns, "a") };
+        if (hasSearch)
+        {
+            conditions.Add(
+                vehicleColumns.Contains(vehicleNumberColumn)
+                    ? $"LOWER(LTRIM(RTRIM(COALESCE([v].[{vehicleNumberColumn}], '')))) = @searchTerm"
+                    : "1 = 0"
+            );
+        }
+
+        if (query.LocationCode.HasValue)
+        {
+            conditions.Add(
+                vehicleColumns.Contains("location_code") ? "[v].[location_code] = @locationCode" : "1 = 0"
+            );
+        }
+
+        var projection = new[]
+        {
+            "[a].[accident_code] AS [accident_code]",
+            vehicleColumns.Contains(vehicleNumberColumn)
+                ? $"[v].[{vehicleNumberColumn}] AS [vehicle_number]"
+                : "CAST(NULL AS nvarchar(50)) AS [vehicle_number]",
+            typeJoinAvailable && typeColumns.Contains("type_description")
+                ? "[t].[type_description] AS [hire_type]"
+                : "CAST(NULL AS nvarchar(255)) AS [hire_type]",
+            GetProjection(accidentColumns, "occurence_date", "a"),
+            GetProjection(accidentColumns, "gg_reference", "a"),
+        };
+        var whereClause = string.Join(" AND ", conditions);
+        var orderBy = accidentColumns.Contains("occurence_date")
+            ? "[a].[occurence_date] DESC, [a].[accident_code] DESC"
+            : "[a].[accident_code] DESC";
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        void AddFilters(DbCommand command)
+        {
+            if (hasSearch)
+            {
+                AddParameter(command, "@searchTerm", DbType.String, searchTerm.ToLowerInvariant());
+            }
+
+            if (query.LocationCode.HasValue)
+            {
+                AddParameter(command, "@locationCode", DbType.Int32, query.LocationCode.Value);
+            }
+        }
+
+        try
+        {
+            int totalRecords;
+            await using (var countCommand = connection.CreateCommand())
+            {
+                countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                countCommand.CommandText = $"""
+                    SELECT COUNT(1)
+                    FROM [dbo].[{TableName}] AS [a]
+                    {vehicleJoin}
+                    WHERE {whereClause}
+                    """;
+                AddFilters(countCommand);
+                totalRecords = Convert.ToInt32(
+                    await countCommand.ExecuteScalarAsync(),
+                    CultureInfo.InvariantCulture
+                );
+            }
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var skip = (long)(page - 1) * pageSize;
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            dataCommand.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}] AS [a]
+                {vehicleJoin}
+                {typeJoin}
+                WHERE {whereClause}
+                ORDER BY {orderBy}
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddFilters(dataCommand);
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var data = new List<AccidentMaintenanceListItem>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                data.Add(
+                    new AccidentMaintenanceListItem(
+                        ReadInt32(reader, "accident_code") ?? 0,
+                        ReadString(reader, "vehicle_number"),
+                        ReadString(reader, "hire_type"),
+                        ReadDateTime(reader, "occurence_date"),
+                        ReadString(reader, "gg_reference")
+                    )
+                );
+            }
+
+            return new AccidentMaintenancePage(data, page, pageSize, totalRecords);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IEnumerable<Accident>> GetByVehicleAsync(int vmfCode) =>
         await QueryAsync(
             "[a].[vmf_code] = @vmfCode",

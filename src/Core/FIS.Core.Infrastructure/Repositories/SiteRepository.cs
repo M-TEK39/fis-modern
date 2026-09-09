@@ -11,8 +11,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 
 /// <summary>
 /// Persists the site table against the original legacy schema and the
-/// expanded schema. The legacy columns are always selected and written;
-/// modern audit columns are negotiated at runtime.
+/// expanded schema. The stable legacy columns are always selected and written;
+/// columns that are absent from older client databases are negotiated at runtime.
 /// </summary>
 public sealed class SiteRepository : ISiteRepository
 {
@@ -40,21 +40,25 @@ public sealed class SiteRepository : ISiteRepository
         "fax1",
         "financial_system_code",
         "financial_system_active",
+        "date_created",
+        "date_updated",
+        "modified_by_user_code",
+    ];
+
+    private static readonly string[] OptionalColumns =
+    [
         "financial_system_activate_date",
         "export_is_active",
         "date_last_exported",
         "Service_Kilometres",
         "Service_Years",
         "Overhead_Percentage",
-        "date_created",
-        "date_updated",
         "province_code",
         "notes",
         "user_access_code",
-        "modified_by_user_code",
+        "created_by_user_code",
+        "is_deleted",
     ];
-
-    private static readonly string[] OptionalColumns = ["created_by_user_code", "is_deleted"];
 
     private readonly FisDbContext _context;
 
@@ -189,6 +193,7 @@ public sealed class SiteRepository : ISiteRepository
         site.is_deleted = false;
 
         var values = BuildLegacyValues(site);
+        AddOptionalSiteValues(values, availableColumns, site);
         AddOptionalValue(
             values,
             availableColumns,
@@ -228,6 +233,7 @@ public sealed class SiteRepository : ISiteRepository
         site.is_deleted = existing.is_deleted;
 
         var values = BuildLegacyValues(site);
+        AddOptionalSiteValues(values, availableColumns, site);
         AddOptionalValue(
             values,
             availableColumns,
@@ -563,7 +569,7 @@ public sealed class SiteRepository : ISiteRepository
             if (missing.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"The legacy site table is missing required columns: {string.Join(", ", missing)}"
+                    $"The site table is missing stable legacy columns: {string.Join(", ", missing)}"
                 );
             }
 
@@ -609,32 +615,8 @@ public sealed class SiteRepository : ISiteRepository
                 DbType.Boolean,
                 site.financial_system_active
             ),
-            new(
-                "financial_system_activate_date",
-                "@financialSystemActivateDate",
-                DbType.DateTime2,
-                site.financial_system_activate_date
-            ),
-            new("export_is_active", "@exportIsActive", DbType.Boolean, site.export_is_active),
-            new(
-                "date_last_exported",
-                "@dateLastExported",
-                DbType.DateTime2,
-                site.date_last_exported
-            ),
-            new("Service_Kilometres", "@serviceKilometres", DbType.Int32, site.Service_Kilometres),
-            new("Service_Years", "@serviceYears", DbType.Byte, site.Service_Years),
-            new(
-                "Overhead_Percentage",
-                "@overheadPercentage",
-                DbType.Decimal,
-                site.Overhead_Percentage
-            ),
             new("date_created", "@dateCreated", DbType.DateTime2, site.date_created),
             new("date_updated", "@dateUpdated", DbType.DateTime2, site.date_updated),
-            new("province_code", "@provinceCode", DbType.Byte, site.province_code),
-            new("notes", "@notes", DbType.String, site.notes),
-            new("user_access_code", "@userAccessCode", DbType.Int32, site.user_access_code),
             new(
                 "modified_by_user_code",
                 "@modifiedByUserCode",
@@ -642,6 +624,86 @@ public sealed class SiteRepository : ISiteRepository
                 site.modified_by_user_code
             ),
         ];
+
+    private static void AddOptionalSiteValues(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> availableColumns,
+        Site site
+    )
+    {
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "financial_system_activate_date",
+            "@financialSystemActivateDate",
+            DbType.DateTime2,
+            site.financial_system_activate_date
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "export_is_active",
+            "@exportIsActive",
+            DbType.Boolean,
+            site.export_is_active
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "date_last_exported",
+            "@dateLastExported",
+            DbType.DateTime2,
+            site.date_last_exported
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Service_Kilometres",
+            "@serviceKilometres",
+            DbType.Int32,
+            site.Service_Kilometres
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Service_Years",
+            "@serviceYears",
+            DbType.Byte,
+            site.Service_Years
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "Overhead_Percentage",
+            "@overheadPercentage",
+            DbType.Decimal,
+            site.Overhead_Percentage
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "province_code",
+            "@provinceCode",
+            DbType.Byte,
+            site.province_code
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "notes",
+            "@notes",
+            DbType.String,
+            site.notes
+        );
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "user_access_code",
+            "@userAccessCode",
+            DbType.Int32,
+            site.user_access_code
+        );
+    }
 
     private static void AddOptionalValue(
         ICollection<WriteValue> values,
@@ -727,6 +789,13 @@ public sealed class SiteRepository : ISiteRepository
 
         var sqlType = column switch
         {
+            "financial_system_activate_date" or "date_last_exported" => "datetime2",
+            "export_is_active" => "bit",
+            "Service_Kilometres" => "int",
+            "Service_Years" => "tinyint",
+            "Overhead_Percentage" => "decimal(18, 3)",
+            "province_code" => "tinyint",
+            "user_access_code" => "int",
             "is_deleted" => "bit",
             "created_by_user_code" => "int",
             _ => "varchar(1)",

@@ -79,7 +79,7 @@ services:
       fis-api:
         condition: service_healthy
       fis-web-next:
-        condition: service_started
+        condition: service_healthy
     networks:
       - fis-network
 

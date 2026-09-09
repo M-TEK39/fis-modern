@@ -3,7 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 24;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -298,14 +298,31 @@ export async function getVehicleSnapshotPage(
   page: number,
   pageSize = PAGE_SIZE,
 ): Promise<VehicleSnapshotPage> {
-  const payload = await requestApi("api/vehicles");
-  const vehicles = getCollection(payload)
+  const safeRequestedPage = Math.max(1, Math.trunc(page) || 1);
+  const safeRequestedPageSize = Math.min(100, Math.max(1, Math.trunc(pageSize) || PAGE_SIZE));
+  const payload = await requestApi(
+    `api/vehicles/snapshot?page=${safeRequestedPage}&pageSize=${safeRequestedPageSize}`,
+  );
+
+  if (!isRecord(payload)) {
+    throw new VehicleApiError("invalid-response", "The FIS API returned an invalid vehicle snapshot.");
+  }
+
+  const parsedPage = asNumber(getValue(payload, "page"));
+  const parsedPageSize = asNumber(getValue(payload, "pageSize", "page_size"));
+  const totalRecords = asNumber(getValue(payload, "totalRecords", "total_records"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "total_pages"));
+
+  if (parsedPage === null || parsedPageSize === null || totalRecords === null || totalPages === null) {
+    throw new VehicleApiError(
+      "invalid-response",
+      "The FIS API returned incomplete vehicle snapshot pagination metadata.",
+    );
+  }
+
+  const rows = getCollection(payload)
     .map(toVehicleSnapshot)
     .filter((vehicle): vehicle is VehicleSnapshotRow => vehicle !== null);
-  const totalRecords = vehicles.length;
-  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
-  const safePage = Math.min(Math.max(page, 1), totalPages);
-  const rows = vehicles.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const contractEntries = await Promise.all(
     rows.map(
@@ -317,10 +334,10 @@ export async function getVehicleSnapshotPage(
   return {
     rows,
     contractsByVmf: Object.fromEntries(contractEntries),
-    page: safePage,
-    pageSize,
-    totalRecords,
-    totalPages,
+    page: Math.max(1, Math.trunc(parsedPage)),
+    pageSize: Math.max(1, Math.trunc(parsedPageSize)),
+    totalRecords: Math.max(0, Math.trunc(totalRecords)),
+    totalPages: Math.max(1, Math.trunc(totalPages)),
   };
 }
 

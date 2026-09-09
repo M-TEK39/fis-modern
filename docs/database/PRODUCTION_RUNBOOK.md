@@ -92,6 +92,10 @@ SQL Server, but that path is not part of production deployment.
 The local Compose file owns the disposable development database workflow. It
 creates `fis_dev` if needed and starts a separate, guarded schema-bootstrap
 container that applies the existing clean-install EF migrations. The bootstrap
+then adds the local-only legacy compatibility objects (`Jobcards`,
+`journal_detail`, and the documented optional `site` columns) when they are
+missing, so local development exercises the same fallback paths as a client
+database. It never runs against a client database. The bootstrap
 refuses non-local SQL Server hosts, non-development database names, and any
 database that already contains tables without EF migration history.
 

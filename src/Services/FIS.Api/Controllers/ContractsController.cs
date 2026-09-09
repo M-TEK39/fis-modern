@@ -8,9 +8,84 @@ using FIS.Core.Domain.Entities.ReferenceData;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
+
+/// <summary>
+/// Applies the legacy Contracts module entitlement to every Contracts API action.
+/// Fine-grained ownership and workflow checks remain on their respective actions.
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, Inherited = true)]
+public sealed class ContractAccessAttribute : Attribute, IAsyncActionFilter
+{
+    private const long ContractManagementPermission = 2;
+
+    private static readonly string[] ContractRoles =
+    [
+        "contracts",
+        "contract",
+        "contract (load and manage)",
+        "contracts (load and manage)",
+        "contract_load_and_manage",
+        "contracts_load_and_manage",
+        "contract capturer",
+        "contracts capturer",
+        "contract (cancel and close)",
+        "contracts (cancel and close)",
+        "contract_cancel_and_close",
+        "contracts_cancel_and_close",
+        "contract (approver)",
+        "contracts approver",
+        "contract approver",
+        "contracts_approver",
+        "contract_approver",
+        "back dating contract (approver)",
+        "backdating contract (approver)",
+        "contract (back dating approver)",
+        "contract history back dating",
+        "contract_history_backdating",
+        "admin",
+        "administrator",
+        "system administrator",
+        "systemadministrator",
+    ];
+
+    public async Task OnActionExecutionAsync(
+        ActionExecutingContext context,
+        ActionExecutionDelegate next
+    )
+    {
+        var user = context.HttpContext.User;
+        var hasNamedRole = ContractRoles.Any(user.IsInRole) || user.Claims.Any(
+            claim =>
+                (claim.Type == ClaimTypes.Role
+                    || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                    || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+                && claim.Value
+                    .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                    .Any(role => ContractRoles.Any(expected =>
+                        string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)))
+        );
+        var accessLevelClaim = user.FindFirst("access_level")?.Value;
+        var hasLegacyPermission = long.TryParse(accessLevelClaim, out var accessLevel)
+            && (accessLevel & ContractManagementPermission) == ContractManagementPermission;
+
+        if (!hasNamedRole && !hasLegacyPermission)
+        {
+            context.Result = new ObjectResult(
+                new { error = "You do not have permission to access vehicle contracts." }
+            )
+            {
+                StatusCode = StatusCodes.Status403Forbidden,
+            };
+            return;
+        }
+
+        await next();
+    }
+}
 
 /// <summary>
 /// Contract/Hire management API endpoints
@@ -20,8 +95,10 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 [Authorize]
 [Produces("application/json")]
+[ContractAccess]
 public class ContractsController : BaseApiController
 {
+    private const long ContractManagementPermission = 2;
     private const short LegacyGfleetDepartmentCode = 147;
     private static readonly short[] LegacyGfleetSiteCodes = [1619, 1620, 1621, 1622];
 
@@ -58,10 +135,7 @@ public class ContractsController : BaseApiController
     /// <returns>Null if validation passes, or ForbidResult with error message if validation fails</returns>
     private ActionResult? ValidateSelfApprovalPrevention(Contract contract, int currentUserId)
     {
-        if (
-            contract.created_by_user_code.HasValue
-            && contract.created_by_user_code.Value == currentUserId
-        )
+        if (IsContractOwner(contract, currentUserId))
         {
             _logger.LogWarning(
                 "Self-approval blocked: User {UserId} attempted to approve their own contract {ContractId}",
@@ -110,13 +184,41 @@ public class ContractsController : BaseApiController
         );
     }
 
+    private bool HasContractAdminRole() =>
+        HasAnyRole("admin", "administrator", "system administrator", "systemadministrator");
+
+    private bool HasContractLoadAndManageRole() =>
+        HasAnyRole(
+            "contract (load and manage)",
+            "contracts (load and manage)",
+            "contract_load_and_manage",
+            "contracts_load_and_manage",
+            "contract capturer",
+            "contracts capturer"
+        );
+
+    private bool HasContractCancelAndCloseRole() =>
+        HasAnyRole(
+            "contract (cancel and close)",
+            "contracts (cancel and close)",
+            "contract_cancel_and_close",
+            "contracts_cancel_and_close"
+        );
+
     private bool HasContractApproverRole() =>
         HasAnyRole(
+            "contract (approver)",
             "contracts approver",
+            "contract approver",
             "contracts_approver",
             "back dating contract (approver)",
+            "backdating contract (approver)",
+            "contract_approver",
+            "contract (back dating approver)",
             "admin",
-            "administrator"
+            "administrator",
+            "system administrator",
+            "systemadministrator"
         );
 
     private bool HasContractHistoryBackdatingRole() =>
@@ -124,8 +226,72 @@ public class ContractsController : BaseApiController
             "contract history back dating",
             "contract_history_backdating",
             "admin",
-            "administrator"
+            "administrator",
+            "system administrator",
+            "systemadministrator"
         );
+
+    private bool HasContractAccess()
+    {
+        if (
+            HasAnyRole("contracts", "contract")
+            || HasContractAdminRole()
+            || HasContractLoadAndManageRole()
+            || HasContractCancelAndCloseRole()
+            || HasContractApproverRole()
+            || HasContractHistoryBackdatingRole()
+        )
+        {
+            return true;
+        }
+
+        var accessLevelClaim = User.FindFirst("access_level")?.Value;
+        return long.TryParse(accessLevelClaim, out var accessLevel)
+            && (accessLevel & ContractManagementPermission) == ContractManagementPermission;
+    }
+
+    private bool CanCaptureContract() => HasContractAdminRole() || HasContractLoadAndManageRole();
+
+    private bool CanManageActiveContract() =>
+        HasContractAdminRole() || HasContractApproverRole();
+
+    private bool CanCloseActiveContract() =>
+        HasContractAdminRole() || HasContractCancelAndCloseRole() || HasContractApproverRole();
+
+    private ActionResult? RequireContractAccess()
+    {
+        return HasContractAccess()
+            ? null
+            : StatusCode(403, new { error = "You do not have permission to access vehicle contracts." });
+    }
+
+    private ActionResult? RequireContractAction(bool allowed, string error)
+    {
+        if (RequireContractAccess() is { } accessFailure)
+        {
+            return accessFailure;
+        }
+
+        return allowed ? null : StatusCode(403, new { error });
+    }
+
+    private static bool IsContractOwner(Contract contract, int currentUserId)
+    {
+        if (contract.created_by_user_code.HasValue)
+        {
+            return contract.created_by_user_code.Value == currentUserId;
+        }
+
+        return contract.user_code.HasValue && contract.user_code.Value == currentUserId;
+    }
+
+    private ActionResult? RequireActiveContract(Contract contract)
+    {
+        return contract.still_current == "Y"
+            && (!contract.contract_status_code.HasValue || contract.contract_status_code == 3)
+            ? null
+            : BadRequest(new { error = "Only an active contract can be changed by this operation." });
+    }
 
     private async Task<string?> GetMissingTariffMessageAsync(int vmfCode)
     {
@@ -383,6 +549,9 @@ public class ContractsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> Hire([FromBody] HireContractDto request)
     {
+        if (RequireContractAction(CanCaptureContract(), "You do not have permission to capture vehicle contracts.") is { } authorization)
+            return authorization;
+
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
@@ -453,6 +622,9 @@ public class ContractsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> ReturnVehicle(int vmfCode, [FromBody] ReturnContractDto request)
     {
+        if (RequireContractAction(CanCloseActiveContract(), "You do not have permission to close vehicle contracts.") is { } authorization)
+            return authorization;
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -483,7 +655,7 @@ public class ContractsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult> GetAll(
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 25,
+        [FromQuery] int pageSize = 24,
         [FromQuery] short? status = null,
         [FromQuery] short? siteCode = null,
         [FromQuery] string? stillCurrent = null,
@@ -790,12 +962,17 @@ public class ContractsController : BaseApiController
         [FromBody] CloseContractRequest request
     )
     {
+        if (RequireContractAction(CanCloseActiveContract(), "You do not have permission to close vehicle contracts.") is { } authorization)
+            return authorization;
+
         try
         {
             int currentUserId = GetCurrentUserId();
             var contract = await _contractRepository.GetByIdAsync(contractCode);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+            if (RequireActiveContract(contract) is { } activeContractFailure)
+                return activeContractFailure;
 
             var homeSiteResolution = await ResolveValidatedSiteAsync(
                 request.HomeSiteCode,
@@ -930,6 +1107,9 @@ public class ContractsController : BaseApiController
         [FromBody] VehicleSiteAssignmentRequest request
     )
     {
+        if (RequireContractAction(CanManageActiveContract(), "You do not have permission to update vehicle site assignments.") is { } authorization)
+            return authorization;
+
         try
         {
             var currentUserId = GetCurrentUserId();
@@ -1062,6 +1242,9 @@ public class ContractsController : BaseApiController
         [FromBody] ExtendContractRequest request
     )
     {
+        if (RequireContractAction(CanManageActiveContract(), "You do not have permission to extend vehicle contracts.") is { } authorization)
+            return authorization;
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -1069,6 +1252,8 @@ public class ContractsController : BaseApiController
             var contract = await _contractRepository.GetByIdAsync(contractCode);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+            if (RequireActiveContract(contract) is { } activeContractFailure)
+                return activeContractFailure;
 
             contract.target_return_date = request.NewTargetReturnDate;
             await _contractRepository.UpdateAsync(contract, currentUserId);
@@ -1103,6 +1288,9 @@ public class ContractsController : BaseApiController
         [FromBody] CancelContractRequest? request = null
     )
     {
+        if (RequireContractAction(CanCloseActiveContract(), "You do not have permission to cancel vehicle contracts.") is { } authorization)
+            return authorization;
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -1110,6 +1298,8 @@ public class ContractsController : BaseApiController
             var contract = await _contractRepository.GetByIdAsync(contractCode);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+            if (RequireActiveContract(contract) is { } activeContractFailure)
+                return activeContractFailure;
 
             var prevStatus = contract.contract_status_code;
             contract.still_current = "N";
@@ -1157,6 +1347,9 @@ public class ContractsController : BaseApiController
         [FromBody] ContractReassignDto request
     )
     {
+        if (RequireContractAction(CanManageActiveContract(), "You do not have permission to reassign vehicle contracts.") is { } authorization)
+            return authorization;
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -1313,6 +1506,9 @@ public class ContractsController : BaseApiController
         [FromBody] ReliefVehicleDto request
     )
     {
+        if (RequireContractAction(CanManageActiveContract(), "You do not have permission to create relief contracts.") is { } authorization)
+            return authorization;
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -1463,6 +1659,9 @@ public class ContractsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult> SubmitContractForApproval(int contractId)
     {
+        if (RequireContractAction(CanCaptureContract(), "You do not have permission to submit vehicle contracts.") is { } authorization)
+            return authorization;
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -1484,10 +1683,7 @@ public class ContractsController : BaseApiController
                 );
 
             // Verify the submitter is the original capturer
-            if (
-                contract.created_by_user_code.HasValue
-                && contract.created_by_user_code.Value != currentUserId
-            )
+            if (!HasContractAdminRole() && !IsContractOwner(contract, currentUserId))
                 return StatusCode(
                     403,
                     new
@@ -1549,14 +1745,16 @@ public class ContractsController : BaseApiController
     {
         try
         {
-            if (!HasContractApproverRole())
-                return Forbid();
+            if (RequireContractAction(HasContractApproverRole(), "You do not have permission to review vehicle contracts.") is { } authorization)
+                return authorization;
 
             int currentUserId = GetCurrentUserId();
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+            if (contract.contract_status_code != 1)
+                return BadRequest(new { error = "Only pending-review contracts can be approved." });
 
             // Prevent self-approval
             var selfApprovalCheck = ValidateSelfApprovalPrevention(contract, currentUserId);
@@ -1607,14 +1805,16 @@ public class ContractsController : BaseApiController
     {
         try
         {
-            if (!HasContractApproverRole())
-                return Forbid();
+            if (RequireContractAction(HasContractApproverRole(), "You do not have permission to review vehicle contracts.") is { } authorization)
+                return authorization;
 
             int currentUserId = GetCurrentUserId();
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+            if (contract.contract_status_code is not (1 or 2))
+                return BadRequest(new { error = "Only pending-review or approved contracts can be activated." });
 
             // Prevent self-approval
             var selfApprovalCheck = ValidateSelfApprovalPrevention(contract, currentUserId);
@@ -1677,14 +1877,16 @@ public class ContractsController : BaseApiController
     {
         try
         {
-            if (!HasContractApproverRole())
-                return Forbid();
+            if (RequireContractAction(HasContractApproverRole(), "You do not have permission to review vehicle contracts.") is { } authorization)
+                return authorization;
 
             int currentUserId = GetCurrentUserId();
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+            if (contract.contract_status_code != 1)
+                return BadRequest(new { error = "Only pending-review contracts can be returned for correction." });
 
             // Prevent self-review/decline
             var selfApprovalCheck = ValidateSelfApprovalPrevention(contract, currentUserId);
@@ -1737,14 +1939,16 @@ public class ContractsController : BaseApiController
     {
         try
         {
-            if (!HasContractApproverRole())
-                return Forbid();
+            if (RequireContractAction(HasContractApproverRole(), "You do not have permission to review vehicle contracts.") is { } authorization)
+                return authorization;
 
             int currentUserId = GetCurrentUserId();
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+            if (contract.contract_status_code != 1)
+                return BadRequest(new { error = "Only pending-review contracts can be declined." });
 
             // Prevent self-review/decline
             var selfApprovalCheck = ValidateSelfApprovalPrevention(contract, currentUserId);
@@ -1791,6 +1995,9 @@ public class ContractsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult> RecallContract(int contractId)
     {
+        if (RequireContractAction(CanCaptureContract(), "You do not have permission to recall vehicle contracts.") is { } authorization)
+            return authorization;
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -1800,10 +2007,7 @@ public class ContractsController : BaseApiController
                 return NotFound(new { error = "Contract not found" });
 
             // Only the original capturer can recall
-            if (
-                !contract.created_by_user_code.HasValue
-                || contract.created_by_user_code.Value != currentUserId
-            )
+            if (!HasContractAdminRole() && !IsContractOwner(contract, currentUserId))
                 return StatusCode(
                     403,
                     new
@@ -1870,6 +2074,9 @@ public class ContractsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult> EditContract(int contractId, [FromBody] EditContractDto request)
     {
+        if (RequireContractAction(CanCaptureContract(), "You do not have permission to edit vehicle contracts.") is { } authorization)
+            return authorization;
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -1879,14 +2086,15 @@ public class ContractsController : BaseApiController
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
 
-            // Only original capturer can edit
+            // Capturers can only edit their own records; administrators may correct a record
+            // without impersonating its original owner.
             if (
-                !contract.created_by_user_code.HasValue
-                || contract.created_by_user_code.Value != currentUserId
+                !HasContractAdminRole()
+                && (!HasContractLoadAndManageRole() || !IsContractOwner(contract, currentUserId))
             )
                 return StatusCode(
                     403,
-                    new { error = "Only the original capturer can edit this contract.", contractId }
+                    new { error = "Only the original capturer or an administrator can edit this contract.", contractId }
                 );
 
             // Only editable when Draft (0/null) or Declined for Correction (4)
@@ -2057,8 +2265,8 @@ public class ContractsController : BaseApiController
     {
         try
         {
-            if (!HasContractHistoryBackdatingRole())
-                return Forbid();
+            if (RequireContractAction(HasContractHistoryBackdatingRole(), "You do not have permission to backdate contract history.") is { } authorization)
+                return authorization;
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
@@ -2405,6 +2613,9 @@ public class ContractsController : BaseApiController
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult> DataRepairRun()
     {
+        if (RequireContractAction(HasContractAdminRole(), "You do not have permission to repair contract data.") is { } authorization)
+            return authorization;
+
         try
         {
             int currentUserId = GetCurrentUserId();

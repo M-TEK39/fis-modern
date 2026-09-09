@@ -1,8 +1,11 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { logoutAction } from "@/app/actions/auth";
+import { AppSidebar16 } from "@/components/ui/sidebar/app-sidebar-16";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar/sidebar";
 import type { SessionState } from "@/lib/api-auth";
+
+import SiteHeader from "./site-header";
 
 type AuthenticatedSession = Extract<SessionState, { status: "authenticated" }>;
 
@@ -166,13 +169,29 @@ function visibleGroups(session: AuthenticatedSession) {
   })).filter((group) => group.items.length > 0);
 }
 
-function UserSummary({ session }: Readonly<{ session: AuthenticatedSession }>) {
-  return (
-    <div className="app-user-summary">
-      <span className="app-user-label">Signed in as</span>
-      <span className="app-user-name">{session.email || "FIS user"}</span>
-    </div>
-  );
+function getInitials(value: string) {
+  const parts = value
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .filter((part): part is string => Boolean(part));
+
+  if (parts.length > 1) return parts.slice(0, 2).join("").toUpperCase();
+  return value.replace(/\s+/g, "").slice(0, 2).toUpperCase() || "FI";
+}
+
+function getSidebarUser(session: AuthenticatedSession) {
+  const email = session.email?.trim() ?? "";
+  const accessCode = session.userAccessCode?.trim() ?? "";
+  const rawName = email ? email.split("@", 1)[0] : accessCode;
+  const name = rawName.replace(/[._-]+/g, " ").trim() || "FIS user";
+
+  return {
+    name,
+    email: email || accessCode || "Authenticated FIS user",
+    initials: getInitials(name),
+    avatar: null,
+  };
 }
 
 export default function AppShell({
@@ -180,51 +199,19 @@ export default function AppShell({
   session,
 }: Readonly<{ children: ReactNode; session: AuthenticatedSession }>) {
   const groups = visibleGroups(session);
+  const user = getSidebarUser(session);
 
   return (
-    <div className="app-shell">
-      <aside className="app-sidebar">
-        <div className="app-sidebar-brand">
-          <Link className="app-brand-link" href="/home">
-            <span className="brand-mark" aria-hidden="true">
-              FIS
-            </span>
-            <span>
-              <span className="app-brand-name">Fleet Information System</span>
-              <span className="app-brand-caption">Gauteng Provincial Government</span>
-            </span>
-          </Link>
-        </div>
-
-        <details className="app-nav-disclosure" open>
-          <summary>FIS Menu</summary>
-          <nav className="app-nav" aria-label="FIS modules">
-            {groups.map((group) => (
-              <div className="app-nav-group" key={group.label}>
-                <p className="app-nav-group-label">{group.label}</p>
-                <div className="app-nav-links">
-                  {group.items.map((item) => (
-                    <Link className="app-nav-link" href={item.href} key={item.href}>
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </nav>
-        </details>
-
-        <div className="app-sidebar-footer">
-          <UserSummary session={session} />
-          <form action={logoutAction}>
-            <button className="button button-secondary app-signout" type="submit">
-              Sign out
-            </button>
-          </form>
-        </div>
-      </aside>
-
-      <div className="app-content">{children}</div>
-    </div>
+    <SidebarProvider className="flex-col bg-background [--header-height:3.5rem]">
+      <SiteHeader groups={groups} />
+      <div className="flex min-h-0 flex-1">
+        <AppSidebar16 groups={groups} user={user} logoutAction={logoutAction} />
+        <SidebarInset>
+          <div className="fis-app-content flex min-w-0 flex-1 flex-col gap-4 p-4 md:p-6">
+            {children}
+          </div>
+        </SidebarInset>
+      </div>
+    </SidebarProvider>
   );
 }

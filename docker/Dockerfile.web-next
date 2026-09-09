@@ -1,5 +1,8 @@
-# Dependency stage
-FROM node:22-alpine AS deps
+# syntax=docker/dockerfile:1.7
+
+# Keep the build and runtime on Alpine so optional native Next dependencies
+# such as sharp use the same musl variant in both stages.
+FROM node:22-alpine AS base
 WORKDIR /app
 
 ENV PNPM_HOME=/pnpm
@@ -8,28 +11,26 @@ ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable \
     && corepack install --global pnpm@11.25.0
 
+# Dependency stage. Copying only the manifests keeps this layer reusable for
+# source-only changes; the cache mount speeds up a cold builder without being
+# copied into the final image.
+FROM base AS deps
 COPY src/Services/FIS.Web.Next/package.json src/Services/FIS.Web.Next/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=fis-web-pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile
 
 # Build stage
-FROM node:22-alpine AS build
-WORKDIR /app
-
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
+FROM base AS build
 ENV NEXT_TELEMETRY_DISABLED=1
-
-RUN corepack enable \
-    && corepack install --global pnpm@11.25.0
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY src/Services/FIS.Web.Next/package.json src/Services/FIS.Web.Next/pnpm-lock.yaml ./
 COPY src/Services/FIS.Web.Next/ ./
 
-RUN mkdir -p public \
-    && pnpm build
+RUN pnpm build
 
-# Production stage
+# Production stage. Next standalone output contains the traced server files
+# and production dependencies only; do not copy the full build or node_modules.
 FROM node:22-alpine AS runtime
 WORKDIR /app
 
@@ -38,16 +39,18 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-RUN addgroup -S -g 1001 nextjs \
+RUN apk add --no-cache tzdata \
+    && addgroup -S -g 1001 nextjs \
     && adduser -S -u 1001 -G nextjs nextjs
 
-COPY --from=build --chown=nextjs:nextjs /app/package.json ./package.json
-COPY --from=build --chown=nextjs:nextjs /app/next.config.ts ./next.config.ts
-COPY --from=build --chown=nextjs:nextjs /app/node_modules ./node_modules
-COPY --from=build --chown=nextjs:nextjs /app/.next ./.next
+COPY --from=build --chown=nextjs:nextjs /app/.next/standalone ./
+COPY --from=build --chown=nextjs:nextjs /app/.next/static ./.next/static
 COPY --from=build --chown=nextjs:nextjs /app/public ./public
 
 USER nextjs
 EXPOSE 3000
 
-CMD ["node", "node_modules/next/dist/bin/next", "start"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
+CMD ["node", "server.js"]

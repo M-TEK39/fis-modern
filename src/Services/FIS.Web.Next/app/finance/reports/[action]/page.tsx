@@ -8,16 +8,17 @@ import {
   FinanceUnavailable,
   hasFinanceRole,
 } from "@/app/finance/_components";
+import { departmentOptions, siteOptions } from "@/app/finance/_location-options";
+import { DepartmentApiError, getDepartments } from "@/lib/api-departments";
 import {
   FinanceApiError,
-  getFinanceDepartments,
   getFinancePostingMonths,
   getFinanceProvinces,
-  getFinanceSites,
   getFinanceYears,
   type FinanceOption,
   type FinanceRow,
 } from "@/lib/api-finance";
+import { SiteApiError, getSites } from "@/lib/api-sites";
 import {
   getBillingHistory,
   getDedicatedFinanceReport,
@@ -128,8 +129,8 @@ function ReportForm({
 }: Readonly<{
   action: string;
   query: Query;
-  departments: FinanceOption[];
-  sites: FinanceOption[];
+  departments: ReturnType<typeof departmentOptions>;
+  sites: ReturnType<typeof siteOptions>;
   provinces: FinanceOption[];
   years: FinanceOption[];
   postingMonths: FinanceOption[];
@@ -458,25 +459,34 @@ export async function FinanceReportsRoute({
 
   const query = await searchParams;
   const normalizedAction = action.trim().toLowerCase();
-  let departments: FinanceOption[] = [];
-  let sites: FinanceOption[] = [];
+  let departments: ReturnType<typeof departmentOptions> = [];
+  let sites: ReturnType<typeof siteOptions> = [];
   let provinces: FinanceOption[] = [];
   let years: FinanceOption[] = [];
   let postingMonths: FinanceOption[] = [];
   let lookupError: string | null = null;
   try {
-    [departments, sites, provinces, years] = await Promise.all([
-      getFinanceDepartments(),
-      getFinanceSites(),
+    const [departmentRecords, siteRecords, loadedProvinces, loadedYears] = await Promise.all([
+      getDepartments(),
+      getSites(),
       getFinanceProvinces(),
       getFinanceYears(),
     ]);
+    departments = departmentOptions(departmentRecords);
+    sites = siteOptions(siteRecords);
+    provinces = loadedProvinces;
+    years = loadedYears;
     if (normalizedAction === "department" || normalizedAction === "site")
       postingMonths = await getFinancePostingMonths(
         normalizedAction === "site" ? "Site" : "Department",
       );
   } catch (error) {
-    if (error instanceof FinanceApiError) lookupError = error.message;
+    if (
+      error instanceof FinanceApiError ||
+      error instanceof DepartmentApiError ||
+      error instanceof SiteApiError
+    )
+      lookupError = error.message;
     else throw error;
   }
 

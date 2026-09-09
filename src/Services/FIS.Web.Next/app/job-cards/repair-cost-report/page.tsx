@@ -13,6 +13,7 @@ import {
   sessionMessage,
 } from "@/app/job-cards/_page";
 import { getRepairCostReport, JobCardApiError } from "@/lib/api-job-cards";
+import { getSites } from "@/lib/api-sites";
 
 function positiveNumber(value: string) {
   const parsed = Number(value);
@@ -39,7 +40,10 @@ export default async function RepairCostReportPage({
   const fromDate = validDate(queryValue(query.fromDate));
   const toDate = validDate(queryValue(query.toDate));
   try {
-    const report = await getRepairCostReport({ vmfCode, siteCode, fromDate, toDate });
+    const [report, sites] = await Promise.all([
+      getRepairCostReport({ vmfCode, siteCode, fromDate, toDate }),
+      getSites().catch(() => null),
+    ]);
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="repair-cost-report-title">
@@ -70,16 +74,27 @@ export default async function RepairCostReportPage({
               </div>
               <div className="form-field">
                 <label className="form-label" htmlFor="repair-report-site">
-                  Site code
+                  Site
                 </label>
-                <input
-                  className="form-input"
-                  id="repair-report-site"
-                  name="siteCode"
-                  type="number"
-                  min="1"
-                  defaultValue={siteCode ?? ""}
-                />
+                {sites ? (
+                  <select
+                    className="form-select"
+                    id="repair-report-site"
+                    name="siteCode"
+                    defaultValue={siteCode ?? ""}
+                  >
+                    <option value="">All sites</option>
+                    {sites.map((site) => (
+                      <option key={site.siteCode} value={site.siteCode}>
+                        {site.description || `Site ${site.siteCode}`} ({site.siteCode})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="muted-copy" role="status">
+                    Site options are temporarily unavailable. Refresh to filter by site.
+                  </p>
+                )}
               </div>
               <div className="form-field">
                 <label className="form-label" htmlFor="repair-report-from">

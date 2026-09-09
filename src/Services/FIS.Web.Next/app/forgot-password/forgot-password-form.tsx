@@ -4,6 +4,9 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { forgotPasswordAction, type ForgotPasswordActionState } from "@/app/actions/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const initialState: ForgotPasswordActionState = { status: "idle" };
 
@@ -11,9 +14,9 @@ function SubmitButton() {
   const { pending } = useFormStatus();
 
   return (
-    <button className="button button-primary button-wide" type="submit" disabled={pending}>
+    <Button className="w-full" type="submit" disabled={pending}>
       {pending ? "Sending..." : "Send reset link"}
-    </button>
+    </Button>
   );
 }
 
@@ -28,24 +31,28 @@ export default function ForgotPasswordForm({
   );
 
   return (
-    <form action={formAction} className="form-stack" noValidate>
+    <form action={formAction} className="flex flex-col gap-6" noValidate>
       {state.status === "error" && state.message ? (
-        <div className="notice notice-error" role="alert">
-          <span aria-hidden="true">!</span>
-          <span>{state.message}</span>
+        <div
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="alert"
+        >
+          {state.message}
         </div>
       ) : null}
 
       {state.status === "success" && state.message ? (
-        <div className="notice notice-info" role="status">
-          <span aria-hidden="true">i</span>
-          <span>{state.message}</span>
+        <div
+          className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"
+          role="status"
+        >
+          {state.message}
         </div>
       ) : null}
 
-      <div className="field">
-        <label htmlFor="identifier">Username, email, or user code</label>
-        <input
+      <div className="grid gap-2">
+        <Label htmlFor="identifier">Username, email, or user code</Label>
+        <Input
           id="identifier"
           name="identifier"
           type="text"

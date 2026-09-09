@@ -45,6 +45,9 @@ export type VehicleStatusReportRow = {
 
 export type VehicleStatusReport = {
   totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
   remarksAvailable: boolean;
   assumptionNote: string | null;
   sites: VehicleStatusSite[];
@@ -52,6 +55,8 @@ export type VehicleStatusReport = {
   makes: VehicleStatusOption[];
   rows: VehicleStatusReportRow[];
 };
+
+export const VEHICLE_STATUS_REPORT_PAGE_SIZE = 24;
 
 export const VEHICLE_STATUS_OPTIONS: readonly VehicleStatusOption[] = [
   { code: 1, description: "In Service" },

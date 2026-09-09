@@ -47,6 +47,11 @@ public class JournalDetailService : IJournalDetailService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    public async Task<IEnumerable<JournalDetail>> GetAllJournalDetailsAsync()
+    {
+        return await _journalDetailRepository.GetAllAsync();
+    }
+
     /// <summary>
     /// Create new journal detail entry
     /// Legacy: AddJournalDetail method (stored procedure: NEW_DEV_INS_JournalDetail)

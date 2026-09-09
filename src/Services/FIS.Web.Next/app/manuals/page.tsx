@@ -1,20 +1,16 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { Suspense } from "react";
+import { BookOpen } from "lucide-react";
 
 import { logoutAction } from "@/app/actions/auth";
 import SessionRecovery from "@/app/home/session-recovery";
+import { ManualLibrary, type ManualGroup } from "@/app/manuals/manual-library";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { getSession } from "@/lib/session";
-
-type ManualLink = {
-  label: string;
-  href: string;
-};
-
-type ManualGroup = {
-  title: string;
-  links: readonly ManualLink[];
-};
 
 const MANUAL_GROUPS: readonly ManualGroup[] = [
   {
@@ -102,16 +98,17 @@ const MANUAL_GROUPS: readonly ManualGroup[] = [
 
 function ManualsFallback() {
   return (
-    <section className="manuals-card" aria-busy="true">
-      <div className="loading-card">
+    <Card className="w-full shadow-none" aria-busy="true">
+      <CardContent className="loading-card p-8">
         <span className="spinner" aria-hidden="true" />
         <p>Loading manuals...</p>
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
 async function ManualsContent() {
+  await connection();
   const session = await getSession();
 
   if (session.status === "anonymous") {
@@ -146,54 +143,52 @@ async function ManualsContent() {
   }
 
   return (
-    <section className="manuals-card" aria-labelledby="manuals-title">
-      <div className="manuals-header">
-        <div className="brand">
-          <div className="brand-mark" aria-hidden="true">
-            FIS
+    <section className="w-full max-w-6xl space-y-6" aria-labelledby="manuals-title">
+      <Card className="shadow-none">
+        <CardHeader className="gap-6 border-b p-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <span className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white p-1 ring-1 ring-border">
+              <Image
+                src="/logo/gauteng-g-fleet.webp"
+                alt=""
+                width={48}
+                height={48}
+                className="size-full object-contain"
+                priority
+              />
+            </span>
+            <div>
+              <p className="eyebrow">Reference library</p>
+              <h1
+                id="manuals-title"
+                className="text-2xl font-semibold leading-tight tracking-tight sm:text-3xl"
+              >
+                Gauteng Fleet Information System User Manuals
+              </h1>
+              <p className="mt-2 text-base text-muted-foreground">
+                Open the user manual for the module you need.
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="brand-name">Fleet Information System</p>
-            <p className="brand-caption">Gauteng Provincial Government</p>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link href="/home">Home</Link>
+            </Button>
+            <form action={logoutAction}>
+              <Button type="submit" variant="outline">
+                Sign out
+              </Button>
+            </form>
           </div>
-        </div>
-        <div className="manuals-title-block">
-          <p className="eyebrow">Reference library</p>
-          <h1 id="manuals-title">Gauteng Fleet Information System User Manuals</h1>
-          <p>Open the user manual for the module you need.</p>
-        </div>
-        <div className="manuals-actions">
-          <Link className="button button-secondary" href="/home">
-            Home
-          </Link>
-          <form action={logoutAction}>
-            <button className="button button-secondary" type="submit">
-              Sign out
-            </button>
-          </form>
-        </div>
-      </div>
-
-      <div className="manuals-tree" aria-label="User manuals">
-        {MANUAL_GROUPS.map((group) => (
-          <details className="manual-group" key={group.title}>
-            <summary>{group.title}</summary>
-            <ul>
-              {group.links.map((link) => (
-                <li key={link.href}>
-                  <a href={link.href}>{link.label}</a>
-                </li>
-              ))}
-            </ul>
-          </details>
-        ))}
-      </div>
-
-      <div className="manuals-footer">
-        <Link className="button button-secondary" href="/home">
-          Back to Home
-        </Link>
-      </div>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="mb-5 flex items-center gap-2 text-sm text-muted-foreground">
+            <BookOpen className="size-4" aria-hidden="true" />
+            Select a module to see its available documentation.
+          </div>
+          <ManualLibrary groups={MANUAL_GROUPS} />
+        </CardContent>
+      </Card>
     </section>
   );
 }

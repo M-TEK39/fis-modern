@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
+import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/session";
 
 const CALL_CENTRE_ROLE = "Call Centre";
@@ -96,44 +97,35 @@ export default async function CallCentrePage() {
         </header>
 
         <div className="vehicle-menu-tiles">
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Call Centre Maintenance Menu</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/call-centre/help">
-                Call Centre Maintenance Information / Help
-              </Link>
-            </div>
-          </section>
+          <MenuSection title="Call Centre Maintenance Menu">
+            <Link className="vehicle-menu-link" href="/call-centre/help">
+              Call Centre Maintenance Information / Help
+            </Link>
+          </MenuSection>
 
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Incident Section</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/call-centre/incident/capture">
-                1) Capture a New Incident
-              </Link>
-              <Link className="vehicle-menu-link" href="/call-centre/incident/edit">
-                2) Edit / Update an Existing Incident
-              </Link>
-              <Link className="vehicle-menu-link" href="/call-centre/notifications">
-                3) Notification List for eMail Addresses
-              </Link>
-              <Link className="vehicle-menu-link" href="/call-centre/reports">
-                4) Reports
-              </Link>
-            </div>
-          </section>
+          <MenuSection title="Incident Section">
+            <Link className="vehicle-menu-link" href="/call-centre/incident/capture">
+              1) Capture a New Incident
+            </Link>
+            <Link className="vehicle-menu-link" href="/call-centre/incident/edit">
+              2) Edit / Update an Existing Incident
+            </Link>
+            <Link className="vehicle-menu-link" href="/call-centre/notifications">
+              3) Notification List for eMail Addresses
+            </Link>
+            <Link className="vehicle-menu-link" href="/call-centre/reports">
+              4) Reports
+            </Link>
+          </MenuSection>
 
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Booking Section</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/call-centre/bookings/notifications">
-                1) Notification e-mail Addresses
-              </Link>
-              <Link className="vehicle-menu-link" href="/call-centre/bookings/help">
-                Booking information/help
-              </Link>
-            </div>
-          </section>
+          <MenuSection title="Booking Section">
+            <Link className="vehicle-menu-link" href="/call-centre/bookings/notifications">
+              1) Notification e-mail Addresses
+            </Link>
+            <Link className="vehicle-menu-link" href="/call-centre/bookings/help">
+              Booking information/help
+            </Link>
+          </MenuSection>
         </div>
       </section>
     </main>

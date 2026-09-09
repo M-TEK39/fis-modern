@@ -11,6 +11,8 @@ import {
 import { getSession } from "@/lib/session";
 
 const VEHICLE_MANAGEMENT_PERMISSION = 1;
+const REPORTS_ROLE = "Reports";
+const FIRST_REPORT_PAGE = 1;
 const REMARK_CATEGORIES = new Set([
   "General",
   "Missing",
@@ -40,6 +42,12 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 }
 
+function hasReportsRole(roles: readonly string[]) {
+  return roles.some(
+    (role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0,
+  );
+}
+
 async function authorizeReport() {
   const session = await getSession();
   if (session.status === "unavailable") {
@@ -57,6 +65,13 @@ async function authorizeReport() {
   }
 
   if (!hasVehicleManagementPermission(session.accessLevel)) {
+    return {
+      ok: false as const,
+      message: "You do not have permission to view vehicle status reports.",
+    };
+  }
+
+  if (!hasReportsRole(session.roles)) {
     return {
       ok: false as const,
       message: "You do not have permission to view vehicle status reports.",
@@ -83,6 +98,20 @@ function getOptionalCode(formData: FormData, key: string, label: string) {
   }
 
   return code;
+}
+
+function getRequestedPage(formData: FormData) {
+  const value = getText(formData, "page");
+  if (!value) {
+    return FIRST_REPORT_PAGE;
+  }
+
+  const page = Number(value);
+  if (!Number.isSafeInteger(page) || page < FIRST_REPORT_PAGE) {
+    throw new Error("Page must be a positive whole number.");
+  }
+
+  return page;
 }
 
 function getReportFilters(formData: FormData): VehicleStatusReportFilters {
@@ -120,7 +149,10 @@ export async function loadVehicleStatusReportAction(
   }
 
   try {
-    const report = await getVehicleStatusReport(getReportFilters(formData));
+    const report = await getVehicleStatusReport(
+      getReportFilters(formData),
+      getRequestedPage(formData),
+    );
     return { status: "success", report };
   } catch (error) {
     console.error(
@@ -181,7 +213,7 @@ export async function submitVehicleStatusRemarkAction(
       await addVehicleRemarkAgainstApi(vmfCode, category, remarkText);
     }
 
-    const report = await getVehicleStatusReport(getReportFilters(formData));
+    const report = await getVehicleStatusReport(getReportFilters(formData), FIRST_REPORT_PAGE);
     return {
       status: "success",
       message:

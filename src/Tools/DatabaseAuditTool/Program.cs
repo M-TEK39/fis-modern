@@ -18,12 +18,70 @@ public static class Program
         new("contract", true),
         new("site", true),
         new("department", true),
+        new("journal_detail", true),
         new("Call_centre", false),
         new("user_access_old1", false),
         new("Legacy_User_Credentials", false),
         new("EntraId_User_Mapping", false),
         new("fis_session_tokens", false),
         new("fis_data_fix_audit", false),
+    ];
+
+    // These names are derived from the read-only legacy DDL under
+    // backup/sources/GGMT.Database/SQLScripts/v2.0.0. They are deliberately
+    // kept as an allow-listed audit contract instead of being loaded from a
+    // database or an arbitrary file path at runtime.
+    private static readonly string[] LegacySiteCompatibilityColumns =
+    [
+        "financial_system_activate_date",
+        "export_is_active",
+        "date_last_exported",
+        "Service_Kilometres",
+        "Service_Years",
+        "Overhead_Percentage",
+        "province_code",
+        "notes",
+        "user_access_code",
+    ];
+
+    private static readonly string[] LegacyJobCardRequiredColumns =
+    [
+        "jc_code",
+        "vmf_code",
+        "extra_code",
+        "status_code",
+        "captured_by",
+    ];
+
+    private static readonly string[] ModernJobCardRequiredColumns =
+    [
+        "job_card_id",
+        "vmf_code",
+        "extra_code",
+        "status_code",
+        "priority",
+        "jcs_comment",
+        "authorizer",
+        "reviewed",
+        "date_created",
+        "is_deleted",
+    ];
+
+    private static readonly string[] JournalDetailRequiredColumns =
+    [
+        "journal_detail_id",
+        "journal_detail_code",
+        "journal_code",
+        "department_code",
+        "site_code",
+        "vmf_code",
+        "journal_detail_type_code",
+        "journal_detail_isdebit",
+        "journal_detail_quantity",
+        "journal_detail_tariff",
+        "journal_detail_amount",
+        "journal_detail_description",
+        "journal_detail_date",
     ];
 
     public static async Task Main(string[] args)
@@ -44,7 +102,7 @@ public static class Program
             await connection.OpenAsync();
             Console.Error.WriteLine($"Auditing database '{connection.Database}' (read-only).");
 
-            var report = await BuildReportAsync(connection);
+            var report = await BuildReportAsync(connection, options.LegacyDdlRoot);
             var output = options.Format switch
             {
                 "json" => JsonSerializer.Serialize(report, JsonOptions),
@@ -73,6 +131,7 @@ public static class Program
     {
         var format = DefaultFormat;
         string? outputPath = null;
+        string? legacyDdlRoot = null;
         var showHelp = false;
 
         foreach (var argument in args)
@@ -99,10 +158,18 @@ public static class Program
                 continue;
             }
 
+            if (argument.StartsWith("--ddl-root=", StringComparison.Ordinal))
+            {
+                legacyDdlRoot = argument["--ddl-root=".Length..];
+                if (string.IsNullOrWhiteSpace(legacyDdlRoot))
+                    throw new InvalidOperationException("--ddl-root requires a directory path.");
+                continue;
+            }
+
             throw new InvalidOperationException($"Unknown option '{argument}'.");
         }
 
-        return new AuditOptions(format, outputPath, showHelp);
+        return new AuditOptions(format, outputPath, legacyDdlRoot, showHelp);
     }
 
     private static string ResolveRequiredConnectionString()
@@ -166,10 +233,29 @@ public static class Program
         }
     }
 
-    private static async Task<AuditReport> BuildReportAsync(SqlConnection connection)
+    private static async Task<AuditReport> BuildReportAsync(
+        SqlConnection connection,
+        string? legacyDdlRoot
+    )
     {
         var issues = new List<AuditIssue>();
         var tableAvailability = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        var legacySchemaAudit = await LegacySchemaAudit.BuildAsync(connection, legacyDdlRoot);
+        issues.AddRange(
+            legacySchemaAudit.Issues.Select(
+                issue =>
+                    new AuditIssue(
+                        issue.IssueCode,
+                        issue.Severity,
+                        issue.TableName,
+                        issue.FieldName,
+                        null,
+                        issue.Occurrences,
+                        issue.Description,
+                        issue.RecommendedAction
+                    )
+            )
+        );
 
         foreach (var table in RequiredTables)
         {
@@ -243,15 +329,131 @@ public static class Program
         if (tableAvailability.GetValueOrDefault("Call_centre"))
             await AuditCallCentreSchemaAsync(connection, issues);
 
+        await AuditCompatibilitySchemaAsync(connection, tableAvailability, issues);
+
         var errorCount = issues.Count(issue => issue.Severity == "error");
         var warningCount = issues.Count(issue => issue.Severity == "warning");
         return new AuditReport(
             DateTimeOffset.UtcNow,
             connection.Database,
+            legacySchemaAudit.ReferenceRoot,
             issues,
             errorCount,
             warningCount
         );
+    }
+
+    private static async Task AuditCompatibilitySchemaAsync(
+        SqlConnection connection,
+        IReadOnlyDictionary<string, bool> tableAvailability,
+        List<AuditIssue> issues
+    )
+    {
+        if (tableAvailability.GetValueOrDefault("site"))
+            await AuditLegacySiteSchemaAsync(connection, issues);
+
+        await AuditJobCardSchemaAsync(connection, issues);
+
+        if (tableAvailability.GetValueOrDefault("journal_detail"))
+            await AuditRequiredColumnsAsync(
+                connection,
+                issues,
+                "journal_detail",
+                JournalDetailRequiredColumns,
+                "The legacy journal_detail table is missing columns required by the finance execution path.",
+                "Restore the exact client journal_detail shape or stop the finance cutover for manual review."
+            );
+    }
+
+    private static async Task AuditLegacySiteSchemaAsync(
+        SqlConnection connection,
+        List<AuditIssue> issues
+    )
+    {
+        foreach (var column in LegacySiteCompatibilityColumns)
+        {
+            if (await ColumnsExistAsync(connection, "site", column))
+                continue;
+
+            issues.Add(
+                new AuditIssue(
+                    "SCHEMA_LEGACY_COLUMN_MISSING",
+                    "warning",
+                    "site",
+                    column,
+                    null,
+                    1,
+                    "A column documented by the legacy site schema is absent from this database.",
+                    "Keep the runtime site projection guarded and use the documented legacy fallback; do not issue a static EF query for this column."
+                )
+            );
+        }
+    }
+
+    private static async Task AuditJobCardSchemaAsync(
+        SqlConnection connection,
+        List<AuditIssue> issues
+    )
+    {
+        var modernAvailable = await TableExistsAsync(connection, "job_cards");
+        var legacyAvailable = await TableExistsAsync(connection, "Jobcards");
+
+        if (!modernAvailable && !legacyAvailable)
+        {
+            issues.Add(
+                new AuditIssue(
+                    "SCHEMA_REQUIRED_COMPATIBILITY_TABLE_MISSING",
+                    "error",
+                    "job_cards/Jobcards",
+                    null,
+                    null,
+                    1,
+                    "Neither the modern job_cards table nor the documented legacy Jobcards table is present.",
+                    "Restore one approved job-card schema before enabling job-card routes; do not create a guessed replacement table."
+                )
+            );
+            return;
+        }
+
+        if (modernAvailable)
+            await AuditRequiredColumnsAsync(
+                connection,
+                issues,
+                "job_cards",
+                ModernJobCardRequiredColumns,
+                "The modern job_cards table is missing columns required by the modern job-card route.",
+                "Compare the table with the approved modern schema and stop the job-card cutover for manual review."
+            );
+
+        if (legacyAvailable)
+            await AuditRequiredColumnsAsync(
+                connection,
+                issues,
+                "Jobcards",
+                LegacyJobCardRequiredColumns,
+                "The legacy Jobcards table is missing columns required by the compatibility repository.",
+                "Compare the table with dbo.Jobcards.Table.sql and stop the job-card cutover for manual review."
+            );
+    }
+
+    private static async Task AuditRequiredColumnsAsync(
+        SqlConnection connection,
+        List<AuditIssue> issues,
+        string table,
+        IReadOnlyCollection<string> requiredColumns,
+        string description,
+        string recommendation
+    )
+    {
+        var missingColumns = new List<string>();
+        foreach (var column in requiredColumns)
+        {
+            if (!await ColumnsExistAsync(connection, table, column))
+                missingColumns.Add(column);
+        }
+
+        if (missingColumns.Count > 0)
+            AddUnexpectedShapeIssue(issues, table, string.Join(',', missingColumns), description, recommendation);
     }
 
     private static async Task AuditUsersAsync(SqlConnection connection, List<AuditIssue> issues)
@@ -372,9 +574,9 @@ public static class Program
                 """
                 SELECT COUNT_BIG(*)
                 FROM dbo.user_access_old1 legacy_user
-                LEFT JOIN dbo.TS_Users current_user
-                  ON current_user.user_access_code = legacy_user.user_access_code
-                WHERE current_user.user_access_code IS NULL;
+                LEFT JOIN dbo.TS_Users current_users
+                  ON current_users.user_access_code = legacy_user.user_access_code
+                WHERE current_users.user_access_code IS NULL;
                 """,
                 "A legacy authentication record has no matching TS_Users record.",
                 "Resolve the identity mapping manually before enabling Microsoft sign-in or password back-fix."
@@ -433,9 +635,12 @@ public static class Program
             SELECT COUNT_BIG(*)
             FROM dbo.Legacy_User_Credentials
             WHERE NULLIF(LTRIM(RTRIM(password_hash)), N'') IS NULL
-               OR NULLIF(LTRIM(RTRIM(password_salt)), N'') IS NULL;
+               OR (
+                    NULLIF(LTRIM(RTRIM(password_salt)), N'') IS NULL
+                    AND LEFT(LTRIM(RTRIM(password_hash)), 4) NOT IN (N'$2a$', N'$2b$', N'$2y$')
+               );
             """,
-            "Credential records are missing the hash or salt required by the legacy login path.",
+            "Credential records are missing a password hash or the external salt required by their hash format. BCrypt hashes embed their salt and do not require password_salt.",
             "Repair from an approved credential migration; never generate or print passwords in an audit."
         );
 
@@ -843,7 +1048,9 @@ public static class Program
     private static void AddUnexpectedShapeIssue(
         List<AuditIssue> issues,
         string table,
-        string columns
+        string columns,
+        string description = "A required audit column is missing, so this data rule was not evaluated.",
+        string recommendation = "Compare the database to the client schema and resolve manually; the tool will not reshape it."
     )
     {
         issues.Add(
@@ -854,8 +1061,8 @@ public static class Program
                 columns,
                 null,
                 1,
-                "A required audit column is missing, so this data rule was not evaluated.",
-                "Compare the database to the client schema and resolve manually; the tool will not reshape it."
+                description,
+                recommendation
             )
         );
     }
@@ -925,6 +1132,7 @@ public static class Program
         var builder = new StringBuilder();
         builder.AppendLine($"FIS database audit: {report.DatabaseName}");
         builder.AppendLine($"Generated UTC: {report.GeneratedAtUtc:O}");
+        builder.AppendLine($"Legacy DDL reference: {report.LegacyReferenceRoot ?? "unavailable"}");
         builder.AppendLine($"Errors: {report.ErrorCount}; warnings: {report.WarningCount}");
         builder.AppendLine();
 
@@ -995,6 +1203,9 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine("Connection: set ConnectionStrings__Default to a real target database.");
         Console.WriteLine(
+            "Legacy DDL: set FIS_LEGACY_DDL_ROOT or pass --ddl-root=backup/sources/GGMT.Database/SQLScripts/v2.0.0."
+        );
+        Console.WriteLine(
             "Exit codes: 0 clean, 2 data-quality issues found, 1 audit could not run."
         );
         Console.WriteLine(
@@ -1009,13 +1220,19 @@ public static class Program
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    private sealed record AuditOptions(string Format, string? OutputPath, bool ShowHelp);
+    private sealed record AuditOptions(
+        string Format,
+        string? OutputPath,
+        string? LegacyDdlRoot,
+        bool ShowHelp
+    );
 
     private sealed record TableSpec(string Name, bool Required);
 
     private sealed record AuditReport(
         DateTimeOffset GeneratedAtUtc,
         string DatabaseName,
+        string? LegacyReferenceRoot,
         IReadOnlyList<AuditIssue> Issues,
         int ErrorCount,
         int WarningCount

@@ -14,7 +14,7 @@ node_modules
 .env.production.local
 .venv
 .claude
-.dockerignore
+!.dockerignore
 
 # Local Markdown files
 *.md

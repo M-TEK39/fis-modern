@@ -31,7 +31,7 @@ export async function GET(request: Request) {
       userId: integer("userId"),
       primaryKey: query.get("primaryKey") || undefined,
       pageNumber: integer("pageNumber") ?? 1,
-      pageSize: integer("pageSize") ?? 50,
+      pageSize: integer("pageSize") ?? 24,
     });
     const rows = [
       ["Timestamp", "Action", "Table", "PK", "Changed By", "User Code", "Changes"]

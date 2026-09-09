@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useFormStatus } from "react-dom";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
 const SECURITY_QUESTIONS = [
   "What was your childhood nickname?",
   "What school did you attend for sixth grade?",
@@ -21,9 +25,9 @@ function SubmitButton() {
   const { pending } = useFormStatus();
 
   return (
-    <button className="button button-primary" type="submit" disabled={pending}>
+    <Button className="w-full" type="submit" disabled={pending}>
       {pending ? "Updating..." : "Change Password"}
-    </button>
+    </Button>
   );
 }
 
@@ -46,12 +50,18 @@ export default function ChangePasswordQuestionForm({
     username && !users.some((user) => user.userName?.toLowerCase() === username.toLowerCase());
 
   return (
-    <form className="vehicle-status-maintenance-panel" action={action}>
-      <div className="form-grid">
-        <div className="field">
-          <label htmlFor="change-question-username">Username</label>
+    <form className="flex flex-col gap-6" action={action}>
+      <div className="flex flex-col gap-6">
+        <div className="grid gap-2">
+          <Label htmlFor="change-question-username">Username</Label>
           {canManageOthers ? (
-            <select id="change-question-username" name="username" defaultValue={username} required>
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm"
+              id="change-question-username"
+              name="username"
+              defaultValue={username}
+              required
+            >
               <option value="">Please select a Username</option>
               {selectedUserIsMissing ? (
                 <option value={username}>{username} (selected)</option>
@@ -66,7 +76,7 @@ export default function ChangePasswordQuestionForm({
               ))}
             </select>
           ) : (
-            <input
+            <Input
               id="change-question-username"
               name="username"
               type="text"
@@ -75,9 +85,9 @@ export default function ChangePasswordQuestionForm({
             />
           )}
         </div>
-        <div className="field">
-          <label htmlFor="change-question-old-password">Old Password</label>
-          <input
+        <div className="grid gap-2">
+          <Label htmlFor="change-question-old-password">Old Password</Label>
+          <Input
             id="change-question-old-password"
             name="oldPassword"
             type="password"
@@ -85,9 +95,9 @@ export default function ChangePasswordQuestionForm({
             required
           />
         </div>
-        <div className="field">
-          <label htmlFor="change-question-new-password">New Password</label>
-          <input
+        <div className="grid gap-2">
+          <Label htmlFor="change-question-new-password">New Password</Label>
+          <Input
             id="change-question-new-password"
             name="newPassword"
             type="password"
@@ -96,9 +106,9 @@ export default function ChangePasswordQuestionForm({
             required
           />
         </div>
-        <div className="field">
-          <label htmlFor="change-question-confirm-password">Confirm New Password</label>
-          <input
+        <div className="grid gap-2">
+          <Label htmlFor="change-question-confirm-password">Confirm New Password</Label>
+          <Input
             id="change-question-confirm-password"
             name="confirmNewPassword"
             type="password"
@@ -107,9 +117,10 @@ export default function ChangePasswordQuestionForm({
             required
           />
         </div>
-        <div className="field form-group-full">
-          <label htmlFor="change-question-security-question">New Password Question</label>
+        <div className="grid gap-2">
+          <Label htmlFor="change-question-security-question">New Password Question</Label>
           <select
+            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm"
             id="change-question-security-question"
             name="securityQuestion"
             defaultValue="Select Question..."
@@ -123,9 +134,9 @@ export default function ChangePasswordQuestionForm({
             ))}
           </select>
         </div>
-        <div className="field">
-          <label htmlFor="change-question-security-answer">New Password Answer</label>
-          <input
+        <div className="grid gap-2">
+          <Label htmlFor="change-question-security-answer">New Password Answer</Label>
+          <Input
             id="change-question-security-answer"
             name="securityAnswer"
             type="text"
@@ -133,9 +144,9 @@ export default function ChangePasswordQuestionForm({
             required
           />
         </div>
-        <div className="field">
-          <label htmlFor="change-question-email">Email Address</label>
-          <input
+        <div className="grid gap-2">
+          <Label htmlFor="change-question-email">Email Address</Label>
+          <Input
             id="change-question-email"
             name="email"
             type="email"
@@ -145,14 +156,14 @@ export default function ChangePasswordQuestionForm({
           />
         </div>
       </div>
-      <p className="muted-copy">
+      <p className="text-xs leading-relaxed text-muted-foreground">
         Use at least 8 characters with uppercase, lowercase, a number, and a special character.
       </p>
-      <div className="button-row">
+      <div className="flex flex-col gap-3">
         <SubmitButton />
-        <Link className="button button-secondary" href="/home">
-          Cancel
-        </Link>
+        <Button asChild className="w-full" variant="outline">
+          <Link href="/home">Cancel</Link>
+        </Button>
       </div>
     </form>
   );

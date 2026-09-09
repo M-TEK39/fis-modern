@@ -69,14 +69,12 @@ public class FinanceController : BaseApiController
                 );
             }
 
-            var totalTransactions = await _context.JournalDetails.CountAsync(jd =>
-                !jd.is_deleted && jd.journal_detail_date.Date == batch.batch_date.Date
-            );
-
-            var processedTransactions = await _context.JournalDetails.CountAsync(jd =>
-                !jd.is_deleted
-                && jd.journal_detail_date.Date == batch.batch_date.Date
-                && jd.journal_detail_date_posted.HasValue
+            var batchJournalDetails = (await _journalService.GetAllJournalDetailsAsync())
+                .Where(jd => !jd.is_deleted && jd.journal_detail_date.Date == batch.batch_date.Date)
+                .ToList();
+            var totalTransactions = batchJournalDetails.Count;
+            var processedTransactions = batchJournalDetails.Count(jd =>
+                jd.journal_detail_date_posted.HasValue
             );
 
             return Ok(
@@ -227,12 +225,11 @@ public class FinanceController : BaseApiController
             }
 
             var batchDate = latestBatch.batch_date.Date;
-            var journalDetailCodes = await _context
-                .JournalDetails.AsNoTracking()
+            var journalDetailCodes = (await _journalService.GetAllJournalDetailsAsync())
                 .Where(jd => !jd.is_deleted && jd.journal_detail_date.Date == batchDate)
                 .Select(jd => jd.journal_detail_code)
                 .Distinct()
-                .ToListAsync();
+                .ToList();
 
             if (journalDetailCodes.Count == 0)
             {
@@ -296,11 +293,9 @@ public class FinanceController : BaseApiController
             }
 
             var batchDate = latestBatch.batch_date.Date;
-            var journalDetails = await _context
-                .JournalDetails.Where(jd =>
-                    !jd.is_deleted && jd.journal_detail_date.Date == batchDate
-                )
-                .ToListAsync();
+            var journalDetails = (await _journalService.GetAllJournalDetailsAsync())
+                .Where(jd => !jd.is_deleted && jd.journal_detail_date.Date == batchDate)
+                .ToList();
 
             foreach (var jd in journalDetails)
             {
@@ -326,6 +321,8 @@ public class FinanceController : BaseApiController
             latestBatch.date_updated = DateTime.UtcNow;
             latestBatch.modified_by_user_code = GetCurrentUserId();
 
+            foreach (var journalDetail in journalDetails)
+                await _journalService.UpdateJournalDetailAsync(journalDetail);
             await _context.SaveChangesAsync();
 
             return Ok(
@@ -364,13 +361,13 @@ public class FinanceController : BaseApiController
             var now = DateTime.UtcNow;
             var userCode = GetCurrentUserId();
 
-            var unpostedRows = await _context
-                .JournalDetails.Where(jd =>
+            var unpostedRows = (await _journalService.GetAllJournalDetailsAsync())
+                .Where(jd =>
                     !jd.is_deleted
                     && jd.journal_detail_date.Date == batchDate
                     && !jd.journal_detail_date_posted.HasValue
                 )
-                .ToListAsync();
+                .ToList();
 
             foreach (var row in unpostedRows)
             {
@@ -383,6 +380,8 @@ public class FinanceController : BaseApiController
             latestBatch.date_updated = now;
             latestBatch.modified_by_user_code = userCode;
 
+            foreach (var journalDetail in unpostedRows)
+                await _journalService.UpdateJournalDetailAsync(journalDetail);
             await _context.SaveChangesAsync();
 
             return Ok(
@@ -553,9 +552,8 @@ public class FinanceController : BaseApiController
             var invalidJournals = await _context.JournalWithInvalidBasCodes.CountAsync(x =>
                 !x.is_deleted
             );
-            var uninvoicedJournals = await _context.JournalDetails.CountAsync(x =>
-                !x.is_deleted && !x.journal_detail_date_posted.HasValue
-            );
+            var uninvoicedJournals = (await _journalService.GetAllJournalDetailsAsync())
+                .Count(x => !x.is_deleted && !x.journal_detail_date_posted.HasValue);
 
             return Ok(
                 new
@@ -727,17 +725,13 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var query = _context
-                .JournalDetails.AsNoTracking()
+            var query = (await _journalService.GetAllJournalDetailsAsync())
                 .Where(jd => !jd.is_deleted && !jd.journal_detail_date_posted.HasValue);
 
             if (departmentCode.HasValue)
-            {
-                var dept = (short)departmentCode.Value;
-                query = query.Where(jd => jd.department_code == dept);
-            }
+                query = query.Where(jd => jd.department_code == (short)departmentCode.Value);
 
-            var response = await query
+            var response = query
                 .OrderByDescending(jd => jd.journal_detail_date)
                 .Select(jd => new UninvoicedJournalDto
                 {
@@ -749,7 +743,7 @@ public class FinanceController : BaseApiController
                     TransactionDate = jd.journal_detail_date,
                 })
                 .Take(1000)
-                .ToListAsync();
+                .ToList();
 
             return Ok(response);
         }
@@ -1467,17 +1461,16 @@ public class FinanceController : BaseApiController
         var hasJournalCode = long.TryParse(trimmed, out var journalCode);
         var hasJournalDetailId = int.TryParse(trimmed, out var journalDetailId);
 
-        var roots = await _context
-            .JournalDetails.AsNoTracking()
+        var journalDetails = (await _journalService.GetAllJournalDetailsAsync())
+            .Where(jd => !jd.is_deleted)
+            .ToList();
+        var roots = journalDetails
             .Where(jd =>
-                !jd.is_deleted
-                && (
-                    (hasJournalCode && jd.journal_code == journalCode)
-                    || (hasJournalDetailId && jd.journal_detail_id == journalDetailId)
-                )
+                (hasJournalCode && jd.journal_code == journalCode)
+                || (hasJournalDetailId && jd.journal_detail_id == journalDetailId)
             )
             .Select(jd => jd.journal_detail_code)
-            .ToListAsync();
+            .ToList();
 
         if (roots.Count == 0)
         {
@@ -1490,11 +1483,9 @@ public class FinanceController : BaseApiController
 
         while (frontier.Count > 0)
         {
-            var matches = await _context
-                .JournalDetails.AsNoTracking()
+            var matches = journalDetails
                 .Where(jd =>
-                    !jd.is_deleted
-                    && jd.journal_detail_reversalof.HasValue
+                    jd.journal_detail_reversalof.HasValue
                     && frontier.Contains(jd.journal_detail_reversalof.Value)
                 )
                 .Select(jd => new
@@ -1505,7 +1496,7 @@ public class FinanceController : BaseApiController
                     jd.journal_detail_date,
                     jd.journal_detail_amount,
                 })
-                .ToListAsync();
+                .ToList();
 
             frontier = new List<Guid>();
             foreach (var row in matches)
@@ -2049,13 +2040,11 @@ public class FinanceController : BaseApiController
         bool reverseBatch
     )
     {
-        var query = _context
-            .JournalDetails.AsNoTracking()
-            .Where(jd =>
-                !jd.is_deleted
-                && jd.journal_detail_date.Date >= startDate
-                && jd.journal_detail_date.Date <= endDate
-            );
+        var query = (await _journalService.GetAllJournalDetailsAsync()).Where(jd =>
+            !jd.is_deleted
+            && jd.journal_detail_date.Date >= startDate
+            && jd.journal_detail_date.Date <= endDate
+        );
 
         if (departmentCode.HasValue)
         {
@@ -2063,7 +2052,7 @@ public class FinanceController : BaseApiController
             query = query.Where(jd => jd.department_code == dept);
         }
 
-        var rows = await query
+        var rows = query
             .OrderBy(jd => jd.journal_detail_date)
             .ThenBy(jd => jd.journal_detail_id)
             .Select(jd => new
@@ -2077,7 +2066,7 @@ public class FinanceController : BaseApiController
                 jd.journal_detail_description,
             })
             .Take(100000)
-            .ToListAsync();
+            .ToList();
 
         var lines = new List<string>();
         if (includeCustomerColumn)

@@ -30,6 +30,7 @@ namespace FIS.Api.Controllers;
 public class FinanceReportController : BaseApiController
 {
     private readonly FisDbContext _context;
+    private readonly IJournalDetailService _journalService;
     private readonly ITaxiRepository _taxiRepository;
     private readonly ITaxiLogRepository _taxiLogRepository;
     private readonly IPrivateHireRepository _privateHireRepository;
@@ -37,6 +38,7 @@ public class FinanceReportController : BaseApiController
 
     public FinanceReportController(
         FisDbContext context,
+        IJournalDetailService journalService,
         ITaxiRepository taxiRepository,
         ITaxiLogRepository taxiLogRepository,
         IPrivateHireRepository privateHireRepository,
@@ -44,6 +46,7 @@ public class FinanceReportController : BaseApiController
     )
     {
         _context = context;
+        _journalService = journalService;
         _taxiRepository = taxiRepository;
         _taxiLogRepository = taxiLogRepository;
         _privateHireRepository = privateHireRepository;
@@ -237,7 +240,7 @@ public class FinanceReportController : BaseApiController
             if (pm == null)
                 return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
 
-            var jdQuery = _context.JournalDetails.Where(jd =>
+            var jdQuery = (await _journalService.GetAllJournalDetailsAsync()).Where(jd =>
                 jd.journal_detail_date >= pm.PeriodStart
                 && jd.journal_detail_date < pm.PeriodEnd
                 && jd.journal_detail_isaccepted
@@ -247,9 +250,10 @@ public class FinanceReportController : BaseApiController
                 ? jdQuery.Where(jd => jd.site_code == id)
                 : jdQuery.Where(jd => jd.department_code == id);
 
-            var rows = await jdQuery
+            var journalDetailTypes = await _context.JournalDetailTypes.AsNoTracking().ToListAsync();
+            var rows = jdQuery
                 .Join(
-                    _context.JournalDetailTypes,
+                    journalDetailTypes,
                     jd => jd.journal_detail_type_code,
                     jdt => jdt.journal_detail_type_code,
                     (jd, jdt) => new { jd, jdt }
@@ -270,7 +274,7 @@ public class FinanceReportController : BaseApiController
                     total_quantity = g.Sum(x => x.jd.journal_detail_quantity),
                 })
                 .OrderBy(x => x.type_name)
-                .ToListAsync();
+                .ToList();
 
             var result = new
             {

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/notice-management")]
 [Authorize]
 public class NoticeManagementController : BaseApiController
 {

@@ -11,11 +11,40 @@ import {
   type AccidentPeriodReportRow,
   type AccidentPeriodReportStatus,
 } from "@/lib/api-accidents";
+import { DepartmentApiError, getDepartments, type DepartmentRecord } from "@/lib/api-departments";
+import { getSites, SiteApiError, type SiteRecord } from "@/lib/api-sites";
 import { getSession } from "@/lib/session";
 
 const ACCIDENTS_ROLE = "Accidents";
 type QueryValue = string | string[] | undefined;
 type ReportQuery = Record<string, QueryValue>;
+type LocationOption = { value: string; label: string };
+
+function getLocationOptions(
+  departments: readonly DepartmentRecord[],
+  sites: readonly SiteRecord[],
+): LocationOption[] {
+  const labelsByDepartmentNumber = new Map<string, Set<string>>();
+
+  function addOption(kind: string, description: string | null, departmentNumber: string | null) {
+    const value = departmentNumber?.trim();
+    if (!value) return;
+
+    const labels = labelsByDepartmentNumber.get(value) ?? new Set<string>();
+    labels.add(`${kind}: ${description?.trim() || "Unnamed"}`);
+    labelsByDepartmentNumber.set(value, labels);
+  }
+
+  departments.forEach((department) =>
+    addOption("Department", department.description, department.departmentNumber),
+  );
+  sites.forEach((site) => addOption("Site", site.description, site.departmentNumber));
+
+  return Array.from(labelsByDepartmentNumber, ([value, labels]) => ({
+    value,
+    label: `${Array.from(labels).join(" / ")} (${value})`,
+  })).toSorted((left, right) => left.label.localeCompare(right.label));
+}
 
 function getQueryValue(query: ReportQuery, ...keys: string[]) {
   for (const key of keys) {
@@ -185,6 +214,24 @@ async function PeriodReportContent({ searchParams }: { searchParams: Promise<Rep
     );
   }
 
+  let locationOptions: LocationOption[];
+  try {
+    const [departments, sites] = await Promise.all([getDepartments(), getSites()]);
+    locationOptions = getLocationOptions(departments, sites);
+  } catch (error) {
+    if (
+      (error instanceof DepartmentApiError && error.reason === "unauthorized") ||
+      (error instanceof SiteApiError && error.reason === "unauthorized")
+    ) {
+      return <SessionRecovery returnPath="/accidents/reports/period" />;
+    }
+    console.error(
+      "FIS accident period department/site lookup failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return <ErrorState />;
+  }
+
   const query = await searchParams;
   const departmentNumber = (getQueryValue(query, "departmentNumber", "xdept") ?? "").trim();
   const startDate = normalizeDate(getQueryValue(query, "startDate", "BDAT") ?? "");
@@ -233,13 +280,19 @@ async function PeriodReportContent({ searchParams }: { searchParams: Promise<Rep
       <form className="vehicle-status-maintenance-panel" method="get">
         <div className="form-grid">
           <div className="field">
-            <label htmlFor="accident-period-department">Department/Site Code</label>
-            <input
+            <label htmlFor="accident-period-department">Department or site</label>
+            <select
               id="accident-period-department"
               name="departmentNumber"
-              maxLength={30}
               defaultValue={departmentNumber}
-            />
+            >
+              <option value="">All departments and sites</option>
+              {locationOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="field">
             <label htmlFor="accident-period-start">Begin Date</label>

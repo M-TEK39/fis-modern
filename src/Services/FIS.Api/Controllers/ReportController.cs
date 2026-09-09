@@ -20,6 +20,8 @@ namespace FIS.Api.Controllers;
 [Produces("application/json")]
 public class ReportController : BaseApiController
 {
+    private const long VehicleManagementPermission = 1;
+
     private readonly IReportingService _reportingService;
     private readonly ILegacyReportResultService _legacyReportResultService;
     private readonly IFineRepository _fineRepository;
@@ -251,7 +253,7 @@ public class ReportController : BaseApiController
 
     /// <summary>
     /// New and In-Service vehicles report.
-    /// Returns all vehicles with status In-Service (1) or Out-of-Service (2),
+    /// Returns a page of vehicles with status In-Service (1) or Out-of-Service (2),
     /// optionally filtered by vehicle source (vs_code), hire type (type_code), or location.
     /// Includes ALL sources — including TSS (vs_code = 6) — which were previously
     /// missing from the legacy report due to a gap in Contract_Type_Group_Mapping.
@@ -260,6 +262,8 @@ public class ReportController : BaseApiController
     /// </summary>
     [HttpGet("new-in-service")]
     public async Task<ActionResult> GetNewAndInServiceReport(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24,
         [FromQuery] byte? vs_code = null,
         [FromQuery] short? type_code = null,
         [FromQuery] short? location_code = null,
@@ -269,10 +273,17 @@ public class ReportController : BaseApiController
         [FromQuery] string? search = null
     )
     {
+        if (!HasReportsRole() || !HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
         try
         {
             var reportPage = await _vehicleStatusReportRepository.GetPageAsync(
                 new VehicleStatusReportQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100),
                     vs_code,
                     type_code,
                     location_code,
@@ -381,7 +392,10 @@ public class ReportController : BaseApiController
             return Ok(
                 new
                 {
-                    total_count = result.Count,
+                    page = reportPage.Page,
+                    page_size = reportPage.PageSize,
+                    total_count = reportPage.TotalCount,
+                    total_pages = reportPage.TotalPages,
                     remarks_available = reportPage.RemarksAvailable,
                     filters_applied = new
                     {
@@ -2062,6 +2076,13 @@ public class ReportController : BaseApiController
         || reportKey.Equals("dept-site-period", StringComparison.OrdinalIgnoreCase);
 
     private bool HasReportsRole() => HasAnyRole("Reports");
+
+    private bool HasVehicleManagementPermission()
+    {
+        var accessLevelClaim = User.FindFirst("access_level")?.Value;
+        return long.TryParse(accessLevelClaim, out var accessLevel)
+            && (accessLevel & VehicleManagementPermission) == VehicleManagementPermission;
+    }
 
     private bool HasAnyRole(params string[] expectedRoles)
     {

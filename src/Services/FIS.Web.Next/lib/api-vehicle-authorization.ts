@@ -4,6 +4,7 @@ import { getForwardedAuthCookieHeader } from "@/lib/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
 const AUTHORIZATION_BASE_PATH = "api/vehicle/authorization";
+export const VEHICLE_AUTHORIZATION_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type VehicleAuthorization = {
@@ -45,10 +46,24 @@ export type VehicleAuthorization = {
   createdByUserCode: number | null;
 };
 
+export type VehicleAuthorizationQueuePage = {
+  data: VehicleAuthorization[];
+  page: number;
+  pageSize: number;
+  totalRecords: number;
+  totalPages: number;
+};
+
+export type VehicleAuthorizationQueuePageRequests = {
+  pendingPage?: number;
+  rejectedPage?: number;
+  authorizedPage?: number;
+};
+
 export type VehicleAuthorizationQueues = {
-  awaiting: VehicleAuthorization[];
-  rejected: VehicleAuthorization[];
-  authorized: VehicleAuthorization[];
+  awaiting: VehicleAuthorizationQueuePage;
+  rejected: VehicleAuthorizationQueuePage;
+  authorized: VehicleAuthorizationQueuePage;
 };
 
 export type VehicleAuthorizationMutation = {
@@ -107,19 +122,6 @@ function asNumber(value: unknown) {
   }
 
   return null;
-}
-
-function getCollection(payload: unknown) {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-
-  if (isRecord(payload)) {
-    const data = getValue(payload, "data", "items", "results");
-    return Array.isArray(data) ? data : [];
-  }
-
-  return [];
 }
 
 function toVehicleAuthorization(value: unknown): VehicleAuthorization | null {
@@ -245,13 +247,56 @@ async function requestApi(path: string, init: RequestInit = {}) {
   }
 }
 
-async function getAuthorizationQueue(path: string) {
-  const payload = await requestApi(`${AUTHORIZATION_BASE_PATH}/${path}`);
-  const vehicles = getCollection(payload)
+function requiredInteger(record: JsonRecord, key: string, minimum: number, label: string) {
+  const value = asNumber(record[key]);
+  if (value === null || !Number.isSafeInteger(value) || value < minimum) {
+    throw new VehicleAuthorizationApiError(
+      "invalid-response",
+      `The FIS API returned an invalid ${label}.`,
+    );
+  }
+
+  return value;
+}
+
+function sortQueue(path: "pending" | "rejected" | "authorized", vehicles: VehicleAuthorization[]) {
+  if (path === "pending") {
+    return vehicles.toSorted((left, right) =>
+      left.chassisNumber.localeCompare(right.chassisNumber),
+    );
+  }
+
+  return vehicles.toSorted(
+    (left, right) => dateValue(right.authorizationDate) - dateValue(left.authorizationDate),
+  );
+}
+
+function mapAuthorizationQueuePage(
+  payload: unknown,
+  requestedPage: number,
+): VehicleAuthorizationQueuePage {
+  if (!isRecord(payload) || !Array.isArray(payload.data)) {
+    throw new VehicleAuthorizationApiError(
+      "invalid-response",
+      "The FIS API returned an invalid vehicle authorization page.",
+    );
+  }
+
+  const page = requiredInteger(payload, "page", 1, "authorization page");
+  const pageSize = requiredInteger(payload, "pageSize", 1, "authorization page size");
+  const totalRecords = requiredInteger(payload, "totalRecords", 0, "authorization record count");
+  const totalPages = requiredInteger(payload, "totalPages", 0, "authorization page count");
+  const data = payload.data
     .map(toVehicleAuthorization)
     .filter((vehicle): vehicle is VehicleAuthorization => vehicle !== null);
 
-  return vehicles;
+  return {
+    data,
+    page: page || requestedPage,
+    pageSize,
+    totalRecords,
+    totalPages: Math.max(1, totalPages),
+  };
 }
 
 function dateValue(value: string | null) {
@@ -263,24 +308,34 @@ function dateValue(value: string | null) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-export async function getVehicleAuthorizationQueues(): Promise<VehicleAuthorizationQueues> {
-  const [awaiting, rejected, authorized] = await Promise.all([
-    getAuthorizationQueue("pending"),
-    getAuthorizationQueue("rejected"),
-    getAuthorizationQueue("authorized"),
-  ]);
+async function getAuthorizationQueue(
+  path: "pending" | "rejected" | "authorized",
+  page: number,
+): Promise<VehicleAuthorizationQueuePage> {
+  const requestedPage = Number.isSafeInteger(page) && page > 0 ? page : 1;
+  const query = new URLSearchParams({
+    page: String(requestedPage),
+    pageSize: String(VEHICLE_AUTHORIZATION_PAGE_SIZE),
+  });
+  const payload = await requestApi(`${AUTHORIZATION_BASE_PATH}/${path}?${query.toString()}`);
+  const result = mapAuthorizationQueuePage(payload, requestedPage);
 
   return {
-    awaiting: awaiting.toSorted((left, right) =>
-      left.chassisNumber.localeCompare(right.chassisNumber),
-    ),
-    rejected: rejected.toSorted(
-      (left, right) => dateValue(right.authorizationDate) - dateValue(left.authorizationDate),
-    ),
-    authorized: authorized.toSorted(
-      (left, right) => dateValue(right.authorizationDate) - dateValue(left.authorizationDate),
-    ),
+    ...result,
+    data: sortQueue(path, result.data),
   };
+}
+
+export async function getVehicleAuthorizationQueues(
+  pages: VehicleAuthorizationQueuePageRequests = {},
+): Promise<VehicleAuthorizationQueues> {
+  const [awaiting, rejected, authorized] = await Promise.all([
+    getAuthorizationQueue("pending", pages.pendingPage ?? 1),
+    getAuthorizationQueue("rejected", pages.rejectedPage ?? 1),
+    getAuthorizationQueue("authorized", pages.authorizedPage ?? 1),
+  ]);
+
+  return { awaiting, rejected, authorized };
 }
 
 async function postAuthorizationAction(
