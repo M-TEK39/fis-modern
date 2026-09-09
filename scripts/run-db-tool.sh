@@ -12,6 +12,10 @@ PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 tool="$1"
 shift
 
+# shellcheck source=load-local-env.sh
+source "$SCRIPT_DIR/load-local-env.sh"
+load_local_mssql_environment "$PROJECT_ROOT"
+
 if [[ "${1:-}" == "--" ]]; then
   shift
 fi

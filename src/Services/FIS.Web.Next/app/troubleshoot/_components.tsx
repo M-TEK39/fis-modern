@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { MenuSection } from "@/components/ui/menu-section";
 import type { TroubleshootUser } from "@/lib/api-troubleshoot";
 
 export const TROUBLESHOOTING_ROLE = "Trouble Shooting";
@@ -35,37 +36,32 @@ export function TroubleshootShell({
 
 export function TroubleshootMenu() {
   return (
-    <section className="vehicle-menu-tile" aria-labelledby="troubleshoot-menu-title">
-      <h2 className="vehicle-menu-header" id="troubleshoot-menu-title">
-        Troubleshoot Menu
-      </h2>
-      <div className="vehicle-menu-body">
-        <Link className="vehicle-menu-link" href="/troubleshoot/help">
-          Troubleshoot Maintenance Information / Help
-        </Link>
-        <Link className="vehicle-menu-link" href="/troubleshoot/log">
-          1) Troubleshoot Log
-        </Link>
-        <Link className="vehicle-menu-link" href="/troubleshoot/reports">
-          2) Troubleshoot General Reports
-        </Link>
-        <Link className="vehicle-menu-link" href="/troubleshoot/vehicle-master-edit">
-          3) Vehicle Master Edit
-        </Link>
-        <Link className="vehicle-menu-link" href="/vehicles/recovered">
-          4) Update Recovered(stolen) GG
-        </Link>
-        <Link className="vehicle-menu-link" href="/troubleshoot/odometer-corrections">
-          5) ODOMeter Corrections
-        </Link>
-        <Link className="vehicle-menu-link" href="/troubleshoot/remove-trips-no-routes">
-          6) Remove Trips that have No routes
-        </Link>
-        <Link className="vehicle-menu-link" href="/troubleshoot/approver-ranks">
-          7) Maintain trip approvers RANKS
-        </Link>
-      </div>
-    </section>
+    <MenuSection title="Troubleshoot Menu">
+      <Link className="vehicle-menu-link" href="/troubleshoot/help">
+        Troubleshoot Maintenance Information / Help
+      </Link>
+      <Link className="vehicle-menu-link" href="/troubleshoot/log">
+        1) Troubleshoot Log
+      </Link>
+      <Link className="vehicle-menu-link" href="/troubleshoot/reports">
+        2) Troubleshoot General Reports
+      </Link>
+      <Link className="vehicle-menu-link" href="/troubleshoot/vehicle-master-edit">
+        3) Vehicle Master Edit
+      </Link>
+      <Link className="vehicle-menu-link" href="/vehicles/recovered">
+        4) Update Recovered(stolen) GG
+      </Link>
+      <Link className="vehicle-menu-link" href="/troubleshoot/odometer-corrections">
+        5) ODOMeter Corrections
+      </Link>
+      <Link className="vehicle-menu-link" href="/troubleshoot/remove-trips-no-routes">
+        6) Remove Trips that have No routes
+      </Link>
+      <Link className="vehicle-menu-link" href="/troubleshoot/approver-ranks">
+        7) Maintain trip approvers RANKS
+      </Link>
+    </MenuSection>
   );
 }
 

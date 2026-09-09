@@ -5,6 +5,7 @@ import {
   deleteLogsheetAction,
   updateLogsheetAction,
 } from "@/app/log-sheets/actions";
+import { MenuSection } from "@/components/ui/menu-section";
 import type { LogsheetRecord } from "@/lib/api-logsheets";
 import type { SiteRecord } from "@/lib/api-sites";
 import type { VehicleOption } from "@/lib/api-vehicles";
@@ -47,40 +48,35 @@ export function LogsheetShell({
 
 export function LogsheetMenu({ canManage }: Readonly<{ canManage: boolean }>) {
   return (
-    <section className="vehicle-menu-tile" aria-labelledby="logsheet-menu-title">
-      <h2 className="vehicle-menu-header" id="logsheet-menu-title">
-        Logsheet Maintenance Menu
-      </h2>
-      <div className="vehicle-menu-body">
-        <Link className="vehicle-menu-link" href="/log-sheets/help">
-          Logsheet Maintenance Information / Help
-        </Link>
-        <Link className="vehicle-menu-link" href="/log-sheets/enter">
-          1) Enter a Logsheet
-        </Link>
-        {canManage ? (
-          <>
-            <Link className="vehicle-menu-link" href="/log-sheets/edit">
-              2) Edit a Logsheet
-            </Link>
-            <Link className="vehicle-menu-link" href="/log-sheets/delete">
-              3) Delete a Logsheet
-            </Link>
-          </>
-        ) : null}
-        <Link className="vehicle-menu-link" href="/log-sheets/reports/captured">
-          4) Report: Logsheets captured
-        </Link>
-        <Link className="vehicle-menu-link" href="/log-sheets/reports/total-km">
-          5) Report: Total Km per Class Code
-        </Link>
-        {canManage ? (
+    <MenuSection title="Logsheet Maintenance Menu">
+      <Link className="vehicle-menu-link" href="/log-sheets/help">
+        Logsheet Maintenance Information / Help
+      </Link>
+      <Link className="vehicle-menu-link" href="/log-sheets/enter">
+        1) Enter a Logsheet
+      </Link>
+      {canManage ? (
+        <>
           <Link className="vehicle-menu-link" href="/log-sheets/edit">
-            8) Edit Logsheets
+            2) Edit a Logsheet
           </Link>
-        ) : null}
-      </div>
-    </section>
+          <Link className="vehicle-menu-link" href="/log-sheets/delete">
+            3) Delete a Logsheet
+          </Link>
+        </>
+      ) : null}
+      <Link className="vehicle-menu-link" href="/log-sheets/reports/captured">
+        4) Report: Logsheets captured
+      </Link>
+      <Link className="vehicle-menu-link" href="/log-sheets/reports/total-km">
+        5) Report: Total Km per Class Code
+      </Link>
+      {canManage ? (
+        <Link className="vehicle-menu-link" href="/log-sheets/edit">
+          8) Edit Logsheets
+        </Link>
+      ) : null}
+    </MenuSection>
   );
 }
 

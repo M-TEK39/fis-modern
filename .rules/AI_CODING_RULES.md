@@ -46,6 +46,7 @@ The Next app is a standalone pnpm package. Keep its dependencies and scripts in 
 - Put typed REST calls in server-only modules under `src/Services/FIS.Web.Next/lib/`. Do not expose API credentials or browser bearer tokens. Forward the existing HttpOnly FIS session cookie from the server.
 - Use Server Actions or server route handlers for mutations and revalidate only the affected route/data after a successful mutation.
 - Keep the authenticated boundary dynamic and authorization-fresh. A fast navigation is not permission to serve stale protected data.
+- With Cache Components enabled, put uncached session/permission/protected-data work behind a route `loading.tsx` or local `<Suspense>` fallback so client navigation stays instant while the server revalidates access. Do not wrap an entire shared layout's `{children}` tree in one session-loading boundary. Do not disable instant navigation or cache protected session state to silence the diagnostic.
 - Keep client bundles small: do not import server adapters, database code, or secrets into Client Components.
 - Use TypeScript strictness and derive types from the actual API contract. Do not use `any` to silence a mismatch.
 

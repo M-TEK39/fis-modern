@@ -10,6 +10,7 @@ import {
   TaxiUnavailable,
   valueOrDash,
 } from "@/app/taxis/_components";
+import { MenuSection } from "@/components/ui/menu-section";
 import { getTaxis, TaxiApiError } from "@/lib/api-taxis";
 import { getSession } from "@/lib/session";
 
@@ -62,99 +63,84 @@ export default async function TaxisPage({
           </header>
           <TaxiNotice query={query} />
           <div className="vehicle-menu-tiles">
-            <section className="vehicle-menu-tile">
-              <h2 className="vehicle-menu-header">Taxi Requisitions</h2>
-              <div className="vehicle-menu-body">
-                <Link className="vehicle-menu-link" href="/taxis/requests?mode=add">
-                  1) Enter Taxi Requisition
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/requests?mode=add&previousBas=1">
-                  1.1) Enter Taxi Requisition using Previous Fin Years BAS Codes
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/requests?mode=edit">
-                  2) Edit Taxi Requisition
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/requests/cancel">
-                  3) Cancel Taxi Requisition
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/requests/reprint">
-                  4) Re-Print A Requisition
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/requests/pending">
-                  5) Pending Requests
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/requests/pending-jia">
-                  6) Pending JIA Pick-ups
-                </Link>
-              </div>
-            </section>
-            <section className="vehicle-menu-tile">
-              <h2 className="vehicle-menu-header">Taxi Logs</h2>
-              <div className="vehicle-menu-body">
-                <Link className="vehicle-menu-link" href="/taxis/logs/enter">
-                  1) Enter Taxi logsheet
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/logs/edit">
-                  2) Edit Taxi Logsheet
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/logs/reprint">
-                  3) Reprint Taxi Log
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/logs/white-log">
-                  3) Enter Taxi white log (GG vehicles not for claiming)
-                </Link>
-              </div>
-            </section>
+            <MenuSection title="Taxi Requisitions">
+              <Link className="vehicle-menu-link" href="/taxis/requests?mode=add">
+                1) Enter Taxi Requisition
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/requests?mode=add&previousBas=1">
+                1.1) Enter Taxi Requisition using Previous Fin Years BAS Codes
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/requests?mode=edit">
+                2) Edit Taxi Requisition
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/requests/cancel">
+                3) Cancel Taxi Requisition
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/requests/reprint">
+                4) Re-Print A Requisition
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/requests/pending">
+                5) Pending Requests
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/requests/pending-jia">
+                6) Pending JIA Pick-ups
+              </Link>
+            </MenuSection>
+            <MenuSection title="Taxi Logs">
+              <Link className="vehicle-menu-link" href="/taxis/logs/enter">
+                1) Enter Taxi logsheet
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/logs/edit">
+                2) Edit Taxi Logsheet
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/logs/reprint">
+                3) Reprint Taxi Log
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/logs/white-log">
+                3) Enter Taxi white log (GG vehicles not for claiming)
+              </Link>
+            </MenuSection>
             {hasRole(session.roles) ? (
-              <section className="vehicle-menu-tile">
-                <h2 className="vehicle-menu-header">Maintenance</h2>
-                <div className="vehicle-menu-body">
-                  <Link className="vehicle-menu-link" href="/taxis/maintenance/info">
-                    1) Taxi Information Maintenance
-                  </Link>
-                </div>
-              </section>
+              <MenuSection title="Maintenance">
+                <Link className="vehicle-menu-link" href="/taxis/maintenance/info">
+                  1) Taxi Information Maintenance
+                </Link>
+              </MenuSection>
             ) : null}
-            <section className="vehicle-menu-tile">
-              <h2 className="vehicle-menu-header">Taxi Reports</h2>
-              <div className="vehicle-menu-body">
-                <Link className="vehicle-menu-link" href="/taxis/reports/one-taxi-number">
-                  1) Report On One Taxi Number
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/reports/logs-per-user">
-                  2) Number Of Taxi Logs Captured Per User For Date
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/reports/old-requisitions">
-                  3) Old Requisitions For Period
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/reports/taxis-per-company">
-                  4) Taxis Per Hire Company
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/reports/taxis-per-department">
-                  5) List Of All Taxis In Various Departments
-                </Link>
-                <Link
-                  className="vehicle-menu-link"
-                  href="/taxis/reports/taxis-inservice-per-department"
-                >
-                  6) List Of All Taxis In Service In Various Departments
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/reports/logs-requisitions-status">
-                  7) Taxi Logs and Requisitions Status Reports
-                </Link>
-                <Link className="vehicle-menu-link" href="/taxis/reports/financial">
-                  8) Financial Reports: Taxis
-                </Link>
-              </div>
-            </section>
-            <section className="vehicle-menu-tile">
-              <h2 className="vehicle-menu-header">Other Taxi Maintenance Options</h2>
-              <div className="vehicle-menu-body">
-                <Link className="vehicle-menu-link" href="/taxis/scan-requisition">
-                  1) Scan Taxi Requisition
-                </Link>
-              </div>
-            </section>
+            <MenuSection title="Taxi Reports">
+              <Link className="vehicle-menu-link" href="/taxis/reports/one-taxi-number">
+                1) Report On One Taxi Number
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/reports/logs-per-user">
+                2) Number Of Taxi Logs Captured Per User For Date
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/reports/old-requisitions">
+                3) Old Requisitions For Period
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/reports/taxis-per-company">
+                4) Taxis Per Hire Company
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/reports/taxis-per-department">
+                5) List Of All Taxis In Various Departments
+              </Link>
+              <Link
+                className="vehicle-menu-link"
+                href="/taxis/reports/taxis-inservice-per-department"
+              >
+                6) List Of All Taxis In Service In Various Departments
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/reports/logs-requisitions-status">
+                7) Taxi Logs and Requisitions Status Reports
+              </Link>
+              <Link className="vehicle-menu-link" href="/taxis/reports/financial">
+                8) Financial Reports: Taxis
+              </Link>
+            </MenuSection>
+            <MenuSection title="Other Taxi Maintenance Options">
+              <Link className="vehicle-menu-link" href="/taxis/scan-requisition">
+                1) Scan Taxi Requisition
+              </Link>
+            </MenuSection>
           </div>
           <section
             className="vehicle-status-maintenance-panel"

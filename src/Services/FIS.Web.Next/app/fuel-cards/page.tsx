@@ -4,6 +4,7 @@ import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
 import { FuelCardNotice } from "@/app/fuel-cards/_components";
+import { MenuSection } from "@/components/ui/menu-section";
 import { getFuelCardAllocation, FuelCardApiError } from "@/lib/api-fuel-cards";
 import { getSession } from "@/lib/session";
 
@@ -68,64 +69,46 @@ export default async function FuelCardsPage({
         </header>
         <FuelCardNotice query={query} />
         <div className="vehicle-menu-tiles">
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Fuelcard Maintenance Information / Help</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/fuel-cards/help">
-                Open Fuelcard Maintenance Help
-              </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Fuelcard Maintenance</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/fuel-cards/vehicle">
-                1) Fuelcard Maintenance for a Vehicle
-              </Link>
-              <Link className="vehicle-menu-link" href="/fuel-cards/collection-multiple">
-                2) Collection for TWO or MORE Fuelcards
-              </Link>
-              <Link className="vehicle-menu-link" href="/fuel-cards/delete">
-                3) Delete a Fuelcard
-              </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Fuelcards Report</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/fuel-cards/report/latest">
-                1) Latest Fuelcard Report for a GG Vehicle
-              </Link>
-              <Link className="vehicle-menu-link" href="/reports/fuel-cards">
-                Open Fuelcard Reports Menu
-              </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Private Hire Vehicle Fuelcards - Maintenance</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/fuel-cards/private-hire/vehicle">
-                1) Private Hire Vehicle Fuelcards for a Vehicle
-              </Link>
-              <Link
-                className="vehicle-menu-link"
-                href="/fuel-cards/private-hire/collection-multiple"
-              >
-                2) Collection for TWO or MORE Fuelcards
-              </Link>
-              <Link className="vehicle-menu-link" href="/fuel-cards/private-hire/delete">
-                3) Delete a Fuelcard
-              </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Private Hire Vehicle Fuelcards - Reports</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/fuel-cards/private-hire/report-all">
-                1) Report for ALL Private Hire Vehicle Fuelcards
-              </Link>
-            </div>
-          </section>
+          <MenuSection title="Fuelcard Maintenance Information / Help">
+            <Link className="vehicle-menu-link" href="/fuel-cards/help">
+              Open Fuelcard Maintenance Help
+            </Link>
+          </MenuSection>
+          <MenuSection title="Fuelcard Maintenance">
+            <Link className="vehicle-menu-link" href="/fuel-cards/vehicle">
+              1) Fuelcard Maintenance for a Vehicle
+            </Link>
+            <Link className="vehicle-menu-link" href="/fuel-cards/collection-multiple">
+              2) Collection for TWO or MORE Fuelcards
+            </Link>
+            <Link className="vehicle-menu-link" href="/fuel-cards/delete">
+              3) Delete a Fuelcard
+            </Link>
+          </MenuSection>
+          <MenuSection title="Fuelcards Report">
+            <Link className="vehicle-menu-link" href="/fuel-cards/report/latest">
+              1) Latest Fuelcard Report for a GG Vehicle
+            </Link>
+            <Link className="vehicle-menu-link" href="/reports/fuel-cards">
+              Open Fuelcard Reports Menu
+            </Link>
+          </MenuSection>
+          <MenuSection title="Private Hire Vehicle Fuelcards - Maintenance">
+            <Link className="vehicle-menu-link" href="/fuel-cards/private-hire/vehicle">
+              1) Private Hire Vehicle Fuelcards for a Vehicle
+            </Link>
+            <Link className="vehicle-menu-link" href="/fuel-cards/private-hire/collection-multiple">
+              2) Collection for TWO or MORE Fuelcards
+            </Link>
+            <Link className="vehicle-menu-link" href="/fuel-cards/private-hire/delete">
+              3) Delete a Fuelcard
+            </Link>
+          </MenuSection>
+          <MenuSection title="Private Hire Vehicle Fuelcards - Reports">
+            <Link className="vehicle-menu-link" href="/fuel-cards/private-hire/report-all">
+              1) Report for ALL Private Hire Vehicle Fuelcards
+            </Link>
+          </MenuSection>
         </div>
         <section
           className="vehicle-status-maintenance-panel"

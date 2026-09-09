@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
+import { MenuSection } from "@/components/ui/menu-section";
 import {
   UserAdminApiError,
   getUserAdminProfiles,
@@ -157,20 +158,17 @@ export async function UserAdminMenuPage({
         </header>
 
         <div className="vehicle-menu-tiles">
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">User Admin Menu</h2>
-            <div className="vehicle-menu-body">
-              <MenuLink href="/users/add">1) Add New User</MenuLink>
-              <MenuLink href="/users/edit">2) Update or Modify User Details</MenuLink>
-              <MenuLink href="/users/reset-login">3) Reset User Password Counter</MenuLink>
-              <MenuLink href="/users/deactivate">4) Delete (or De-Activate) User</MenuLink>
-              <MenuLink href="/UserAdmin/UserAdmin.aspx?Alphabet=A">5) View User Details</MenuLink>
-              <MenuLink href="/change-password-question">
-                6) Change Password and Password Question
-              </MenuLink>
-              <MenuLink href="/users/force-password-change">7) Force Password Change</MenuLink>
-            </div>
-          </section>
+          <MenuSection title="User Admin Menu">
+            <MenuLink href="/users/add">1) Add New User</MenuLink>
+            <MenuLink href="/users/edit">2) Update or Modify User Details</MenuLink>
+            <MenuLink href="/users/reset-login">3) Reset User Password Counter</MenuLink>
+            <MenuLink href="/users/deactivate">4) Delete (or De-Activate) User</MenuLink>
+            <MenuLink href="/UserAdmin/UserAdmin.aspx?Alphabet=A">5) View User Details</MenuLink>
+            <MenuLink href="/change-password-question">
+              6) Change Password and Password Question
+            </MenuLink>
+            <MenuLink href="/users/force-password-change">7) Force Password Change</MenuLink>
+          </MenuSection>
         </div>
       </section>
     </main>

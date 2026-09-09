@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
+import { MenuSection } from "@/components/ui/menu-section";
 import {
   getWorkshopVehicles,
   getWorkshops,
@@ -220,28 +221,22 @@ export default async function WorkshopPage({
           </Link>
         </header>
         <div className="vehicle-menu-tiles">
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Workshop Maintenance Information / Help</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/workshop/help">
-                Workshop Maintenance Information / Help
-              </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Workshop Section</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/workshop/entry">
-                1) Enter a WorkShop Entry
-              </Link>
-              <Link className="vehicle-menu-link" href="/workshop/open-job-card">
-                2) OPEN a CLOSED Job Card
-              </Link>
-              <Link className="vehicle-menu-link" href="/workshop/merchant">
-                3) Enter / Update a Merchant
-              </Link>
-            </div>
-          </section>
+          <MenuSection title="Workshop Maintenance Information / Help">
+            <Link className="vehicle-menu-link" href="/workshop/help">
+              Workshop Maintenance Information / Help
+            </Link>
+          </MenuSection>
+          <MenuSection title="Workshop Section">
+            <Link className="vehicle-menu-link" href="/workshop/entry">
+              1) Enter a WorkShop Entry
+            </Link>
+            <Link className="vehicle-menu-link" href="/workshop/open-job-card">
+              2) OPEN a CLOSED Job Card
+            </Link>
+            <Link className="vehicle-menu-link" href="/workshop/merchant">
+              3) Enter / Update a Merchant
+            </Link>
+          </MenuSection>
         </div>
         {unavailable ? (
           <ApiUnavailable />

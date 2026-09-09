@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/home/session-recovery";
+import { MenuSection } from "@/components/ui/menu-section";
 import { LossApiError, getLosses } from "@/lib/api-losses";
 import { getSession } from "@/lib/session";
 
@@ -101,22 +102,16 @@ export default async function LossesPage() {
         </header>
 
         <div className="vehicle-menu-tiles">
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Losses Maintenance Menu</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/Losses/Doc/Doc_losses.htm">
-                Losses Maintenance Information / Help
-              </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Losses Maintenance</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/Losses/MNT_Loss_GetGg.aspx">
-                1) Vehicle Losses Maintenance
-              </Link>
-            </div>
-          </section>
+          <MenuSection title="Losses Maintenance Menu">
+            <Link className="vehicle-menu-link" href="/Losses/Doc/Doc_losses.htm">
+              Losses Maintenance Information / Help
+            </Link>
+          </MenuSection>
+          <MenuSection title="Losses Maintenance">
+            <Link className="vehicle-menu-link" href="/Losses/MNT_Loss_GetGg.aspx">
+              1) Vehicle Losses Maintenance
+            </Link>
+          </MenuSection>
         </div>
 
         <section className="vehicle-status-maintenance-panel" aria-labelledby="loss-preview-title">
