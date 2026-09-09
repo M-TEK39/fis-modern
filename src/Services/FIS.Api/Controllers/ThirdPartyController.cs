@@ -200,7 +200,7 @@ public class ThirdPartyController : BaseApiController
         }
     }
 
-    [HttpGet("projects/department/{departmentCode:short}")]
+    [HttpGet("projects/department/{departmentCode:int}")]
     public async Task<ActionResult<IEnumerable<ThirdPartyProjectRecord>>> GetProjectsByDepartment(
         short departmentCode,
         CancellationToken cancellationToken
@@ -406,7 +406,7 @@ public class ThirdPartyController : BaseApiController
         }
     }
 
-    [HttpGet("sites/{departmentCode:short}")]
+    [HttpGet("sites/{departmentCode:int}")]
     public async Task<ActionResult<IEnumerable<Site>>> GetSitesByDepartment(short departmentCode)
     {
         try

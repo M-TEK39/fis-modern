@@ -12,6 +12,7 @@ using FIS.Core.Infrastructure.Interfaces;
 using FIS.Core.Infrastructure.Repositories;
 using FIS.Core.Infrastructure.Services;
 using FIS.Data.SqlServer;
+using FIS.Data.SqlServer.Compatibility;
 using FIS.Data.SqlServer.Interceptors;
 using Hangfire;
 using Hangfire.SqlServer;
@@ -216,6 +217,7 @@ builder.Services.AddScoped<IReportingService, ReportingService>(); // Re-enabled
 builder.Services.AddScoped<ILegacyReportResultService, LegacyReportResultService>();
 builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
 builder.Services.AddScoped<LegacyCredentialCompatibilityService>();
+builder.Services.AddScoped<LegacyUserProfileOptionalFieldsService>();
 builder.Services.AddScoped<MicrosoftIdentityCompatibilityService>();
 builder.Services.AddScoped<NotifyListCompatibilityService>();
 builder.Services.AddScoped<TowTruckCompatibilityService>();

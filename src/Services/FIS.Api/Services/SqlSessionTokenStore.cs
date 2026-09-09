@@ -1,8 +1,10 @@
+using System.Data;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
 using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.SqlServer;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Services;
@@ -16,6 +18,8 @@ public class SqlSessionTokenStore : ISessionTokenStore
 
     private readonly IServiceProvider _services;
     private readonly ILogger<SqlSessionTokenStore> _logger;
+    private readonly InMemorySessionTokenStore _legacyFallback = new();
+    private int _sqlTableState;
 
     public SqlSessionTokenStore(IServiceProvider services, ILogger<SqlSessionTokenStore> logger)
     {
@@ -31,6 +35,11 @@ public class SqlSessionTokenStore : ISessionTokenStore
     ) IssueTokens(IEnumerable<Claim> claims)
     {
         var claimList = claims.ToList();
+        if (!IsSqlStoreAvailable())
+        {
+            return _legacyFallback.IssueTokens(claimList);
+        }
+
         var claimsJson = SerializeClaims(claimList);
         var now = DateTime.UtcNow;
         var sessionId = GenerateToken();
@@ -64,7 +73,15 @@ public class SqlSessionTokenStore : ISessionTokenStore
                 created_at = now,
             }
         );
-        db.SaveChanges();
+        try
+        {
+            db.SaveChanges();
+        }
+        catch (SqlException exception) when (IsMissingObject(exception))
+        {
+            MarkSqlStoreUnavailable(exception);
+            return _legacyFallback.IssueTokens(claimList);
+        }
 
         return (
             accessToken,
@@ -80,12 +97,26 @@ public class SqlSessionTokenStore : ISessionTokenStore
         if (string.IsNullOrWhiteSpace(accessToken))
             return false;
 
+        if (!IsSqlStoreAvailable())
+        {
+            return _legacyFallback.TryValidateAccessToken(accessToken, out claims);
+        }
+
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
 
-        var record = db
-            .SessionTokens.AsNoTracking()
-            .FirstOrDefault(t => t.token_id == accessToken && t.token_type == AccessType);
+        SessionToken? record;
+        try
+        {
+            record = db
+                .SessionTokens.AsNoTracking()
+                .FirstOrDefault(t => t.token_id == accessToken && t.token_type == AccessType);
+        }
+        catch (SqlException exception) when (IsMissingObject(exception))
+        {
+            MarkSqlStoreUnavailable(exception);
+            return _legacyFallback.TryValidateAccessToken(accessToken, out claims);
+        }
 
         if (record is null)
             return false;
@@ -121,12 +152,26 @@ public class SqlSessionTokenStore : ISessionTokenStore
         if (string.IsNullOrWhiteSpace(refreshToken))
             return false;
 
+        if (!IsSqlStoreAvailable())
+        {
+            return _legacyFallback.TryRefresh(refreshToken, out refreshedTokens, out claims);
+        }
+
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
 
-        var record = db.SessionTokens.FirstOrDefault(t =>
-            t.token_id == refreshToken && t.token_type == RefreshType
-        );
+        SessionToken? record;
+        try
+        {
+            record = db.SessionTokens.FirstOrDefault(t =>
+                t.token_id == refreshToken && t.token_type == RefreshType
+            );
+        }
+        catch (SqlException exception) when (IsMissingObject(exception))
+        {
+            MarkSqlStoreUnavailable(exception);
+            return _legacyFallback.TryRefresh(refreshToken, out refreshedTokens, out claims);
+        }
 
         if (record is null)
             return false;
@@ -152,11 +197,28 @@ public class SqlSessionTokenStore : ISessionTokenStore
     {
         if (string.IsNullOrWhiteSpace(accessToken))
             return;
+
+        if (!IsSqlStoreAvailable())
+        {
+            _legacyFallback.RevokeByAccessToken(accessToken);
+            return;
+        }
+
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
-        var rec = db.SessionTokens.FirstOrDefault(t =>
-            t.token_id == accessToken && t.token_type == AccessType
-        );
+        SessionToken? rec;
+        try
+        {
+            rec = db.SessionTokens.FirstOrDefault(t =>
+                t.token_id == accessToken && t.token_type == AccessType
+            );
+        }
+        catch (SqlException exception) when (IsMissingObject(exception))
+        {
+            MarkSqlStoreUnavailable(exception);
+            _legacyFallback.RevokeByAccessToken(accessToken);
+            return;
+        }
         if (rec is null)
             return;
         var all = db.SessionTokens.Where(t => t.session_id == rec.session_id).ToList();
@@ -168,11 +230,28 @@ public class SqlSessionTokenStore : ISessionTokenStore
     {
         if (string.IsNullOrWhiteSpace(refreshToken))
             return;
+
+        if (!IsSqlStoreAvailable())
+        {
+            _legacyFallback.RevokeByRefreshToken(refreshToken);
+            return;
+        }
+
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
-        var rec = db.SessionTokens.FirstOrDefault(t =>
-            t.token_id == refreshToken && t.token_type == RefreshType
-        );
+        SessionToken? rec;
+        try
+        {
+            rec = db.SessionTokens.FirstOrDefault(t =>
+                t.token_id == refreshToken && t.token_type == RefreshType
+            );
+        }
+        catch (SqlException exception) when (IsMissingObject(exception))
+        {
+            MarkSqlStoreUnavailable(exception);
+            _legacyFallback.RevokeByRefreshToken(refreshToken);
+            return;
+        }
         if (rec is null)
             return;
         var all = db.SessionTokens.Where(t => t.session_id == rec.session_id).ToList();
@@ -201,6 +280,70 @@ public class SqlSessionTokenStore : ISessionTokenStore
         RandomNumberGenerator.Fill(bytes);
         return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
+
+    private bool IsSqlStoreAvailable()
+    {
+        var state = Volatile.Read(ref _sqlTableState);
+        if (state != 0)
+        {
+            return state > 0;
+        }
+
+        using var scope = _services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
+        var connection = db.Database.GetDbConnection();
+        var shouldClose = connection.State == ConnectionState.Closed;
+
+        try
+        {
+            if (shouldClose)
+            {
+                connection.Open();
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT CASE WHEN EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = @schema AND TABLE_NAME = @table) THEN 1 ELSE 0 END";
+            var schemaParameter = command.CreateParameter();
+            schemaParameter.ParameterName = "@schema";
+            schemaParameter.Value = "dbo";
+            command.Parameters.Add(schemaParameter);
+            var tableParameter = command.CreateParameter();
+            tableParameter.ParameterName = "@table";
+            tableParameter.Value = "fis_session_tokens";
+            command.Parameters.Add(tableParameter);
+
+            var exists = Convert.ToInt32(command.ExecuteScalar()) == 1;
+            Volatile.Write(ref _sqlTableState, exists ? 1 : -1);
+
+            if (!exists)
+            {
+                _logger.LogWarning(
+                    "Optional dbo.fis_session_tokens is absent; using in-memory session tokens for legacy database compatibility."
+                );
+            }
+
+            return exists;
+        }
+        finally
+        {
+            if (shouldClose && connection.State != ConnectionState.Closed)
+            {
+                connection.Close();
+            }
+        }
+    }
+
+    private void MarkSqlStoreUnavailable(SqlException exception)
+    {
+        Volatile.Write(ref _sqlTableState, -1);
+        _logger.LogWarning(
+            exception,
+            "Optional dbo.fis_session_tokens is unavailable; using in-memory session tokens for legacy database compatibility."
+        );
+    }
+
+    private static bool IsMissingObject(SqlException exception) => exception.Number == 208;
 
     private sealed record SerializedClaim(
         string Type,

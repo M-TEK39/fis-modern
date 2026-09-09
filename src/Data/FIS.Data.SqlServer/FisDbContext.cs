@@ -226,6 +226,7 @@ public class FisDbContext : DbContext
     // System Entities
     public DbSet<TSLog> TSLogs { get; set; } = null!;
     public DbSet<Audit> Audits { get; set; } = null!;
+    public DbSet<LegacyAudit> LegacyAudits { get; set; } = null!;
     public DbSet<ErrorLog> ErrorLogs { get; set; } = null!;
     public DbSet<BookingAddress> BookingAddresses { get; set; } = null!;
     public DbSet<EventMap> EventMaps { get; set; } = null!;

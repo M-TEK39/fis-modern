@@ -3,6 +3,7 @@ using System.Text;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.SqlServer;
+using FIS.Data.SqlServer.Compatibility;
 using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Core.Infrastructure.Repositories;
@@ -13,10 +14,15 @@ namespace FIS.Core.Infrastructure.Repositories;
 public class UserProfileRepository : IUserProfileRepository
 {
     private readonly FisDbContext _context;
+    private readonly LegacyUserProfileOptionalFieldsService _optionalFields;
 
-    public UserProfileRepository(FisDbContext context)
+    public UserProfileRepository(
+        FisDbContext context,
+        LegacyUserProfileOptionalFieldsService optionalFields
+    )
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _optionalFields = optionalFields ?? throw new ArgumentNullException(nameof(optionalFields));
     }
 
     /// <summary>
@@ -24,9 +30,16 @@ public class UserProfileRepository : IUserProfileRepository
     /// </summary>
     public async Task<UserAccessOld?> GetByIdAsync(short userAccessCode)
     {
-        return await _context
+        var user = await _context
             .UserAccessOlds.Where(u => u.user_active)
             .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
+
+        if (user is not null)
+        {
+            await _optionalFields.HydrateAsync(user);
+        }
+
+        return user;
     }
 
     /// <summary>
@@ -37,11 +50,18 @@ public class UserProfileRepository : IUserProfileRepository
         if (string.IsNullOrWhiteSpace(firstName))
             return null;
 
-        return await _context
+        var user = await _context
             .UserAccessOlds.Where(u => u.user_active)
             .FirstOrDefaultAsync(u =>
                 u.FirstName != null && u.FirstName.ToLower() == firstName.ToLower().Trim()
             );
+
+        if (user is not null)
+        {
+            await _optionalFields.HydrateAsync(user);
+        }
+
+        return user;
     }
 
     /// <summary>
@@ -52,11 +72,18 @@ public class UserProfileRepository : IUserProfileRepository
         if (string.IsNullOrWhiteSpace(email))
             return null;
 
-        return await _context
+        var user = await _context
             .UserAccessOlds.Where(u => u.user_active)
             .FirstOrDefaultAsync(u =>
                 u.E_Mail != null && u.E_Mail.ToLower() == email.ToLower().Trim()
             );
+
+        if (user is not null)
+        {
+            await _optionalFields.HydrateAsync(user);
+        }
+
+        return user;
     }
 
     /// <summary>
@@ -64,11 +91,14 @@ public class UserProfileRepository : IUserProfileRepository
     /// </summary>
     public async Task<IEnumerable<UserAccessOld>> GetAllActiveAsync()
     {
-        return await _context
+        var users = await _context
             .UserAccessOlds.Where(u => u.user_active)
             .OrderBy(u => u.FirstName)
             .ThenBy(u => u.LastName)
             .ToListAsync();
+
+        await _optionalFields.HydrateManyAsync(users);
+        return users;
     }
 
     /// <summary>
@@ -76,11 +106,14 @@ public class UserProfileRepository : IUserProfileRepository
     /// </summary>
     public async Task<IEnumerable<UserAccessOld>> GetBySiteAsync(short siteCode)
     {
-        return await _context
+        var users = await _context
             .UserAccessOlds.Where(u => u.user_active && u.Site_code == siteCode)
             .OrderBy(u => u.FirstName)
             .ThenBy(u => u.LastName)
             .ToListAsync();
+
+        await _optionalFields.HydrateManyAsync(users);
+        return users;
     }
 
     /// <summary>
@@ -93,7 +126,7 @@ public class UserProfileRepository : IUserProfileRepository
 
         var term = searchTerm.ToLower().Trim();
 
-        return await _context
+        var users = await _context
             .UserAccessOlds.Where(u =>
                 u.user_active
                 && (
@@ -106,6 +139,9 @@ public class UserProfileRepository : IUserProfileRepository
             .OrderBy(u => u.FirstName)
             .ThenBy(u => u.LastName)
             .ToListAsync();
+
+        await _optionalFields.HydrateManyAsync(users);
+        return users;
     }
 
     /// <summary>
@@ -118,6 +154,7 @@ public class UserProfileRepository : IUserProfileRepository
 
         _context.UserAccessOlds.Add(userProfile);
         await _context.SaveChangesAsync();
+        await _optionalFields.PersistAsync(userProfile);
         return userProfile;
     }
 
@@ -142,6 +179,8 @@ public class UserProfileRepository : IUserProfileRepository
         _context.Entry(existing).Property(x => x.date_created).IsModified = false;
 
         await _context.SaveChangesAsync();
+        existing.approver_code_at_gfleet = userProfile.approver_code_at_gfleet;
+        await _optionalFields.PersistAsync(existing);
     }
 
     /// <summary>
