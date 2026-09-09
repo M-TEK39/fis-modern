@@ -132,7 +132,7 @@ async function HqContent({ searchParams, locationCode }: HqPageProps) {
 
   let pageData;
   try {
-    pageData = await getHqAccidentPage(pageNumber, searchType, searchTerm, 12, locationCode);
+    pageData = await getHqAccidentPage(pageNumber, searchType, searchTerm, 24, locationCode);
   } catch (error) {
     if (error instanceof AccidentApiError && error.reason === "unauthorized") {
       return <SessionRecovery returnPath="/accidents/hq" />;

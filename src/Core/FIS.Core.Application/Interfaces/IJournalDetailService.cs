@@ -11,6 +11,11 @@ namespace FIS.Core.Application.Interfaces;
 public interface IJournalDetailService
 {
     /// <summary>
+    /// Get all journal details through the legacy/expanded schema compatibility projection.
+    /// </summary>
+    Task<IEnumerable<JournalDetail>> GetAllJournalDetailsAsync();
+
+    /// <summary>
     /// Create a new journal detail entry
     /// Legacy: AddJournalDetail method
     /// </summary>

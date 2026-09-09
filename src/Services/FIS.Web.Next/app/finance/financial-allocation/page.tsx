@@ -10,11 +10,12 @@ import {
   FinanceUnavailable,
   hasFinanceRole,
 } from "@/app/finance/_components";
+import { departmentOptions } from "@/app/finance/_location-options";
+import { DepartmentApiError, getDepartments } from "@/lib/api-departments";
 import {
   FinanceApiError,
   getBasRows,
   getBasSegments,
-  getFinanceDepartments,
   getFinanceSegmentTypes,
   type BasSegment,
   type FinanceOption,
@@ -305,12 +306,14 @@ export async function FinancialAllocationRoute({ searchParams, action }: Allocat
   let departments: FinanceOption[] = [];
   let segmentTypes: FinanceOption[] = [];
   try {
-    [departments, segmentTypes] = await Promise.all([
-      getFinanceDepartments(),
+    const [departmentRecords, loadedSegmentTypes] = await Promise.all([
+      getDepartments(),
       getFinanceSegmentTypes(),
     ]);
+    departments = departmentOptions(departmentRecords);
+    segmentTypes = loadedSegmentTypes;
   } catch (error) {
-    if (!(error instanceof FinanceApiError)) throw error;
+    if (!(error instanceof FinanceApiError) && !(error instanceof DepartmentApiError)) throw error;
   }
   const submitted = queryValue(query, "view") === "search";
   const departmentCode = positiveInteger(queryValue(query, "departmentCode"));

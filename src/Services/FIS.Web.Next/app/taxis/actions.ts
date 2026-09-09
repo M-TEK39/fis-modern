@@ -8,6 +8,7 @@ import {
   createTaxiWhiteLog,
   deleteTaxiScanDoc,
   getTaxi,
+  getTaxiLogReferences,
   saveTaxiLog,
   uploadTaxiScanDoc,
   updateTaxi,
@@ -105,7 +106,34 @@ function existingTaxiInput(taxi: Awaited<ReturnType<typeof getTaxi>>): TaxiInput
   return { ...fields, requestId };
 }
 
-function taxiInput(formData: FormData, existing?: Awaited<ReturnType<typeof getTaxi>>): TaxiInput {
+async function validateProviderClass(
+  contractorId: number | null,
+  vehicleTypeCode: number | null,
+) {
+  if (contractorId === null && vehicleTypeCode === null) return;
+  if (contractorId === null)
+    throw new TaxiValidationError("Choose a service provider before selecting a vehicle class.");
+
+  const references = await getTaxiLogReferences();
+  if (!references.contractors.some((contractor) => contractor.contractorId === contractorId))
+    throw new TaxiValidationError("Choose a valid service provider.");
+  if (
+    vehicleTypeCode !== null &&
+    !references.classes.some(
+      (taxiClass) =>
+        taxiClass.contractorId === contractorId && taxiClass.classId === vehicleTypeCode,
+    )
+  ) {
+    throw new TaxiValidationError(
+      "Choose a vehicle class supplied by the selected service provider.",
+    );
+  }
+}
+
+async function taxiInput(
+  formData: FormData,
+  existing?: Awaited<ReturnType<typeof getTaxi>>,
+): Promise<TaxiInput> {
   const rekNum = text(formData, "rekNum");
   const siteCode = number(formData, "siteCode", "Site code", {
     required: true,
@@ -120,13 +148,22 @@ function taxiInput(formData: FormData, existing?: Awaited<ReturnType<typeof getT
     true,
   );
   const official = text(formData, "official");
+  const contractorId = number(formData, "contractorId", "Service provider", {
+    integer: true,
+    min: 1,
+  });
+  const vehicleTypeCode = number(formData, "vehicleTypeCode", "Vehicle class", {
+    integer: true,
+    min: 0,
+  });
   if (!rekNum) throw new TaxiValidationError("Requisition number is required.");
   if (!official) throw new TaxiValidationError("Official/passenger name is required.");
+  await validateProviderClass(contractorId, vehicleTypeCode);
 
   const input: TaxiInput = {
     requestId: existing?.requestId,
     rekNum,
-    contractorId: number(formData, "contractorId", "Service provider", { integer: true, min: 1 }),
+    contractorId,
     vmfCode: text(formData, "vmfCode") || null,
     departmentCode: number(formData, "departmentCode", "Department code", {
       integer: true,
@@ -135,10 +172,7 @@ function taxiInput(formData: FormData, existing?: Awaited<ReturnType<typeof getT
     siteCode: siteCode ?? 0,
     dateRequired: required ?? "",
     timeRequired: required ?? "",
-    vehicleTypeCode: number(formData, "vehicleTypeCode", "Vehicle class", {
-      integer: true,
-      min: 0,
-    }),
+    vehicleTypeCode,
     official,
     rank: text(formData, "rank") || null,
     confirmed: existing?.confirmed ?? null,
@@ -191,7 +225,7 @@ export async function saveTaxiRequestAction(formData: FormData) {
   try {
     const requestId = number(formData, "requestId", "Request ID", { integer: true, min: 1 });
     const existing = requestId ? await getTaxi(requestId) : undefined;
-    const input = taxiInput(formData, existing);
+    const input = await taxiInput(formData, existing);
     const saved = requestId ? await updateTaxi(requestId, input) : await createTaxi(input);
     revalidatePath("/taxis");
     revalidatePath("/taxis/requests");

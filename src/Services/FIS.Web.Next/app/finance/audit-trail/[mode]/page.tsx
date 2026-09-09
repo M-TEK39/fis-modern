@@ -8,12 +8,10 @@ import {
   FinanceUnavailable,
   hasFinanceRole,
 } from "@/app/finance/_components";
-import {
-  FinanceApiError,
-  getFinanceDepartments,
-  getFinanceSites,
-  type FinanceOption,
-} from "@/lib/api-finance";
+import { departmentOptions, siteOptions } from "@/app/finance/_location-options";
+import { DepartmentApiError, getDepartments } from "@/lib/api-departments";
+import { FinanceApiError, type FinanceOption } from "@/lib/api-finance";
+import { SiteApiError, getSites } from "@/lib/api-sites";
 import { getSession } from "@/lib/session";
 
 type Query = Record<string, string | string[] | undefined>;
@@ -107,9 +105,16 @@ export default async function FinanceAuditTrailModePage({ params, searchParams }
   let sites: FinanceOption[] = [];
   let lookupError: string | null = null;
   try {
-    [departments, sites] = await Promise.all([getFinanceDepartments(), getFinanceSites()]);
+    const [departmentRecords, siteRecords] = await Promise.all([getDepartments(), getSites()]);
+    departments = departmentOptions(departmentRecords);
+    sites = siteOptions(siteRecords);
   } catch (error) {
-    if (error instanceof FinanceApiError) lookupError = error.message;
+    if (
+      error instanceof FinanceApiError ||
+      error instanceof DepartmentApiError ||
+      error instanceof SiteApiError
+    )
+      lookupError = error.message;
     else throw error;
   }
   const submitted = queryValue(query, "run") === "1";

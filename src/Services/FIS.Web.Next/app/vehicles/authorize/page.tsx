@@ -11,6 +11,15 @@ import {
 } from "@/lib/api-vehicle-authorization";
 import { getSession } from "@/lib/session";
 
+type VehicleAuthorizationSearchParams = Record<string, string | string[] | undefined>;
+
+function getPageValue(query: VehicleAuthorizationSearchParams, key: string) {
+  const value = query[key];
+  const firstValue = Array.isArray(value) ? value[0] : value;
+  const parsed = Number.parseInt(firstValue ?? "1", 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
 const VEHICLE_MANAGEMENT_PERMISSION = 1;
 const INCEPTION_ROLES = ["vehicle inception capturer", "vehicle inception authorizer"];
 
@@ -87,7 +96,11 @@ function ApiUnavailable() {
   );
 }
 
-export default async function VehicleAuthorizationPage() {
+export default async function VehicleAuthorizationPage({
+  searchParams,
+}: Readonly<{
+  searchParams: Promise<VehicleAuthorizationSearchParams>;
+}>) {
   await connection();
   const session = await getSession();
 
@@ -120,7 +133,12 @@ export default async function VehicleAuthorizationPage() {
   }
 
   try {
-    const queues = await getVehicleAuthorizationQueues();
+    const query = await searchParams;
+    const queues = await getVehicleAuthorizationQueues({
+      pendingPage: getPageValue(query, "pendingPage"),
+      rejectedPage: getPageValue(query, "rejectedPage"),
+      authorizedPage: getPageValue(query, "authorizedPage"),
+    });
 
     return (
       <main className="page-shell vehicle-page-shell">
@@ -137,6 +155,7 @@ export default async function VehicleAuthorizationPage() {
           </header>
           <VehicleAuthorizationClient
             queues={queues}
+            query={query}
             currentUserAccessCode={session.userAccessCode}
           />
           <div className="vehicle-footer-actions">

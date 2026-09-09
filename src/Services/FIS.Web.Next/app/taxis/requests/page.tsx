@@ -17,10 +17,13 @@ import {
 import {
   getTaxi,
   getTaxiByRequisition,
+  getTaxiLogReferences,
   getTaxis,
   TaxiApiError,
   type TaxiRecord,
 } from "@/lib/api-taxis";
+import { getDepartments } from "@/lib/api-departments";
+import { getSites } from "@/lib/api-sites";
 import { getSession } from "@/lib/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -37,6 +40,276 @@ function timeInput(value: string | null | undefined) {
 
 function numberValue(value: number | null | undefined) {
   return value === null || value === undefined ? "" : String(value);
+}
+
+type LookupOption = { value: string; label: string };
+
+type TaxiClassLookupOption = {
+  classId: number;
+  contractorId: number;
+  contractorName: string;
+  description: string;
+};
+
+type TaxiRequestLookups = {
+  contractors: LookupOption[];
+  classes: TaxiClassLookupOption[];
+  departments: LookupOption[];
+  sites: LookupOption[];
+  warnings: string[];
+};
+
+function namedOption(code: number, description: string | null | undefined): LookupOption | null {
+  const normalizedDescription = description?.trim();
+  return normalizedDescription
+    ? { value: String(code), label: `${normalizedDescription} (${code})` }
+    : null;
+}
+
+function contractorOptions(
+  references: Awaited<ReturnType<typeof getTaxiLogReferences>>,
+) {
+  return references.contractors
+    .map((contractor) => ({
+      value: String(contractor.contractorId),
+      label: `${contractor.contractorName} (${contractor.contractorId})`,
+    }))
+    .toSorted((left, right) => left.label.localeCompare(right.label));
+}
+
+function classOptions(
+  references: Awaited<ReturnType<typeof getTaxiLogReferences>>,
+) {
+  const contractorNames = new Map(
+    references.contractors.map((contractor) => [contractor.contractorId, contractor.contractorName]),
+  );
+
+  return references.classes
+    .filter((taxiClass) => contractorNames.has(taxiClass.contractorId))
+    .map((taxiClass) => ({
+      classId: taxiClass.classId,
+      contractorId: taxiClass.contractorId,
+      contractorName:
+        contractorNames.get(taxiClass.contractorId) ?? `Contractor ${taxiClass.contractorId}`,
+      description: taxiClass.description,
+    }))
+    .toSorted((left, right) =>
+      `${left.contractorName} ${left.description}`.localeCompare(
+        `${right.contractorName} ${right.description}`,
+      ),
+    );
+}
+
+function departmentOptions(
+  departments: Awaited<ReturnType<typeof getDepartments>>,
+) {
+  return departments
+    .filter((department) => department.deptActive)
+    .map((department) => namedOption(department.departmentCode, department.description))
+    .filter((option): option is LookupOption => option !== null)
+    .toSorted((left, right) => left.label.localeCompare(right.label));
+}
+
+function siteOptions(sites: Awaited<ReturnType<typeof getSites>>) {
+  return sites
+    .filter((site) => site.siteActive)
+    .map((site) => {
+      const department = site.departmentNumber ?? site.departmentCode;
+      const description = department
+        ? `${site.description ?? "Site"} — Department ${department}`
+        : site.description;
+      return namedOption(site.siteCode, description);
+    })
+    .filter((option): option is LookupOption => option !== null)
+    .toSorted((left, right) => left.label.localeCompare(right.label));
+}
+
+function lookupWarning(
+  result: PromiseSettledResult<unknown>,
+  options: readonly LookupOption[] | readonly TaxiClassLookupOption[],
+  label: string,
+) {
+  if (result.status === "rejected")
+    return `${label} choices are temporarily unavailable. They cannot be entered manually.`;
+  if (options.length === 0)
+    return `No ${label.toLowerCase()} choices are currently available. They cannot be entered manually.`;
+  return null;
+}
+
+async function getTaxiRequestLookups(): Promise<TaxiRequestLookups> {
+  const [referenceResult, departmentResult, siteResult] = await Promise.allSettled([
+    getTaxiLogReferences(),
+    getDepartments(),
+    getSites(),
+  ]);
+
+  const references = referenceResult.status === "fulfilled" ? referenceResult.value : null;
+  const contractors = references ? contractorOptions(references) : [];
+  const classes = references ? classOptions(references) : [];
+  const departments =
+    departmentResult.status === "fulfilled" ? departmentOptions(departmentResult.value) : [];
+  const sites = siteResult.status === "fulfilled" ? siteOptions(siteResult.value) : [];
+  const warnings = [
+    lookupWarning(referenceResult, contractors, "Service provider"),
+    lookupWarning(referenceResult, classes, "Vehicle class"),
+    lookupWarning(departmentResult, departments, "Department"),
+    lookupWarning(siteResult, sites, "Site"),
+  ].filter((warning): warning is string => warning !== null);
+
+  return { contractors, classes, departments, sites, warnings };
+}
+
+function hasOption(options: readonly LookupOption[], value: string) {
+  return options.some((option) => option.value === value);
+}
+
+function hasClassOption(options: readonly TaxiClassLookupOption[], value: string) {
+  return options.some((option) => String(option.classId) === value);
+}
+
+function classOptionsForTaxi(
+  taxi: TaxiRecord | undefined,
+  classes: readonly TaxiClassLookupOption[],
+) {
+  if (!taxi) return classes;
+  if (taxi.contractorId === null) return [];
+  const providerClasses = classes.filter((taxiClass) => taxiClass.contractorId === taxi.contractorId);
+  return providerClasses.length > 0 ? providerClasses : classes;
+}
+
+function currentLookupWarnings(taxi: TaxiRecord | undefined, lookups: TaxiRequestLookups) {
+  if (!taxi) return lookups.warnings;
+
+  const warnings = [...lookups.warnings];
+  const contractorValue = numberValue(taxi.contractorId);
+  const departmentValue = numberValue(taxi.departmentCode);
+  const siteValue = numberValue(taxi.siteCode);
+  const classValue = numberValue(taxi.vehicleTypeCode);
+  const taxiClasses = classOptionsForTaxi(taxi, lookups.classes);
+
+  if (lookups.contractors.length > 0 && contractorValue && !hasOption(lookups.contractors, contractorValue))
+    warnings.push(
+      `The current service provider is no longer in active reference data. Choose a current provider before saving.`,
+    );
+  if (lookups.departments.length > 0 && departmentValue && !hasOption(lookups.departments, departmentValue))
+    warnings.push(
+      `The current department is no longer in active reference data. Choose a current department before saving.`,
+    );
+  if (lookups.sites.length > 0 && siteValue && !hasOption(lookups.sites, siteValue))
+    warnings.push(`The current site is no longer in active reference data. Choose a current site before saving.`);
+  if (lookups.classes.length > 0 && taxiClasses.length === 0 && classValue)
+    warnings.push(
+      "The current provider has no active vehicle-class reference. Choose a current provider and vehicle class before saving.",
+    );
+  else if (taxiClasses.length > 0 && classValue && !hasClassOption(taxiClasses, classValue))
+    warnings.push(
+      "The current vehicle class is no longer available for this provider. Choose a current vehicle class before saving.",
+    );
+
+  return [...new Set(warnings)];
+}
+
+function LookupSelect({
+  id,
+  label,
+  name,
+  defaultValue,
+  options,
+  placeholder,
+  required = false,
+  disabled = false,
+}: Readonly<{
+  id: string;
+  label: string;
+  name: string;
+  defaultValue: string;
+  options: readonly LookupOption[];
+  placeholder: string;
+  required?: boolean;
+  disabled?: boolean;
+}>) {
+  return (
+    <div className="form-field">
+      <label className="form-label" htmlFor={id}>
+        {label}
+        {required ? " *" : ""}
+      </label>
+      <select
+        className="form-select"
+        id={id}
+        name={name}
+        defaultValue={defaultValue}
+        required={required}
+        disabled={disabled}
+      >
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function TaxiClassLookup({
+  defaultValue,
+  options,
+  disabled = false,
+}: Readonly<{
+  defaultValue: string;
+  options: readonly TaxiClassLookupOption[];
+  disabled?: boolean;
+}>) {
+  const grouped = new Map<number, TaxiClassLookupOption[]>();
+  for (const option of options) {
+    const contractorClasses = grouped.get(option.contractorId) ?? [];
+    contractorClasses.push(option);
+    grouped.set(option.contractorId, contractorClasses);
+  }
+  const groups = [...grouped.entries()].toSorted((left, right) =>
+    left[1][0].contractorName.localeCompare(right[1][0].contractorName),
+  );
+
+  return (
+    <div className="form-field">
+      <label className="form-label" htmlFor="taxi-class">
+        Vehicle class
+      </label>
+      <select
+        className="form-select"
+        id="taxi-class"
+        name="vehicleTypeCode"
+        defaultValue={defaultValue}
+        disabled={disabled}
+      >
+        <option value="">Select vehicle class...</option>
+        {groups.map(([contractorId, contractorClasses]) => (
+          <optgroup key={contractorId} label={contractorClasses[0].contractorName}>
+            {contractorClasses.map((taxiClass) => (
+              <option key={taxiClass.classId} value={String(taxiClass.classId)}>
+                {taxiClass.description} ({taxiClass.classId})
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function TaxiLookupFallbackNotice({ warnings }: Readonly<{ warnings: readonly string[] }>) {
+  if (warnings.length === 0) return null;
+  return (
+    <aside className="notice notice-error" role="status" aria-live="polite">
+      <p className="eyebrow">Reference data unavailable</p>
+      <p>Some named request choices could not be loaded. Internal codes cannot be entered manually.</p>
+      {warnings.map((warning) => (
+        <p key={warning}>{warning}</p>
+      ))}
+    </aside>
+  );
 }
 
 function RequestSearch({
@@ -73,7 +346,21 @@ function RequestSearch({
   );
 }
 
-function TaxiRequestForm({ taxi }: Readonly<{ taxi?: TaxiRecord }>) {
+function TaxiRequestForm({
+  taxi,
+  lookups,
+}: Readonly<{ taxi?: TaxiRecord; lookups: TaxiRequestLookups }>) {
+  const isEdit = Boolean(taxi);
+  const contractorValue = numberValue(taxi?.contractorId);
+  const departmentValue = numberValue(taxi?.departmentCode);
+  const siteValue = numberValue(taxi?.siteCode);
+  const classValue = numberValue(taxi?.vehicleTypeCode);
+  const contractorIsAvailable = !isEdit || !contractorValue || hasOption(lookups.contractors, contractorValue);
+  const classIsAvailable = !isEdit || !classValue || hasClassOption(lookups.classes, classValue);
+  const departmentIsAvailable = !isEdit || !departmentValue || hasOption(lookups.departments, departmentValue);
+  const siteIsAvailable = !isEdit || !siteValue || hasOption(lookups.sites, siteValue);
+  const canSave = lookups.sites.length > 0;
+
   return (
     <form className="vehicle-status-maintenance-panel" action={saveTaxiRequestAction}>
       <input type="hidden" name="requestId" value={taxi?.requestId ?? ""} />
@@ -112,32 +399,20 @@ function TaxiRequestForm({ taxi }: Readonly<{ taxi?: TaxiRecord }>) {
             defaultValue={taxi?.official ?? ""}
           />
         </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="taxi-contractor">
-            Service provider ID
-          </label>
-          <input
-            className="form-input"
-            id="taxi-contractor"
-            name="contractorId"
-            type="number"
-            min="1"
-            defaultValue={numberValue(taxi?.contractorId)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="taxi-class">
-            Vehicle class
-          </label>
-          <input
-            className="form-input"
-            id="taxi-class"
-            name="vehicleTypeCode"
-            type="number"
-            min="0"
-            defaultValue={numberValue(taxi?.vehicleTypeCode)}
-          />
-        </div>
+        <LookupSelect
+          id="taxi-contractor"
+          label="Provider / contractor"
+          name="contractorId"
+          defaultValue={contractorIsAvailable ? contractorValue : ""}
+          options={lookups.contractors}
+          placeholder="Select provider..."
+          disabled={lookups.contractors.length === 0}
+        />
+        <TaxiClassLookup
+          defaultValue={classIsAvailable ? classValue : ""}
+          options={lookups.classes}
+          disabled={lookups.classes.length === 0}
+        />
         <div className="form-field">
           <label className="form-label" htmlFor="taxi-vmf">
             GG / vehicle code
@@ -171,33 +446,25 @@ function TaxiRequestForm({ taxi }: Readonly<{ taxi?: TaxiRecord }>) {
             defaultValue={taxi?.rank ?? ""}
           />
         </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="taxi-department">
-            Department code
-          </label>
-          <input
-            className="form-input"
-            id="taxi-department"
-            name="departmentCode"
-            type="number"
-            min="1"
-            defaultValue={numberValue(taxi?.departmentCode)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="taxi-site">
-            Site code *
-          </label>
-          <input
-            className="form-input"
-            id="taxi-site"
-            name="siteCode"
-            type="number"
-            min="1"
-            required
-            defaultValue={taxi?.siteCode || ""}
-          />
-        </div>
+        <LookupSelect
+          id="taxi-department"
+          label="Department"
+          name="departmentCode"
+          defaultValue={departmentIsAvailable ? departmentValue : ""}
+          options={lookups.departments}
+          placeholder="Select department..."
+          disabled={lookups.departments.length === 0}
+        />
+        <LookupSelect
+          id="taxi-site"
+          label="Site"
+          name="siteCode"
+          defaultValue={siteIsAvailable ? siteValue : ""}
+          options={lookups.sites}
+          placeholder="Select site..."
+          required
+          disabled={lookups.sites.length === 0}
+        />
         <div className="form-field">
           <label className="form-label" htmlFor="taxi-date">
             Date required *
@@ -315,7 +582,7 @@ function TaxiRequestForm({ taxi }: Readonly<{ taxi?: TaxiRecord }>) {
         </label>
       </div>
       <div className="button-row">
-        <button className="button button-primary" type="submit">
+        <button className="button button-primary" type="submit" disabled={!canSave}>
           {taxi ? "Save changes" : "Enter requisition"}
         </button>
         <Link className="button button-secondary" href="/taxis">
@@ -537,6 +804,7 @@ export default async function TaxiRequestsPage({
           </section>
         </main>
       );
+    const lookups = await getTaxiRequestLookups();
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card">
@@ -546,7 +814,10 @@ export default async function TaxiRequestsPage({
           />
           <TaxiNotice query={query} />
           {mode === "edit" ? <RequestSearch mode="edit" query={query} /> : null}
-          <TaxiRequestForm taxi={mode === "edit" ? taxi : undefined} />
+          <TaxiLookupFallbackNotice
+            warnings={currentLookupWarnings(mode === "edit" ? taxi : undefined, lookups)}
+          />
+          <TaxiRequestForm taxi={mode === "edit" ? taxi : undefined} lookups={lookups} />
         </section>
       </main>
     );

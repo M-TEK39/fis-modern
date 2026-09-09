@@ -1,21 +1,9 @@
 import Link from "next/link";
 import { Suspense } from "react";
 
+import { AuthBrand, AuthFooter, AuthHeader, AuthPage } from "@/app/_components/auth-ui";
+import { Button } from "@/components/ui/button";
 import ResetPasswordForm from "@/app/reset-password/reset-password-form";
-
-function Brand() {
-  return (
-    <div className="brand">
-      <div className="brand-mark" aria-hidden="true">
-        FIS
-      </div>
-      <div>
-        <p className="brand-name">Fleet Information System</p>
-        <p className="brand-caption">Gauteng Provincial Government</p>
-      </div>
-    </div>
-  );
-}
 
 type ResetPasswordPageProps = {
   searchParams: Promise<{ token?: string | string[] }>;
@@ -23,23 +11,29 @@ type ResetPasswordPageProps = {
 
 export default async function ResetPasswordPage({ searchParams }: ResetPasswordPageProps) {
   return (
-    <main className="page-shell">
+    <AuthPage>
       <Suspense fallback={<ResetPasswordFallback />}>
         <ResetPasswordContent searchParams={searchParams} />
       </Suspense>
-    </main>
+    </AuthPage>
   );
 }
 
 function ResetPasswordFallback() {
   return (
-    <section className="auth-card" aria-busy="true">
-      <Brand />
-      <div className="loading-card">
-        <span className="spinner" aria-hidden="true" />
+    <>
+      <AuthBrand />
+      <div
+        className="flex flex-col items-center gap-3 py-8 text-sm text-muted-foreground"
+        aria-busy="true"
+      >
+        <span
+          className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"
+          aria-hidden="true"
+        />
         <p>Checking your reset link...</p>
       </div>
-    </section>
+    </>
   );
 }
 
@@ -49,34 +43,37 @@ async function ResetPasswordContent({ searchParams }: ResetPasswordPageProps) {
   const token = Array.isArray(tokenValue) ? tokenValue[0]?.trim() : tokenValue?.trim();
 
   return (
-    <section className="auth-card" aria-labelledby="reset-password-title">
-      <Brand />
+    <>
+      <AuthBrand />
       {token ? (
         <>
-          <div className="auth-header">
-            <p className="eyebrow">Account recovery</p>
-            <h1 id="reset-password-title">Choose a new password</h1>
-            <p>This link verifies your email address. Choose a new password to regain access.</p>
-          </div>
+          <AuthHeader
+            id="reset-password-title"
+            title="Choose a new password"
+            description="This link verifies your email address. Choose a new password to regain access."
+          />
           <ResetPasswordForm token={token} />
-          <div className="auth-footer">
-            <Link className="text-link" href="/login">
+          <AuthFooter>
+            <Link
+              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              href="/login"
+            >
               Cancel
             </Link>
-          </div>
+          </AuthFooter>
         </>
       ) : (
         <>
-          <div className="auth-header">
-            <p className="eyebrow">Account recovery</p>
-            <h1 id="reset-password-title">Invalid reset link</h1>
-            <p>This password reset link is missing or invalid. Request a new link to continue.</p>
-          </div>
-          <Link className="button button-primary button-wide" href="/forgot-password">
-            Request a new link
-          </Link>
+          <AuthHeader
+            id="reset-password-title"
+            title="Invalid reset link"
+            description="This password reset link is missing or invalid. Request a new link to continue."
+          />
+          <Button asChild className="w-full">
+            <Link href="/forgot-password">Request a new link</Link>
+          </Button>
         </>
       )}
-    </section>
+    </>
   );
 }

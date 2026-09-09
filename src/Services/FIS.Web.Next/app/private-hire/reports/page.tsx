@@ -17,6 +17,7 @@ import {
   type PrivateHireContractorRecord,
   type PrivateHireVehicleRecord,
 } from "@/lib/api-private-hire";
+import { getSites, type SiteRecord } from "@/lib/api-sites";
 import { getSession } from "@/lib/session";
 
 const ROLE = "Private Hire Vehicles";
@@ -41,6 +42,10 @@ function reportTitle(kind: PrivateHireReportKind) {
     "department-in-service": "Private Hire Vehicles per Department in Service",
     company: "Private Hire Vehicles per Hire Company",
   }[kind];
+}
+
+function siteOptionLabel(site: SiteRecord) {
+  return `${site.description?.trim() || `Site ${site.siteCode}`} (${site.siteCode})`;
 }
 
 function ReportTable({
@@ -105,10 +110,12 @@ function ReportFilter({
   kind,
   query,
   contractors,
+  sites,
 }: Readonly<{
   kind: PrivateHireReportKind;
   query: Record<string, string | string[] | undefined>;
   contractors: PrivateHireContractorRecord[];
+  sites: SiteRecord[];
 }>) {
   if (kind === "all") return null;
   const search = queryValue(query.search);
@@ -162,17 +169,39 @@ function ReportFilter({
       ) : (
         <div className="vehicle-search-row">
           <label className="form-label" htmlFor="private-hire-report-code">
-            {kind === "site" ? "Site code" : "Department / contracted-to code"}
+            {kind === "site" ? "Site" : "Contracted-to site"}
           </label>
-          <input
-            className="vehicle-search"
-            id="private-hire-report-code"
-            name="code"
-            type="number"
-            min="1"
-            defaultValue={code}
-            required
-          />
+          {sites.length > 0 ? (
+            <select
+              className="form-select"
+              id="private-hire-report-code"
+              name="code"
+              defaultValue={code}
+              required
+            >
+              <option value="">Select a site</option>
+              {sites.map((site) => (
+                <option key={site.siteCode} value={site.siteCode}>
+                  {siteOptionLabel(site)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <>
+              <input
+                className="vehicle-search"
+                id="private-hire-report-code"
+                name="code"
+                type="number"
+                min="1"
+                defaultValue={code}
+                required
+              />
+              <p className="muted-copy" role="status">
+                Site options are temporarily unavailable, so the existing reference can be entered.
+              </p>
+            </>
+          )}
           <button className="button button-primary" type="submit">
             Run report
           </button>
@@ -212,9 +241,10 @@ export default async function PrivateHireReportPage({
 
   const query = searchParams ? await searchParams : {};
   try {
-    const [vehicles, contractors] = await Promise.all([
+    const [vehicles, contractors, sites] = await Promise.all([
       getPrivateHireVehicles(),
       getPrivateHireContractors(),
+      getSites().catch(() => []),
     ]);
     const code = getNumber(queryValue(query.code));
     const search = queryValue(query.search).trim().toLowerCase();
@@ -256,7 +286,7 @@ export default async function PrivateHireReportPage({
             </Link>
           </header>
           <PrivateHireNotice query={query} />
-          <ReportFilter kind={kind} query={query} contractors={contractors} />
+          <ReportFilter kind={kind} query={query} contractors={contractors} sites={sites} />
           <section
             className="vehicle-status-maintenance-panel"
             aria-labelledby="private-hire-report-results-title"

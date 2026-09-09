@@ -1,8 +1,20 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { ClipboardList } from "lucide-react";
 
+import ModulePageHeader from "@/app/_components/module-page-header";
 import { editContractAction, hireContractAction, runContractAction } from "@/app/contracts/actions";
+import {
+  canCaptureNewContract,
+  canCloseActiveContract,
+  canEditContract,
+  canManageActiveContract,
+  canReviewContract,
+  canSubmitContract,
+  hasContractAccess,
+  type ContractSession,
+} from "@/app/contracts/access";
 import SessionRecovery from "@/app/home/session-recovery";
 import {
   ContractApiError,
@@ -11,9 +23,13 @@ import {
   type ContractRecord,
   type ContractVehicleSearchResult,
 } from "@/lib/api-contracts";
+import { getDepartments, type DepartmentRecord } from "@/lib/api-departments";
+import {
+  getDriverManagementSiteDrivers,
+  type DriverManagementDriver,
+} from "@/lib/api-driver-management";
+import { getSites, type SiteRecord } from "@/lib/api-sites";
 import { getSession } from "@/lib/session";
-
-const CONTRACT_PERMISSION = BigInt(2);
 
 export type ContractDetailPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -29,60 +45,6 @@ function positiveInt(value: string | undefined) {
   return value && Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function hasContractAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  if (
-    roles.some((role) =>
-      ["contracts", "contract", "admin", "administrator"].includes(role.trim().toLowerCase()),
-    )
-  )
-    return true;
-  try {
-    return accessLevel
-      ? (BigInt(accessLevel) & CONTRACT_PERMISSION) === CONTRACT_PERMISSION
-      : false;
-  } catch {
-    return false;
-  }
-}
-
-function hasApproverAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  return roles.some((role) =>
-    [
-      "contracts approver",
-      "contracts_approver",
-      "back dating contract (approver)",
-      "admin",
-      "administrator",
-    ].includes(role.trim().toLowerCase()),
-  );
-}
-
-function hasLoadAndManageAccess(roles: readonly string[]) {
-  return roles.some((role) =>
-    [
-      "contract (load and manage)",
-      "contracts (load and manage)",
-      "contract_load_and_manage",
-      "contracts_load_and_manage",
-      "admin",
-      "administrator",
-    ].includes(role.trim().toLowerCase()),
-  );
-}
-
-function hasCancelAndCloseAccess(roles: readonly string[]) {
-  return roles.some((role) =>
-    [
-      "contract (cancel and close)",
-      "contracts (cancel and close)",
-      "contract_cancel_and_close",
-      "contracts_cancel_and_close",
-      "admin",
-      "administrator",
-    ].includes(role.trim().toLowerCase()),
-  );
-}
-
 function valueOrDash(value: string | number | null | undefined) {
   return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
 }
@@ -93,6 +55,141 @@ function formatDate(value: string | null) {
 
 function dateInputValue(value: string | null, fallback: string) {
   return value?.slice(0, 10) || fallback;
+}
+
+type ContractReferenceData = Readonly<{
+  sites: SiteRecord[];
+  departments: DepartmentRecord[];
+  drivers: DriverManagementDriver[];
+}>;
+
+function siteOptionLabel(site: SiteRecord) {
+  return `${site.description?.trim() || `Site ${site.siteCode}`} (${site.siteCode})`;
+}
+
+function departmentOptionLabel(department: DepartmentRecord) {
+  return `${department.description?.trim() || `Department ${department.departmentCode}`} (${department.departmentCode})`;
+}
+
+function driverOptionLabel(driver: DriverManagementDriver, sites: SiteRecord[]) {
+  const name = [driver.driverFirstname, driver.driverSurname].filter(Boolean).join(" ");
+  const site = sites.find((item) => item.siteCode === driver.siteCode);
+  const siteLabel = site ? siteOptionLabel(site) : `Site ${driver.siteCode}`;
+  return `${name || `Site driver ${driver.siteDriverCode}`} — ${siteLabel}`;
+}
+
+function SiteSelect({
+  id,
+  name,
+  sites,
+  value,
+  required = false,
+}: Readonly<{
+  id: string;
+  name: string;
+  sites: SiteRecord[];
+  value?: number | null;
+  required?: boolean;
+}>) {
+  const selectedValue = value === null || value === undefined ? "" : String(value);
+  const hasSelectedValue = sites.some((site) => String(site.siteCode) === selectedValue);
+  return (
+    <select
+      className="form-select"
+      defaultValue={selectedValue}
+      id={id}
+      name={name}
+      required={required}
+    >
+      <option value="">Select a site</option>
+      {selectedValue && !hasSelectedValue ? (
+        <option value={selectedValue}>{`Site ${selectedValue} (${selectedValue})`}</option>
+      ) : null}
+      {sites.map((site) => (
+        <option key={site.siteCode} value={site.siteCode}>
+          {siteOptionLabel(site)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function DepartmentSelect({
+  id,
+  name,
+  departments,
+  value,
+  required = false,
+}: Readonly<{
+  id: string;
+  name: string;
+  departments: DepartmentRecord[];
+  value?: number | null;
+  required?: boolean;
+}>) {
+  const selectedValue = value === null || value === undefined ? "" : String(value);
+  const hasSelectedValue = departments.some(
+    (department) => String(department.departmentCode) === selectedValue,
+  );
+  return (
+    <select
+      className="form-select"
+      defaultValue={selectedValue}
+      id={id}
+      name={name}
+      required={required}
+    >
+      <option value="">Select a department</option>
+      {selectedValue && !hasSelectedValue ? (
+        <option value={selectedValue}>{`Department ${selectedValue} (${selectedValue})`}</option>
+      ) : null}
+      {departments.map((department) => (
+        <option key={department.departmentCode} value={department.departmentCode}>
+          {departmentOptionLabel(department)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function SiteDriverSelect({
+  id,
+  name,
+  drivers,
+  sites,
+  value,
+  required = false,
+}: Readonly<{
+  id: string;
+  name: string;
+  drivers: DriverManagementDriver[];
+  sites: SiteRecord[];
+  value?: number | null;
+  required?: boolean;
+}>) {
+  const selectedValue = value === null || value === undefined ? "" : String(value);
+  const hasSelectedValue = drivers.some(
+    (driver) => String(driver.siteDriverCode) === selectedValue,
+  );
+  return (
+    <select
+      className="form-select"
+      defaultValue={selectedValue}
+      id={id}
+      name={name}
+      required={required}
+    >
+      <option value="">Select a site driver</option>
+      {selectedValue && !hasSelectedValue ? (
+        <option value={selectedValue}>{`Site driver ${selectedValue} (${selectedValue})`}</option>
+      ) : null}
+      {drivers.map((driver) => (
+        <option key={driver.siteDriverCode} value={driver.siteDriverCode}>
+          {driverOptionLabel(driver, sites)}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 function statusLabel(contract: ContractRecord) {
@@ -120,28 +217,32 @@ function statusLabel(contract: ContractRecord) {
 
 function DetailActions({
   contract,
-  canApprove,
-  canManage,
-  canCancelClose,
+  session,
 }: Readonly<{
   contract: ContractRecord;
-  canApprove: boolean;
-  canManage: boolean;
-  canCancelClose: boolean;
+  session: ContractSession;
 }>) {
   const returnPath = `/contracts/detail?contractId=${contract.contractCode}`;
   const status = contract.contractStatusCode;
+  const isActive = status === 3 || (status === null && contract.stillCurrent?.toUpperCase() === "Y");
+  const canEdit = (status === 0 || status === 4) && canEditContract(contract, session);
+  const canSubmit = (status === 0 || status === 4) && canSubmitContract(contract, session);
+  const canRecall = status === 1 && canSubmitContract(contract, session);
+  const canReview = status === 1 && canReviewContract(contract, session);
+  const canActivate = (status === 1 || status === 2) && canReviewContract(contract, session);
+  const canManage = isActive && canManageActiveContract(session.roles);
+  const canCancelClose = isActive && canCloseActiveContract(session.roles);
   return (
     <section className="vehicle-status-maintenance-panel" aria-labelledby="contract-actions-title">
       <p className="eyebrow">Available actions</p>
       <h2 id="contract-actions-title">{statusLabel(contract)}</h2>
       <div className="button-row">
-        {status === 0 || status === 4 ? (
+        {canEdit ? (
           <Link className="button button-primary" href={`${returnPath}#edit-contract`}>
             Edit contract
           </Link>
         ) : null}
-        {status === 0 || status === 4 ? (
+        {canSubmit ? (
           <form action={runContractAction}>
             <input name="contractId" type="hidden" value={contract.contractCode} />
             <input name="returnPath" type="hidden" value={returnPath} />
@@ -151,7 +252,7 @@ function DetailActions({
             </button>
           </form>
         ) : null}
-        {status === 1 && (contract.createdByUserCode || contract.userCode) ? (
+        {canRecall ? (
           <form action={runContractAction}>
             <input name="contractId" type="hidden" value={contract.contractCode} />
             <input name="returnPath" type="hidden" value={returnPath} />
@@ -161,7 +262,7 @@ function DetailActions({
             </button>
           </form>
         ) : null}
-        {status === 1 && canApprove ? (
+        {canReview ? (
           <form action={runContractAction}>
             <input name="contractId" type="hidden" value={contract.contractCode} />
             <input name="returnPath" type="hidden" value={returnPath} />
@@ -171,7 +272,7 @@ function DetailActions({
             </button>
           </form>
         ) : null}
-        {status === 2 && canApprove ? (
+        {status === 2 && canActivate ? (
           <form action={runContractAction}>
             <input name="contractId" type="hidden" value={contract.contractCode} />
             <input name="returnPath" type="hidden" value={returnPath} />
@@ -181,22 +282,22 @@ function DetailActions({
             </button>
           </form>
         ) : null}
-        {status === 3 && canManage ? (
+        {canManage ? (
           <Link className="button button-secondary" href={`${returnPath}#extend-contract`}>
             Extend
           </Link>
         ) : null}
-        {status === 3 && canManage ? (
+        {canManage ? (
           <Link className="button button-secondary" href={`${returnPath}#reassign-contract`}>
             Reassign contract
           </Link>
         ) : null}
-        {status === 3 && canCancelClose ? (
+        {canCancelClose ? (
           <Link className="button button-secondary" href={`${returnPath}#close-contract`}>
             Close and return home
           </Link>
         ) : null}
-        {status === 3 && canCancelClose ? (
+        {canCancelClose ? (
           <form action={runContractAction}>
             <input name="contractId" type="hidden" value={contract.contractCode} />
             <input name="returnPath" type="hidden" value={returnPath} />
@@ -206,7 +307,7 @@ function DetailActions({
             </button>
           </form>
         ) : null}
-        {status === 3 && canManage && contract.reliefVehicleOption === true ? (
+        {canManage && contract.reliefVehicleOption === true ? (
           <Link
             className="button button-secondary"
             href={`/contracts/relief-vehicle-search?contractId=${contract.contractCode}`}
@@ -215,7 +316,7 @@ function DetailActions({
           </Link>
         ) : null}
       </div>
-      {(status === 1 || status === 2) && canApprove ? (
+      {status === 1 && canReview ? (
         <form action={runContractAction} className="form-grid contract-action-form">
           <input name="contractId" type="hidden" value={contract.contractCode} />
           <input name="returnPath" type="hidden" value={returnPath} />
@@ -322,7 +423,13 @@ function ContractFacts({ contract }: Readonly<{ contract: ContractRecord }>) {
   );
 }
 
-function HireForm({ vehicle }: Readonly<{ vehicle: ContractVehicleSearchResult }>) {
+function HireForm({
+  vehicle,
+  references,
+}: Readonly<{
+  vehicle: ContractVehicleSearchResult;
+  references: ContractReferenceData;
+}>) {
   return (
     <form action={hireContractAction} className="vehicle-status-maintenance-panel">
       <input name="returnPath" type="hidden" value="/contracts/maintenance" />
@@ -339,15 +446,13 @@ function HireForm({ vehicle }: Readonly<{ vehicle: ContractVehicleSearchResult }
       <div className="form-grid">
         <div className="form-field">
           <label className="form-label" htmlFor="new-contract-site">
-            Site code
+            Site
           </label>
-          <input
-            className="form-input"
+          <SiteSelect
             id="new-contract-site"
-            min="1"
             name="siteCode"
-            type="number"
             required
+            sites={references.sites}
           />
         </div>
         <div className="form-field">
@@ -370,14 +475,13 @@ function HireForm({ vehicle }: Readonly<{ vehicle: ContractVehicleSearchResult }
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="new-contract-site-driver">
-            Site driver code
+            Site driver
           </label>
-          <input
-            className="form-input"
+          <SiteDriverSelect
+            drivers={references.drivers}
             id="new-contract-site-driver"
-            min="1"
             name="siteDriverCode"
-            type="number"
+            sites={references.sites}
           />
         </div>
         <div className="form-field">
@@ -427,7 +531,15 @@ function HireForm({ vehicle }: Readonly<{ vehicle: ContractVehicleSearchResult }
   );
 }
 
-function EditForm({ contract, today }: Readonly<{ contract: ContractRecord; today: string }>) {
+function EditForm({
+  contract,
+  references,
+  today,
+}: Readonly<{
+  contract: ContractRecord;
+  references: ContractReferenceData;
+  today: string;
+}>) {
   return (
     <form
       action={editContractAction}
@@ -450,16 +562,14 @@ function EditForm({ contract, today }: Readonly<{ contract: ContractRecord; toda
       <div className="form-grid">
         <div className="form-field">
           <label className="form-label" htmlFor="edit-contract-site">
-            Site code
+            Site
           </label>
-          <input
-            className="form-input"
+          <SiteSelect
             id="edit-contract-site"
-            min="1"
             name="siteCode"
-            type="number"
-            defaultValue={contract.siteCode}
             required
+            sites={references.sites}
+            value={contract.siteCode}
           />
         </div>
         <div className="form-field">
@@ -489,14 +599,14 @@ function EditForm({ contract, today }: Readonly<{ contract: ContractRecord; toda
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="edit-contract-site-driver">
-            Site driver code
+            Site driver
           </label>
-          <input
-            className="form-input"
+          <SiteDriverSelect
+            drivers={references.drivers}
             id="edit-contract-site-driver"
-            min="1"
             name="siteDriverCode"
-            type="number"
+            sites={references.sites}
+            value={contract.siteDriverCode}
           />
         </div>
         <div className="form-field">
@@ -594,7 +704,15 @@ function ExtendForm({ contract, today }: Readonly<{ contract: ContractRecord; to
   );
 }
 
-function ReassignForm({ contract, today }: Readonly<{ contract: ContractRecord; today: string }>) {
+function ReassignForm({
+  contract,
+  references,
+  today,
+}: Readonly<{
+  contract: ContractRecord;
+  references: ContractReferenceData;
+  today: string;
+}>) {
   return (
     <form
       action={runContractAction}
@@ -621,15 +739,13 @@ function ReassignForm({ contract, today }: Readonly<{ contract: ContractRecord; 
       <div className="form-grid">
         <div className="form-field">
           <label className="form-label" htmlFor="reassign-site">
-            Destination site code
+            Destination site
           </label>
-          <input
-            className="form-input"
+          <SiteSelect
             id="reassign-site"
-            min="1"
             name="newSiteCode"
-            type="number"
             required
+            sites={references.sites}
           />
         </div>
         <div className="form-field">
@@ -688,7 +804,15 @@ function ReassignForm({ contract, today }: Readonly<{ contract: ContractRecord; 
   );
 }
 
-function CloseForm({ contract, today }: Readonly<{ contract: ContractRecord; today: string }>) {
+function CloseForm({
+  contract,
+  references,
+  today,
+}: Readonly<{
+  contract: ContractRecord;
+  references: ContractReferenceData;
+  today: string;
+}>) {
   return (
     <form
       action={runContractAction}
@@ -739,40 +863,35 @@ function CloseForm({ contract, today }: Readonly<{ contract: ContractRecord; tod
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="home-department">
-            Home department code
+            Home department
           </label>
-          <input
-            className="form-input"
+          <DepartmentSelect
             id="home-department"
-            min="1"
             name="homeDepartmentCode"
-            type="number"
             required
+            departments={references.departments}
           />
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="home-site">
-            Home site code
+            Home site
           </label>
-          <input
-            className="form-input"
+          <SiteSelect
             id="home-site"
-            min="1"
             name="homeSiteCode"
-            type="number"
             required
+            sites={references.sites}
           />
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="home-driver">
-            Home site driver code
+            Home site driver
           </label>
-          <input
-            className="form-input"
+          <SiteDriverSelect
+            drivers={references.drivers}
             id="home-driver"
-            min="1"
             name="homeSiteDriverCode"
-            type="number"
+            sites={references.sites}
           />
         </div>
         <div className="form-field form-group-full">
@@ -789,7 +908,7 @@ function CloseForm({ contract, today }: Readonly<{ contract: ContractRecord; tod
         </div>
         <div className="form-field form-group-full">
           <label className="vehicle-checkbox-label">
-            <input name="createHomeCustodyContract" type="checkbox" value="true" defaultChecked />{" "}
+            <input name="createHomeCustodyContract" type="checkbox" value="true" defaultChecked />
             Create home custody contract
           </label>
         </div>
@@ -882,6 +1001,27 @@ export default async function ContractDetailPage({
         </main>
       );
 
+    const canCapture = !contract && vehicle ? canCaptureNewContract(session.roles) : false;
+    const canEdit =
+      contract && [0, 4].includes(contract.contractStatusCode ?? -1)
+        ? canEditContract(contract, session)
+        : false;
+    const isActive =
+      contract?.contractStatusCode === 3 ||
+      (contract?.contractStatusCode === null && contract.stillCurrent?.toUpperCase() === "Y");
+    const canManage = isActive ? canManageActiveContract(session.roles) : false;
+    const canCancelClose = isActive ? canCloseActiveContract(session.roles) : false;
+    const needsReferences = Boolean(canCapture || canEdit || canManage || canCancelClose);
+    let references: ContractReferenceData = { sites: [], departments: [], drivers: [] };
+    if (needsReferences) {
+      const [sites, departments, drivers] = await Promise.all([
+        getSites(),
+        getDepartments(),
+        getDriverManagementSiteDrivers(),
+      ]);
+      references = { sites, departments, drivers };
+    }
+
     const notice =
       getQueryValue(query.saved) === "1"
         ? "Contract captured successfully."
@@ -890,29 +1030,26 @@ export default async function ContractDetailPage({
           : getQueryValue(query.success)
             ? `Contract ${getQueryValue(query.success)} successfully.`
             : getQueryValue(query.error);
-    const canApprove = hasApproverAccess(session.accessLevel, session.roles);
-    const canManage = hasLoadAndManageAccess(session.roles);
-    const canCancelClose = hasCancelAndCloseAccess(session.roles);
     const today = new Date().toISOString().slice(0, 10);
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="contract-detail-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Vehicle contract management</p>
-              <h1 id="contract-detail-title">
-                {contract ? `Contract ${contract.contractCode}` : "Open a vehicle contract"}
-              </h1>
-              <p>
-                {contract
-                  ? `${valueOrDash(contract.fleetNumber)} / ${valueOrDash(contract.registrationNumber)}`
-                  : `${valueOrDash(vehicle?.fleetNumber)} / ${valueOrDash(vehicle?.registrationNumber)}`}
-              </p>
-            </div>
-            <Link className="button button-secondary" href="/contracts/maintenance">
-              Return to Search
-            </Link>
-          </header>
+          <ModulePageHeader
+            icon={ClipboardList}
+            eyebrow="Vehicle contract management"
+            title={contract ? `Contract ${contract.contractCode}` : "Open a vehicle contract"}
+            titleId="contract-detail-title"
+            description={
+              contract
+                ? `${valueOrDash(contract.fleetNumber)} / ${valueOrDash(contract.registrationNumber)}`
+                : `${valueOrDash(vehicle?.fleetNumber)} / ${valueOrDash(vehicle?.registrationNumber)}`
+            }
+            actions={
+              <Link className="button button-secondary" href="/contracts/maintenance">
+                Return to Search
+              </Link>
+            }
+          />
           {notice ? (
             <div
               className={
@@ -927,26 +1064,28 @@ export default async function ContractDetailPage({
             <>
               <DetailActions
                 contract={contract}
-                canApprove={canApprove}
-                canManage={canManage}
-                canCancelClose={canCancelClose}
+                session={session}
               />
               <ContractFacts contract={contract} />
-              {contract.contractStatusCode === 0 || contract.contractStatusCode === 4 ? (
-                <EditForm contract={contract} today={today} />
+              {canEdit ? (
+                <EditForm contract={contract} references={references} today={today} />
               ) : null}
-              {contract.contractStatusCode === 3 && canManage ? (
+              {isActive && canManage ? (
                 <ExtendForm contract={contract} today={today} />
               ) : null}
-              {contract.contractStatusCode === 3 && canManage ? (
-                <ReassignForm contract={contract} today={today} />
+              {isActive && canManage ? (
+                <ReassignForm contract={contract} references={references} today={today} />
               ) : null}
-              {contract.contractStatusCode === 3 && canCancelClose ? (
-                <CloseForm contract={contract} today={today} />
+              {isActive && canCancelClose ? (
+                <CloseForm contract={contract} references={references} today={today} />
               ) : null}
             </>
           ) : vehicle ? (
-            <HireForm vehicle={vehicle} />
+            canCapture ? (
+              <HireForm references={references} vehicle={vehicle} />
+            ) : (
+              <p className="muted-copy">You can view this vehicle but do not have capture access.</p>
+            )
           ) : null}
           <div className="vehicle-footer-actions">
             <Link className="button button-secondary" href="/contracts">

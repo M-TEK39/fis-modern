@@ -8,12 +8,19 @@ import {
   vehicleAuthorizationAction,
   type VehicleAuthorizationActionState,
 } from "@/app/vehicles/authorize/actions";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import type {
   VehicleAuthorization,
+  VehicleAuthorizationQueuePage,
   VehicleAuthorizationQueues,
 } from "@/lib/api-vehicle-authorization";
 
-const PAGE_SIZE = 12;
 const initialActionState: VehicleAuthorizationActionState = { status: "idle" };
 const AMOUNT_FORMATTER = new Intl.NumberFormat("en-ZA", {
   minimumFractionDigits: 2,
@@ -21,13 +28,20 @@ const AMOUNT_FORMATTER = new Intl.NumberFormat("en-ZA", {
 });
 
 type QueueKind = "rejected" | "awaiting" | "authorized";
+type QueuePageParam = "pendingPage" | "rejectedPage" | "authorizedPage";
+type VehicleAuthorizationSearchParams = Record<string, string | string[] | undefined>;
+
+const QUEUE_PAGE_PARAMS: Record<QueueKind, QueuePageParam> = {
+  rejected: "rejectedPage",
+  awaiting: "pendingPage",
+  authorized: "authorizedPage",
+};
 
 type QueueTableProps = {
   title: string;
-  vehicles: VehicleAuthorization[];
+  queue: VehicleAuthorizationQueuePage;
   kind: QueueKind;
-  page: number;
-  onPageChange: (page: number) => void;
+  query: VehicleAuthorizationSearchParams;
   onReview: (vehicle: VehicleAuthorization) => void;
   currentUserAccessCode?: string;
 };
@@ -83,51 +97,85 @@ function canReviewVehicle(vehicle: VehicleAuthorization, currentUserAccessCode?:
   return !isCurrentUserCapturer(vehicle, currentUserAccessCode);
 }
 
-function Pagination({
-  page,
-  totalPages,
-  onPageChange,
+function pageHref(
+  query: VehicleAuthorizationSearchParams,
+  pageParam: QueuePageParam,
+  page: number,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    const firstValue = Array.isArray(value) ? value[0] : value;
+    if (firstValue !== undefined) {
+      params.set(key, firstValue);
+    }
+  }
+
+  if (page <= 1) {
+    params.delete(pageParam);
+  } else {
+    params.set(pageParam, String(page));
+  }
+
+  const queryString = params.toString();
+  return queryString ? `/vehicles/authorize?${queryString}` : "/vehicles/authorize";
+}
+
+function QueuePagination({
+  queueTitle,
+  queue,
+  pageParam,
+  query,
 }: Readonly<{
-  page: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
+  queueTitle: string;
+  queue: VehicleAuthorizationQueuePage;
+  pageParam: QueuePageParam;
+  query: VehicleAuthorizationSearchParams;
 }>) {
+  const previousDisabled = queue.page <= 1;
+  const nextDisabled = queue.page >= queue.totalPages;
+
   return (
-    <nav className="vehicle-pagination" aria-label="Vehicle authorization pages">
-      <button
-        className="vehicle-pagination-button"
-        type="button"
-        disabled={page <= 1}
-        onClick={() => onPageChange(page - 1)}
-      >
-        Previous
-      </button>
-      <span className="vehicle-pagination-meta" aria-live="polite">
-        Page {page} of {totalPages}
-      </span>
-      <button
-        className="vehicle-pagination-button"
-        type="button"
-        disabled={page >= totalPages}
-        onClick={() => onPageChange(page + 1)}
-      >
-        Next
-      </button>
-    </nav>
+    <Pagination className="mt-4" aria-label={`${queueTitle} pages`}>
+      <PaginationContent className="flex-wrap justify-center gap-2">
+        <PaginationItem>
+          <PaginationPrevious
+            href={pageHref(query, pageParam, previousDisabled ? queue.page : queue.page - 1)}
+            aria-disabled={previousDisabled}
+            className={previousDisabled ? "pointer-events-none opacity-50" : undefined}
+            tabIndex={previousDisabled ? -1 : undefined}
+          />
+        </PaginationItem>
+        <PaginationItem>
+          <span
+            className="inline-flex h-9 items-center whitespace-nowrap px-2 text-sm font-medium text-muted-foreground"
+            aria-live="polite"
+          >
+            Page {queue.page} of {queue.totalPages} ({queue.totalRecords} records; {queue.pageSize}{" "}
+            per page)
+          </span>
+        </PaginationItem>
+        <PaginationItem>
+          <PaginationNext
+            href={pageHref(query, pageParam, nextDisabled ? queue.page : queue.page + 1)}
+            aria-disabled={nextDisabled}
+            className={nextDisabled ? "pointer-events-none opacity-50" : undefined}
+            tabIndex={nextDisabled ? -1 : undefined}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
   );
 }
 
 function QueueTable({
   title,
-  vehicles,
+  queue,
   kind,
-  page,
-  onPageChange,
+  query,
   onReview,
   currentUserAccessCode,
 }: QueueTableProps) {
-  const totalPages = Math.max(1, Math.ceil(vehicles.length / PAGE_SIZE));
-  const visibleVehicles = vehicles.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const vehicles = queue.data;
 
   return (
     <section className="vehicle-authorization-section" aria-labelledby={`${kind}-vehicles-title`}>
@@ -136,7 +184,7 @@ function QueueTable({
           <p className="eyebrow">Authorization queue</p>
           <h2 id={`${kind}-vehicles-title`}>{title}</h2>
         </div>
-        <span className="vehicle-queue-count">{vehicles.length} record(s)</span>
+        <span className="vehicle-queue-count">{queue.totalRecords} record(s)</span>
       </div>
 
       {vehicles.length === 0 ? (
@@ -197,7 +245,7 @@ function QueueTable({
                 )}
               </thead>
               <tbody>
-                {visibleVehicles.map((vehicle) => {
+                {vehicles.map((vehicle) => {
                   const canReview = canReviewVehicle(vehicle, currentUserAccessCode);
                   const actionLabel = kind === "awaiting" && canReview ? "Review" : "View";
 
@@ -290,7 +338,12 @@ function QueueTable({
               </tbody>
             </table>
           </div>
-          <Pagination page={page} totalPages={totalPages} onPageChange={onPageChange} />
+          <QueuePagination
+            queueTitle={title}
+            queue={queue}
+            pageParam={QUEUE_PAGE_PARAMS[kind]}
+            query={query}
+          />
         </>
       )}
     </section>
@@ -568,16 +621,14 @@ function ReviewModal({
 
 export default function VehicleAuthorizationClient({
   queues,
+  query,
   currentUserAccessCode,
 }: Readonly<{
   queues: VehicleAuthorizationQueues;
+  query: VehicleAuthorizationSearchParams;
   currentUserAccessCode?: string;
 }>) {
   const router = useRouter();
-  const [showAllAuthorized, setShowAllAuthorized] = useState(false);
-  const [rejectedPage, setRejectedPage] = useState(1);
-  const [awaitingPage, setAwaitingPage] = useState(1);
-  const [authorizedPage, setAuthorizedPage] = useState(1);
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleAuthorization | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [actionState, formAction, pending] = useActionState(
@@ -585,17 +636,12 @@ export default function VehicleAuthorizationClient({
     initialActionState,
   );
 
-  const authorizedVehicles = showAllAuthorized ? queues.authorized : queues.authorized.slice(0, 25);
-
   useEffect(() => {
     if (actionState.status !== "success") {
       return;
     }
 
     setStatusMessage(actionState.message ?? "Vehicle authorization action completed successfully.");
-    setRejectedPage(1);
-    setAwaitingPage(1);
-    setAuthorizedPage(1);
     setSelectedVehicle(null);
     router.refresh();
   }, [actionState, router]);
@@ -625,16 +671,6 @@ export default function VehicleAuthorizationClient({
           Authorization actions are recorded against the existing vehicle inception workflow.
         </p>
         <div className="vehicle-overview-controls">
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={() => {
-              setShowAllAuthorized((value) => !value);
-              setAuthorizedPage(1);
-            }}
-          >
-            {showAllAuthorized ? "Show Grouped" : "View All"}
-          </button>
           <Link className="button button-secondary" href="/vehicles">
             Back to Vehicle Master
           </Link>
@@ -643,28 +679,25 @@ export default function VehicleAuthorizationClient({
 
       <QueueTable
         title="Rejected Vehicle List"
-        vehicles={queues.rejected}
+        queue={queues.rejected}
         kind="rejected"
-        page={rejectedPage}
-        onPageChange={setRejectedPage}
+        query={query}
         onReview={openReview}
         currentUserAccessCode={currentUserAccessCode}
       />
       <QueueTable
         title="Awaiting Authorization Vehicle List"
-        vehicles={queues.awaiting}
+        queue={queues.awaiting}
         kind="awaiting"
-        page={awaitingPage}
-        onPageChange={setAwaitingPage}
+        query={query}
         onReview={openReview}
         currentUserAccessCode={currentUserAccessCode}
       />
       <QueueTable
         title="Authorized Vehicles Ready for Printing and Inception into the Database"
-        vehicles={authorizedVehicles}
+        queue={queues.authorized}
         kind="authorized"
-        page={authorizedPage}
-        onPageChange={setAuthorizedPage}
+        query={query}
         onReview={openReview}
         currentUserAccessCode={currentUserAccessCode}
       />

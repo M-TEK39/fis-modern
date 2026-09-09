@@ -4,12 +4,26 @@ import { connection } from "next/server";
 
 import { saveBookingAction } from "@/app/call-centre/bookings/actions";
 import SessionRecovery from "@/app/home/session-recovery";
-import { CallCentreApiError, getCallCentreIncident } from "@/lib/api-call-centre";
+import {
+  CallCentreApiError,
+  getCallCentreIncident,
+  getCallCentreSites,
+  type CallCentreSiteOption,
+} from "@/lib/api-call-centre";
+import { getClasses, type ClassRecord } from "@/lib/api-classes";
 import { BookingApiError, getBooking, type BookingRecord } from "@/lib/api-bookings";
+import { getUserAdminUserChoices, type UserAdminProfile } from "@/lib/api-user-admin";
 import { getSession } from "@/lib/session";
 
 const CALL_CENTRE_ROLE = "Call Centre";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+type SelectOption = { value: string; label: string };
+type BookingLookups = {
+  classOptions: SelectOption[];
+  siteOptions: SelectOption[];
+  userOptions: SelectOption[];
+  blockers: string[];
+};
 
 export type BookingPageProps = { searchParams: SearchParams };
 
@@ -63,6 +77,101 @@ function emptyBooking(): BookingRecord {
     modifiedByUserCode: null,
     isDeleted: false,
   };
+}
+
+function namedOption(code: number, name: string | null | undefined): SelectOption | null {
+  const normalizedName = name?.trim();
+  return normalizedName ? { value: String(code), label: `${normalizedName} (${code})` } : null;
+}
+
+function classOptions(classes: readonly ClassRecord[]) {
+  return classes
+    .map((item) => namedOption(item.classCode, item.description))
+    .filter((item): item is SelectOption => item !== null)
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function siteOptions(sites: readonly CallCentreSiteOption[]) {
+  return sites
+    .map((site) => namedOption(site.code, site.description))
+    .filter((item): item is SelectOption => item !== null)
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function userDisplayName(user: UserAdminProfile) {
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return fullName || user.userName?.trim() || null;
+}
+
+function userOptions(users: readonly UserAdminProfile[]) {
+  return users
+    .map((user) => namedOption(user.userAccessCode, userDisplayName(user)))
+    .filter((item): item is SelectOption => item !== null)
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+async function getBookingLookups(): Promise<BookingLookups> {
+  const [classesResult, sitesResult, usersResult] = await Promise.allSettled([
+    getClasses(),
+    getCallCentreSites(),
+    getUserAdminUserChoices(),
+  ]);
+  const classes = classesResult.status === "fulfilled" ? classesResult.value : [];
+  const sites = sitesResult.status === "fulfilled" ? sitesResult.value : [];
+  const users = usersResult.status === "fulfilled" ? usersResult.value : [];
+  const classChoices = classOptions(classes);
+  const siteChoices = siteOptions(sites);
+  const userChoices = userOptions(users);
+  const blockers: string[] = [];
+
+  if (classesResult.status === "rejected" || classChoices.length === 0) {
+    blockers.push("Class Code options are unavailable, so the code remains manual.");
+  }
+  if (sitesResult.status === "rejected" || siteChoices.length === 0) {
+    blockers.push("Site Code options are unavailable, so the code remains manual.");
+  }
+  if (usersResult.status === "rejected" || userChoices.length === 0) {
+    blockers.push("User ID options are unavailable, so the code remains manual.");
+  }
+
+  return {
+    classOptions: classChoices,
+    siteOptions: siteChoices,
+    userOptions: userChoices,
+    blockers,
+  };
+}
+
+function hasOption(options: readonly SelectOption[], value: string) {
+  return options.some((option) => option.value === value);
+}
+
+function canUseSelect(options: readonly SelectOption[], value: string, isEdit: boolean) {
+  if (options.length === 0) return false;
+  if (!isEdit && (value === "" || value === "0")) return true;
+  return value === "" || hasOption(options, value);
+}
+
+function selectDefaultValue(value: string, isEdit: boolean) {
+  return !isEdit && value === "0" ? "" : value;
+}
+
+function currentLookupBlockers(record: BookingRecord, lookups: BookingLookups) {
+  const blockers = [...lookups.blockers];
+  if (record.bookingId <= 0) return blockers;
+
+  const currentValues = [
+    ["Class Code", valueOrEmpty(record.classCode), lookups.classOptions],
+    ["Site Code", valueOrEmpty(record.siteCode), lookups.siteOptions],
+    ["User ID", valueOrEmpty(record.userId), lookups.userOptions],
+  ] as const;
+  for (const [label, value, options] of currentValues) {
+    if (value && options.length > 0 && !hasOption(options, value)) {
+      blockers.push(`${label} ${value} has no named lookup match, so it remains manual.`);
+    }
+  }
+
+  return blockers;
 }
 
 function AccessRestricted() {
@@ -158,11 +267,51 @@ function Field({
   );
 }
 
+function SelectField({
+  id,
+  label,
+  name,
+  defaultValue,
+  options,
+  placeholder,
+  required = false,
+}: Readonly<{
+  id: string;
+  label: string;
+  name: string;
+  defaultValue: string;
+  options: readonly SelectOption[];
+  placeholder: string;
+  required?: boolean;
+}>) {
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <select id={id} name={name} defaultValue={defaultValue} required={required}>
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function BookingForm({
   record,
   sourceGmt,
-}: Readonly<{ record: BookingRecord; sourceGmt: string }>) {
+  lookups,
+}: Readonly<{
+  record: BookingRecord;
+  sourceGmt: string;
+  lookups: BookingLookups;
+}>) {
   const isEdit = record.bookingId > 0;
+  const siteValue = valueOrEmpty(record.siteCode);
+  const classValue = valueOrEmpty(record.classCode);
+  const userValue = valueOrEmpty(record.userId);
 
   return (
     <form action={saveBookingAction} className="vehicle-form-stack">
@@ -182,12 +331,23 @@ function BookingForm({
             name="name"
             defaultValue={valueOrEmpty(record.name)}
           />
-          <Field
-            id="booking-site"
-            label="Site Code"
-            name="site_code"
-            defaultValue={valueOrEmpty(record.siteCode)}
-          />
+          {canUseSelect(lookups.siteOptions, siteValue, isEdit) ? (
+            <SelectField
+              id="booking-site"
+              label="Site"
+              name="site_code"
+              defaultValue={selectDefaultValue(siteValue, isEdit)}
+              options={lookups.siteOptions}
+              placeholder="Select site"
+            />
+          ) : (
+            <Field
+              id="booking-site"
+              label="Site Code"
+              name="site_code"
+              defaultValue={siteValue}
+            />
+          )}
           <Field
             id="booking-telephone"
             label="Telephone"
@@ -201,22 +361,46 @@ function BookingForm({
             type="number"
             defaultValue={valueOrEmpty(record.vmfCode)}
           />
-          <Field
-            id="booking-class"
-            label="Class Code"
-            name="class_code"
-            type="number"
-            defaultValue={valueOrEmpty(record.classCode)}
-            required
-          />
-          <Field
-            id="booking-user"
-            label="User ID"
-            name="user_id"
-            type="number"
-            defaultValue={valueOrEmpty(record.userId)}
-            required
-          />
+          {canUseSelect(lookups.classOptions, classValue, isEdit) ? (
+            <SelectField
+              id="booking-class"
+              label="Vehicle class"
+              name="class_code"
+              defaultValue={selectDefaultValue(classValue, isEdit)}
+              options={lookups.classOptions}
+              placeholder="Select class"
+              required
+            />
+          ) : (
+            <Field
+              id="booking-class"
+              label="Class Code"
+              name="class_code"
+              type="number"
+              defaultValue={classValue}
+              required
+            />
+          )}
+          {canUseSelect(lookups.userOptions, userValue, isEdit) ? (
+            <SelectField
+              id="booking-user"
+              label="Requesting user"
+              name="user_id"
+              defaultValue={selectDefaultValue(userValue, isEdit)}
+              options={lookups.userOptions}
+              placeholder="Select user"
+              required
+            />
+          ) : (
+            <Field
+              id="booking-user"
+              label="User ID"
+              name="user_id"
+              type="number"
+              defaultValue={userValue}
+              required
+            />
+          )}
           <Field
             id="booking-location"
             label="Location Code"
@@ -392,6 +576,8 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
   }
 
   const formRecord = record ?? emptyBooking();
+  const lookups = await getBookingLookups();
+  const lookupBlockers = currentLookupBlockers(formRecord, lookups);
 
   return (
     <main className="page-shell vehicle-page-shell">
@@ -427,13 +613,18 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
             {contextNotice}
           </div>
         ) : null}
+        {lookupBlockers.length > 0 ? (
+          <div className="notice notice-info" role="status">
+            Some code fields remain manual: {lookupBlockers.join(" ")}
+          </div>
+        ) : null}
         <LookupForm bookingId={rawBookingId} sourceGmt={sourceGmt} />
         {loadError ? (
           <div className="notice notice-error" role="alert">
             {loadError}
           </div>
         ) : null}
-        <BookingForm record={formRecord} sourceGmt={sourceGmt} />
+        <BookingForm record={formRecord} sourceGmt={sourceGmt} lookups={lookups} />
       </section>
     </main>
   );

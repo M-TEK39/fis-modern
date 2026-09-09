@@ -67,6 +67,12 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
     {
         ArgumentNullException.ThrowIfNull(query);
 
+        var normalizedQuery = query with
+        {
+            Page = Math.Max(1, query.Page),
+            PageSize = Math.Clamp(query.PageSize, 1, 100),
+        };
+
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)
@@ -90,12 +96,12 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
             var statusColumns = await GetColumnsAsync(connection, StatusTableName, transaction);
             var remarkColumns = await GetColumnsAsync(connection, RemarksTableName, transaction);
 
-            var vehicles = await QueryVehiclesAsync(
+            var (vehicles, totalCount, page) = await QueryVehiclesAsync(
                 connection,
                 transaction,
                 vehicleColumns,
                 modelColumns,
-                query
+                normalizedQuery
             );
             var remarksAvailable = RequiredRemarkColumns.All(remarkColumns.Contains);
             if (remarksAvailable && vehicles.Count > 0)
@@ -153,7 +159,10 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
                     "status_description",
                     statusColumns
                 ),
-                remarksAvailable
+                remarksAvailable,
+                page,
+                normalizedQuery.PageSize,
+                totalCount
             );
         }
         finally
@@ -165,7 +174,11 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         }
     }
 
-    private static async Task<List<VehicleStatusReportVehicle>> QueryVehiclesAsync(
+    private static async Task<(
+        List<VehicleStatusReportVehicle> Vehicles,
+        int TotalCount,
+        int Page
+    )> QueryVehiclesAsync(
         DbConnection connection,
         DbTransaction? transaction,
         IReadOnlySet<string> vehicleColumns,
@@ -173,9 +186,99 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         VehicleStatusReportQuery query
     )
     {
+        int totalCount;
+        await using (var countCommand = connection.CreateCommand())
+        {
+            countCommand.Transaction = transaction;
+            var countConditions = BuildVehicleConditions(
+                countCommand,
+                vehicleColumns,
+                modelColumns,
+                query
+            );
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{VehicleTableName}] AS [v]
+                WHERE {string.Join(" AND ", countConditions)}
+                """;
+            totalCount = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+        }
+
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
+        var conditions = BuildVehicleConditions(command, vehicleColumns, modelColumns, query);
 
+        var dateCreated = GetDateExpression(
+            "v",
+            vehicleColumns,
+            "date_created",
+            "captured_date",
+            "take_on_date"
+        );
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)query.PageSize));
+        var page = Math.Min(query.Page, totalPages);
+        var skip = (long)(page - 1) * query.PageSize;
+        command.CommandText = $"""
+            SELECT
+                [v].[vmf_code] AS [vmf_code],
+                [v].[fleet_number] AS [fleet_number],
+                [v].[registration_number] AS [registration_number],
+                [v].[vehicle_status_code] AS [vehicle_status_code],
+                [v].[type_code] AS [type_code],
+                [v].[vs_code] AS [vs_code],
+                [v].[model_code] AS [model_code],
+                [v].[location_code] AS [location_code],
+                [v].[chassis_number] AS [chassis_number],
+                [v].[engine_number_1] AS [engine_number_1],
+                [v].[year_manufactured] AS [year_manufactured],
+                [v].[take_on_date] AS [take_on_date],
+                [v].[invoice_number] AS [invoice_number],
+                {dateCreated} AS [date_created],
+                [v].[current_odo] AS [current_odo]
+            FROM [dbo].[{VehicleTableName}] AS [v]
+            WHERE {string.Join(" AND ", conditions)}
+            ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddParameter(command, "@skip", DbType.Int64, skip);
+        AddParameter(command, "@pageSize", DbType.Int32, query.PageSize);
+
+        var results = new List<VehicleStatusReportVehicle>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            results.Add(
+                new VehicleStatusReportVehicle(
+                    ReadInt32(reader, "vmf_code") ?? 0,
+                    ReadString(reader, "fleet_number"),
+                    ReadString(reader, "registration_number"),
+                    ReadInt16(reader, "vehicle_status_code"),
+                    ReadInt16(reader, "type_code"),
+                    ReadByte(reader, "vs_code"),
+                    ReadInt16(reader, "model_code"),
+                    ReadInt16(reader, "location_code"),
+                    ReadString(reader, "chassis_number"),
+                    ReadString(reader, "engine_number_1"),
+                    ReadInt16(reader, "year_manufactured"),
+                    ReadDateTime(reader, "take_on_date"),
+                    ReadString(reader, "invoice_number"),
+                    ReadDateTime(reader, "date_created"),
+                    ReadInt32(reader, "current_odo"),
+                    null
+                )
+            );
+        }
+
+        return (results, totalCount, page);
+    }
+
+    private static List<string> BuildVehicleConditions(
+        DbCommand command,
+        IReadOnlySet<string> vehicleColumns,
+        IReadOnlySet<string> modelColumns,
+        VehicleStatusReportQuery query
+    )
+    {
         var conditions = new List<string> { GetNotDeletedFilter("v", vehicleColumns) };
 
         if (query.VehicleStatusCode.HasValue)
@@ -268,62 +371,7 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
             );
         }
 
-        var dateCreated = GetDateExpression(
-            "v",
-            vehicleColumns,
-            "date_created",
-            "captured_date",
-            "take_on_date"
-        );
-        command.CommandText = $"""
-            SELECT
-                [v].[vmf_code] AS [vmf_code],
-                [v].[fleet_number] AS [fleet_number],
-                [v].[registration_number] AS [registration_number],
-                [v].[vehicle_status_code] AS [vehicle_status_code],
-                [v].[type_code] AS [type_code],
-                [v].[vs_code] AS [vs_code],
-                [v].[model_code] AS [model_code],
-                [v].[location_code] AS [location_code],
-                [v].[chassis_number] AS [chassis_number],
-                [v].[engine_number_1] AS [engine_number_1],
-                [v].[year_manufactured] AS [year_manufactured],
-                [v].[take_on_date] AS [take_on_date],
-                [v].[invoice_number] AS [invoice_number],
-                {dateCreated} AS [date_created],
-                [v].[current_odo] AS [current_odo]
-            FROM [dbo].[{VehicleTableName}] AS [v]
-            WHERE {string.Join(" AND ", conditions)}
-            ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]
-            """;
-
-        var results = new List<VehicleStatusReportVehicle>();
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            results.Add(
-                new VehicleStatusReportVehicle(
-                    ReadInt32(reader, "vmf_code") ?? 0,
-                    ReadString(reader, "fleet_number"),
-                    ReadString(reader, "registration_number"),
-                    ReadInt16(reader, "vehicle_status_code"),
-                    ReadInt16(reader, "type_code"),
-                    ReadByte(reader, "vs_code"),
-                    ReadInt16(reader, "model_code"),
-                    ReadInt16(reader, "location_code"),
-                    ReadString(reader, "chassis_number"),
-                    ReadString(reader, "engine_number_1"),
-                    ReadInt16(reader, "year_manufactured"),
-                    ReadDateTime(reader, "take_on_date"),
-                    ReadString(reader, "invoice_number"),
-                    ReadDateTime(reader, "date_created"),
-                    ReadInt32(reader, "current_odo"),
-                    null
-                )
-            );
-        }
-
-        return results;
+        return conditions;
     }
 
     private static async Task<IReadOnlyList<VehicleStatusReportLookup>> QueryLookupAsync(

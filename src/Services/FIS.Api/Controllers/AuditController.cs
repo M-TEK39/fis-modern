@@ -44,7 +44,7 @@ public class AuditController : BaseApiController
         [FromQuery] int? userId = null,
         [FromQuery] string? primaryKey = null,
         [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 50
+        [FromQuery] int pageSize = 24
     )
     {
         try
@@ -155,7 +155,7 @@ public class AuditController : BaseApiController
         [FromQuery] DateTime? fromDate = null,
         [FromQuery] DateTime? toDate = null,
         [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 50
+        [FromQuery] int pageSize = 24
     )
     {
         try
@@ -218,7 +218,7 @@ public class AuditController : BaseApiController
     public async Task<IActionResult> GetPasswordHistory(
         [FromQuery] int? userAccessCode = null,
         [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 50
+        [FromQuery] int pageSize = 24
     )
     {
         try

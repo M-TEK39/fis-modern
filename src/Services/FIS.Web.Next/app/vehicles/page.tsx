@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { CarFront } from "lucide-react";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { logoutAction } from "@/app/actions/auth";
+import ModulePageHeader from "@/app/_components/module-page-header";
 import SessionRecovery from "@/app/home/session-recovery";
 import VehicleMasterClient from "@/app/vehicles/vehicle-master-client";
 import { getVehicleSnapshotPage, VehicleApiError } from "@/lib/api-vehicles";
@@ -83,6 +86,7 @@ function ApiUnavailable() {
 }
 
 async function VehicleMasterContent({ searchParams, routePath }: VehicleMasterPageProps) {
+  await connection();
   const currentRoute = routePath ?? "/vehicles";
   const session = await getSession();
 
@@ -160,13 +164,13 @@ export default function VehicleMasterPage({
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="vehicle-master-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Fleet administration</p>
-            <h1 id="vehicle-master-title">{pageTitle}</h1>
-            <p>{pageDescription}</p>
-          </div>
-        </header>
+        <ModulePageHeader
+          icon={CarFront}
+          eyebrow="Fleet administration"
+          title={pageTitle}
+          titleId="vehicle-master-title"
+          description={pageDescription}
+        />
         <Suspense fallback={<VehicleMasterFallback />}>
           <VehicleMasterContent {...props} />
         </Suspense>

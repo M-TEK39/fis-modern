@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { BadgeCheck } from "lucide-react";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
+import ModulePageHeader from "@/app/_components/module-page-header";
 import { hasVehicleManagementPermission } from "@/app/drivers/access";
 import SessionRecovery from "@/app/home/session-recovery";
+import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/session";
 
 const VALIDATION_LINKS = [
@@ -61,35 +64,31 @@ export default async function ValidationDataPage() {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="validation-data-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Validation</p>
-            <h1 id="validation-data-title">Validation Data</h1>
-            <p>Open the same validation-maintenance areas as the legacy menu.</p>
-          </div>
-          <Link className="button button-secondary" href="/home">
-            Home
-          </Link>
-        </header>
+        <ModulePageHeader
+          icon={BadgeCheck}
+          eyebrow="Validation"
+          title="Validation Data"
+          titleId="validation-data-title"
+          description="Open the same validation-maintenance areas as the legacy menu."
+          actions={
+            <Link className="button button-secondary" href="/home">
+              Home
+            </Link>
+          }
+        />
         <div className="vehicle-menu-tiles">
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Validation Maintenance Information</h2>
-            <div className="vehicle-menu-body">
-              <Link className="vehicle-menu-link" href="/validation-data/help">
-                Validation Data Maintenance Information / Help
+          <MenuSection title="Validation Maintenance Information">
+            <Link className="vehicle-menu-link" href="/validation-data/help">
+              Validation Data Maintenance Information / Help
+            </Link>
+          </MenuSection>
+          <MenuSection title="Validation Maintenance">
+            {VALIDATION_LINKS.map(([label, href]) => (
+              <Link className="vehicle-menu-link" href={href} key={href}>
+                {label}
               </Link>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Validation Maintenance</h2>
-            <div className="vehicle-menu-body">
-              {VALIDATION_LINKS.map(([label, href]) => (
-                <Link className="vehicle-menu-link" href={href} key={href}>
-                  {label}
-                </Link>
-              ))}
-            </div>
-          </section>
+            ))}
+          </MenuSection>
         </div>
       </section>
     </main>

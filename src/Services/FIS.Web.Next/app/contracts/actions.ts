@@ -9,6 +9,7 @@ import {
   editContractAgainstApi,
   extendContractAgainstApi,
   createReliefContractAgainstApi,
+  getContract,
   hireContractAgainstApi,
   postContractAction,
   reassignContractAgainstApi,
@@ -17,9 +18,17 @@ import {
   type EditContractRequest,
   type HireContractRequest,
 } from "@/lib/api-contracts";
+import {
+  canCaptureNewContract,
+  canCloseActiveContract,
+  canEditContract,
+  canManageActiveContract,
+  canReviewContract,
+  canSubmitContract,
+  hasContractAccess,
+  hasContractHistoryBackdatingRole,
+} from "@/app/contracts/access";
 import { getSession } from "@/lib/session";
-
-const CONTRACT_PERMISSION = BigInt(2);
 
 class ContractValidationError extends Error {}
 
@@ -84,74 +93,15 @@ function getBoolean(formData: FormData, key: string) {
   return getText(formData, key).toLowerCase() === "true";
 }
 
-function hasContractAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  if (
-    roles.some((role) =>
-      ["contracts", "contract", "admin", "administrator"].includes(role.trim().toLowerCase()),
-    )
-  ) {
-    return true;
-  }
+type AuthenticatedSession = Extract<Awaited<ReturnType<typeof getSession>>, {
+  status: "authenticated";
+}>;
 
-  try {
-    return accessLevel
-      ? (BigInt(accessLevel) & CONTRACT_PERMISSION) === CONTRACT_PERMISSION
-      : false;
-  } catch {
-    return false;
-  }
-}
+type ContractAuthorization =
+  | { ok: false; message: string }
+  | { ok: true; session: AuthenticatedSession };
 
-function hasContractApproverRole(roles: readonly string[]) {
-  return roles.some((role) =>
-    [
-      "contracts approver",
-      "contracts_approver",
-      "back dating contract (approver)",
-      "admin",
-      "administrator",
-    ].includes(role.trim().toLowerCase()),
-  );
-}
-
-function hasContractLoadAndManageRole(roles: readonly string[]) {
-  return roles.some((role) =>
-    [
-      "contract (load and manage)",
-      "contracts (load and manage)",
-      "contract_load_and_manage",
-      "contracts_load_and_manage",
-      "admin",
-      "administrator",
-    ].includes(role.trim().toLowerCase()),
-  );
-}
-
-function hasContractCancelAndCloseRole(roles: readonly string[]) {
-  return roles.some((role) =>
-    [
-      "contract (cancel and close)",
-      "contracts (cancel and close)",
-      "contract_cancel_and_close",
-      "contracts_cancel_and_close",
-      "admin",
-      "administrator",
-    ].includes(role.trim().toLowerCase()),
-  );
-}
-
-function hasContractHistoryBackdatingRole(roles: readonly string[]) {
-  return roles.some((role) =>
-    [
-      "contract history back dating",
-      "contract_history_backdating",
-      "admin",
-      "administrator",
-    ].includes(role.trim().toLowerCase()),
-  );
-}
-
-async function authorizeContract() {
+async function authorizeContract(): Promise<ContractAuthorization> {
   const session = await getSession();
   if (session.status === "unavailable") {
     return {
@@ -171,22 +121,21 @@ async function authorizeContract() {
       message: "You do not have permission to maintain vehicle contracts.",
     };
   }
-  return { ok: true as const };
+  return { ok: true as const, session };
 }
 
 async function authorizeContractRole(
-  roleCheck: (roles: readonly string[]) => boolean,
+  roleCheck: (session: AuthenticatedSession) => boolean,
   message: string,
 ) {
   const access = await authorizeContract();
   if (!access.ok) return access;
 
-  const session = await getSession();
-  if (session.status !== "authenticated" || !roleCheck(session.roles)) {
+  if (!roleCheck(access.session)) {
     return { ok: false as const, message };
   }
 
-  return { ok: true as const };
+  return access;
 }
 
 function apiErrorMessage(error: unknown, operation: string) {
@@ -202,11 +151,54 @@ function apiErrorMessage(error: unknown, operation: string) {
   return `The contract could not be ${operation}. Please try again.`;
 }
 
-function redirectError(returnPath: string, message: string) {
+function redirectError(returnPath: string, message: string): never {
   redirect(
     `${returnPath}${returnPath.includes("?") ? "&" : "?"}error=${encodeURIComponent(message)}`,
   );
 }
+
+async function authorizeContractRecord(contractId: number, returnPath: string) {
+  const access = await authorizeContract();
+  if (!access.ok) redirectError(returnPath, access.message);
+
+  try {
+    return { ...access, contract: await getContract(contractId) };
+  } catch (error) {
+    redirectError(returnPath, apiErrorMessage(error, "loaded"));
+  }
+}
+
+function canRunContractAction(
+  action: string,
+  contract: Awaited<ReturnType<typeof getContract>>,
+  session: AuthenticatedSession,
+) {
+  const status = contract.contractStatusCode;
+  const isActive = status === 3 || (status === null && contract.stillCurrent?.toUpperCase() === "Y");
+  switch (action) {
+    case "submit":
+      return (status === 0 || status === 4) && canSubmitContract(contract, session);
+    case "recall":
+      return status === 1 && canSubmitContract(contract, session);
+    case "approve":
+    case "decline-correction":
+    case "decline":
+      return status === 1 && canReviewContract(contract, session);
+    case "approve-activate":
+      return (status === 1 || status === 2) && canReviewContract(contract, session);
+    case "extend":
+    case "reassign":
+    case "relief":
+      return isActive && canManageActiveContract(session.roles);
+    case "close":
+    case "cancel":
+      return isActive && canCloseActiveContract(session.roles);
+    default:
+      return false;
+  }
+}
+
+const ACTION_PERMISSION_MESSAGE = "You do not have permission for this contract action.";
 
 function buildHireRequest(formData: FormData): HireContractRequest {
   const startOdometer = getInteger(formData, "startOdometer", "Start odometer");
@@ -244,6 +236,9 @@ export async function hireContractAction(formData: FormData) {
   const returnPath = getReturnPath(formData, "/contracts/maintenance");
   const access = await authorizeContract();
   if (!access.ok) redirectError(returnPath, access.message);
+  if (!canCaptureNewContract(access.session.roles)) {
+    redirectError(returnPath, "You do not have permission to capture vehicle contracts.");
+  }
 
   try {
     await hireContractAgainstApi(buildHireRequest(formData));
@@ -262,8 +257,13 @@ export async function hireContractAction(formData: FormData) {
 export async function editContractAction(formData: FormData) {
   const contractId = getContractId(formData);
   const returnPath = getReturnPath(formData, `/contracts/detail?contractId=${contractId}`);
-  const access = await authorizeContract();
-  if (!access.ok) redirectError(returnPath, access.message);
+  const access = await authorizeContractRecord(contractId, returnPath);
+  if (!canEditContract(access.contract, access.session)) {
+    redirectError(returnPath, ACTION_PERMISSION_MESSAGE);
+  }
+  if (![0, 4].includes(access.contract.contractStatusCode ?? -1)) {
+    redirectError(returnPath, "This contract cannot be edited in its current state.");
+  }
 
   try {
     await editContractAgainstApi(contractId, buildEditRequest(formData));
@@ -284,7 +284,7 @@ export async function createReliefContractAction(formData: FormData) {
   const contractId = getContractId(formData);
   const returnPath = getReturnPath(formData, `/contracts/detail?contractId=${contractId}`);
   const access = await authorizeContractRole(
-    hasContractLoadAndManageRole,
+    (session) => canManageActiveContract(session.roles),
     "You do not have permission to create relief contracts.",
   );
   if (!access.ok) redirectError(returnPath, access.message);
@@ -320,7 +320,7 @@ export async function updateContractHistoryAction(formData: FormData) {
     `/contracts/backdating-history?contractId=${contractId}`,
   );
   const access = await authorizeContractRole(
-    hasContractHistoryBackdatingRole,
+    (session) => hasContractHistoryBackdatingRole(session.roles),
     "You do not have permission to backdate contract history.",
   );
   if (!access.ok) redirectError(returnPath, access.message);
@@ -348,30 +348,10 @@ export async function updateContractHistoryAction(formData: FormData) {
 export async function runContractAction(formData: FormData) {
   const contractId = getContractId(formData);
   const returnPath = getReturnPath(formData, `/contracts/detail?contractId=${contractId}`);
-  const access = await authorizeContract();
-  if (!access.ok) redirectError(returnPath, access.message);
-
   const action = getText(formData, "action");
-  if (["approve", "approve-activate", "decline-correction", "decline"].includes(action)) {
-    const approverAccess = await authorizeContractRole(
-      hasContractApproverRole,
-      "You do not have permission to review vehicle contracts.",
-    );
-    if (!approverAccess.ok) redirectError(returnPath, approverAccess.message);
-  }
-  if (["extend", "reassign", "relief"].includes(action)) {
-    const managerAccess = await authorizeContractRole(
-      hasContractLoadAndManageRole,
-      "You do not have permission to manage active vehicle contracts.",
-    );
-    if (!managerAccess.ok) redirectError(returnPath, managerAccess.message);
-  }
-  if (["close", "cancel"].includes(action)) {
-    const closeAccess = await authorizeContractRole(
-      hasContractCancelAndCloseRole,
-      "You do not have permission to cancel or close vehicle contracts.",
-    );
-    if (!closeAccess.ok) redirectError(returnPath, closeAccess.message);
+  const access = await authorizeContractRecord(contractId, returnPath);
+  if (!canRunContractAction(action, access.contract, access.session)) {
+    redirectError(returnPath, ACTION_PERMISSION_MESSAGE);
   }
 
   let operation = "updated";

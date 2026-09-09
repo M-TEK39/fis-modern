@@ -147,7 +147,7 @@ function ChangesTab({
   const page = integer(queryValue(query, "pageNumber")) ?? 1;
   const searchHref = (pageNumber: number) =>
     `/reports/system-audit-trail?${paramsFor({ tab: "changes", view: "search", tableName, action, fromDate, toDate, userId, primaryKey, pageNumber })}`;
-  const exportHref = `/reports/system-audit-trail/export?${paramsFor({ tableName, action, fromDate, toDate, userId, primaryKey, pageNumber: page, pageSize: result?.pageSize ?? 50 })}`;
+  const exportHref = `/reports/system-audit-trail/export?${paramsFor({ tableName, action, fromDate, toDate, userId, primaryKey, pageNumber: page, pageSize: result?.pageSize ?? 24 })}`;
 
   return (
     <>
@@ -573,7 +573,7 @@ export default async function SystemAuditTrailPage({
           userId: integer(queryValue(query, "userId")),
           primaryKey: queryValue(query, "primaryKey") || undefined,
           pageNumber: integer(queryValue(query, "pageNumber")) ?? 1,
-          pageSize: 50,
+          pageSize: 24,
         });
       if (tab === "users")
         status = await getUserStatusHistory({
@@ -581,13 +581,13 @@ export default async function SystemAuditTrailPage({
           fromDate: queryValue(query, "fromDate") || undefined,
           toDate: queryValue(query, "toDate") || undefined,
           pageNumber: integer(queryValue(query, "pageNumber")) ?? 1,
-          pageSize: 50,
+          pageSize: 24,
         });
       if (tab === "password")
         password = await getPasswordHistory({
           userAccessCode: integer(queryValue(query, "userAccessCode")),
           pageNumber: integer(queryValue(query, "pageNumber")) ?? 1,
-          pageSize: 50,
+          pageSize: 24,
         });
     } catch (caught) {
       error = apiMessage(caught);

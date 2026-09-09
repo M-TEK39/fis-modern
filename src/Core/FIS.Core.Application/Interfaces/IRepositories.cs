@@ -20,6 +20,7 @@ public interface IVehicleRepository
     Task<Vehicle?> GetByFleetNumberAsync(string fleetNumber);
     Task<Vehicle?> GetByRegistrationNumberAsync(string registrationNumber);
     Task<IEnumerable<Vehicle>> GetActiveVehiclesAsync();
+    Task<VehicleMasterSnapshotPage> GetSnapshotPageAsync(int page, int pageSize);
     Task<IEnumerable<Vehicle>> GetAvailableVehiclesAsync();
     Task<IEnumerable<Vehicle>> GetAllAsync();
     Task<IEnumerable<Vehicle>> SearchVehiclesAsync(string searchTerm);
@@ -29,6 +30,16 @@ public interface IVehicleRepository
     Task UpdateLicenceFieldsAsync(int vmfCode, VehicleLicenceUpdate update, int currentUserId);
     Task AddLicenceReceiveNoteAsync(int vmfCode, string username, int currentUserId);
     Task DeleteAsync(int vmfCode, int currentUserId);
+}
+
+public sealed record VehicleMasterSnapshotPage(
+    IReadOnlyList<Vehicle> Data,
+    int Page,
+    int PageSize,
+    int TotalRecords
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
 }
 
 /// <summary>
@@ -157,6 +168,8 @@ public interface IVehicleStatusReportRepository
 }
 
 public sealed record VehicleStatusReportQuery(
+    int Page = 1,
+    int PageSize = 24,
     byte? VehicleSourceCode = null,
     short? TypeCode = null,
     short? LocationCode = null,
@@ -203,8 +216,14 @@ public sealed record VehicleStatusReportPage(
     IReadOnlyList<VehicleStatusReportLookup> Makes,
     IReadOnlyList<VehicleStatusReportModelLookup> Models,
     IReadOnlyList<VehicleStatusReportLookup> Statuses,
-    bool RemarksAvailable
-);
+    bool RemarksAvailable,
+    int Page,
+    int PageSize,
+    int TotalCount
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalCount / (double)PageSize));
+}
 
 /// <summary>
 /// Repository interface for the recovered-vehicle renumbering workflow.
@@ -317,9 +336,12 @@ public interface IVehicleAuthorizationRepository
 {
     Task<PreVehicleMaster?> GetByIdAsync(int tempVmfCode);
     Task<PreVehicleMaster?> GetByChassisNumberAsync(string chassisNumber);
-    Task<IEnumerable<PreVehicleMaster>> GetPendingAuthorizationsAsync();
-    Task<IEnumerable<PreVehicleMaster>> GetAuthorizedVehiclesAsync();
-    Task<IEnumerable<PreVehicleMaster>> GetRejectedVehiclesAsync();
+    Task<VehicleAuthorizationPage> GetPendingAuthorizationsAsync(
+        int page = 1,
+        int pageSize = 24
+    );
+    Task<VehicleAuthorizationPage> GetAuthorizedVehiclesAsync(int page = 1, int pageSize = 24);
+    Task<VehicleAuthorizationPage> GetRejectedVehiclesAsync(int page = 1, int pageSize = 24);
     Task<IEnumerable<PreVehicleMaster>> GetByStatusAsync(string status);
     Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(
         DateTime? startDate = null,
@@ -337,6 +359,16 @@ public interface IVehicleAuthorizationRepository
     );
     Task AddCommentAsync(int tempVmfCode, string comment, int modifiedByUserId);
     Task DeleteAsync(int tempVmfCode, int currentUserId);
+}
+
+public sealed record VehicleAuthorizationPage(
+    IReadOnlyList<PreVehicleMaster> Data,
+    int Page,
+    int PageSize,
+    int TotalRecords
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
 }
 
 public sealed record VehicleMaintenanceTypeOption(short Code, string Name);
@@ -388,7 +420,7 @@ public interface IContractRepository
 
 public sealed record ContractPageQuery(
     int Page = 1,
-    int PageSize = 25,
+    int PageSize = 24,
     short? StatusCode = null,
     short? SiteCode = null,
     string? StillCurrent = null,
@@ -718,6 +750,7 @@ public interface IMaintenanceRecordRepository
 /// </summary>
 public interface IJournalDetailRepository
 {
+    Task<IEnumerable<JournalDetail>> GetAllAsync();
     Task<JournalDetail?> GetByIdAsync(int journalDetailId);
     Task<JournalDetail?> GetByCodeAsync(Guid journalDetailCode);
     Task<IEnumerable<JournalDetail>> GetByVehicleAsync(int vmfCode);

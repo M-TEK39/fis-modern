@@ -15,6 +15,8 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 public class VehiclesController : BaseApiController
 {
+    private const long VehicleManagementPermission = 1;
+
     private readonly IVehicleRepository _vehicleRepository;
     private readonly IRecoveredVehicleRepository _recoveredVehicleRepository;
     private readonly VehicleService _vehicleService;
@@ -64,6 +66,44 @@ public class VehiclesController : BaseApiController
         {
             _logger.LogError(ex, "Error retrieving vehicles");
             return StatusCode(500, "An error occurred while retrieving vehicles");
+        }
+    }
+
+    /// <summary>
+    /// Get a paged snapshot of active vehicle master records.
+    /// </summary>
+    [HttpGet("snapshot")]
+    public async Task<IActionResult> GetVehicleSnapshot(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24
+    )
+    {
+        if (!HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var result = await _vehicleRepository.GetSnapshotPageAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, 100)
+            );
+            return Ok(
+                new
+                {
+                    data = result.Data,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    totalRecords = result.TotalRecords,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving vehicle master snapshot");
+            return StatusCode(500, "An error occurred while retrieving the vehicle master snapshot");
         }
     }
 
@@ -301,6 +341,13 @@ public class VehiclesController : BaseApiController
         return roleClaims.Any(role =>
             string.Equals(role, "Demo Vehicles", StringComparison.OrdinalIgnoreCase)
         );
+    }
+
+    private bool HasVehicleManagementPermission()
+    {
+        var accessLevelClaim = User.FindFirst("access_level")?.Value;
+        return long.TryParse(accessLevelClaim, out var accessLevel)
+            && (accessLevel & VehicleManagementPermission) == VehicleManagementPermission;
     }
 
     /// <summary>

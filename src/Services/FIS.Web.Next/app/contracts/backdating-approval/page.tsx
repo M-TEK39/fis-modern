@@ -209,7 +209,7 @@ export default async function BackdatingApprovalPage({
                 type="radio"
                 value="GG"
                 defaultChecked={searchType === "GG"}
-              />{" "}
+              />
               GG number
             </label>
             <label className="vehicle-checkbox-label">
@@ -218,7 +218,7 @@ export default async function BackdatingApprovalPage({
                 type="radio"
                 value="GP"
                 defaultChecked={searchType === "GP"}
-              />{" "}
+              />
               Registration number
             </label>
           </fieldset>

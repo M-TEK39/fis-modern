@@ -1,5 +1,7 @@
-# Build stage
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+# syntax=docker/dockerfile:1.7
+
+# Build and run on Alpine so native dependencies use the same musl libc.
+FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
 WORKDIR /src
 ENV NUGET_PACKAGES=/root/.nuget/packages
 
@@ -17,28 +19,36 @@ COPY src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj src/Data/FIS.Data.Sql
 COPY src/Data/FIS.Data/FIS.Data.csproj src/Data/FIS.Data/
 COPY src/Services/FIS.Api/FIS.Api.csproj src/Services/FIS.Api/
 
-# Restore packages (cached layer — only invalidated when .csproj files change)
-RUN dotnet restore src/Services/FIS.Api/FIS.Api.csproj
+# Restore packages (cached layer — only invalidated when .csproj files change).
+RUN --mount=type=cache,id=fis-api-nuget,target=/root/.nuget/packages \
+    dotnet restore src/Services/FIS.Api/FIS.Api.csproj
 
-# Copy source code
-COPY src/ src/
+# Copy only the API's transitive project graph. Keep tools and unrelated
+# services out of this layer so their changes cannot invalidate the API image.
+COPY src/Core/FIS.Core.Domain/ src/Core/FIS.Core.Domain/
+COPY src/Core/FIS.Core.Application/ src/Core/FIS.Core.Application/
+COPY src/Core/FIS.Core.Infrastructure/ src/Core/FIS.Core.Infrastructure/
+COPY src/Data/FIS.Data.SqlServer/ src/Data/FIS.Data.SqlServer/
+COPY src/Data/FIS.Data/ src/Data/FIS.Data/
+COPY src/Services/FIS.Api/ src/Services/FIS.Api/
 
 # Build and publish
-RUN dotnet publish src/Services/FIS.Api/FIS.Api.csproj -c Release -o /app/publish
+RUN --mount=type=cache,id=fis-api-nuget,target=/root/.nuget/packages \
+    dotnet publish src/Services/FIS.Api/FIS.Api.csproj -c Release -o /app/publish --no-restore
 
 # Runtime stage
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
 WORKDIR /app
 
+ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+
 # Install curl for health checks
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache curl icu-libs tzdata \
+    && addgroup -S -g 1001 fisapi \
+    && adduser -S -u 1001 -G fisapi fisapi
 
-# Copy published application
-COPY --from=build /app/publish .
-
-# Create non-root user for security
-RUN groupadd -r fisapi && useradd -r -g fisapi fisapi
-RUN chown -R fisapi:fisapi /app
+# Copy published application directly to the non-root owner in one layer.
+COPY --from=build --chown=fisapi:fisapi /app/publish .
 USER fisapi
 
 # Configure ports

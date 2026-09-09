@@ -2,9 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
-import SessionRecovery from "@/app/home/session-recovery";
+import { AuthBrand, AuthFooter, AuthHeader, AuthNotice, AuthPage } from "@/app/_components/auth-ui";
 import ChangePasswordQuestionForm from "@/app/change-password-question/change-password-question-form";
 import { changePasswordQuestionAction } from "@/app/change-password-question/actions";
+import ChangePasswordQuestionSessionRecovery from "@/app/change-password-question/session-recovery";
 import { getUserAdminUserChoices, UserAdminApiError } from "@/lib/api-user-admin";
 import { getSession } from "@/lib/session";
 
@@ -69,6 +70,26 @@ function getMessage(result: string | undefined) {
   }
 }
 
+function StatusState({
+  id,
+  title,
+  description,
+  message,
+}: Readonly<{
+  id: string;
+  title: string;
+  description: string;
+  message: string;
+}>) {
+  return (
+    <>
+      <AuthBrand caption="Secure account settings" />
+      <AuthHeader id={id} title={title} description={description} />
+      <AuthNotice tone="error">{message}</AuthNotice>
+    </>
+  );
+}
+
 export default async function ChangePasswordQuestionPage({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
@@ -78,20 +99,27 @@ export default async function ChangePasswordQuestionPage({
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired") {
     return (
-      <main className="page-shell vehicle-page-shell">
-        <SessionRecovery returnPath="/change-password-question" />
-      </main>
+      <AuthPage>
+        <AuthBrand caption="Secure account settings" />
+        <AuthHeader
+          id="change-password-question-expired-title"
+          title="Continue to change your password and question"
+          description="Your session has expired. Refresh it or sign in again to continue."
+        />
+        <ChangePasswordQuestionSessionRecovery returnPath="/change-password-question" />
+      </AuthPage>
     );
   }
   if (session.status === "unavailable") {
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-status-card" role="alert">
-          <p className="eyebrow">API unavailable</p>
-          <h2>Change Password and Question could not be opened.</h2>
-          <p className="muted-copy">Retry when the FIS API is available.</p>
-        </section>
-      </main>
+      <AuthPage>
+        <StatusState
+          id="change-password-question-unavailable-title"
+          title="Change Password and Question could not be opened."
+          description="The password and recovery question can be updated when the FIS API is available."
+          message="Retry when the FIS API is available."
+        />
+      </AuthPage>
     );
   }
 
@@ -110,12 +138,14 @@ export default async function ChangePasswordQuestionPage({
     } catch (error) {
       if (error instanceof UserAdminApiError && error.reason === "unauthorized") {
         return (
-          <main className="page-shell vehicle-page-shell">
-            <section className="vehicle-status-card" role="alert">
-              <p className="eyebrow">Access restricted</p>
-              <h2>You do not have permission to load user accounts.</h2>
-            </section>
-          </main>
+          <AuthPage>
+            <StatusState
+              id="change-password-question-access-title"
+              title="Change Password and Question"
+              description="Update the password and recovery question used by the FIS account."
+              message="You do not have permission to load user accounts."
+            />
+          </AuthPage>
         );
       }
 
@@ -124,13 +154,14 @@ export default async function ChangePasswordQuestionPage({
         error instanceof Error ? error.message : "unknown error",
       );
       return (
-        <main className="page-shell vehicle-page-shell">
-          <section className="vehicle-status-card" role="alert">
-            <p className="eyebrow">API unavailable</p>
-            <h2>Users could not be loaded.</h2>
-            <p className="muted-copy">Retry when the FIS API is available.</p>
-          </section>
-        </main>
+        <AuthPage>
+          <StatusState
+            id="change-password-question-users-unavailable-title"
+            title="Users could not be loaded."
+            description="User accounts are needed to update another user’s password and question."
+            message="Retry when the FIS API is available."
+          />
+        </AuthPage>
       );
     }
   }
@@ -141,47 +172,46 @@ export default async function ChangePasswordQuestionPage({
   const email = selectedUser?.email ?? session.email ?? "";
 
   return (
-    <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card" aria-labelledby="change-password-question-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Password security</p>
-            <h1 id="change-password-question-title">Change Password and Question</h1>
-            <p>Update the password and recovery question used by the FIS account.</p>
-          </div>
-          <Link
-            className="button button-secondary"
-            href={canManageOthers ? "/UserAdmin/UserAdminMenu.aspx" : "/home"}
-          >
-            {canManageOthers ? "Menu" : "Home"}
-          </Link>
-        </header>
+    <AuthPage>
+      <AuthBrand caption="Secure account settings" />
+      <AuthHeader
+        id="change-password-question-title"
+        title="Change Password and Question"
+        description="Update the password and recovery question used by the FIS account."
+      />
 
-        <p className="muted-copy">
-          The security answer is case sensitive. Keep it safe so the password recovery process
-          remains available.
-        </p>
-        {message ? (
-          <div
-            className={`notice notice-${message.tone}`}
-            role={message.tone === "error" ? "alert" : "status"}
-          >
-            {message.text}
-          </div>
-        ) : null}
+      <p className="mb-6 text-center text-xs leading-relaxed text-muted-foreground">
+        The security answer is case sensitive. Keep it safe so the password recovery process remains
+        available.
+      </p>
+      {message ? <AuthNotice tone={message.tone}>{message.text}</AuthNotice> : null}
 
-        <section className="vehicle-overview" aria-labelledby="change-password-question-form-title">
-          <p className="eyebrow">Account credentials</p>
-          <h2 id="change-password-question-form-title">Enter the required account details</h2>
-          <ChangePasswordQuestionForm
-            action={changePasswordQuestionAction}
-            canManageOthers={canManageOthers}
-            users={users}
-            username={username}
-            email={email}
-          />
-        </section>
+      <section aria-labelledby="change-password-question-form-title">
+        <div className="mb-6 text-center">
+          <p className="text-xs font-medium uppercase tracking-[0.11em] text-muted-foreground">
+            Account credentials
+          </p>
+          <h2 id="change-password-question-form-title" className="mt-1 text-base font-semibold">
+            Enter the required account details
+          </h2>
+        </div>
+        <ChangePasswordQuestionForm
+          action={changePasswordQuestionAction}
+          canManageOthers={canManageOthers}
+          users={users}
+          username={username}
+          email={email}
+        />
       </section>
-    </main>
+
+      <AuthFooter>
+        <Link
+          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+          href={canManageOthers ? "/UserAdmin/UserAdminMenu.aspx" : "/home"}
+        >
+          {canManageOthers ? "Menu" : "Home"}
+        </Link>
+      </AuthFooter>
+    </AuthPage>
   );
 }

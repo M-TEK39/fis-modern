@@ -155,14 +155,20 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 ).SingleOrDefault();
             });
 
-    public Task<IEnumerable<PreVehicleMaster>> GetPendingAuthorizationsAsync() =>
-        GetByStatusAsync("Awaiting Authorization");
+    public Task<VehicleAuthorizationPage> GetPendingAuthorizationsAsync(
+        int page = 1,
+        int pageSize = 24
+    ) => GetStatusPageAsync("Awaiting Authorization", page, pageSize, awaiting: true);
 
-    public Task<IEnumerable<PreVehicleMaster>> GetAuthorizedVehiclesAsync() =>
-        GetByStatusAsync("Authorized");
+    public Task<VehicleAuthorizationPage> GetAuthorizedVehiclesAsync(
+        int page = 1,
+        int pageSize = 24
+    ) => GetStatusPageAsync("Authorized", page, pageSize);
 
-    public Task<IEnumerable<PreVehicleMaster>> GetRejectedVehiclesAsync() =>
-        GetByStatusAsync("Rejected");
+    public Task<VehicleAuthorizationPage> GetRejectedVehiclesAsync(
+        int page = 1,
+        int pageSize = 24
+    ) => GetStatusPageAsync("Rejected", page, pageSize);
 
     public async Task<IEnumerable<PreVehicleMaster>> GetByStatusAsync(string status)
     {
@@ -178,6 +184,33 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 await QueryAsync(connection, null, schema, status: status);
         });
     }
+
+    private async Task<VehicleAuthorizationPage> GetStatusPageAsync(
+        string status,
+        int requestedPage,
+        int requestedPageSize,
+        bool awaiting = false
+    ) => await WithConnectionAsync(async connection =>
+    {
+        var pageSize = Math.Clamp(requestedPageSize, 1, 100);
+        var page = Math.Max(1, requestedPage);
+        var schema = await GetSchemaAsync(connection, null);
+        var totalRecords = await CountByStatusAsync(connection, null, schema, status);
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+        var data = await QueryAsync(
+            connection,
+            null,
+            schema,
+            status: status,
+            skip: skip,
+            take: pageSize,
+            orderBy: GetQueueOrder(schema, awaiting)
+        );
+
+        return new VehicleAuthorizationPage(data, page, pageSize, totalRecords);
+    });
 
     public async Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(
         DateTime? startDate = null,
@@ -665,6 +698,55 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         return columns;
     }
 
+    private static async Task<int> CountByStatusAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        VehicleAuthorizationSchema schema,
+        string status
+    )
+    {
+        var hasStatusColumn = schema.Columns.Contains("Authority_Status");
+        if (
+            !hasStatusColumn
+            && !string.Equals(status, "Awaiting Authorization", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return 0;
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        var conditions = new List<string> { GetNotDeletedFilter("p", schema.Columns) };
+        if (hasStatusColumn)
+        {
+            conditions.Add("[p].[Authority_Status] = @authorityStatus");
+            AddParameter(command, "@authorityStatus", DbType.String, status);
+        }
+
+        command.CommandText =
+            $"SELECT COUNT(1) FROM [dbo].[{PreVehicleTableName}] AS [p] WHERE {string.Join(" AND ", conditions)}";
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
+    private static string GetQueueOrder(VehicleAuthorizationSchema schema, bool awaiting)
+    {
+        if (awaiting)
+        {
+            return schema.Columns.Contains("chassis_number")
+                ? "[p].[chassis_number] ASC, [p].[temp_vmf_code] ASC"
+                : "[p].[temp_vmf_code] ASC";
+        }
+
+        if (schema.Columns.Contains("authorization_date"))
+        {
+            return "[p].[authorization_date] DESC, [p].[temp_vmf_code] DESC";
+        }
+
+        return schema.Columns.Contains("date_created")
+            ? "[p].[date_created] DESC, [p].[temp_vmf_code] DESC"
+            : "[p].[temp_vmf_code] DESC";
+    }
+
     private static async Task<List<PreVehicleMaster>> QueryAsync(
         DbConnection connection,
         DbTransaction? transaction,
@@ -674,7 +756,10 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         string? status = null,
         IReadOnlyCollection<string>? statuses = null,
         DateTime? startDate = null,
-        DateTime? endDate = null
+        DateTime? endDate = null,
+        long? skip = null,
+        int? take = null,
+        string? orderBy = null
     )
     {
         if (
@@ -774,8 +859,15 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             schema.Columns.Contains("authorization_date") ? "authorization_date"
             : schema.Columns.Contains("date_created") ? "date_created"
             : "temp_vmf_code";
+        var orderClause = orderBy ?? $"[p].[{orderColumn}] DESC, [p].[temp_vmf_code] DESC";
         command.CommandText =
-            $"SELECT {projection} FROM [dbo].[{PreVehicleTableName}] AS [p] {joins} WHERE {string.Join(" AND ", conditions)} ORDER BY [p].[{orderColumn}] DESC, [p].[temp_vmf_code] DESC";
+            $"SELECT {projection} FROM [dbo].[{PreVehicleTableName}] AS [p] {joins} WHERE {string.Join(" AND ", conditions)} ORDER BY {orderClause}";
+        if (skip.HasValue && take.HasValue)
+        {
+            command.CommandText += " OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY";
+            AddParameter(command, "@skip", DbType.Int64, skip.Value);
+            AddParameter(command, "@take", DbType.Int32, take.Value);
+        }
 
         var rows = new List<PreVehicleMaster>();
         await using var reader = await command.ExecuteReaderAsync();

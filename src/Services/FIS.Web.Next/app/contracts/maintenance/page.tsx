@@ -1,7 +1,19 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { ClipboardList } from "lucide-react";
 
+import ModulePageHeader from "@/app/_components/module-page-header";
+import { runContractAction } from "@/app/contracts/actions";
+import {
+  canCloseActiveContract,
+  canEditContract,
+  canManageActiveContract,
+  canReviewContract,
+  canSubmitContract,
+  hasContractAccess,
+  type ContractSession,
+} from "@/app/contracts/access";
 import SessionRecovery from "@/app/home/session-recovery";
 import {
   ContractApiError,
@@ -10,9 +22,15 @@ import {
   type ContractRecord,
   type ContractVehicleSearchResult,
 } from "@/lib/api-contracts";
+import { SiteApiError, getSites, type SiteRecord } from "@/lib/api-sites";
 import { getSession } from "@/lib/session";
-
-const CONTRACT_PERMISSION = BigInt(2);
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 export type ContractMaintenancePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -28,26 +46,12 @@ function positiveInt(value: string | undefined) {
   return value && Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function hasContractAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  if (
-    roles.some((role) =>
-      ["contracts", "contract", "admin", "administrator"].includes(role.trim().toLowerCase()),
-    )
-  ) {
-    return true;
-  }
-
-  try {
-    return accessLevel
-      ? (BigInt(accessLevel) & CONTRACT_PERMISSION) === CONTRACT_PERMISSION
-      : false;
-  } catch {
-    return false;
-  }
-}
-
 function valueOrDash(value: string | number | null | undefined) {
   return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
+}
+
+function siteLabel(site: SiteRecord) {
+  return `${site.description?.trim() || `Site ${site.siteCode}`} (${site.siteCode})`;
 }
 
 function formatDate(value: string | null) {
@@ -84,6 +88,13 @@ function getStatusClass(contract: ContractRecord) {
     return "badge-warning";
   if ([5, 6].includes(contract.contractStatusCode ?? -1)) return "badge-error";
   return "badge";
+}
+
+function isActiveContract(contract: ContractRecord) {
+  return (
+    contract.contractStatusCode === 3 ||
+    (contract.contractStatusCode === null && contract.stillCurrent?.toUpperCase() === "Y")
+  );
 }
 
 function detailHref(contract: ContractRecord) {
@@ -137,11 +148,11 @@ function SearchForm({
       <fieldset className="vehicle-search-options">
         <legend>Select the vehicle to manage</legend>
         <label className="vehicle-checkbox-label">
-          <input name="searchType" type="radio" value="GG" defaultChecked={searchType === "GG"} />{" "}
+          <input name="searchType" type="radio" value="GG" defaultChecked={searchType === "GG"} />
           GG Number
         </label>
         <label className="vehicle-checkbox-label">
-          <input name="searchType" type="radio" value="GP" defaultChecked={searchType === "GP"} />{" "}
+          <input name="searchType" type="radio" value="GP" defaultChecked={searchType === "GP"} />
           Registration Number
         </label>
       </fieldset>
@@ -170,7 +181,18 @@ function SearchForm({
   );
 }
 
-function Filters({ query }: Readonly<{ query: Record<string, string | string[] | undefined> }>) {
+function Filters({
+  query,
+  sites,
+  siteLookupUnavailable,
+}: Readonly<{
+  query: Record<string, string | string[] | undefined>;
+  sites: SiteRecord[];
+  siteLookupUnavailable: boolean;
+}>) {
+  const selectedSiteCode = getQueryValue(query.siteCode) ?? "";
+  const hasSelectedSite = sites.some((site) => String(site.siteCode) === selectedSiteCode);
+
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
       <input name="searchType" type="hidden" value={getQueryValue(query.searchType) ?? "GG"} />
@@ -205,16 +227,33 @@ function Filters({ query }: Readonly<{ query: Record<string, string | string[] |
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="contract-site">
-            Site code
+            Site
           </label>
-          <input
-            className="form-input"
+          <select
+            className="form-select"
+            disabled={siteLookupUnavailable}
             id="contract-site"
-            min="1"
             name="siteCode"
-            type="number"
-            defaultValue={getQueryValue(query.siteCode) ?? ""}
-          />
+            defaultValue={selectedSiteCode}
+          >
+            <option value="">All sites</option>
+            {selectedSiteCode && !hasSelectedSite ? (
+              <option value={selectedSiteCode}>{`Site ${selectedSiteCode} (${selectedSiteCode})`}</option>
+            ) : null}
+            {sites.map((site) => (
+              <option key={site.siteCode} value={site.siteCode}>
+                {siteLabel(site)}
+              </option>
+            ))}
+          </select>
+          {siteLookupUnavailable && selectedSiteCode ? (
+            <input name="siteCode" type="hidden" value={selectedSiteCode} />
+          ) : null}
+          {siteLookupUnavailable ? (
+            <p className="muted-copy" role="status">
+              Site options are temporarily unavailable; other filters remain available.
+            </p>
+          ) : null}
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="contract-current">
@@ -309,7 +348,36 @@ function VehicleSearchResults({ vehicles }: Readonly<{ vehicles: ContractVehicle
   );
 }
 
-function ContractTable({ contracts }: Readonly<{ contracts: ContractRecord[] }>) {
+function ContractActionForm({
+  contract,
+  action,
+  label,
+  className = "button button-secondary button-small",
+}: Readonly<{
+  contract: ContractRecord;
+  action: "submit" | "recall" | "approve-activate" | "cancel";
+  label: string;
+  className?: string;
+}>) {
+  return (
+    <form action={runContractAction}>
+      <input name="contractId" type="hidden" value={contract.contractCode} />
+      <input name="returnPath" type="hidden" value="/contracts/maintenance" />
+      <input name="action" type="hidden" value={action} />
+      <button className={className} type="submit">
+        {label}
+      </button>
+    </form>
+  );
+}
+
+function ContractTable({
+  contracts,
+  session,
+}: Readonly<{
+  contracts: ContractRecord[];
+  session: ContractSession;
+}>) {
   if (contracts.length === 0)
     return (
       <div className="vehicle-empty-state">
@@ -358,9 +426,70 @@ function ContractTable({ contracts }: Readonly<{ contracts: ContractRecord[] }>)
                     className="button button-secondary button-small"
                     href={detailHref(contract)}
                   >
-                    Open
+                    {[5, 6, 7].includes(contract.contractStatusCode ?? -1) ? "View" : "Open"}
                   </Link>
-                  {(contract.contractStatusCode ?? 0) >= 2 ? (
+                  {(contract.contractStatusCode === 0 || contract.contractStatusCode === 4) &&
+                  canEditContract(contract, session) ? (
+                    <Link
+                      className="button button-primary button-small"
+                      href={`${detailHref(contract)}#edit-contract`}
+                    >
+                      Edit
+                    </Link>
+                  ) : null}
+                  {(contract.contractStatusCode === 0 || contract.contractStatusCode === 4) &&
+                  canSubmitContract(contract, session) ? (
+                    <ContractActionForm
+                      action="submit"
+                      contract={contract}
+                      label={contract.contractStatusCode === 4 ? "Resubmit" : "Submit"}
+                    />
+                  ) : null}
+                  {contract.contractStatusCode === 1 &&
+                  canSubmitContract(contract, session) ? (
+                    <ContractActionForm action="recall" contract={contract} label="Recall" />
+                  ) : null}
+                  {contract.contractStatusCode === 1 && canReviewContract(contract, session) ? (
+                    <Link
+                      className="button button-primary button-small"
+                      href={detailHref(contract)}
+                    >
+                      Review
+                    </Link>
+                  ) : null}
+                  {contract.contractStatusCode === 2 && canReviewContract(contract, session) ? (
+                    <ContractActionForm
+                      action="approve-activate"
+                      contract={contract}
+                      label="Activate"
+                      className="button button-primary button-small"
+                    />
+                  ) : null}
+                  {isActiveContract(contract) && canManageActiveContract(session.roles) ? (
+                    <Link
+                      className="button button-secondary button-small"
+                      href={`${detailHref(contract)}#extend-contract`}
+                    >
+                      Extend
+                    </Link>
+                  ) : null}
+                  {isActiveContract(contract) && canCloseActiveContract(session.roles) ? (
+                    <Link
+                      className="button button-secondary button-small"
+                      href={`${detailHref(contract)}#close-contract`}
+                    >
+                      Close
+                    </Link>
+                  ) : null}
+                  {isActiveContract(contract) && canCloseActiveContract(session.roles) ? (
+                    <ContractActionForm
+                      action="cancel"
+                      contract={contract}
+                      label="Cancel"
+                      className="button button-danger button-small"
+                    />
+                  ) : null}
+                  {(contract.contractStatusCode ?? (isActiveContract(contract) ? 3 : 0)) >= 2 ? (
                     <Link
                       className="button button-secondary button-small"
                       href={`/contracts/printout?contractId=${contract.contractCode}`}
@@ -454,7 +583,7 @@ export default async function ContractMaintenancePage({
     const [pageData, vehicles] = await Promise.all([
       getContractPage({
         page,
-        pageSize: 12,
+        pageSize: 24,
         statusCode: statusFilter,
         siteCode,
         stillCurrent: getQueryValue(query.stillCurrent),
@@ -465,6 +594,17 @@ export default async function ContractMaintenancePage({
         ? searchContractVehicles(searchQuery)
         : Promise.resolve([] as ContractVehicleSearchResult[]),
     ]);
+    let sites: SiteRecord[] = [];
+    let siteLookupUnavailable = false;
+    try {
+      sites = await getSites();
+    } catch (error) {
+      if (error instanceof SiteApiError) {
+        siteLookupUnavailable = true;
+      } else {
+        throw error;
+      }
+    }
     const filteredVehicles = searchQuery
       ? vehicles.filter((vehicle) =>
           (searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber)
@@ -475,16 +615,18 @@ export default async function ContractMaintenancePage({
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="contract-maintenance-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Contract maintenance</p>
-              <h1 id="contract-maintenance-title">Vehicle Contract Maintenance</h1>
-              <p>Search a vehicle and manage its existing or new legacy contract.</p>
-            </div>
-            <Link className="button button-secondary" href="/contracts">
-              Contracts Menu
-            </Link>
-          </header>
+          <ModulePageHeader
+            icon={ClipboardList}
+            eyebrow="Contract maintenance"
+            title="Vehicle Contract Maintenance"
+            titleId="contract-maintenance-title"
+            description="Search a vehicle and manage its existing or new legacy contract."
+            actions={
+              <Link className="button button-secondary" href="/contracts">
+                Contracts Menu
+              </Link>
+            }
+          />
           {notice ? (
             <div
               className={
@@ -497,7 +639,11 @@ export default async function ContractMaintenancePage({
           ) : null}
           <SearchForm searchType={searchType} searchQuery={searchQuery} query={query} />
           <VehicleSearchResults vehicles={filteredVehicles} />
-          <Filters query={query} />
+          <Filters
+            query={query}
+            siteLookupUnavailable={siteLookupUnavailable}
+            sites={sites}
+          />
           <section
             className="vehicle-status-maintenance-panel"
             aria-labelledby="contract-results-title"
@@ -510,28 +656,44 @@ export default async function ContractMaintenancePage({
                 <h2 id="contract-results-title">Existing contracts</h2>
               </div>
             </div>
-            <ContractTable contracts={pageData.items} />
-            <div className="pagination">
-              <Link
-                className={`pagination-btn${pageData.page <= 1 ? " disabled" : ""}`}
-                href={pageData.page <= 1 ? "#" : buildPageHref(query, pageData.page - 1)}
-              >
-                Previous
-              </Link>
-              <span className="pagination-info">
-                Page {pageData.page} of {pageData.totalPages}
-              </span>
-              <Link
-                className={`pagination-btn${pageData.page >= pageData.totalPages ? " disabled" : ""}`}
-                href={
-                  pageData.page >= pageData.totalPages
-                    ? "#"
-                    : buildPageHref(query, pageData.page + 1)
-                }
-              >
-                Next
-              </Link>
-            </div>
+            <ContractTable contracts={pageData.items} session={session} />
+            <Pagination className="mt-4" aria-label="Contract results pages">
+              <PaginationContent className="flex-wrap justify-center gap-2">
+                <PaginationItem>
+                  <PaginationPrevious
+                    aria-disabled={pageData.page <= 1}
+                    className={pageData.page <= 1 ? "pointer-events-none opacity-50" : undefined}
+                    href={
+                      pageData.page <= 1
+                        ? buildPageHref(query, pageData.page)
+                        : buildPageHref(query, pageData.page - 1)
+                    }
+                    tabIndex={pageData.page <= 1 ? -1 : undefined}
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <span className="inline-flex h-9 items-center whitespace-nowrap px-2 text-sm font-medium text-muted-foreground">
+                    Page {pageData.page} of {pageData.totalPages}
+                  </span>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    aria-disabled={pageData.page >= pageData.totalPages}
+                    className={
+                      pageData.page >= pageData.totalPages
+                        ? "pointer-events-none opacity-50"
+                        : undefined
+                    }
+                    href={
+                      pageData.page >= pageData.totalPages
+                        ? buildPageHref(query, pageData.page)
+                        : buildPageHref(query, pageData.page + 1)
+                    }
+                    tabIndex={pageData.page >= pageData.totalPages ? -1 : undefined}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </section>
           <div className="vehicle-footer-actions">
             <Link className="button button-secondary" href="/home">
@@ -542,7 +704,10 @@ export default async function ContractMaintenancePage({
       </main>
     );
   } catch (error) {
-    if (error instanceof ContractApiError && error.reason === "unauthorized")
+    if (
+      (error instanceof ContractApiError || error instanceof SiteApiError) &&
+      error.reason === "unauthorized"
+    )
       return (
         <main className="page-shell vehicle-page-shell">
           <SessionRecovery returnPath={routePath} />

@@ -11,7 +11,7 @@ import { GgBlockApiError, getGgBlockHistory, type GgBlockHistoryPage } from "@/l
 import { getSession } from "@/lib/session";
 
 const VEHICLE_MANAGEMENT_PERMISSION = 1;
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 24;
 
 type GgBlockNumbersPageProps = {
   searchParams: Promise<{ page?: string | string[]; saved?: string | string[] }>;

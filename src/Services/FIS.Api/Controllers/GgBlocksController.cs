@@ -29,7 +29,7 @@ public sealed class GgBlocksController : BaseApiController
     [HttpGet]
     public async Task<IActionResult> GetHistory(
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 12
+        [FromQuery] int pageSize = 24
     )
     {
         if (!HasVehicleManagementPermission())

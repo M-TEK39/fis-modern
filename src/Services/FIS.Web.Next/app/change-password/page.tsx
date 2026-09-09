@@ -1,73 +1,82 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { Suspense } from "react";
 
+import { AuthBrand, AuthFooter, AuthHeader, AuthPage } from "@/app/_components/auth-ui";
+import { Button } from "@/components/ui/button";
 import ChangePasswordForm from "@/app/change-password/change-password-form";
 import { getSession } from "@/lib/session";
 
 function UnavailableState() {
   return (
-    <section className="status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">
-        !
+    <>
+      <AuthBrand caption="Secure account settings" />
+      <AuthHeader
+        id="change-password-unavailable-title"
+        title="We could not verify your session."
+        description="Please try again when the service is available."
+      />
+      <div className="flex flex-col gap-3">
+        <Button asChild className="w-full">
+          <Link href="/change-password">Try again</Link>
+        </Button>
+        <Button asChild className="w-full" variant="outline">
+          <Link href="/login">Sign in</Link>
+        </Button>
       </div>
-      <p className="eyebrow">API unavailable</p>
-      <h1>We could not verify your session.</h1>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href="/change-password">
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/login">
-          Sign in
-        </Link>
-      </div>
-    </section>
+    </>
   );
 }
 
 function ExpiredSessionState() {
   return (
-    <section className="status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">
-        !
+    <>
+      <AuthBrand caption="Secure account settings" />
+      <AuthHeader
+        id="change-password-expired-title"
+        title="Sign in again to change your password."
+        description="Your session has expired. Sign in again to continue."
+      />
+      <div className="flex flex-col gap-3">
+        <Button asChild className="w-full">
+          <Link href="/login">Return to sign in</Link>
+        </Button>
       </div>
-      <p className="eyebrow">Session expired</p>
-      <h1>Sign in again to change your password.</h1>
-      <p className="muted-copy">Your password change page needs an active FIS session.</p>
-      <div className="button-row">
-        <Link className="button button-primary" href="/login">
-          Return to sign in
-        </Link>
-      </div>
-    </section>
+    </>
   );
 }
 
 export default function ChangePasswordPage() {
   return (
-    <main className="page-shell">
+    <AuthPage>
       <Suspense fallback={<ChangePasswordFallback />}>
         <ChangePasswordContent />
       </Suspense>
-    </main>
+    </AuthPage>
   );
 }
 
 function ChangePasswordFallback() {
   return (
-    <section className="status-card" aria-busy="true">
-      <div className="loading-card">
-        <span className="spinner" aria-hidden="true" />
+    <>
+      <AuthBrand />
+      <div
+        className="flex flex-col items-center gap-3 py-8 text-sm text-muted-foreground"
+        aria-busy="true"
+      >
+        <span
+          className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"
+          aria-hidden="true"
+        />
         <p>Checking your session...</p>
       </div>
-    </section>
+    </>
   );
 }
 
 async function ChangePasswordContent() {
+  await connection();
   const session = await getSession();
 
   if (session.status === "anonymous") {
@@ -79,38 +88,31 @@ async function ChangePasswordContent() {
       {session.status === "unavailable" ? <UnavailableState /> : null}
       {session.status === "expired" ? <ExpiredSessionState /> : null}
       {session.status === "authenticated" ? (
-        <section className="auth-card" aria-labelledby="change-password-title">
-          <div className="brand">
-            <div className="brand-mark" aria-hidden="true">
-              FIS
-            </div>
-            <div>
-              <p className="brand-name">Fleet Information System</p>
-              <p className="brand-caption">Secure account settings</p>
-            </div>
-          </div>
-          <div className="auth-header">
-            <p className="eyebrow">Password security</p>
-            <h1 id="change-password-title">
-              {session.passwordChangeRequired
-                ? "Your password has expired"
-                : "Change your password"}
-            </h1>
-            <p>
-              {session.passwordChangeRequired
+        <>
+          <AuthBrand caption="Secure account settings" />
+          <AuthHeader
+            id="change-password-title"
+            title={
+              session.passwordChangeRequired ? "Your password has expired" : "Change your password"
+            }
+            description={
+              session.passwordChangeRequired
                 ? "You must change your password before continuing."
-                : "Update your FIS password while keeping your account secure."}
-            </p>
-          </div>
+                : "Update your FIS password while keeping your account secure."
+            }
+          />
           <ChangePasswordForm passwordChangeRequired={session.passwordChangeRequired} />
           {!session.passwordChangeRequired ? (
-            <div className="auth-footer">
-              <Link className="text-link" href="/home">
+            <AuthFooter>
+              <Link
+                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                href="/home"
+              >
                 Cancel and return home
               </Link>
-            </div>
+            </AuthFooter>
           ) : null}
-        </section>
+        </>
       ) : null}
     </>
   );

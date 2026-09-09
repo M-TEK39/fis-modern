@@ -1,27 +1,19 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { logoutAction } from "@/app/actions/auth";
+import { AuthBrand, AuthFooter, AuthHeader, AuthNotice, AuthPage } from "@/app/_components/auth-ui";
+import { Button } from "@/components/ui/button";
 import LoginForm from "@/app/login/login-form";
 import { getSession } from "@/lib/session";
 
-function Brand() {
-  return (
-    <div className="brand">
-      <div className="brand-mark" aria-hidden="true">
-        FIS
-      </div>
-      <div>
-        <p className="brand-name">Fleet Information System</p>
-        <p className="brand-caption">Gauteng Provincial Government</p>
-      </div>
-    </div>
-  );
-}
-
 function LoginFallback() {
   return (
-    <div className="loading-card" aria-busy="true">
+    <div
+      className="flex flex-col items-center gap-3 py-8 text-sm text-muted-foreground"
+      aria-busy="true"
+    >
       <span className="spinner" aria-hidden="true" />
       <p>Checking your session...</p>
     </div>
@@ -34,79 +26,79 @@ function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function isEnabled(value: string | undefined) {
+  const normalized = value?.trim().toLowerCase();
+  return Boolean(normalized && !["0", "false", "no", "off"].includes(normalized));
+}
+
 async function LoginContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+  await connection();
   const [query, session] = await Promise.all([searchParams, getSession()]);
   const microsoftSignInUrl =
     process.env.MICROSOFT_SIGN_IN_URL?.trim() || "/api/auth/microsoft/sign-in";
-  const microsoftSignInEnabled = Boolean(process.env.MICROSOFT_SIGN_IN_ENABLED?.trim());
+  const microsoftSignInEnabled = isEnabled(process.env.MICROSOFT_SIGN_IN_ENABLED);
   const microsoftSignInFailed = getQueryValue(query.error) === "microsoft-sign-in";
 
   return (
     <>
       {microsoftSignInFailed ? (
-        <div className="notice notice-error" role="alert">
-          <span aria-hidden="true">!</span>
-          <span>
-            Microsoft sign-in could not be completed. Use your FIS credentials or try again.
-          </span>
-        </div>
+        <AuthNotice tone="error">
+          Microsoft sign-in could not be completed. Use your FIS credentials or try again.
+        </AuthNotice>
       ) : null}
 
       {session.status === "unavailable" ? (
-        <div className="notice notice-info" role="status">
-          <span aria-hidden="true">i</span>
-          <span>We could not check your existing session. You can still try to sign in.</span>
-        </div>
+        <AuthNotice>
+          We could not check your existing session. You can still try to sign in.
+        </AuthNotice>
       ) : null}
 
       {session.status === "expired" ? (
-        <div className="notice notice-info" role="status">
-          <span aria-hidden="true">i</span>
-          <span>Your session needs to be refreshed. Sign in again to continue.</span>
-        </div>
+        <AuthNotice>Your session needs to be refreshed. Sign in again to continue.</AuthNotice>
       ) : null}
 
       {session.status === "authenticated" ? (
         <>
-          <div className="auth-header">
-            <p className="eyebrow">Session active</p>
-            <h1>Already signed in</h1>
-            <p>
-              {session.email ? `Signed in as ${session.email}.` : "You are already authenticated."}
-            </p>
-          </div>
-          <div className="auth-actions">
-            <Link className="button button-primary button-wide" href="/home">
-              Go to home
-            </Link>
-            <form action={logoutAction} className="button-wide">
-              <button className="button button-secondary button-wide" type="submit">
+          <AuthHeader
+            id="login-page-title"
+            title="Already signed in"
+            description={
+              session.email ? `Signed in as ${session.email}.` : "You are already authenticated."
+            }
+          />
+          <div className="flex flex-col gap-3">
+            <Button asChild className="w-full">
+              <Link href="/home">Go to home</Link>
+            </Button>
+            <form action={logoutAction} className="w-full">
+              <Button className="w-full" type="submit" variant="outline">
                 Sign out
-              </button>
+              </Button>
             </form>
           </div>
         </>
       ) : (
         <>
-          <div className="auth-header">
-            <p className="eyebrow">Secure access</p>
-            <h1>Welcome back</h1>
-            <p>Use your fleet credentials to access the system.</p>
-          </div>
-          {microsoftSignInEnabled ? (
-            <a className="button button-secondary button-wide" href={microsoftSignInUrl}>
-              Sign in with Microsoft
-            </a>
-          ) : null}
-          <LoginForm />
-          <div className="auth-footer">
-            <Link className="text-link" href="/forgot-password">
+          <AuthHeader
+            id="login-page-title"
+            title="Welcome back"
+            description="Use your fleet credentials to access the system."
+          />
+          <LoginForm
+            microsoftSignInEnabled={microsoftSignInEnabled}
+            microsoftSignInUrl={microsoftSignInUrl}
+          />
+          <AuthFooter>
+            <Link
+              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+              href="/forgot-password"
+            >
               Forgot your password?
             </Link>
-            <span className="auth-footnote">
+            <span className="text-xs text-muted-foreground">
               Authorized Gauteng Provincial Government staff only.
             </span>
-          </div>
+          </AuthFooter>
         </>
       )}
     </>
@@ -115,16 +107,11 @@ async function LoginContent({ searchParams }: Readonly<{ searchParams: SearchPar
 
 export default function LoginPage({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   return (
-    <main className="page-shell">
-      <section className="auth-card" aria-labelledby="login-page-title">
-        <Brand />
-        <h1 id="login-page-title" className="sr-only">
-          Sign in to Fleet Information System
-        </h1>
-        <Suspense fallback={<LoginFallback />}>
-          <LoginContent searchParams={searchParams} />
-        </Suspense>
-      </section>
-    </main>
+    <AuthPage>
+      <AuthBrand />
+      <Suspense fallback={<LoginFallback />}>
+        <LoginContent searchParams={searchParams} />
+      </Suspense>
+    </AuthPage>
   );
 }

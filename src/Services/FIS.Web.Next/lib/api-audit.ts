@@ -231,7 +231,7 @@ export async function getAuditTrail(filters: AuditTrailFilters = {}): Promise<Au
   return {
     totalCount: asNumber(getValue(payload, "totalCount", "TotalCount")) ?? items.length,
     pageNumber: asNumber(getValue(payload, "pageNumber", "PageNumber")) ?? filters.pageNumber ?? 1,
-    pageSize: asNumber(getValue(payload, "pageSize", "PageSize")) ?? filters.pageSize ?? 50,
+    pageSize: asNumber(getValue(payload, "pageSize", "PageSize")) ?? filters.pageSize ?? 24,
     totalPages:
       asNumber(getValue(payload, "totalPages", "TotalPages")) ?? (items.length > 0 ? 1 : 0),
     items,

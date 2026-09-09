@@ -1,5 +1,6 @@
 using System.Data;
 using System.Globalization;
+using System.Security.Claims;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
@@ -44,6 +45,59 @@ public class AccidentController : BaseApiController
         }
     }
 
+    /// <summary>
+    /// Paged operational maintenance list. Legacy reports keep their own
+    /// complete-result endpoints so that print and export behavior is unchanged.
+    /// </summary>
+    [HttpGet("maintenance")]
+    public async Task<IActionResult> GetMaintenancePage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24,
+        [FromQuery] string searchType = "GP",
+        [FromQuery] string? searchTerm = null,
+        [FromQuery] int? locationCode = null
+    )
+    {
+        if (!HasAccidentRole())
+        {
+            return Forbid();
+        }
+
+        var normalizedSearchType = searchType.Trim().ToUpperInvariant();
+        if (normalizedSearchType is not ("GG" or "GP"))
+        {
+            return BadRequest(new { error = "Search type must be GG or GP." });
+        }
+
+        try
+        {
+            var result = await _repository.GetMaintenancePageAsync(
+                new AccidentMaintenancePageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100),
+                    normalizedSearchType,
+                    searchTerm ?? string.Empty,
+                    locationCode
+                )
+            );
+            return Ok(
+                new
+                {
+                    data = result.Data,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    totalRecords = result.TotalRecords,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged accident maintenance records");
+            return StatusCode(500, "An error occurred while retrieving accident maintenance records");
+        }
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<Accident>> GetById(int id)
     {
@@ -57,6 +111,23 @@ public class AccidentController : BaseApiController
             _logger.LogError(ex, "Error");
             return StatusCode(500);
         }
+    }
+
+    private bool HasAccidentRole()
+    {
+        if (User.IsInRole("Accidents"))
+        {
+            return true;
+        }
+
+        return User.Claims.Any(claim =>
+            (claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            && claim.Value
+                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(role => string.Equals(role, "Accidents", StringComparison.OrdinalIgnoreCase))
+        );
     }
 
     [HttpGet("types")]

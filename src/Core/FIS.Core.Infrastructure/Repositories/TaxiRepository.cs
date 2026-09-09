@@ -25,6 +25,7 @@ public sealed class TaxiRepository : ITaxiRepository
 
     private static readonly string[] BusinessColumns =
     [
+        "request_id",
         "rek_num",
         "contractor_id",
         "vmf_code",

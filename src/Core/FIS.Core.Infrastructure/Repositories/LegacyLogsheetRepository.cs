@@ -33,17 +33,6 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
         "month",
         "site_code",
         "rek_num",
-        "days_used",
-        "bund_num",
-        "trans_date",
-        "driver_time",
-        "FBS_comp",
-        "user_access_code",
-        "trans_time",
-        "department_code",
-        "contract_code",
-        "journal_detail_code",
-        "parent_log_code",
     ];
 
     private readonly FisDbContext _context;
@@ -398,17 +387,21 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
                 "l.[month] AS [month]",
                 "l.[site_code] AS [site_code]",
                 "l.[rek_num] AS [rek_num]",
-                "l.[days_used] AS [days_used]",
-                "l.[bund_num] AS [bund_num]",
-                "l.[trans_date] AS [trans_date]",
-                "l.[driver_time] AS [driver_time]",
-                "l.[FBS_comp] AS [FBS_comp]",
-                "l.[user_access_code] AS [user_access_code]",
-                "l.[trans_time] AS [trans_time]",
-                "l.[department_code] AS [department_code]",
-                "l.[contract_code] AS [contract_code]",
-                "l.[journal_detail_code] AS [journal_detail_code]",
-                "l.[parent_log_code] AS [parent_log_code]",
+                OptionalExpression(columns, "days_used", "int") + " AS [days_used]",
+                OptionalExpression(columns, "bund_num", "int") + " AS [bund_num]",
+                OptionalExpression(columns, "trans_date", "datetime2") + " AS [trans_date]",
+                OptionalExpression(columns, "driver_time", "float") + " AS [driver_time]",
+                OptionalExpression(columns, "FBS_comp", "datetime2") + " AS [FBS_comp]",
+                OptionalExpression(columns, "user_access_code", "int")
+                    + " AS [user_access_code]",
+                OptionalExpression(columns, "trans_time", "time") + " AS [trans_time]",
+                OptionalExpression(columns, "department_code", "int")
+                    + " AS [department_code]",
+                OptionalExpression(columns, "contract_code", "int") + " AS [contract_code]",
+                OptionalExpression(columns, "journal_detail_code", "uniqueidentifier")
+                    + " AS [journal_detail_code]",
+                OptionalExpression(columns, "parent_log_code", "int")
+                    + " AS [parent_log_code]",
                 "v.[fleet_number] AS [fleet_number]",
                 "v.[registration_number] AS [registration_number]",
                 "s.[description] AS [site_description]",
@@ -423,13 +416,13 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
 
     private static string DateCreatedExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("date_created")
-            ? "COALESCE(l.[date_created], l.[trans_date])"
-            : "l.[trans_date]";
+            ? $"COALESCE(l.[date_created], {OptionalExpression(columns, "trans_date", "datetime2")}, l.[month])"
+            : $"COALESCE({OptionalExpression(columns, "trans_date", "datetime2")}, l.[month])";
 
     private static string CreatedByExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("created_by_user_code")
-            ? "COALESCE(l.[created_by_user_code], l.[user_access_code])"
-            : "l.[user_access_code]";
+            ? $"COALESCE(l.[created_by_user_code], {OptionalExpression(columns, "user_access_code", "int")})"
+            : OptionalExpression(columns, "user_access_code", "int");
 
     private static string OptionalExpression(
         IReadOnlyDictionary<string, ColumnInfo> columns,

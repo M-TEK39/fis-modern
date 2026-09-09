@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Vehicles;
 using Microsoft.AspNetCore.Authorization;
@@ -15,6 +16,11 @@ namespace FIS.Api.Controllers;
 public class VehicleAuthorizationController : BaseApiController
 {
     private const long VehicleManagementPermission = 1;
+    private static readonly string[] InceptionRoles =
+    [
+        "vehicle inception capturer",
+        "vehicle inception authorizer",
+    ];
 
     private readonly IVehicleAuthorizationRepository _repository;
     private readonly ILogger<VehicleAuthorizationController> _logger;
@@ -67,14 +73,22 @@ public class VehicleAuthorizationController : BaseApiController
     /// Get all vehicles awaiting authorization (pending queue)
     /// </summary>
     [HttpGet("pending")]
-    public async Task<ActionResult<IEnumerable<PreVehicleMasterDto>>> GetPendingAuthorizations()
+    public async Task<IActionResult> GetPendingAuthorizations(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24
+    )
     {
+        if (!CanAccessAuthorizationQueue())
+            return Forbid();
+
         try
         {
             _logger.LogInformation("Fetching vehicles awaiting authorization");
-            var vehicles = await _repository.GetPendingAuthorizationsAsync();
-            var dtos = vehicles.Select(MapToDto);
-            return Ok(dtos);
+            var result = await _repository.GetPendingAuthorizationsAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, 100)
+            );
+            return Ok(ToPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -87,14 +101,22 @@ public class VehicleAuthorizationController : BaseApiController
     /// Get all authorized vehicles
     /// </summary>
     [HttpGet("authorized")]
-    public async Task<ActionResult<IEnumerable<PreVehicleMasterDto>>> GetAuthorizedVehicles()
+    public async Task<IActionResult> GetAuthorizedVehicles(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24
+    )
     {
+        if (!CanAccessAuthorizationQueue())
+            return Forbid();
+
         try
         {
             _logger.LogInformation("Fetching authorized vehicles");
-            var vehicles = await _repository.GetAuthorizedVehiclesAsync();
-            var dtos = vehicles.Select(MapToDto);
-            return Ok(dtos);
+            var result = await _repository.GetAuthorizedVehiclesAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, 100)
+            );
+            return Ok(ToPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -107,14 +129,22 @@ public class VehicleAuthorizationController : BaseApiController
     /// Get all rejected vehicles
     /// </summary>
     [HttpGet("rejected")]
-    public async Task<ActionResult<IEnumerable<PreVehicleMasterDto>>> GetRejectedVehicles()
+    public async Task<IActionResult> GetRejectedVehicles(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24
+    )
     {
+        if (!CanAccessAuthorizationQueue())
+            return Forbid();
+
         try
         {
             _logger.LogInformation("Fetching rejected vehicles");
-            var vehicles = await _repository.GetRejectedVehiclesAsync();
-            var dtos = vehicles.Select(MapToDto);
-            return Ok(dtos);
+            var result = await _repository.GetRejectedVehiclesAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, 100)
+            );
+            return Ok(ToPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -617,6 +647,50 @@ public class VehicleAuthorizationController : BaseApiController
             DateCreated = v.date_created,
             CreatedByUserCode = v.created_by_user_code,
         };
+    }
+
+    private object ToPageResponse(VehicleAuthorizationPage page) =>
+        new
+        {
+            data = page.Data.Select(MapToDto),
+            page = page.Page,
+            pageSize = page.PageSize,
+            totalRecords = page.TotalRecords,
+            totalPages = page.TotalPages,
+        };
+
+    private bool CanAccessAuthorizationQueue() =>
+        HasVehicleManagementPermission()
+        && (
+            HasAnyRole("vehicle inception authorizer")
+            || !HasAnyRole(InceptionRoles)
+        );
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Any(User.IsInRole))
+        {
+            return true;
+        }
+
+        var roleClaims = User
+            .Claims.Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            );
+
+        return roleClaims.Any(role =>
+            expectedRoles.Any(expected =>
+                string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+            )
+        );
     }
 
     private bool HasVehicleManagementPermission()

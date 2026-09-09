@@ -1,0 +1,63 @@
+# Docker context is shared by the production API and Next builds. Start with
+# nothing, then allow only the source graph those Dockerfiles copy. This keeps
+# local caches, legacy archives, credentials, certificates, and tools out of
+# every build upload and prevents unrelated files invalidating cached layers.
+**
+
+!FIS.sln
+!Directory.Build.props
+!CodeAnalysis.ruleset
+!nuget.config
+
+!src/
+!src/Core/
+!src/Core/FIS.Core.Domain/
+!src/Core/FIS.Core.Domain/**
+!src/Core/FIS.Core.Application/
+!src/Core/FIS.Core.Application/**
+!src/Core/FIS.Core.Infrastructure/
+!src/Core/FIS.Core.Infrastructure/**
+!src/Data/
+!src/Data/FIS.Data/
+!src/Data/FIS.Data/**
+!src/Data/FIS.Data.SqlServer/
+!src/Data/FIS.Data.SqlServer/**
+!src/Services/
+!src/Services/FIS.Api/
+!src/Services/FIS.Api/**
+!src/Services/FIS.Web.Next/
+!src/Services/FIS.Web.Next/**
+
+# Build output and package installations are always regenerated in Docker.
+**/node_modules/
+**/.next/
+**/bin/
+**/obj/
+**/out/
+**/publish/
+**/.vercel/
+**/*.tsbuildinfo
+
+# Secrets and deployment material must never enter a builder context. The
+# nginx certificate directory remains available as a runtime Compose mount.
+.env*
+**/.env*
+docker/nginx/certs/
+**/*.pem
+**/*.key
+**/*.crt
+
+# Local agent/editor state and generated diagnostics are never application
+# source and must not invalidate an image cache.
+.git/
+.agents/
+.codex/
+.claude/
+.copilot/
+.gemini/
+.idea/
+.vscode/
+.vs/
+**/*.log
+**/coverage/
+**/test-results/

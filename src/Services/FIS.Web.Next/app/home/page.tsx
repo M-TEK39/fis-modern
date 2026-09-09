@@ -1,11 +1,14 @@
 import Link from "next/link";
-import Image from "next/image";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { logoutAction } from "@/app/actions/auth";
 import SessionRecovery from "@/app/home/session-recovery";
 import { getSession } from "@/lib/session";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
+import { FileText, ArrowDownToLine } from "lucide-react";
 
 type DocumentLink = {
   title: string;
@@ -41,12 +44,12 @@ const DOCUMENT_LINKS: readonly DocumentLink[] = [
   },
   {
     title: "Trip Request Form (Chauffeur Driven Service)",
-    href: "/private_hire/trip_request_form.htm",
+    href: "/Docs/private_hire/trip_request_form.htm",
     description: "Chauffeur-driven service requisition for private hire vehicles.",
   },
   {
     title: "Procedures Manual (Chauffeur Driven Service)",
-    href: "/private_hire/Procedures_manual.htm",
+    href: "/Docs/private_hire/Procedures_manual.htm",
     description: "Detailed procedures governing the chauffeur driven service.",
   },
   {
@@ -139,6 +142,7 @@ function HomeFallback() {
 }
 
 async function HomeContent({ searchParams, routePath }: HomePageProps) {
+  await connection();
   const session = await getSession();
 
   if (session.status === "anonymous") {
@@ -186,42 +190,51 @@ async function HomeContent({ searchParams, routePath }: HomePageProps) {
   const pageHref = (page: number) => (page === 1 ? currentPath : `${currentPath}?page=${page}`);
 
   return (
-    <article className="legacy-home">
-      <section className="legacy-heading">
-        <h1>Gauteng Provincial Government</h1>
-        <h2>
-          g-FleeT Management
-          <br />
-          Fleet Information System
-        </h2>
-      </section>
+    <article className="flex w-full flex-col gap-6">
+      <header className="space-y-2">
+        <h1 className="text-2xl font-semibold tracking-tight">Gauteng Provincial Government</h1>
+        <p className="text-sm text-muted-foreground">
+          g-FleeT Management · Fleet Information System
+        </p>
+      </header>
 
-      <hr />
-
-      <p>
+      <p className="text-sm leading-relaxed text-muted-foreground">
         Welcome to the Fleet Information System Web Site of the Gauteng Provincial Government.
         <br />
         This site controls the issuing of Trip Authorities used by the Provincial Government. These
         Authorities can be issued and printed from this site for free.
       </p>
 
-      <hr />
-
-      <section aria-labelledby="downloads-title">
-        <h2 id="downloads-title" className="sr-only">
+      <section className="space-y-4" aria-labelledby="downloads-title">
+        <h2 id="downloads-title" className="text-base font-semibold">
           Pertinent information downloads
         </h2>
-        <p>Please click on the links below to download pertinent information:</p>
-
-        <div className="doc-grid">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {visibleDocuments.map((document) => (
-            <article className="doc-card" key={document.href}>
-              <header>
-                <h3>{document.title}</h3>
-              </header>
-              <p>{document.description}</p>
-              <a href={document.href}>Download</a>
-            </article>
+            <Card className="flex flex-col shadow-none" key={document.href}>
+              <CardHeader className="gap-3 p-5">
+                <FileText className="size-5 text-muted-foreground" aria-hidden="true" />
+                <CardTitle className="text-sm leading-normal">
+                  <h3>{document.title}</h3>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 px-5 pb-4 pt-0">
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {document.description}
+                </p>
+              </CardContent>
+              <CardFooter className="px-5 pb-5 pt-0">
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={document.href}
+                    download={document.href.startsWith("/Docs/") || undefined}
+                  >
+                    <ArrowDownToLine aria-hidden="true" />
+                    Download
+                  </a>
+                </Button>
+              </CardFooter>
+            </Card>
           ))}
         </div>
 
@@ -250,29 +263,21 @@ async function HomeContent({ searchParams, routePath }: HomePageProps) {
         </nav>
       </section>
 
-      <hr />
-
-      <p>
+      <p className="border-t pt-4 text-xs text-muted-foreground">
         Please note that all actions on this site are logged and will be audited from time to time.
       </p>
 
-      <hr />
-
-      <p>
+      <p className="text-xs text-muted-foreground">
         ADOBE ACROBAT might be required to view some of the files on this site. Please click below
         to download the latest version for free from Adobe.
       </p>
 
-      <p className="acrobat-link">
-        <a href="https://www.adobe.com/products/acrobat/readstep2.html">
-          <Image
-            alt="Get Adobe Acrobat Reader"
-            src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS_DYgKcoBKX3I4tNr5qigAUGIx5LCEipaAZg&s"
-            width={88}
-            height={31}
-          />
-        </a>
-      </p>
+      <a
+        className="w-fit text-xs underline underline-offset-4"
+        href="https://www.adobe.com/products/acrobat/readstep2.html"
+      >
+        Get Adobe Acrobat Reader
+      </a>
 
       <div className="home-footer-actions">
         <Link className="button button-secondary" href="/change-password">

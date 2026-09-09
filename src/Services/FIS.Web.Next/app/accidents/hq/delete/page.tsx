@@ -81,7 +81,7 @@ async function HqDeleteContent({ searchParams }: HqDeletePageProps) {
 
   let pageData;
   try {
-    pageData = await getHqAccidentPage(pageNumber, searchType, searchTerm, 12, 2);
+    pageData = await getHqAccidentPage(pageNumber, searchType, searchTerm, 24, 2);
   } catch (error) {
     if (error instanceof AccidentApiError && error.reason === "unauthorized")
       return <SessionRecovery returnPath="/accidents/hq/delete" />;

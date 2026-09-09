@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { MenuSection } from "@/components/ui/menu-section";
+
 export function hasFinanceRole(roles: readonly string[]) {
   return roles.some((role) =>
     [
@@ -87,13 +89,12 @@ export function FinanceUnavailable({
 export function FinanceMenuSection({
   title,
   children,
-  open = true,
+  open = false,
 }: Readonly<{ title: string; children: ReactNode; open?: boolean }>) {
   return (
-    <details className="vehicle-menu-tile" open={open}>
-      <summary className="vehicle-menu-header">{title}</summary>
-      <div className="vehicle-menu-body">{children}</div>
-    </details>
+    <MenuSection title={title} defaultOpen={open}>
+      {children}
+    </MenuSection>
   );
 }
 

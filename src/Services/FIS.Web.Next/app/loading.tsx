@@ -1,10 +1,18 @@
+import { Skeleton } from "@/components/ui/skeleton";
+
 export default function Loading() {
   return (
-    <main className="page-shell" aria-busy="true">
-      <div className="loading-card">
-        <span className="spinner" aria-hidden="true" />
-        <p>Loading Fleet Information System...</p>
+    <div className="w-full space-y-6" role="status" aria-label="Loading page" aria-busy="true">
+      <span className="sr-only">Loading page…</span>
+      <div className="space-y-3">
+        <Skeleton className="h-7 w-64 max-w-full" />
+        <Skeleton className="h-4 w-96 max-w-full" />
       </div>
-    </main>
+      <div className="space-y-3">
+        <Skeleton className="h-12 w-full rounded-lg" />
+        <Skeleton className="h-12 w-full rounded-lg" />
+        <Skeleton className="h-12 w-full rounded-lg" />
+      </div>
+    </div>
   );
 }

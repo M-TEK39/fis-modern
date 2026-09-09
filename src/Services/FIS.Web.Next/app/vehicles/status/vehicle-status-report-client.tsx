@@ -8,14 +8,19 @@ import {
   submitVehicleStatusRemarkAction,
 } from "@/app/vehicles/status/actions";
 import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
   VEHICLE_STATUS_OPTIONS,
   type VehicleStatusReport,
   type VehicleStatusReportRow,
   type VehicleStatusSite,
   type VehicleStatusType,
 } from "@/app/vehicles/status/status-types";
-
-const PAGE_SIZE = 12;
 
 const EXPORT_FIELDS = [
   ["fleetNumber", "GG Number"],
@@ -252,7 +257,7 @@ export default function VehicleStatusReportClient({
 }>) {
   const [filters, setFilters] = useState<FilterValues>(EMPTY_FILTERS);
   const [report, setReport] = useState(initialReport);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialReport.page);
   const [showFieldSelector, setShowFieldSelector] = useState(false);
   const [selectedFields, setSelectedFields] = useState<Set<ExportField>>(
     () => new Set(EXPORT_FIELDS.map(([key]) => key)),
@@ -263,23 +268,23 @@ export default function VehicleStatusReportClient({
   const [pending, startTransition] = useTransition();
   const [remarkPending, startRemarkTransition] = useTransition();
 
-  const totalPages = Math.max(1, Math.ceil(report.rows.length / PAGE_SIZE));
-  const visiblePage = Math.min(page, totalPages);
-  const visibleRows = report.rows.slice((visiblePage - 1) * PAGE_SIZE, visiblePage * PAGE_SIZE);
+  const totalPages = report.totalPages;
+  const visiblePage = Math.min(Math.max(page, 1), totalPages);
 
   function updateFilter(field: keyof FilterValues, value: string) {
     setFilters((current) => ({ ...current, [field]: value }));
   }
 
-  function requestReport(nextFilters: FilterValues) {
+  function requestReport(nextFilters: FilterValues, requestedPage = 1) {
     const formData = new FormData();
     appendFilters(formData, nextFilters);
+    formData.set("page", String(requestedPage));
     setNotice(null);
     startTransition(async () => {
       const result = await loadVehicleStatusReportAction(formData);
       if (result.report) {
         setReport(result.report);
-        setPage(1);
+        setPage(result.report.page);
       }
       if (result.status === "error") {
         setNotice({
@@ -307,11 +312,12 @@ export default function VehicleStatusReportClient({
 
   function handleRemarkSubmit(formData: FormData) {
     appendFilters(formData, filters);
+    formData.set("page", "1");
     startRemarkTransition(async () => {
       const result = await submitVehicleStatusRemarkAction(formData);
       if (result.report) {
         setReport(result.report);
-        setPage(1);
+        setPage(result.report.page);
       }
       if (result.status === "success") {
         setRemarkTarget(null);
@@ -335,6 +341,14 @@ export default function VehicleStatusReportClient({
       else next.add(field);
       return next;
     });
+  }
+
+  function requestPage(requestedPage: number) {
+    if (pending || requestedPage < 1 || requestedPage > totalPages) {
+      return;
+    }
+
+    requestReport(filters, requestedPage);
   }
 
   return (
@@ -409,7 +423,7 @@ export default function VehicleStatusReportClient({
                 onClick={() => downloadCsv(report.rows, selectedFields)}
                 disabled={selectedFields.size === 0}
               >
-                Download CSV
+                Download current page CSV
               </button>
             </div>
           </div>
@@ -446,7 +460,7 @@ export default function VehicleStatusReportClient({
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map((row) => (
+                {report.rows.map((row) => (
                   <tr key={row.vmfCode}>
                     <td>{valueOrDash(row.fleetNumber)}</td>
                     <td>{valueOrDash(row.registrationNumber)}</td>
@@ -491,27 +505,48 @@ export default function VehicleStatusReportClient({
           </div>
 
           {totalPages > 1 ? (
-            <nav className="pagination-controls" aria-label="Vehicle status report pagination">
-              <button
-                className="button button-secondary button-small"
-                type="button"
-                disabled={visiblePage <= 1}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-              >
-                Previous
-              </button>
-              <span aria-live="polite">
-                Page {visiblePage} of {totalPages}
-              </span>
-              <button
-                className="button button-secondary button-small"
-                type="button"
-                disabled={visiblePage >= totalPages}
-                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-              >
-                Next
-              </button>
-            </nav>
+            <Pagination className="mt-4" aria-label="Vehicle status report pagination">
+              <PaginationContent className="flex-wrap justify-center gap-2">
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    aria-disabled={pending || visiblePage <= 1}
+                    className={
+                      pending || visiblePage <= 1 ? "pointer-events-none opacity-50" : undefined
+                    }
+                    tabIndex={pending || visiblePage <= 1 ? -1 : undefined}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      requestPage(visiblePage - 1);
+                    }}
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <span
+                    className="inline-flex h-9 items-center whitespace-nowrap px-2 text-sm font-medium text-muted-foreground"
+                    aria-live="polite"
+                  >
+                    Page {visiblePage} of {totalPages} ({report.pageSize} per page)
+                  </span>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    aria-disabled={pending || visiblePage >= totalPages}
+                    className={
+                      pending || visiblePage >= totalPages
+                        ? "pointer-events-none opacity-50"
+                        : undefined
+                    }
+                    tabIndex={pending || visiblePage >= totalPages ? -1 : undefined}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      requestPage(visiblePage + 1);
+                    }}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           ) : null}
         </section>
       )}

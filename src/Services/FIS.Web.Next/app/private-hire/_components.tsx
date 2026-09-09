@@ -1,6 +1,8 @@
 import Link from "next/link";
 
+import type { ModelRecord } from "@/lib/api-models";
 import type { PrivateHireContractorRecord, PrivateHireVehicleRecord } from "@/lib/api-private-hire";
+import type { SiteRecord } from "@/lib/api-sites";
 
 export function valueOrDash(value: string | number | null | undefined) {
   return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
@@ -184,11 +186,27 @@ export function PrivateHireVehicleForm({
   vehicle,
   action,
   returnPath,
+  models,
+  sites,
+  contractors,
 }: Readonly<{
   vehicle?: PrivateHireVehicleRecord | null;
   action: (formData: FormData) => void | Promise<void>;
   returnPath: string;
+  models: readonly ModelRecord[];
+  sites: readonly SiteRecord[];
+  contractors: readonly PrivateHireContractorRecord[];
 }>) {
+  const sortedModels = models
+    .slice()
+    .sort((a, b) => a.modelDescription.localeCompare(b.modelDescription));
+  const sortedSites = sites
+    .slice()
+    .sort((a, b) => (a.departmentNumber ?? "").localeCompare(b.departmentNumber ?? ""));
+  const sortedContractors = contractors
+    .slice()
+    .sort((a, b) => a.companyName.localeCompare(b.companyName));
+
   return (
     <form className="vehicle-status-maintenance-panel" action={action}>
       <input type="hidden" name="returnPath" value={returnPath} />
@@ -215,17 +233,22 @@ export function PrivateHireVehicleForm({
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="phv-model-code">
-            Model code
+            Model
           </label>
-          <input
-            className="form-input"
+          <select
+            className="form-select"
             id="phv-model-code"
             name="modelCode"
-            type="number"
-            min="1"
             defaultValue={numberValue(vehicle?.modelCode)}
             required
-          />
+          >
+            <option value="">Select model...</option>
+            {sortedModels.map((model) => (
+              <option key={model.modelCode} value={model.modelCode}>
+                {model.modelDescription} ({model.modelCode})
+              </option>
+            ))}
+          </select>
         </div>
         <div className="form-field form-group-full">
           <label className="form-label" htmlFor="phv-model-description">
@@ -240,44 +263,59 @@ export function PrivateHireVehicleForm({
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="phv-site">
-            Site code
+            Site
           </label>
-          <input
-            className="form-input"
+          <select
+            className="form-select"
             id="phv-site"
             name="siteCode"
-            type="number"
-            min="1"
             defaultValue={numberValue(vehicle?.siteCode)}
             required
-          />
+          >
+            <option value="">Select site...</option>
+            {sortedSites.map((site) => (
+              <option key={site.siteCode} value={site.siteCode}>
+                {site.description ?? "Unnamed site"} ({site.siteCode})
+              </option>
+            ))}
+          </select>
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="phv-contracted-to">
             Contracted to
           </label>
-          <input
-            className="form-input"
+          <select
+            className="form-select"
             id="phv-contracted-to"
             name="contractedTo"
-            type="number"
-            min="0"
             defaultValue={numberValue(vehicle?.contractedTo)}
-          />
+          >
+            <option value="">Select site...</option>
+            {sortedSites.map((site) => (
+              <option key={site.siteCode} value={site.siteCode}>
+                {site.description ?? "Unnamed site"} ({site.siteCode})
+              </option>
+            ))}
+          </select>
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="phv-contractor">
-            Contractor ID
+            Contractor
           </label>
-          <input
-            className="form-input"
+          <select
+            className="form-select"
             id="phv-contractor"
             name="contractorId"
-            type="number"
-            min="1"
             defaultValue={numberValue(vehicle?.contractorId)}
             required
-          />
+          >
+            <option value="">Select contractor...</option>
+            {sortedContractors.map((contractor) => (
+              <option key={contractor.contractorId} value={contractor.contractorId}>
+                {contractor.companyName} ({contractor.contractorId})
+              </option>
+            ))}
+          </select>
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="phv-engine">

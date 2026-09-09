@@ -30,13 +30,17 @@ public static class Program
             if (pendingMigrations.Length == 0)
             {
                 Console.WriteLine("Local development database is already current.");
-                return 0;
             }
 
-            Console.WriteLine(
-                $"Applying {pendingMigrations.Length} clean-install migration(s) to the local development database..."
-            );
-            await dbContext.Database.MigrateAsync();
+            if (pendingMigrations.Length > 0)
+            {
+                Console.WriteLine(
+                    $"Applying {pendingMigrations.Length} clean-install migration(s) to the local development database..."
+                );
+                await dbContext.Database.MigrateAsync();
+            }
+
+            await dbContext.Database.ExecuteSqlRawAsync(DevelopmentCompatibilitySchema.Sql);
             Console.WriteLine("Local development database bootstrap completed successfully.");
             return 0;
         }

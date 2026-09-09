@@ -6,6 +6,7 @@ public interface IAccidentRepository
 {
     Task<Accident?> GetByIdAsync(int accidentCode);
     Task<IEnumerable<Accident>> GetAllAsync();
+    Task<AccidentMaintenancePage> GetMaintenancePageAsync(AccidentMaintenancePageQuery query);
     Task<IEnumerable<Accident>> GetByVehicleAsync(int vmfCode);
     Task<IEnumerable<AccidentDriverReportRow>> GetDriverReportAsync(
         string searchTerm,
@@ -75,6 +76,36 @@ public interface IAccidentRepository
     Task<Accident> UpdateAsync(Accident accident, int currentUserId);
     Task<Accident> UpdateHqAsync(Accident accident, int currentUserId);
     Task DeleteAsync(int accidentCode, int currentUserId);
+}
+
+/// <summary>
+/// The operational accident-maintenance grid only. Report and dashboard queries
+/// deliberately remain complete result sets.
+/// </summary>
+public sealed record AccidentMaintenancePageQuery(
+    int Page,
+    int PageSize,
+    string SearchType,
+    string SearchTerm,
+    int? LocationCode
+);
+
+public sealed record AccidentMaintenanceListItem(
+    int AccidentCode,
+    string? VehicleNumber,
+    string? HireType,
+    DateTime? AccidentDate,
+    string? Reference
+);
+
+public sealed record AccidentMaintenancePage(
+    IReadOnlyList<AccidentMaintenanceListItem> Data,
+    int Page,
+    int PageSize,
+    int TotalRecords
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
 }
 
 public class AccidentDriverReportRow

@@ -3592,6 +3592,38 @@ public class Program
                       AND ISNULL(jc.is_deleted, 0) = 0
                 );
             END
+            ELSE IF OBJECT_ID('Jobcards', 'U') IS NOT NULL
+            BEGIN
+                ;WITH src AS (
+                    SELECT TOP 100 vm.vmf_code
+                    FROM vehicle_master vm
+                    WHERE vm.is_deleted = 0
+                    ORDER BY vm.vmf_code
+                )
+                INSERT INTO Jobcards
+                (
+                    jc_number, vmf_code, extra_code, jcs_comment, jcs_date,
+                    status_code, captured_by, priority, Authorizer,
+                    reviewed_by_Authorizer, DateClosed
+                )
+                SELECT CONCAT('SEED-', src.vmf_code),
+                       src.vmf_code,
+                       ISNULL(@defaultExtraCode, 1),
+                       'Auto-seeded legacy job card',
+                       CONVERT(varchar(10), GETDATE(), 111),
+                       CASE WHEN src.vmf_code % 5 = 0 THEN 3 ELSE 1 END,
+                       ISNULL(@defaultUserCode, 1),
+                       CASE WHEN src.vmf_code % 3 = 0 THEN 'H' ELSE 'N' END,
+                       NULL,
+                       'N',
+                       NULL
+                FROM src
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM Jobcards jc
+                    WHERE jc.vmf_code = src.vmf_code
+                );
+            END
 
             IF OBJECT_ID('workshop', 'U') IS NOT NULL
             BEGIN
@@ -3751,7 +3783,9 @@ public class Program
                     dbContext,
                     "SELECT COUNT(1) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0"
                 )
-                : Task.FromResult(0)
+                : await HasTableAsync(dbContext, "Jobcards")
+                    ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Jobcards")
+                    : Task.FromResult(0)
         );
         var workshopCount = await QueryCountAsync(
             dbContext,
@@ -3789,7 +3823,12 @@ public class Program
                     dbContext,
                     "SELECT COUNT(DISTINCT vmf_code) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0 AND vmf_code IS NOT NULL"
                 )
-                : Task.FromResult(0)
+                : await HasTableAsync(dbContext, "Jobcards")
+                    ? QueryCountAsync(
+                        dbContext,
+                        "SELECT COUNT(DISTINCT vmf_code) FROM Jobcards WHERE vmf_code IS NOT NULL"
+                    )
+                    : Task.FromResult(0)
         );
         var vehiclesWithAssessments = await QueryCountAsync(
             dbContext,
@@ -6203,6 +6242,18 @@ public class Program
                 )
                 : 1;
 
+        var hasModernJournalDetailColumns = await HasColumnAsync(
+            dbContext,
+            "journal_detail",
+            "is_deleted"
+        );
+        var journalDetailActivePredicate = hasModernJournalDetailColumns
+            ? "ISNULL(is_deleted, 0) = 0"
+            : "ISNULL(journal_detail_inactive, 0) = 0";
+        var journalDetailCreatedColumn = hasModernJournalDetailColumns
+            ? "date_created"
+            : "journal_detail_date_created";
+
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
             $@"
@@ -6398,7 +6449,7 @@ public class Program
                         SELECT TOP 1 segment_code FROM bassegment WHERE segment_number = '4500000' AND ISNULL(is_deleted, 0) = 0 ORDER BY segment_code
                     );
                     DECLARE @journalDetailCode uniqueidentifier = (
-                        SELECT TOP 1 journal_detail_code FROM journal_detail WHERE ISNULL(is_deleted, 0) = 0 ORDER BY date_created
+                        SELECT TOP 1 journal_detail_code FROM journal_detail WHERE {journalDetailActivePredicate} ORDER BY {journalDetailCreatedColumn}
                     );
                     DECLARE @sjdmCode bigint = ISNULL((SELECT MAX(segment_journal_detail_map_code) FROM segment_journal_detail_map), 0);
                     IF @segmentCode IS NOT NULL AND @journalDetailCode IS NOT NULL
@@ -6420,7 +6471,7 @@ public class Program
                         SELECT TOP 1 segment_code FROM bassegment WHERE segment_number = '4500000' AND ISNULL(is_deleted, 0) = 0 ORDER BY segment_code
                     );
                     DECLARE @journalDetailCode uniqueidentifier = (
-                        SELECT TOP 1 journal_detail_code FROM journal_detail WHERE ISNULL(is_deleted, 0) = 0 ORDER BY date_created
+                        SELECT TOP 1 journal_detail_code FROM journal_detail WHERE {journalDetailActivePredicate} ORDER BY {journalDetailCreatedColumn}
                     );
                     DECLARE @sjdmCode bigint = ISNULL((SELECT MAX(segment_journal_detail_map_code) FROM segment_journal_detail_map), 0);
                     IF @segmentCode IS NOT NULL AND @journalDetailCode IS NOT NULL
@@ -7523,6 +7574,18 @@ public class Program
                 )
                 : 1;
 
+        var hasModernJournalDetailColumns = await HasColumnAsync(
+            dbContext,
+            "journal_detail",
+            "is_deleted"
+        );
+        var journalDetailActivePredicate = hasModernJournalDetailColumns
+            ? "ISNULL(is_deleted, 0) = 0"
+            : "ISNULL(journal_detail_inactive, 0) = 0";
+        var journalDetailCreatedColumn = hasModernJournalDetailColumns
+            ? "date_created"
+            : "journal_detail_date_created";
+
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
             $@"
@@ -7560,7 +7623,7 @@ public class Program
                    AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @absaTxCode int = ISNULL((SELECT MAX(absa_transaction_code) FROM absa_transaction), 0);
-                    DECLARE @journalDetailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE ISNULL(is_deleted, 0) = 0 ORDER BY date_created);
+                    DECLARE @journalDetailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE {journalDetailActivePredicate} ORDER BY {journalDetailCreatedColumn});
                     SET IDENTITY_INSERT absa_transaction ON;
                     IF NOT EXISTS (SELECT 1 FROM absa_transaction WHERE vmf_code = {defaultVehicleCode} AND contract_code = {defaultContractCode} AND ISNULL(is_deleted, 0) = 0)
                         INSERT INTO absa_transaction
@@ -7574,7 +7637,7 @@ public class Program
                    AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @absaTxCode int = ISNULL((SELECT MAX(absa_transaction_code) FROM absa_transaction), 0);
-                    DECLARE @journalDetailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE ISNULL(is_deleted, 0) = 0 ORDER BY date_created);
+                    DECLARE @journalDetailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE {journalDetailActivePredicate} ORDER BY {journalDetailCreatedColumn});
                     IF NOT EXISTS (SELECT 1 FROM absa_transaction WHERE vmf_code = {defaultVehicleCode} AND contract_code = {defaultContractCode} AND ISNULL(is_deleted, 0) = 0)
                         INSERT INTO absa_transaction
                         (absa_transaction_code, vmf_code, contract_code, site_code, fuel_card_code, journal_detail_code, date_created, created_by_user_code, is_deleted)
@@ -7687,16 +7750,17 @@ public class Program
             "
         );
 
-        await dbContext.Database.ExecuteSqlRawAsync(
-            @"
+        await ExecuteCompatibilitySqlAsync(
+            dbContext,
+            $@"
             IF OBJECT_ID('InvalidSegmentNumbersUsed', 'U') IS NOT NULL
                AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
             BEGIN
                 DECLARE @journalDetailCode uniqueidentifier = (
                     SELECT TOP 1 journal_detail_code
                     FROM journal_detail
-                    WHERE ISNULL(is_deleted, 0) = 0
-                    ORDER BY date_created
+                    WHERE {journalDetailActivePredicate}
+                    ORDER BY {journalDetailCreatedColumn}
                 );
                 IF @journalDetailCode IS NOT NULL
                    AND NOT EXISTS (SELECT 1 FROM InvalidSegmentNumbersUsed WHERE journal_detail_code = @journalDetailCode AND ISNULL(is_deleted, 0) = 0)
@@ -9765,6 +9829,18 @@ public class Program
                 )
                 : 1;
 
+        var hasModernJournalDetailColumns = await HasColumnAsync(
+            dbContext,
+            "journal_detail",
+            "is_deleted"
+        );
+        var journalDetailActivePredicate = hasModernJournalDetailColumns
+            ? "ISNULL(is_deleted, 0) = 0"
+            : "ISNULL(journal_detail_inactive, 0) = 0";
+        var journalDetailCreatedColumn = hasModernJournalDetailColumns
+            ? "date_created"
+            : "journal_detail_date_created";
+
         await dbContext.Database.ExecuteSqlRawAsync(
             @"
             IF OBJECT_ID('transactions','U') IS NOT NULL
@@ -9795,48 +9871,36 @@ public class Program
             defaultUserCode
         );
 
-        await dbContext.Database.ExecuteSqlRawAsync(
-            @"
+        var journalDetailSeedSql = hasModernJournalDetailColumns
+            ? $@"
             IF OBJECT_ID('journal_detail','U') IS NOT NULL
             BEGIN
-                DECLARE @id int = ISNULL((SELECT MAX(journal_detail_id) FROM journal_detail), 0);
-                DECLARE @isIdentity int = COLUMNPROPERTY(OBJECT_ID('journal_detail'), 'journal_detail_id', 'IsIdentity');
-                DECLARE @detailCode uniqueidentifier = NEWID();
-
                 IF NOT EXISTS (SELECT 1 FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND ISNULL(is_deleted, 0) = 0)
-                BEGIN
-                    IF @isIdentity = 1
-                    BEGIN
-                        INSERT INTO journal_detail
-                        (journal_detail_code, journal_code, department_code, site_code, vmf_code, journal_detail_type_code, journal_detail_isdebit, journal_detail_quantity, journal_detail_tariff, journal_detail_amount, journal_detail_description, journal_detail_date_created, journal_detail_date_posted, journal_detail_isaccepted, journal_detail_financial_year, journal_detail_date, journal_detail_isreversaldenied, journal_detail_debitamount, date_created, created_by_user_code, is_deleted)
-                        VALUES (@detailCode, CASE WHEN {0} > 0 THEN {0} ELSE NULL END, CAST({1} AS smallint), CAST({2} AS smallint), {3}, CAST({4} AS tinyint), 1, 1, 1000.00, 1000.00, 'Seeded batch21 journal detail', GETDATE(), GETDATE(), 1, CAST({5} AS varchar(10)), CAST(GETDATE() AS date), 0, 1000.00, GETDATE(), {6}, 0);
-                    END
-                    ELSE
-                    BEGIN
-                        INSERT INTO journal_detail
-                        (journal_detail_id, journal_detail_code, journal_code, department_code, site_code, vmf_code, journal_detail_type_code, journal_detail_isdebit, journal_detail_quantity, journal_detail_tariff, journal_detail_amount, journal_detail_description, journal_detail_date_created, journal_detail_date_posted, journal_detail_isaccepted, journal_detail_financial_year, journal_detail_date, journal_detail_isreversaldenied, journal_detail_debitamount, date_created, created_by_user_code, is_deleted)
-                        VALUES (@id + 1, @detailCode, CASE WHEN {0} > 0 THEN {0} ELSE NULL END, CAST({1} AS smallint), CAST({2} AS smallint), {3}, CAST({4} AS tinyint), 1, 1, 1000.00, 1000.00, 'Seeded batch21 journal detail', GETDATE(), GETDATE(), 1, CAST({5} AS varchar(10)), CAST(GETDATE() AS date), 0, 1000.00, GETDATE(), {6}, 0);
-                    END
-                END
+                    INSERT INTO journal_detail
+                    (journal_detail_code, journal_code, department_code, site_code, vmf_code, journal_detail_type_code, journal_detail_isdebit, journal_detail_quantity, journal_detail_tariff, journal_detail_amount, journal_detail_description, journal_detail_date_created, journal_detail_date_posted, journal_detail_isaccepted, journal_detail_financial_year, journal_detail_date, journal_detail_isreversaldenied, date_created, created_by_user_code, is_deleted)
+                    VALUES (NEWID(), CASE WHEN {defaultJournalCode} > 0 THEN {defaultJournalCode} ELSE NULL END, CAST({defaultDepartmentCode} AS smallint), CAST({defaultSiteCode} AS smallint), {defaultVehicleCode}, CAST({defaultJournalDetailTypeCode} AS tinyint), 1, 1, 1000.00, 1000.00, 'Seeded batch21 journal detail', GETDATE(), GETDATE(), 1, CAST({defaultPostingYearCode} AS varchar(10)), CAST(GETDATE() AS date), 0, GETDATE(), {defaultUserCode}, 0);
             END
-        ",
-            defaultJournalCode,
-            defaultDepartmentCode,
-            defaultSiteCode,
-            defaultVehicleCode,
-            defaultJournalDetailTypeCode,
-            defaultPostingYearCode,
-            defaultUserCode
-        );
+        "
+            : $@"
+            IF OBJECT_ID('journal_detail','U') IS NOT NULL
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND ISNULL(journal_detail_inactive, 0) = 0)
+                    INSERT INTO journal_detail
+                    (journal_detail_code, journal_code, department_code, site_code, vmf_code, journal_detail_type_code, journal_detail_isdebit, journal_detail_quantity, journal_detail_tariff, journal_detail_amount, journal_detail_description, journal_detail_date_created, journal_detail_date_posted, journal_detail_isaccepted, journal_detail_financial_year, journal_detail_date, journal_detail_isreversaldenied)
+                    VALUES (NEWID(), CASE WHEN {defaultJournalCode} > 0 THEN {defaultJournalCode} ELSE NULL END, CAST({defaultDepartmentCode} AS smallint), CAST({defaultSiteCode} AS smallint), {defaultVehicleCode}, CAST({defaultJournalDetailTypeCode} AS tinyint), 1, 1, 1000.00, 1000.00, 'Seeded batch21 journal detail', GETDATE(), GETDATE(), 1, CAST({defaultPostingYearCode} AS varchar(10)), CAST(GETDATE() AS date), 0);
+            END
+        ";
+        await dbContext.Database.ExecuteSqlRawAsync(journalDetailSeedSql);
 
-        await dbContext.Database.ExecuteSqlRawAsync(
-            @"
+        await ExecuteCompatibilitySqlAsync(
+            dbContext,
+            $@"
             IF OBJECT_ID('journal_detail_allocation_exception','U') IS NOT NULL
                AND OBJECT_ID('journal_detail','U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(journal_detail_allocation_exception_code) FROM journal_detail_allocation_exception), 0);
                 DECLARE @isIdentity int = COLUMNPROPERTY(OBJECT_ID('journal_detail_allocation_exception'), 'journal_detail_allocation_exception_code', 'IsIdentity');
-                DECLARE @detailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND ISNULL(is_deleted, 0) = 0 ORDER BY journal_detail_date_created DESC);
+                DECLARE @detailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND {journalDetailActivePredicate} ORDER BY {journalDetailCreatedColumn} DESC);
 
                 IF @detailCode IS NOT NULL
                    AND NOT EXISTS (SELECT 1 FROM journal_detail_allocation_exception WHERE journal_detail_code = @detailCode AND ISNULL(is_deleted, 0) = 0)
@@ -9845,13 +9909,13 @@ public class Program
                     BEGIN
                         INSERT INTO journal_detail_allocation_exception
                         (journal_detail_code, journal_detail_allocation_exception_date_created, created_by_user_code, is_system_user, new_responsibility_code, date_created, is_deleted)
-                        VALUES (@detailCode, GETDATE(), {0}, 0, '4500000', GETDATE(), 0);
+                        VALUES (@detailCode, GETDATE(), {{0}}, 0, '4500000', GETDATE(), 0);
                     END
                     ELSE
                     BEGIN
                         INSERT INTO journal_detail_allocation_exception
                         (journal_detail_allocation_exception_code, journal_detail_code, journal_detail_allocation_exception_date_created, created_by_user_code, is_system_user, new_responsibility_code, date_created, is_deleted)
-                        VALUES (@code + 1, @detailCode, GETDATE(), {0}, 0, '4500000', GETDATE(), 0);
+                        VALUES (@code + 1, @detailCode, GETDATE(), {{0}}, 0, '4500000', GETDATE(), 0);
                     END
                 END
             END
@@ -9859,19 +9923,20 @@ public class Program
             defaultUserCode
         );
 
-        await dbContext.Database.ExecuteSqlRawAsync(
-            @"
+        await ExecuteCompatibilitySqlAsync(
+            dbContext,
+            $@"
             IF OBJECT_ID('Income_Split_TempTable','U') IS NOT NULL
                AND OBJECT_ID('journal_detail','U') IS NOT NULL
             BEGIN
-                DECLARE @detailId int = (SELECT TOP 1 journal_detail_id FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND ISNULL(is_deleted, 0) = 0 ORDER BY journal_detail_date_created DESC);
-                DECLARE @detailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND ISNULL(is_deleted, 0) = 0 ORDER BY journal_detail_date_created DESC);
+                DECLARE @detailId int = (SELECT TOP 1 journal_detail_id FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND {journalDetailActivePredicate} ORDER BY {journalDetailCreatedColumn} DESC);
+                DECLARE @detailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND {journalDetailActivePredicate} ORDER BY {journalDetailCreatedColumn} DESC);
 
                 IF @detailId IS NOT NULL
                    AND NOT EXISTS (SELECT 1 FROM Income_Split_TempTable WHERE journal_detail_id = @detailId AND Type = 'SeededSplit' AND ISNULL(is_deleted, 0) = 0)
                     INSERT INTO Income_Split_TempTable
                     (Type, source_date, TransactionFinYear, journal_detail_id, journal_detail_code, journal_code, date_created, created_by_user_code, is_deleted)
-                    VALUES ('SeededSplit', CAST(GETDATE() AS date), CAST({0} AS varchar(10)), @detailId, @detailCode, CASE WHEN {1} > 0 THEN {1} ELSE NULL END, GETDATE(), {2}, 0);
+                    VALUES ('SeededSplit', CAST(GETDATE() AS date), CAST({{0}} AS varchar(10)), @detailId, @detailCode, CASE WHEN {{1}} > 0 THEN {{1}} ELSE NULL END, GETDATE(), {{2}}, 0);
             END
         ",
             defaultPostingYearCode,
@@ -9920,14 +9985,15 @@ public class Program
             defaultUserCode
         );
 
-        await dbContext.Database.ExecuteSqlRawAsync(
-            @"
+        await ExecuteCompatibilitySqlAsync(
+            dbContext,
+            $@"
             IF OBJECT_ID('vip_billing','U') IS NOT NULL
                AND OBJECT_ID('journal_detail','U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(vip_billing_code) FROM vip_billing), 0);
                 DECLARE @isIdentity int = COLUMNPROPERTY(OBJECT_ID('vip_billing'), 'vip_billing_code', 'IsIdentity');
-                DECLARE @detailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND ISNULL(is_deleted, 0) = 0 ORDER BY journal_detail_date_created DESC);
+                DECLARE @detailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND {journalDetailActivePredicate} ORDER BY {journalDetailCreatedColumn} DESC);
                 IF @detailCode IS NOT NULL
                    AND NOT EXISTS (SELECT 1 FROM vip_billing WHERE journal_detail_code = @detailCode AND ISNULL(is_deleted, 0) = 0)
                 BEGIN
@@ -9935,13 +10001,13 @@ public class Program
                     BEGIN
                         INSERT INTO vip_billing
                         (journal_detail_code, vmf_code, site_code, normal_midweek_hours, midweek_overtime_hours, date_created, created_by_user_code, is_deleted)
-                        VALUES (@detailCode, {0}, {1}, 8.00, 2.00, GETDATE(), {2}, 0);
+                        VALUES (@detailCode, {{0}}, {{1}}, 8.00, 2.00, GETDATE(), {{2}}, 0);
                     END
                     ELSE
                     BEGIN
                         INSERT INTO vip_billing
                         (vip_billing_code, journal_detail_code, vmf_code, site_code, normal_midweek_hours, midweek_overtime_hours, date_created, created_by_user_code, is_deleted)
-                        VALUES (@code + 1, @detailCode, {0}, {1}, 8.00, 2.00, GETDATE(), {2}, 0);
+                        VALUES (@code + 1, @detailCode, {{0}}, {{1}}, 8.00, 2.00, GETDATE(), {{2}}, 0);
                     END
                 END
             END
@@ -10055,7 +10121,7 @@ public class Program
             await HasTableAsync(dbContext, "journal_detail")
                 ? QueryCountAsync(
                     dbContext,
-                    "SELECT COUNT(1) FROM journal_detail WHERE ISNULL(is_deleted, 0) = 0"
+                    $"SELECT COUNT(1) FROM journal_detail WHERE {journalDetailActivePredicate}"
                 )
                 : Task.FromResult(0)
         );
@@ -10550,6 +10616,17 @@ public class Program
             }
         }
     }
+
+    [SuppressMessage(
+        "Security",
+        "EF1002:Risk of vulnerability from arbitrary SQL",
+        Justification = "The SQL statement contains only allow-listed schema identifiers selected by the compatibility probe. Values remain parameterized."
+    )]
+    private static Task<int> ExecuteCompatibilitySqlAsync(
+        FisDbContext dbContext,
+        string sql,
+        params object[] parameters
+    ) => dbContext.Database.ExecuteSqlRawAsync(sql, parameters);
 
     private static async Task<bool> HasColumnAsync(
         FisDbContext dbContext,

@@ -8,20 +8,17 @@ import {
   FinanceUnavailable,
   hasFinanceRole,
 } from "@/app/finance/_components";
+import { departmentOptions, siteOptions } from "@/app/finance/_location-options";
 import { FinanceReportTable } from "@/app/finance/report-table";
-import {
-  FinanceApiError,
-  getFinanceDepartments,
-  getFinanceProvinces,
-  getFinanceSites,
-  type FinanceOption,
-} from "@/lib/api-finance";
+import { DepartmentApiError, getDepartments } from "@/lib/api-departments";
+import { FinanceApiError, getFinanceProvinces, type FinanceOption } from "@/lib/api-finance";
 import { getLegacyReport, LegacyReportApiError, type LegacyReport } from "@/lib/api-legacy-reports";
 import {
   getRegionalFinanceReport,
   REGIONAL_SUMMARY_ACTIONS,
   type FinanceReport,
 } from "@/lib/api-finance-reports";
+import { SiteApiError, getSites } from "@/lib/api-sites";
 import { getSession } from "@/lib/session";
 
 type Query = Record<string, string | string[] | undefined>;
@@ -153,19 +150,29 @@ export default async function RegionalFinanceActionPage({ params, searchParams }
   let error: string | null = null;
   try {
     if (assetReport) {
-      departments = await getFinanceDepartments();
+      departments = departmentOptions(await getDepartments());
       if (action === "assets-province") provinces = await getFinanceProvinces();
       if (action === "assets-site") {
         const departmentCode = Number(queryValue(query, "departmentCode"));
-        sites = await getFinanceSites(
-          Number.isSafeInteger(departmentCode) && departmentCode > 0 ? departmentCode : undefined,
+        const availableSites = await getSites();
+        const selectedDepartment =
+          Number.isSafeInteger(departmentCode) && departmentCode > 0 ? departmentCode : null;
+        sites = siteOptions(
+          selectedDepartment === null
+            ? availableSites
+            : availableSites.filter((site) => site.departmentCode === selectedDepartment),
         );
       }
     } else if (action === "summary-per-province") {
       provinces = await getFinanceProvinces();
     }
   } catch (caught) {
-    if (caught instanceof FinanceApiError) error = caught.message;
+    if (
+      caught instanceof FinanceApiError ||
+      caught instanceof DepartmentApiError ||
+      caught instanceof SiteApiError
+    )
+      error = caught.message;
     else throw caught;
   }
 

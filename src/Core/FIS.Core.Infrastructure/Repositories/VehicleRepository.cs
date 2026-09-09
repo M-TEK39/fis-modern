@@ -246,6 +246,30 @@ public sealed class VehicleRepository : IVehicleRepository
         );
     }
 
+    public async Task<VehicleMasterSnapshotPage> GetSnapshotPageAsync(int page, int pageSize)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var availableColumns = await GetAvailableColumnsAsync();
+        var activePredicate = $"[v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)}";
+        var totalRecords = await CountActiveVehiclesAsync(availableColumns);
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = (long)(page - 1) * pageSize;
+        var data = await QueryAsync(
+            $"WHERE {activePredicate} ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code] OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY",
+            command =>
+            {
+                AddParameter(command, "@skip", DbType.Int64, skip);
+                AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+            },
+            availableColumns
+        );
+
+        return new VehicleMasterSnapshotPage(data, page, pageSize, totalRecords);
+    }
+
     public async Task<IEnumerable<Vehicle>> GetAvailableVehiclesAsync() =>
         await GetActiveVehiclesAsync();
 
@@ -741,6 +765,37 @@ public sealed class VehicleRepository : IVehicleRepository
             }
 
             return results;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<int> CountActiveVehiclesAsync(IReadOnlySet<string> availableColumns)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var activePredicate = $"[v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)}";
+            command.CommandText = $"""
+                SELECT COUNT(*)
+                FROM [dbo].[{VehicleTableName}] AS [v]
+                WHERE {activePredicate}
+                """;
+
+            return Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
         }
         finally
         {
