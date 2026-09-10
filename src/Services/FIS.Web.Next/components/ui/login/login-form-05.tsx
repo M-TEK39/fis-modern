@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { loginAction, type LoginActionState } from "@/app/actions/auth";
+import { loginAction, type LoginActionState } from "@/app/(auth)/actions/auth";
 import { cn } from "../../lib/utils";
 import { Button } from "../button";
 import { Input } from "../input";

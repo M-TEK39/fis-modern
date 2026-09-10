@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense, type ReactNode } from "react";
 
-import { logoutAction } from "@/app/actions/auth";
-import { AppShellFrame, getAppShellData } from "@/app/_components/app-shell";
-import SiteHeader from "@/app/_components/site-header";
+import { logoutAction } from "@/app/(auth)/actions/auth";
+import { AppShellFrame, getAppShellData } from "@/components/app-shell/app-shell";
+import SiteHeader from "@/components/app-shell/site-header";
 import { AppSidebar16 } from "@/components/ui/sidebar/app-sidebar-16";
 import { ThemeProvider } from "@/components/theme-provider";
-import { getSession } from "@/lib/session";
+import { getSession } from "@/lib/auth/session";
 
 import "./globals.css";
 
