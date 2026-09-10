@@ -80,6 +80,19 @@ export function LoginForm05({
             />
           </div>
 
+          <label
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+            htmlFor="rememberMe"
+          >
+            <input
+              id="rememberMe"
+              name="rememberMe"
+              type="checkbox"
+              className="size-4 rounded border-input accent-primary"
+            />
+            Remember me for up to 7 days
+          </label>
+
           <SubmitButton />
         </div>
 

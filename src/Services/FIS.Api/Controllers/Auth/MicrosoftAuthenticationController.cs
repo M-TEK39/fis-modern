@@ -111,7 +111,8 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
 
     private bool IsMicrosoftIdentityConfigured()
     {
-        return !string.IsNullOrWhiteSpace(_configuration["AzureAd:ClientId"])
+        return _configuration.GetValue<bool?>("SystemSettings:EntraEnabled") != false
+            && !string.IsNullOrWhiteSpace(_configuration["AzureAd:ClientId"])
             && !string.IsNullOrWhiteSpace(_configuration["AzureAd:TenantId"])
             && !string.IsNullOrWhiteSpace(_configuration["AzureAd:ClientSecret"]);
     }

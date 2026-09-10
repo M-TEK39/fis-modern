@@ -19,6 +19,7 @@ import { SettingsDialog } from "./settings-dialog";
 
 export function NavUser({
   user,
+  canManageSystemSettings,
   logoutAction,
   helpHref,
 }: {
@@ -28,6 +29,7 @@ export function NavUser({
     initials: string;
     avatar: string | null;
   };
+  canManageSystemSettings: boolean;
   logoutAction: (formData: FormData) => void | Promise<void>;
   helpHref: string;
 }) {
@@ -104,6 +106,7 @@ export function NavUser({
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
+        canManageSystemSettings={canManageSystemSettings}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           profileTrigger.current?.focus();

@@ -9,7 +9,7 @@ public interface ISessionTokenStore
         DateTimeOffset AccessExpiresAt,
         string RefreshToken,
         DateTimeOffset RefreshExpiresAt
-    ) IssueTokens(IEnumerable<Claim> claims);
+    ) IssueTokens(IEnumerable<Claim> claims, bool rememberMe = false);
     bool TryValidateAccessToken(string accessToken, out IReadOnlyCollection<Claim> claims);
     bool TryRefresh(
         string refreshToken,

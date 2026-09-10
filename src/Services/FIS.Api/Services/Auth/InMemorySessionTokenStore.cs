@@ -7,7 +7,8 @@ namespace FIS.Api.Services;
 public class InMemorySessionTokenStore : ISessionTokenStore
 {
     private static readonly TimeSpan AccessLifetime = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan RefreshLifetime = TimeSpan.FromHours(8);
+    private readonly TimeSpan _standardRefreshLifetime;
+    private readonly TimeSpan _rememberedRefreshLifetime;
 
     private readonly ConcurrentDictionary<string, SessionRecord> _accessSessions = new(
         StringComparer.Ordinal
@@ -16,12 +17,21 @@ public class InMemorySessionTokenStore : ISessionTokenStore
         StringComparer.Ordinal
     );
 
+    public InMemorySessionTokenStore(
+        TimeSpan? standardRefreshLifetime = null,
+        TimeSpan? rememberedRefreshLifetime = null
+    )
+    {
+        _standardRefreshLifetime = standardRefreshLifetime ?? TimeSpan.FromHours(8);
+        _rememberedRefreshLifetime = rememberedRefreshLifetime ?? TimeSpan.FromDays(7);
+    }
+
     public (
         string AccessToken,
         DateTimeOffset AccessExpiresAt,
         string RefreshToken,
         DateTimeOffset RefreshExpiresAt
-    ) IssueTokens(IEnumerable<Claim> claims)
+    ) IssueTokens(IEnumerable<Claim> claims, bool rememberMe = false)
     {
         var claimList = claims.ToList().AsReadOnly();
         var now = DateTimeOffset.UtcNow;
@@ -31,7 +41,8 @@ public class InMemorySessionTokenStore : ISessionTokenStore
         var record = new SessionRecord(
             claimList,
             now.Add(AccessLifetime),
-            now.Add(RefreshLifetime)
+            now.Add(rememberMe ? _rememberedRefreshLifetime : _standardRefreshLifetime),
+            rememberMe
         );
 
         _accessSessions[accessToken] = record;
@@ -84,7 +95,7 @@ public class InMemorySessionTokenStore : ISessionTokenStore
         }
 
         claims = record.Claims;
-        refreshedTokens = IssueTokens(record.Claims);
+        refreshedTokens = IssueTokens(record.Claims, record.RememberMe);
         return true;
     }
 
@@ -108,6 +119,7 @@ public class InMemorySessionTokenStore : ISessionTokenStore
     private sealed record SessionRecord(
         IReadOnlyCollection<Claim> Claims,
         DateTimeOffset AccessExpiresAt,
-        DateTimeOffset RefreshExpiresAt
+        DateTimeOffset RefreshExpiresAt,
+        bool RememberMe
     );
 }

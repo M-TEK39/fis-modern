@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.SqlServer;
+using FIS.Api.Services.SessionManagement;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,17 +15,34 @@ public class SqlSessionTokenStore : ISessionTokenStore
     private const string AccessType = "access";
     private const string RefreshType = "refresh";
     private static readonly TimeSpan AccessLifetime = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan RefreshLifetime = TimeSpan.FromHours(8);
+    private readonly TimeSpan _standardRefreshLifetime;
+    private readonly TimeSpan _rememberedRefreshLifetime;
 
     private readonly IServiceProvider _services;
     private readonly ILogger<SqlSessionTokenStore> _logger;
-    private readonly InMemorySessionTokenStore _legacyFallback = new();
+    private readonly InMemorySessionTokenStore _legacyFallback;
     private int _sqlTableState;
 
-    public SqlSessionTokenStore(IServiceProvider services, ILogger<SqlSessionTokenStore> logger)
+    public SqlSessionTokenStore(
+        IServiceProvider services,
+        IConfiguration configuration,
+        ILogger<SqlSessionTokenStore> logger
+    )
     {
         _services = services;
         _logger = logger;
+        _standardRefreshLifetime = ReadRefreshLifetime(
+            configuration["SystemSettings:SessionRefreshLifetimeMinutes"],
+            TimeSpan.FromHours(8)
+        );
+        _rememberedRefreshLifetime = ReadRefreshLifetime(
+            configuration["SystemSettings:RememberRefreshLifetimeMinutes"],
+            TimeSpan.FromDays(7)
+        );
+        _legacyFallback = new InMemorySessionTokenStore(
+            _standardRefreshLifetime,
+            _rememberedRefreshLifetime
+        );
     }
 
     public (
@@ -32,12 +50,12 @@ public class SqlSessionTokenStore : ISessionTokenStore
         DateTimeOffset AccessExpiresAt,
         string RefreshToken,
         DateTimeOffset RefreshExpiresAt
-    ) IssueTokens(IEnumerable<Claim> claims)
+    ) IssueTokens(IEnumerable<Claim> claims, bool rememberMe = false)
     {
         var claimList = claims.ToList();
         if (!IsSqlStoreAvailable())
         {
-            return _legacyFallback.IssueTokens(claimList);
+            return _legacyFallback.IssueTokens(claimList, rememberMe);
         }
 
         var claimsJson = SerializeClaims(claimList);
@@ -46,7 +64,9 @@ public class SqlSessionTokenStore : ISessionTokenStore
         var accessToken = GenerateToken();
         var refreshToken = GenerateToken();
         var accessExpiresAt = now.Add(AccessLifetime);
-        var refreshExpiresAt = now.Add(RefreshLifetime);
+        var refreshExpiresAt = now.Add(
+            rememberMe ? _rememberedRefreshLifetime : _standardRefreshLifetime
+        );
 
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
@@ -80,7 +100,7 @@ public class SqlSessionTokenStore : ISessionTokenStore
         catch (SqlException exception) when (IsMissingObject(exception))
         {
             MarkSqlStoreUnavailable(exception);
-            return _legacyFallback.IssueTokens(claimList);
+            return _legacyFallback.IssueTokens(claimList, rememberMe);
         }
 
         return (
@@ -179,17 +199,29 @@ public class SqlSessionTokenStore : ISessionTokenStore
         var sessionId = record.session_id;
         var claimsJson = record.claims_json;
 
-        // Atomic rotate: delete entire old session, issue new pair
+        if (record.expires_at <= DateTime.UtcNow)
+        {
+            var expired = db.SessionTokens.Where(t => t.session_id == sessionId).ToList();
+            db.SessionTokens.RemoveRange(expired);
+            db.SaveChanges();
+            return false;
+        }
+
+        // Atomic rotate: delete entire old session, issue new pair.
         var all = db.SessionTokens.Where(t => t.session_id == sessionId).ToList();
         db.SessionTokens.RemoveRange(all);
         db.SaveChanges();
 
-        if (record.expires_at <= DateTime.UtcNow)
-            return false;
-
         var deserialized = DeserializeClaims(claimsJson);
         claims = deserialized;
-        refreshedTokens = IssueTokens(deserialized);
+        refreshedTokens = IssueTokens(
+            deserialized,
+            SessionTokenConventions.IsRememberedSession(
+                record.created_at,
+                record.expires_at,
+                _standardRefreshLifetime
+            )
+        );
         return true;
     }
 
@@ -279,6 +311,13 @@ public class SqlSessionTokenStore : ISessionTokenStore
         Span<byte> bytes = stackalloc byte[32];
         RandomNumberGenerator.Fill(bytes);
         return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    }
+
+    private static TimeSpan ReadRefreshLifetime(string? rawValue, TimeSpan fallback)
+    {
+        return int.TryParse(rawValue, out var minutes) && minutes is >= 15 and <= 43_200
+            ? TimeSpan.FromMinutes(minutes)
+            : fallback;
     }
 
     private bool IsSqlStoreAvailable()

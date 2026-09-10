@@ -5,12 +5,20 @@ namespace FIS.Core.Application.Services.Workflow.Handlers;
 
 public class EmailNotificationHandler : StepHandlerBase
 {
+    private readonly IEmailService _emailService;
+
     public override string HandlerType => "email_notification";
 
-    public EmailNotificationHandler(ILogger<EmailNotificationHandler> logger)
-        : base(logger) { }
+    public EmailNotificationHandler(
+        IEmailService emailService,
+        ILogger<EmailNotificationHandler> logger
+    )
+        : base(logger)
+    {
+        _emailService = emailService;
+    }
 
-    protected override Task<StepExecutionResult> ExecuteInternalAsync(
+    protected override async Task<StepExecutionResult> ExecuteInternalAsync(
         Dictionary<string, object> parameters,
         WorkflowExecutionContext context
     )
@@ -19,18 +27,29 @@ public class EmailNotificationHandler : StepHandlerBase
         var subject = GetRequiredParameter<string>(parameters, "subject");
         var body = GetRequiredParameter<string>(parameters, "body");
 
-        Logger.LogInformation("Email would be sent to {To} with subject '{Subject}'", to, subject);
+        var emailResult = await _emailService.SendEmailAsync(to, subject, body, isHtml: true);
+        if (!emailResult.Success)
+        {
+            Logger.LogWarning(
+                "Workflow email delivery failed for workflow execution {WorkflowExecutionId}",
+                context.WorkflowID
+            );
+            return StepExecutionResult.FailureResult("The workflow email could not be delivered.");
+        }
 
-        return Task.FromResult(
-            StepExecutionResult.SuccessResult(
-                $"Email sent to {to}",
-                new Dictionary<string, object>
-                {
-                    ["emailSent"] = true,
-                    ["recipient"] = to,
-                    ["sentAt"] = DateTime.UtcNow,
-                }
-            )
+        Logger.LogInformation(
+            "Workflow email delivery accepted for workflow execution {WorkflowExecutionId}",
+            context.WorkflowID
+        );
+
+        return StepExecutionResult.SuccessResult(
+            "Workflow email accepted for delivery.",
+            new Dictionary<string, object>
+            {
+                ["emailSent"] = true,
+                ["sentAt"] = DateTime.UtcNow,
+                ["messageId"] = emailResult.MessageId ?? "accepted",
+            }
         );
     }
 

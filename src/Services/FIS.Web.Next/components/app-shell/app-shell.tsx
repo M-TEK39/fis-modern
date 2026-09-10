@@ -194,6 +194,7 @@ export function getAppShellData(session: AuthenticatedSession) {
   return {
     groups: visibleGroups(session),
     user: getSidebarUser(session),
+    canManageSystemSettings: hasRole(session, ["User Administration"]),
   };
 }
 

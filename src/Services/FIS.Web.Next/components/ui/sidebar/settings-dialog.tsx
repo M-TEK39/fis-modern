@@ -2,7 +2,15 @@
 
 import * as React from "react";
 import NextLink from "next/link";
-import { CircleHelp, Lock, Paintbrush, type LucideIcon } from "lucide-react";
+import {
+  CircleHelp,
+  Clock3,
+  KeyRound,
+  Lock,
+  Mail,
+  Paintbrush,
+  type LucideIcon,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 
 import {
@@ -13,17 +21,12 @@ import {
   BreadcrumbSeparator,
 } from "../breadcrumb";
 import { Button } from "../button";
+import { EmailConfigurationPanel } from "@/components/settings/email-configuration-panel";
+import { SecurityPanel } from "@/components/settings/security-panel";
+import { SessionManagementPanel } from "@/components/settings/session-management-panel";
+import { SystemConfigurationPanel } from "@/components/settings/system-configuration-panel";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../dialog";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarProvider,
-} from "./sidebar";
 
 type SettingsItem = {
   name: string;
@@ -42,8 +45,7 @@ const data: { nav: readonly SettingsItem[] } = {
     {
       name: "Security",
       icon: Lock,
-      description: "Update your password to keep your account secure.",
-      href: "/change-password",
+      description: "Review password, account recovery, and MFA capability status.",
     },
     {
       name: "Help & manuals",
@@ -58,15 +60,42 @@ export function SettingsDialog({
   open,
   onOpenChange,
   onCloseAutoFocus,
+  canManageSystemSettings = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCloseAutoFocus?: (event: Event) => void;
+  canManageSystemSettings?: boolean;
 }) {
   const [section, setSection] = React.useState("Appearance");
   const [mounted, setMounted] = React.useState(false);
   const { setTheme, theme } = useTheme();
-  const activeItem = data.nav.find((item) => item.name === section) ?? data.nav[0];
+  const navigation = React.useMemo(
+    () => [
+      ...data.nav,
+      ...(canManageSystemSettings
+        ? [
+            {
+              name: "Email configuration",
+              icon: Mail,
+              description: "Configure secure email delivery and provider fallback.",
+            },
+            {
+              name: "Session management",
+              icon: Clock3,
+              description: "Set refresh lifetimes and revoke durable compromised sessions.",
+            },
+            {
+              name: "Authentication configuration",
+              icon: KeyRound,
+              description: "Configure optional Entra sign-in and rotate reset signing material.",
+            },
+          ]
+        : []),
+    ],
+    [canManageSystemSettings],
+  );
+  const activeItem = navigation.find((item) => item.name === section) ?? navigation[0];
 
   React.useEffect(() => setMounted(true), []);
 
@@ -78,35 +107,38 @@ export function SettingsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         onCloseAutoFocus={onCloseAutoFocus}
-        className="h-[min(90svh,32rem)] overflow-hidden p-0 sm:max-w-[700px] lg:max-w-[800px]"
+        className="flex h-[min(90svh,32rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[700px] lg:max-w-[800px]"
       >
         <DialogTitle className="sr-only">FIS settings</DialogTitle>
         <DialogDescription className="sr-only">
           Review available FIS account, navigation, security, and help options.
         </DialogDescription>
-        <SidebarProvider className="h-full min-h-0 items-start">
-          <Sidebar collapsible="none" className="hidden md:flex">
-            <SidebarContent>
-              <SidebarGroup>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {data.nav.map((item) => (
-                      <SidebarMenuItem key={item.name}>
-                        <SidebarMenuButton asChild isActive={item.name === activeItem.name}>
-                          <button type="button" onClick={() => setSection(item.name)}>
-                            <item.icon />
-                            <span>{item.name}</span>
-                          </button>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </SidebarGroup>
-            </SidebarContent>
-          </Sidebar>
+        <div className="flex min-h-0 flex-1">
+          <aside className="hidden h-full w-60 shrink-0 flex-col border-r bg-muted/20 md:flex">
+            <nav className="grid gap-1 p-2" aria-label="Settings sections">
+              {navigation.map((item) => {
+                const isActive = item.name === activeItem.name;
+                return (
+                  <button
+                    key={item.name}
+                    type="button"
+                    className={`flex min-h-9 items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    }`}
+                    aria-current={isActive ? "page" : undefined}
+                    onClick={() => setSection(item.name)}
+                  >
+                    <item.icon className="size-4 shrink-0" aria-hidden="true" />
+                    <span>{item.name}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </aside>
           <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
+            <header className="flex h-16 shrink-0 items-center gap-2">
               <div className="flex items-center gap-2 px-4">
                 <Breadcrumb>
                   <BreadcrumbList>
@@ -122,7 +154,7 @@ export function SettingsDialog({
               </div>
             </header>
             <div className="flex gap-1 overflow-x-auto border-y px-4 py-2 md:hidden">
-              {data.nav.map((item) => (
+              {navigation.map((item) => (
                 <button
                   key={item.name}
                   type="button"
@@ -134,8 +166,11 @@ export function SettingsDialog({
                 </button>
               ))}
             </div>
-            <div className="flex flex-1 flex-col overflow-y-auto p-4 pt-0 sm:p-6 sm:pt-0">
-              <section className="mx-auto w-full max-w-2xl space-y-6" aria-live="polite">
+            <ScrollArea className="h-0 flex-1">
+              <section
+                className="mx-auto w-full max-w-2xl space-y-6 p-4 pt-0 sm:p-6 sm:pt-0"
+                aria-live="polite"
+              >
                 <div className="space-y-2 border-b pb-5 pt-5 sm:pt-6">
                   <h2 className="text-xl font-semibold tracking-tight">{activeItem.name}</h2>
                   <p className="text-sm text-muted-foreground">{activeItem.description}</p>
@@ -143,7 +178,7 @@ export function SettingsDialog({
                 {activeItem.href ? (
                   <Button asChild>
                     <NextLink href={activeItem.href} onClick={() => onOpenChange(false)}>
-                      {activeItem.name === "Security" ? "Change password" : "Open manuals"}
+                      Open manuals
                     </NextLink>
                   </Button>
                 ) : activeItem.name === "Appearance" ? (
@@ -165,11 +200,22 @@ export function SettingsDialog({
                       ))}
                     </div>
                   </div>
+                ) : activeItem.name === "Email configuration" ? (
+                  <EmailConfigurationPanel />
+                ) : activeItem.name === "Session management" ? (
+                  <div className="grid gap-5">
+                    <SystemConfigurationPanel section="session" />
+                    <SessionManagementPanel />
+                  </div>
+                ) : activeItem.name === "Authentication configuration" ? (
+                  <SystemConfigurationPanel section="authentication" />
+                ) : activeItem.name === "Security" ? (
+                  <SecurityPanel onNavigate={() => onOpenChange(false)} />
                 ) : null}
               </section>
-            </div>
+            </ScrollArea>
           </main>
-        </SidebarProvider>
+        </div>
       </DialogContent>
     </Dialog>
   );

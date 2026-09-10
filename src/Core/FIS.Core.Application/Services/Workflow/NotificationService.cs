@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using FIS.Core.Application.Interfaces;
+using FIS.Core.Application.Interfaces.EmailDelivery;
 using FIS.Core.Application.Interfaces.Workflow;
 using FIS.Core.Domain.Entities.System;
 using Microsoft.Extensions.Logging;
@@ -153,17 +154,20 @@ public class NotificationService : INotificationService
 
     private async Task SendNotificationAsync(
         WorkflowNotification notification,
-        Dictionary<string, object> contextData
+        Dictionary<string, object> contextData,
+        NotificationLog? existingLog = null
     )
     {
-        var log = new NotificationLog
-        {
-            NotificationID = notification.NotificationID,
-            WorkflowID = notification.WorkflowID,
-            StepID = notification.StepID,
-            EventType = notification.EventType,
-            DeliveryStatus = "Pending",
-        };
+        var log =
+            existingLog
+            ?? new NotificationLog
+            {
+                NotificationID = notification.NotificationID,
+                WorkflowID = notification.WorkflowID,
+                StepID = notification.StepID,
+                EventType = notification.EventType,
+                DeliveryStatus = "Pending",
+            };
 
         try
         {
@@ -177,7 +181,6 @@ public class NotificationService : INotificationService
                 log.DeliveryStatus = "Failed";
                 log.ErrorMessage =
                     $"Could not resolve recipient: {notification.RecipientType}:{notification.RecipientIdentifier}";
-                await _logRepository.CreateAsync(log);
                 return;
             }
 
@@ -197,7 +200,6 @@ public class NotificationService : INotificationService
                 {
                     log.DeliveryStatus = "Failed";
                     log.ErrorMessage = $"Template {notification.NotificationTemplateID} not found";
-                    await _logRepository.CreateAsync(log);
                     return;
                 }
 
@@ -248,12 +250,16 @@ public class NotificationService : INotificationService
             }
             else
             {
-                log.DeliveryStatus = "Failed";
+                log.DeliveryStatus =
+                    emailResult.DeliveryStatus == EmailDeliveryStatus.Unknown
+                        ? "Unknown"
+                        : "Failed";
                 log.ErrorMessage = emailResult.ErrorMessage;
                 _logger.LogWarning(
-                    "Failed to send notification to {Recipient}: {Error}",
-                    log.RecipientEmail,
-                    emailResult.ErrorMessage
+                    "Workflow notification was not accepted. Outcome {Outcome}; provider {Provider}; correlation {CorrelationId}",
+                    emailResult.DeliveryStatus?.ToString() ?? "Unknown",
+                    emailResult.Provider?.ToString() ?? "none",
+                    emailResult.CorrelationId ?? "none"
                 );
             }
         }
@@ -265,7 +271,10 @@ public class NotificationService : INotificationService
         }
         finally
         {
-            await _logRepository.CreateAsync(log);
+            if (existingLog is null)
+                await _logRepository.CreateAsync(log);
+            else
+                await _logRepository.UpdateAsync(log);
         }
     }
 
@@ -437,7 +446,7 @@ public class NotificationService : INotificationService
                             ["StepID"] = log.StepID ?? 0,
                         };
 
-                        await SendNotificationAsync(notification, contextData);
+                        await SendNotificationAsync(notification, contextData, log);
                     }
                 }
             }
@@ -473,7 +482,6 @@ public class NotificationService : INotificationService
                     {
                         log.RetryCount++;
                         log.DeliveryStatus = "Pending";
-                        await _logRepository.UpdateAsync(log);
 
                         var contextData = new Dictionary<string, object>
                         {
@@ -481,7 +489,7 @@ public class NotificationService : INotificationService
                             ["StepID"] = log.StepID ?? 0,
                         };
 
-                        await SendNotificationAsync(notification, contextData);
+                        await SendNotificationAsync(notification, contextData, log);
                     }
                 }
             }

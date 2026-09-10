@@ -23,8 +23,10 @@ export async function loginAction(
 ): Promise<LoginActionState> {
   const firstNameValue = formData.get("firstName");
   const passwordValue = formData.get("password");
+  const rememberMeValue = formData.get("rememberMe");
   const firstName = typeof firstNameValue === "string" ? firstNameValue.trim() : "";
   const password = typeof passwordValue === "string" ? passwordValue : "";
+  const rememberMe = rememberMeValue === "on";
 
   if (!firstName || !password) {
     return {
@@ -33,7 +35,7 @@ export async function loginAction(
     };
   }
 
-  const result = await loginAgainstApi(firstName, password);
+  const result = await loginAgainstApi(firstName, password, rememberMe);
   if (!result.ok) {
     const message =
       result.reason === "invalid-credentials"

@@ -38,8 +38,15 @@ async function AuthenticatedSidebar() {
     return null;
   }
 
-  const { groups, user } = getAppShellData(session);
-  return <AppSidebar16 groups={groups} user={user} logoutAction={logoutAction} />;
+  const { groups, user, canManageSystemSettings } = getAppShellData(session);
+  return (
+    <AppSidebar16
+      groups={groups}
+      user={user}
+      canManageSystemSettings={canManageSystemSettings}
+      logoutAction={logoutAction}
+    />
+  );
 }
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

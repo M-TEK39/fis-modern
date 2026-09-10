@@ -161,12 +161,16 @@ export async function setAuthCookies(authCookies: ForwardedAuthCookie[]) {
   }
 }
 
-export async function loginAgainstApi(username: string, password: string): Promise<ApiLoginResult> {
+export async function loginAgainstApi(
+  username: string,
+  password: string,
+  rememberMe: boolean,
+): Promise<ApiLoginResult> {
   try {
     const loginResponse = await fetchApi("api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, rememberMe }),
     });
 
     const payload = await readJson<LoginPayload>(loginResponse);

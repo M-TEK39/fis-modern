@@ -1,24 +1,24 @@
-using System.Text;
-using System.Text.Json;
 using System.Threading;
-using Azure.Core;
-using Azure.Identity;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
+using DeliveryAttachment = FIS.Core.Application.Interfaces.EmailDelivery.EmailAttachment;
+using EmailDeliveryRequest = FIS.Core.Application.Interfaces.EmailDelivery.EmailDeliveryRequest;
+using EmailProvider = FIS.Core.Application.Interfaces.EmailDelivery.EmailProvider;
+using EmailRecipient = FIS.Core.Application.Interfaces.EmailDelivery.EmailRecipient;
+using EmailSmtpSecurityMode = FIS.Core.Application.Interfaces.EmailDelivery.EmailSmtpSecurityMode;
+using IEmailConfigurationService = FIS.Core.Application.Interfaces.EmailDelivery.IEmailConfigurationService;
+using IEmailDeliveryService = FIS.Core.Application.Interfaces.EmailDelivery.IEmailDeliveryService;
 
 namespace FIS.Core.Infrastructure.Services;
 
 /// <summary>
 /// Email notification service implementation for Fleet Information System
 /// Provides modern replacement for legacy email functionality
-/// Uses Microsoft Graph with Entra ID app-only authentication and error handling
+/// Delegates actual provider delivery to the shared secure email dispatcher.
 /// </summary>
 public class EmailNotificationService : IEmailNotificationService
 {
-    private readonly IConfiguration _configuration;
     private readonly ILogger<EmailNotificationService> _logger;
     private readonly IReportingService _reportingService;
     private readonly IVehicleRepository _vehicleRepository;
@@ -26,19 +26,8 @@ public class EmailNotificationService : IEmailNotificationService
     private readonly IMaintenanceRecordRepository _maintenanceRepository;
     private readonly IUserRepository _userRepository;
     private readonly ISiteRepository _siteRepository;
-    private readonly IHttpClientFactory _httpClientFactory;
-
-    // Email configuration settings
-    private readonly string _provider;
-    private readonly string _graphAuthentication;
-    private readonly string _graphTenantId;
-    private readonly string _graphClientId;
-    private readonly string _graphManagedIdentityClientId;
-    private readonly string _graphSenderUserPrincipalName;
-    private readonly string _graphEndpoint;
-    private readonly TokenCredential? _graphCredential;
-    private readonly string _fromName;
-    private readonly bool _isConfigured;
+    private readonly IEmailDeliveryService _emailDeliveryService;
+    private readonly IEmailConfigurationService _emailConfigurationService;
 
     // Email templates cache
     private static readonly Dictionary<string, EmailTemplate> _defaultTemplates = new()
@@ -308,7 +297,6 @@ public class EmailNotificationService : IEmailNotificationService
     private DateTime _monthlyCounterDate = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
 
     public EmailNotificationService(
-        IConfiguration configuration,
         ILogger<EmailNotificationService> logger,
         IReportingService reportingService,
         IVehicleRepository vehicleRepository,
@@ -316,10 +304,10 @@ public class EmailNotificationService : IEmailNotificationService
         IMaintenanceRecordRepository maintenanceRepository,
         IUserRepository userRepository,
         ISiteRepository siteRepository,
-        IHttpClientFactory httpClientFactory
+        IEmailDeliveryService emailDeliveryService,
+        IEmailConfigurationService emailConfigurationService
     )
     {
-        _configuration = configuration;
         _logger = logger;
         _reportingService = reportingService;
         _vehicleRepository = vehicleRepository;
@@ -327,51 +315,8 @@ public class EmailNotificationService : IEmailNotificationService
         _maintenanceRepository = maintenanceRepository;
         _userRepository = userRepository;
         _siteRepository = siteRepository;
-        _httpClientFactory = httpClientFactory;
-
-        // Load email configuration
-        var emailConfig = _configuration.GetSection("EmailSettings");
-        _provider = (emailConfig["Provider"] ?? "MicrosoftGraph").Trim().ToLowerInvariant();
-        _graphAuthentication = (emailConfig["GraphAuthentication"] ?? "managed-identity")
-            .Trim()
-            .ToLowerInvariant();
-        _graphTenantId = emailConfig["GraphTenantId"]?.Trim() ?? string.Empty;
-        _graphClientId = emailConfig["GraphClientId"]?.Trim() ?? string.Empty;
-        _graphManagedIdentityClientId =
-            emailConfig["GraphManagedIdentityClientId"]?.Trim() ?? string.Empty;
-        _graphSenderUserPrincipalName = (
-            emailConfig["GraphSenderUserPrincipalName"]
-            ?? emailConfig["FromAddress"]
-            ?? string.Empty
-        ).Trim();
-        _graphEndpoint = (
-            emailConfig["GraphEndpoint"] ?? "https://graph.microsoft.com/v1.0"
-        ).TrimEnd('/');
-        _fromName = emailConfig["FromName"] ?? "Fleet Management System";
-
-        if (_provider is "microsoftgraph" or "graph")
-        {
-            _graphCredential = CreateGraphCredential(emailConfig);
-        }
-
-        _isConfigured =
-            _provider is "microsoftgraph" or "graph"
-            && _graphCredential is not null
-            && Uri.TryCreate(_graphEndpoint, UriKind.Absolute, out var graphUri)
-            && graphUri.Scheme == Uri.UriSchemeHttps
-            && graphUri.Host.Equals("graph.microsoft.com", StringComparison.OrdinalIgnoreCase)
-            && graphUri.AbsolutePath.TrimEnd('/') == "/v1.0"
-            && string.IsNullOrEmpty(graphUri.Query)
-            && string.IsNullOrEmpty(graphUri.Fragment)
-            && !string.IsNullOrWhiteSpace(_graphSenderUserPrincipalName);
-
-        if (!_isConfigured)
-        {
-            _logger.LogWarning(
-                "Email service is not properly configured for Microsoft Graph. "
-                    + "Check EmailSettings:Provider, GraphAuthentication, sender mailbox, and Entra credentials."
-            );
-        }
+        _emailDeliveryService = emailDeliveryService;
+        _emailConfigurationService = emailConfigurationService;
     }
 
     #region Simple Email Methods
@@ -1537,27 +1482,53 @@ public class EmailNotificationService : IEmailNotificationService
         }
     }
 
-    public Task<EmailServiceStatus> GetEmailServiceStatusAsync()
+    public async Task<EmailServiceStatus> GetEmailServiceStatusAsync()
     {
-        return Task.FromResult(
-            new EmailServiceStatus
-            {
-                IsConfigured = _isConfigured,
-                IsConnected = _isConfigured && string.IsNullOrWhiteSpace(_lastErrorMessage),
-                Provider = "MicrosoftGraph",
-                Authentication = _graphAuthentication,
-                SmtpServer = "graph.microsoft.com",
-                SmtpPort = 443,
-                UseSSL = true,
-                FromAddress = _graphSenderUserPrincipalName,
-                FromName = _fromName,
-                LastTestDate = _lastTestDate,
-                LastTestSuccessful = _lastTestSuccessful,
-                LastErrorMessage = _lastErrorMessage,
-                DailyEmailsSent = _dailyEmailsSent,
-                MonthlyEmailsSent = _monthlyEmailsSent,
-            }
-        );
+        var status = await _emailConfigurationService.GetStatusAsync();
+        var primary =
+            status.Providers.FirstOrDefault(provider => provider.Enabled)
+            ?? status.Providers.FirstOrDefault();
+        var fromAddress = primary?.Provider switch
+        {
+            EmailProvider.Graph => status.Graph.FromAddress ?? status.Graph.SenderUserPrincipalName,
+            EmailProvider.Smtp => status.Smtp.FromAddress,
+            EmailProvider.SendGrid => status.SendGrid.FromEmail,
+            _ => null,
+        };
+        var fromName = primary?.Provider switch
+        {
+            EmailProvider.Graph => status.Graph.FromName,
+            EmailProvider.Smtp => status.Smtp.FromName,
+            EmailProvider.SendGrid => status.SendGrid.FromName,
+            _ => null,
+        };
+
+        return new EmailServiceStatus
+        {
+            IsConfigured = primary?.Configured == true,
+            IsConnected =
+                primary?.Available == true && string.IsNullOrWhiteSpace(_lastErrorMessage),
+            Provider = primary?.Provider.ToString() ?? "None",
+            Authentication =
+                primary?.Provider == EmailProvider.Graph ? status.Graph.Authentication.ToString()
+                : primary?.Provider == EmailProvider.Smtp ? status.Smtp.Authentication.ToString()
+                : "API key",
+            SmtpServer =
+                primary?.Provider == EmailProvider.Smtp ? status.Smtp.Host ?? string.Empty : "",
+            SmtpPort = primary?.Provider == EmailProvider.Smtp ? status.Smtp.Port : 0,
+            UseSSL =
+                primary?.Provider != EmailProvider.Smtp
+                || status.Smtp.SecurityMode
+                    is EmailSmtpSecurityMode.StartTls
+                        or EmailSmtpSecurityMode.SslOnConnect,
+            FromAddress = fromAddress ?? string.Empty,
+            FromName = fromName ?? string.Empty,
+            LastTestDate = _lastTestDate,
+            LastTestSuccessful = _lastTestSuccessful,
+            LastErrorMessage = _lastErrorMessage,
+            DailyEmailsSent = _dailyEmailsSent,
+            MonthlyEmailsSent = _monthlyEmailsSent,
+        };
     }
 
     #endregion
@@ -1588,57 +1559,6 @@ public class EmailNotificationService : IEmailNotificationService
 
     #region Private Helper Methods
 
-    private TokenCredential? CreateGraphCredential(IConfigurationSection emailConfig)
-    {
-        try
-        {
-            return _graphAuthentication switch
-            {
-                "managed-identity" or "managedidentity" or "mi" => string.IsNullOrWhiteSpace(
-                    _graphManagedIdentityClientId
-                )
-                    ? new ManagedIdentityCredential()
-                    : new ManagedIdentityCredential(_graphManagedIdentityClientId),
-                "client-secret" or "clientsecret" => CreateClientSecretCredential(emailConfig),
-                _ => LogUnsupportedGraphAuthentication(),
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unable to initialize Microsoft Graph authentication provider");
-            return null;
-        }
-    }
-
-    private TokenCredential? CreateClientSecretCredential(IConfigurationSection emailConfig)
-    {
-        var clientSecret = emailConfig["GraphClientSecret"]?.Trim() ?? string.Empty;
-        if (
-            string.IsNullOrWhiteSpace(_graphTenantId)
-            || string.IsNullOrWhiteSpace(_graphClientId)
-            || string.IsNullOrWhiteSpace(clientSecret)
-        )
-        {
-            _logger.LogWarning(
-                "Graph client-secret authentication requires GraphTenantId, GraphClientId, and "
-                    + "EmailSettings:GraphClientSecret from a secret store or environment variable."
-            );
-            return null;
-        }
-
-        return new ClientSecretCredential(_graphTenantId, _graphClientId, clientSecret);
-    }
-
-    private TokenCredential? LogUnsupportedGraphAuthentication()
-    {
-        _logger.LogWarning(
-            "Unsupported EmailSettings:GraphAuthentication value {Authentication}. "
-                + "Use managed-identity or client-secret.",
-            _graphAuthentication
-        );
-        return null;
-    }
-
     private async Task<bool> SendEmailInternalAsync(
         List<string> toAddresses,
         string subject,
@@ -1647,100 +1567,40 @@ public class EmailNotificationService : IEmailNotificationService
         List<EmailAttachment> attachments
     )
     {
-        if (!_isConfigured)
+        var result = await _emailDeliveryService.SendAsync(
+            new EmailDeliveryRequest(
+                toAddresses
+                    .Where(address => !string.IsNullOrWhiteSpace(address))
+                    .Select(address => new EmailRecipient(address.Trim()))
+                    .ToArray(),
+                subject,
+                body,
+                isHtml,
+                attachments
+                    .Select(attachment => new DeliveryAttachment(
+                        attachment.FileName,
+                        attachment.ContentType,
+                        attachment.Content
+                    ))
+                    .ToArray(),
+                Category: "operational",
+                CorrelationId: Guid.NewGuid().ToString("N")
+            )
+        );
+        if (result.IsAccepted)
         {
-            _logger.LogWarning("Email service not configured. Cannot send email.");
-            return false;
-        }
-
-        try
-        {
-            var accessToken = await _graphCredential!.GetTokenAsync(
-                new TokenRequestContext(new[] { "https://graph.microsoft.com/.default" }),
-                CancellationToken.None
-            );
-
-            var requestBody = new Dictionary<string, object?>
-            {
-                ["message"] = new Dictionary<string, object?>
-                {
-                    ["subject"] = subject,
-                    ["body"] = new Dictionary<string, string>
-                    {
-                        ["contentType"] = isHtml ? "HTML" : "Text",
-                        ["content"] = body,
-                    },
-                    ["toRecipients"] = toAddresses
-                        .Where(address => !string.IsNullOrWhiteSpace(address))
-                        .Select(address => new Dictionary<string, object?>
-                        {
-                            ["emailAddress"] = new Dictionary<string, string>
-                            {
-                                ["address"] = address.Trim(),
-                            },
-                        })
-                        .ToList(),
-                    ["attachments"] = attachments
-                        .Select(attachment => new Dictionary<string, object?>
-                        {
-                            ["@odata.type"] = "#microsoft.graph.fileAttachment",
-                            ["name"] = attachment.FileName,
-                            ["contentType"] = attachment.ContentType,
-                            ["contentBytes"] = Convert.ToBase64String(attachment.Content),
-                        })
-                        .ToList(),
-                },
-                ["saveToSentItems"] = false,
-            };
-
-            using var request = new HttpRequestMessage(
-                HttpMethod.Post,
-                $"{_graphEndpoint}/users/{Uri.EscapeDataString(_graphSenderUserPrincipalName)}/sendMail"
-            );
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-                "Bearer",
-                accessToken.Token
-            );
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(requestBody),
-                Encoding.UTF8,
-                "application/json"
-            );
-
-            using var response = await _httpClientFactory.CreateClient().SendAsync(request);
-            if (!response.IsSuccessStatusCode)
-            {
-                var responseBody = await response.Content.ReadAsStringAsync();
-                var safeDetails = responseBody.Length > 500 ? responseBody[..500] : responseBody;
-                _lastErrorMessage =
-                    $"Microsoft Graph sendMail returned {(int)response.StatusCode}: {safeDetails}";
-                _logger.LogError(
-                    "Microsoft Graph sendMail failed with status {StatusCode}: {Details}",
-                    (int)response.StatusCode,
-                    safeDetails
-                );
-                return false;
-            }
-
             RecordSuccessfulSend();
             _lastErrorMessage = null;
-
-            _logger.LogInformation(
-                "Email sent successfully through Microsoft Graph to {Recipients}",
-                string.Join(", ", toAddresses)
-            );
             return true;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "Failed to send email to {Recipients}",
-                string.Join(", ", toAddresses)
-            );
-            _lastErrorMessage = ex.Message;
-            return false;
-        }
+
+        _lastErrorMessage = result.Description;
+        _logger.LogWarning(
+            "Operational email delivery failed with {Status} through {Provider}",
+            result.Status,
+            result.Provider?.ToString() ?? "no provider"
+        );
+        return false;
     }
 
     private void RecordSuccessfulSend()

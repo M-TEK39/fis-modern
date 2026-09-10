@@ -19,15 +19,6 @@ public interface IEmailService
         string body,
         bool isHtml = true
     );
-
-    /// <summary>
-    /// Sends an email using a template with variable substitution
-    /// </summary>
-    Task<EmailResult> SendTemplatedEmailAsync(
-        string to,
-        string templateId,
-        Dictionary<string, string> variables
-    );
 }
 
 /// <summary>
@@ -39,24 +30,48 @@ public class EmailResult
     public string? MessageId { get; set; }
     public string? ErrorMessage { get; set; }
     public int StatusCode { get; set; }
+    public FIS.Core.Application.Interfaces.EmailDelivery.EmailDeliveryStatus? DeliveryStatus { get; set; }
+    public FIS.Core.Application.Interfaces.EmailDelivery.EmailProvider? Provider { get; set; }
+    public string? CorrelationId { get; set; }
 
-    public static EmailResult SuccessResult(string messageId)
+    public static EmailResult SuccessResult(
+        string messageId,
+        FIS.Core.Application.Interfaces.EmailDelivery.EmailProvider? provider = null,
+        string? correlationId = null
+    )
     {
         return new EmailResult
         {
             Success = true,
             MessageId = messageId,
             StatusCode = 200,
+            DeliveryStatus = FIS.Core
+                .Application
+                .Interfaces
+                .EmailDelivery
+                .EmailDeliveryStatus
+                .Accepted,
+            Provider = provider,
+            CorrelationId = correlationId,
         };
     }
 
-    public static EmailResult FailureResult(string errorMessage, int statusCode = 500)
+    public static EmailResult FailureResult(
+        string errorMessage,
+        int statusCode = 500,
+        FIS.Core.Application.Interfaces.EmailDelivery.EmailDeliveryStatus? deliveryStatus = null,
+        FIS.Core.Application.Interfaces.EmailDelivery.EmailProvider? provider = null,
+        string? correlationId = null
+    )
     {
         return new EmailResult
         {
             Success = false,
             ErrorMessage = errorMessage,
             StatusCode = statusCode,
+            DeliveryStatus = deliveryStatus,
+            Provider = provider,
+            CorrelationId = correlationId,
         };
     }
 }

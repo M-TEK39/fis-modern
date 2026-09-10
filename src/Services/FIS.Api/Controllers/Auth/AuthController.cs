@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using FIS.Api.Services;
+using FIS.Api.Services.SessionManagement;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Interfaces.Auth;
 using FIS.Core.Domain.Entities;
@@ -33,6 +34,7 @@ public class AuthController : ControllerBase
     private readonly IEmailNotificationService _emailNotificationService;
     private readonly IPasswordService _passwordService;
     private readonly LegacyCredentialCompatibilityService _legacyCredentialCompatibility;
+    private readonly ISessionManagementService _sessionManagementService;
 
     public AuthController(
         IConfiguration configuration,
@@ -41,7 +43,8 @@ public class AuthController : ControllerBase
         ISessionTokenStore sessionTokenStore,
         IEmailNotificationService emailNotificationService,
         IPasswordService passwordService,
-        LegacyCredentialCompatibilityService legacyCredentialCompatibility
+        LegacyCredentialCompatibilityService legacyCredentialCompatibility,
+        ISessionManagementService sessionManagementService
     )
     {
         _configuration = configuration;
@@ -51,6 +54,7 @@ public class AuthController : ControllerBase
         _emailNotificationService = emailNotificationService;
         _passwordService = passwordService;
         _legacyCredentialCompatibility = legacyCredentialCompatibility;
+        _sessionManagementService = sessionManagementService;
     }
 
     /// <summary>
@@ -243,7 +247,7 @@ public class AuthController : ControllerBase
             passwordExpired,
             grantedRoles
         );
-        var tokens = _sessionTokenStore.IssueTokens(authClaims);
+        var tokens = _sessionTokenStore.IssueTokens(authClaims, request.RememberMe);
 
         WriteAuthCookies(
             tokens.AccessToken,
@@ -475,6 +479,7 @@ public class AuthController : ControllerBase
 
             ApplyLegacyPasswordChange(profile.UserAccessOld, request.NewPassword, now);
             await SaveChangesWithOptionalCredentialAsync(credential);
+            await RevokeSessionsAfterCredentialEventAsync(profile.UserAccessCode, "password change");
 
             _logger.LogInformation(
                 "Password changed successfully for user {Username} by user_access_code {ChangedBy}",
@@ -665,6 +670,10 @@ public class AuthController : ControllerBase
 
             ApplyLegacyPasswordChange(profile.UserAccessOld, request.NewPassword, now);
             await SaveChangesWithOptionalCredentialAsync(credential);
+            await RevokeSessionsAfterCredentialEventAsync(
+                profile.UserAccessCode,
+                "password and security-question change"
+            );
 
             return Ok(
                 new ChangePasswordResponse
@@ -855,6 +864,7 @@ public class AuthController : ControllerBase
             ApplyLegacyPasswordChange(profile.UserAccessOld, request.NewPassword, now);
 
             await SaveChangesWithOptionalCredentialAsync(credential);
+            await RevokeSessionsAfterCredentialEventAsync(profile.UserAccessCode, "admin password reset");
 
             return Ok(
                 new UserAdminResponse
@@ -1128,6 +1138,10 @@ public class AuthController : ControllerBase
                     _context.LegacyUserCredentials.Update(modernCredentialLookup.Credential);
                 }
                 await SaveChangesWithOptionalCredentialAsync(modernCredentialLookup.Credential);
+                await RevokeSessionsAfterCredentialEventAsync(
+                    legacyUserAccessCode,
+                    "password reset"
+                );
 
                 return Ok(
                     new UserAdminResponse
@@ -1197,6 +1211,7 @@ public class AuthController : ControllerBase
 
             await SaveChangesWithOptionalCredentialAsync(credential);
             await transaction.CommitAsync();
+            await RevokeSessionsAfterCredentialEventAsync(credential.user_access_code, "password reset");
 
             return Ok(
                 new UserAdminResponse
@@ -1269,6 +1284,7 @@ public class AuthController : ControllerBase
             }
 
             await _context.SaveChangesAsync();
+            await RevokeSessionsAfterCredentialEventAsync(profile.UserAccessCode, "user deactivation");
 
             return Ok(
                 new UserAdminResponse
@@ -1337,6 +1353,7 @@ public class AuthController : ControllerBase
             }
 
             await _context.SaveChangesAsync();
+            await RevokeSessionsAfterCredentialEventAsync(profile.UserAccessCode, "expired-password deactivation");
 
             return Ok(
                 new UserAdminResponse
@@ -1476,6 +1493,41 @@ public class AuthController : ControllerBase
         if (credential is not null)
         {
             await _legacyCredentialCompatibility.PersistAsync(credential);
+        }
+    }
+
+    private async Task RevokeSessionsAfterCredentialEventAsync(
+        int userAccessCode,
+        string eventName
+    )
+    {
+        var result = await _sessionManagementService.RevokeUserSessionsAsync(userAccessCode);
+        if (result.Status == SessionManagementStatus.Succeeded)
+        {
+            _logger.LogInformation(
+                "Revoked {SessionCount} durable sessions for user {UserAccessCode} after {EventName}.",
+                result.AffectedSessionCount,
+                userAccessCode,
+                eventName
+            );
+        }
+        else if (result.Status == SessionManagementStatus.Failed)
+        {
+            _logger.LogWarning(
+                "Could not revoke durable sessions for user {UserAccessCode} after {EventName}: {Reason}",
+                userAccessCode,
+                eventName,
+                result.Description
+            );
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Durable session revocation is unavailable after {EventName} for user {UserAccessCode}: {Reason}",
+                eventName,
+                userAccessCode,
+                result.Description
+            );
         }
     }
 
@@ -1765,8 +1817,8 @@ public class AuthController : ControllerBase
     )
     {
         token = string.Empty;
-        var signingKey = GetPasswordResetSigningKey();
-        if (signingKey == null)
+        var signingKey = GetPasswordResetSigningKeys().FirstOrDefault();
+        if (signingKey is null)
         {
             _logger.LogError(
                 "Cannot create a legacy password reset token because JwtSettings:SecretKey is not configured."
@@ -1805,8 +1857,8 @@ public class AuthController : ControllerBase
         issuedAtUtc = default;
         expiresAtUtc = default;
 
-        var signingKey = GetPasswordResetSigningKey();
-        if (signingKey == null)
+        var signingKeys = GetPasswordResetSigningKeys();
+        if (signingKeys.Count == 0)
         {
             return false;
         }
@@ -1824,12 +1876,15 @@ public class AuthController : ControllerBase
         try
         {
             var signingInput = $"{parts[0]}.{parts[1]}";
-            var expectedSignature = HMACSHA256.HashData(
-                signingKey,
-                Encoding.UTF8.GetBytes(signingInput)
-            );
             var suppliedSignature = Base64UrlDecode(parts[2]);
-            if (!CryptographicOperations.FixedTimeEquals(expectedSignature, suppliedSignature))
+            if (
+                !signingKeys.Any(signingKey =>
+                    CryptographicOperations.FixedTimeEquals(
+                        HMACSHA256.HashData(signingKey, Encoding.UTF8.GetBytes(signingInput)),
+                        suppliedSignature
+                    )
+                )
+            )
             {
                 return false;
             }
@@ -1871,10 +1926,29 @@ public class AuthController : ControllerBase
         }
     }
 
-    private byte[]? GetPasswordResetSigningKey()
+    private IReadOnlyList<byte[]> GetPasswordResetSigningKeys()
     {
         var secretKey = _configuration["JwtSettings:SecretKey"]?.Trim();
-        return string.IsNullOrWhiteSpace(secretKey) ? null : Encoding.UTF8.GetBytes(secretKey);
+        var keys = new List<byte[]>();
+        if (!string.IsNullOrWhiteSpace(secretKey))
+        {
+            keys.Add(Encoding.UTF8.GetBytes(secretKey));
+        }
+
+        var previousKey = _configuration["SystemSettings:PreviousPasswordResetSigningKey"]?.Trim();
+        var previousExpiresAtRaw = _configuration[
+            "SystemSettings:PreviousPasswordResetSigningKeyExpiresAtUtc"
+        ];
+        if (
+            !string.IsNullOrWhiteSpace(previousKey)
+            && DateTimeOffset.TryParse(previousExpiresAtRaw, out var previousExpiresAtUtc)
+            && previousExpiresAtUtc > DateTimeOffset.UtcNow
+        )
+        {
+            keys.Add(Encoding.UTF8.GetBytes(previousKey));
+        }
+
+        return keys;
     }
 
     private static string Base64UrlEncode(byte[] bytes)
@@ -2108,6 +2182,12 @@ public class LoginRequest
     /// Password
     /// </summary>
     public string Password { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Extends only the refresh-token lifetime. Access tokens remain valid for
+    /// fifteen minutes regardless of this preference.
+    /// </summary>
+    public bool RememberMe { get; set; }
 }
 
 /// <summary>
