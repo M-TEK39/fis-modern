@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
-import { loginAction, type LoginActionState } from "@/app/actions/auth";
+import { loginAction, type LoginActionState } from "@/app/(auth)/actions/auth";
 import { cn } from "../../lib/utils";
 import { Button } from "../button";
 import { Input } from "../input";
@@ -79,6 +79,19 @@ export function LoginForm05({
               required
             />
           </div>
+
+          <label
+            className="flex items-center gap-2 text-sm text-muted-foreground"
+            htmlFor="rememberMe"
+          >
+            <input
+              id="rememberMe"
+              name="rememberMe"
+              type="checkbox"
+              className="size-4 rounded border-input accent-primary"
+            />
+            Remember me for up to 7 days
+          </label>
 
           <SubmitButton />
         </div>

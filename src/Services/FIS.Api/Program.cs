@@ -1,9 +1,11 @@
 using AspNetCoreRateLimit;
 using DotNetEnv;
 using FIS.Api.Services;
+using FIS.Api.Services.SessionManagement;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Interfaces.Auth;
 using FIS.Core.Application.Interfaces.Repositories;
+using FIS.Core.Application.Interfaces.SystemConfiguration;
 using FIS.Core.Application.Services;
 using FIS.Core.Application.Services.Auth;
 using FIS.Core.Application.Services.Billing;
@@ -11,6 +13,8 @@ using FIS.Core.Application.Services.Validation;
 using FIS.Core.Infrastructure.Interfaces;
 using FIS.Core.Infrastructure.Repositories;
 using FIS.Core.Infrastructure.Services;
+using FIS.Core.Infrastructure.Services.EmailDelivery;
+using FIS.Core.Infrastructure.Services.SystemConfiguration;
 using FIS.Data.SqlServer;
 using FIS.Data.SqlServer.Compatibility;
 using FIS.Data.SqlServer.Interceptors;
@@ -20,7 +24,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
-using SendGrid;
 
 var builder = WebApplication.CreateBuilder(args);
 var dotEnvRawValues = Env.NoEnvVars().TraversePath().Load();
@@ -44,6 +47,12 @@ builder.Configuration.AddInMemoryCollection(dotEnvConfig);
 // This lets host-local development target Docker SQL Server without changing
 // tracked application settings, while preserving .env as a fallback only.
 builder.Configuration.AddEnvironmentVariables();
+
+// Key Vault can safely override only the system security settings allow-listed
+// by SystemConfigurationService. It runs before the authentication and
+// session services are composed, while deployment configuration remains the
+// fallback when the vault is unavailable.
+SystemConfigurationService.ApplyStartupOverrides(builder.Configuration);
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -169,6 +178,7 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 builder.Services.AddSingleton<ISessionTokenStore, SqlSessionTokenStore>();
+builder.Services.AddScoped<ISessionManagementService, SqlSessionManagementService>();
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -189,6 +199,8 @@ var authenticationBuilder = builder
     );
 
 if (
+    builder.Configuration.GetValue<bool?>("SystemSettings:EntraEnabled") != false
+    &&
     !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientId"])
     && !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:TenantId"])
     && !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientSecret"])
@@ -220,7 +232,20 @@ builder.Services.AddScoped<FuelCardManagementService>();
 builder.Services.AddScoped<VehicleService>();
 builder.Services.AddScoped<IReportingService, ReportingService>(); // Re-enabled with PDF service
 builder.Services.AddScoped<ILegacyReportResultService, LegacyReportResultService>();
+builder.Services.AddSingleton<EmailDeliveryConfigurationStore>();
+builder.Services.AddSingleton<IEmailDeliveryProvider, GraphEmailDeliveryProvider>();
+builder.Services.AddSingleton<IEmailDeliveryProvider, SmtpEmailDeliveryProvider>();
+builder.Services.AddSingleton<IEmailDeliveryProvider, SendGridEmailDeliveryProvider>();
+builder.Services.AddSingleton<EmailDeliveryService>();
+builder.Services.AddSingleton<FIS.Core.Application.Interfaces.EmailDelivery.IEmailDeliveryService>(
+    serviceProvider => serviceProvider.GetRequiredService<EmailDeliveryService>()
+);
+builder.Services.AddSingleton<FIS.Core.Application.Interfaces.EmailDelivery.IEmailConfigurationService>(
+    serviceProvider => serviceProvider.GetRequiredService<EmailDeliveryService>()
+);
 builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
+builder.Services.AddSingleton<ISystemConfigurationAuditSink, SystemConfigurationAuditLogger>();
+builder.Services.AddSingleton<ISystemConfigurationService, SystemConfigurationService>();
 builder.Services.AddScoped<LegacyCredentialCompatibilityService>();
 builder.Services.AddScoped<LegacyUserProfileOptionalFieldsService>();
 builder.Services.AddScoped<MicrosoftIdentityCompatibilityService>();
@@ -376,16 +401,9 @@ builder.Services.AddScoped<
 >();
 
 // Notification services (Phase 4)
-builder.Services.AddScoped<SendGrid.ISendGridClient>(sp =>
-{
-    var apiKey =
-        builder.Configuration["SendGrid:ApiKey"]
-        ?? throw new InvalidOperationException("SendGrid API key not configured");
-    return new SendGrid.SendGridClient(apiKey);
-});
 builder.Services.AddScoped<
     FIS.Core.Application.Interfaces.Workflow.IEmailService,
-    FIS.Core.Application.Services.Workflow.SendGridEmailService
+    WorkflowEmailService
 >();
 builder.Services.AddScoped<
     FIS.Core.Application.Interfaces.Workflow.INotificationService,

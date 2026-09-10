@@ -40,11 +40,13 @@ type LogoutAction = (formData: FormData) => void | Promise<void>;
 export function AppSidebar16({
   groups,
   user,
+  canManageSystemSettings,
   logoutAction,
   ...props
 }: React.ComponentProps<typeof Sidebar> & {
   groups: readonly NavigationGroup[];
   user: SidebarUser;
+  canManageSystemSettings: boolean;
   logoutAction: LogoutAction;
 }) {
   return (
@@ -80,7 +82,12 @@ export function AppSidebar16({
         />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={user} logoutAction={logoutAction} helpHref="/manuals" />
+        <NavUser
+          user={user}
+          canManageSystemSettings={canManageSystemSettings}
+          logoutAction={logoutAction}
+          helpHref="/manuals"
+        />
       </SidebarFooter>
     </Sidebar>
   );

@@ -105,8 +105,10 @@ pnpm build
 | `DB_*` or `ConnectionStrings__Default` | External SQL Server connection for deployment or explicitly targeted tools |
 | `ApiSettings__*` | API and web base URLs |
 | `AzureAd__*` | Optional Microsoft Entra ID sign-in |
-| `EmailSettings__*` | Microsoft Graph password-reset email delivery |
-| `SendGrid__ApiKey` | Workflow notification email delivery |
+| `EmailSettings__*` | Backward-compatible Microsoft Graph defaults for all FIS email |
+| `EmailDelivery__*` | Ordered Graph, SMTP, and SendGrid provider configuration |
+| `SystemSettings__*` | Optional Azure Key Vault and secure admin-managed system settings |
+| `SendGrid__*` | Backward-compatible SendGrid fallback configuration |
 | `FIS_API_HOST_PORT`, `FIS_WEB_HOST_PORT` | Host ports for the Compose development services |
 
 Use environment variables or the deployment secret store for credentials, signing keys, tokens, certificates, and API keys. Do not place real values in tracked files or command output.
@@ -115,7 +117,27 @@ Use environment variables or the deployment secret store for credentials, signin
 
 The API exposes controller-based REST endpoints under `/api`. Development mode serves Swagger at the API root. Authentication uses the HttpOnly `FIS_Access_Token` and `FIS_Refresh_Token` cookies; authorization is enforced server-side. The frontend forwards the server session to typed adapters and does not put API credentials or bearer tokens in browser storage.
 
-Password recovery uses expiring, one-time links. Microsoft Entra ID sign-in is enabled only when its required settings are configured. Microsoft Graph and SendGrid integrations require valid provider configuration and permissions; a configured setting alone does not prove email delivery.
+Password recovery uses expiring, one-time links. Microsoft Entra ID sign-in is enabled only when its required settings are configured.
+
+### Email delivery
+
+FIS uses one provider-neutral delivery path for password resets, workflow notifications, operational reminders, contract notifications, and report attachments. Configure an ordered provider list with Microsoft Graph, SMTP, and/or SendGrid. The first configured provider is primary; FIS uses the next provider only after a definite pre-acceptance failure. It deliberately stops on an uncertain result so a sensitive message is not sent twice.
+
+Environment configuration remains the bootstrap and fallback source. When `SystemSettings__KeyVaultUri` is set and the API identity has `secrets/get` and `secrets/set` access to the vault, a User Administration user can safely manage email delivery from the Settings dialog. Provider secrets are submitted only to the server and stored in the encrypted Key Vault configuration secret; the UI exposes configuration state, never secret values. Without Key Vault, the dialog is read-only and deployment environment values continue to apply.
+
+The provider test sends one controlled message through the chosen provider only; it never falls back. Tests and configuration writes are server-authorized and rate-limited. Runtime values are cached for up to one minute, so a successful save can take up to one minute to become active across each API instance. Two administrators editing the same email setting concurrently use last-successful-save-wins semantics; coordinate planned secret rotation in the client change process.
+
+For Microsoft Graph, grant `Mail.Send` application permission and scope the app to the dedicated FIS sender mailbox using Exchange Application RBAC. Graph accepts `sendMail` requests with `202 Accepted`; that acknowledges request acceptance, not final mailbox delivery. SMTP requires TLS and is suitable for an approved enterprise relay. Do not use legacy basic SMTP authentication with Microsoft 365.
+
+### System settings and session safety
+
+The profile Settings dialog exposes Email configuration, Session management, and Authentication configuration only to users with the `User Administration` role. Admin-entered credentials and signing material go straight to the API over TLS and then to the fixed, encrypted Azure Key Vault configuration record; the browser receives only configured/not-configured state. Configuration audit events contain the acting administrator, setting names, source, operation ID, and timestamp—never setting values or secrets.
+
+The deployment environment remains the bootstrap fallback. When a Key Vault value changes, restart the API to load the new allow-listed configuration safely at startup. The current and immediately previous password-reset signing keys are accepted for the reset-link lifetime during a rotation, so valid in-flight legacy reset links are not invalidated abruptly. Microsoft Entra sign-in remains disabled unless its complete configuration is present (and, when explicitly configured, `SystemSettings__EntraEnabled` is true).
+
+Access tokens remain fixed at 15 minutes. The default standard refresh lifetime is 8 hours and the default remembered-session lifetime is 7 days; an administrator may set both between 15 minutes and 30 days. Active-session listing and revocation use `dbo.fis_session_tokens` only when that optional durable table is present. On legacy-only databases FIS says that administration is unavailable rather than pretending an in-memory session can be revoked across servers. Password changes, password resets, forced password changes, and account deactivation revoke that user's durable sessions where available.
+
+Local authenticator-app MFA, email OTP, and passkeys are intentionally not advertised as operational until an approved durable security store provides enrollment, replay prevention, recovery, and revocation controls. Entra users continue to follow their tenant's Conditional Access and MFA policy.
 
 ## Database tools
 
