@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-
 import {
   FinanceFrame,
   FinanceRestricted,
@@ -213,7 +216,7 @@ function ParameterTable({ data }: Readonly<{ data: FinanceTariffParameters }>) {
   );
 }
 
-export default async function TariffParametersPage({
+async function TariffParametersContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Query> }>) {
   await connection();
@@ -340,5 +343,13 @@ export default async function TariffParametersPage({
         </>
       ) : null}
     </FinanceFrame>
+  );
+}
+
+export default function TariffParametersPage(props: Readonly<{ searchParams: Promise<Query> }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TariffParametersContent {...props} />
+    </Suspense>
   );
 }

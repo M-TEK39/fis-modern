@@ -1,9 +1,3 @@
-import FineMaintenancePage, {
-  type FineMaintenancePageProps,
-} from "@/app/(fleet-operations)/fines/maintenance/page";
+import { createLegacyFineMaintenancePage } from "@/app/(fleet-operations)/fines/maintenance/_route";
 
-export default function LegacyFineMaintenanceHistoricalLookupResultPage(
-  props: FineMaintenancePageProps,
-) {
-  return <FineMaintenancePage {...props} routePath="/fines/MNT_finej_load2reg.aspx" />;
-}
+export default createLegacyFineMaintenancePage("/fines/MNT_finej_load2reg.aspx");

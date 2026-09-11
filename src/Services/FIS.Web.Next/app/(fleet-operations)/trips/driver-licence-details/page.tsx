@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -104,7 +108,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function DriverLicenceDetailsPage({
+async function DriverLicenceDetailsPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -224,4 +228,14 @@ export default async function DriverLicenceDetailsPage({
       </main>
     );
   }
+}
+
+export default function DriverLicenceDetailsPage(
+  props: Parameters<typeof DriverLicenceDetailsPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DriverLicenceDetailsPageContent {...props} />
+    </Suspense>
+  );
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   MonitorForm,
   MonitorNotice,
@@ -35,7 +36,7 @@ async function referenceData(): Promise<
   return Promise.all([getSites(), getMonitorDrivers()]);
 }
 
-export default async function MonitorCapturePage({
+async function MonitorCapturePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getMonitorSession();
@@ -159,4 +160,12 @@ export default async function MonitorCapturePage({
       </MonitorShell>
     );
   }
+}
+
+export default function MonitorCapturePage(props: Parameters<typeof MonitorCapturePageContent>[0]) {
+  return (
+    <StreamedRoute>
+      <MonitorCapturePageContent {...props} />
+    </StreamedRoute>
+  );
 }

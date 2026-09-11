@@ -5,6 +5,10 @@ public interface IThirdPartyRentalRepository
     Task<IReadOnlyList<ThirdPartySupplierRecord>> GetSuppliersAsync(
         CancellationToken cancellationToken = default
     );
+    Task<ThirdPartySupplierPage> GetSuppliersPageAsync(
+        ThirdPartySupplierPageQuery query,
+        CancellationToken cancellationToken = default
+    );
     Task<ThirdPartySupplierRecord?> GetSupplierAsync(
         int supplierId,
         CancellationToken cancellationToken = default
@@ -25,6 +29,10 @@ public interface IThirdPartyRentalRepository
     );
 
     Task<IReadOnlyList<ThirdPartyProjectRecord>> GetProjectsAsync(
+        CancellationToken cancellationToken = default
+    );
+    Task<ThirdPartyProjectPage> GetProjectsPageAsync(
+        ThirdPartyProjectPageQuery query,
         CancellationToken cancellationToken = default
     );
     Task<IReadOnlyList<ThirdPartyProjectRecord>> GetProjectsByDepartmentAsync(
@@ -51,6 +59,10 @@ public interface IThirdPartyRentalRepository
         int projectId,
         CancellationToken cancellationToken = default
     );
+    Task<ThirdPartyAllocationPage> GetAllocationsByProjectPageAsync(
+        ThirdPartyAllocationPageQuery query,
+        CancellationToken cancellationToken = default
+    );
     Task<ThirdPartyAllocationRecord> CreateAllocationAsync(
         ThirdPartyAllocationWrite input,
         int currentUserId,
@@ -66,10 +78,66 @@ public interface IThirdPartyRentalRepository
         int supplierId,
         CancellationToken cancellationToken = default
     );
+    Task<ThirdPartyVehiclePage> GetVehiclesBySupplierPageAsync(
+        ThirdPartyVehiclePageQuery query,
+        CancellationToken cancellationToken = default
+    );
     Task<IReadOnlyList<ThirdPartyClassRequirementRecord>> GetClassRequirementsAsync(
         int projectId,
         CancellationToken cancellationToken = default
     );
+}
+
+public sealed record ThirdPartySupplierPageQuery(int Page = 1, int PageSize = 24);
+
+public sealed record ThirdPartyProjectPageQuery(
+    int Page = 1,
+    int PageSize = 24,
+    short? DepartmentCode = null
+);
+
+public sealed record ThirdPartyAllocationPageQuery(int ProjectId, int Page = 1, int PageSize = 24);
+
+public sealed record ThirdPartyVehiclePageQuery(int SupplierId, int Page = 1, int PageSize = 24);
+
+public sealed record ThirdPartySupplierPage(
+    IReadOnlyList<ThirdPartySupplierRecord> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
+
+public sealed record ThirdPartyProjectPage(
+    IReadOnlyList<ThirdPartyProjectRecord> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
+
+public sealed record ThirdPartyAllocationPage(
+    IReadOnlyList<ThirdPartyAllocationRecord> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
+
+public sealed record ThirdPartyVehiclePage(
+    IReadOnlyList<ThirdPartyVehicleRecord> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 public sealed record ThirdPartySupplierRecord(

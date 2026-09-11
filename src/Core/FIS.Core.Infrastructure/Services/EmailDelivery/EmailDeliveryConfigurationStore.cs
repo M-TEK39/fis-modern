@@ -699,7 +699,12 @@ public sealed class EmailDeliveryConfigurationStore : IDisposable
             changedFields.Add("smtp.password");
         }
         if (
-            !TryValidateLength(update.GoogleOAuthClientId, "Google OAuth client ID", 200, out message)
+            !TryValidateLength(
+                update.GoogleOAuthClientId,
+                "Google OAuth client ID",
+                200,
+                out message
+            )
             || !TryValidateLength(
                 update.GoogleOAuthClientSecret,
                 "Google OAuth client secret",

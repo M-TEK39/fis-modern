@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
+
+async function LegacyAuditTrailPageContent(): Promise<never> {
+  redirect("/finance/audit-trail");
+}
 
 export default function LegacyAuditTrailPage() {
-  redirect("/finance/audit-trail");
+  return (
+    <StreamedRoute>
+      <LegacyAuditTrailPageContent />
+    </StreamedRoute>
+  );
 }

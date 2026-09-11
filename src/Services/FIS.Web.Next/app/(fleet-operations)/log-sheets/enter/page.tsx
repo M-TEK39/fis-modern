@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -18,7 +22,7 @@ import { getSites, SiteApiError } from "@/lib/api/reference-data/api-sites";
 import { LogsheetApiError } from "@/lib/api/fleet-operations/api-logsheets";
 import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
 
-export default async function LogsheetEntryPage({
+async function LogsheetEntryPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogsheetSession();
@@ -102,4 +106,12 @@ export default async function LogsheetEntryPage({
       </LogsheetShell>
     );
   }
+}
+
+export default function LogsheetEntryPage(props: Parameters<typeof LogsheetEntryPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LogsheetEntryPageContent {...props} />
+    </Suspense>
+  );
 }

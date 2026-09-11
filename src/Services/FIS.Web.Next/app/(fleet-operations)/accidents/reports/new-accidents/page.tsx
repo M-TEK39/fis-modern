@@ -89,7 +89,7 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading new accident report...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -207,6 +207,7 @@ function NewAccidentReportTable({
 }
 
 async function NewAccidentsReportContent({ searchParams }: { searchParams: Promise<ReportQuery> }) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
@@ -308,12 +309,11 @@ async function NewAccidentsReportContent({ searchParams }: { searchParams: Promi
   );
 }
 
-export default async function NewAccidentsReportPage({
+export default function NewAccidentsReportPage({
   searchParams,
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
-  await connection();
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="new-accident-title">

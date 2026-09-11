@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import DeleteButton from "@/app/(administration)/drivers/delete-button";
 import { deleteAuthoriserAction } from "@/app/(administration)/drivers/actions";
 import {
@@ -14,7 +16,8 @@ import {
 } from "@/app/(administration)/drivers/access";
 import {
   DriverManagementApiError,
-  getDriverManagementAuthorisers,
+  DEFAULT_DRIVER_MANAGEMENT_PAGE_SIZE,
+  getDriverManagementAuthorisersPage,
   getDriverManagementDepartments,
   getDriverManagementSites,
   type DriverManagementAuthoriser,
@@ -63,6 +66,15 @@ function displayName(authoriser: DriverManagementAuthoriser) {
   return name || `Authoriser ${authoriser.authoriserCode}`;
 }
 
+function pagePath(departmentCode: number, siteCode: number, page: number) {
+  const params = new URLSearchParams({
+    departmentCode: String(departmentCode),
+    siteCode: String(siteCode),
+  });
+  if (page > 1) params.set("page", String(page));
+  return `/drivers/authorisers?${params.toString()}`;
+}
+
 function AccessRestricted() {
   return (
     <section className="vehicle-status-card" role="alert">
@@ -94,9 +106,7 @@ function ApiUnavailable({
   );
 }
 
-export default async function AuthorisersPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function AuthorisersContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -122,6 +132,7 @@ export default async function AuthorisersPage({
   const query = await searchParams;
   const departmentCode = parsePositiveInteger(getQueryValue(query.departmentCode));
   const siteCode = parsePositiveInteger(getQueryValue(query.siteCode));
+  const requestedPage = parsePositiveInteger(getQueryValue(query.page)) ?? 1;
   if (!departmentCode || !siteCode) {
     return (
       <main className="page-shell vehicle-page-shell">
@@ -138,14 +149,19 @@ export default async function AuthorisersPage({
 
   const message = resultMessage(getQueryValue(query.result));
   try {
-    const [authorisers, departments, sites] = await Promise.all([
-      getDriverManagementAuthorisers(siteCode),
+    const [authoriserPage, departments, sites] = await Promise.all([
+      getDriverManagementAuthorisersPage(siteCode, {
+        page: requestedPage,
+        pageSize: DEFAULT_DRIVER_MANAGEMENT_PAGE_SIZE,
+      }),
       getDriverManagementDepartments(),
       getDriverManagementSites(),
     ]);
     const department = departments.find((item) => item.code === departmentCode);
     const site = sites.find((item) => item.code === siteCode);
-    const hasLegacyFields = authorisers.every((authoriser) => authoriser.legacyFieldsAvailable);
+    const hasLegacyFields = authoriserPage.items.every(
+      (authoriser) => authoriser.legacyFieldsAvailable,
+    );
     const editPath = contextPath("/drivers/authorisers/edit", departmentCode, siteCode);
 
     return (
@@ -187,7 +203,7 @@ export default async function AuthorisersPage({
               saving new values.
             </div>
           ) : null}
-          {authorisers.length === 0 ? (
+          {authoriserPage.total === 0 ? (
             <div className="empty-state">
               <h2>No authorisers found</h2>
               <p>Add the first authoriser for this site.</p>
@@ -198,7 +214,7 @@ export default async function AuthorisersPage({
           ) : (
             <div className="table-container">
               <div className="table-header">
-                <span className="table-title">{authorisers.length} authoriser(s)</span>
+                <span className="table-title">{authoriserPage.total} authoriser(s)</span>
               </div>
               <div className="table-wrapper">
                 <table className="data-table">
@@ -212,7 +228,7 @@ export default async function AuthorisersPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {authorisers.map((authoriser) => (
+                    {authoriserPage.items.map((authoriser) => (
                       <tr key={authoriser.authoriserCode}>
                         <td>{authoriser.firstname || "-"}</td>
                         <td>{authoriser.surname || "-"}</td>
@@ -242,6 +258,43 @@ export default async function AuthorisersPage({
                   </tbody>
                 </table>
               </div>
+              {authoriserPage.totalPages > 1 ? (
+                <nav className="vehicle-pagination" aria-label="Authoriser pages">
+                  {authoriserPage.page <= 1 ? (
+                    <span
+                      className="vehicle-pagination-button vehicle-pagination-disabled"
+                      aria-disabled="true"
+                    >
+                      Previous
+                    </span>
+                  ) : (
+                    <Link
+                      className="vehicle-pagination-button"
+                      href={pagePath(departmentCode, siteCode, authoriserPage.page - 1)}
+                    >
+                      Previous
+                    </Link>
+                  )}
+                  <span className="vehicle-pagination-meta" aria-live="polite">
+                    Page {authoriserPage.page} of {authoriserPage.totalPages}
+                  </span>
+                  {authoriserPage.page >= authoriserPage.totalPages ? (
+                    <span
+                      className="vehicle-pagination-button vehicle-pagination-disabled"
+                      aria-disabled="true"
+                    >
+                      Next
+                    </span>
+                  ) : (
+                    <Link
+                      className="vehicle-pagination-button"
+                      href={pagePath(departmentCode, siteCode, authoriserPage.page + 1)}
+                    >
+                      Next
+                    </Link>
+                  )}
+                </nav>
+              ) : null}
             </div>
           )}
           <div className="vehicle-footer-actions">
@@ -276,4 +329,12 @@ export default async function AuthorisersPage({
       </main>
     );
   }
+}
+
+export default function AuthorisersPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <AuthorisersContent {...props} />
+    </Suspense>
+  );
 }

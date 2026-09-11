@@ -84,7 +84,7 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading garage accident report...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -208,6 +208,7 @@ async function GarageAccidentsReportContent({
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
@@ -303,12 +304,11 @@ async function GarageAccidentsReportContent({
   );
 }
 
-export default async function GarageAccidentsReportPage({
+export default function GarageAccidentsReportPage({
   searchParams,
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
-  await connection();
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="garage-accident-title">

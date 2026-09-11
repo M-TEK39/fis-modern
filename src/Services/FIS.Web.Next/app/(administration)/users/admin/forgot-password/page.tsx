@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import AdminForgotPasswordForm from "@/app/(administration)/users/admin/forgot-password/admin-forgot-password-form";
 import { sendAdminPasswordReset } from "@/app/(administration)/users/admin/forgot-password/actions";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 const USER_ADMIN_ROLE = "User Administration";
 
@@ -34,7 +36,7 @@ function getMessage(error: string | undefined) {
   }
 }
 
-export default async function AdminForgotPasswordPage({
+async function AdminForgotPasswordPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -112,5 +114,15 @@ export default async function AdminForgotPasswordPage({
         </section>
       </section>
     </main>
+  );
+}
+
+export default function AdminForgotPasswordPage(
+  props: NonNullable<Parameters<typeof AdminForgotPasswordPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <AdminForgotPasswordPageContent {...props} />
+    </Suspense>
   );
 }

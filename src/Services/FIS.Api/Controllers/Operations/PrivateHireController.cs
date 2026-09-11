@@ -14,6 +14,9 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 public class PrivateHireController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly IPrivateHireRepository _privateHireRepository;
     private readonly ILogger<PrivateHireController> _logger;
 
@@ -24,6 +27,44 @@ public class PrivateHireController : BaseApiController
     {
         _privateHireRepository = privateHireRepository;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Get a server-paginated page of private hire vehicles using the existing list/search filters.
+    /// </summary>
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPrivateHirePage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] string? searchTerm = null
+    )
+    {
+        try
+        {
+            var result = await _privateHireRepository.GetPageAsync(
+                new PrivateHirePageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize),
+                    searchTerm
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged private hire vehicles");
+            return StatusCode(500, "An error occurred while retrieving private hires");
+        }
     }
 
     /// <summary>
@@ -310,6 +351,42 @@ public class PrivateHireController : BaseApiController
     {
         var contractors = await _privateHireRepository.GetContractorsAsync();
         return Ok(contractors.Select(ToContractorDto));
+    }
+
+    /// <summary>
+    /// Get a server-paginated page of private hire contractors.
+    /// </summary>
+    [HttpGet("contractors/page")]
+    public async Task<ActionResult> GetContractorPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        try
+        {
+            var result = await _privateHireRepository.GetContractorPageAsync(
+                new PrivateHireContractorPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize)
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(ToContractorDto),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged private hire contractors");
+            return StatusCode(500, "An error occurred while retrieving private hire contractors");
+        }
     }
 
     [HttpGet("contractors/{contractorId:int}")]

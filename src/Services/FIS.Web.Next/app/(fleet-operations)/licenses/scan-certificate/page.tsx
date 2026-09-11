@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -18,19 +22,78 @@ import {
   sessionMessage,
 } from "@/app/(fleet-operations)/licenses/_page";
 import {
-  getLicenseCertificates,
+  DEFAULT_LICENSE_CERTIFICATE_PAGE_SIZE,
+  getLicenseCertificatesPage,
   getLicenseCertificatesForVehicle,
-  getVehiclesMissingLicenseCertificates,
+  getVehiclesMissingLicenseCertificatesPage,
   LicenseCertificateApiError,
   searchLicenseCertificateVehicles,
   type CertificateVehicle,
+  type LicenseCertificatePage,
   type LicenseCertificateRecord,
+  type MissingLicenseCertificatePage,
 } from "@/lib/api/vehicles/api-license-certificates";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
+}
+
+function requestedPage(value: string) {
+  const candidate = Number(value);
+  return Number.isSafeInteger(candidate) && candidate > 0 ? candidate : 1;
+}
+
+function pageHref(view: "all" | "missing", page: number, location?: "jhb" | "pta") {
+  const params = new URLSearchParams({ view, page: String(page) });
+  if (view === "missing" && location) params.set("location", location);
+  return `/licenses/scan-certificate?${params.toString()}`;
+}
+
+function CertificatePagination({
+  view,
+  page,
+  totalPages,
+  location,
+}: Readonly<{
+  view: "all" | "missing";
+  page: number;
+  totalPages: number;
+  location?: "jhb" | "pta";
+}>) {
+  if (totalPages <= 1) return null;
+  return (
+    <nav className="vehicle-pagination" aria-label="Licence certificate pages">
+      {page > 1 ? (
+        <Link className="vehicle-pagination-button" href={pageHref(view, page - 1, location)}>
+          Previous
+        </Link>
+      ) : (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Previous
+        </span>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {page} of {totalPages}
+      </span>
+      {page < totalPages ? (
+        <Link className="vehicle-pagination-button" href={pageHref(view, page + 1, location)}>
+          Next
+        </Link>
+      ) : (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Next
+        </span>
+      )}
+    </nav>
+  );
 }
 
 function certificateFileHref(certificate: LicenseCertificateRecord) {
@@ -150,8 +213,13 @@ function VehicleMatches({
 function CertificateTable({
   certificates,
   returnPath,
-}: Readonly<{ certificates: readonly LicenseCertificateRecord[]; returnPath: string }>) {
-  if (certificates.length === 0)
+  pagination,
+}: Readonly<{
+  certificates: readonly LicenseCertificateRecord[];
+  pagination?: LicenseCertificatePage;
+  returnPath: string;
+}>) {
+  if ((pagination?.total ?? certificates.length) === 0)
     return (
       <section className="vehicle-empty-state" aria-live="polite">
         <p className="eyebrow">No certificates found</p>
@@ -166,7 +234,9 @@ function CertificateTable({
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">Certificate scans</p>
-          <h2 id="certificate-results-title">{certificates.length} certificate(s)</h2>
+          <h2 id="certificate-results-title">
+            {pagination?.total ?? certificates.length} certificate(s)
+          </h2>
         </div>
       </div>
       <div className="vehicle-table-wrapper">
@@ -212,17 +282,30 @@ function CertificateTable({
           </tbody>
         </table>
       </div>
+      {pagination ? (
+        <>
+          <CertificatePagination
+            view="all"
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+          />
+          <div className="pagination-meta">
+            Total records: {pagination.total} | Page size: {pagination.pageSize}
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }
 
 function MissingCertificates({
   location,
-  vehicles,
+  page,
 }: Readonly<{
   location: string;
-  vehicles: Awaited<ReturnType<typeof getVehiclesMissingLicenseCertificates>>["vehicles"];
+  page: MissingLicenseCertificatePage;
 }>) {
+  const selectedLocation = location === "jhb" || location === "pta" ? location : undefined;
   return (
     <section
       className="vehicle-status-maintenance-panel"
@@ -233,9 +316,13 @@ function MissingCertificates({
           <p className="eyebrow">Active fleet</p>
           <h2 id="missing-certificates-title">Vehicles without scanned certificates</h2>
         </div>
+        <span className="form-hint">
+          {page.total} vehicle{page.total === 1 ? "" : "s"}
+        </span>
       </div>
       <form method="get" className="form-grid">
         <input name="view" type="hidden" value="missing" />
+        <input name="page" type="hidden" value="1" />
         <div className="form-field">
           <label className="form-label" htmlFor="certificate-location">
             Garage
@@ -257,7 +344,7 @@ function MissingCertificates({
           </button>
         </div>
       </form>
-      {vehicles.length === 0 ? (
+      {page.vehicles.length === 0 ? (
         <p className="muted-copy">
           Every active vehicle in the selected garage has a scanned certificate.
         </p>
@@ -275,7 +362,7 @@ function MissingCertificates({
               </tr>
             </thead>
             <tbody>
-              {vehicles.map((vehicle) => (
+              {page.vehicles.map((vehicle) => (
                 <tr key={vehicle.vmfCode}>
                   <td>{vehicle.number}</td>
                   <td>{valueOrDash(vehicle.fleetNumber)}</td>
@@ -295,6 +382,15 @@ function MissingCertificates({
           </table>
         </div>
       )}
+      <CertificatePagination
+        view="missing"
+        location={selectedLocation}
+        page={page.page}
+        totalPages={page.totalPages}
+      />
+      <div className="pagination-meta">
+        Total vehicles: {page.total} | Page size: {page.pageSize}
+      </div>
     </section>
   );
 }
@@ -363,7 +459,7 @@ function UploadForm({ vmfCode, returnPath }: Readonly<{ vmfCode: number; returnP
   );
 }
 
-export default async function LicenseScanCertificatePage({
+async function LicenseScanCertificatePageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const session = await getLicenseSession();
@@ -380,24 +476,37 @@ export default async function LicenseScanCertificatePage({
   const vmfCodeValue = Number(queryValue(query.vmfCode));
   const vmfCode = Number.isSafeInteger(vmfCodeValue) && vmfCodeValue > 0 ? vmfCodeValue : null;
   const lookup = queryValue(query.lookup) === "1";
-  const location = queryValue(query.location);
-  const returnPath = `/licenses/scan-certificate?${new URLSearchParams({ view, mode, ...(number ? { number } : {}), ...(vmfCode ? { vmfCode: String(vmfCode) } : {}), ...(lookup ? { lookup: "1" } : {}), ...(location ? { location } : {}) }).toString()}`;
+  const locationValue = queryValue(query.location);
+  const location = locationValue === "jhb" || locationValue === "pta" ? locationValue : "";
+  const page = requestedPage(queryValue(query.page));
+  const returnParams = new URLSearchParams({ view, mode });
+  if (number) returnParams.set("number", number);
+  if (vmfCode) returnParams.set("vmfCode", String(vmfCode));
+  if (lookup) returnParams.set("lookup", "1");
+  if (view === "all" || view === "missing") returnParams.set("page", String(page));
+  if (view === "missing" && location) returnParams.set("location", location);
+  const returnPath = `/licenses/scan-certificate?${returnParams.toString()}`;
   let matches: CertificateVehicle[] = [];
   let certificates: LicenseCertificateRecord[] = [];
-  let missing: Awaited<ReturnType<typeof getVehiclesMissingLicenseCertificates>>["vehicles"] = [];
+  let certificatePage: LicenseCertificatePage | null = null;
+  let missingPage: MissingLicenseCertificatePage | null = null;
   let loadError = "";
   try {
     if (view === "vehicle" && lookup && number && !vmfCode)
       matches = await searchLicenseCertificateVehicles(number);
     if (view === "vehicle" && vmfCode)
       certificates = await getLicenseCertificatesForVehicle(vmfCode);
-    if (view === "all") certificates = await getLicenseCertificates();
+    if (view === "all")
+      certificatePage = await getLicenseCertificatesPage({
+        page,
+        pageSize: DEFAULT_LICENSE_CERTIFICATE_PAGE_SIZE,
+      });
     if (view === "missing")
-      missing = (
-        await getVehiclesMissingLicenseCertificates(
-          location === "jhb" || location === "pta" ? location : undefined,
-        )
-      ).vehicles;
+      missingPage = await getVehiclesMissingLicenseCertificatesPage({
+        location: location || undefined,
+        page,
+        pageSize: DEFAULT_LICENSE_CERTIFICATE_PAGE_SIZE,
+      });
   } catch (error) {
     loadError =
       error instanceof LicenseCertificateApiError && error.reason === "not-found"
@@ -456,9 +565,17 @@ export default async function LicenseScanCertificatePage({
         </>
       ) : null}
       {view === "all" ? (
-        <CertificateTable certificates={certificates} returnPath={returnPath} />
+        certificatePage ? (
+          <CertificateTable
+            certificates={certificatePage.items}
+            pagination={certificatePage}
+            returnPath={returnPath}
+          />
+        ) : null
       ) : null}
-      {view === "missing" ? <MissingCertificates location={location} vehicles={missing} /> : null}
+      {view === "missing" && missingPage ? (
+        <MissingCertificates location={location} page={missingPage} />
+      ) : null}
       <div className="vehicle-footer-actions">
         <Link className="button button-secondary" href="/licenses">
           Licence Menu
@@ -468,5 +585,15 @@ export default async function LicenseScanCertificatePage({
         </Link>
       </div>
     </LicenseShell>
+  );
+}
+
+export default function LicenseScanCertificatePage(
+  props: Parameters<typeof LicenseScanCertificatePageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LicenseScanCertificatePageContent {...props} />
+    </Suspense>
   );
 }

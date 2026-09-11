@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { MenuSection } from "@/components/ui/menu-section";
 import {
   AccessRestricted,
@@ -17,7 +18,12 @@ import {
   vehicleLabel,
   valueOrDash,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
-import { FmlApiError, getLeaseTerms, type LeaseTermRecord } from "@/lib/api/finance/api-fml";
+import {
+  DEFAULT_LEASE_TERMS_PAGE_SIZE,
+  FmlApiError,
+  getLeaseTermsPage,
+  type LeaseTermsPage,
+} from "@/lib/api/finance/api-fml";
 import { getVehicleOptions, type VehicleOption } from "@/lib/api/vehicles/api-vehicles";
 import { getSession } from "@/lib/auth/session";
 
@@ -27,27 +33,21 @@ function firstQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function filterTerms(
-  terms: LeaseTermRecord[],
-  vehicles: VehicleOption[],
-  search: string,
-  mode: string,
-) {
-  const query = search.trim().toLowerCase();
-  if (!query) return terms;
-  const matchingCodes = new Set(
-    vehicles
-      .filter((vehicle) => {
-        const value =
-          mode.toUpperCase() === "GP" ? vehicle.registrationNumber : vehicle.fleetNumber;
-        return value?.toLowerCase().includes(query);
-      })
-      .map((vehicle) => vehicle.vmfCode),
-  );
-  return terms.filter((term) => matchingCodes.has(term.vmfCode));
+function positivePage(value: string | undefined) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
 }
 
-export default async function FullMaintenanceLeasePage({
+function lookupPageHref(search: string, mode: string, page: number) {
+  const params = new URLSearchParams();
+  if (search.trim()) params.set("search", search);
+  if (mode) params.set("mode", mode);
+  if (page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return query ? `/full-maintenance-lease?${query}` : "/full-maintenance-lease";
+}
+
+async function FullMaintenanceLeasePageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -74,22 +74,31 @@ export default async function FullMaintenanceLeasePage({
 
   const query = await searchParams;
   const search = firstQueryValue(query.search) ?? "";
-  const mode = firstQueryValue(query.mode) ?? "GG";
+  const mode = firstQueryValue(query.mode)?.toUpperCase() === "GP" ? "GP" : "GG";
+  const requestedPage = positivePage(firstQueryValue(query.page));
   const result = firstQueryValue(query.result);
   const message = firstQueryValue(query.message);
-  let terms: LeaseTermRecord[] = [];
+  let termsPage: LeaseTermsPage | null = null;
   let vehicles: VehicleOption[] = [];
   let lookupError = false;
 
   if (search.trim()) {
     try {
-      [terms, vehicles] = await Promise.all([getLeaseTerms(), getVehicleOptions()]);
-      terms = filterTerms(terms, vehicles, search, mode);
+      [termsPage, vehicles] = await Promise.all([
+        getLeaseTermsPage({
+          page: requestedPage,
+          pageSize: DEFAULT_LEASE_TERMS_PAGE_SIZE,
+          search,
+          mode,
+        }),
+        getVehicleOptions(),
+      ]);
     } catch (error) {
       lookupError = error instanceof FmlApiError;
     }
   }
 
+  const terms = termsPage?.items ?? [];
   const labels = new Map(vehicles.map((vehicle) => [vehicle.vmfCode, vehicleLabel(vehicle)]));
   return (
     <FmlFrame
@@ -130,6 +139,7 @@ export default async function FullMaintenanceLeasePage({
           </div>
         </div>
         <form method="get" className="form-grid">
+          <input type="hidden" name="page" value="1" />
           <div className="form-field">
             <label className="form-label" htmlFor="fml-search">
               Search number
@@ -179,7 +189,7 @@ export default async function FullMaintenanceLeasePage({
                 </tr>
               </thead>
               <tbody>
-                {terms.slice(0, 100).map((term) => (
+                {terms.map((term) => (
                   <tr key={term.termId}>
                     <td>{term.termId}</td>
                     <td>{labels.get(term.vmfCode) ?? term.vmfCode}</td>
@@ -197,7 +207,57 @@ export default async function FullMaintenanceLeasePage({
             </table>
           </div>
         ) : null}
+        {termsPage && termsPage.totalPages > 1 ? (
+          <>
+            <nav className="vehicle-pagination" aria-label="Lease lookup pages">
+              {termsPage.page <= 1 ? (
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
+                  Previous
+                </span>
+              ) : (
+                <Link
+                  className="vehicle-pagination-button"
+                  href={lookupPageHref(search, mode, termsPage.page - 1)}
+                >
+                  Previous
+                </Link>
+              )}
+              <span className="vehicle-pagination-meta" aria-live="polite">
+                Page {termsPage.page} of {termsPage.totalPages}
+              </span>
+              {termsPage.page >= termsPage.totalPages ? (
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
+                  Next
+                </span>
+              ) : (
+                <Link
+                  className="vehicle-pagination-button"
+                  href={lookupPageHref(search, mode, termsPage.page + 1)}
+                >
+                  Next
+                </Link>
+              )}
+            </nav>
+            <div className="pagination-meta">
+              Total records: {termsPage.total} | Page size: {termsPage.pageSize}
+            </div>
+          </>
+        ) : null}
       </section>
     </FmlFrame>
+  );
+}
+
+export default function FullMaintenanceLeasePage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <FullMaintenanceLeasePageContent {...props} />
+    </StreamedRoute>
   );
 }

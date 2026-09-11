@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   FmlFrame,
@@ -19,7 +20,7 @@ import {
 import { FmlApiError, getFmlExpiredOpenContracts } from "@/lib/api/finance/api-fml";
 import { getSession } from "@/lib/auth/session";
 
-export default async function FmlExpiredContractsOpenPage() {
+async function FmlExpiredContractsOpenPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -97,4 +98,12 @@ export default async function FmlExpiredContractsOpenPage() {
       "The expired-contract report could not be loaded.",
     );
   }
+}
+
+export default function FmlExpiredContractsOpenPage() {
+  return (
+    <StreamedRoute>
+      <FmlExpiredContractsOpenPageContent />
+    </StreamedRoute>
+  );
 }

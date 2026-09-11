@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/auth/session";
 
@@ -26,7 +28,7 @@ function AccessRestricted() {
   );
 }
 
-export default async function ClearancePage() {
+async function ClearanceContent() {
   await connection();
   const session = await getSession();
 
@@ -35,44 +37,51 @@ export default async function ClearancePage() {
   }
 
   if (session.status === "expired") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <SessionRecovery returnPath="/clearance" />
-      </main>
-    );
+    return <SessionRecovery returnPath="/clearance" />;
   }
 
   if (session.status === "unavailable") {
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-status-card" role="alert">
-          <div className="status-icon status-icon-error" aria-hidden="true">
-            !
-          </div>
-          <p className="eyebrow">API unavailable</p>
-          <h2>Clearance could not be opened.</h2>
-          <p className="muted-copy">Retry when the FIS API is available.</p>
-          <div className="button-row">
-            <Link className="button button-primary" href="/clearance">
-              Try again
-            </Link>
-            <Link className="button button-secondary" href="/login">
-              Sign in
-            </Link>
-          </div>
-        </section>
-      </main>
+      <section className="vehicle-status-card" role="alert">
+        <div className="status-icon status-icon-error" aria-hidden="true">
+          !
+        </div>
+        <p className="eyebrow">API unavailable</p>
+        <h2>Clearance could not be opened.</h2>
+        <p className="muted-copy">Retry when the FIS API is available.</p>
+        <div className="button-row">
+          <Link className="button button-primary" href="/clearance">
+            Try again
+          </Link>
+          <Link className="button button-secondary" href="/login">
+            Sign in
+          </Link>
+        </div>
+      </section>
     );
   }
 
   if (!hasRole(session.roles, CLEARANCE_ROLE)) {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <AccessRestricted />
-      </main>
-    );
+    return <AccessRestricted />;
   }
 
+  return (
+    <div className="vehicle-menu-tiles">
+      <MenuSection title="Clearance Maintenance Menu">
+        <Link className="vehicle-menu-link" href="/clearance/entry">
+          1) Enter Clearance
+        </Link>
+      </MenuSection>
+      <MenuSection title="Merchants">
+        <Link className="vehicle-menu-link" href="/clearance/merchant">
+          1) Merchant Maintenance
+        </Link>
+      </MenuSection>
+    </div>
+  );
+}
+
+export default function ClearancePage() {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="clearance-title">
@@ -86,19 +95,9 @@ export default async function ClearancePage() {
             Home
           </Link>
         </header>
-
-        <div className="vehicle-menu-tiles">
-          <MenuSection title="Clearance Maintenance Menu">
-            <Link className="vehicle-menu-link" href="/clearance/entry">
-              1) Enter Clearance
-            </Link>
-          </MenuSection>
-          <MenuSection title="Merchants">
-            <Link className="vehicle-menu-link" href="/clearance/merchant">
-              1) Merchant Maintenance
-            </Link>
-          </MenuSection>
-        </div>
+        <Suspense fallback={<RouteLoading />}>
+          <ClearanceContent />
+        </Suspense>
       </section>
     </main>
   );

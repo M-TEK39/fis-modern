@@ -88,6 +88,16 @@ export type DriverManagementLicenceType = {
   description: string | null;
 };
 
+export type DriverManagementPage<TItem> = {
+  items: TItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_DRIVER_MANAGEMENT_PAGE_SIZE = 24;
+
 export type DriverManagementApiErrorReason =
   "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "rejected";
 
@@ -451,6 +461,53 @@ function mapCollection<T>(payload: unknown, mapper: (value: unknown) => T | null
     .filter((value): value is T => value !== null);
 }
 
+function normalizePage(value: number | undefined) {
+  return Number.isSafeInteger(value) && (value ?? 0) > 0 ? value : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isSafeInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_DRIVER_MANAGEMENT_PAGE_SIZE)
+      : DEFAULT_DRIVER_MANAGEMENT_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
+function readPage<TItem>(payload: unknown, mapper: (value: unknown) => TItem | null) {
+  if (!isRecord(payload)) {
+    throw new DriverManagementApiError(
+      "invalid-response",
+      "The FIS API returned an invalid paginated response.",
+    );
+  }
+
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages"));
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isSafeInteger(page) ||
+    !Number.isSafeInteger(pageSize) ||
+    !Number.isSafeInteger(total) ||
+    !Number.isSafeInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    throw new DriverManagementApiError(
+      "invalid-response",
+      "The FIS API returned incomplete pagination metadata.",
+    );
+  }
+
+  return { items: mapCollection(payload, mapper), page, pageSize, total, totalPages };
+}
+
 export async function getDriverManagementDepartments() {
   const response = await requestApi("api/department");
   return mapCollection(await readJson(response), mapDepartment).sort((left, right) =>
@@ -473,6 +530,19 @@ export async function getDriverManagementAuthorisers(siteCode: number) {
       (left.firstname ?? "").localeCompare(right.firstname ?? "") ||
       left.authoriserCode - right.authoriserCode,
   );
+}
+
+export async function getDriverManagementAuthorisersPage(
+  siteCode: number,
+  options: { page?: number; pageSize?: number } = {},
+): Promise<DriverManagementPage<DriverManagementAuthoriser>> {
+  const params = new URLSearchParams({
+    siteCode: String(siteCode),
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const response = await requestApi(`api/authorisers/page?${params.toString()}`);
+  return readPage(await readJson(response), mapAuthoriser);
 }
 
 export async function getDriverManagementAuthoriser(authoriserCode: number) {
@@ -505,6 +575,19 @@ export async function getDriverManagementSiteDrivers(siteCode?: number) {
       (left.driverFirstname ?? "").localeCompare(right.driverFirstname ?? "") ||
       left.siteDriverCode - right.siteDriverCode,
   );
+}
+
+export async function getDriverManagementSiteDriversPage(
+  siteCode: number,
+  options: { page?: number; pageSize?: number } = {},
+): Promise<DriverManagementPage<DriverManagementDriver>> {
+  const params = new URLSearchParams({
+    siteCode: String(siteCode),
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const response = await requestApi(`api/site-drivers/page?${params.toString()}`);
+  return readPage(await readJson(response), mapDriver);
 }
 
 export async function getDriverManagementSiteDriver(siteDriverCode: number) {

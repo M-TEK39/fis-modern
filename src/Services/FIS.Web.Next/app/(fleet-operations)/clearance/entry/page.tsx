@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import {
   deleteClearanceAction,
   saveClearanceAction,
@@ -360,7 +362,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function ClearanceEntryPage({
+async function ClearanceEntryContent({
   searchParams,
   forcedAction,
   routePath = "/clearance/entry",
@@ -373,29 +375,19 @@ export default async function ClearanceEntryPage({
   }
 
   if (session.status === "expired") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <SessionRecovery returnPath={routePath} />
-      </main>
-    );
+    return <SessionRecovery returnPath={routePath} />;
   }
 
   if (session.status === "unavailable") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <ApiUnavailable />
-      </main>
-    );
+    return <ApiUnavailable />;
   }
 
   if (!hasRole(session.roles, CLEARANCE_ROLE)) {
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-status-card" role="alert">
-          <p className="eyebrow">Access restricted</p>
-          <h2>You do not have permission to maintain clearance records.</h2>
-        </section>
-      </main>
+      <section className="vehicle-status-card" role="alert">
+        <p className="eyebrow">Access restricted</p>
+        <h2>You do not have permission to maintain clearance records.</h2>
+      </section>
     );
   }
 
@@ -447,11 +439,7 @@ export default async function ClearanceEntryPage({
     }
   } catch (error) {
     if (error instanceof ClearanceApiError && error.reason === "unauthorized") {
-      return (
-        <main className="page-shell vehicle-page-shell">
-          <SessionRecovery returnPath={routePath} />
-        </main>
-      );
+      return <SessionRecovery returnPath={routePath} />;
     }
 
     if (error instanceof ClearanceApiError && error.reason === "not-found") {
@@ -461,11 +449,7 @@ export default async function ClearanceEntryPage({
         "FIS clearance request failed",
         error instanceof Error ? error.message : "unknown error",
       );
-      return (
-        <main className="page-shell vehicle-page-shell">
-          <ApiUnavailable />
-        </main>
-      );
+      return <ApiUnavailable />;
     }
   }
 
@@ -474,6 +458,31 @@ export default async function ClearanceEntryPage({
   const deleted = getQueryValue(query.deleted) === "1";
   const errorMessage = getQueryValue(query.error);
 
+  return (
+    <>
+      {saved ? <Message message="Clearance saved successfully." success /> : null}
+      {updated ? <Message message="Clearance updated successfully." success /> : null}
+      {deleted ? <Message message="Clearance deleted successfully." success /> : null}
+      {errorMessage ? <Message message={errorMessage} /> : null}
+
+      <VehicleSearch searchType={searchType} searchTerm={searchTerm} />
+
+      {searchTerm && !vehicle ? <NotFoundState searchTerm={searchTerm} /> : null}
+      {vehicle && action === "delete" && record ? (
+        <DeleteConfirmation record={record} vehicle={vehicle} />
+      ) : null}
+      {vehicle && action !== "delete" ? (
+        <ClearanceHistory records={records} vehicle={vehicle} />
+      ) : null}
+      {vehicle && action !== "delete" ? (
+        <ClearanceForm vehicle={vehicle} merchants={merchants} record={record} />
+      ) : null}
+      {code && !record ? <NotFoundState searchTerm="" /> : null}
+    </>
+  );
+}
+
+export default function ClearanceEntryPage(props: ClearanceEntryPageProps) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="clearance-entry-title">
@@ -487,25 +496,9 @@ export default async function ClearanceEntryPage({
             Clearance Menu
           </Link>
         </header>
-
-        {saved ? <Message message="Clearance saved successfully." success /> : null}
-        {updated ? <Message message="Clearance updated successfully." success /> : null}
-        {deleted ? <Message message="Clearance deleted successfully." success /> : null}
-        {errorMessage ? <Message message={errorMessage} /> : null}
-
-        <VehicleSearch searchType={searchType} searchTerm={searchTerm} />
-
-        {searchTerm && !vehicle ? <NotFoundState searchTerm={searchTerm} /> : null}
-        {vehicle && action === "delete" && record ? (
-          <DeleteConfirmation record={record} vehicle={vehicle} />
-        ) : null}
-        {vehicle && action !== "delete" ? (
-          <ClearanceHistory records={records} vehicle={vehicle} />
-        ) : null}
-        {vehicle && action !== "delete" ? (
-          <ClearanceForm vehicle={vehicle} merchants={merchants} record={record} />
-        ) : null}
-        {code && !record ? <NotFoundState searchTerm="" /> : null}
+        <Suspense fallback={<RouteLoading />}>
+          <ClearanceEntryContent {...props} />
+        </Suspense>
       </section>
     </main>
   );

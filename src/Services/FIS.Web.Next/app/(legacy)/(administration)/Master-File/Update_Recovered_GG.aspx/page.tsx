@@ -1,12 +1,3 @@
-import RecoveredVehiclePage, {
-  type RecoveredVehiclePageProps,
-} from "@/app/(fleet-operations)/vehicles/recovered/page";
+import { createLegacyRecoveredVehiclePage } from "@/app/(fleet-operations)/vehicles/recovered/_route";
 
-export default function LegacyRecoveredVehiclePage({ searchParams }: RecoveredVehiclePageProps) {
-  return (
-    <RecoveredVehiclePage
-      searchParams={searchParams}
-      routePath="/Master-File/Update_Recovered_GG.aspx"
-    />
-  );
-}
+export default createLegacyRecoveredVehiclePage("/Master-File/Update_Recovered_GG.aspx");

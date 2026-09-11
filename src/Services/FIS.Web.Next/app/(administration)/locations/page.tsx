@@ -1,17 +1,39 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import LocationClient from "@/app/(administration)/locations/location-client";
+import RouteLoading from "@/components/app-shell/route-loading";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
-import { getLocations, LocationApiError } from "@/lib/api/reference-data/api-locations";
+import {
+  DEFAULT_LOCATION_PAGE_SIZE,
+  getLocationsPage,
+  LocationApiError,
+} from "@/lib/api/reference-data/api-locations";
 import { getSession } from "@/lib/auth/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function queryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function positivePage(value: string | undefined) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function pageHref(query: Record<string, string | string[] | undefined>, page: number) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (key === "page" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) params.append(key, item);
+  }
+  if (page > 1) params.set("page", String(page));
+  const queryString = params.toString();
+  return queryString ? `/locations?${queryString}` : "/locations";
 }
 
 function StatusCard({
@@ -33,9 +55,7 @@ function StatusCard({
   );
 }
 
-export default async function LocationsPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function LocationsContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -53,8 +73,12 @@ export default async function LocationsPage({
     );
 
   const query = await searchParams;
+  const requestedPage = positivePage(queryValue(query.page));
   try {
-    const locations = await getLocations();
+    const locationPage = await getLocationsPage({
+      page: requestedPage,
+      pageSize: DEFAULT_LOCATION_PAGE_SIZE,
+    });
     const saved = queryValue(query.saved);
     const error = queryValue(query.error);
     return (
@@ -82,7 +106,19 @@ export default async function LocationsPage({
               <span>{error}</span>
             </div>
           ) : null}
-          <LocationClient locations={locations} />
+          <LocationClient
+            locations={locationPage.items}
+            page={locationPage.page}
+            pageSize={locationPage.pageSize}
+            total={locationPage.total}
+            totalPages={locationPage.totalPages}
+            previousHref={locationPage.page > 1 ? pageHref(query, locationPage.page - 1) : null}
+            nextHref={
+              locationPage.page < locationPage.totalPages
+                ? pageHref(query, locationPage.page + 1)
+                : null
+            }
+          />
           <div className="vehicle-footer-actions">
             <Link className="button button-secondary" href="/home">
               Home
@@ -116,4 +152,12 @@ export default async function LocationsPage({
       </main>
     );
   }
+}
+
+export default function LocationsPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LocationsContent {...props} />
+    </Suspense>
+  );
 }

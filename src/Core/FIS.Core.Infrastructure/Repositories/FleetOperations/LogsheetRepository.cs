@@ -23,8 +23,10 @@ public sealed class LogsheetRepository : ILogsheetRepository
     public Task<Logsheet?> GetByIdAsync(int logCode) =>
         _compatibilityRepository.GetByIdAsync(logCode);
 
-    public Task<IEnumerable<Logsheet>> GetAllAsync() =>
-        _compatibilityRepository.GetAllAsync();
+    public Task<IEnumerable<Logsheet>> GetAllAsync() => _compatibilityRepository.GetAllAsync();
+
+    public Task<LogsheetPage> GetPageAsync(LogsheetPageQuery query) =>
+        _compatibilityRepository.GetPageAsync(query);
 
     public Task<IEnumerable<Logsheet>> GetByVehicleAsync(int vmfCode) =>
         _compatibilityRepository.GetByVehicleAsync(vmfCode);

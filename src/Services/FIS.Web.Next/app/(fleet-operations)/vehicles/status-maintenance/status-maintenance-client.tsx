@@ -17,7 +17,6 @@ import type {
 
 const SOLD_STATUS_CODE = 5;
 const STOLEN_STATUS_CODE = 4;
-const SEARCH_PAGE_SIZE = 12;
 
 const initialSearchState: VehicleStatusActionState = {
   status: "idle",
@@ -175,11 +174,22 @@ function VehicleHistory({ vehicle }: Readonly<{ vehicle: VehicleStatusVehicle }>
 function SearchResults({
   results,
   returnUrl,
-}: Readonly<{ results: VehicleStatusVehicle[]; returnUrl: string }>) {
-  const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(results.length / SEARCH_PAGE_SIZE));
-  const visibleResults = results.slice((page - 1) * SEARCH_PAGE_SIZE, page * SEARCH_PAGE_SIZE);
-
+  page,
+  total,
+  totalPages,
+  searchMode,
+  searchTerm,
+  searchAction,
+}: Readonly<{
+  results: VehicleStatusVehicle[];
+  returnUrl: string;
+  page: number;
+  total: number;
+  totalPages: number;
+  searchMode: "GG" | "GP";
+  searchTerm: string;
+  searchAction: (payload: FormData) => void;
+}>) {
   if (results.length === 0) {
     return null;
   }
@@ -189,7 +199,7 @@ function SearchResults({
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">Vehicle search</p>
-          <h2 id="status-search-results-title">Select Vehicle ({results.length})</h2>
+          <h2 id="status-search-results-title">Select Vehicle ({total})</h2>
         </div>
       </div>
       <div className="vehicle-table-wrapper">
@@ -204,7 +214,7 @@ function SearchResults({
             </tr>
           </thead>
           <tbody>
-            {visibleResults.map((vehicle) => (
+            {results.map((vehicle) => (
               <tr key={vehicle.vmfCode}>
                 <td>{valueOrDash(vehicle.fleetNumber)}</td>
                 <td>{valueOrDash(vehicle.registrationNumber)}</td>
@@ -223,29 +233,35 @@ function SearchResults({
           </tbody>
         </table>
       </div>
-      {totalPages > 1 ? (
-        <nav className="vehicle-pagination" aria-label="Vehicle status search results">
-          <button
-            className="vehicle-pagination-button"
-            type="button"
-            disabled={page <= 1}
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-          >
-            Previous
-          </button>
-          <span className="vehicle-pagination-meta" aria-live="polite">
-            Page {page} of {totalPages}
-          </span>
-          <button
-            className="vehicle-pagination-button"
-            type="button"
-            disabled={page >= totalPages}
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-          >
-            Next
-          </button>
-        </nav>
-      ) : null}
+      <form
+        action={searchAction}
+        className="vehicle-pagination"
+        aria-label="Vehicle status search results"
+      >
+        <input name="searchMode" type="hidden" value={searchMode} />
+        <input name="searchTerm" type="hidden" value={searchTerm} />
+        <button
+          className="vehicle-pagination-button"
+          name="page"
+          type="submit"
+          value={Math.max(1, page - 1)}
+          disabled={page <= 1}
+        >
+          Previous
+        </button>
+        <span className="vehicle-pagination-meta" aria-live="polite">
+          Page {page} of {totalPages}
+        </span>
+        <button
+          className="vehicle-pagination-button"
+          name="page"
+          type="submit"
+          value={Math.min(totalPages, page + 1)}
+          disabled={page >= totalPages}
+        >
+          Next
+        </button>
+      </form>
     </section>
   );
 }
@@ -343,9 +359,14 @@ export default function StatusMaintenanceClient({
       </section>
 
       <SearchResults
-        key={(searchState.results ?? []).map((vehicle) => vehicle.vmfCode).join(",")}
         results={searchState.results ?? []}
         returnUrl={initialReturnUrl}
+        page={searchState.page ?? 1}
+        total={searchState.total ?? 0}
+        totalPages={searchState.totalPages ?? 1}
+        searchMode={searchState.searchMode ?? "GG"}
+        searchTerm={searchState.searchTerm ?? ""}
+        searchAction={searchAction}
       />
 
       {initialUpdated ? (

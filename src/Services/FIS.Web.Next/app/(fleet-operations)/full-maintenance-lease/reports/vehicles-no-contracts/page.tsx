@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   FmlFrame,
@@ -18,7 +19,7 @@ import {
 import { FmlApiError, getFmlVehiclesNoContracts } from "@/lib/api/finance/api-fml";
 import { getSession } from "@/lib/auth/session";
 
-export default async function FmlVehiclesNoContractsPage() {
+async function FmlVehiclesNoContractsPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -90,4 +91,12 @@ export default async function FmlVehiclesNoContractsPage() {
       "The no-contract report could not be loaded.",
     );
   }
+}
+
+export default function FmlVehiclesNoContractsPage() {
+  return (
+    <StreamedRoute>
+      <FmlVehiclesNoContractsPageContent />
+    </StreamedRoute>
+  );
 }

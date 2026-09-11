@@ -19,6 +19,75 @@ export function queryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
+function privateHirePageHref(
+  path: string,
+  query: Record<string, string | string[] | undefined>,
+  page: number,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (key === "page" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item) params.append(key, item);
+    }
+  }
+  if (page > 1) params.set("page", String(page));
+  const queryString = params.toString();
+  return queryString ? `${path}?${queryString}` : path;
+}
+
+export function PrivateHirePagination({
+  path,
+  query,
+  page,
+  totalPages,
+}: Readonly<{
+  path: string;
+  query: Record<string, string | string[] | undefined>;
+  page: number;
+  totalPages: number;
+}>) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <nav className="vehicle-pagination" aria-label="Private Hire result pages">
+      {page <= 1 ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Previous
+        </span>
+      ) : (
+        <Link
+          className="vehicle-pagination-button"
+          href={privateHirePageHref(path, query, page - 1)}
+        >
+          Previous
+        </Link>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {page} of {totalPages}
+      </span>
+      {page >= totalPages ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Next
+        </span>
+      ) : (
+        <Link
+          className="vehicle-pagination-button"
+          href={privateHirePageHref(path, query, page + 1)}
+        >
+          Next
+        </Link>
+      )}
+    </nav>
+  );
+}
+
 export function PrivateHireNotice({
   query,
 }: Readonly<{ query: Record<string, string | string[] | undefined> }>) {
@@ -91,7 +160,7 @@ export function PrivateHireVehicleTable({
           </tr>
         </thead>
         <tbody>
-          {vehicles.slice(0, 200).map((vehicle) => (
+          {vehicles.map((vehicle) => (
             <tr key={vehicle.phvCode}>
               <td>
                 {valueOrDash(vehicle.registrationNumber)}{" "}
@@ -149,7 +218,7 @@ export function PrivateHireContractorTable({
           </tr>
         </thead>
         <tbody>
-          {contractors.slice(0, 200).map((contractor) => (
+          {contractors.map((contractor) => (
             <tr key={contractor.contractorId}>
               <td>
                 {valueOrDash(contractor.companyName)}{" "}

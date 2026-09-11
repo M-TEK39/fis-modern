@@ -33,6 +33,43 @@ public class LogsheetController : BaseApiController
         }
     }
 
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24,
+        [FromQuery] int? vmfCode = null,
+        [FromQuery] string? requisition = null
+    )
+    {
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new LogsheetPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100),
+                    vmfCode is > 0 ? vmfCode : null,
+                    string.IsNullOrWhiteSpace(requisition) ? null : requisition.Trim()
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error paging logsheets");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<Logsheet>> GetById(int id)
     {

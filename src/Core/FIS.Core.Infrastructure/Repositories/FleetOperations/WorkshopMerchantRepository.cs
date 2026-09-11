@@ -50,6 +50,83 @@ public sealed class WorkshopMerchantRepository : IWorkshopMerchantRepository
 
     public async Task<IEnumerable<WwMerchant>> GetAllAsync() => await QueryAsync();
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The table, columns, ordering, and parameter names are fixed. The merchant search and pagination values are always parameters."
+    )]
+    public async Task<WorkshopMerchantPage> GetPageAsync(WorkshopMerchantPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var search = query.Search?.Trim();
+        if (string.IsNullOrEmpty(search))
+        {
+            search = null;
+        }
+        else if (search.Length > 40)
+        {
+            search = search[..40];
+        }
+
+        var columns = await GetAvailableColumnsAsync();
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            var conditions = new List<string> { GetActiveFilter(columns) };
+            if (search is not null)
+                conditions.Add("[wwmerch_name] LIKE @search ESCAPE '~'");
+            var whereClause = string.Join(" AND ", conditions);
+
+            await using var countCommand = connection.CreateCommand();
+            countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            countCommand.CommandText =
+                $"SELECT COUNT(1) FROM [dbo].[{TableName}] WHERE {whereClause}";
+            if (search is not null)
+                AddParameter(countCommand, "@search", DbType.String, ContainsPattern(search));
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            dataCommand.CommandText = $"""
+                SELECT {string.Join(
+                    ", ",
+                    BusinessColumns.Concat(OptionalAuditColumns).Select(column =>
+                        GetProjection(columns, column)
+                    )
+                )}
+                FROM [dbo].[{TableName}]
+                WHERE {whereClause}
+                ORDER BY [wwmerch_name], [wwmerch_code]
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            if (search is not null)
+                AddParameter(dataCommand, "@search", DbType.String, ContainsPattern(search));
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<WwMerchant>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                items.Add(MapMerchant(reader, columns));
+            return new WorkshopMerchantPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
     public async Task<WwMerchant> CreateAsync(WwMerchant merchant, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(merchant);
@@ -445,6 +522,9 @@ public sealed class WorkshopMerchantRepository : IWorkshopMerchantRepository
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
     }
+
+    private static string ContainsPattern(string value) =>
+        $"%{value.Replace("~", "~~", StringComparison.Ordinal).Replace("%", "~%", StringComparison.Ordinal).Replace("_", "~_", StringComparison.Ordinal)}%";
 
     private static string GetActiveFilter(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";

@@ -90,6 +90,93 @@ public sealed class ModelRepository : IModelRepository
 
     public async Task<IEnumerable<Model>> GetAllModelsAsync() => await QueryAsync();
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The page queries use fixed compatibility columns, filters, joins, ordering, and parameterized pagination values."
+    )]
+    public async Task<ModelPage> GetPageAsync(
+        int page = 1,
+        int pageSize = 24,
+        short? makeCode = null
+    )
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var availableColumns = await GetAvailableColumnsAsync();
+        var conditions = new List<string> { GetNotDeletedFilter(availableColumns) };
+        if (makeCode.HasValue)
+        {
+            conditions.Add("[model].[make_code] = @makeCode");
+        }
+
+        var whereClause = string.Join(" AND ", conditions);
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            int total;
+            await using (var countCommand = connection.CreateCommand())
+            {
+                countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                countCommand.CommandText =
+                    $"SELECT COUNT(1) FROM [dbo].[{TableName}] AS [model] WHERE {whereClause}";
+                if (makeCode.HasValue)
+                {
+                    AddParameter(countCommand, "@makeCode", DbType.Int16, makeCode.Value);
+                }
+
+                total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            }
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            page = Math.Min(page, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
+            var projection = RequiredColumns
+                .Select(column => $"[model].[{column}] AS [{column}]")
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
+                .Append("[make].[make_description] AS [make_description]")
+                .ToArray();
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText =
+                $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] AS [model] LEFT JOIN [dbo].[make] AS [make] ON [make].[make_code] = [model].[make_code] WHERE {whereClause} ORDER BY [make].[make_description], [model].[model_description], [model].[model_code] OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY";
+            if (makeCode.HasValue)
+            {
+                AddParameter(command, "@makeCode", DbType.Int16, makeCode.Value);
+            }
+            AddParameter(command, "@skip", DbType.Int64, skip);
+            AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<Model>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(MapModel(reader, availableColumns));
+            }
+
+            return new ModelPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IEnumerable<Model>> GetModelsByMakeAsync(short makeCode) =>
         await QueryAsync(
             "[model].[make_code] = @makeCode",

@@ -1,14 +1,22 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
-import { cancelTaxiRequestAction, saveTaxiRequestAction } from "@/app/(fleet-operations)/taxis/actions";
+import {
+  cancelTaxiRequestAction,
+  saveTaxiRequestAction,
+} from "@/app/(fleet-operations)/taxis/actions";
 import {
   dateValue,
   queryValue,
   TaxiHeader,
   TaxiNotice,
+  TaxiPagination,
   TaxiRestricted,
   TaxiUnavailable,
   timeValue,
@@ -18,7 +26,8 @@ import {
   getTaxi,
   getTaxiByRequisition,
   getTaxiLogReferences,
-  getTaxis,
+  getTaxiPage,
+  DEFAULT_TAXI_PAGE_SIZE,
   TaxiApiError,
   type TaxiRecord,
 } from "@/lib/api/fleet-operations/api-taxis";
@@ -40,6 +49,11 @@ function timeInput(value: string | null | undefined) {
 
 function numberValue(value: number | null | undefined) {
   return value === null || value === undefined ? "" : String(value);
+}
+
+function requestedPage(value: string | string[] | undefined) {
+  const candidate = Number(queryValue(value));
+  return Number.isInteger(candidate) && candidate > 0 ? candidate : 1;
 }
 
 type LookupOption = { value: string; label: string };
@@ -66,9 +80,7 @@ function namedOption(code: number, description: string | null | undefined): Look
     : null;
 }
 
-function contractorOptions(
-  references: Awaited<ReturnType<typeof getTaxiLogReferences>>,
-) {
+function contractorOptions(references: Awaited<ReturnType<typeof getTaxiLogReferences>>) {
   return references.contractors
     .map((contractor) => ({
       value: String(contractor.contractorId),
@@ -77,11 +89,12 @@ function contractorOptions(
     .toSorted((left, right) => left.label.localeCompare(right.label));
 }
 
-function classOptions(
-  references: Awaited<ReturnType<typeof getTaxiLogReferences>>,
-) {
+function classOptions(references: Awaited<ReturnType<typeof getTaxiLogReferences>>) {
   const contractorNames = new Map(
-    references.contractors.map((contractor) => [contractor.contractorId, contractor.contractorName]),
+    references.contractors.map((contractor) => [
+      contractor.contractorId,
+      contractor.contractorName,
+    ]),
   );
 
   return references.classes
@@ -100,9 +113,7 @@ function classOptions(
     );
 }
 
-function departmentOptions(
-  departments: Awaited<ReturnType<typeof getDepartments>>,
-) {
+function departmentOptions(departments: Awaited<ReturnType<typeof getDepartments>>) {
   return departments
     .filter((department) => department.deptActive)
     .map((department) => namedOption(department.departmentCode, department.description))
@@ -173,7 +184,9 @@ function classOptionsForTaxi(
 ) {
   if (!taxi) return classes;
   if (taxi.contractorId === null) return [];
-  const providerClasses = classes.filter((taxiClass) => taxiClass.contractorId === taxi.contractorId);
+  const providerClasses = classes.filter(
+    (taxiClass) => taxiClass.contractorId === taxi.contractorId,
+  );
   return providerClasses.length > 0 ? providerClasses : classes;
 }
 
@@ -187,16 +200,26 @@ function currentLookupWarnings(taxi: TaxiRecord | undefined, lookups: TaxiReques
   const classValue = numberValue(taxi.vehicleTypeCode);
   const taxiClasses = classOptionsForTaxi(taxi, lookups.classes);
 
-  if (lookups.contractors.length > 0 && contractorValue && !hasOption(lookups.contractors, contractorValue))
+  if (
+    lookups.contractors.length > 0 &&
+    contractorValue &&
+    !hasOption(lookups.contractors, contractorValue)
+  )
     warnings.push(
       `The current service provider is no longer in active reference data. Choose a current provider before saving.`,
     );
-  if (lookups.departments.length > 0 && departmentValue && !hasOption(lookups.departments, departmentValue))
+  if (
+    lookups.departments.length > 0 &&
+    departmentValue &&
+    !hasOption(lookups.departments, departmentValue)
+  )
     warnings.push(
       `The current department is no longer in active reference data. Choose a current department before saving.`,
     );
   if (lookups.sites.length > 0 && siteValue && !hasOption(lookups.sites, siteValue))
-    warnings.push(`The current site is no longer in active reference data. Choose a current site before saving.`);
+    warnings.push(
+      `The current site is no longer in active reference data. Choose a current site before saving.`,
+    );
   if (lookups.classes.length > 0 && taxiClasses.length === 0 && classValue)
     warnings.push(
       "The current provider has no active vehicle-class reference. Choose a current provider and vehicle class before saving.",
@@ -304,7 +327,9 @@ function TaxiLookupFallbackNotice({ warnings }: Readonly<{ warnings: readonly st
   return (
     <aside className="notice notice-error" role="status" aria-live="polite">
       <p className="eyebrow">Reference data unavailable</p>
-      <p>Some named request choices could not be loaded. Internal codes cannot be entered manually.</p>
+      <p>
+        Some named request choices could not be loaded. Internal codes cannot be entered manually.
+      </p>
       {warnings.map((warning) => (
         <p key={warning}>{warning}</p>
       ))}
@@ -355,9 +380,11 @@ function TaxiRequestForm({
   const departmentValue = numberValue(taxi?.departmentCode);
   const siteValue = numberValue(taxi?.siteCode);
   const classValue = numberValue(taxi?.vehicleTypeCode);
-  const contractorIsAvailable = !isEdit || !contractorValue || hasOption(lookups.contractors, contractorValue);
+  const contractorIsAvailable =
+    !isEdit || !contractorValue || hasOption(lookups.contractors, contractorValue);
   const classIsAvailable = !isEdit || !classValue || hasClassOption(lookups.classes, classValue);
-  const departmentIsAvailable = !isEdit || !departmentValue || hasOption(lookups.departments, departmentValue);
+  const departmentIsAvailable =
+    !isEdit || !departmentValue || hasOption(lookups.departments, departmentValue);
   const siteIsAvailable = !isEdit || !siteValue || hasOption(lookups.sites, siteValue);
   const canSave = lookups.sites.length > 0;
 
@@ -644,7 +671,7 @@ function RequestSummary({ taxi }: Readonly<{ taxi: TaxiRecord }>) {
   );
 }
 
-export default async function TaxiRequestsPage({
+async function TaxiRequestsPageContent({
   searchParams,
   mode: forcedMode,
 }: Readonly<{ searchParams: SearchParams; mode?: string }>) {
@@ -676,10 +703,12 @@ export default async function TaxiRequestsPage({
   const rekNum = queryValue(query.rekNum);
   try {
     if (mode === "pending" || mode === "pending-jia") {
-      const taxis = await getTaxis();
-      const filtered = taxis.filter(
-        (taxi) => !taxi.cancelled && (mode !== "pending-jia" || taxi.jiaPickup),
-      );
+      const taxiPage = await getTaxiPage({
+        page: requestedPage(query.page),
+        pageSize: DEFAULT_TAXI_PAGE_SIZE,
+        pendingOnly: true,
+        jiaPickupOnly: mode === "pending-jia",
+      });
       return (
         <main className="page-shell vehicle-page-shell">
           <section className="vehicle-card">
@@ -701,12 +730,12 @@ export default async function TaxiRequestsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 ? (
+                  {taxiPage.total === 0 ? (
                     <tr>
                       <td colSpan={5}>No pending records found.</td>
                     </tr>
                   ) : (
-                    filtered.slice(0, 500).map((taxi) => (
+                    taxiPage.items.map((taxi) => (
                       <tr key={taxi.requestId}>
                         <td>
                           <Link href={`/taxis/requests?mode=edit&requestId=${taxi.requestId}`}>
@@ -723,6 +752,12 @@ export default async function TaxiRequestsPage({
                 </tbody>
               </table>
             </div>
+            <TaxiPagination
+              path="/taxis/requests"
+              query={query}
+              page={taxiPage.page}
+              totalPages={taxiPage.totalPages}
+            />
           </section>
         </main>
       );
@@ -834,4 +869,12 @@ export default async function TaxiRequestsPage({
       </main>
     );
   }
+}
+
+export default function TaxiRequestsPage(props: Parameters<typeof TaxiRequestsPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TaxiRequestsPageContent {...props} />
+    </Suspense>
+  );
 }

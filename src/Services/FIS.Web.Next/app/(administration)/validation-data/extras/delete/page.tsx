@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -11,6 +12,7 @@ import {
   getExtraCodeDeleteCheck,
 } from "@/lib/api/reference-data/api-extra-codes";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 type ExtraCodeDeletePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -37,7 +39,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function ExtraCodeDeletePage({ searchParams }: ExtraCodeDeletePageProps) {
+async function ExtraCodeDeletePageContent({ searchParams }: ExtraCodeDeletePageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -167,4 +169,14 @@ export default async function ExtraCodeDeletePage({ searchParams }: ExtraCodeDel
       </main>
     );
   }
+}
+
+export default function ExtraCodeDeletePage(
+  props: NonNullable<Parameters<typeof ExtraCodeDeletePageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <ExtraCodeDeletePageContent {...props} />
+    </Suspense>
+  );
 }

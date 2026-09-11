@@ -32,7 +32,9 @@ export default function ModulePageHeader({
         <div>
           <p className="eyebrow">{eyebrow}</p>
           <h1 id={titleId}>{title}</h1>
-          {description ? <p className="fis-module-page-header__description">{description}</p> : null}
+          {description ? (
+            <p className="fis-module-page-header__description">{description}</p>
+          ) : null}
         </div>
       </div>
       {actions ? <div className="fis-module-page-header__actions">{actions}</div> : null}

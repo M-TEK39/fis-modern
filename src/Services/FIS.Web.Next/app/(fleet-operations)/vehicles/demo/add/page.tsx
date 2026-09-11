@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { hasDemoVehicleRole } from "@/app/(fleet-operations)/vehicles/demo/access";
 import { createDemoVehicleAction } from "@/app/(fleet-operations)/vehicles/demo/actions";
@@ -11,12 +12,13 @@ import {
   DemoApiUnavailable,
   DemoSessionRecovery,
 } from "@/app/(fleet-operations)/vehicles/demo/page-support";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { isUnauthorizedError } from "@/app/(fleet-operations)/vehicles/demo/error-utils";
 import { getSession } from "@/lib/auth/session";
 
 export type DemoAddPageProps = { routePath?: string };
 
-export default async function DemoAddPage({ routePath = "/vehicles/demo/add" }: DemoAddPageProps) {
+async function DemoAddPageContent({ routePath = "/vehicles/demo/add" }: DemoAddPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -94,4 +96,12 @@ export default async function DemoAddPage({ routePath = "/vehicles/demo/add" }: 
       </main>
     );
   }
+}
+
+export default function DemoAddPage(props: DemoAddPageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DemoAddPageContent {...props} />
+    </Suspense>
+  );
 }

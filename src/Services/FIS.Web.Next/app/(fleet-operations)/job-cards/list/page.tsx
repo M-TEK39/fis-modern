@@ -8,14 +8,32 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_components";
 import {
   accessRestricted,
-  filterByVehicle,
+  getJobCardForSelection,
   getJobCardSession,
+  JobCardPageBoundary,
+  jobCardPageHref,
+  queryPage,
+  querySearchType,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/job-cards/_page";
-import { getJobCards, JobCardApiError } from "@/lib/api/fleet-operations/api-job-cards";
+import {
+  DEFAULT_JOB_CARD_PAGE_SIZE,
+  getJobCardsPage,
+  JobCardApiError,
+} from "@/lib/api/fleet-operations/api-job-cards";
 
-export default async function ListJobCardsPage({
+export default function ListJobCardsPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
+  return (
+    <JobCardPageBoundary>
+      <ListJobCardsContent searchParams={searchParams} />
+    </JobCardPageBoundary>
+  );
+}
+
+async function ListJobCardsContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
@@ -27,7 +45,8 @@ export default async function ListJobCardsPage({
     return accessRestricted("Your profile does not include Job Card capturer access.");
   const query = await searchParams;
   const search = queryValue(query.search || query.gg);
-  const mode = queryValue(query.mode) || "GG";
+  const mode = querySearchType(query.mode);
+  const page = queryPage(query.page);
   const selectedId = Number(queryValue(query.id));
   const message =
     queryValue(query.updated) === "1"
@@ -36,12 +55,21 @@ export default async function ListJobCardsPage({
         ? "Job card deleted successfully."
         : queryValue(query.error);
   try {
-    const cards = await getJobCards();
-    const filtered = filterByVehicle(cards, search, mode);
+    const pageData = await getJobCardsPage({
+      page,
+      pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+      search,
+      searchType: mode,
+    });
     const selected =
       Number.isInteger(selectedId) && selectedId > 0
-        ? (cards.find((card) => card.jobCardId === selectedId) ?? null)
+        ? await getJobCardForSelection(selectedId)
         : null;
+    const tableReturnPath = jobCardPageHref(
+      "/job-cards/list",
+      { ...query, id: undefined },
+      pageData.page,
+    );
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="list-job-cards-title">
@@ -73,6 +101,7 @@ export default async function ListJobCardsPage({
             </div>
           ) : null}
           <form className="vehicle-search-row" method="get">
+            <input type="hidden" name="page" value="1" />
             <fieldset className="vehicle-search-options">
               <legend>Find by</legend>
               <label className="vehicle-checkbox-label">
@@ -104,15 +133,22 @@ export default async function ListJobCardsPage({
             aria-labelledby="job-card-results-title"
           >
             <p className="eyebrow">
-              {filtered.length} record{filtered.length === 1 ? "" : "s"}
+              {pageData.totalRecords} record{pageData.totalRecords === 1 ? "" : "s"}
             </p>
             <h2 id="job-card-results-title">Job Card Results</h2>
-            <JobCardTable cards={filtered} mode="list" returnPath="/job-cards/list" />
+            <JobCardTable
+              cards={pageData.items}
+              mode="list"
+              returnPath={tableReturnPath}
+              page={pageData.page}
+              totalPages={pageData.totalPages}
+              pageHref={(nextPage) => jobCardPageHref("/job-cards/list", query, nextPage)}
+            />
           </section>
           {selected ? (
             <JobCardDetails
               card={selected}
-              returnPath={`/job-cards/list?id=${selected.jobCardId}`}
+              returnPath={jobCardPageHref("/job-cards/list", query, pageData.page)}
             />
           ) : (
             <p className="muted-copy">Select Review to inspect or edit a job card.</p>

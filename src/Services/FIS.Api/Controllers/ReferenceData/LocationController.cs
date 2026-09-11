@@ -47,6 +47,40 @@ public class LocationController : BaseApiController
     }
 
     /// <summary>
+    /// Get a page of active locations without changing the legacy collection response.
+    /// </summary>
+    [HttpGet("page")]
+    public async Task<IActionResult> GetLocationsPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24
+    )
+    {
+        try
+        {
+            var result = await _locationRepository.GetPageAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, 100)
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged locations");
+            return StatusCode(500, "An error occurred while retrieving locations");
+        }
+    }
+
+    /// <summary>
     /// Get a location by ID
     /// </summary>
     [HttpGet("{locationId}")]

@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-
 import {
   FinanceFrame,
   FinanceMenuLink,
@@ -21,7 +24,7 @@ import {
 } from "@/lib/api/finance/api-finance";
 import { getSession } from "@/lib/auth/session";
 
-export default async function FinancePage() {
+async function FinancePageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -245,5 +248,13 @@ export default async function FinancePage() {
         </div>
       </div>
     </FinanceFrame>
+  );
+}
+
+export default function FinancePage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <FinancePageContent />
+    </Suspense>
   );
 }

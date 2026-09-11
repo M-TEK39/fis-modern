@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   ActionNotice,
@@ -16,7 +17,12 @@ import {
   hasFmlPermission,
   vehicleLabel,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
-import { FmlApiError, getLeaseTerms } from "@/lib/api/finance/api-fml";
+import {
+  DEFAULT_LEASE_TERMS_PAGE_SIZE,
+  FmlApiError,
+  getLeaseTermsPage,
+  type LeaseTermsPage,
+} from "@/lib/api/finance/api-fml";
 import { getVehicleOptions } from "@/lib/api/vehicles/api-vehicles";
 import { getSession } from "@/lib/auth/session";
 
@@ -24,6 +30,24 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function positivePage(value: string | undefined) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function pageHref(query: Record<string, string | string[] | undefined>, page: number) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (key === "page" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) params.append(key, item);
+  }
+  if (page > 1) params.set("page", String(page));
+  const queryString = params.toString();
+  return queryString
+    ? `/full-maintenance-lease/tariffs?${queryString}`
+    : "/full-maintenance-lease/tariffs";
 }
 
 function workflowMode(
@@ -37,7 +61,7 @@ function workflowMode(
   return "view";
 }
 
-export default async function FmlTariffQueuePage({
+async function FmlTariffQueuePageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -64,15 +88,24 @@ export default async function FmlTariffQueuePage({
 
   const query = await searchParams;
   const status = first(query.status) ?? "all";
+  const requestedPage = positivePage(first(query.page));
   const result = first(query.result);
   const message = first(query.message);
   const currentUserCode = Number(session.userAccessCode);
   const currentUser =
     Number.isSafeInteger(currentUserCode) && currentUserCode > 0 ? currentUserCode : null;
-  let terms;
+  let termsPage: LeaseTermsPage;
   let vehicles;
   try {
-    [terms, vehicles] = await Promise.all([getLeaseTerms(), getVehicleOptions()]);
+    [termsPage, vehicles] = await Promise.all([
+      getLeaseTermsPage({
+        page: requestedPage,
+        pageSize: DEFAULT_LEASE_TERMS_PAGE_SIZE,
+        status:
+          status === "pending" || status === "approved" || status === "rejected" ? status : "all",
+      }),
+      getVehicleOptions(),
+    ]);
   } catch (error) {
     return (
       <FmlFrame
@@ -85,15 +118,6 @@ export default async function FmlTariffQueuePage({
   }
 
   const labels = new Map(vehicles.map((vehicle) => [vehicle.vmfCode, vehicleLabel(vehicle)]));
-  const filtered = terms.filter((term) =>
-    status === "pending"
-      ? term.authorityStatus === 1
-      : status === "approved"
-        ? term.authorityStatus === 2
-        : status === "rejected"
-          ? term.authorityStatus === 4
-          : true,
-  );
   const canReview = hasFinancialPermission(session.accessLevel);
   return (
     <FmlFrame
@@ -106,6 +130,7 @@ export default async function FmlTariffQueuePage({
         records captured by someone else.
       </div>
       <form method="get" className="form-row">
+        <input type="hidden" name="page" value="1" />
         <label className="form-label" htmlFor="fml-status">
           Authority status
         </label>
@@ -119,7 +144,7 @@ export default async function FmlTariffQueuePage({
           Filter
         </button>
       </form>
-      {filtered.length === 0 ? (
+      {termsPage.items.length === 0 ? (
         <section className="vehicle-status-card" role="status">
           <h2>No lease tariffs found</h2>
           <p className="muted-copy">No records match the selected authority status.</p>
@@ -140,7 +165,7 @@ export default async function FmlTariffQueuePage({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((term) => {
+              {termsPage.items.map((term) => {
                 const mode = workflowMode(term, currentUser, canReview);
                 return (
                   <tr key={term.termId}>
@@ -173,6 +198,48 @@ export default async function FmlTariffQueuePage({
           </table>
         </div>
       )}
+      {termsPage.totalPages > 1 ? (
+        <>
+          <nav className="vehicle-pagination" aria-label="FML tariff queue pages">
+            {termsPage.page <= 1 ? (
+              <span
+                className="vehicle-pagination-button vehicle-pagination-disabled"
+                aria-disabled="true"
+              >
+                Previous
+              </span>
+            ) : (
+              <Link
+                className="vehicle-pagination-button"
+                href={pageHref(query, termsPage.page - 1)}
+              >
+                Previous
+              </Link>
+            )}
+            <span className="vehicle-pagination-meta" aria-live="polite">
+              Page {termsPage.page} of {termsPage.totalPages}
+            </span>
+            {termsPage.page >= termsPage.totalPages ? (
+              <span
+                className="vehicle-pagination-button vehicle-pagination-disabled"
+                aria-disabled="true"
+              >
+                Next
+              </span>
+            ) : (
+              <Link
+                className="vehicle-pagination-button"
+                href={pageHref(query, termsPage.page + 1)}
+              >
+                Next
+              </Link>
+            )}
+          </nav>
+          <div className="pagination-meta">
+            Total records: {termsPage.total} | Page size: {termsPage.pageSize}
+          </div>
+        </>
+      ) : null}
       <div className="button-row">
         <Link className="button button-primary" href="/full-maintenance-lease/add-lease">
           Add Lease Tariff
@@ -182,5 +249,13 @@ export default async function FmlTariffQueuePage({
         </Link>
       </div>
     </FmlFrame>
+  );
+}
+
+export default function FmlTariffQueuePage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <FmlTariffQueuePageContent {...props} />
+    </StreamedRoute>
   );
 }

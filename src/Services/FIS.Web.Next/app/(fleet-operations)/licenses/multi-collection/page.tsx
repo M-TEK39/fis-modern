@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -37,7 +41,7 @@ function buildPath(
   return `/licenses/multi-collection?${params.toString()}`;
 }
 
-export default async function LicenseMultiCollectionPage({
+async function LicenseMultiCollectionPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLicenseSession();
@@ -203,5 +207,15 @@ export default async function LicenseMultiCollectionPage({
         </Link>
       </div>
     </LicenseShell>
+  );
+}
+
+export default function LicenseMultiCollectionPage(
+  props: Parameters<typeof LicenseMultiCollectionPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LicenseMultiCollectionPageContent {...props} />
+    </Suspense>
   );
 }

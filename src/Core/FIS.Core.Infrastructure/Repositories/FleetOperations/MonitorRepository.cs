@@ -41,6 +41,57 @@ public class MonitorRepository : IMonitorRepository
 
     public async Task<IEnumerable<MonitorEntity>> GetAllAsync() => await QueryAsync();
 
+    public async Task<MonitorPage> GetPageAsync(MonitorPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var searchTerm = query.SearchTerm?.ToLowerInvariant() ?? string.Empty;
+        var columns = await GetAvailableColumnsAsync();
+        var whereClause = BuildPageWhereClause(columns, searchTerm);
+
+        await using var scope = await OpenConnectionAsync();
+
+        await using var countCommand = scope.Connection.CreateCommand();
+        countCommand.Transaction = CurrentTransaction;
+        countCommand.CommandText = $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{TableName}] m
+            LEFT JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = m.[vmf_code]
+            WHERE {whereClause}
+            """;
+        AddSearchParameter(countCommand, searchTerm);
+        var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Min(requestedPage, totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+        var captureDateExpression = OptionalExpression(columns, "Capture_dat", "datetime2", "m");
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = CurrentTransaction;
+        dataCommand.CommandText = $"""
+            SELECT
+                {BuildProjection(columns)}
+            FROM [dbo].[{TableName}] m
+            LEFT JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = m.[vmf_code]
+            WHERE {whereClause}
+            ORDER BY {captureDateExpression} DESC, m.[monitor_code] DESC
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddSearchParameter(dataCommand, searchTerm);
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<MonitorEntity>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            items.Add(Map(reader));
+
+        return new MonitorPage(items, page, pageSize, total);
+    }
+
     public async Task<IEnumerable<MonitorEntity>> GetByVehicleAsync(int vmfCode) =>
         await QueryAsync(
             "m.[vmf_code] = @vmfCode",
@@ -387,6 +438,52 @@ public class MonitorRepository : IMonitorRepository
             ]
         );
 
+    private static string BuildPageWhereClause(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string searchTerm
+    )
+    {
+        var conditions = new List<string>();
+        if (columns.ContainsKey("is_deleted"))
+            conditions.Add("ISNULL(m.[is_deleted], 0) = 0");
+
+        if (searchTerm.Length == 0)
+            return conditions.Count == 0 ? "1 = 1" : string.Join(" AND ", conditions);
+
+        var searchPredicates = new List<string>
+        {
+            ContainsSearch("m.[monitor_code]", "nvarchar(50)"),
+        };
+
+        AddOptionalSearch(searchPredicates, columns, "vmf_code", "m", "nvarchar(50)");
+        AddOptionalSearch(searchPredicates, columns, "Inquiry_type", "m", "nvarchar(max)");
+        AddOptionalSearch(searchPredicates, columns, "Inquiry_Desc", "m", "nvarchar(max)");
+        AddOptionalSearch(searchPredicates, columns, "Driver_name", "m", "nvarchar(max)");
+        AddOptionalSearch(searchPredicates, columns, "Driver_persalno", "m", "nvarchar(max)");
+        AddOptionalSearch(searchPredicates, columns, "Driver_Site", "m", "nvarchar(50)");
+
+        searchPredicates.Add(ContainsSearch("v.[fleet_number]", "nvarchar(max)"));
+        searchPredicates.Add(ContainsSearch("v.[registration_number]", "nvarchar(max)"));
+
+        conditions.Add($"({string.Join(" OR ", searchPredicates)})");
+        return string.Join(" AND ", conditions);
+    }
+
+    private static void AddOptionalSearch(
+        ICollection<string> predicates,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string alias,
+        string sqlType
+    )
+    {
+        if (columns.ContainsKey(column))
+            predicates.Add(ContainsSearch($"{alias}.[{column}]", sqlType));
+    }
+
+    private static string ContainsSearch(string expression, string sqlType) =>
+        $"CHARINDEX(@search, LOWER(LTRIM(RTRIM(COALESCE(CONVERT({sqlType}, {expression}), N''))))) > 0";
+
     private static string DateCreatedExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("date_created")
             ? "COALESCE(m.[date_created], m.[Capture_dat])"
@@ -477,6 +574,9 @@ public class MonitorRepository : IMonitorRepository
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
     }
+
+    private static void AddSearchParameter(DbCommand command, string searchTerm) =>
+        AddParameter(command, "@search", DbType.String, searchTerm);
 
     private static string? ReadString(DbDataReader reader, string name) =>
         reader.IsDBNull(reader.GetOrdinal(name)) ? null : Convert.ToString(reader[name]);

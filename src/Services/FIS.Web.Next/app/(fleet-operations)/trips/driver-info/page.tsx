@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -101,9 +105,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function DriverInfoPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function DriverInfoPageContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getTripSession();
   const sessionProblem = tripSessionMessage(session, "/trips/driver-info");
@@ -200,5 +202,13 @@ export default async function DriverInfoPage({
         </div>
       </section>
     </main>
+  );
+}
+
+export default function DriverInfoPage(props: Parameters<typeof DriverInfoPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DriverInfoPageContent {...props} />
+    </Suspense>
   );
 }

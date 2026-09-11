@@ -25,7 +25,7 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading accident categories...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -91,6 +91,7 @@ function CategoryTable({ categories }: { categories: AccidentTypeOption[] }) {
 }
 
 async function AccidentCategoriesContent() {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
@@ -118,9 +119,13 @@ async function AccidentCategoriesContent() {
   }
 }
 
-export default async function AccidentCategoriesPage() {
+async function PrintedAt() {
   await connection();
   const printedAt = new Date();
+  return <time dateTime={printedAt.toISOString()}>{printedAt.toLocaleString("en-ZA")}</time>;
+}
+
+export default function AccidentCategoriesPage() {
   return (
     <main className="page-shell vehicle-page-shell">
       <article className="vehicle-card" aria-labelledby="accident-categories-title">
@@ -130,7 +135,9 @@ export default async function AccidentCategoriesPage() {
             <h1 id="accident-categories-title">Accident CATEGORY List</h1>
             <p>
               Date Printed:{" "}
-              <time dateTime={printedAt.toISOString()}>{printedAt.toLocaleString("en-ZA")}</time>
+              <Suspense fallback={<span aria-hidden="true">—</span>}>
+                <PrintedAt />
+              </Suspense>
             </p>
           </div>
           <div className="button-row">

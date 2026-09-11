@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import {
@@ -8,16 +9,20 @@ import {
   hasVehicleManagementPermission,
 } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import {
   getVehicleSearchCriteria,
-  searchVehiclePhotos,
+  searchVehiclePhotosPage,
+  VEHICLE_PHOTO_PAGE_SIZE,
   VehiclePhotoApiError,
+  type VehiclePhotoSearchPage,
   type VehiclePhotoSearchRecord,
 } from "@/lib/api/vehicles/api-vehicle-photos";
 import { getSession } from "@/lib/auth/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-const PAGE_SIZE = 12;
+type ResolvedSearchParams = Record<string, string | string[] | undefined>;
+type SearchMode = "gg" | "gp";
 
 function formatDate(value: string | null) {
   if (!value) return "-";
@@ -29,9 +34,26 @@ function valueOrDash(value: string | number | null | undefined) {
   return value === null || value === undefined || value === "" ? "-" : String(value);
 }
 
-function resultMatchesMode(vehicle: VehiclePhotoSearchRecord, mode: "gg" | "gp", query: string) {
-  const value = mode === "gg" ? vehicle.ggNumber : vehicle.registrationNumber;
-  return Boolean(value?.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+function pageHref(
+  searchParams: ResolvedSearchParams,
+  query: string,
+  mode: SearchMode,
+  nextPage: number,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (key === "page" || key === "q" || key === "keyword" || key === "mode") continue;
+    for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) {
+      params.append(key, item);
+    }
+  }
+  if (query) {
+    params.set("q", query);
+    params.set("mode", mode);
+    if (nextPage > 1) params.set("page", String(nextPage));
+  }
+  const queryString = params.toString();
+  return queryString ? `/vehicle-photos?${queryString}` : "/vehicle-photos";
 }
 
 function StatusCard({
@@ -59,29 +81,21 @@ function StatusCard({
 }
 
 function VehicleResults({
-  vehicles,
+  resultPage,
+  searchParams,
   query,
   mode,
-  page,
 }: Readonly<{
-  vehicles: VehiclePhotoSearchRecord[];
+  resultPage: VehiclePhotoSearchPage;
+  searchParams: ResolvedSearchParams;
   query: string;
-  mode: "gg" | "gp";
-  page: number;
+  mode: SearchMode;
 }>) {
-  const filtered = vehicles.filter((vehicle) => resultMatchesMode(vehicle, mode, query));
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(Math.max(page, 1), totalPages);
-  const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const pageHref = (nextPage: number) => {
-    const params = new URLSearchParams({ q: query, mode });
-    if (nextPage > 1) params.set("page", String(nextPage));
-    return `/vehicle-photos?${params.toString()}`;
-  };
+  const { items, page: currentPage, pageSize, total, totalPages } = resultPage;
 
-  if (filtered.length === 0)
+  if (items.length === 0)
     return (
-      <div className="vehicle-empty-state">
+      <div className="vehicle-empty-state" role="status" aria-live="polite">
         <p className="eyebrow">No vehicles found</p>
         <p>No vehicle matched the selected {mode.toUpperCase()} search.</p>
       </div>
@@ -91,7 +105,9 @@ function VehicleResults({
     <>
       <div className="table-container">
         <div className="table-header">
-          <span className="table-title">{filtered.length} vehicle(s)</span>
+          <span className="table-title">
+            {total} vehicle{total === 1 ? "" : "s"} · {pageSize} per page
+          </span>
         </div>
         <div className="table-wrapper">
           <table className="data-table">
@@ -111,7 +127,7 @@ function VehicleResults({
               </tr>
             </thead>
             <tbody>
-              {pageItems.map((vehicle) => (
+              {items.map((vehicle) => (
                 <tr key={vehicle.vmfCode}>
                   <td>{valueOrDash(vehicle.ggNumber)}</td>
                   <td>{valueOrDash(vehicle.registrationNumber)}</td>
@@ -136,25 +152,37 @@ function VehicleResults({
           </table>
         </div>
       </div>
-      <nav className="pagination-controls" aria-label="Vehicle photo search pagination">
+      <nav className="vehicle-pagination" aria-label="Vehicle photo search pagination">
         {currentPage <= 1 ? (
-          <span className="button button-secondary" aria-disabled="true">
+          <span
+            className="vehicle-pagination-button vehicle-pagination-disabled"
+            aria-disabled="true"
+          >
             Previous
           </span>
         ) : (
-          <Link className="button button-secondary" href={pageHref(currentPage - 1)}>
+          <Link
+            className="vehicle-pagination-button"
+            href={pageHref(searchParams, query, mode, currentPage - 1)}
+          >
             Previous
           </Link>
         )}
-        <span aria-live="polite">
-          Page {currentPage} of {totalPages}
+        <span className="vehicle-pagination-meta" aria-live="polite">
+          Page {currentPage} of {totalPages} · {total} total vehicles
         </span>
         {currentPage >= totalPages ? (
-          <span className="button button-secondary" aria-disabled="true">
+          <span
+            className="vehicle-pagination-button vehicle-pagination-disabled"
+            aria-disabled="true"
+          >
             Next
           </span>
         ) : (
-          <Link className="button button-secondary" href={pageHref(currentPage + 1)}>
+          <Link
+            className="vehicle-pagination-button"
+            href={pageHref(searchParams, query, mode, currentPage + 1)}
+          >
             Next
           </Link>
         )}
@@ -163,7 +191,7 @@ function VehicleResults({
   );
 }
 
-export default async function VehiclePhotosPage({
+async function VehiclePhotosPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -193,13 +221,21 @@ export default async function VehiclePhotosPage({
 
   const query = await searchParams;
   const searchQuery = (getQueryValue(query.q) ?? getQueryValue(query.keyword) ?? "").trim();
-  const mode = getQueryValue(query.mode) === "gp" ? "gp" : "gg";
+  const mode: SearchMode = getQueryValue(query.mode)?.toLowerCase() === "gp" ? "gp" : "gg";
   const requestedPage = Number.parseInt(getQueryValue(query.page) ?? "1", 10);
   const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
 
   try {
     const criteria = await getVehicleSearchCriteria();
-    const vehicles = searchQuery ? await searchVehiclePhotos(searchQuery) : [];
+    const resultPage = searchQuery
+      ? await searchVehiclePhotosPage(searchQuery, mode === "gp" ? "GP" : "GG", page)
+      : {
+          items: [],
+          page: 1,
+          pageSize: VEHICLE_PHOTO_PAGE_SIZE,
+          total: 0,
+          totalPages: 1,
+        };
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="vehicle-photos-title">
@@ -223,7 +259,7 @@ export default async function VehiclePhotosPage({
               </form>
             </div>
           </header>
-          <form className="vehicle-photo-search-form" method="get">
+          <form action="/vehicle-photos" className="vehicle-photo-search-form" method="get">
             <fieldset>
               <legend>Search for a vehicle</legend>
               <div className="vehicle-photo-search-options">
@@ -260,9 +296,14 @@ export default async function VehiclePhotosPage({
             </fieldset>
           </form>
           {searchQuery ? (
-            <VehicleResults vehicles={vehicles} query={searchQuery} mode={mode} page={page} />
+            <VehicleResults
+              resultPage={resultPage}
+              searchParams={query}
+              query={searchQuery}
+              mode={mode}
+            />
           ) : (
-            <div className="vehicle-empty-state">
+            <div className="vehicle-empty-state" role="status" aria-live="polite">
               <p className="eyebrow">Ready to search</p>
               <p>Enter a GG or registration number to find a vehicle.</p>
             </div>
@@ -288,8 +329,20 @@ export default async function VehiclePhotosPage({
     );
     return (
       <main className="page-shell vehicle-page-shell">
-        <StatusCard title="API unavailable" message="Vehicle photo search could not be loaded." />
+        <StatusCard
+          title="API unavailable"
+          message="Vehicle photo search could not be loaded."
+          routePath={pageHref(query, searchQuery, mode, page)}
+        />
       </main>
     );
   }
+}
+
+export default function VehiclePhotosPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <VehiclePhotosPageContent {...props} />
+    </Suspense>
+  );
 }

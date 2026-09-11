@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
+
+async function LegacyLogsheetEntryAliasContent(): Promise<never> {
+  redirect("/log-sheets/enter");
+}
 
 export default function LegacyLogsheetEntryAlias() {
-  redirect("/log-sheets/enter");
+  return (
+    <StreamedRoute>
+      <LegacyLogsheetEntryAliasContent />
+    </StreamedRoute>
+  );
 }

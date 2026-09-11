@@ -48,6 +48,16 @@ export type VehicleStatusVehicle = {
   currentOdo: number | null;
 };
 
+export type VehicleStatusSearchPage = {
+  items: VehicleStatusVehicle[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const VEHICLE_STATUS_SEARCH_PAGE_SIZE = 24;
+
 export type VehicleStatusChangeResult = {
   vmfCode: number;
   previousStatusCode: number | null;
@@ -269,7 +279,8 @@ function mapVehicle(value: unknown): VehicleStatusVehicle | null {
 
   return {
     vmfCode,
-    fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")) || null,
+    fleetNumber:
+      asString(getValue(value, "fleet_number", "fleetNumber", "gg_number", "ggNumber")) || null,
     registrationNumber:
       asString(getValue(value, "registration_number", "registrationNumber")) || null,
     modelName:
@@ -282,7 +293,14 @@ function mapVehicle(value: unknown): VehicleStatusVehicle | null {
     statusCode: asNumber(getValue(value, "vehicle_status_code", "vehicleStatusCode")) ?? 0,
     statusDescription:
       asString(
-        getValue(value, "status_description", "statusDescription", "vehicle_status_description"),
+        getValue(
+          value,
+          "status_description",
+          "statusDescription",
+          "vehicle_status_description",
+          "status",
+          "Status",
+        ),
       ) || null,
     statusDate: asString(getValue(value, "vehicle_status_date", "vehicleStatusDate")) || null,
     locationCode: asNumber(getValue(value, "location_code", "locationCode")),
@@ -376,6 +394,68 @@ export async function searchVehiclesForStatus(searchTerm: string) {
   return getCollection(await readJson(response))
     .map(mapVehicle)
     .filter((vehicle): vehicle is VehicleStatusVehicle => vehicle !== null);
+}
+
+export async function searchVehiclesForStatusPage(
+  searchTerm: string,
+  searchMode: "GG" | "GP",
+  page = 1,
+): Promise<VehicleStatusSearchPage> {
+  const normalizedSearchTerm = searchTerm.trim();
+  const requestedPage = Number.isSafeInteger(page) && page > 0 ? page : 1;
+  if (!normalizedSearchTerm) {
+    return {
+      items: [],
+      page: 1,
+      pageSize: VEHICLE_STATUS_SEARCH_PAGE_SIZE,
+      total: 0,
+      totalPages: 1,
+    };
+  }
+
+  const params = new URLSearchParams({
+    keyword: normalizedSearchTerm,
+    mode: searchMode,
+    page: String(requestedPage),
+    pageSize: String(VEHICLE_STATUS_SEARCH_PAGE_SIZE),
+  });
+  const payload = await readJson(await requestApi(`api/VehicleLookup/page?${params.toString()}`));
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new VehicleStatusApiError(
+      "invalid-response",
+      "The FIS API returned an invalid vehicle search page.",
+    );
+  }
+
+  const pageValue = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages"));
+  if (
+    pageValue === null ||
+    pageValue < 1 ||
+    pageSize === null ||
+    pageSize < 1 ||
+    total === null ||
+    total < 0 ||
+    totalPages === null ||
+    totalPages < 1
+  ) {
+    throw new VehicleStatusApiError(
+      "invalid-response",
+      "The FIS API returned incomplete vehicle search pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items
+      .map(mapVehicle)
+      .filter((vehicle): vehicle is VehicleStatusVehicle => vehicle !== null),
+    page: pageValue,
+    pageSize,
+    total,
+    totalPages,
+  };
 }
 
 export async function getVehicleForStatus(vmfCode: number) {

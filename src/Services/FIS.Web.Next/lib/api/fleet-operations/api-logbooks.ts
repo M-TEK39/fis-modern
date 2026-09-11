@@ -25,6 +25,16 @@ export type LogbookRecord = {
   isDeleted: boolean;
 };
 
+export type LogbookPage = {
+  items: LogbookRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_LOGBOOK_PAGE_SIZE = 24;
+
 export type LogbookWriteInput = {
   vmf_code: number | null;
   begin_num?: string | null;
@@ -94,6 +104,48 @@ function getCollection(value: unknown) {
     return Array.isArray(collection) ? collection : [];
   }
   return [];
+}
+
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_LOGBOOK_PAGE_SIZE)
+      : DEFAULT_LOGBOOK_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
+function normalizePositiveInteger(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : null;
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
@@ -189,6 +241,40 @@ export async function getLogbooks() {
   return getCollection(payload)
     .map(mapLogbook)
     .filter((item): item is LogbookRecord => item !== null && !item.isDeleted);
+}
+
+function readLogbookPage(payload: unknown): LogbookPage {
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new LogbookApiError("invalid-response", "The FIS API returned an invalid logbook page.");
+  }
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata) {
+    throw new LogbookApiError(
+      "invalid-response",
+      "The FIS API returned incomplete logbook pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items
+      .map(mapLogbook)
+      .filter((item): item is LogbookRecord => item !== null && !item.isDeleted),
+    ...metadata,
+  };
+}
+
+export async function getLogbookPage(
+  options: { page?: number; pageSize?: number; search?: string; vmfCode?: number } = {},
+): Promise<LogbookPage> {
+  const params = new URLSearchParams({
+    search: options.search?.trim() ?? "",
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const vmfCode = normalizePositiveInteger(options.vmfCode);
+  if (vmfCode !== null) params.set("vmfCode", String(vmfCode));
+  return readLogbookPage(await readJson(await requestApi(`api/logbook/page?${params.toString()}`)));
 }
 
 export async function getLogbook(logbookCode: number) {

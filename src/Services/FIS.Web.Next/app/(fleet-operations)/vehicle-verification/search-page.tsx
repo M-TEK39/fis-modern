@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
@@ -13,6 +14,7 @@ import {
   VehicleCreateApiError,
 } from "@/lib/api/vehicles/api-vehicle-create";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -33,7 +35,7 @@ function filterVehicles(vehicles: VehicleSearchResult[], searchMode: "GG" | "GP"
     });
 }
 
-export async function VehicleVerificationSearchPage({
+async function VehicleVerificationSearchContent({
   mode,
   searchParams,
   routePath,
@@ -213,5 +215,15 @@ export async function VehicleVerificationSearchPage({
         ) : null}
       </section>
     </main>
+  );
+}
+
+export function VehicleVerificationSearchPage(
+  props: Readonly<{ mode: "add" | "edit"; searchParams: SearchParams; routePath: string }>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <VehicleVerificationSearchContent {...props} />
+    </Suspense>
   );
 }

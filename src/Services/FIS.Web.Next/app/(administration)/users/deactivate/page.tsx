@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import DeactivateUserForm from "@/app/(administration)/users/deactivate/deactivate-user-form";
 import { updateUserStatusAction } from "@/app/(administration)/users/deactivate/actions";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 const USER_ADMIN_ROLE = "User Administration";
 const ALPHABET = /^[A-Z]$/;
@@ -73,7 +75,7 @@ function getMessage(result: string | undefined, operation: UserStatusOperation) 
   }
 }
 
-export default async function DeactivateUserPage({
+async function DeactivateUserPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -153,5 +155,15 @@ export default async function DeactivateUserPage({
         </section>
       </section>
     </main>
+  );
+}
+
+export default function DeactivateUserPage(
+  props: NonNullable<Parameters<typeof DeactivateUserPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DeactivateUserPageContent {...props} />
+    </Suspense>
   );
 }

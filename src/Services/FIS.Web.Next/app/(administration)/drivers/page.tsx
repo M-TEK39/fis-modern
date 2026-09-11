@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import DriverManagementSelector from "@/app/(administration)/drivers/driver-management-selector";
 import {
   hasVehicleManagementPermission,
@@ -47,9 +49,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function DriverManagementPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function DriverManagementContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") {
@@ -137,4 +137,12 @@ export default async function DriverManagementPage({
       </main>
     );
   }
+}
+
+export default function DriverManagementPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DriverManagementContent {...props} />
+    </Suspense>
+  );
 }

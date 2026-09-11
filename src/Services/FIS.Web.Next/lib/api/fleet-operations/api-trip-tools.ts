@@ -14,6 +14,16 @@ export type TripsWithoutRoutesRow = {
   approverName: string | null;
 };
 
+export type TripsWithoutRoutesPage = {
+  items: TripsWithoutRoutesRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_TRIPS_WITHOUT_ROUTES_PAGE_SIZE = 24;
+
 export type TripToolsApiErrorReason =
   "unauthorized" | "unavailable" | "invalid-response" | "rejected";
 
@@ -149,6 +159,44 @@ export async function getTripsWithoutRoutes() {
   return getCollection(await readJson(response))
     .map(mapRow)
     .filter((row): row is TripsWithoutRoutesRow => row !== null);
+}
+
+export async function getTripsWithoutRoutesPage(
+  options: { page?: number; pageSize?: number } = {},
+): Promise<TripsWithoutRoutesPage> {
+  const page = Number.isSafeInteger(options.page) && (options.page ?? 0) > 0 ? options.page! : 1;
+  const pageSize = Math.min(
+    100,
+    Number.isSafeInteger(options.pageSize) && (options.pageSize ?? 0) > 0
+      ? options.pageSize!
+      : DEFAULT_TRIPS_WITHOUT_ROUTES_PAGE_SIZE,
+  );
+  const response = await requestApi(
+    `api/troubleshoot/trips-without-routes/page?${new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    }).toString()}`,
+  );
+  const payload = await readJson(response);
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new TripToolsApiError("invalid-response", "The FIS API returned an invalid trips page.");
+  }
+  const positiveInteger = (value: unknown, fallback: number) => {
+    const number = asNumber(value);
+    return number !== null && Number.isSafeInteger(number) && number > 0 ? number : fallback;
+  };
+  const total = Math.max(0, asNumber(getValue(payload, "total", "Total")) ?? 0);
+  const resolvedPageSize = positiveInteger(getValue(payload, "pageSize", "PageSize"), pageSize);
+  return {
+    items: payload.items.map(mapRow).filter((row): row is TripsWithoutRoutesRow => row !== null),
+    page: positiveInteger(getValue(payload, "page", "Page"), page),
+    pageSize: resolvedPageSize,
+    total,
+    totalPages: positiveInteger(
+      getValue(payload, "totalPages", "TotalPages"),
+      Math.max(1, Math.ceil(total / resolvedPageSize)),
+    ),
+  };
 }
 
 export async function removeTripsWithoutRoutes() {

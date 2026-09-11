@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { saveAuthoriserAction } from "@/app/(administration)/drivers/actions";
 import {
   contextPath,
@@ -57,9 +59,7 @@ function AccessRestricted() {
   );
 }
 
-export default async function AuthoriserEditPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function AuthoriserEditContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -304,4 +304,12 @@ export default async function AuthoriserEditPage({
       </main>
     );
   }
+}
+
+export default function AuthoriserEditPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <AuthoriserEditContent {...props} />
+    </Suspense>
+  );
 }

@@ -9,12 +9,30 @@ import {
 import {
   accessRestricted,
   getJobCardSession,
+  JobCardPageBoundary,
+  jobCardPageHref,
+  queryPage,
+  querySearchType,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/job-cards/_page";
-import { getJobCards, JobCardApiError } from "@/lib/api/fleet-operations/api-job-cards";
+import {
+  DEFAULT_JOB_CARD_PAGE_SIZE,
+  getJobCardsPage,
+  JobCardApiError,
+} from "@/lib/api/fleet-operations/api-job-cards";
 
-export default async function JobCardsPage({
+export default function JobCardsPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
+  return (
+    <JobCardPageBoundary>
+      <JobCardsContent searchParams={searchParams} />
+    </JobCardPageBoundary>
+  );
+}
+
+async function JobCardsContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
@@ -27,33 +45,19 @@ export default async function JobCardsPage({
 
   const query = await searchParams;
   const search = queryValue(query.search);
-  const status = queryValue(query.status);
+  const requestedStatus = queryValue(query.status);
+  const status = ["all", "open", "closed"].includes(requestedStatus) ? requestedStatus : "all";
+  const searchType = querySearchType(query.mode);
+  const page = queryPage(query.page);
+  const statusCodes =
+    status === "open" ? [0, 1, 2, 3, 4, 6] : status === "closed" ? [5] : undefined;
   try {
-    const cards = await getJobCards();
-    const normalized = search.toLocaleLowerCase();
-    const filtered = cards.filter((card) => {
-      const matchesSearch =
-        !normalized ||
-        [
-          card.jobCardId,
-          card.ggNumber,
-          card.registrationNumber,
-          card.extraDescription,
-          statusLabel(card.statusCode),
-        ].some((value) =>
-          String(value ?? "")
-            .toLocaleLowerCase()
-            .includes(normalized),
-        );
-      const matchesStatus =
-        !status ||
-        status === "all" ||
-        (status === "open"
-          ? card.statusCode !== 5 && card.statusCode !== 7
-          : status === "closed"
-            ? card.statusCode === 5
-            : true);
-      return matchesSearch && matchesStatus;
+    const pageData = await getJobCardsPage({
+      page,
+      pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+      search,
+      searchType,
+      statusCodes,
     });
     const canCapturer =
       hasRole(session.roles, "capturer") || hasJobCardAccess(session.accessLevel, session.roles);
@@ -80,21 +84,33 @@ export default async function JobCardsPage({
             <div className="vehicle-form-section-header">
               <div>
                 <p className="eyebrow">
-                  {filtered.length} of {cards.length} record{cards.length === 1 ? "" : "s"}
+                  {pageData.totalRecords} record{pageData.totalRecords === 1 ? "" : "s"}
                 </p>
                 <h2 id="job-card-snapshot-title">All Job Cards Snapshot</h2>
               </div>
             </div>
             <form className="vehicle-search-row" method="get">
+              <input type="hidden" name="page" value="1" />
+              <fieldset className="vehicle-search-options">
+                <legend>Find by</legend>
+                <label className="vehicle-checkbox-label">
+                  <input type="radio" name="mode" value="GG" defaultChecked={searchType === "GG"} />{" "}
+                  GG
+                </label>
+                <label className="vehicle-checkbox-label">
+                  <input type="radio" name="mode" value="GP" defaultChecked={searchType === "GP"} />{" "}
+                  GP
+                </label>
+              </fieldset>
               <label className="sr-only" htmlFor="job-card-search">
-                Search job cards
+                Search job cards by GG, GP, or job card number
               </label>
               <input
                 className="vehicle-search"
                 id="job-card-search"
                 name="search"
                 defaultValue={search}
-                placeholder="Search job card, GG, registration, description"
+                placeholder="GG, GP, or job card number"
               />
               <select
                 className="form-select"
@@ -114,10 +130,13 @@ export default async function JobCardsPage({
               </Link>
             </form>
             <JobCardTable
-              cards={filtered}
+              cards={pageData.items}
               mode="list"
               returnPath="/job-cards/list"
               currentUserCode={Number(session.userAccessCode) || null}
+              page={pageData.page}
+              totalPages={pageData.totalPages}
+              pageHref={(nextPage) => jobCardPageHref("/job-cards", query, nextPage)}
             />
           </section>
         </section>
@@ -139,18 +158,4 @@ export default async function JobCardsPage({
       </main>
     );
   }
-}
-
-function statusLabel(statusCode: number) {
-  return (
-    {
-      1: "pending",
-      2: "awaiting authorization",
-      3: "authorized",
-      4: "in progress",
-      5: "complete",
-      6: "failed",
-      7: "canceled",
-    }[statusCode] ?? "unknown"
-  );
 }

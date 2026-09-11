@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_JOB_CARD_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type JobCardRecord = {
@@ -35,6 +36,22 @@ export type JobCardRecord = {
   invoiceNumber: string | null;
   invoiceDate: string | null;
   serviceProvider: string | null;
+};
+
+export type JobCardPage = {
+  items: JobCardRecord[];
+  page: number;
+  pageSize: number;
+  totalRecords: number;
+  totalPages: number;
+};
+
+export type JobCardPageOptions = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  searchType?: "GG" | "GP";
+  statusCodes?: readonly number[];
 };
 
 export type JobCardCreateInput = {
@@ -76,6 +93,12 @@ export type RepairCostReport = {
   totalParts: number;
   totalOther: number;
   lineItems: RepairCostLine[];
+};
+
+export type RepairCostReportPage = RepairCostReport & {
+  page: number;
+  pageSize: number;
+  totalPages: number;
 };
 
 export type RepairCostLine = {
@@ -238,6 +261,60 @@ async function readJobCard(response: Response) {
   return record;
 }
 
+async function readJobCardPage(response: Response): Promise<JobCardPage> {
+  const payload = await readJson(response);
+  if (!isRecord(payload) || !Array.isArray(payload.items))
+    throw new JobCardApiError("invalid-response", "The FIS API returned an invalid job card page.");
+
+  const metadata = readPageMetadata(payload, ["totalRecords", "total_records"]);
+  if (!metadata)
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned incomplete job card pagination metadata.",
+    );
+
+  return {
+    items: payload.items.map(mapJobCard).filter((item): item is JobCardRecord => item !== null),
+    ...metadata,
+  };
+}
+
+function readPageMetadata(payload: JsonRecord, totalKeys: readonly string[]) {
+  const page = asNumber(getValue(payload, "page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "page_size"));
+  const totalRecords = asNumber(getValue(payload, ...totalKeys));
+  const totalPages = asNumber(getValue(payload, "totalPages", "total_pages"));
+  if (
+    page === null ||
+    pageSize === null ||
+    totalRecords === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(totalRecords) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    totalRecords < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+  return { page, pageSize, totalRecords, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_JOB_CARD_PAGE_SIZE)
+      : DEFAULT_JOB_CARD_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
 async function mutate(path: string, method: string, body?: unknown) {
   return requestApi(path, {
     method,
@@ -250,6 +327,54 @@ export async function getJobCards() {
   return getCollection(payload)
     .map(mapJobCard)
     .filter((item): item is JobCardRecord => item !== null);
+}
+
+export async function getJobCardsPage(options: JobCardPageOptions = {}): Promise<JobCardPage> {
+  const requestedPage = normalizePage(options.page);
+  const pageSize = normalizePageSize(options.pageSize);
+  const searchType = options.searchType === "GP" ? "GP" : "GG";
+  const params = new URLSearchParams({
+    page: String(requestedPage),
+    pageSize: String(pageSize),
+    searchType,
+  });
+  const search = options.search?.trim();
+  if (search) params.set("search", search);
+  if (options.statusCodes && options.statusCodes.length > 0) {
+    params.set("statusCodes", options.statusCodes.join(","));
+  }
+
+  return readJobCardPage(await requestApi(`api/jobcards/page?${params.toString()}`));
+}
+
+export async function getPriorityUnassignedJobCardsPage(
+  options: {
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<JobCardPage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const payload = await readJson(
+    await requestApi(`api/jobcards/priority/unassigned/page?${params.toString()}`),
+  );
+  if (!isRecord(payload) || !Array.isArray(payload.items))
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned an invalid priority job card page.",
+    );
+  const metadata = readPageMetadata(payload, ["totalRecords", "total_records", "total"]);
+  if (!metadata)
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned incomplete priority job card pagination metadata.",
+    );
+  return {
+    items: payload.items.map(mapJobCard).filter((item): item is JobCardRecord => item !== null),
+    ...metadata,
+  };
 }
 
 export async function getJobCard(jobCardId: number) {
@@ -359,14 +484,50 @@ export async function getRepairCostReport(filters: {
   const payload = await readJson(
     await requestApi(`api/jobcards/repair-cost-report?${params.toString()}`),
   );
+  return readRepairCostReport(payload);
+}
+
+export async function getRepairCostReportPage(filters: {
+  vmfCode?: number;
+  siteCode?: number;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<RepairCostReportPage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(filters.page)),
+    pageSize: String(normalizePageSize(filters.pageSize)),
+  });
+  if (filters.vmfCode) params.set("vmfCode", String(filters.vmfCode));
+  if (filters.siteCode) params.set("siteCode", String(filters.siteCode));
+  if (filters.fromDate) params.set("fromDate", filters.fromDate);
+  if (filters.toDate) params.set("toDate", filters.toDate);
+  const payload = await readJson(
+    await requestApi(`api/jobcards/repair-cost-report/page?${params.toString()}`),
+  );
   if (!isRecord(payload))
     throw new JobCardApiError("invalid-response", "The repair cost report response was invalid.");
+  const metadata = readPageMetadata(payload, ["totalRecords", "total_records"]);
+  if (!metadata)
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned incomplete repair cost pagination metadata.",
+    );
+  return { ...readRepairCostReport(payload), ...metadata };
+}
+
+function readRepairCostReport(payload: unknown): RepairCostReport {
+  if (!isRecord(payload))
+    throw new JobCardApiError("invalid-response", "The repair cost report response was invalid.");
+  const filters = getValue(payload, "filters_applied", "filtersApplied");
+  const filterRecord = isRecord(filters) ? filters : payload;
   return {
     filtersApplied: {
-      vmfCode: asNumber(getValue(payload, "vmf_code", "vmfCode")),
-      siteCode: asNumber(getValue(payload, "site_code", "siteCode")),
-      fromDate: asString(getValue(payload, "from_date", "fromDate")),
-      toDate: asString(getValue(payload, "to_date", "toDate")),
+      vmfCode: asNumber(getValue(filterRecord, "vmf_code", "vmfCode")),
+      siteCode: asNumber(getValue(filterRecord, "site_code", "siteCode")),
+      fromDate: asString(getValue(filterRecord, "from_date", "fromDate")),
+      toDate: asString(getValue(filterRecord, "to_date", "toDate")),
     },
     totalRecords: asNumber(getValue(payload, "total_records", "totalRecords")) ?? 0,
     grandTotal: asNumber(getValue(payload, "grand_total", "grandTotal")) ?? 0,

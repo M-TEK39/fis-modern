@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
+import RouteLoading from "@/components/app-shell/route-loading";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import VehicleEditFormClient from "@/app/(fleet-operations)/vehicles/[vmfCode]/edit/vehicle-edit-form-client";
 import { updateVehicleAction } from "@/app/(fleet-operations)/vehicles/edit/actions";
@@ -139,7 +141,7 @@ function toEditFormData(
   };
 }
 
-export default async function VehicleEditPage({ params }: VehicleEditPageProps) {
+async function VehicleEditPageContent({ params }: VehicleEditPageProps) {
   await connection();
   const session = await getSession();
 
@@ -242,4 +244,12 @@ export default async function VehicleEditPage({ params }: VehicleEditPageProps) 
       </main>
     );
   }
+}
+
+export default function VehicleEditPage(props: VehicleEditPageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <VehicleEditPageContent {...props} />
+    </Suspense>
+  );
 }

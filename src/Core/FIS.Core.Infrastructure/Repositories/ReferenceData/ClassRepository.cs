@@ -57,6 +57,73 @@ public sealed class ClassRepository : IClassRepository
 
     public async Task<IEnumerable<Class>> GetAllAsync() => await QueryAsync();
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The page queries use fixed compatibility columns, filters, ordering, and parameterized pagination values."
+    )]
+    public async Task<ClassPage> GetPageAsync(int page = 1, int pageSize = 24)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var availableColumns = await GetAvailableColumnsAsync();
+        var notDeletedFilter = GetNotDeletedFilter(availableColumns);
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            int total;
+            await using (var countCommand = connection.CreateCommand())
+            {
+                countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                countCommand.CommandText =
+                    $"SELECT COUNT(1) FROM [dbo].[{TableName}] WHERE {notDeletedFilter}";
+                total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            }
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            page = Math.Min(page, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
+            var projection = RequiredColumns
+                .Select(column => $"[{column}] AS [{column}]")
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
+                .ToArray();
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText =
+                $"SELECT {string.Join(", ", projection)} FROM [dbo].[{TableName}] WHERE {notDeletedFilter} ORDER BY [description], [class_code] OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY";
+            AddParameter(command, "@skip", DbType.Int64, skip);
+            AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<Class>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(MapClass(reader));
+            }
+
+            return new ClassPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IEnumerable<Class>> SearchAsync(string searchTerm)
     {
         if (string.IsNullOrWhiteSpace(searchTerm))

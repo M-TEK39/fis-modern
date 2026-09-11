@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -6,9 +7,9 @@ function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function LegacyAngularEntryPage({
+async function LegacyAngularEntryPageContent({
   searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+}: Readonly<{ searchParams: SearchParams }>): Promise<never> {
   const query = await searchParams;
   const sub = (getQueryValue(query.sub) ?? "SiteStaff").trim().toLowerCase();
   const departmentCode = getQueryValue(query.departmentCode);
@@ -31,4 +32,12 @@ export default async function LegacyAngularEntryPage({
   if (sub === "sitedrivermanagement") redirect(`/drivers/site-drivers${suffix}`);
   if (sub === "sitedriveredit") redirect(`/drivers/site-drivers/edit${suffix}`);
   redirect(`/drivers${suffix}`);
+}
+
+export default function LegacyAngularEntryPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <LegacyAngularEntryPageContent {...props} />
+    </StreamedRoute>
+  );
 }

@@ -127,6 +127,42 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
         return modern is null ? [] : await QueryAsync(modern);
     }
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The page query uses fixed compatibility table sources and columns and parameterizes search and paging values."
+    )]
+    public async Task<LicenseFeePage> GetPageAsync(LicenseFeePageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var searchTerm = query.SearchTerm?.Trim() ?? string.Empty;
+        var modern = await GetSourceAsync(ModernTableName);
+        var legacy = await GetSourceAsync(LegacyTableName);
+        if (modern is not null)
+        {
+            var modernActiveTotal = await CountPageRowsAsync(modern, string.Empty);
+            if (modernActiveTotal > 0 || legacy is null)
+            {
+                var total =
+                    searchTerm.Length == 0
+                        ? modernActiveTotal
+                        : await CountPageRowsAsync(modern, searchTerm);
+                return await ReadPageAsync(modern, searchTerm, requestedPage, pageSize, total);
+            }
+        }
+
+        if (legacy is null)
+        {
+            return new LicenseFeePage([], 1, pageSize, 0);
+        }
+
+        var legacyTotal = await CountPageRowsAsync(legacy, searchTerm);
+        return await ReadPageAsync(legacy, searchTerm, requestedPage, pageSize, legacyTotal);
+    }
+
     public async Task<IEnumerable<LicenseFee>> SearchAsync(string searchTerm)
     {
         if (string.IsNullOrWhiteSpace(searchTerm))
@@ -514,6 +550,130 @@ public sealed class LicenseFeeRepository : ILicenseFeeRepository
                 await connection.CloseAsync();
             }
         }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The count query uses a table source selected from the fixed modern and legacy table names."
+    )]
+    private async Task<int> CountPageRowsAsync(TableSource source, string searchTerm)
+    {
+        var whereClause = BuildPageWhereClause(source, searchTerm);
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{source.TableName}]
+                WHERE {whereClause}
+                """;
+            if (searchTerm.Length > 0)
+            {
+                AddParameter(
+                    command,
+                    "@searchTerm",
+                    DbType.String,
+                    $"%{searchTerm.ToLowerInvariant()}%"
+                );
+            }
+
+            return Convert.ToInt32(await command.ExecuteScalarAsync());
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The page query uses a table source selected from fixed compatibility tables and parameterized filter and paging values."
+    )]
+    private async Task<LicenseFeePage> ReadPageAsync(
+        TableSource source,
+        string searchTerm,
+        int requestedPage,
+        int pageSize,
+        int total
+    )
+    {
+        var projection = RequiredColumns
+            .Select(column => $"[{column}] AS [{column}]")
+            .Concat(OptionalColumns.Select(column => GetOptionalProjection(source.Columns, column)))
+            .ToArray();
+        var whereClause = BuildPageWhereClause(source, searchTerm);
+        var searchPattern = $"%{searchTerm.ToLowerInvariant()}%";
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var offset = checked((long)(page - 1) * pageSize);
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = transaction;
+            dataCommand.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{source.TableName}]
+                WHERE {whereClause}
+                ORDER BY [licence_description], [licence_fee_code]
+                OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            if (searchTerm.Length > 0)
+            {
+                AddParameter(dataCommand, "@searchTerm", DbType.String, searchPattern);
+            }
+
+            AddParameter(dataCommand, "@offset", DbType.Int64, offset);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<LicenseFee>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(MapLicenseFee(reader));
+            }
+
+            return new LicenseFeePage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static string BuildPageWhereClause(TableSource source, string searchTerm)
+    {
+        var conditions = new List<string> { GetNotDeletedFilter(source.Columns) };
+        if (searchTerm.Length > 0)
+        {
+            conditions.Add("LOWER(COALESCE([licence_description], '')) LIKE @searchTerm");
+        }
+
+        return string.Join(" AND ", conditions);
     }
 
     private static List<WriteValue> BuildValues(

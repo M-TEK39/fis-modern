@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
+import RouteLoading from "@/components/app-shell/route-loading";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import VehicleDetailClient from "@/app/(fleet-operations)/vehicles/[vmfCode]/vehicle-detail-client";
 import {
@@ -78,7 +80,7 @@ function VehicleNotFound() {
   );
 }
 
-export default async function VehicleDetailPage({ params }: VehicleDetailPageProps) {
+async function VehicleDetailPageContent({ params }: VehicleDetailPageProps) {
   await connection();
   const session = await getSession();
 
@@ -170,5 +172,13 @@ export default async function VehicleDetailPage({ params }: VehicleDetailPagePro
         </div>
       </section>
     </main>
+  );
+}
+
+export default function VehicleDetailPage(props: VehicleDetailPageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <VehicleDetailPageContent {...props} />
+    </Suspense>
   );
 }

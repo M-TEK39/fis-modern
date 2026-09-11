@@ -1,5 +1,8 @@
-import LossTypeListPage from "@/app/(administration)/validation-data/loss-types/page";
+import {
+  LossTypeListPageRoute,
+  type LossTypeListPageProps,
+} from "@/app/(administration)/validation-data/loss-types/_route";
 
-export default function LegacyLossTypeListPage(props: Parameters<typeof LossTypeListPage>[0]) {
-  return <LossTypeListPage {...props} routePath="/Validation/MNT_Loss_Type.aspx" />;
+export default function LegacyLossTypeListPage(props: Pick<LossTypeListPageProps, "searchParams">) {
+  return <LossTypeListPageRoute {...props} routePath="/Validation/MNT_Loss_Type.aspx" />;
 }

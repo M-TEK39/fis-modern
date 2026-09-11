@@ -661,10 +661,7 @@ public class VehicleAuthorizationController : BaseApiController
 
     private bool CanAccessAuthorizationQueue() =>
         HasVehicleManagementPermission()
-        && (
-            HasAnyRole("vehicle inception authorizer")
-            || !HasAnyRole(InceptionRoles)
-        );
+        && (HasAnyRole("vehicle inception authorizer") || !HasAnyRole(InceptionRoles));
 
     private bool HasAnyRole(params string[] expectedRoles)
     {

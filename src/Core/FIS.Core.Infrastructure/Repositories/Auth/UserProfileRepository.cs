@@ -101,6 +101,47 @@ public class UserProfileRepository : IUserProfileRepository
         return users;
     }
 
+    public async Task<UserProfileAdministrationPage> GetAdministrationPageAsync(
+        string alphabet,
+        int page,
+        int pageSize
+    )
+    {
+        var selectedAlphabet = string.IsNullOrWhiteSpace(alphabet)
+            ? "A"
+            : alphabet.Trim().ToUpperInvariant();
+        var selectedAlphabetLower = selectedAlphabet.ToLowerInvariant();
+        var normalizedPage = Math.Max(1, page);
+        var normalizedPageSize = Math.Clamp(pageSize, 1, 100);
+
+        var filteredUsers = _context
+            .UserAccessOlds.AsNoTracking()
+            .Where(user =>
+                user.user_active
+                && (
+                    user.LastName == null
+                    || user.LastName.Trim() == string.Empty
+                    || user.LastName.StartsWith(selectedAlphabet)
+                    || user.LastName.StartsWith(selectedAlphabetLower)
+                )
+            );
+
+        var total = await filteredUsers.CountAsync();
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)normalizedPageSize));
+        normalizedPage = Math.Min(normalizedPage, totalPages);
+
+        var users = await filteredUsers
+            .OrderBy(user => user.LastName)
+            .ThenBy(user => user.FirstName)
+            .ThenBy(user => user.user_access_code)
+            .Skip(checked((normalizedPage - 1) * normalizedPageSize))
+            .Take(normalizedPageSize)
+            .ToListAsync();
+
+        await _optionalFields.HydrateManyAsync(users);
+        return new UserProfileAdministrationPage(users, normalizedPage, normalizedPageSize, total);
+    }
+
     /// <summary>
     /// Get user profiles by site code
     /// </summary>

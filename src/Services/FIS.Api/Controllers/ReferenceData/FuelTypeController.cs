@@ -76,6 +76,55 @@ namespace FIS.Api.Controllers
             }
         }
 
+        [HttpGet("page")]
+        public async Task<ActionResult> GetPage(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 24
+        )
+        {
+            try
+            {
+                _ = GetCurrentUserId();
+                var result = await _fuelTypeRepository.GetPageAsync(page, pageSize);
+                var items = new List<FuelTypeResponseDto>(result.Items.Count);
+                foreach (var fuelType in result.Items)
+                {
+                    var tariff = await _fuelTariffRepository.GetCurrentTariffAsync(
+                        fuelType.fuel_type_code
+                    );
+                    items.Add(
+                        new FuelTypeResponseDto
+                        {
+                            fuel_type_code = fuelType.fuel_type_code,
+                            fuel_description = fuelType.fuel_description ?? string.Empty,
+                            rate_per_litre = tariff?.fuel_tariff,
+                            date_created = fuelType.date_created,
+                            date_updated = fuelType.date_updated,
+                            created_by_user_code = fuelType.created_by_user_code,
+                            modified_by_user_code = fuelType.modified_by_user_code,
+                            is_deleted = fuelType.is_deleted,
+                        }
+                    );
+                }
+
+                return Ok(
+                    new
+                    {
+                        items,
+                        result.Page,
+                        result.PageSize,
+                        result.Total,
+                        result.TotalPages,
+                    }
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving paged fuel types");
+                return StatusCode(500, "An error occurred while retrieving fuel types");
+            }
+        }
+
         /// <summary>
         /// Gets a fuel type by its code
         /// </summary>

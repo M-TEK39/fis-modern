@@ -27,6 +27,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 internal sealed class LegacyJobCardRepository : IJobCardRepository
 {
     private const string TableName = "Jobcards";
+    private const string VehicleTableName = "vehicle_master";
+    private const string ExtraCodeTableName = "extra_codes";
 
     private readonly FisDbContext _context;
 
@@ -57,6 +59,303 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
 
     public async Task<IEnumerable<JobCard>> GetAllAsync() => await QueryAsync();
 
+    public async Task<JobCardPage> GetPageAsync(JobCardPageQuery query)
+    {
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var searchTerm = query.SearchTerm?.Trim() ?? string.Empty;
+        var searchType = string.Equals(query.SearchType, "GP", StringComparison.OrdinalIgnoreCase)
+            ? "GP"
+            : "GG";
+        var statusCodes = query.StatusCodes?.Distinct().ToArray() ?? [];
+        var columns = await GetAvailableColumnsAsync();
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
+        var vehicleProjectionColumns = vehicleColumns.ContainsKey("vmf_code")
+            ? vehicleColumns
+            : new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
+        var conditions = new List<string>();
+
+        if (columns.ContainsKey("is_deleted"))
+            conditions.Add("ISNULL(j.[is_deleted], 0) = 0");
+
+        if (statusCodes.Length > 0)
+        {
+            var statusParameters = string.Join(
+                ", ",
+                statusCodes.Select((_, index) => $"@statusCode{index}")
+            );
+            conditions.Add($"j.[status_code] IN ({statusParameters})");
+        }
+
+        var searchId = int.TryParse(searchTerm, out var parsedSearchId)
+            ? parsedSearchId
+            : (int?)null;
+        if (query.JobCardId.HasValue)
+            conditions.Add($"{IdExpression(columns)} = @jobCardId");
+
+        if (searchTerm.Length > 0)
+        {
+            var vehicleColumn = searchType == "GP" ? "registration_number" : "fleet_number";
+            var vehicleSearch =
+                vehicleColumns.ContainsKey("vmf_code") && vehicleColumns.ContainsKey(vehicleColumn)
+                    ? $"LOWER(LTRIM(RTRIM(COALESCE(vm.[{vehicleColumn}], '')))) LIKE @searchTerm"
+                    : "1 = 0";
+            var searchPredicate = searchId.HasValue
+                ? $"({vehicleSearch} OR {IdExpression(columns)} = @searchId)"
+                : vehicleSearch;
+            conditions.Add($"({searchPredicate})");
+        }
+
+        var whereClause = string.Join(" AND ", conditions.DefaultIfEmpty("1 = 1"));
+        var orderBy = $"{DateExpression(columns)} DESC, {IdExpression(columns)} DESC";
+        var vehicleJoin = vehicleColumns.ContainsKey("vmf_code")
+            ? $"LEFT JOIN [dbo].[{VehicleTableName}] vm ON vm.[vmf_code] = j.[vmf_code]"
+            : string.Empty;
+        var extraColumns = await GetAvailableColumnsAsync(ExtraCodeTableName);
+        var extraJoin = extraColumns.ContainsKey("extra_code")
+            ? $"LEFT JOIN [dbo].[{ExtraCodeTableName}] ec ON ec.[extra_code] = j.[extra_code]"
+            : string.Empty;
+        await using var scope = await OpenConnectionAsync();
+
+        int totalRecords;
+        await using (var countCommand = scope.Connection.CreateCommand())
+        {
+            countCommand.Transaction = CurrentTransaction;
+            countCommand.CommandText = $"""
+                SELECT COUNT(DISTINCT {IdExpression(columns)})
+                FROM [dbo].[{TableName}] j
+                {vehicleJoin}
+                WHERE {whereClause}
+                """;
+            AddPageParameters(countCommand, statusCodes, searchTerm, searchId, query.JobCardId);
+            totalRecords = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+        }
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = (long)(page - 1) * pageSize;
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = CurrentTransaction;
+        dataCommand.CommandText = $"""
+            SELECT
+                {BuildProjection(columns, vehicleProjectionColumns, extraColumns)}
+            FROM [dbo].[{TableName}] j
+            {vehicleJoin}
+            {extraJoin}
+            WHERE {whereClause}
+            ORDER BY {orderBy}
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddPageParameters(dataCommand, statusCodes, searchTerm, searchId, query.JobCardId);
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<JobCard>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            items.Add(Map(reader));
+
+        return new JobCardPage(items, page, pageSize, totalRecords);
+    }
+
+    public async Task<JobCardPage> GetPriorityUnassignedPageAsync(
+        PriorityUnassignedJobCardPageQuery query
+    )
+    {
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var columns = await GetAvailableColumnsAsync();
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
+        var vehicleProjectionColumns = vehicleColumns.ContainsKey("vmf_code")
+            ? vehicleColumns
+            : new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
+        var extraColumns = await GetAvailableColumnsAsync(ExtraCodeTableName);
+        var conditions = new List<string> { PriorityUnassignedPredicate(columns) };
+
+        if (columns.ContainsKey("is_deleted"))
+            conditions.Add("ISNULL(j.[is_deleted], 0) = 0");
+
+        var whereClause = string.Join(" AND ", conditions);
+        var vehicleJoin = vehicleColumns.ContainsKey("vmf_code")
+            ? $"LEFT JOIN [dbo].[{VehicleTableName}] vm ON vm.[vmf_code] = j.[vmf_code]"
+            : string.Empty;
+        var extraJoin = extraColumns.ContainsKey("extra_code")
+            ? $"LEFT JOIN [dbo].[{ExtraCodeTableName}] ec ON ec.[extra_code] = j.[extra_code]"
+            : string.Empty;
+        var orderBy = $"{DateExpression(columns)} DESC, {IdExpression(columns)} DESC";
+
+        await using var scope = await OpenConnectionAsync();
+        int totalRecords;
+        await using (var countCommand = scope.Connection.CreateCommand())
+        {
+            countCommand.Transaction = CurrentTransaction;
+            countCommand.CommandText = $"""
+                SELECT COUNT(DISTINCT {IdExpression(columns)})
+                FROM [dbo].[{TableName}] j
+                WHERE {whereClause}
+                """;
+            totalRecords = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+        }
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = (long)(page - 1) * pageSize;
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = CurrentTransaction;
+        dataCommand.CommandText = $"""
+            SELECT
+                {BuildProjection(columns, vehicleProjectionColumns, extraColumns)}
+            FROM [dbo].[{TableName}] j
+            {vehicleJoin}
+            {extraJoin}
+            WHERE {whereClause}
+            ORDER BY {orderBy}
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<JobCard>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            items.Add(Map(reader));
+
+        return new JobCardPage(items, page, pageSize, totalRecords);
+    }
+
+    public async Task<RepairCostReportPage> GetRepairCostReportPageAsync(
+        RepairCostReportPageQuery query
+    )
+    {
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var columns = await GetAvailableColumnsAsync();
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
+        var vehicleProjectionColumns = vehicleColumns.ContainsKey("vmf_code")
+            ? vehicleColumns
+            : new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
+        var extraColumns = await GetAvailableColumnsAsync(ExtraCodeTableName);
+        var vmfCodes = query.VmfCodes?.Distinct().ToArray();
+        var conditions = new List<string> { "j.[status_code] = 5" };
+
+        if (columns.ContainsKey("is_deleted"))
+            conditions.Add("ISNULL(j.[is_deleted], 0) = 0");
+        if (query.VmfCode.HasValue)
+            conditions.Add("j.[vmf_code] = @vmfCode");
+        if (vmfCodes is not null)
+        {
+            if (vmfCodes.Length == 0)
+                conditions.Add("1 = 0");
+            else
+            {
+                var vmfCodeParameters = string.Join(
+                    ", ",
+                    vmfCodes.Select((_, index) => $"@siteVmfCode{index}")
+                );
+                conditions.Add($"j.[vmf_code] IN ({vmfCodeParameters})");
+            }
+        }
+        if (query.FromDate.HasValue)
+            conditions.Add($"{UpdatedDateExpression(columns)} >= @fromDate");
+        if (query.ToDate.HasValue)
+            conditions.Add($"{UpdatedDateExpression(columns)} <= @toDate");
+
+        var whereClause = string.Join(" AND ", conditions);
+        var vehicleJoin = vehicleColumns.ContainsKey("vmf_code")
+            ? $"LEFT JOIN [dbo].[{VehicleTableName}] vm ON vm.[vmf_code] = j.[vmf_code]"
+            : string.Empty;
+        var extraJoin = extraColumns.ContainsKey("extra_code")
+            ? $"LEFT JOIN [dbo].[{ExtraCodeTableName}] ec ON ec.[extra_code] = j.[extra_code]"
+            : string.Empty;
+        var orderBy = $"{UpdatedDateExpression(columns)} DESC, {IdExpression(columns)} DESC";
+
+        await using var scope = await OpenConnectionAsync();
+        int totalRecords;
+        decimal grandTotal = 0;
+        decimal totalLabour = 0;
+        decimal totalParts = 0;
+        decimal totalOther = 0;
+        await using (var summaryCommand = scope.Connection.CreateCommand())
+        {
+            summaryCommand.Transaction = CurrentTransaction;
+            summaryCommand.CommandText = $"""
+                SELECT
+                    COUNT(DISTINCT {IdExpression(columns)}) AS [total_records],
+                    COALESCE(SUM({OptionalExpression(
+                    columns,
+                    "total_cost",
+                    "decimal(18, 2)"
+                )}), CAST(0 AS decimal(18, 2))) AS [grand_total],
+                    COALESCE(SUM({OptionalExpression(
+                    columns,
+                    "labour_cost",
+                    "decimal(18, 2)"
+                )}), CAST(0 AS decimal(18, 2))) AS [total_labour],
+                    COALESCE(SUM({OptionalExpression(
+                    columns,
+                    "parts_cost",
+                    "decimal(18, 2)"
+                )}), CAST(0 AS decimal(18, 2))) AS [total_parts],
+                    COALESCE(SUM({OptionalExpression(
+                    columns,
+                    "other_cost",
+                    "decimal(18, 2)"
+                )}), CAST(0 AS decimal(18, 2))) AS [total_other]
+                FROM [dbo].[{TableName}] j
+                WHERE {whereClause}
+                """;
+            AddRepairCostParameters(summaryCommand, query, vmfCodes);
+            await using var summaryReader = await summaryCommand.ExecuteReaderAsync();
+            if (await summaryReader.ReadAsync())
+            {
+                totalRecords = ReadInt(summaryReader, "total_records") ?? 0;
+                grandTotal = ReadDecimal(summaryReader, "grand_total") ?? 0;
+                totalLabour = ReadDecimal(summaryReader, "total_labour") ?? 0;
+                totalParts = ReadDecimal(summaryReader, "total_parts") ?? 0;
+                totalOther = ReadDecimal(summaryReader, "total_other") ?? 0;
+            }
+            else
+            {
+                totalRecords = 0;
+            }
+        }
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = (long)(page - 1) * pageSize;
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = CurrentTransaction;
+        dataCommand.CommandText = $"""
+            SELECT
+                {BuildProjection(columns, vehicleProjectionColumns, extraColumns)}
+            FROM [dbo].[{TableName}] j
+            {vehicleJoin}
+            {extraJoin}
+            WHERE {whereClause}
+            ORDER BY {orderBy}
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddRepairCostParameters(dataCommand, query, vmfCodes);
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<JobCard>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            items.Add(Map(reader));
+
+        return new RepairCostReportPage(
+            items,
+            page,
+            pageSize,
+            totalRecords,
+            grandTotal,
+            totalLabour,
+            totalParts,
+            totalOther
+        );
+    }
+
     public async Task<IEnumerable<JobCard>> GetByGGNumberAsync(string ggNumber) =>
         await QueryAsync(
             command => AddParameter(command, "@ggNumber", DbType.String, ggNumber.Trim()),
@@ -64,13 +363,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         );
 
     public async Task<IEnumerable<JobCard>> GetPriorityUnassignedAsync() =>
-        await QueryAsync(
-            null,
-            columns =>
-                columns.ContainsKey("priority") && columns.ContainsKey("reviewed_by_Authorizer")
-                    ? "j.[priority] = 'Y' AND j.[reviewed_by_Authorizer] = 'Y' AND j.[status_code] IN (1, 2)"
-                    : "j.[priority] = 'H' AND j.[assigned_to] IS NULL AND j.[status_code] NOT IN (5, 7)"
-        );
+        await QueryAsync(null, PriorityUnassignedPredicate);
 
     public async Task<IEnumerable<JobCard>> GetAssignedPriorityAsync() =>
         await QueryAsync(
@@ -776,6 +1069,17 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
     )
     {
         var columns = await GetAvailableColumnsAsync();
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
+        var extraColumns = await GetAvailableColumnsAsync(ExtraCodeTableName);
+        var vehicleProjectionColumns = vehicleColumns.ContainsKey("vmf_code")
+            ? vehicleColumns
+            : new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
+        var vehicleJoin = vehicleColumns.ContainsKey("vmf_code")
+            ? $"LEFT JOIN [dbo].[{VehicleTableName}] vm ON vm.[vmf_code] = j.[vmf_code]"
+            : string.Empty;
+        var extraJoin = extraColumns.ContainsKey("extra_code")
+            ? $"LEFT JOIN [dbo].[{ExtraCodeTableName}] ec ON ec.[extra_code] = j.[extra_code]"
+            : string.Empty;
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
@@ -788,10 +1092,10 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
 
         command.CommandText = $"""
             SELECT
-                {BuildProjection(columns)}
+                {BuildProjection(columns, vehicleProjectionColumns, extraColumns)}
             FROM [dbo].[{TableName}] j
-            LEFT JOIN [dbo].[vehicle_master] vm ON vm.[vmf_code] = j.[vmf_code]
-            LEFT JOIN [dbo].[extra_codes] ec ON ec.[extra_code] = j.[extra_code]
+            {vehicleJoin}
+            {extraJoin}
             WHERE {string.Join(" AND ", conditions.DefaultIfEmpty("1 = 1"))}
             ORDER BY {DateExpression(columns)} DESC, {IdExpression(columns)} DESC
             """;
@@ -803,6 +1107,55 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             results.Add(Map(reader));
         return results;
     }
+
+    private static void AddPageParameters(
+        DbCommand command,
+        IReadOnlyList<int> statusCodes,
+        string searchTerm,
+        int? searchId,
+        int? jobCardId
+    )
+    {
+        for (var index = 0; index < statusCodes.Count; index++)
+            AddParameter(command, $"@statusCode{index}", DbType.Int32, statusCodes[index]);
+
+        if (searchTerm.Length > 0)
+            AddParameter(
+                command,
+                "@searchTerm",
+                DbType.String,
+                $"%{searchTerm.ToLowerInvariant()}%"
+            );
+        if (searchId.HasValue)
+            AddParameter(command, "@searchId", DbType.Int32, searchId.Value);
+        if (jobCardId.HasValue)
+            AddParameter(command, "@jobCardId", DbType.Int32, jobCardId.Value);
+    }
+
+    private static void AddRepairCostParameters(
+        DbCommand command,
+        RepairCostReportPageQuery query,
+        IReadOnlyList<int>? vmfCodes
+    )
+    {
+        if (query.VmfCode.HasValue)
+            AddParameter(command, "@vmfCode", DbType.Int32, query.VmfCode.Value);
+
+        for (var index = 0; index < (vmfCodes?.Count ?? 0); index++)
+            AddParameter(command, $"@siteVmfCode{index}", DbType.Int32, vmfCodes![index]);
+
+        if (query.FromDate.HasValue)
+            AddParameter(command, "@fromDate", DbType.DateTime2, query.FromDate.Value);
+        if (query.ToDate.HasValue)
+            AddParameter(command, "@toDate", DbType.DateTime2, query.ToDate.Value.AddDays(1));
+    }
+
+    private static string PriorityUnassignedPredicate(
+        IReadOnlyDictionary<string, ColumnInfo> columns
+    ) =>
+        columns.ContainsKey("priority") && columns.ContainsKey("reviewed_by_Authorizer")
+            ? "j.[priority] = 'Y' AND j.[reviewed_by_Authorizer] = 'Y' AND j.[status_code] IN (1, 2)"
+            : "j.[priority] = 'H' AND j.[assigned_to] IS NULL AND j.[status_code] NOT IN (5, 7)";
 
     private async Task ExecuteUpdateAsync(
         int jobCardId,
@@ -824,7 +1177,9 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
     }
 
-    private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync()
+    private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync(
+        string tableName = TableName
+    )
     {
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
@@ -832,16 +1187,19 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         command.CommandText =
             "SELECT [COLUMN_NAME], [DATA_TYPE] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table";
         AddParameter(command, "@schema", DbType.String, "dbo");
-        AddParameter(command, "@table", DbType.String, TableName);
+        AddParameter(command, "@table", DbType.String, tableName);
 
         var columns = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
             columns[reader.GetString(0)] = new ColumnInfo(reader.GetString(0), reader.GetString(1));
         if (
-            !columns.ContainsKey("vmf_code")
-            || !columns.ContainsKey("extra_code")
-            || !columns.ContainsKey("status_code")
+            tableName.Equals(TableName, StringComparison.OrdinalIgnoreCase)
+            && (
+                !columns.ContainsKey("vmf_code")
+                || !columns.ContainsKey("extra_code")
+                || !columns.ContainsKey("status_code")
+            )
         )
             throw new InvalidOperationException(
                 "The Jobcards compatibility table is missing required workflow columns."
@@ -849,16 +1207,22 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         return columns;
     }
 
-    private static string BuildProjection(IReadOnlyDictionary<string, ColumnInfo> columns) =>
+    private static string BuildProjection(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        IReadOnlyDictionary<string, ColumnInfo> vehicleColumns,
+        IReadOnlyDictionary<string, ColumnInfo> extraColumns
+    ) =>
         string.Join(
             ",\n                ",
             [
                 $"{IdExpression(columns)} AS [job_card_id]",
                 "j.[vmf_code] AS [vmf_code]",
-                "vm.[fleet_number] AS [gg_number]",
-                "vm.[registration_number] AS [registration_number]",
+                VehicleColumnExpression(vehicleColumns, "fleet_number", "varchar(50)")
+                    + " AS [gg_number]",
+                VehicleColumnExpression(vehicleColumns, "registration_number", "varchar(50)")
+                    + " AS [registration_number]",
                 "j.[extra_code] AS [extra_code]",
-                "ec.[extra_description] AS [extra_description]",
+                ExtraDescriptionExpression(extraColumns) + " AS [extra_description]",
                 "j.[status_code] AS [status_code]",
                 PriorityExpression(columns) + " AS [priority]",
                 AssignedToExpression(columns) + " AS [assigned_to]",
@@ -887,13 +1251,26 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             ]
         );
 
+    private static string VehicleColumnExpression(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string sqlType
+    ) => columns.ContainsKey(column) ? $"vm.[{column}]" : $"CAST(NULL AS {sqlType})";
+
+    private static string ExtraDescriptionExpression(
+        IReadOnlyDictionary<string, ColumnInfo> columns
+    ) =>
+        columns.ContainsKey("extra_code") && columns.ContainsKey("extra_description")
+            ? "ec.[extra_description]"
+            : "CAST(NULL AS varchar(255))";
+
     private static string IdExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("job_card_id") ? "j.[job_card_id]" : "j.[jc_code]";
 
     private static string DateExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
-        columns.ContainsKey("date_created")
-            ? "j.[date_created]"
-            : "TRY_CONVERT(datetime2, NULLIF(j.[jcs_date], ''), 111)";
+        columns.ContainsKey("date_created") ? "j.[date_created]"
+        : columns.ContainsKey("jcs_date") ? "TRY_CONVERT(datetime2, NULLIF(j.[jcs_date], ''), 111)"
+        : "CAST(NULL AS datetime2)";
 
     private static string UpdatedDateExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("date_updated") ? "j.[date_updated]"
@@ -913,9 +1290,10 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         : "CAST(NULL AS varchar(50))";
 
     private static string AssignedDateExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
-        columns.ContainsKey("assigned_date")
-            ? "j.[assigned_date]"
-            : "TRY_CONVERT(datetime2, NULLIF(j.[hhandover_date], ''), 111)";
+        columns.ContainsKey("assigned_date") ? "j.[assigned_date]"
+        : columns.ContainsKey("hhandover_date")
+            ? "TRY_CONVERT(datetime2, NULLIF(j.[hhandover_date], ''), 111)"
+        : "CAST(NULL AS datetime2)";
 
     private static string CommentExpression(
         IReadOnlyDictionary<string, ColumnInfo> columns,

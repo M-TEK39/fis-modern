@@ -33,6 +33,61 @@ public class TrackingRepository : ITrackingRepository
 
     public async Task<IEnumerable<Tracking>> GetAllAsync() => await QueryAsync();
 
+    public async Task<TrackingPage> GetPageAsync(TrackingPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var searchTerm = query.SearchTerm?.ToLowerInvariant() ?? string.Empty;
+        var columns = await GetAvailableColumnsAsync();
+        var vmfCode =
+            query.VmfCode is > 0 && columns.ContainsKey("vmf_code") ? query.VmfCode : null;
+        var whereClause = BuildPageWhereClause(columns, searchTerm, vmfCode);
+
+        await using var scope = await OpenConnectionAsync();
+
+        await using var countCommand = scope.Connection.CreateCommand();
+        countCommand.Transaction = CurrentTransaction;
+        countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{TableName}] t
+                LEFT JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = t.[vmf_code]
+                WHERE {whereClause}
+            """;
+        AddSearchParameter(countCommand, searchTerm);
+        AddVmfParameter(countCommand, vmfCode);
+        var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Min(requestedPage, totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = CurrentTransaction;
+        dataCommand.CommandText = $"""
+                SELECT
+                    {BuildProjection(columns)}
+                FROM [dbo].[{TableName}] t
+                LEFT JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = t.[vmf_code]
+                WHERE {whereClause}
+                ORDER BY {OptionalExpression(columns, "install_date", "datetime2")} DESC,
+                         t.[track_code] DESC
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddSearchParameter(dataCommand, searchTerm);
+        AddVmfParameter(dataCommand, vmfCode);
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<Tracking>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            items.Add(Map(reader));
+
+        return new TrackingPage(items, page, pageSize, total);
+    }
+
     public async Task<IEnumerable<Tracking>> GetByVehicleAsync(int vmfCode) =>
         await QueryAsync(
             "t.[vmf_code] = @vmfCode",
@@ -324,6 +379,50 @@ public class TrackingRepository : ITrackingRepository
         return results;
     }
 
+    private static string BuildPageWhereClause(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string searchTerm,
+        int? vmfCode
+    )
+    {
+        var conditions = new List<string>();
+        if (columns.ContainsKey("is_deleted"))
+            conditions.Add("ISNULL(t.[is_deleted], 0) = 0");
+        if (vmfCode.HasValue)
+            conditions.Add("t.[vmf_code] = @vmfCode");
+
+        if (searchTerm.Length == 0)
+            return conditions.Count == 0 ? "1 = 1" : string.Join(" AND ", conditions);
+
+        var searchPredicates = new List<string>
+        {
+            ContainsSearch("t.[track_code]", "nvarchar(50)"),
+        };
+        AddOptionalSearch(searchPredicates, columns, "vmf_code", "t", "nvarchar(50)");
+        AddOptionalSearch(searchPredicates, columns, "track_num", "t", "nvarchar(max)");
+        AddOptionalSearch(searchPredicates, columns, "track_status", "t", "nvarchar(max)");
+        AddOptionalSearch(searchPredicates, columns, "track_type", "t", "nvarchar(max)");
+        searchPredicates.Add(ContainsSearch("v.[fleet_number]", "nvarchar(max)"));
+        searchPredicates.Add(ContainsSearch("v.[registration_number]", "nvarchar(max)"));
+        conditions.Add($"({string.Join(" OR ", searchPredicates)})");
+        return string.Join(" AND ", conditions);
+    }
+
+    private static void AddOptionalSearch(
+        ICollection<string> predicates,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string alias,
+        string sqlType
+    )
+    {
+        if (columns.ContainsKey(column))
+            predicates.Add(ContainsSearch($"{alias}.[{column}]", sqlType));
+    }
+
+    private static string ContainsSearch(string expression, string sqlType) =>
+        $"CHARINDEX(@search, LOWER(LTRIM(RTRIM(COALESCE(CONVERT({sqlType}, {expression}), N''))))) > 0";
+
     private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync()
     {
         await using var scope = await OpenConnectionAsync();
@@ -455,6 +554,15 @@ public class TrackingRepository : ITrackingRepository
         parameter.DbType = type;
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
+    }
+
+    private static void AddSearchParameter(DbCommand command, string searchTerm) =>
+        AddParameter(command, "@search", DbType.String, searchTerm);
+
+    private static void AddVmfParameter(DbCommand command, int? vmfCode)
+    {
+        if (vmfCode.HasValue)
+            AddParameter(command, "@vmfCode", DbType.Int32, vmfCode.Value);
     }
 
     private static string? ReadString(DbDataReader reader, string name) =>

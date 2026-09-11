@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-
 import {
   FinanceFrame,
   FinanceRestricted,
@@ -75,7 +78,7 @@ function outputHref(
   return `/finance/reports/output?${params.toString()}`;
 }
 
-export default async function FinanceAuditTrailModePage({ params, searchParams }: AuditPageProps) {
+async function FinanceAuditTrailModeContent({ params, searchParams }: AuditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -271,5 +274,13 @@ export default async function FinanceAuditTrailModePage({ params, searchParams }
         </section>
       ) : null}
     </FinanceFrame>
+  );
+}
+
+export default function FinanceAuditTrailModePage(props: AuditPageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <FinanceAuditTrailModeContent {...props} />
+    </Suspense>
   );
 }

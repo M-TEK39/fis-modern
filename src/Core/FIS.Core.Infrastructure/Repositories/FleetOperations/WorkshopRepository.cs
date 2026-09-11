@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
@@ -17,6 +18,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 public sealed class WorkshopRepository : IWorkshopRepository
 {
     private const string TableName = "workshop";
+    private const string VehicleTableName = "vehicle_master";
+    private const int MaximumSnapshotRows = 500;
 
     private static readonly string[] LegacyColumns =
     [
@@ -116,6 +119,123 @@ public sealed class WorkshopRepository : IWorkshopRepository
         ).SingleOrDefault();
 
     public async Task<IEnumerable<Workshop>> GetAllAsync() => await QueryAsync();
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The page query is composed only from fixed compatibility identifiers and predicates; request values are parameters."
+    )]
+    public async Task<WorkshopPage> GetPageAsync(WorkshopPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var searchTerm = query.SearchTerm?.Trim().ToLowerInvariant() ?? string.Empty;
+        var status = NormalizeStatus(query.Status);
+        var searchField = NormalizeSearchField(query.SearchField);
+        var workshopColumns = await GetAvailableColumnsAsync();
+        var vehicleColumns = await GetTableColumnsAsync(VehicleTableName);
+        var hasVehicleJoin = vehicleColumns.ContainsKey("vmf_code");
+        var vehicleJoin = BuildVehicleJoin(vehicleColumns, hasVehicleJoin);
+        var whereClause = BuildPageWhereClause(
+            workshopColumns,
+            vehicleColumns,
+            hasVehicleJoin,
+            searchTerm,
+            status,
+            searchField
+        );
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var countCommand = connection.CreateCommand();
+            countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{TableName}] AS [w]
+                {vehicleJoin}
+                WHERE {whereClause}
+                """;
+            AddSearchParameter(countCommand, searchTerm);
+            var matchingTotal = Convert.ToInt32(
+                await countCommand.ExecuteScalarAsync(),
+                CultureInfo.InvariantCulture
+            );
+            var total = Math.Min(matchingTotal, MaximumSnapshotRows);
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+            var pageTake = (int)Math.Max(1L, Math.Min((long)pageSize, total - skip));
+
+            var order = workshopColumns.ContainsKey("receive_date")
+                ? "[w].[receive_date] DESC, "
+                : string.Empty;
+            var projection = string.Join(
+                ", ",
+                [
+                    GetProjection(workshopColumns, "ww_code", "w"),
+                    GetProjection(workshopColumns, "vmf_code", "w"),
+                    GetProjection(workshopColumns, "receive_date", "w"),
+                    GetCompleteTimeProjection(workshopColumns, "w"),
+                    GetCompleteDateProjection(workshopColumns, "w"),
+                    GetVehicleProjection(vehicleColumns, hasVehicleJoin, "fleet_number"),
+                    GetVehicleProjection(vehicleColumns, hasVehicleJoin, "registration_number"),
+                    GetVehicleProjection(vehicleColumns, hasVehicleJoin, "location_code"),
+                    $"CASE WHEN {GetClosedPredicate(workshopColumns, "w")} THEN 'Closed' ELSE 'Open' END AS [status]",
+                ]
+            );
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            dataCommand.CommandText = $"""
+                SELECT {projection}
+                FROM [dbo].[{TableName}] AS [w]
+                {vehicleJoin}
+                WHERE {whereClause}
+                ORDER BY {order}[w].[ww_code] DESC
+                OFFSET @skip ROWS FETCH NEXT @pageTake ROWS ONLY
+                """;
+            AddSearchParameter(dataCommand, searchTerm);
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageTake", DbType.Int32, pageTake);
+
+            var items = new List<WorkshopPageItem>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(
+                    new WorkshopPageItem(
+                        ReadInt16(reader, "ww_code") ?? 0,
+                        ReadInt32(reader, "vmf_code"),
+                        ReadDateTime(reader, "receive_date"),
+                        ReadTimeSpan(reader, "complete_time"),
+                        ReadDateTime(reader, "complete_date"),
+                        ReadString(reader, "fleet_number"),
+                        ReadString(reader, "registration_number"),
+                        ReadInt16(reader, "location_code"),
+                        ReadString(reader, "status") ?? "Open"
+                    )
+                );
+            }
+
+            return new WorkshopPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
 
     public async Task<IEnumerable<Workshop>> GetByVehicleAsync(int vmfCode)
     {
@@ -804,6 +924,19 @@ public sealed class WorkshopRepository : IWorkshopRepository
 
     private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync()
     {
+        var columns = await GetTableColumnsAsync(TableName);
+        if (!columns.ContainsKey("ww_code"))
+        {
+            throw new InvalidOperationException(
+                "The required workshop compatibility column ww_code is not available."
+            );
+        }
+
+        return columns;
+    }
+
+    private async Task<Dictionary<string, ColumnInfo>> GetTableColumnsAsync(string tableName)
+    {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)
@@ -816,13 +949,13 @@ public sealed class WorkshopRepository : IWorkshopRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = """
-                SELECT [COLUMN_NAME], [DATA_TYPE]
-                FROM [INFORMATION_SCHEMA].[COLUMNS]
-                WHERE [TABLE_SCHEMA] = @schema
-                  AND [TABLE_NAME] = @table
+                    SELECT [COLUMN_NAME], [DATA_TYPE]
+                    FROM [INFORMATION_SCHEMA].[COLUMNS]
+                    WHERE [TABLE_SCHEMA] = @schema
+                      AND [TABLE_NAME] = @table
                 """;
             AddParameter(command, "@schema", DbType.String, "dbo");
-            AddParameter(command, "@table", DbType.String, TableName);
+            AddParameter(command, "@table", DbType.String, tableName);
 
             var columns = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
             await using var reader = await command.ExecuteReaderAsync();
@@ -830,13 +963,6 @@ public sealed class WorkshopRepository : IWorkshopRepository
             {
                 var name = reader.GetString(0);
                 columns[name] = new ColumnInfo(name, reader.GetString(1));
-            }
-
-            if (!columns.ContainsKey("ww_code"))
-            {
-                throw new InvalidOperationException(
-                    "The required workshop compatibility column ww_code is not available."
-                );
             }
 
             return columns;
@@ -930,6 +1056,209 @@ public sealed class WorkshopRepository : IWorkshopRepository
         };
     }
 
+    private static string NormalizeStatus(string? status)
+    {
+        var normalized = status?.Trim().ToLowerInvariant() ?? string.Empty;
+        return normalized switch
+        {
+            "" or "all" or "open" or "closed" or "vehicle" => normalized,
+            _ => throw new ArgumentException(
+                "Workshop status must be all, open, closed, or vehicle.",
+                nameof(status)
+            ),
+        };
+    }
+
+    private static string BuildVehicleJoin(
+        IReadOnlyDictionary<string, ColumnInfo> vehicleColumns,
+        bool hasVehicleJoin
+    )
+    {
+        if (!hasVehicleJoin)
+        {
+            return string.Empty;
+        }
+
+        var activeConditions = new List<string>();
+        if (vehicleColumns.ContainsKey("vehicle_status_code"))
+        {
+            activeConditions.Add("[v].[vehicle_status_code] > 0");
+        }
+
+        if (vehicleColumns.ContainsKey("is_deleted"))
+        {
+            activeConditions.Add("ISNULL([v].[is_deleted], 0) = 0");
+        }
+
+        var activeFilter =
+            activeConditions.Count == 0
+                ? string.Empty
+                : $" AND {string.Join(" AND ", activeConditions)}";
+        return $"LEFT JOIN [dbo].[{VehicleTableName}] AS [v] ON [v].[vmf_code] = [w].[vmf_code]{activeFilter}";
+    }
+
+    private static string BuildPageWhereClause(
+        IReadOnlyDictionary<string, ColumnInfo> workshopColumns,
+        IReadOnlyDictionary<string, ColumnInfo> vehicleColumns,
+        bool hasVehicleJoin,
+        string searchTerm,
+        string status,
+        string searchField
+    )
+    {
+        var conditions = new List<string> { GetActiveFilter(workshopColumns, "w") };
+        var closedPredicate = GetClosedPredicate(workshopColumns, "w");
+
+        switch (status)
+        {
+            case "open":
+                conditions.Add($"NOT ({closedPredicate})");
+                break;
+            case "closed":
+                conditions.Add(closedPredicate);
+                break;
+            case "vehicle":
+                conditions.Add(
+                    workshopColumns.ContainsKey("vmf_code") ? "[w].[vmf_code] IS NOT NULL" : "1 = 0"
+                );
+                break;
+        }
+
+        if (searchTerm.Length == 0)
+        {
+            return string.Join(" AND ", conditions);
+        }
+
+        if (searchField == "fleet")
+        {
+            conditions.Add(
+                hasVehicleJoin && vehicleColumns.ContainsKey("fleet_number")
+                    ? ContainsSearch("[v].[fleet_number]", "nvarchar(max)")
+                    : "1 = 0"
+            );
+            return string.Join(" AND ", conditions);
+        }
+
+        if (searchField == "registration")
+        {
+            conditions.Add(
+                hasVehicleJoin && vehicleColumns.ContainsKey("registration_number")
+                    ? ContainsSearch("[v].[registration_number]", "nvarchar(max)")
+                    : "1 = 0"
+            );
+            return string.Join(" AND ", conditions);
+        }
+
+        var searchPredicates = new List<string> { ContainsSearch("[w].[ww_code]", "nvarchar(50)") };
+        if (workshopColumns.ContainsKey("vmf_code"))
+        {
+            searchPredicates.Add(ContainsSearch("[w].[vmf_code]", "nvarchar(50)"));
+        }
+
+        if (hasVehicleJoin && vehicleColumns.ContainsKey("fleet_number"))
+        {
+            searchPredicates.Add(ContainsSearch("[v].[fleet_number]", "nvarchar(max)"));
+        }
+
+        if (hasVehicleJoin && vehicleColumns.ContainsKey("registration_number"))
+        {
+            searchPredicates.Add(ContainsSearch("[v].[registration_number]", "nvarchar(max)"));
+        }
+
+        searchPredicates.Add(
+            $"CHARINDEX(@search, LOWER(CASE WHEN {closedPredicate} THEN 'closed' ELSE 'open' END)) > 0"
+        );
+        conditions.Add($"({string.Join(" OR ", searchPredicates)})");
+        return string.Join(" AND ", conditions);
+    }
+
+    private static string ContainsSearch(string expression, string sqlType) =>
+        $"CHARINDEX(@search, LOWER(LTRIM(RTRIM(COALESCE(CONVERT({sqlType}, {expression}), ''))))) > 0";
+
+    private static void AddSearchParameter(DbCommand command, string searchTerm) =>
+        AddParameter(command, "@search", DbType.String, searchTerm);
+
+    private static string NormalizeSearchField(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "fleet" => "fleet",
+            "registration" => "registration",
+            _ => string.Empty,
+        };
+
+    private static string GetClosedPredicate(
+        IReadOnlyDictionary<string, ColumnInfo> workshopColumns,
+        string alias
+    )
+    {
+        var checks = new List<string>();
+        if (workshopColumns.ContainsKey("complete_date"))
+        {
+            checks.Add($"[{alias}].[complete_date] IS NOT NULL");
+        }
+
+        if (workshopColumns.ContainsKey("complete_time"))
+        {
+            checks.Add($"[{alias}].[complete_time] IS NOT NULL");
+        }
+
+        return checks.Count == 0 ? "1 = 0" : $"({string.Join(" OR ", checks)})";
+    }
+
+    private static string GetCompleteTimeProjection(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string alias
+    )
+    {
+        if (!columns.TryGetValue("complete_time", out var column))
+        {
+            return "CAST(NULL AS time) AS [complete_time]";
+        }
+
+        var expression = string.Equals(column.DataType, "time", StringComparison.OrdinalIgnoreCase)
+            ? $"[{alias}].[complete_time]"
+            : $"CAST([{alias}].[complete_time] AS time)";
+        return $"{expression} AS [complete_time]";
+    }
+
+    private static string GetCompleteDateProjection(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string alias
+    )
+    {
+        var hasDate = columns.ContainsKey("complete_date");
+        var hasTime = columns.TryGetValue("complete_time", out var timeColumn);
+        var hasDateTime =
+            hasTime
+            && !string.Equals(timeColumn?.DataType, "time", StringComparison.OrdinalIgnoreCase);
+
+        if (hasDate && hasDateTime)
+        {
+            return $"COALESCE(CAST([{alias}].[complete_date] AS datetime2), CAST([{alias}].[complete_time] AS datetime2)) AS [complete_date]";
+        }
+
+        if (hasDate)
+        {
+            return $"CAST([{alias}].[complete_date] AS datetime2) AS [complete_date]";
+        }
+
+        if (hasDateTime)
+        {
+            return $"CAST([{alias}].[complete_time] AS datetime2) AS [complete_date]";
+        }
+
+        return "CAST(NULL AS datetime2) AS [complete_date]";
+    }
+
+    private static string GetVehicleProjection(
+        IReadOnlyDictionary<string, ColumnInfo> vehicleColumns,
+        bool hasVehicleJoin,
+        string column
+    ) =>
+        hasVehicleJoin && vehicleColumns.ContainsKey(column)
+            ? $"[v].[{column}] AS [{column}]"
+            : $"CAST(NULL AS varchar(1)) AS [{column}]";
+
     private static void AddTimeValue(
         ICollection<WriteValue> values,
         IReadOnlyDictionary<string, ColumnInfo> columns,
@@ -995,7 +1324,21 @@ public sealed class WorkshopRepository : IWorkshopRepository
     }
 
     private static string GetActiveFilter(IReadOnlyDictionary<string, ColumnInfo> columns) =>
-        columns.ContainsKey("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+        GetActiveFilter(columns, null);
+
+    private static string GetActiveFilter(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string? alias
+    )
+    {
+        if (!columns.ContainsKey("is_deleted"))
+        {
+            return "1 = 1";
+        }
+
+        var column = string.IsNullOrWhiteSpace(alias) ? "[is_deleted]" : $"[{alias}].[is_deleted]";
+        return $"ISNULL({column}, 0) = 0";
+    }
 
     private static string GetProjection(
         IReadOnlyDictionary<string, ColumnInfo> columns,
@@ -1003,6 +1346,15 @@ public sealed class WorkshopRepository : IWorkshopRepository
     ) =>
         columns.ContainsKey(column)
             ? $"[{column}] AS [{column}]"
+            : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
+
+    private static string GetProjection(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string alias
+    ) =>
+        columns.ContainsKey(column)
+            ? $"[{alias}].[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
 
     private static string GetSqlType(string column)
@@ -1086,6 +1438,11 @@ public sealed class WorkshopRepository : IWorkshopRepository
             return null;
         }
 
+        return ReadTimeSpan(reader, column);
+    }
+
+    private static TimeSpan? ReadTimeSpan(DbDataReader reader, string column)
+    {
         var ordinal = reader.GetOrdinal(column);
         if (reader.IsDBNull(ordinal))
         {

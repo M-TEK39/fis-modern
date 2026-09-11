@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
+import RouteLoading from "@/components/app-shell/route-loading";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { searchVehicleEditAction } from "@/app/(fleet-operations)/vehicles/edit/actions";
 import VehicleEditSearchClient from "@/app/(fleet-operations)/vehicles/edit/vehicle-edit-search-client";
@@ -50,7 +52,7 @@ function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function VehicleEditSearchPage({ searchParams }: VehicleEditSearchPageProps) {
+async function VehicleEditSearchPageContent({ searchParams }: VehicleEditSearchPageProps) {
   await connection();
   const session = await getSession();
 
@@ -124,5 +126,13 @@ export default async function VehicleEditSearchPage({ searchParams }: VehicleEdi
         </div>
       </section>
     </main>
+  );
+}
+
+export default function VehicleEditSearchPage(props: VehicleEditSearchPageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <VehicleEditSearchPageContent {...props} />
+    </Suspense>
   );
 }

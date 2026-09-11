@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { connection } from "next/server";
 
@@ -148,9 +152,7 @@ function unavailablePage(message: string) {
   );
 }
 
-export default async function CreateTripPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function CreateTripPageContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getTripSession();
   const sessionMessage = tripSessionMessage(session, "/trips/create");
@@ -278,5 +280,13 @@ export default async function CreateTripPage({
         today={new Date().toISOString().slice(0, 10)}
       />
     </article>,
+  );
+}
+
+export default function CreateTripPage(props: Parameters<typeof CreateTripPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <CreateTripPageContent {...props} />
+    </Suspense>
   );
 }

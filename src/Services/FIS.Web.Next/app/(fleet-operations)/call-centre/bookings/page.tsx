@@ -4,6 +4,7 @@ import { connection } from "next/server";
 
 import { saveBookingAction } from "@/app/(fleet-operations)/call-centre/bookings/actions";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   CallCentreApiError,
   getCallCentreIncident,
@@ -11,8 +12,15 @@ import {
   type CallCentreSiteOption,
 } from "@/lib/api/fleet-operations/api-call-centre";
 import { getClasses, type ClassRecord } from "@/lib/api/reference-data/api-classes";
-import { BookingApiError, getBooking, type BookingRecord } from "@/lib/api/fleet-operations/api-bookings";
-import { getUserAdminUserChoices, type UserAdminProfile } from "@/lib/api/administration/api-user-admin";
+import {
+  BookingApiError,
+  getBooking,
+  type BookingRecord,
+} from "@/lib/api/fleet-operations/api-bookings";
+import {
+  getUserAdminUserChoices,
+  type UserAdminProfile,
+} from "@/lib/api/administration/api-user-admin";
 import { getSession } from "@/lib/auth/session";
 
 const CALL_CENTRE_ROLE = "Call Centre";
@@ -341,12 +349,7 @@ function BookingForm({
               placeholder="Select site"
             />
           ) : (
-            <Field
-              id="booking-site"
-              label="Site Code"
-              name="site_code"
-              defaultValue={siteValue}
-            />
+            <Field id="booking-site" label="Site Code" name="site_code" defaultValue={siteValue} />
           )}
           <Field
             id="booking-telephone"
@@ -515,7 +518,7 @@ function errorMessage(error: unknown) {
   return "The booking workflow could not load the requested record.";
 }
 
-export default async function BookingPage({ searchParams }: BookingPageProps) {
+async function BookingPageContent({ searchParams }: BookingPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -627,5 +630,13 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
         <BookingForm record={formRecord} sourceGmt={sourceGmt} lookups={lookups} />
       </section>
     </main>
+  );
+}
+
+export default function BookingPage(props: BookingPageProps) {
+  return (
+    <StreamedRoute>
+      <BookingPageContent {...props} />
+    </StreamedRoute>
   );
 }

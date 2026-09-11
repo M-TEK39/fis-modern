@@ -1,14 +1,7 @@
-import { FineReportPage } from "@/app/(fleet-operations)/fines/reports/[mode]/page";
+import { createLegacyFineReportPage } from "@/app/(fleet-operations)/fines/reports/[mode]/_route";
 
-export default function LegacyDeptPeriodReportResultPage(
-  props: Parameters<typeof FineReportPage>[0],
-) {
-  return (
-    <FineReportPage
-      {...props}
-      forcedMode="dept-period"
-      legacyResult
-      routePath="/fines/RPT_dept_period_report_Fines.aspx"
-    />
-  );
-}
+export default createLegacyFineReportPage({
+  forcedMode: "dept-period",
+  legacyResult: true,
+  routePath: "/fines/RPT_dept_period_report_Fines.aspx",
+});

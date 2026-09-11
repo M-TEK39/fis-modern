@@ -1,3 +1,3 @@
-import TowingFirmDatePage from "@/app/(fleet-operations)/towing/reports/firm-date/page";
+import { createLegacyTowingFirmDatePage } from "@/app/(fleet-operations)/towing/reports/firm-date/_route";
 
-export default TowingFirmDatePage;
+export default createLegacyTowingFirmDatePage("/towing/RPT_road_firmdate_main.aspx");

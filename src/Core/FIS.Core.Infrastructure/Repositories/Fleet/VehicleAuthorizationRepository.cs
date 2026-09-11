@@ -190,27 +190,28 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         int requestedPage,
         int requestedPageSize,
         bool awaiting = false
-    ) => await WithConnectionAsync(async connection =>
-    {
-        var pageSize = Math.Clamp(requestedPageSize, 1, 100);
-        var page = Math.Max(1, requestedPage);
-        var schema = await GetSchemaAsync(connection, null);
-        var totalRecords = await CountByStatusAsync(connection, null, schema, status);
-        var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
-        page = Math.Min(page, totalPages);
-        var skip = checked((long)(page - 1) * pageSize);
-        var data = await QueryAsync(
-            connection,
-            null,
-            schema,
-            status: status,
-            skip: skip,
-            take: pageSize,
-            orderBy: GetQueueOrder(schema, awaiting)
-        );
+    ) =>
+        await WithConnectionAsync(async connection =>
+        {
+            var pageSize = Math.Clamp(requestedPageSize, 1, 100);
+            var page = Math.Max(1, requestedPage);
+            var schema = await GetSchemaAsync(connection, null);
+            var totalRecords = await CountByStatusAsync(connection, null, schema, status);
+            var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+            page = Math.Min(page, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+            var data = await QueryAsync(
+                connection,
+                null,
+                schema,
+                status: status,
+                skip: skip,
+                take: pageSize,
+                orderBy: GetQueueOrder(schema, awaiting)
+            );
 
-        return new VehicleAuthorizationPage(data, page, pageSize, totalRecords);
-    });
+            return new VehicleAuthorizationPage(data, page, pageSize, totalRecords);
+        });
 
     public async Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(
         DateTime? startDate = null,

@@ -7,14 +7,31 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_components";
 import {
   accessRestricted,
-  filterByVehicle,
   getJobCardSession,
+  JobCardPageBoundary,
+  jobCardPageHref,
+  queryPage,
+  querySearchType,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/job-cards/_page";
-import { getJobCards, JobCardApiError } from "@/lib/api/fleet-operations/api-job-cards";
+import {
+  DEFAULT_JOB_CARD_PAGE_SIZE,
+  getJobCardsPage,
+  JobCardApiError,
+} from "@/lib/api/fleet-operations/api-job-cards";
 
-export default async function CancelJobCardsPage({
+export default function CancelJobCardsPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
+  return (
+    <JobCardPageBoundary>
+      <CancelJobCardsContent searchParams={searchParams} />
+    </JobCardPageBoundary>
+  );
+}
+
+async function CancelJobCardsContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
@@ -26,10 +43,21 @@ export default async function CancelJobCardsPage({
     return accessRestricted("Your profile does not include Job Card capturer access.");
   const query = await searchParams;
   const search = queryValue(query.search);
-  const mode = queryValue(query.mode) || "GG";
+  const mode = querySearchType(query.mode);
+  const page = queryPage(query.page);
   try {
-    const cards = (await getJobCards()).filter((card) => [3, 4, 6, 7].includes(card.statusCode));
-    const filtered = filterByVehicle(cards, search, mode);
+    const pageData = await getJobCardsPage({
+      page,
+      pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+      search,
+      searchType: mode,
+      statusCodes: [3, 4, 6, 7],
+    });
+    const tableReturnPath = jobCardPageHref(
+      "/job-cards/cancel",
+      { ...query, id: undefined },
+      pageData.page,
+    );
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="cancel-job-cards-title">
@@ -45,6 +73,7 @@ export default async function CancelJobCardsPage({
           </header>
           <section className="vehicle-status-maintenance-panel">
             <form className="vehicle-search-row" method="get">
+              <input type="hidden" name="page" value="1" />
               <fieldset className="vehicle-search-options">
                 <legend>Find by</legend>
                 <label className="vehicle-checkbox-label">
@@ -74,10 +103,17 @@ export default async function CancelJobCardsPage({
           </section>
           <section className="vehicle-status-maintenance-panel">
             <p className="eyebrow">
-              {filtered.length} record{filtered.length === 1 ? "" : "s"}
+              {pageData.totalRecords} record{pageData.totalRecords === 1 ? "" : "s"}
             </p>
             <h2>Cancelable Job Cards</h2>
-            <JobCardTable cards={filtered} mode="cancel" returnPath="/job-cards/cancel" />
+            <JobCardTable
+              cards={pageData.items}
+              mode="cancel"
+              returnPath={tableReturnPath}
+              page={pageData.page}
+              totalPages={pageData.totalPages}
+              pageHref={(nextPage) => jobCardPageHref("/job-cards/cancel", query, nextPage)}
+            />
           </section>
         </section>
       </main>

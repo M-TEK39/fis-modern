@@ -10,6 +10,7 @@ import {
   saveRoadAssistanceAction,
 } from "@/app/(fleet-operations)/call-centre/incident/capture/actions";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   CallCentreApiError,
   getCallCentreSites,
@@ -1153,7 +1154,7 @@ function RoadAssistanceForm({
   );
 }
 
-export default async function IncidentCapturePage({ searchParams }: IncidentCapturePageProps) {
+async function IncidentCapturePageContent({ searchParams }: IncidentCapturePageProps) {
   await connection();
   const session = await getSession();
 
@@ -1356,5 +1357,13 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
         ) : null}
       </section>
     </main>
+  );
+}
+
+export default function IncidentCapturePage(props: IncidentCapturePageProps) {
+  return (
+    <StreamedRoute>
+      <IncidentCapturePageContent {...props} />
+    </StreamedRoute>
   );
 }

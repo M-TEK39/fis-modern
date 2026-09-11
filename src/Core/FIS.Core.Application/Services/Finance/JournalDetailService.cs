@@ -52,6 +52,12 @@ public class JournalDetailService : IJournalDetailService
         return await _journalDetailRepository.GetAllAsync();
     }
 
+    public Task<JournalDetailPage> GetUninvoicedJournalDetailsPageAsync(
+        int? departmentCode,
+        int page,
+        int pageSize
+    ) => _journalDetailRepository.GetUninvoicedPageAsync(departmentCode, page, pageSize);
+
     /// <summary>
     /// Create new journal detail entry
     /// Legacy: AddJournalDetail method (stored procedure: NEW_DEV_INS_JournalDetail)

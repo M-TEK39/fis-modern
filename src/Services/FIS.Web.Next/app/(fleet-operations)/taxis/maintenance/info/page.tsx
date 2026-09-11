@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
@@ -5,7 +9,7 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { TaxiHeader, TaxiRestricted } from "@/app/(fleet-operations)/taxis/_components";
 import { getSession } from "@/lib/auth/session";
 
-export default async function TaxiMaintenanceInfoPage() {
+async function TaxiMaintenanceInfoPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -42,5 +46,13 @@ export default async function TaxiMaintenanceInfoPage() {
         </section>
       </section>
     </main>
+  );
+}
+
+export default function TaxiMaintenanceInfoPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TaxiMaintenanceInfoPageContent />
+    </Suspense>
   );
 }

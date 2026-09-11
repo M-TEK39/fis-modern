@@ -1,5 +1,6 @@
 import { type ReportQuery } from "@/app/(fleet-operations)/reports/_components";
-import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/page";
+import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/_route";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 
 const REPORTS_BY_PATH: Record<string, string | undefined> = {
   "rpt_outstanding1.aspx": "logsheets-one-vehicle",
@@ -11,7 +12,7 @@ const REPORTS_BY_PATH: Record<string, string | undefined> = {
   "rpt_logs_per_dept_1.aspx": "logsheets",
 };
 
-export default async function LegacyLogsheetReportPage({
+async function LegacyLogsheetReportPageContent({
   params,
   searchParams,
 }: Readonly<{ params: Promise<{ path: string[] }>; searchParams: Promise<ReportQuery> }>) {
@@ -20,5 +21,18 @@ export default async function LegacyLogsheetReportPage({
   if (!reportKey) return <ReportsRoutePage slug="logsheets" searchParams={searchParams} />;
   return (
     <ReportsRoutePage slug="logsheets" searchParams={searchParams} forcedReportKey={reportKey} />
+  );
+}
+
+export default function LegacyLogsheetReportPage(
+  props: Readonly<{
+    params: Promise<{ path: string[] }>;
+    searchParams: Promise<ReportQuery>;
+  }>,
+) {
+  return (
+    <StreamedRoute>
+      <LegacyLogsheetReportPageContent {...props} />
+    </StreamedRoute>
   );
 }

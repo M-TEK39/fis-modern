@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import { TrackingNotice, TrackingShell } from "@/app/(fleet-operations)/tracking/_components";
@@ -8,7 +12,7 @@ import {
   sessionMessage,
 } from "@/app/(fleet-operations)/tracking/_page";
 
-export default async function TrackingReportsPage({
+async function TrackingReportsPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getTrackingSession();
@@ -61,5 +65,15 @@ export default async function TrackingReportsPage({
         </section>
       </div>
     </TrackingShell>
+  );
+}
+
+export default function TrackingReportsPage(
+  props: Parameters<typeof TrackingReportsPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TrackingReportsPageContent {...props} />
+    </Suspense>
   );
 }

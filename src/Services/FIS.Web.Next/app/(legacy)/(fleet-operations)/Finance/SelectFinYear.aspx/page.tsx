@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
+
+async function LegacyProfitabilityPageContent(): Promise<never> {
+  redirect("/finance/profitability");
+}
 
 export default function LegacyProfitabilityPage() {
-  redirect("/finance/profitability");
+  return (
+    <StreamedRoute>
+      <LegacyProfitabilityPageContent />
+    </StreamedRoute>
+  );
 }

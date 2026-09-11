@@ -1,3 +1,8 @@
-import DepartmentListPage from "@/app/(administration)/validation-data/departments/page";
+import {
+  DepartmentListPageRoute,
+  type DepartmentListPageProps,
+} from "@/app/(administration)/validation-data/departments/_route";
 
-export default DepartmentListPage;
+export default function DepartmentsPage(props: Pick<DepartmentListPageProps, "searchParams">) {
+  return <DepartmentListPageRoute {...props} routePath="/departments" />;
+}

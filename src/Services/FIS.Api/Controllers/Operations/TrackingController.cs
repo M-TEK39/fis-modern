@@ -10,6 +10,9 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 public class TrackingController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly ITrackingRepository _repository;
     private readonly IVehicleRepository _vehicleRepository;
     private readonly ISiteRepository _siteRepository;
@@ -38,6 +41,43 @@ public class TrackingController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] string? search = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] int? vmfCode = null
+    )
+    {
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new TrackingPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize),
+                    search,
+                    vmfCode is > 0 ? vmfCode : null
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged tracking records");
             return StatusCode(500);
         }
     }

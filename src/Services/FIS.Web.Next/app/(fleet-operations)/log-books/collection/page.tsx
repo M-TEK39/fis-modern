@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import { collectLogbooksAction } from "@/app/(fleet-operations)/log-books/actions";
@@ -37,7 +41,7 @@ function statusMessage(query: Record<string, string | string[] | undefined>) {
   return key ? { key, value: queryValue(query[key]) } : null;
 }
 
-export default async function LogbookCollectionPage({
+async function LogbookCollectionPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogbookSession();
@@ -200,4 +204,14 @@ export default async function LogbookCollectionPage({
       </LogbookShell>
     );
   }
+}
+
+export default function LogbookCollectionPage(
+  props: Parameters<typeof LogbookCollectionPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LogbookCollectionPageContent {...props} />
+    </Suspense>
+  );
 }

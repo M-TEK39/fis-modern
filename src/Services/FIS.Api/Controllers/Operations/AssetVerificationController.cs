@@ -10,6 +10,9 @@ namespace FIS.Api.Controllers;
 [Authorize]
 public class AssetVerificationController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly IAssetVerificationRepository _repository;
     private readonly ILogger<AssetVerificationController> _logger;
 
@@ -32,6 +35,40 @@ public class AssetVerificationController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
+    }
+
+    [Authorize(Roles = "Asset Verification")]
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new AssetVerificationPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize)
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged asset verification records");
             return StatusCode(500);
         }
     }

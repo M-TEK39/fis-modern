@@ -42,6 +42,7 @@ public interface IReportingService
         DateTime startDate,
         DateTime endDate
     );
+    Task<TripSummaryPage> GenerateTripSummaryPageAsync(TripSummaryPageQuery query);
     Task<TripDetailReport> GenerateTripDetailReportAsync(int tripId);
     Task<AuthorityReport> GenerateAuthorityReportAsync(int contractId);
 

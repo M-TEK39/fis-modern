@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -13,8 +17,9 @@ import {
 } from "@/app/(fleet-operations)/trips/_page";
 import {
   TripToolsApiError,
-  getTripsWithoutRoutes,
-  type TripsWithoutRoutesRow,
+  getTripsWithoutRoutesPage,
+  DEFAULT_TRIPS_WITHOUT_ROUTES_PAGE_SIZE,
+  type TripsWithoutRoutesPage,
 } from "@/lib/api/fleet-operations/api-trip-tools";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -51,7 +56,8 @@ function resultMessage(result: string | undefined, removed: string | undefined) 
   return null;
 }
 
-function TripsTable({ rows }: Readonly<{ rows: readonly TripsWithoutRoutesRow[] }>) {
+function TripsTable({ result }: Readonly<{ result: TripsWithoutRoutesPage }>) {
+  const { items: rows } = result;
   return (
     <section
       className="vehicle-status-maintenance-panel"
@@ -60,7 +66,7 @@ function TripsTable({ rows }: Readonly<{ rows: readonly TripsWithoutRoutesRow[] 
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">
-            {rows.length} record{rows.length === 1 ? "" : "s"}
+            {result.total} record{result.total === 1 ? "" : "s"}
           </p>
           <h2 id="trips-without-routes-results-title">Report Results</h2>
         </div>
@@ -102,6 +108,39 @@ function TripsTable({ rows }: Readonly<{ rows: readonly TripsWithoutRoutesRow[] 
   );
 }
 
+function TripsPagination({ page }: Readonly<{ page: TripsWithoutRoutesPage }>) {
+  if (page.totalPages <= 1) return null;
+
+  const href = (nextPage: number) =>
+    `/trips/remove-without-routes?${new URLSearchParams({ page: String(nextPage) }).toString()}`;
+
+  return (
+    <nav className="table-pagination" aria-label="Trips without routes pages">
+      {page.page > 1 ? (
+        <Link className="button button-secondary button-small" href={href(page.page - 1)}>
+          Previous
+        </Link>
+      ) : (
+        <span className="button button-secondary button-small" aria-disabled="true">
+          Previous
+        </span>
+      )}
+      <span aria-live="polite">
+        Page {page.page} of {page.totalPages}
+      </span>
+      {page.page < page.totalPages ? (
+        <Link className="button button-secondary button-small" href={href(page.page + 1)}>
+          Next
+        </Link>
+      ) : (
+        <span className="button button-secondary button-small" aria-disabled="true">
+          Next
+        </span>
+      )}
+    </nav>
+  );
+}
+
 function ApiUnavailable() {
   return (
     <section className="vehicle-status-card" role="alert">
@@ -115,7 +154,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function RemoveTripsWithoutRoutesPage({
+async function RemoveTripsWithoutRoutesPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -126,9 +165,15 @@ export default async function RemoveTripsWithoutRoutesPage({
     return tripAccessRestricted("Your session could not be loaded.");
   if (!hasTripAuthorityAccess(session)) return tripAccessRestricted();
 
-  let rows: TripsWithoutRoutesRow[];
+  const query = await searchParams;
+  const rawPage = Number(queryValue(query.page));
+  const requestedPage = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+  let tripPage: TripsWithoutRoutesPage;
   try {
-    rows = await getTripsWithoutRoutes();
+    tripPage = await getTripsWithoutRoutesPage({
+      page: requestedPage,
+      pageSize: DEFAULT_TRIPS_WITHOUT_ROUTES_PAGE_SIZE,
+    });
   } catch (error) {
     if (error instanceof TripToolsApiError && error.reason === "unauthorized")
       return (
@@ -147,7 +192,6 @@ export default async function RemoveTripsWithoutRoutesPage({
     );
   }
 
-  const query = await searchParams;
   const message = resultMessage(queryValue(query.result), queryValue(query.removed));
   return (
     <main className="page-shell vehicle-page-shell">
@@ -170,8 +214,9 @@ export default async function RemoveTripsWithoutRoutesPage({
             {message.text}
           </div>
         ) : null}
-        <TripsTable rows={rows} />
-        {rows.length > 0 ? (
+        <TripsTable result={tripPage} />
+        <TripsPagination page={tripPage} />
+        {tripPage.total > 0 ? (
           <div className="button-row">
             <form action={removeTripsWithoutRoutesAction}>
               <ConfirmSubmitButton
@@ -197,5 +242,15 @@ export default async function RemoveTripsWithoutRoutesPage({
         </div>
       </section>
     </main>
+  );
+}
+
+export default function RemoveTripsWithoutRoutesPage(
+  props: Parameters<typeof RemoveTripsWithoutRoutesPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <RemoveTripsWithoutRoutesPageContent {...props} />
+    </Suspense>
   );
 }

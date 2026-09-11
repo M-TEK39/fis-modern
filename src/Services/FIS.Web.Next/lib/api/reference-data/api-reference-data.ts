@@ -23,6 +23,16 @@ export type LicenseTypeRecord = {
   category: string | null;
 };
 
+export type ReferenceDataPage<T> = {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_REFERENCE_DATA_PAGE_SIZE = 24;
+
 export type ReferenceDataApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
 
 export class ReferenceDataApiError extends Error {
@@ -127,6 +137,51 @@ function readList(value: unknown) {
   return value.filter(isRecord);
 }
 
+function normalizePage(value: number | undefined) {
+  return value && Number.isSafeInteger(value) && value > 0 ? value : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    value && Number.isSafeInteger(value) && value > 0 ? value : DEFAULT_REFERENCE_DATA_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
+function readPage<T>(value: unknown, mapper: (item: unknown) => T | null): ReferenceDataPage<T> {
+  if (!isRecord(value))
+    throw new ReferenceDataApiError("invalid-response", "The reference-data response was invalid.");
+
+  const items = getValue(value, "items", "Items");
+  const page = asNumber(getValue(value, "page", "Page"));
+  const pageSize = asNumber(getValue(value, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(value, "total", "Total"));
+  const totalPages = asNumber(getValue(value, "totalPages", "TotalPages", "total_pages"));
+  if (
+    !Array.isArray(items) ||
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isSafeInteger(page) ||
+    !Number.isSafeInteger(pageSize) ||
+    !Number.isSafeInteger(total) ||
+    !Number.isSafeInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  )
+    throw new ReferenceDataApiError("invalid-response", "The reference-data page was invalid.");
+
+  return {
+    items: items.map(mapper).filter((item): item is T => item !== null),
+    page,
+    pageSize,
+    total,
+    totalPages,
+  };
+}
+
 function mapVehicleType(value: unknown): VehicleTypeRecord | null {
   if (!isRecord(value)) return null;
   const typeCode = asNumber(getValue(value, "type_code", "typeCode"));
@@ -220,6 +275,14 @@ export async function getVehicleTypes() {
     .filter((value): value is VehicleTypeRecord => value !== null);
 }
 
+export async function getVehicleTypesPage(options: { page?: number; pageSize?: number } = {}) {
+  const query = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  return readPage(await readJson(await requestApi(`api/type/page?${query}`)), mapVehicleType);
+}
+
 export async function createVehicleType(description: string) {
   return mapVehicleType(await sendJson("api/type", "POST", { type_description: description }));
 }
@@ -241,6 +304,14 @@ export async function getFuelTypes() {
   return readList(await readJson(await requestApi("api/fueltype")))
     .map(mapFuelType)
     .filter((value): value is FuelTypeRecord => value !== null);
+}
+
+export async function getFuelTypesPage(options: { page?: number; pageSize?: number } = {}) {
+  const query = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  return readPage(await readJson(await requestApi(`api/fueltype/page?${query}`)), mapFuelType);
 }
 
 export async function createFuelType(description: string, ratePerLitre: number | null) {
@@ -273,6 +344,14 @@ export async function getUnitsOfMeasure() {
   return readList(await readJson(await requestApi("api/UnitOfMeasure")))
     .map(mapUnit)
     .filter((value): value is UnitOfMeasureRecord => value !== null);
+}
+
+export async function getUnitsOfMeasurePage(options: { page?: number; pageSize?: number } = {}) {
+  const query = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  return readPage(await readJson(await requestApi(`api/UnitOfMeasure/page?${query}`)), mapUnit);
 }
 
 export async function createUnitOfMeasure(
@@ -313,6 +392,14 @@ export async function getLicenseTypes() {
   return readList(await readJson(await requestApi("api/License")))
     .map(mapLicense)
     .filter((value): value is LicenseTypeRecord => value !== null);
+}
+
+export async function getLicenseTypesPage(options: { page?: number; pageSize?: number } = {}) {
+  const query = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  return readPage(await readJson(await requestApi(`api/License/page?${query}`)), mapLicense);
 }
 
 export async function createLicenseType(description: string, category: string | null) {

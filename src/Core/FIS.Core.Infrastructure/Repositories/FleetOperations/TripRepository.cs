@@ -66,6 +66,24 @@ public sealed class TripRepository : ITripRepository
         "site_code",
     ];
 
+    private static readonly string[] TripAuthorityVehicleContractColumns =
+    [
+        "contract_code",
+        "vmf_code",
+        "site_code",
+        "still_current",
+        "contract_type",
+    ];
+
+    private static readonly string[] TripAuthorityVehicleColumns =
+    [
+        "vmf_code",
+        "vehicle_status_code",
+        "fleet_number",
+        "registration_number",
+        "licence_due_date",
+    ];
+
     private readonly FisDbContext _context;
 
     public TripRepository(FisDbContext context)
@@ -99,6 +117,202 @@ public sealed class TripRepository : ITripRepository
 
     public async Task<IEnumerable<Trip>> GetAllAsync() =>
         await QueryAsync(orderBy: "[t].[issue_date] DESC, [t].[trip_authority_code] DESC");
+
+    public async Task<TripSummaryPage> GetTripSummaryPageAsync(TripSummaryPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var search = query.Search?.Trim().ToLowerInvariant() ?? string.Empty;
+        var filter = query.Filter?.Trim().ToLowerInvariant() ?? string.Empty;
+        var contractColumns = await GetTableColumnsAsync(ContractTableName);
+        var hasContractProjection = RequiredContractColumns.All(contractColumns.Contains);
+
+        // GetTripsByVehicleAsync returns no rows when the legacy contract link
+        // is unavailable. Preserve that existing report behavior for the
+        // optional VMF filter instead of guessing a replacement field.
+        if (query.VmfCode.HasValue && !hasContractProjection)
+        {
+            return new TripSummaryPage([], 1, pageSize, 0);
+        }
+
+        var siteColumns = hasContractProjection
+            ? await GetTableColumnsAsync("site")
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var hasSiteProjection = new[] { "Site_code", "description" }.All(siteColumns.Contains);
+        var departmentExpression = hasSiteProjection
+            ? "COALESCE(NULLIF(LTRIM(RTRIM([s].[description])), ''), '')"
+            : "CAST('' AS varchar(1))";
+        var contractJoin = hasContractProjection
+            ? $"LEFT JOIN [dbo].[{ContractTableName}] AS [c] ON [c].[contract_code] = [t].[contract_code]"
+            : string.Empty;
+        var siteJoin = hasSiteProjection
+            ? $"LEFT JOIN [dbo].[site] AS [s] ON [s].[Site_code] = [c].[site_code]"
+                + (
+                    siteColumns.Contains("is_deleted")
+                        ? " AND ([s].[is_deleted] = 0 OR [s].[is_deleted] IS NULL)"
+                        : string.Empty
+                )
+            : string.Empty;
+
+        var availableColumns = await GetAvailableColumnsAsync();
+        var conditions = new List<string>
+        {
+            "[t].[issue_date] >= @startDate",
+            "[t].[issue_date] <= @endDate",
+        };
+        if (availableColumns.Contains("is_deleted"))
+        {
+            conditions.Add("([t].[is_deleted] = 0 OR [t].[is_deleted] IS NULL)");
+        }
+
+        if (query.VmfCode.HasValue)
+        {
+            conditions.Add("[c].[vmf_code] = @vmfCode");
+        }
+
+        var sourceSql = $"""
+            SELECT
+                [t].[contract_code] AS [contract_code],
+                {departmentExpression} AS [department],
+                COUNT(1) AS [trip_count],
+                COALESCE(
+                    SUM(CONVERT(decimal(19, 2), COALESCE([t].[end_odo_meter], 0))),
+                    CAST(0 AS decimal(19, 2))
+                ) AS [total_kilometers],
+                MIN([t].[issue_date]) AS [first_trip],
+                MAX([t].[issue_date]) AS [last_trip],
+                MAX([t].[trip_authority_code]) AS [last_trip_id]
+            FROM [dbo].[{TableName}] AS [t]
+            {contractJoin}
+            {siteJoin}
+            WHERE {string.Join(" AND ", conditions)}
+            GROUP BY [t].[contract_code], {departmentExpression}
+            """;
+
+        var summaryConditions = new List<string>();
+        var keyExpression =
+            "CASE WHEN [summary].[contract_code] > 0 THEN CONCAT('VMF ', CONVERT(varchar(50), [summary].[contract_code])) ELSE 'Unknown' END";
+        var vehicleExpression = keyExpression;
+        var departmentDisplayExpression =
+            "CASE WHEN [summary].[department] = '' THEN '-' ELSE [summary].[department] END";
+
+        if (search.Length > 0)
+        {
+            var searchableExpressions = new[]
+            {
+                keyExpression,
+                vehicleExpression,
+                departmentDisplayExpression,
+                "CONVERT(varchar(50), [summary].[trip_count])",
+                "CONVERT(varchar(50), CONVERT(bigint, [summary].[total_kilometers]))",
+            };
+            summaryConditions.Add(
+                $"({string.Join(
+                    " OR ",
+                    searchableExpressions.Select(expression =>
+                        $"CHARINDEX(@search, LOWER(CONVERT(varchar(250), {expression}))) > 0"
+                    )
+                )})"
+            );
+        }
+
+        switch (filter)
+        {
+            case "vehicle":
+                summaryConditions.Add("[summary].[contract_code] > 0");
+                break;
+            case "department":
+                summaryConditions.Add("[summary].[department] <> ''");
+                break;
+            case "multiple":
+                summaryConditions.Add("[summary].[trip_count] > 1");
+                break;
+        }
+
+        var summaryWhere =
+            summaryConditions.Count == 0
+                ? string.Empty
+                : $"WHERE {string.Join(" AND ", summaryConditions)}";
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            int total;
+            await using (var countCommand = connection.CreateCommand())
+            {
+                countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                countCommand.CommandText = $"""
+                    SELECT COUNT(1)
+                    FROM (
+                        {sourceSql}
+                    ) AS [summary]
+                    {summaryWhere}
+                    """;
+                AddTripSummaryParameters(countCommand, query, search);
+                total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            }
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            dataCommand.CommandText = $"""
+                SELECT
+                    [summary].[contract_code],
+                    [summary].[department],
+                    [summary].[trip_count],
+                    [summary].[total_kilometers],
+                    [summary].[first_trip],
+                    [summary].[last_trip]
+                FROM (
+                    {sourceSql}
+                ) AS [summary]
+                {summaryWhere}
+                ORDER BY [summary].[last_trip] DESC, [summary].[last_trip_id] DESC, [summary].[contract_code] DESC
+                OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddTripSummaryParameters(dataCommand, query, search);
+            AddParameter(dataCommand, "@offset", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<TripSummaryLine>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(
+                    new TripSummaryLine
+                    {
+                        VmfCode = ReadInt32(reader, "contract_code") ?? 0,
+                        RegistrationNumber = string.Empty,
+                        TripCount = ReadInt32(reader, "trip_count") ?? 0,
+                        TotalKilometers = ReadDecimal(reader, "total_kilometers") ?? 0,
+                        Department = ReadString(reader, "department") ?? string.Empty,
+                        FirstTrip = ReadDateTime(reader, "first_trip") ?? DateTime.MinValue,
+                        LastTrip = ReadDateTime(reader, "last_trip") ?? DateTime.MinValue,
+                    }
+                );
+            }
+
+            return new TripSummaryPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
 
     public async Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync()
     {
@@ -235,6 +449,375 @@ public sealed class TripRepository : ITripRepository
             }
         }
     }
+
+    public Task<TripAuthorityVehiclePage> GetTripAuthorityInServicePageAsync(
+        TripAuthorityVehiclePageQuery query
+    ) => GetTripAuthorityVehiclePageAsync(query, includeOutVehicles: false);
+
+    public Task<TripAuthorityVehiclePage> GetTripAuthorityOutPageAsync(
+        TripAuthorityVehiclePageQuery query
+    ) => GetTripAuthorityVehiclePageAsync(query, includeOutVehicles: true);
+
+    private async Task<TripAuthorityVehiclePage> GetTripAuthorityVehiclePageAsync(
+        TripAuthorityVehiclePageQuery query,
+        bool includeOutVehicles
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var normalizedQuery = query with
+        {
+            Page = Math.Max(1, query.Page),
+            PageSize = Math.Clamp(query.PageSize, 1, 100),
+            SearchMode = string.Equals(query.SearchMode, "GP", StringComparison.OrdinalIgnoreCase)
+                ? "GP"
+                : "GG",
+            SearchTerm = string.IsNullOrWhiteSpace(query.SearchTerm)
+                ? null
+                : query.SearchTerm.Trim(),
+        };
+
+        // The legacy page only shows OUT rows for an authority-number search.
+        // Keep the IN result empty for that filter instead of silently ignoring
+        // the selected value and returning an unfiltered page.
+        if (!includeOutVehicles && normalizedQuery.TripAuthorityCode.HasValue)
+        {
+            return EmptyTripAuthorityVehiclePage(normalizedQuery);
+        }
+
+        var contractColumns = await GetTableColumnsAsync(ContractTableName);
+        var vehicleColumns = await GetTableColumnsAsync(VehicleTableName);
+        var missingColumns = TripAuthorityVehicleContractColumns
+            .Where(column => !contractColumns.Contains(column))
+            .Concat(TripAuthorityVehicleColumns.Where(column => !vehicleColumns.Contains(column)))
+            .ToArray();
+        if (missingColumns.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"The required Trip Authority vehicle compatibility columns are not available: {string.Join(", ", missingColumns)}"
+            );
+        }
+
+        var tripColumns = await GetAvailableColumnsAsync();
+        var modelColumns = await GetTableColumnsAsync(ModelTableName);
+        var makeColumns = await GetTableColumnsAsync(MakeTableName);
+        var hasModelProjection =
+            vehicleColumns.Contains("model_code")
+            && new[] { "model_code", "make_code", "model_description" }.All(modelColumns.Contains);
+        var hasMakeProjection =
+            hasModelProjection
+            && new[] { "make_code", "make_description" }.All(makeColumns.Contains);
+
+        var siteColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (normalizedQuery.DepartmentCode.HasValue)
+        {
+            siteColumns = await GetTableColumnsAsync("site");
+            if (!new[] { "Site_code", "Depatrment_code" }.All(siteColumns.Contains))
+            {
+                // A requested department filter cannot be safely applied when
+                // the legacy site relationship is unavailable. Fail closed.
+                return EmptyTripAuthorityVehiclePage(normalizedQuery);
+            }
+        }
+
+        var projection = new List<string>
+        {
+            "[c].[vmf_code] AS [vmf_code]",
+            "[c].[contract_code] AS [contract_code]",
+            "[c].[site_code] AS [site_code]",
+            "[v].[fleet_number] AS [fleet_number]",
+            "[v].[registration_number] AS [registration_number]",
+            "[v].[licence_due_date] AS [licence_due_date]",
+            "[c].[contract_type] AS [contract_type]",
+            hasModelProjection
+                ? "[m].[model_description] AS [model_description]"
+                : "CAST(NULL AS varchar(250)) AS [model_description]",
+            hasMakeProjection
+                ? "[mk].[make_description] AS [make_description]"
+                : "CAST(NULL AS varchar(250)) AS [make_description]",
+            normalizedQuery.DepartmentCode.HasValue
+                ? "[s].[Depatrment_code] AS [department_code]"
+                : "CAST(NULL AS smallint) AS [department_code]",
+            includeOutVehicles
+                ? "[ot].[trip_authority_code] AS [trip_authority_code]"
+                : "CAST(NULL AS int) AS [trip_authority_code]",
+            includeOutVehicles
+                ? "[ot].[trip_issue_date] AS [trip_issue_date]"
+                : "CAST(NULL AS datetime2) AS [trip_issue_date]",
+            includeOutVehicles
+                ? "[ot].[trip_contract_code] AS [trip_contract_code]"
+                : "CAST(NULL AS int) AS [trip_contract_code]",
+        };
+
+        var joins = new List<string>();
+        if (hasModelProjection)
+        {
+            joins.Add(
+                $"LEFT JOIN [dbo].[{ModelTableName}] AS [m] ON [m].[model_code] = [v].[model_code]"
+            );
+        }
+
+        if (hasMakeProjection)
+        {
+            joins.Add(
+                $"LEFT JOIN [dbo].[{MakeTableName}] AS [mk] ON [mk].[make_code] = [m].[make_code]"
+            );
+        }
+
+        if (normalizedQuery.DepartmentCode.HasValue)
+        {
+            joins.Add("INNER JOIN [dbo].[site] AS [s] ON [s].[Site_code] = [c].[site_code]");
+        }
+
+        var conditions = new List<string>
+        {
+            "[c].[still_current] = 'Y'",
+            "[v].[vehicle_status_code] > 0",
+        };
+        if (contractColumns.Contains("is_deleted"))
+        {
+            conditions.Add("([c].[is_deleted] = 0 OR [c].[is_deleted] IS NULL)");
+        }
+
+        if (vehicleColumns.Contains("is_deleted"))
+        {
+            conditions.Add("([v].[is_deleted] = 0 OR [v].[is_deleted] IS NULL)");
+        }
+
+        if (normalizedQuery.DepartmentCode.HasValue)
+        {
+            if (siteColumns.Contains("site_active"))
+            {
+                conditions.Add("[s].[site_active] = 1");
+            }
+
+            if (siteColumns.Contains("is_deleted"))
+            {
+                conditions.Add("([s].[is_deleted] = 0 OR [s].[is_deleted] IS NULL)");
+            }
+        }
+
+        var openTripNotDeletedForTripAlias = tripColumns.Contains("is_deleted")
+            ? "AND ([open_trip].[is_deleted] = 0 OR [open_trip].[is_deleted] IS NULL)"
+            : string.Empty;
+        var openTripNotDeletedForContractAlias = contractColumns.Contains("is_deleted")
+            ? "AND ([open_contract].[is_deleted] = 0 OR [open_contract].[is_deleted] IS NULL)"
+            : string.Empty;
+
+        var openTripsCte = includeOutVehicles
+            ? $"""
+                [OpenTrips] AS (
+                    SELECT
+                        [open_trip].[trip_authority_code] AS [trip_authority_code],
+                        [open_trip].[contract_code] AS [trip_contract_code],
+                        [open_trip].[issue_date] AS [trip_issue_date],
+                        [open_contract].[vmf_code] AS [vmf_code],
+                        ROW_NUMBER() OVER (
+                            PARTITION BY [open_contract].[vmf_code]
+                            ORDER BY [open_trip].[issue_date] DESC, [open_trip].[trip_authority_code] DESC
+                        ) AS [trip_rank]
+                    FROM [dbo].[{TableName}] AS [open_trip]
+                    INNER JOIN [dbo].[{ContractTableName}] AS [open_contract]
+                        ON [open_contract].[contract_code] = [open_trip].[contract_code]
+                    WHERE [open_trip].[end_odo_meter] IS NULL
+                      {openTripNotDeletedForTripAlias}
+                      {openTripNotDeletedForContractAlias}
+                ),
+                """
+            : string.Empty;
+
+        if (includeOutVehicles)
+        {
+            joins.Add(
+                "INNER JOIN [OpenTrips] AS [ot] ON [ot].[vmf_code] = [c].[vmf_code] AND [ot].[trip_rank] = 1"
+            );
+        }
+        else
+        {
+            conditions.Add(
+                $"""
+                NOT EXISTS (
+                    SELECT 1
+                    FROM [dbo].[{TableName}] AS [open_trip]
+                    INNER JOIN [dbo].[{ContractTableName}] AS [open_contract]
+                        ON [open_contract].[contract_code] = [open_trip].[contract_code]
+                    WHERE [open_contract].[vmf_code] = [c].[vmf_code]
+                      AND [open_trip].[end_odo_meter] IS NULL
+                      {openTripNotDeletedForTripAlias}
+                      {openTripNotDeletedForContractAlias}
+                )
+                """
+            );
+        }
+
+        var rowsCte = $"""
+            WITH {openTripsCte}[Rows] AS (
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{ContractTableName}] AS [c]
+                INNER JOIN [dbo].[{VehicleTableName}] AS [v]
+                    ON [v].[vmf_code] = [c].[vmf_code]
+                {string.Join(Environment.NewLine, joins)}
+                WHERE {string.Join(" AND ", conditions)}
+            )
+            """;
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            int total;
+            await using (var countCommand = connection.CreateCommand())
+            {
+                countCommand.Transaction = transaction;
+                var filters = BuildTripAuthorityVehiclePageFilters(
+                    countCommand,
+                    normalizedQuery,
+                    includeOutVehicles
+                );
+                countCommand.CommandText = $"""
+                    {rowsCte}
+                    SELECT COUNT(1)
+                    FROM [Rows] AS [r]
+                    WHERE {string.Join(" AND ", filters)}
+                    """;
+                total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            }
+
+            var totalPages = Math.Max(
+                1,
+                (int)Math.Ceiling(total / (double)normalizedQuery.PageSize)
+            );
+            var page = Math.Min(normalizedQuery.Page, totalPages);
+            var skip = checked((long)(page - 1) * normalizedQuery.PageSize);
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = transaction;
+            var dataFilters = BuildTripAuthorityVehiclePageFilters(
+                dataCommand,
+                normalizedQuery,
+                includeOutVehicles
+            );
+            var orderBy = includeOutVehicles
+                ? "[r].[trip_issue_date] DESC, [r].[trip_authority_code] DESC, COALESCE([r].[fleet_number], ''), [r].[vmf_code], [r].[contract_code]"
+                : "COALESCE([r].[fleet_number], ''), [r].[vmf_code], [r].[contract_code]";
+            dataCommand.CommandText = $"""
+                {rowsCte}
+                SELECT
+                    [r].[vmf_code],
+                    [r].[contract_code],
+                    [r].[site_code],
+                    [r].[fleet_number],
+                    [r].[registration_number],
+                    [r].[licence_due_date],
+                    [r].[make_description],
+                    [r].[model_description],
+                    [r].[contract_type],
+                    [r].[trip_authority_code],
+                    [r].[trip_contract_code]
+                FROM [Rows] AS [r]
+                WHERE {string.Join(" AND ", dataFilters)}
+                ORDER BY {orderBy}
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, normalizedQuery.PageSize);
+
+            var items = new List<TripAuthorityVehiclePageItem>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(
+                    new TripAuthorityVehiclePageItem(
+                        ReadInt32(reader, "vmf_code") ?? 0,
+                        includeOutVehicles
+                            ? ReadInt32(reader, "trip_contract_code") ?? 0
+                            : ReadInt32(reader, "contract_code") ?? 0,
+                        ReadInt16(reader, "site_code") ?? 0,
+                        ReadString(reader, "fleet_number"),
+                        ReadString(reader, "registration_number"),
+                        ReadDateTime(reader, "licence_due_date"),
+                        ReadString(reader, "make_description"),
+                        ReadString(reader, "model_description"),
+                        ReadString(reader, "contract_type"),
+                        includeOutVehicles ? ReadInt32(reader, "trip_authority_code") : null
+                    )
+                );
+            }
+
+            return new TripAuthorityVehiclePage(items, page, normalizedQuery.PageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static TripAuthorityVehiclePage EmptyTripAuthorityVehiclePage(
+        TripAuthorityVehiclePageQuery query
+    ) => new([], 1, query.PageSize, 0);
+
+    private static List<string> BuildTripAuthorityVehiclePageFilters(
+        DbCommand command,
+        TripAuthorityVehiclePageQuery query,
+        bool includeOutVehicles
+    )
+    {
+        var filters = new List<string> { "1 = 1" };
+
+        if (query.SiteCode.HasValue)
+        {
+            filters.Add("[r].[site_code] = @siteCode");
+            AddParameter(command, "@siteCode", DbType.Int16, query.SiteCode.Value);
+        }
+
+        if (query.DepartmentCode.HasValue)
+        {
+            filters.Add("[r].[department_code] = @departmentCode");
+            AddParameter(command, "@departmentCode", DbType.Int16, query.DepartmentCode.Value);
+        }
+
+        if (includeOutVehicles && query.TripAuthorityCode.HasValue)
+        {
+            filters.Add("[r].[trip_authority_code] = @tripAuthorityCode");
+            AddParameter(
+                command,
+                "@tripAuthorityCode",
+                DbType.Int32,
+                query.TripAuthorityCode.Value
+            );
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.SearchTerm))
+        {
+            var searchColumn =
+                query.SearchMode == "GP" ? "[r].[registration_number]" : "[r].[fleet_number]";
+            filters.Add($"LOWER(COALESCE({searchColumn}, '')) LIKE @search ESCAPE '\\'");
+            AddParameter(
+                command,
+                "@search",
+                DbType.String,
+                $"%{EscapeLikePattern(query.SearchTerm)}%"
+            );
+        }
+
+        return filters;
+    }
+
+    private static string EscapeLikePattern(string value) =>
+        value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("%", "\\%", StringComparison.Ordinal)
+            .Replace("_", "\\_", StringComparison.Ordinal)
+            .Replace("[", "\\[", StringComparison.Ordinal);
 
     public async Task<IEnumerable<Trip>> GetTripsByContractAsync(int contractCode) =>
         await QueryAsync(
@@ -1700,6 +2283,25 @@ public sealed class TripRepository : ITripRepository
         command.Parameters.Add(parameter);
     }
 
+    private static void AddTripSummaryParameters(
+        DbCommand command,
+        TripSummaryPageQuery query,
+        string search
+    )
+    {
+        AddParameter(command, "@startDate", DbType.DateTime, query.StartDate);
+        AddParameter(command, "@endDate", DbType.DateTime, query.EndDate);
+        if (query.VmfCode.HasValue)
+        {
+            AddParameter(command, "@vmfCode", DbType.Int32, query.VmfCode.Value);
+        }
+
+        if (search.Length > 0)
+        {
+            AddParameter(command, "@search", DbType.String, search);
+        }
+    }
+
     private static string? ReadString(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
@@ -1722,6 +2324,12 @@ public sealed class TripRepository : ITripRepository
     {
         var ordinal = reader.GetOrdinal(column);
         return reader.IsDBNull(ordinal) ? null : Convert.ToDateTime(reader.GetValue(ordinal));
+    }
+
+    private static decimal? ReadDecimal(DbDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : Convert.ToDecimal(reader.GetValue(ordinal));
     }
 
     private static bool ReadBoolean(DbDataReader reader, string column)

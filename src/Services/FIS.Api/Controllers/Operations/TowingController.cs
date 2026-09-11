@@ -12,6 +12,9 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 public class TowingController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly ITowingRepository _repository;
     private readonly TowTruckCompatibilityService _towTruckService;
     private readonly ILogger<TowingController> _logger;
@@ -39,6 +42,43 @@ public class TowingController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] int[]? vmfCode = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasTowingRole())
+            return Forbid();
+
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new TowingPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize),
+                    vmfCode
+                )
+            );
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged towing requests");
             return StatusCode(500);
         }
     }
@@ -125,6 +165,43 @@ public class TowingController : BaseApiController
         {
             _logger.LogError(ex, "Error retrieving tow truck options");
             return StatusCode(500, "Error retrieving tow truck options");
+        }
+    }
+
+    [HttpGet("tow-trucks/page")]
+    public async Task<ActionResult> GetTowTruckPage(
+        [FromQuery] string? search = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasTowingRole())
+            return Forbid();
+
+        try
+        {
+            var result = await _towTruckService.GetPageAsync(
+                search,
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumPageSize),
+                HttpContext.RequestAborted
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    total = result.Total,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged tow truck options");
+            return StatusCode(500, "Error retrieving paged tow truck options");
         }
     }
 

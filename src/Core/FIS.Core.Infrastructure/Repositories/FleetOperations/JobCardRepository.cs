@@ -106,6 +106,167 @@ public class JobCardRepository : IJobCardRepository
             .ToListAsync();
     }
 
+    public async Task<JobCardPage> GetPageAsync(JobCardPageQuery query)
+    {
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.GetPageAsync(query);
+
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var searchTerm = query.SearchTerm?.Trim() ?? string.Empty;
+        var searchType = string.Equals(query.SearchType, "GP", StringComparison.OrdinalIgnoreCase)
+            ? "GP"
+            : "GG";
+        var statusCodes = query.StatusCodes?.Distinct().ToArray() ?? [];
+
+        var filtered = _context
+            .JobCards.AsNoTracking()
+            .Include(jc => jc.Vehicle)
+            .Include(jc => jc.ExtraCodeRef)
+            .Include(jc => jc.AssignedToUser)
+            .Include(jc => jc.AuthorizerUser)
+            .Where(jc => !jc.is_deleted);
+
+        if (statusCodes.Length > 0)
+            filtered = filtered.Where(jc => statusCodes.Contains(jc.status_code));
+
+        if (query.JobCardId.HasValue)
+            filtered = filtered.Where(jc => jc.job_card_id == query.JobCardId.Value);
+
+        if (searchTerm.Length > 0)
+        {
+            var searchId = int.TryParse(searchTerm, out var parsedSearchId)
+                ? parsedSearchId
+                : (int?)null;
+
+            filtered =
+                searchType == "GP"
+                    ? filtered.Where(jc =>
+                        (
+                            jc.Vehicle != null
+                            && jc.Vehicle.registration_number != null
+                            && jc.Vehicle.registration_number.Contains(searchTerm)
+                        ) || (searchId.HasValue && jc.job_card_id == searchId.Value)
+                    )
+                    : filtered.Where(jc =>
+                        (
+                            jc.Vehicle != null
+                            && jc.Vehicle.fleet_number != null
+                            && jc.Vehicle.fleet_number.Contains(searchTerm)
+                        ) || (searchId.HasValue && jc.job_card_id == searchId.Value)
+                    );
+        }
+
+        var totalRecords = await filtered.CountAsync();
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = (long)(page - 1) * pageSize;
+        var items = await filtered
+            .OrderByDescending(jc => jc.date_created)
+            .ThenByDescending(jc => jc.job_card_id)
+            .Skip((int)skip)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return new JobCardPage(items, page, pageSize, totalRecords);
+    }
+
+    public async Task<JobCardPage> GetPriorityUnassignedPageAsync(
+        PriorityUnassignedJobCardPageQuery query
+    )
+    {
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.GetPriorityUnassignedPageAsync(query);
+
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var filtered = _context
+            .JobCards.AsNoTracking()
+            .Include(jc => jc.Vehicle)
+            .Include(jc => jc.ExtraCodeRef)
+            .Include(jc => jc.AssignedToUser)
+            .Include(jc => jc.AuthorizerUser)
+            .Where(jc =>
+                !jc.is_deleted
+                && jc.priority == "H"
+                && jc.assigned_to == null
+                && jc.status_code != 5
+                && jc.status_code != 7
+            );
+
+        var totalRecords = await filtered.CountAsync();
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = (long)(page - 1) * pageSize;
+        var items = await filtered
+            .OrderByDescending(jc => jc.date_created)
+            .ThenByDescending(jc => jc.job_card_id)
+            .Skip((int)skip)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return new JobCardPage(items, page, pageSize, totalRecords);
+    }
+
+    public async Task<RepairCostReportPage> GetRepairCostReportPageAsync(
+        RepairCostReportPageQuery query
+    )
+    {
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.GetRepairCostReportPageAsync(query);
+
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var filtered = _context
+            .JobCards.AsNoTracking()
+            .Where(jc => !jc.is_deleted && jc.status_code == 5);
+
+        if (query.VmfCode.HasValue)
+            filtered = filtered.Where(jc => jc.vmf_code == query.VmfCode.Value);
+
+        if (query.VmfCodes is not null)
+        {
+            var vmfCodes = query.VmfCodes.Distinct().ToArray();
+            filtered =
+                vmfCodes.Length == 0
+                    ? filtered.Where(_ => false)
+                    : filtered.Where(jc => vmfCodes.Contains(jc.vmf_code));
+        }
+
+        if (query.FromDate.HasValue)
+            filtered = filtered.Where(jc => jc.date_updated >= query.FromDate.Value);
+
+        if (query.ToDate.HasValue)
+            filtered = filtered.Where(jc => jc.date_updated <= query.ToDate.Value.AddDays(1));
+
+        var totalRecords = await filtered.CountAsync();
+        var grandTotal = await filtered.SumAsync(jc => jc.total_cost ?? 0m);
+        var totalLabour = await filtered.SumAsync(jc => jc.labour_cost ?? 0m);
+        var totalParts = await filtered.SumAsync(jc => jc.parts_cost ?? 0m);
+        var totalOther = await filtered.SumAsync(jc => jc.other_cost ?? 0m);
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = (long)(page - 1) * pageSize;
+        var items = await filtered
+            .Include(jc => jc.Vehicle)
+            .OrderByDescending(jc => jc.date_updated)
+            .ThenByDescending(jc => jc.job_card_id)
+            .Skip((int)skip)
+            .Take(pageSize)
+            .ToListAsync();
+
+        return new RepairCostReportPage(
+            items,
+            page,
+            pageSize,
+            totalRecords,
+            grandTotal,
+            totalLabour,
+            totalParts,
+            totalOther
+        );
+    }
+
     /// <summary>
     /// Get job cards by GG number (fleet_number)
     /// Legacy: Replaces DEV_SEL_JobCards stored procedure

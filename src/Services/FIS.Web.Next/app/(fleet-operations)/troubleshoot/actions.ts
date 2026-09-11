@@ -106,6 +106,8 @@ export async function updateTroubleshootLogsAction(formData: FormData) {
 export async function saveApproverRanksAction(formData: FormData) {
   const access = await authorizeTroubleshooting();
   if (!access.ok) pathWithMessage("/troubleshoot/approver-ranks", access.message);
+  const page = integer(formData, "page", "Page", false) ?? 1;
+  const returnPath = `/troubleshoot/approver-ranks?page=${page}`;
 
   try {
     const ids = formData.getAll("rankId");
@@ -125,12 +127,9 @@ export async function saveApproverRanksAction(formData: FormData) {
     if (ranks.length === 0) throw new Error("Add at least one approver rank before saving.");
     await saveApproverRanks(ranks);
     revalidatePath("/troubleshoot/approver-ranks");
-    redirect("/troubleshoot/approver-ranks?saved=1");
+    redirect(`${returnPath}&saved=1`);
   } catch (error) {
-    pathWithMessage(
-      "/troubleshoot/approver-ranks",
-      apiMessage(error, "Approver ranks could not be saved."),
-    );
+    pathWithMessage(returnPath, apiMessage(error, "Approver ranks could not be saved."));
   }
 }
 

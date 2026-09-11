@@ -81,7 +81,13 @@ export function TrackingTable({
   records,
   title = "Tracking records",
   editable = true,
-}: Readonly<{ records: readonly TrackingRecord[]; title?: string; editable?: boolean }>) {
+  returnPath,
+}: Readonly<{
+  records: readonly TrackingRecord[];
+  title?: string;
+  editable?: boolean;
+  returnPath?: string;
+}>) {
   if (records.length === 0) return <p className="muted-copy">No tracking records found.</p>;
   return (
     <div className="vehicle-table-wrapper">
@@ -113,7 +119,11 @@ export function TrackingTable({
                 <td>
                   <Link
                     className="button button-secondary"
-                    href={`/tracking/maintenance?trackCode=${record.trackCode}`}
+                    href={
+                      returnPath
+                        ? `${returnPath}${returnPath.includes("?") ? "&" : "?"}trackCode=${encodeURIComponent(record.trackCode)}`
+                        : `/tracking/maintenance?trackCode=${record.trackCode}`
+                    }
                   >
                     Edit
                   </Link>

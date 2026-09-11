@@ -479,7 +479,10 @@ public class AuthController : ControllerBase
 
             ApplyLegacyPasswordChange(profile.UserAccessOld, request.NewPassword, now);
             await SaveChangesWithOptionalCredentialAsync(credential);
-            await RevokeSessionsAfterCredentialEventAsync(profile.UserAccessCode, "password change");
+            await RevokeSessionsAfterCredentialEventAsync(
+                profile.UserAccessCode,
+                "password change"
+            );
 
             _logger.LogInformation(
                 "Password changed successfully for user {Username} by user_access_code {ChangedBy}",
@@ -864,7 +867,10 @@ public class AuthController : ControllerBase
             ApplyLegacyPasswordChange(profile.UserAccessOld, request.NewPassword, now);
 
             await SaveChangesWithOptionalCredentialAsync(credential);
-            await RevokeSessionsAfterCredentialEventAsync(profile.UserAccessCode, "admin password reset");
+            await RevokeSessionsAfterCredentialEventAsync(
+                profile.UserAccessCode,
+                "admin password reset"
+            );
 
             return Ok(
                 new UserAdminResponse
@@ -1211,7 +1217,10 @@ public class AuthController : ControllerBase
 
             await SaveChangesWithOptionalCredentialAsync(credential);
             await transaction.CommitAsync();
-            await RevokeSessionsAfterCredentialEventAsync(credential.user_access_code, "password reset");
+            await RevokeSessionsAfterCredentialEventAsync(
+                credential.user_access_code,
+                "password reset"
+            );
 
             return Ok(
                 new UserAdminResponse
@@ -1284,7 +1293,10 @@ public class AuthController : ControllerBase
             }
 
             await _context.SaveChangesAsync();
-            await RevokeSessionsAfterCredentialEventAsync(profile.UserAccessCode, "user deactivation");
+            await RevokeSessionsAfterCredentialEventAsync(
+                profile.UserAccessCode,
+                "user deactivation"
+            );
 
             return Ok(
                 new UserAdminResponse
@@ -1353,7 +1365,10 @@ public class AuthController : ControllerBase
             }
 
             await _context.SaveChangesAsync();
-            await RevokeSessionsAfterCredentialEventAsync(profile.UserAccessCode, "expired-password deactivation");
+            await RevokeSessionsAfterCredentialEventAsync(
+                profile.UserAccessCode,
+                "expired-password deactivation"
+            );
 
             return Ok(
                 new UserAdminResponse
@@ -1496,10 +1511,7 @@ public class AuthController : ControllerBase
         }
     }
 
-    private async Task RevokeSessionsAfterCredentialEventAsync(
-        int userAccessCode,
-        string eventName
-    )
+    private async Task RevokeSessionsAfterCredentialEventAsync(int userAccessCode, string eventName)
     {
         var result = await _sessionManagementService.RevokeUserSessionsAsync(userAccessCode);
         if (result.Status == SessionManagementStatus.Succeeded)

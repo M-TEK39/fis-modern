@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
+import RouteLoading from "@/components/app-shell/route-loading";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import VehicleAuthorizationClient from "@/app/(fleet-operations)/vehicles/authorize/vehicle-authorization-client";
 import {
@@ -96,7 +98,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function VehicleAuthorizationPage({
+async function VehicleAuthorizationPageContent({
   searchParams,
 }: Readonly<{
   searchParams: Promise<VehicleAuthorizationSearchParams>;
@@ -190,4 +192,16 @@ export default async function VehicleAuthorizationPage({
       </main>
     );
   }
+}
+
+export default function VehicleAuthorizationPage(
+  props: Readonly<{
+    searchParams: Promise<VehicleAuthorizationSearchParams>;
+  }>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <VehicleAuthorizationPageContent {...props} />
+    </Suspense>
+  );
 }

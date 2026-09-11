@@ -73,6 +73,21 @@ namespace FIS.Core.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<FuelTypePage> GetPageAsync(int page, int pageSize)
+        {
+            var resolvedPage = Math.Max(1, page);
+            var resolvedPageSize = Math.Clamp(pageSize, 1, 100);
+            var query = _context.FuelTypes.AsNoTracking().Where(fuelType => !fuelType.is_deleted);
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderBy(fuelType => fuelType.fuel_description)
+                .ThenBy(fuelType => fuelType.fuel_type_code)
+                .Skip((resolvedPage - 1) * resolvedPageSize)
+                .Take(resolvedPageSize)
+                .ToListAsync();
+            return new FuelTypePage(items, resolvedPage, resolvedPageSize, total);
+        }
+
         /// <summary>
         /// Creates a new fuel type
         /// </summary>

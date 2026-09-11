@@ -1,16 +1,37 @@
-import ClearanceUniversalReportPage from "@/app/(fleet-operations)/clearance/reports/universal/page";
+import { redirect } from "next/navigation";
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
 
 type LegacyClearanceUniversalResultsProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default function LegacyClearanceUniversalResultsPage({
+function toQueryString(query: Record<string, string | string[] | undefined>) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(key, item);
+    } else if (value !== undefined) {
+      params.set(key, value);
+    }
+  }
+  return params.toString();
+}
+
+async function LegacyClearanceUniversalResultsContent({
   searchParams,
 }: LegacyClearanceUniversalResultsProps) {
+  const query = toQueryString(await searchParams);
+  return redirect(`/clearance/reports/universal${query ? `?${query}` : ""}`);
+}
+
+export default function LegacyClearanceUniversalResultsPage(
+  props: LegacyClearanceUniversalResultsProps,
+) {
   return (
-    <ClearanceUniversalReportPage
-      routePath="/Clearance/RPT_Clear_Univ2.aspx"
-      searchParams={searchParams}
-    />
+    <Suspense fallback={<RouteLoading />}>
+      <LegacyClearanceUniversalResultsContent {...props} />
+    </Suspense>
   );
 }

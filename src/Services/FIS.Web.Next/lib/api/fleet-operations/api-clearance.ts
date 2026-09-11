@@ -27,6 +27,16 @@ export type MerchantRecord = {
   merchantName: string | null;
 };
 
+export type MerchantPage = {
+  items: MerchantRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_MERCHANT_PAGE_SIZE = 24;
+
 export type ClearanceRequest = {
   clearance_code?: number;
   vmf_code: number;
@@ -324,6 +334,60 @@ export async function getMerchants() {
     .map(mapMerchant)
     .filter((merchant): merchant is MerchantRecord => merchant !== null)
     .sort((left, right) => (left.merchantName ?? "").localeCompare(right.merchantName ?? ""));
+}
+
+export async function getMerchantsPage({
+  page = 1,
+  pageSize = DEFAULT_MERCHANT_PAGE_SIZE,
+  search,
+}: Readonly<{
+  page?: number;
+  pageSize?: number;
+  search?: string;
+}> = {}): Promise<MerchantPage> {
+  const params = new URLSearchParams({
+    page: String(Math.max(1, page)),
+    pageSize: String(Math.max(1, pageSize)),
+  });
+  if (search?.trim()) params.set("search", search.trim());
+
+  const response = await requestApi(`api/merchant/page?${params.toString()}`);
+  const payload = await readJson(response);
+  if (!isRecord(payload)) {
+    throw new ClearanceApiError(
+      "invalid-response",
+      "The FIS API returned an invalid merchant page.",
+    );
+  }
+
+  const items = getCollection(payload)
+    .map(mapMerchant)
+    .filter((merchant): merchant is MerchantRecord => merchant !== null);
+  const resolvedPageSize = asNumber(getValue(payload, "pageSize", "PageSize")) ?? pageSize;
+  const total = asNumber(getValue(payload, "total", "Total")) ?? items.length;
+  const totalPages =
+    asNumber(getValue(payload, "totalPages", "TotalPages")) ??
+    Math.max(1, Math.ceil(total / Math.max(1, resolvedPageSize)));
+
+  return {
+    items,
+    page: asNumber(getValue(payload, "page", "Page")) ?? page,
+    pageSize: resolvedPageSize,
+    total,
+    totalPages,
+  };
+}
+
+export async function getMerchant(merchantCode: number) {
+  const response = await requestApi(`api/merchant/${encodeURIComponent(merchantCode)}`);
+  const merchant = mapMerchant(await readJson(response));
+  if (!merchant) {
+    throw new ClearanceApiError(
+      "invalid-response",
+      "The FIS API returned an invalid merchant record.",
+    );
+  }
+  return merchant;
 }
 
 export async function createClearanceAgainstApi(request: ClearanceRequest) {

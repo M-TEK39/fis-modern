@@ -45,6 +45,32 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
 
     public async Task<IEnumerable<LeaseContractTerms>> GetAllAsync() => await QueryAsync();
 
+    public async Task<LeaseContractTermsPage> GetPageAsync(LeaseContractTermsPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var availableColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
+        var filter = BuildPageFilter(query, availableColumns, vehicleColumns);
+        var total = await CountAsync(availableColumns, vehicleColumns, filter);
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+        var items = await QueryAsync(
+            filter.Predicate,
+            command => AddFilterParameters(command, filter),
+            availableColumns,
+            vehicleColumns,
+            filter.IncludeVehicleJoin,
+            skip,
+            pageSize
+        );
+
+        return new LeaseContractTermsPage(items, page, pageSize, total);
+    }
+
     public async Task<LeaseContractTerms?> GetByVehicleAsync(int vmfCode) =>
         (
             await QueryAsync(
@@ -219,11 +245,18 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
 
     private async Task<List<LeaseContractTerms>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null
+        Action<DbCommand>? configure = null,
+        IReadOnlySet<string>? availableColumnsOverride = null,
+        IReadOnlySet<string>? vehicleColumnsOverride = null,
+        bool includeVehicleJoin = false,
+        long? skip = null,
+        int? take = null
     )
     {
-        var availableColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
-        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
+        var availableColumns =
+            availableColumnsOverride ?? await GetAvailableColumnsAsync(TableName, RequiredColumns);
+        var vehicleColumns =
+            vehicleColumnsOverride ?? await GetAvailableColumnsAsync(VehicleTableName);
         var vehicleDateFallbackAvailable =
             vehicleColumns.Contains("vmf_code") && vehicleColumns.Contains("take_on_date");
         var connection = _context.Database.GetDbConnection();
@@ -324,12 +357,16 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
                 GetRejectionReasonProjection(availableColumns),
                 GetLeaseStatusProjection(availableColumns),
             };
-            var joins = vehicleDateFallbackAvailable
-                ? "LEFT JOIN [dbo].[vehicle_master] AS [v] ON [v].[vmf_code] = [l].[vmf_Code]"
-                : string.Empty;
-            var where = string.IsNullOrWhiteSpace(predicate)
-                ? GetActiveFilter(availableColumns)
-                : $"{predicate} AND {GetActiveFilter(availableColumns)}";
+            var joins = GetVehicleJoinClause(
+                vehicleColumns,
+                includeVehicleJoin,
+                vehicleDateFallbackAvailable
+            );
+            var where = BuildWhereClause(availableColumns, predicate);
+            var pagination =
+                skip is not null && take is not null
+                    ? " OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY"
+                    : string.Empty;
 
             command.CommandText = $"""
                 SELECT {string.Join(", ", projection)}
@@ -337,8 +374,14 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
                 {joins}
                 WHERE {where}
                 ORDER BY [l].[VehicleContractTermID] DESC
+                {pagination}
                 """;
             configure?.Invoke(command);
+            if (skip is not null && take is not null)
+            {
+                AddParameter(command, "@offset", DbType.Int64, skip.Value);
+                AddParameter(command, "@pageSize", DbType.Int32, take.Value);
+            }
 
             var results = new List<LeaseContractTerms>();
             await using var reader = await command.ExecuteReaderAsync();
@@ -355,6 +398,144 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
             {
                 await connection.CloseAsync();
             }
+        }
+    }
+
+    private async Task<int> CountAsync(
+        IReadOnlySet<string> availableColumns,
+        IReadOnlySet<string> vehicleColumns,
+        LeaseContractTermsPageFilter filter
+    )
+    {
+        var vehicleDateFallbackAvailable =
+            vehicleColumns.Contains("vmf_code") && vehicleColumns.Contains("take_on_date");
+        var joins = GetVehicleJoinClause(
+            vehicleColumns,
+            filter.IncludeVehicleJoin,
+            vehicleDateFallbackAvailable
+        );
+        var where = BuildWhereClause(availableColumns, filter.Predicate);
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                SELECT COUNT_BIG(1)
+                FROM [dbo].[{TableName}] AS [l]
+                {joins}
+                WHERE {where}
+                """;
+            AddFilterParameters(command, filter);
+            var value = await command.ExecuteScalarAsync();
+            return value is null || value == DBNull.Value
+                ? 0
+                : checked(Convert.ToInt32(Convert.ToInt64(value)));
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static LeaseContractTermsPageFilter BuildPageFilter(
+        LeaseContractTermsPageQuery query,
+        IReadOnlySet<string> availableColumns,
+        IReadOnlySet<string> vehicleColumns
+    )
+    {
+        var predicates = new List<string>();
+        var statusPredicate = GetStatusPredicate(query.Status, availableColumns);
+        if (statusPredicate is not null)
+        {
+            predicates.Add(statusPredicate);
+        }
+
+        var search = query.Search?.Trim();
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            return new LeaseContractTermsPageFilter(
+                predicates.Count == 0 ? null : string.Join(" AND ", predicates),
+                null,
+                false
+            );
+        }
+
+        var searchColumn = string.Equals(query.Mode, "GP", StringComparison.OrdinalIgnoreCase)
+            ? "registration_number"
+            : "fleet_number";
+        if (
+            !vehicleColumns.Contains("vmf_code")
+            || !vehicleColumns.Contains("vehicle_status_code")
+            || !vehicleColumns.Contains(searchColumn)
+        )
+        {
+            predicates.Add("1 = 0");
+            return new LeaseContractTermsPageFilter(string.Join(" AND ", predicates), null, false);
+        }
+
+        predicates.Add(
+            $"[v].[vehicle_status_code] > 0 AND {GetVehicleActiveFilter(vehicleColumns)} AND LOWER(COALESCE([v].[{searchColumn}], '')) LIKE @vehicleSearch"
+        );
+        return new LeaseContractTermsPageFilter(
+            string.Join(" AND ", predicates),
+            $"%{search.ToLowerInvariant()}%",
+            true
+        );
+    }
+
+    private static string? GetStatusPredicate(string? status, IReadOnlySet<string> availableColumns)
+    {
+        var statusCode = status switch
+        {
+            "pending" => 1,
+            "approved" => 2,
+            "rejected" => 4,
+            _ => (int?)null,
+        };
+        if (statusCode is null)
+        {
+            return null;
+        }
+
+        var statusExpression = GetEffectiveAuthorityStatusExpression(availableColumns);
+        return statusExpression is null ? "1 = 0" : $"{statusExpression} = {statusCode.Value}";
+    }
+
+    private static string GetVehicleJoinClause(
+        IReadOnlySet<string> vehicleColumns,
+        bool includeVehicleJoin,
+        bool vehicleDateFallbackAvailable
+    ) =>
+        vehicleDateFallbackAvailable || (includeVehicleJoin && vehicleColumns.Contains("vmf_code"))
+            ? "LEFT JOIN [dbo].[vehicle_master] AS [v] ON [v].[vmf_code] = [l].[vmf_Code]"
+            : string.Empty;
+
+    private static string GetVehicleActiveFilter(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "ISNULL([v].[is_deleted], 0) = 0" : "1 = 1";
+
+    private static string BuildWhereClause(
+        IReadOnlySet<string> availableColumns,
+        string? predicate
+    ) =>
+        string.IsNullOrWhiteSpace(predicate)
+            ? GetActiveFilter(availableColumns)
+            : $"{predicate} AND {GetActiveFilter(availableColumns)}";
+
+    private static void AddFilterParameters(DbCommand command, LeaseContractTermsPageFilter filter)
+    {
+        if (filter.SearchTerm is not null)
+        {
+            AddParameter(command, "@vehicleSearch", DbType.String, filter.SearchTerm);
         }
     }
 
@@ -671,17 +852,22 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
 
     private static string GetAuthorityStatusProjection(IReadOnlySet<string> columns)
     {
+        var expression = GetEffectiveAuthorityStatusExpression(columns);
+        return expression is null
+            ? "CAST(NULL AS int) AS [AuthorityStatus]"
+            : $"{expression} AS [AuthorityStatus]";
+    }
+
+    private static string? GetEffectiveAuthorityStatusExpression(IReadOnlySet<string> columns)
+    {
         if (!columns.Contains("AuthorityStatus"))
         {
-            return "CAST(NULL AS int) AS [AuthorityStatus]";
+            return null;
         }
 
-        if (!columns.Contains("Rejected"))
-        {
-            return "[l].[AuthorityStatus] AS [AuthorityStatus]";
-        }
-
-        return "CASE WHEN [l].[AuthorityStatus] = 0 AND [l].[Rejected] = 1 THEN 4 ELSE [l].[AuthorityStatus] END AS [AuthorityStatus]";
+        return columns.Contains("Rejected")
+            ? "CASE WHEN [l].[AuthorityStatus] = 0 AND [l].[Rejected] = 1 THEN 4 ELSE [l].[AuthorityStatus] END"
+            : "[l].[AuthorityStatus]";
     }
 
     private static string GetEffectiveStartProjection(
@@ -920,6 +1106,12 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         var ordinal = reader.GetOrdinal(column);
         return reader.IsDBNull(ordinal) ? null : Convert.ToBoolean(reader.GetValue(ordinal));
     }
+
+    private sealed record LeaseContractTermsPageFilter(
+        string? Predicate,
+        string? SearchTerm,
+        bool IncludeVehicleJoin
+    );
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 }

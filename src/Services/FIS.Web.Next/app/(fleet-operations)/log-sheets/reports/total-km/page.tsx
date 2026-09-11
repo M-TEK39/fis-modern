@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import { LogsheetShell, formatNumber } from "@/app/(fleet-operations)/log-sheets/_components";
@@ -17,7 +21,7 @@ function monthStart(value: string) {
   return /^\d{4}-\d{2}$/.test(value) ? new Date(`${value}-01T00:00:00.000Z`) : null;
 }
 
-export default async function LogsheetTotalKmReportPage({
+async function LogsheetTotalKmReportPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogsheetSession();
@@ -186,4 +190,14 @@ export default async function LogsheetTotalKmReportPage({
       </LogsheetShell>
     );
   }
+}
+
+export default function LogsheetTotalKmReportPage(
+  props: Parameters<typeof LogsheetTotalKmReportPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LogsheetTotalKmReportPageContent {...props} />
+    </Suspense>
+  );
 }

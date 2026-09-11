@@ -1,6 +1,3 @@
-import TrafficDeptPage from "@/app/(fleet-operations)/fines/traffic-dept/page";
-import type { TrafficDeptPageProps } from "@/app/(fleet-operations)/fines/traffic-dept/page";
+import { createLegacyTrafficDeptPage } from "@/app/(fleet-operations)/fines/traffic-dept/_route";
 
-export default function LegacyTrafficDeptPage(props: TrafficDeptPageProps) {
-  return <TrafficDeptPage {...props} routePath="/fines/MNT_Traffic_getdata.aspx" />;
-}
+export default createLegacyTrafficDeptPage("/fines/MNT_Traffic_getdata.aspx");

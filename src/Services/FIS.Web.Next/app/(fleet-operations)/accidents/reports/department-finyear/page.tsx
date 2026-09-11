@@ -71,7 +71,7 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading department financial year report...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -182,6 +182,7 @@ async function DepartmentFinancialYearReportContent({
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
@@ -319,12 +320,11 @@ async function DepartmentFinancialYearReportContent({
   );
 }
 
-export default async function DepartmentFinancialYearReportPage({
+export default function DepartmentFinancialYearReportPage({
   searchParams,
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
-  await connection();
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="accident-department-finyear-title">

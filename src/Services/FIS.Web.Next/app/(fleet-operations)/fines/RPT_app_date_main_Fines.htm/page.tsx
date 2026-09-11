@@ -1,11 +1,6 @@
-import { FineReportPage } from "@/app/(fleet-operations)/fines/reports/[mode]/page";
+import { createLegacyFineReportPage } from "@/app/(fleet-operations)/fines/reports/[mode]/_route";
 
-export default function LegacyAppearDateReportPage(props: Parameters<typeof FineReportPage>[0]) {
-  return (
-    <FineReportPage
-      {...props}
-      forcedMode="appear-date"
-      routePath="/fines/RPT_app_date_main_Fines.htm"
-    />
-  );
-}
+export default createLegacyFineReportPage({
+  forcedMode: "appear-date",
+  routePath: "/fines/RPT_app_date_main_Fines.htm",
+});

@@ -201,24 +201,28 @@ public sealed class AccidentRepository : IAccidentRepository
     {
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var requestedPage = Math.Max(1, query.Page);
-        var normalizedSearchType = string.Equals(query.SearchType, "GG", StringComparison.OrdinalIgnoreCase)
+        var normalizedSearchType = string.Equals(
+            query.SearchType,
+            "GG",
+            StringComparison.OrdinalIgnoreCase
+        )
             ? "GG"
             : "GP";
         var searchTerm = query.SearchTerm?.Trim() ?? string.Empty;
         var accidentColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
         var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName, ["vmf_code"]);
         var typeColumns = await GetAvailableColumnsAsync("type");
-        var vehicleNumberColumn = normalizedSearchType == "GG"
-            ? "fleet_number"
-            : "registration_number";
+        var vehicleNumberColumn =
+            normalizedSearchType == "GG" ? "fleet_number" : "registration_number";
         var hasSearch = searchTerm.Length > 0;
         var requiresVehicle = hasSearch || query.LocationCode.HasValue;
-        var typeJoinAvailable = vehicleColumns.Contains("type_code")
-            && typeColumns.Contains("type_code");
+        var typeJoinAvailable =
+            vehicleColumns.Contains("type_code") && typeColumns.Contains("type_code");
 
         var vehicleJoinConditions = new List<string> { "[v].[vmf_code] = [a].[vmf_code]" };
 
-        var vehicleJoin = $"{(requiresVehicle ? "INNER" : "LEFT")} JOIN [dbo].[{VehicleTableName}] AS [v] ON {string.Join(" AND ", vehicleJoinConditions)}";
+        var vehicleJoin =
+            $"{(requiresVehicle ? "INNER" : "LEFT")} JOIN [dbo].[{VehicleTableName}] AS [v] ON {string.Join(" AND ", vehicleJoinConditions)}";
         var typeJoin = typeJoinAvailable
             ? "LEFT JOIN [dbo].[type] AS [t] ON [t].[type_code] = [v].[type_code]"
             : string.Empty;
@@ -235,7 +239,9 @@ public sealed class AccidentRepository : IAccidentRepository
         if (query.LocationCode.HasValue)
         {
             conditions.Add(
-                vehicleColumns.Contains("location_code") ? "[v].[location_code] = @locationCode" : "1 = 0"
+                vehicleColumns.Contains("location_code")
+                    ? "[v].[location_code] = @locationCode"
+                    : "1 = 0"
             );
         }
 

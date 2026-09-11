@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -21,7 +25,7 @@ import {
 } from "@/lib/api/fleet-operations/api-tracking";
 import { getSites } from "@/lib/api/reference-data/api-sites";
 
-export default async function TrackingSitePeriodReportPage({
+async function TrackingSitePeriodReportPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getTrackingSession();
@@ -123,4 +127,14 @@ export default async function TrackingSitePeriodReportPage({
       </TrackingShell>
     );
   }
+}
+
+export default function TrackingSitePeriodReportPage(
+  props: Parameters<typeof TrackingSitePeriodReportPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TrackingSitePeriodReportPageContent {...props} />
+    </Suspense>
+  );
 }

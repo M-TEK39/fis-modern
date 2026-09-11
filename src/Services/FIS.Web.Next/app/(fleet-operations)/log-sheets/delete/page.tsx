@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -14,10 +18,27 @@ import {
   sessionMessage,
   statusMessage,
 } from "@/app/(fleet-operations)/log-sheets/_page";
-import { getLogsheets, LogsheetApiError } from "@/lib/api/fleet-operations/api-logsheets";
+import { getLogsheetsPage, LogsheetApiError } from "@/lib/api/fleet-operations/api-logsheets";
 import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
 
-export default async function LogsheetDeletePage({
+const PAGE_SIZE = 24;
+
+function pageValue(value: string | string[] | undefined) {
+  const parsed = Number(queryValue(value));
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function pageHref(values: Record<string, string | number | undefined>, page: number) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  if (page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return `/log-sheets/delete${query ? `?${query}` : ""}`;
+}
+
+async function LogsheetDeletePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogsheetSession();
@@ -35,25 +56,32 @@ export default async function LogsheetDeletePage({
   const requisition = queryValue(query.requisition);
   const mode = queryValue(query.mode).toUpperCase() === "GP" ? "GP" : "GG";
   const vmfCode = Number(queryValue(query.vmfCode));
+  const requestedPage = pageValue(query.page);
   const message = statusMessage(query);
   try {
-    const [options, records] = await Promise.all([getVehicleOptions(), getLogsheets()]);
+    const options = await getVehicleOptions();
     const matches = filterVehicles(options, search, mode);
     const selectedVehicle =
       Number.isInteger(vmfCode) && vmfCode > 0
         ? options.find((vehicle) => vehicle.vmfCode === vmfCode)
         : null;
-    const filtered = requisition
-      ? records.filter(
-          (record) =>
-            record.requisitionNumber?.localeCompare(requisition, undefined, {
-              sensitivity: "accent",
-            }) === 0,
-        )
-      : selectedVehicle
-        ? records.filter((record) => record.vmfCode === selectedVehicle.vmfCode)
-        : [];
-    const returnPath = `/log-sheets/delete?${new URLSearchParams({ ...(search ? { search } : {}), mode, ...(requisition ? { requisition } : {}), ...(selectedVehicle ? { vmfCode: String(vmfCode) } : {}) }).toString()}`;
+    const recordPage =
+      requisition || selectedVehicle
+        ? await getLogsheetsPage({
+            page: requestedPage,
+            pageSize: PAGE_SIZE,
+            requisition: requisition || undefined,
+            vmfCode: requisition ? undefined : selectedVehicle?.vmfCode,
+          })
+        : null;
+    const filtered = recordPage?.items ?? [];
+    const pageValues = {
+      ...(search ? { search } : {}),
+      mode,
+      ...(requisition ? { requisition } : {}),
+      ...(selectedVehicle ? { vmfCode } : {}),
+    };
+    const returnPath = pageHref(pageValues, recordPage?.page ?? 1);
     return (
       <LogsheetShell
         title="Delete a Logsheet"
@@ -74,6 +102,7 @@ export default async function LogsheetDeletePage({
           vmfCode={selectedVehicle ? String(vmfCode) : ""}
           options={matches}
           requisition={requisition}
+          resetPage
         />
         {filtered.length > 0 || requisition || selectedVehicle ? (
           <section
@@ -83,12 +112,43 @@ export default async function LogsheetDeletePage({
             <div className="vehicle-form-section-header">
               <div>
                 <p className="eyebrow">
-                  {filtered.length} record{filtered.length === 1 ? "" : "s"}
+                  {recordPage?.total ?? 0} record{recordPage?.total === 1 ? "" : "s"}
                 </p>
                 <h2 id="logsheet-delete-results-title">Matching logsheets</h2>
               </div>
             </div>
             <LogsheetTable records={filtered} mode="delete" returnPath={returnPath} />
+            {recordPage && recordPage.totalPages > 1 ? (
+              <nav className="vehicle-pagination" aria-label="Matching logsheets pages">
+                {recordPage.page > 1 ? (
+                  <Link
+                    className="vehicle-pagination-button"
+                    href={pageHref(pageValues, recordPage.page - 1)}
+                  >
+                    Previous
+                  </Link>
+                ) : (
+                  <span className="vehicle-pagination-button vehicle-pagination-disabled">
+                    Previous
+                  </span>
+                )}
+                <span className="vehicle-pagination-meta" aria-live="polite">
+                  Page {recordPage.page} of {recordPage.totalPages}
+                </span>
+                {recordPage.page < recordPage.totalPages ? (
+                  <Link
+                    className="vehicle-pagination-button"
+                    href={pageHref(pageValues, recordPage.page + 1)}
+                  >
+                    Next
+                  </Link>
+                ) : (
+                  <span className="vehicle-pagination-button vehicle-pagination-disabled">
+                    Next
+                  </span>
+                )}
+              </nav>
+            ) : null}
           </section>
         ) : (
           <p className="muted-copy">Search by requisition or vehicle to load logsheets.</p>
@@ -119,4 +179,12 @@ export default async function LogsheetDeletePage({
       </LogsheetShell>
     );
   }
+}
+
+export default function LogsheetDeletePage(props: Parameters<typeof LogsheetDeletePageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LogsheetDeletePageContent {...props} />
+    </Suspense>
+  );
 }

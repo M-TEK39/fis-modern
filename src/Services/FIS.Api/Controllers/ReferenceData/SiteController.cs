@@ -81,6 +81,9 @@ public class SiteDto
 [Route("api/[controller]")]
 public class SiteController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly ISiteRepository _siteRepository;
     private readonly ILogger<SiteController> _logger;
 
@@ -101,6 +104,37 @@ public class SiteController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving sites");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        try
+        {
+            var result = await _siteRepository.GetPageAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumPageSize)
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(MapToDto),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged sites");
             return StatusCode(500, "Internal server error");
         }
     }

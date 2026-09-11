@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -19,7 +23,7 @@ import {
 import { getSession } from "@/lib/auth/session";
 import { searchWorkshopVehicles } from "@/lib/api/fleet-operations/api-workshop";
 
-export default async function PrivateHireFuelCardVehiclePage({
+async function PrivateHireFuelCardVehiclePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -208,4 +212,14 @@ export default async function PrivateHireFuelCardVehiclePage({
       </main>
     );
   }
+}
+
+export default function PrivateHireFuelCardVehiclePage(
+  props: Parameters<typeof PrivateHireFuelCardVehiclePageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <PrivateHireFuelCardVehiclePageContent {...props} />
+    </Suspense>
+  );
 }

@@ -47,6 +47,7 @@ function ErrorState({ notFoundState = false }: Readonly<{ notFoundState?: boolea
 }
 
 async function HqDeleteConfirmContent({ searchParams }: HqDeleteConfirmPageProps) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired") return <SessionRecovery returnPath="/accidents/hq/delete" />;
@@ -102,8 +103,7 @@ async function HqDeleteConfirmContent({ searchParams }: HqDeleteConfirmPageProps
   }
 }
 
-export default async function HqDeleteConfirmPage({ searchParams }: HqDeleteConfirmPageProps) {
-  await connection();
+export default function HqDeleteConfirmPage({ searchParams }: HqDeleteConfirmPageProps) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="hq-delete-confirm-title">
@@ -111,7 +111,7 @@ export default async function HqDeleteConfirmPage({ searchParams }: HqDeleteConf
           fallback={
             <div className="loading-card" aria-busy="true">
               <span className="spinner" aria-hidden="true" />
-              <p>Loading accident details...</p>
+              <p>Loading page…</p>
             </div>
           }
         >

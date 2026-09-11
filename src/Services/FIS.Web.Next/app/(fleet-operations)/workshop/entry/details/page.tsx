@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -11,7 +15,7 @@ import {
 } from "@/lib/api/fleet-operations/api-workshop";
 import { getSession } from "@/lib/auth/session";
 
-export default async function WorkshopEntryDetailsPage({
+async function WorkshopEntryDetailsPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -108,5 +112,15 @@ export default async function WorkshopEntryDetailsPage({
         <WorkshopEntryForm record={null} vehicles={vehicles} returnPath="/workshop/entry/details" />
       </section>
     </main>
+  );
+}
+
+export default function WorkshopEntryDetailsPage(
+  props: Parameters<typeof WorkshopEntryDetailsPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <WorkshopEntryDetailsPageContent {...props} />
+    </Suspense>
   );
 }

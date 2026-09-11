@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   ContractApiError,
@@ -118,7 +119,7 @@ function ApprovalQueue({ contracts }: Readonly<{ contracts: ContractRecord[] }>)
   );
 }
 
-export default async function BackdatingApprovalPage({
+async function BackdatingApprovalPageContent({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -308,5 +309,17 @@ export default async function BackdatingApprovalPage({
         </div>
       </section>
     </main>
+  );
+}
+
+export default function BackdatingApprovalPage(
+  props: Readonly<{
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+  }>,
+) {
+  return (
+    <StreamedRoute>
+      <BackdatingApprovalPageContent {...props} />
+    </StreamedRoute>
   );
 }

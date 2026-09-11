@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_ASSET_VERIFICATION_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type AssetVerificationRecord = {
@@ -40,6 +41,14 @@ export type AssetVerificationRecord = {
   dateLastVerified: string | null;
   comments: string | null;
   isDeleted: boolean;
+};
+
+export type AssetVerificationPage = {
+  items: AssetVerificationRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type AssetVerificationInput = Omit<
@@ -106,6 +115,44 @@ function getCollection(value: unknown) {
     return Array.isArray(collection) ? collection : [];
   }
   return [];
+}
+
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_ASSET_VERIFICATION_PAGE_SIZE)
+      : DEFAULT_ASSET_VERIFICATION_PAGE_SIZE;
+  return Math.min(100, pageSize);
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
@@ -256,6 +303,52 @@ export async function getAssetVerifications() {
   return getCollection(payload)
     .map(mapRecord)
     .filter((value): value is AssetVerificationRecord => value !== null);
+}
+
+export async function getAssetVerificationsForVehicle(vmfCode: number) {
+  const payload = await readJson(
+    await requestApi(`api/assetverification/vehicle/${encodeURIComponent(vmfCode)}`),
+  );
+  return getCollection(payload)
+    .map(mapRecord)
+    .filter((value): value is AssetVerificationRecord => value !== null);
+}
+
+function readAssetVerificationPage(payload: unknown): AssetVerificationPage {
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new AssetVerificationApiError(
+      "invalid-response",
+      "The FIS API returned an invalid asset verification page.",
+    );
+  }
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata) {
+    throw new AssetVerificationApiError(
+      "invalid-response",
+      "The FIS API returned incomplete asset verification pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items
+      .map(mapRecord)
+      .filter((value): value is AssetVerificationRecord => value !== null),
+    ...metadata,
+  };
+}
+
+export async function getAssetVerificationsPage(
+  options: { page?: number; pageSize?: number } = {},
+): Promise<AssetVerificationPage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const payload = await readJson(
+    await requestApi(`api/assetverification/page?${params.toString()}`),
+  );
+  return readAssetVerificationPage(payload);
 }
 
 export async function createAssetVerification(input: AssetVerificationInput) {

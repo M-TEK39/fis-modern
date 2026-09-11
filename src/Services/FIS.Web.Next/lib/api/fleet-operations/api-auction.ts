@@ -31,6 +31,14 @@ export type AuctionRecord = {
   registrationNumber: string | null;
 };
 
+export type AuctionPage = {
+  items: AuctionRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 export type AuctionMaintenanceRequest = {
   auction_code: number;
   vmf_code: number;
@@ -233,6 +241,11 @@ function mapAuction(value: unknown): AuctionRecord | null {
   };
 }
 
+function pageNumber(value: unknown, fallback: number) {
+  const parsed = asNumber(value);
+  return parsed !== null && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 function mapReport(value: unknown): AuctionReport {
   if (!isRecord(value)) {
     throw new AuctionApiError(
@@ -259,6 +272,40 @@ export async function getAuctions() {
         (right.authDate ?? "").localeCompare(left.authDate ?? "") ||
         right.auctionCode - left.auctionCode,
     );
+}
+
+export async function getAuctionPage(
+  searchType: AuctionSearchType,
+  searchQuery: string,
+  page = 1,
+  pageSize = 24,
+): Promise<AuctionPage> {
+  const params = new URLSearchParams({
+    searchType,
+    searchQuery,
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  const payload = await readJson(await requestApi(`api/Auction/page?${params.toString()}`));
+  if (!isRecord(payload)) {
+    throw new AuctionApiError("invalid-response", "The FIS API returned an invalid auction page.");
+  }
+
+  const items = getCollection(payload)
+    .map(mapAuction)
+    .filter((auction): auction is AuctionRecord => auction !== null);
+  const resolvedPageSize = pageNumber(getValue(payload, "pageSize", "PageSize"), pageSize);
+  const total = Math.max(0, asNumber(getValue(payload, "total", "Total")) ?? items.length);
+  return {
+    items,
+    page: pageNumber(getValue(payload, "page", "Page"), 1),
+    pageSize: resolvedPageSize,
+    total,
+    totalPages: pageNumber(
+      getValue(payload, "totalPages", "TotalPages"),
+      Math.max(1, Math.ceil(total / resolvedPageSize)),
+    ),
+  };
 }
 
 export async function getAuction(auctionCode: number) {

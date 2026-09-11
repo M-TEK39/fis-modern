@@ -11,6 +11,9 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 public class ModelController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly IModelRepository _modelRepository;
     private readonly IMakeRepository _makeRepository;
     private readonly ILogger<ModelController> _logger;
@@ -44,6 +47,45 @@ public class ModelController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving models");
+            return StatusCode(500, "An error occurred while retrieving models");
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] short? makeCode = null
+    )
+    {
+        try
+        {
+            if (makeCode.HasValue && await _makeRepository.GetByIdAsync(makeCode.Value) is null)
+            {
+                _logger.LogWarning("Make with code {MakeCode} not found", makeCode.Value);
+                return NotFound($"Make with code {makeCode.Value} not found");
+            }
+
+            var result = await _modelRepository.GetPageAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumPageSize),
+                makeCode
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(model => MapToDto(model)),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged models for make {MakeCode}", makeCode);
             return StatusCode(500, "An error occurred while retrieving models");
         }
     }

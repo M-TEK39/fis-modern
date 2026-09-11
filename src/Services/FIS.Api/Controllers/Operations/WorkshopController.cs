@@ -11,6 +11,9 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 public class WorkshopController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly IWorkshopRepository _repository;
     private readonly ILogger<WorkshopController> _logger;
 
@@ -32,6 +35,77 @@ public class WorkshopController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] string? search = null,
+        [FromQuery] string? status = null,
+        [FromQuery] string? searchField = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasWorkshopRole())
+            return Forbid();
+
+        var normalizedStatus = status?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (normalizedStatus is not ("" or "all" or "open" or "closed" or "vehicle"))
+        {
+            return BadRequest(
+                new { error = "Workshop status must be all, open, closed, or vehicle." }
+            );
+        }
+
+        var normalizedSearchField = searchField?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (normalizedSearchField is not ("" or "fleet" or "registration"))
+        {
+            return BadRequest(
+                new { error = "Workshop search field must be fleet or registration." }
+            );
+        }
+
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new WorkshopPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize),
+                    search,
+                    normalizedStatus,
+                    normalizedSearchField
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result
+                        .Items.Select(item => new
+                        {
+                            ww_code = item.WwCode,
+                            vmf_code = item.VmfCode,
+                            receive_date = item.ReceiveDate,
+                            complete_time = item.CompleteTime,
+                            complete_date = item.CompleteDate,
+                            fleet_number = item.FleetNumber,
+                            registration_number = item.RegistrationNumber,
+                            location_code = item.LocationCode,
+                            status = item.Status,
+                        })
+                        .ToList(),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged workshop entries");
             return StatusCode(500);
         }
     }

@@ -10,8 +10,7 @@ namespace FIS.Tools.DatabaseAuditTool;
 /// </summary>
 internal static class LegacySchemaAudit
 {
-    private const string DefaultRelativeRoot =
-        "backup/sources/GGMT.Database/SQLScripts/v2.0.0";
+    private const string DefaultRelativeRoot = "backup/sources/GGMT.Database/SQLScripts/v2.0.0";
 
     private static readonly Regex CreateTablePattern = new(
         "CREATE\\s+TABLE\\s+\\[(?<schema>[^\\]]+)\\]\\s*\\.\\s*\\[(?<table>[^\\]]+)\\]\\s*\\(",
@@ -95,8 +94,8 @@ internal static class LegacySchemaAudit
                 continue;
             }
 
-            var missingColumns = expected.Columns
-                .Where(column => !actualTableColumns.Contains(column))
+            var missingColumns = expected
+                .Columns.Where(column => !actualTableColumns.Contains(column))
                 .OrderBy(column => column, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             if (missingColumns.Length == 0)
@@ -166,7 +165,8 @@ internal static class LegacySchemaAudit
                 var columnBlock = blockEndMatch.Success
                     ? remaining[..blockEndMatch.Index]
                     : remaining;
-                var columns = ColumnPattern.Matches(columnBlock)
+                var columns = ColumnPattern
+                    .Matches(columnBlock)
                     .Select(match => match.Groups["column"].Value)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);

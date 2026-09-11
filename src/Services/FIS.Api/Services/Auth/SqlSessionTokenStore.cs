@@ -2,9 +2,9 @@ using System.Data;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
+using FIS.Api.Services.SessionManagement;
 using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.SqlServer;
-using FIS.Api.Services.SessionManagement;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 

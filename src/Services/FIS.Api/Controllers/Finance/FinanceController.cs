@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Globalization;
 using System.IO.Compression;
+using System.Security.Claims;
 using System.Threading;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
@@ -23,6 +24,10 @@ namespace FIS.Api.Controllers;
 [Produces("application/json")]
 public class FinanceController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+    private const int MaximumPage = 1_000_000;
+
     private readonly IJournalDetailService _journalService;
     private readonly FisDbContext _context;
     private readonly ILogger<FinanceController> _logger;
@@ -552,8 +557,9 @@ public class FinanceController : BaseApiController
             var invalidJournals = await _context.JournalWithInvalidBasCodes.CountAsync(x =>
                 !x.is_deleted
             );
-            var uninvoicedJournals = (await _journalService.GetAllJournalDetailsAsync())
-                .Count(x => !x.is_deleted && !x.journal_detail_date_posted.HasValue);
+            var uninvoicedJournals = (await _journalService.GetAllJournalDetailsAsync()).Count(x =>
+                !x.is_deleted && !x.journal_detail_date_posted.HasValue
+            );
 
             return Ok(
                 new
@@ -644,6 +650,103 @@ public class FinanceController : BaseApiController
         }
     }
 
+    /// <summary>
+    /// Returns a bounded BAS segment page for the operational allocation grid.
+    /// The original collection endpoint remains for legacy consumers.
+    /// </summary>
+    [HttpGet("bas/segments/page")]
+    public async Task<ActionResult> GetBasSegmentsPage(
+        [FromQuery] int? departmentCode,
+        [FromQuery] string? segmentType,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasFinanceDataRole())
+            return Forbid();
+
+        try
+        {
+            var query =
+                from seg in _context.BasSegments.AsNoTracking()
+                join grp in _context.SegmentGroups.AsNoTracking()
+                    on seg.segment_group_code equals grp.segment_group_code
+                    into segGroups
+                from grp in segGroups.DefaultIfEmpty()
+                join typ in _context.SegmentTypes.AsNoTracking()
+                    on grp.segment_type_code equals typ.segment_type_code
+                    into segmentTypes
+                from typ in segmentTypes.DefaultIfEmpty()
+                where !seg.is_deleted
+                select new
+                {
+                    seg.segment_code,
+                    seg.segment_number,
+                    seg.segment_name,
+                    seg.department_code,
+                    SegmentTypeCode = typ != null ? typ.segment_type_code : (byte?)null,
+                    SegmentTypeName = typ != null ? typ.segment_type_name : null,
+                };
+
+            if (departmentCode.HasValue)
+            {
+                var department = checked((short)departmentCode.Value);
+                query = query.Where(item => item.department_code == department);
+            }
+
+            if (!string.IsNullOrWhiteSpace(segmentType))
+            {
+                var token = segmentType.Trim();
+                query = query.Where(item =>
+                    (
+                        item.SegmentTypeName != null
+                        && EF.Functions.Like(item.SegmentTypeName, $"%{token}%")
+                    )
+                    || (
+                        item.SegmentTypeCode.HasValue
+                        && item.SegmentTypeCode.Value.ToString() == token
+                    )
+                );
+            }
+
+            var normalizedPage = NormalizePage(page);
+            var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderBy(item => item.segment_number)
+                .ThenBy(item => item.segment_code)
+                .Skip((normalizedPage - 1) * normalizedPageSize)
+                .Take(normalizedPageSize)
+                .Select(item => new BasSegmentDto
+                {
+                    SegmentCode = item.segment_code,
+                    SegmentType =
+                        item.SegmentTypeName
+                        ?? (
+                            item.SegmentTypeCode.HasValue
+                                ? item.SegmentTypeCode.Value.ToString()
+                                : string.Empty
+                        ),
+                    SegmentValue =
+                        $"{item.segment_number ?? string.Empty} {item.segment_name ?? string.Empty}".Trim(),
+                    DepartmentCode = item.department_code,
+                    IsActive = true,
+                })
+                .ToListAsync();
+
+            return Ok(CreatePageResponse(items, normalizedPage, normalizedPageSize, total));
+        }
+        catch (OverflowException)
+        {
+            return BadRequest(new { error = "Department code is outside the supported range." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching paged BAS segments");
+            return StatusCode(500, new { error = "Failed to fetch BAS segments" });
+        }
+    }
+
     [HttpPost("bas/segments/activate")]
     public async Task<ActionResult> ActivateBasSegments([FromBody] ActivateSegmentsDto request)
     {
@@ -718,6 +821,46 @@ public class FinanceController : BaseApiController
         }
     }
 
+    [HttpGet("bas/journals/invalid/page")]
+    public async Task<ActionResult> GetInvalidJournalsPage(
+        [FromQuery] int? departmentCode,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasFinanceDataRole())
+            return Forbid();
+
+        try
+        {
+            var query = _context
+                .JournalWithInvalidBasCodes.AsNoTracking()
+                .Where(item => !item.is_deleted);
+            var normalizedPage = NormalizePage(page);
+            var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(item => item.Id)
+                .Skip((normalizedPage - 1) * normalizedPageSize)
+                .Take(normalizedPageSize)
+                .Select(item => new InvalidJournalDto
+                {
+                    JournalDetailCode = Guid.Empty,
+                    JournalNumber = item.GGNumber ?? string.Empty,
+                    Reason = item.JournalType ?? "Invalid BAS code",
+                    DepartmentCode = departmentCode,
+                })
+                .ToListAsync();
+
+            return Ok(CreatePageResponse(items, normalizedPage, normalizedPageSize, total));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching paged invalid BAS journals");
+            return StatusCode(500, new { error = "Failed to fetch invalid BAS journals" });
+        }
+    }
+
     [HttpGet("bas/journals/uninvoiced")]
     public async Task<ActionResult<IEnumerable<UninvoicedJournalDto>>> GetUninvoicedJournals(
         [FromQuery] int? departmentCode
@@ -725,8 +868,9 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var query = (await _journalService.GetAllJournalDetailsAsync())
-                .Where(jd => !jd.is_deleted && !jd.journal_detail_date_posted.HasValue);
+            var query = (await _journalService.GetAllJournalDetailsAsync()).Where(jd =>
+                !jd.is_deleted && !jd.journal_detail_date_posted.HasValue
+            );
 
             if (departmentCode.HasValue)
                 query = query.Where(jd => jd.department_code == (short)departmentCode.Value);
@@ -750,6 +894,47 @@ public class FinanceController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching uninvoiced journals");
+            return StatusCode(500, new { error = "Failed to fetch uninvoiced journals" });
+        }
+    }
+
+    [HttpGet("bas/journals/uninvoiced/page")]
+    public async Task<ActionResult> GetUninvoicedJournalsPage(
+        [FromQuery] int? departmentCode,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasFinanceDataRole())
+            return Forbid();
+
+        try
+        {
+            var result = await _journalService.GetUninvoicedJournalDetailsPageAsync(
+                departmentCode,
+                NormalizePage(page),
+                Math.Clamp(pageSize, 1, MaximumPageSize)
+            );
+            var items = result
+                .Items.Select(item => new UninvoicedJournalDto
+                {
+                    JournalDetailCode = item.journal_detail_code,
+                    JournalNumber =
+                        item.journal_code?.ToString() ?? item.journal_detail_id.ToString(),
+                    Amount = item.journal_detail_amount,
+                    TransactionDate = item.journal_detail_date,
+                })
+                .ToList();
+
+            return Ok(CreatePageResponse(items, result.Page, result.PageSize, result.Total));
+        }
+        catch (OverflowException)
+        {
+            return BadRequest(new { error = "Department code is outside the supported range." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching paged un-invoiced BAS journals");
             return StatusCode(500, new { error = "Failed to fetch uninvoiced journals" });
         }
     }
@@ -784,6 +969,52 @@ public class FinanceController : BaseApiController
         }
     }
 
+    [HttpGet("bas/departments-without-bas/page")]
+    public async Task<ActionResult> GetDepartmentsWithoutBasPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasFinanceDataRole())
+            return Forbid();
+
+        try
+        {
+            var departmentsWithBas = _context
+                .BasSegments.Where(segment => !segment.is_deleted)
+                .Select(segment => segment.department_code)
+                .Distinct();
+            var query = _context
+                .Departments.AsNoTracking()
+                .Where(department =>
+                    !department.is_deleted
+                    && !departmentsWithBas.Contains(department.department_code)
+                );
+            var normalizedPage = NormalizePage(page);
+            var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderBy(department => department.description)
+                .ThenBy(department => department.department_code)
+                .Skip((normalizedPage - 1) * normalizedPageSize)
+                .Take(normalizedPageSize)
+                .Select(department => new FinanceDepartmentDto
+                {
+                    DepartmentCode = department.department_code,
+                    DepartmentName =
+                        department.description ?? $"Department {department.department_code}",
+                })
+                .ToListAsync();
+
+            return Ok(CreatePageResponse(items, normalizedPage, normalizedPageSize, total));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching paged departments without BAS");
+            return StatusCode(500, new { error = "Failed to fetch departments without BAS" });
+        }
+    }
+
     [HttpGet("bas/departments-missing-financial-system")]
     public async Task<
         ActionResult<IEnumerable<FinanceDepartmentDto>>
@@ -810,6 +1041,54 @@ public class FinanceController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching departments missing financial system");
+            return StatusCode(
+                500,
+                new { error = "Failed to fetch departments missing financial system" }
+            );
+        }
+    }
+
+    [HttpGet("bas/departments-missing-financial-system/page")]
+    public async Task<ActionResult> GetDepartmentsMissingFinancialSystemPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasFinanceDataRole())
+            return Forbid();
+
+        try
+        {
+            var query = _context
+                .Departments.AsNoTracking()
+                .Where(department =>
+                    !department.is_deleted
+                    && (
+                        !department.financial_system_code.HasValue
+                        || department.financial_system_code.Value == 0
+                    )
+                );
+            var normalizedPage = NormalizePage(page);
+            var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderBy(department => department.description)
+                .ThenBy(department => department.department_code)
+                .Skip((normalizedPage - 1) * normalizedPageSize)
+                .Take(normalizedPageSize)
+                .Select(department => new FinanceDepartmentDto
+                {
+                    DepartmentCode = department.department_code,
+                    DepartmentName =
+                        department.description ?? $"Department {department.department_code}",
+                })
+                .ToListAsync();
+
+            return Ok(CreatePageResponse(items, normalizedPage, normalizedPageSize, total));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching paged departments missing a financial system");
             return StatusCode(
                 500,
                 new { error = "Failed to fetch departments missing financial system" }
@@ -1138,6 +1417,59 @@ public class FinanceController : BaseApiController
 
         return Ok(
             new { message = "Queued asynchronous exports for BAS, SAP and MPI.", tasks = queued }
+        );
+    }
+
+    private static object CreatePageResponse<T>(
+        IReadOnlyList<T> items,
+        int page,
+        int pageSize,
+        int total
+    ) =>
+        new
+        {
+            items,
+            page,
+            pageSize,
+            total,
+            totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize)),
+        };
+
+    private static int NormalizePage(int page) => Math.Clamp(page, 1, MaximumPage);
+
+    private bool HasFinanceDataRole() =>
+        HasAnyRole(
+            "financial reports",
+            "financial data (own department)",
+            "financial data (all departments)",
+            "administrator",
+            "admin"
+        );
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Any(User.IsInRole))
+        {
+            return true;
+        }
+
+        var roleClaims = User
+            .Claims.Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            );
+
+        return roleClaims.Any(role =>
+            expectedRoles.Any(expected =>
+                string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+            )
         );
     }
 

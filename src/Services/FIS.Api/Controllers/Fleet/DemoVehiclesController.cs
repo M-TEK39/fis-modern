@@ -12,6 +12,9 @@ namespace FIS.Api.Controllers;
 [Route("api/demo-vehicles")]
 public sealed class DemoVehiclesController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly IDemoVehicleRepository _repository;
     private readonly ILogger<DemoVehiclesController> _logger;
 
@@ -54,6 +57,40 @@ public sealed class DemoVehiclesController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving the demo vehicle report");
+            return StatusCode(500, "An error occurred while retrieving the demo vehicle report.");
+        }
+    }
+
+    [HttpGet("reports/all/page")]
+    public async Task<ActionResult> GetReportPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasDemoVehicleRole())
+            return Forbid();
+
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumPageSize)
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(Map).ToList(),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving the paged demo vehicle report");
             return StatusCode(500, "An error occurred while retrieving the demo vehicle report.");
         }
     }

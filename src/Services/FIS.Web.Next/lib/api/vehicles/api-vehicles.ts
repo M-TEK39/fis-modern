@@ -4,6 +4,7 @@ import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
 const PAGE_SIZE = 24;
+export const DEFAULT_RENUMBERED_REPORT_PAGE_SIZE = PAGE_SIZE;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -47,6 +48,14 @@ export type RenumberedVehicleReportRow = {
   oldStatusDescription: string | null;
   newFleetNumber: string | null;
   newStatusDescription: string | null;
+};
+
+export type RenumberedVehicleReportPage = {
+  items: RenumberedVehicleReportRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export class VehicleApiError extends Error {
@@ -135,17 +144,6 @@ function getCollection(payload: unknown) {
   return [];
 }
 
-function mapPresent<T>(values: readonly unknown[], mapper: (value: unknown) => T | null) {
-  const result: T[] = [];
-  for (const value of values) {
-    const mapped = mapper(value);
-    if (mapped !== null) {
-      result.push(mapped);
-    }
-  }
-  return result;
-}
-
 function toVehicleSnapshot(value: unknown): VehicleSnapshotRow | null {
   if (!isRecord(value)) {
     return null;
@@ -169,6 +167,29 @@ function toVehicleSnapshot(value: unknown): VehicleSnapshotRow | null {
       statusDescriptionForCode(statusCode),
     recoveredGgNumber: asString(getValue(value, "recovered_gg_number", "recoveredGgNumber")),
     renumberedTo: asString(getValue(value, "renumbered_to", "renumberedTo")),
+  };
+}
+
+function toRenumberedVehicleReportRow(value: unknown): RenumberedVehicleReportRow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const oldVmfCode = asNumber(getValue(value, "oldVmfCode", "old_vmf_code"));
+  if (oldVmfCode === null) {
+    return null;
+  }
+
+  return {
+    oldVmfCode,
+    oldFleetNumber: asString(getValue(value, "oldFleetNumber", "old_fleet_number")),
+    oldStatusDescription: asString(
+      getValue(value, "oldStatusDescription", "old_status_description"),
+    ),
+    newFleetNumber: asString(getValue(value, "newFleetNumber", "new_fleet_number")),
+    newStatusDescription: asString(
+      getValue(value, "newStatusDescription", "new_status_description"),
+    ),
   };
 }
 
@@ -305,7 +326,10 @@ export async function getVehicleSnapshotPage(
   );
 
   if (!isRecord(payload)) {
-    throw new VehicleApiError("invalid-response", "The FIS API returned an invalid vehicle snapshot.");
+    throw new VehicleApiError(
+      "invalid-response",
+      "The FIS API returned an invalid vehicle snapshot.",
+    );
   }
 
   const parsedPage = asNumber(getValue(payload, "page"));
@@ -313,7 +337,12 @@ export async function getVehicleSnapshotPage(
   const totalRecords = asNumber(getValue(payload, "totalRecords", "total_records"));
   const totalPages = asNumber(getValue(payload, "totalPages", "total_pages"));
 
-  if (parsedPage === null || parsedPageSize === null || totalRecords === null || totalPages === null) {
+  if (
+    parsedPage === null ||
+    parsedPageSize === null ||
+    totalRecords === null ||
+    totalPages === null
+  ) {
     throw new VehicleApiError(
       "invalid-response",
       "The FIS API returned incomplete vehicle snapshot pagination metadata.",
@@ -358,41 +387,58 @@ export async function getVehicleOptions(): Promise<VehicleOption[]> {
     .filter((vehicle): vehicle is VehicleOption => vehicle !== null);
 }
 
-export async function getRenumberedVehicleReport(): Promise<RenumberedVehicleReportRow[]> {
-  const payload = await requestApi("api/vehicles");
-  if (isRecord(payload) && !["data", "items", "results"].some((key) => key in payload)) {
+export async function getRenumberedVehicleReportPage(
+  page: number,
+  pageSize = DEFAULT_RENUMBERED_REPORT_PAGE_SIZE,
+): Promise<RenumberedVehicleReportPage> {
+  const safeRequestedPage = Math.max(1, Math.trunc(page) || 1);
+  const safeRequestedPageSize = Math.min(
+    100,
+    Math.max(1, Math.trunc(pageSize) || DEFAULT_RENUMBERED_REPORT_PAGE_SIZE),
+  );
+  const payload = await requestApi(
+    `api/vehicles/renumbered/page?page=${safeRequestedPage}&pageSize=${safeRequestedPageSize}`,
+  );
+
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
     throw new VehicleApiError(
       "invalid-response",
-      "The FIS API returned an unexpected vehicle collection.",
+      "The FIS API returned an invalid renumbered vehicle page.",
     );
   }
 
-  const vehicles = mapPresent(getCollection(payload), toVehicleSnapshot);
-  const vehiclesByFleetNumber = new Map<string, VehicleSnapshotRow>();
-  for (const vehicle of vehicles) {
-    if (vehicle.fleetNumber) {
-      vehiclesByFleetNumber.set(vehicle.fleetNumber.trim().toLocaleLowerCase(), vehicle);
-    }
+  const parsedPage = asNumber(getValue(payload, "page"));
+  const parsedPageSize = asNumber(getValue(payload, "pageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "total_pages"));
+
+  if (
+    parsedPage === null ||
+    parsedPageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(parsedPage) ||
+    !Number.isInteger(parsedPageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    parsedPage < 1 ||
+    parsedPageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    throw new VehicleApiError(
+      "invalid-response",
+      "The FIS API returned incomplete renumbered vehicle pagination.",
+    );
   }
 
-  return vehicles
-    .reduce<RenumberedVehicleReportRow[]>((rows, vehicle) => {
-      if (!vehicle.renumberedTo) {
-        return rows;
-      }
-
-      const replacement = vehiclesByFleetNumber.get(
-        vehicle.renumberedTo!.trim().toLocaleLowerCase(),
-      );
-
-      rows.push({
-        oldVmfCode: vehicle.vmfCode,
-        oldFleetNumber: vehicle.fleetNumber,
-        oldStatusDescription: vehicle.statusDescription,
-        newFleetNumber: vehicle.renumberedTo,
-        newStatusDescription: replacement?.statusDescription ?? null,
-      });
-      return rows;
-    }, [])
-    .sort((left, right) => (left.oldFleetNumber ?? "").localeCompare(right.oldFleetNumber ?? ""));
+  return {
+    items: payload.items
+      .map(toRenumberedVehicleReportRow)
+      .filter((item): item is RenumberedVehicleReportRow => item !== null),
+    page: parsedPage,
+    pageSize: parsedPageSize,
+    total,
+    totalPages,
+  };
 }

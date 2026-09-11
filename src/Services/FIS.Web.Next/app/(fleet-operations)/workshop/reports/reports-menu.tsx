@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -43,7 +47,7 @@ function hasWorkshopReportAccess(roles: readonly string[]) {
   );
 }
 
-export default async function WorkshopReportsMenu({
+async function WorkshopReportsMenuContent({
   routePath = "/workshop/reports",
   linkBase = routePath,
   backHref = "/workshop",
@@ -110,5 +114,13 @@ export default async function WorkshopReportsMenu({
         </div>
       </section>
     </main>
+  );
+}
+
+export default function WorkshopReportsMenu(props: WorkshopReportsMenuProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <WorkshopReportsMenuContent {...props} />
+    </Suspense>
   );
 }

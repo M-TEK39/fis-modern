@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import DeleteButton from "@/app/(administration)/drivers/delete-button";
 import { deleteSiteDriverAction } from "@/app/(administration)/drivers/actions";
 import {
@@ -14,9 +16,10 @@ import {
 } from "@/app/(administration)/drivers/access";
 import {
   DriverManagementApiError,
+  DEFAULT_DRIVER_MANAGEMENT_PAGE_SIZE,
   getDriverManagementDepartments,
   getDriverManagementSites,
-  getDriverManagementSiteDrivers,
+  getDriverManagementSiteDriversPage,
   type DriverManagementDriver,
 } from "@/lib/api/reference-data/api-driver-management";
 import { getSession } from "@/lib/auth/session";
@@ -63,6 +66,15 @@ function displayName(driver: DriverManagementDriver) {
   return name || `Site driver ${driver.siteDriverCode}`;
 }
 
+function pagePath(departmentCode: number, siteCode: number, page: number) {
+  const params = new URLSearchParams({
+    departmentCode: String(departmentCode),
+    siteCode: String(siteCode),
+  });
+  if (page > 1) params.set("page", String(page));
+  return `/drivers/site-drivers?${params.toString()}`;
+}
+
 function AccessRestricted() {
   return (
     <section className="vehicle-status-card" role="alert">
@@ -75,9 +87,7 @@ function AccessRestricted() {
   );
 }
 
-export default async function SiteDriversPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function SiteDriversContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -106,6 +116,7 @@ export default async function SiteDriversPage({
   const query = await searchParams;
   const departmentCode = parsePositiveInteger(getQueryValue(query.departmentCode));
   const siteCode = parsePositiveInteger(getQueryValue(query.siteCode));
+  const requestedPage = parsePositiveInteger(getQueryValue(query.page)) ?? 1;
   if (!departmentCode || !siteCode) {
     return (
       <main className="page-shell vehicle-page-shell">
@@ -122,8 +133,11 @@ export default async function SiteDriversPage({
 
   const message = resultMessage(getQueryValue(query.result));
   try {
-    const [drivers, departments, sites] = await Promise.all([
-      getDriverManagementSiteDrivers(siteCode),
+    const [driverPage, departments, sites] = await Promise.all([
+      getDriverManagementSiteDriversPage(siteCode, {
+        page: requestedPage,
+        pageSize: DEFAULT_DRIVER_MANAGEMENT_PAGE_SIZE,
+      }),
       getDriverManagementDepartments(),
       getDriverManagementSites(),
     ]);
@@ -162,7 +176,7 @@ export default async function SiteDriversPage({
               {message.text}
             </div>
           ) : null}
-          {drivers.length === 0 ? (
+          {driverPage.total === 0 ? (
             <div className="empty-state">
               <h2>No site drivers found</h2>
               <p>Add the first site driver for this site.</p>
@@ -173,7 +187,7 @@ export default async function SiteDriversPage({
           ) : (
             <div className="table-container">
               <div className="table-header">
-                <span className="table-title">{drivers.length} site driver(s)</span>
+                <span className="table-title">{driverPage.total} site driver(s)</span>
               </div>
               <div className="table-wrapper">
                 <table className="data-table">
@@ -188,7 +202,7 @@ export default async function SiteDriversPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {drivers.map((driver) => (
+                    {driverPage.items.map((driver) => (
                       <tr key={driver.siteDriverCode}>
                         <td>{driver.driverFirstname || "-"}</td>
                         <td>{driver.driverSurname || "-"}</td>
@@ -219,6 +233,43 @@ export default async function SiteDriversPage({
                   </tbody>
                 </table>
               </div>
+              {driverPage.totalPages > 1 ? (
+                <nav className="vehicle-pagination" aria-label="Site driver pages">
+                  {driverPage.page <= 1 ? (
+                    <span
+                      className="vehicle-pagination-button vehicle-pagination-disabled"
+                      aria-disabled="true"
+                    >
+                      Previous
+                    </span>
+                  ) : (
+                    <Link
+                      className="vehicle-pagination-button"
+                      href={pagePath(departmentCode, siteCode, driverPage.page - 1)}
+                    >
+                      Previous
+                    </Link>
+                  )}
+                  <span className="vehicle-pagination-meta" aria-live="polite">
+                    Page {driverPage.page} of {driverPage.totalPages}
+                  </span>
+                  {driverPage.page >= driverPage.totalPages ? (
+                    <span
+                      className="vehicle-pagination-button vehicle-pagination-disabled"
+                      aria-disabled="true"
+                    >
+                      Next
+                    </span>
+                  ) : (
+                    <Link
+                      className="vehicle-pagination-button"
+                      href={pagePath(departmentCode, siteCode, driverPage.page + 1)}
+                    >
+                      Next
+                    </Link>
+                  )}
+                </nav>
+              ) : null}
             </div>
           )}
           <div className="vehicle-footer-actions">
@@ -262,4 +313,12 @@ export default async function SiteDriversPage({
       </main>
     );
   }
+}
+
+export default function SiteDriversPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <SiteDriversContent {...props} />
+    </Suspense>
+  );
 }

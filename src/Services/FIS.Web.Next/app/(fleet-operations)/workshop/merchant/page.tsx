@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -9,7 +13,8 @@ import {
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   getWorkshopMerchant,
-  getWorkshopMerchants,
+  getWorkshopMerchantPage,
+  DEFAULT_WORKSHOP_MERCHANT_PAGE_SIZE,
   WorkshopMerchantApiError,
   type WorkshopMerchantRecord,
 } from "@/lib/api/fleet-operations/api-workshop-merchant";
@@ -97,7 +102,7 @@ function MerchantForm({ merchant }: Readonly<{ merchant: WorkshopMerchantRecord 
   );
 }
 
-export default async function WorkshopMerchantPage({
+async function WorkshopMerchantPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -124,21 +129,29 @@ export default async function WorkshopMerchantPage({
   const query = await searchParams;
   const search = queryValue(query.search) ?? "";
   const selectedCode = Number(queryValue(query.merchantCode));
+  const rawPage = Number(queryValue(query.page));
+  const requestedPage = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
   const saved = queryValue(query.saved) === "1";
   const updated = queryValue(query.updated) === "1";
   const deleted = queryValue(query.deleted) === "1";
   const errorMessage = queryValue(query.error);
   try {
-    const merchants = await getWorkshopMerchants();
-    const filtered = search.trim()
-      ? merchants.filter((merchant) =>
-          merchant.name?.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
-        )
-      : merchants;
-    const selected =
+    const [merchantPage, selected] = await Promise.all([
+      getWorkshopMerchantPage({
+        search,
+        page: requestedPage,
+        pageSize: DEFAULT_WORKSHOP_MERCHANT_PAGE_SIZE,
+      }),
       Number.isInteger(selectedCode) && selectedCode > 0
-        ? await getWorkshopMerchant(selectedCode).catch(() => null)
-        : null;
+        ? getWorkshopMerchant(selectedCode).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    const pageHref = (page: number) => {
+      const params = new URLSearchParams({ page: String(page) });
+      if (search.trim()) params.set("search", search.trim());
+      if (selectedCode > 0) params.set("merchantCode", String(selectedCode));
+      return `/workshop/merchant?${params.toString()}`;
+    };
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="workshop-merchant-title">
@@ -200,12 +213,12 @@ export default async function WorkshopMerchantPage({
             <div className="vehicle-form-section-header">
               <div>
                 <p className="eyebrow">
-                  {filtered.length} merchant{filtered.length === 1 ? "" : "s"}
+                  {merchantPage.total} merchant{merchantPage.total === 1 ? "" : "s"}
                 </p>
                 <h2 id="workshop-merchants-list">Existing Merchants</h2>
               </div>
             </div>
-            {filtered.length === 0 ? (
+            {merchantPage.items.length === 0 ? (
               <p className="muted-copy">No merchants found.</p>
             ) : (
               <div className="vehicle-table-wrapper">
@@ -221,7 +234,7 @@ export default async function WorkshopMerchantPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((merchant) => (
+                    {merchantPage.items.map((merchant) => (
                       <tr key={merchant.merchantCode}>
                         <td>{merchant.merchantCode}</td>
                         <td>{merchant.name || "-"}</td>
@@ -254,6 +267,37 @@ export default async function WorkshopMerchantPage({
                 </table>
               </div>
             )}
+            {merchantPage.totalPages > 1 ? (
+              <nav className="table-pagination" aria-label="Workshop merchant pages">
+                {merchantPage.page > 1 ? (
+                  <Link
+                    className="button button-secondary button-small"
+                    href={pageHref(merchantPage.page - 1)}
+                  >
+                    Previous
+                  </Link>
+                ) : (
+                  <span className="button button-secondary button-small" aria-disabled="true">
+                    Previous
+                  </span>
+                )}
+                <span aria-live="polite">
+                  Page {merchantPage.page} of {merchantPage.totalPages}
+                </span>
+                {merchantPage.page < merchantPage.totalPages ? (
+                  <Link
+                    className="button button-secondary button-small"
+                    href={pageHref(merchantPage.page + 1)}
+                  >
+                    Next
+                  </Link>
+                ) : (
+                  <span className="button button-secondary button-small" aria-disabled="true">
+                    Next
+                  </span>
+                )}
+              </nav>
+            ) : null}
           </section>
         </section>
       </main>
@@ -274,4 +318,14 @@ export default async function WorkshopMerchantPage({
       </main>
     );
   }
+}
+
+export default function WorkshopMerchantPage(
+  props: Parameters<typeof WorkshopMerchantPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <WorkshopMerchantPageContent {...props} />
+    </Suspense>
+  );
 }

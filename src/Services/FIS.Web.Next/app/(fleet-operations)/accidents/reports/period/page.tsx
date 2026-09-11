@@ -119,7 +119,7 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading accident period report...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -204,6 +204,7 @@ function ReportTable({
 }
 
 async function PeriodReportContent({ searchParams }: { searchParams: Promise<ReportQuery> }) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
@@ -378,12 +379,11 @@ async function PeriodReportContent({ searchParams }: { searchParams: Promise<Rep
   );
 }
 
-export default async function AccidentPeriodReportPage({
+export default function AccidentPeriodReportPage({
   searchParams,
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
-  await connection();
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="accident-period-title">

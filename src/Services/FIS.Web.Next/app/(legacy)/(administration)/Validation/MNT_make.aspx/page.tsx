@@ -1,5 +1,8 @@
-import MakeListPage from "@/app/(administration)/validation-data/makes/page";
+import {
+  MakeListPageRoute,
+  type MakeListPageProps,
+} from "@/app/(administration)/validation-data/makes/_route";
 
-export default function LegacyMakeListPage(props: Parameters<typeof MakeListPage>[0]) {
-  return <MakeListPage {...props} routePath="/Validation/MNT_make.aspx" />;
+export default function LegacyMakeListPage(props: Pick<MakeListPageProps, "searchParams">) {
+  return <MakeListPageRoute {...props} routePath="/Validation/MNT_make.aspx" />;
 }

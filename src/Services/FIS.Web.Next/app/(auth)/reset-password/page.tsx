@@ -9,7 +9,7 @@ type ResetPasswordPageProps = {
   searchParams: Promise<{ token?: string | string[] }>;
 };
 
-export default async function ResetPasswordPage({ searchParams }: ResetPasswordPageProps) {
+export default function ResetPasswordPage({ searchParams }: ResetPasswordPageProps) {
   return (
     <AuthPage>
       <Suspense fallback={<ResetPasswordFallback />}>

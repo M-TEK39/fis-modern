@@ -4,6 +4,7 @@ import { Suspense, type ReactNode } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import { AppShellFrame, getAppShellData } from "@/components/app-shell/app-shell";
+import SessionKeepAlive from "@/components/app-shell/session-keep-alive";
 import SiteHeader from "@/components/app-shell/site-header";
 import { AppSidebar16 } from "@/components/ui/sidebar/app-sidebar-16";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -27,7 +28,12 @@ async function AuthenticatedHeader() {
     return null;
   }
 
-  return <SiteHeader groups={getAppShellData(session).groups} />;
+  return (
+    <>
+      <SessionKeepAlive />
+      <SiteHeader groups={getAppShellData(session).groups} />
+    </>
+  );
 }
 
 async function AuthenticatedSidebar() {

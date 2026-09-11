@@ -130,12 +130,13 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Checking accident report access...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
 
 async function AccidentReportsContent() {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired") return <SessionRecovery returnPath="/accidents/reports" />;
@@ -195,8 +196,7 @@ async function AccidentReportsContent() {
   );
 }
 
-export default async function AccidentReportsPage() {
-  await connection();
+export default function AccidentReportsPage() {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="accident-reports-title">

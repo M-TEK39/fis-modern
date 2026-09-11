@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-
 import {
   FinanceFrame,
   FinanceRestricted,
@@ -437,7 +440,7 @@ function ReportTable({ report, page }: Readonly<{ report: FinanceReport; page: n
   );
 }
 
-export async function FinanceReportsRoute({
+async function FinanceReportsContent({
   action,
   searchParams,
 }: Readonly<{ action: string; searchParams: Promise<Query> }>) {
@@ -619,7 +622,28 @@ export async function FinanceReportsRoute({
   );
 }
 
-export default async function FinanceReportsPage({ params, searchParams }: ReportPageProps) {
+function FinanceReportsRoute(
+  props: Readonly<{
+    action: string;
+    searchParams: Promise<Query>;
+  }>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <FinanceReportsContent {...props} />
+    </Suspense>
+  );
+}
+
+export default function FinanceReportsPage({ params, searchParams }: ReportPageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <FinanceReportsActionContent params={params} searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function FinanceReportsActionContent({ params, searchParams }: ReportPageProps) {
   const { action } = await params;
   return <FinanceReportsRoute action={action} searchParams={searchParams} />;
 }

@@ -1,11 +1,13 @@
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
+  DEFAULT_TROUBLESHOOT_PAGE_SIZE,
   TroubleshootApiError,
   getTroubleshootSiteUsers,
-  searchTroubleshootLogs,
+  searchTroubleshootLogsPage,
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import { getSession } from "@/lib/auth/session";
 import {
@@ -32,7 +34,7 @@ function dateValue(value: string | null) {
   return value ? value.slice(0, 10) : "-";
 }
 
-export default async function TroubleshootLogPage({
+async function TroubleshootLogPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -67,7 +69,7 @@ export default async function TroubleshootLogPage({
 
   const query = await searchParams;
   const userAccessCode = positive(first(query.userAccessCode));
-  const page = Number(first(query.page)) > 0 ? Number(first(query.page)) : 1;
+  const page = positive(first(query.page)) ?? 1;
   let siteUsers;
   try {
     siteUsers = await getTroubleshootSiteUsers();
@@ -91,11 +93,15 @@ export default async function TroubleshootLogPage({
     );
   }
 
-  let logs = [] as Awaited<ReturnType<typeof searchTroubleshootLogs>>;
+  let pageData: Awaited<ReturnType<typeof searchTroubleshootLogsPage>> | null = null;
   let errorMessage: string | null = null;
   if (userAccessCode) {
     try {
-      logs = await searchTroubleshootLogs(userAccessCode);
+      pageData = await searchTroubleshootLogsPage({
+        userAccessCode,
+        page,
+        pageSize: DEFAULT_TROUBLESHOOT_PAGE_SIZE,
+      });
     } catch (error) {
       errorMessage =
         error instanceof TroubleshootApiError
@@ -104,10 +110,6 @@ export default async function TroubleshootLogPage({
     }
   }
 
-  const pageSize = 12;
-  const totalPages = Math.max(1, Math.ceil(logs.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const visibleLogs = logs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const saved = first(query.saved);
 
   return (
@@ -127,6 +129,7 @@ export default async function TroubleshootLogPage({
           </div>
         </div>
         <form className="vehicle-create-form" method="get">
+          <input type="hidden" name="page" value="1" />
           <label className="form-label" htmlFor="troubleshoot-log-user">
             User/site
           </label>
@@ -166,7 +169,7 @@ export default async function TroubleshootLogPage({
         <div className="vehicle-empty-state">
           <p>Select a user/site to load its troubleshoot logs.</p>
         </div>
-      ) : errorMessage ? null : logs.length === 0 ? (
+      ) : errorMessage ? null : pageData?.total === 0 ? (
         <div className="vehicle-empty-state">
           <p>No logs match the selected user/site.</p>
         </div>
@@ -178,7 +181,7 @@ export default async function TroubleshootLogPage({
           <div className="vehicle-form-section-header">
             <div>
               <p className="eyebrow">
-                {logs.length} log{logs.length === 1 ? "" : "s"}
+                {pageData?.total ?? 0} log{pageData?.total === 1 ? "" : "s"}
               </p>
               <h2 id="troubleshoot-log-results-title">Report results</h2>
             </div>
@@ -202,7 +205,7 @@ export default async function TroubleshootLogPage({
                 </tr>
               </thead>
               <tbody>
-                {visibleLogs.map((log) => (
+                {pageData?.items.map((log) => (
                   <tr key={log.id}>
                     <td>{valueOrDash(log.vehicleIdentifier)}</td>
                     <td>{valueOrDash(log.problemDescription)}</td>
@@ -216,12 +219,20 @@ export default async function TroubleshootLogPage({
           </div>
           <Pagination
             path="/troubleshoot/log"
-            page={currentPage}
-            totalPages={totalPages}
+            page={pageData?.page ?? page}
+            totalPages={pageData?.totalPages ?? 1}
             query={{ userAccessCode }}
           />
         </section>
       )}
     </TroubleshootShell>
+  );
+}
+
+export default function TroubleshootLogPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <TroubleshootLogPageContent {...props} />
+    </StreamedRoute>
   );
 }

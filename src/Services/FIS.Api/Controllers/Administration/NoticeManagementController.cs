@@ -83,6 +83,48 @@ public class NoticeManagementController : BaseApiController
     }
 
     /// <summary>
+    /// Get a page of notice schedules without changing the legacy collection response.
+    /// </summary>
+    [HttpGet("notice-schedules/page")]
+    public async Task<IActionResult> GetNoticeSchedulesPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24,
+        [FromQuery] string? search = null,
+        [FromQuery] string? status = null,
+        [FromQuery] DateTime? today = null
+    )
+    {
+        try
+        {
+            var result = await _noticeScheduleRepository.GetPageAsync(
+                new NoticeSchedulePageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100),
+                    search?.Trim(),
+                    status?.Trim(),
+                    today?.Date ?? DateTime.UtcNow.Date
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(ToNoticeScheduleDto),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting paged notice schedules");
+            return StatusCode(500, "Error retrieving notice schedules");
+        }
+    }
+
+    /// <summary>
     /// Create new notice schedule
     /// </summary>
     [HttpPost("notice-schedules")]
@@ -358,6 +400,19 @@ public class NoticeManagementController : BaseApiController
         // Final fallback
         return "system";
     }
+
+    private static NoticeScheduleDto ToNoticeScheduleDto(NoticeSchedule schedule) =>
+        new()
+        {
+            NoticeScheduleId = schedule.notice_schedule_id,
+            NoticeId = schedule.notice_id,
+            TitleField = schedule.title_field ?? "",
+            StartDate = schedule.start_date,
+            EndDate = schedule.end_date,
+            SortOrder = schedule.sort_order,
+            CreatedBy = schedule.CreatedByUser?.email,
+            CreatedDate = schedule.date_created,
+        };
 }
 
 #region Notice Management DTOs

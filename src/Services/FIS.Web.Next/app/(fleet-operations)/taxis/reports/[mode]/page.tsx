@@ -1,4 +1,10 @@
-import TaxiReportsPage, { type TaxiReportKind } from "@/app/(fleet-operations)/taxis/reports/page";
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
+import TaxiReportsPage, {
+  type TaxiReportKind,
+} from "@/app/(fleet-operations)/taxis/reports/_route";
 
 const REPORT_MODES = new Set<TaxiReportKind>([
   "one-taxi-number",
@@ -11,7 +17,7 @@ const REPORT_MODES = new Set<TaxiReportKind>([
   "financial",
 ]);
 
-export default async function TaxiReportModePage({
+async function TaxiReportModePageContent({
   params,
   searchParams,
 }: Readonly<{
@@ -24,5 +30,13 @@ export default async function TaxiReportModePage({
       searchParams={searchParams}
       kind={REPORT_MODES.has(mode) ? mode : "one-taxi-number"}
     />
+  );
+}
+
+export default function TaxiReportModePage(props: Parameters<typeof TaxiReportModePageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TaxiReportModePageContent {...props} />
+    </Suspense>
   );
 }

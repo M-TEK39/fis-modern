@@ -93,13 +93,15 @@ function getBoolean(formData: FormData, key: string) {
   return getText(formData, key).toLowerCase() === "true";
 }
 
-type AuthenticatedSession = Extract<Awaited<ReturnType<typeof getSession>>, {
-  status: "authenticated";
-}>;
+type AuthenticatedSession = Extract<
+  Awaited<ReturnType<typeof getSession>>,
+  {
+    status: "authenticated";
+  }
+>;
 
 type ContractAuthorization =
-  | { ok: false; message: string }
-  | { ok: true; session: AuthenticatedSession };
+  { ok: false; message: string } | { ok: true; session: AuthenticatedSession };
 
 async function authorizeContract(): Promise<ContractAuthorization> {
   const session = await getSession();
@@ -174,7 +176,8 @@ function canRunContractAction(
   session: AuthenticatedSession,
 ) {
   const status = contract.contractStatusCode;
-  const isActive = status === 3 || (status === null && contract.stillCurrent?.toUpperCase() === "Y");
+  const isActive =
+    status === 3 || (status === null && contract.stillCurrent?.toUpperCase() === "Y");
   switch (action) {
     case "submit":
       return (status === 0 || status === 4) && canSubmitContract(contract, session);

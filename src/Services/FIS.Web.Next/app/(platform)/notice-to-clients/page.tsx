@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
+import RouteLoading from "@/components/app-shell/route-loading";
 import {
   getActiveNotices,
   NoticeApiError,
@@ -102,9 +104,7 @@ function ErrorCard() {
   );
 }
 
-export default async function NoticeToClientsPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function NoticeToClientsContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   let notices: Notice[];
   try {
@@ -151,5 +151,15 @@ export default async function NoticeToClientsPage({
         </footer>
       </section>
     </main>
+  );
+}
+
+export default function NoticeToClientsPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <NoticeToClientsContent searchParams={searchParams} />
+    </Suspense>
   );
 }

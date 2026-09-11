@@ -29,7 +29,7 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading GG reference numbers...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -97,6 +97,7 @@ function ReferenceTable({ rows }: { rows: AccidentLastGgReferenceRow[] }) {
 }
 
 async function LastGgReferenceContent() {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
@@ -124,9 +125,13 @@ async function LastGgReferenceContent() {
   }
 }
 
-export default async function LastGgReferencePage() {
+async function PrintedAt() {
   await connection();
   const printedAt = new Date();
+  return <time dateTime={printedAt.toISOString()}>{printedAt.toLocaleString("en-ZA")}</time>;
+}
+
+export default function LastGgReferencePage() {
   return (
     <main className="page-shell vehicle-page-shell">
       <article className="vehicle-card" aria-labelledby="last-gg-reference-title">
@@ -136,7 +141,9 @@ export default async function LastGgReferencePage() {
             <h1 id="last-gg-reference-title">LAST GG Reference Numbers Used</h1>
             <p>
               Date Printed:{" "}
-              <time dateTime={printedAt.toISOString()}>{printedAt.toLocaleString("en-ZA")}</time>
+              <Suspense fallback={<span aria-hidden="true">—</span>}>
+                <PrintedAt />
+              </Suspense>
             </p>
           </div>
           <div className="button-row">

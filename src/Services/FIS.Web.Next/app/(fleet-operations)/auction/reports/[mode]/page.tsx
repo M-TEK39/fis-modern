@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   AuctionApiError,
@@ -262,7 +263,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function AuctionReportPage({
+async function AuctionReportPageContent({
   params,
   searchParams,
   routePath = "/auction/reports",
@@ -398,4 +399,12 @@ export default async function AuctionReportPage({
       </main>
     );
   }
+}
+
+export default function AuctionReportPage(props: AuctionReportPageProps) {
+  return (
+    <StreamedRoute>
+      <AuctionReportPageContent {...props} />
+    </StreamedRoute>
+  );
 }

@@ -1,4 +1,4 @@
-import EditLossPage from "@/app/(fleet-operations)/losses/edit/page";
+import EditLossPage from "@/app/(fleet-operations)/losses/edit/_route";
 
 type LegacyEditLossProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

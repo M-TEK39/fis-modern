@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   FmlFrame,
@@ -24,7 +25,7 @@ function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function FmlOverUtilizedPage({
+async function FmlOverUtilizedPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -124,4 +125,12 @@ export default async function FmlOverUtilizedPage({
       "The over-utilized report could not be loaded.",
     );
   }
+}
+
+export default function FmlOverUtilizedPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <FmlOverUtilizedPageContent {...props} />
+    </StreamedRoute>
+  );
 }

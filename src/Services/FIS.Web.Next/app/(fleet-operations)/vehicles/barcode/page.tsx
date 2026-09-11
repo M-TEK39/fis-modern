@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
+import RouteLoading from "@/components/app-shell/route-loading";
 import VehicleBarcodeClient from "@/app/(fleet-operations)/vehicles/barcode/barcode-client";
 import {
   searchVehicleBarcodeAction,
@@ -41,7 +43,7 @@ function StatusCard({ title, message }: Readonly<{ title: string; message: strin
   );
 }
 
-export default async function VehicleBarcodePage({
+async function VehicleBarcodePageContent({
   routePath = "/vehicles/barcode",
 }: VehicleBarcodePageProps) {
   await connection();
@@ -107,5 +109,13 @@ export default async function VehicleBarcodePage({
         </div>
       </section>
     </main>
+  );
+}
+
+export default function VehicleBarcodePage(props: VehicleBarcodePageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <VehicleBarcodePageContent {...props} />
+    </Suspense>
   );
 }

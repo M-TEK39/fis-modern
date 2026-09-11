@@ -1,8 +1,15 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
 import { type ReportQuery } from "@/app/(fleet-operations)/reports/_components";
-import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/page";
+import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/_route";
 
 export default function LegacyDepartmentReportsPage({
   searchParams,
 }: Readonly<{ searchParams: Promise<ReportQuery> }>) {
-  return <ReportsRoutePage slug="departments-sites" searchParams={searchParams} />;
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <ReportsRoutePage slug="departments-sites" searchParams={searchParams} />
+    </Suspense>
+  );
 }

@@ -1,15 +1,18 @@
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
 import {
-  getVehicleMasterLookup,
+  DEFAULT_TROUBLESHOOT_PAGE_SIZE,
+  getVehicleMasterLookupPage,
   TroubleshootApiError,
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import {
   hasTroubleshootingRole,
   Pagination,
+  pageNumber,
   StatusCard,
   TroubleshootMenu,
   TroubleshootShell,
@@ -21,7 +24,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
-export default async function VehicleMasterEditPage({
+async function VehicleMasterEditPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -56,12 +59,16 @@ export default async function VehicleMasterEditPage({
 
   const query = await searchParams;
   const vehicleIdentifier = (first(query.vehicleIdentifier) ?? "").trim();
-  const page = Number(first(query.page)) > 0 ? Number(first(query.page)) : 1;
-  let vehicles = [] as Awaited<ReturnType<typeof getVehicleMasterLookup>>;
+  const page = pageNumber(query.page);
+  let pageData: Awaited<ReturnType<typeof getVehicleMasterLookupPage>> | null = null;
   let errorMessage: string | null = null;
   if (vehicleIdentifier) {
     try {
-      vehicles = await getVehicleMasterLookup(vehicleIdentifier);
+      pageData = await getVehicleMasterLookupPage({
+        vehicleIdentifier,
+        page,
+        pageSize: DEFAULT_TROUBLESHOOT_PAGE_SIZE,
+      });
     } catch (error) {
       errorMessage =
         error instanceof TroubleshootApiError
@@ -69,11 +76,6 @@ export default async function VehicleMasterEditPage({
           : "Vehicle details could not be loaded.";
     }
   }
-  const pageSize = 12;
-  const totalPages = Math.max(1, Math.ceil(vehicles.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const visibleVehicles = vehicles.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
   return (
     <TroubleshootShell
       title="Vehicle Master Edit"
@@ -91,6 +93,7 @@ export default async function VehicleMasterEditPage({
           </div>
         </div>
         <form className="vehicle-create-form" method="get">
+          <input type="hidden" name="page" value="1" />
           <label className="form-label" htmlFor="vehicle-master-identifier">
             Vehicle GG/Registration
           </label>
@@ -120,7 +123,7 @@ export default async function VehicleMasterEditPage({
         <div className="vehicle-empty-state">
           <p>Enter a vehicle identifier to load details.</p>
         </div>
-      ) : errorMessage ? null : vehicles.length === 0 ? (
+      ) : errorMessage ? null : pageData?.total === 0 ? (
         <div className="vehicle-empty-state">
           <p>No vehicle was found.</p>
         </div>
@@ -132,7 +135,7 @@ export default async function VehicleMasterEditPage({
           <div className="vehicle-form-section-header">
             <div>
               <p className="eyebrow">
-                {vehicles.length} vehicle{vehicles.length === 1 ? "" : "s"}
+                {pageData?.total ?? 0} vehicle{pageData?.total === 1 ? "" : "s"}
               </p>
               <h2 id="vehicle-master-results-title">Vehicle master records</h2>
             </div>
@@ -149,7 +152,7 @@ export default async function VehicleMasterEditPage({
                 </tr>
               </thead>
               <tbody>
-                {visibleVehicles.map((vehicle) => (
+                {pageData?.items.map((vehicle) => (
                   <tr key={vehicle.vmfCode}>
                     <td>
                       {valueOrDash(vehicle.fleetNumber)} / {valueOrDash(vehicle.registrationNumber)}{" "}
@@ -165,12 +168,20 @@ export default async function VehicleMasterEditPage({
           </div>
           <Pagination
             path="/troubleshoot/vehicle-master-edit"
-            page={currentPage}
-            totalPages={totalPages}
+            page={pageData?.page ?? page}
+            totalPages={pageData?.totalPages ?? 1}
             query={{ vehicleIdentifier }}
           />
         </section>
       )}
     </TroubleshootShell>
+  );
+}
+
+export default function VehicleMasterEditPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <VehicleMasterEditPageContent {...props} />
+    </StreamedRoute>
   );
 }

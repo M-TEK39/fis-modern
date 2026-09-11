@@ -36,7 +36,28 @@ public class LocationRepository : ILocationRepository
         return await _context
             .Locations.Where(l => l.IsActive)
             .OrderBy(l => l.LocationName)
+            .ThenBy(l => l.LocationId)
             .ToListAsync();
+    }
+
+    public async Task<LocationPage> GetPageAsync(int page = 1, int pageSize = 24)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var activeLocations = _context.Locations.Where(l => l.IsActive).AsNoTracking();
+        var total = await activeLocations.CountAsync();
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        page = Math.Min(page, totalPages);
+
+        var items = await activeLocations
+            .OrderBy(l => l.LocationName)
+            .ThenBy(l => l.LocationId)
+            .Skip(checked((page - 1) * pageSize))
+            .Take(pageSize)
+            .ToListAsync();
+
+        return new LocationPage(items, page, pageSize, total);
     }
 
     public async Task<IEnumerable<Location>> GetByCountryAsync(string country)
@@ -112,6 +133,7 @@ public class LocationRepository : ILocationRepository
                 )
             )
             .OrderBy(l => l.LocationName)
+            .ThenBy(l => l.LocationId)
             .ToListAsync();
     }
 }

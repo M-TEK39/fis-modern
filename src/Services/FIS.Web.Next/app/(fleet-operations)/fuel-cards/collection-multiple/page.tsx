@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -15,7 +19,7 @@ import { FuelCardApiError, getFuelCardsByVehicle } from "@/lib/api/fleet-operati
 import { getSession } from "@/lib/auth/session";
 import { searchWorkshopVehicles } from "@/lib/api/fleet-operations/api-workshop";
 
-export default async function FuelCardCollectionPage({
+async function FuelCardCollectionPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -128,4 +132,14 @@ export default async function FuelCardCollectionPage({
       </main>
     );
   }
+}
+
+export default function FuelCardCollectionPage(
+  props: Parameters<typeof FuelCardCollectionPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <FuelCardCollectionPageContent {...props} />
+    </Suspense>
+  );
 }

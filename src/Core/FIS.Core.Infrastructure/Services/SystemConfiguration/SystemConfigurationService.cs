@@ -89,9 +89,11 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
 
             var overrides = new Dictionary<string, string?>();
             if (document.SessionRefreshLifetimeMinutes is { } sessionLifetime)
-                overrides["SystemSettings:SessionRefreshLifetimeMinutes"] = sessionLifetime.ToString();
+                overrides["SystemSettings:SessionRefreshLifetimeMinutes"] =
+                    sessionLifetime.ToString();
             if (document.RememberRefreshLifetimeMinutes is { } rememberLifetime)
-                overrides["SystemSettings:RememberRefreshLifetimeMinutes"] = rememberLifetime.ToString();
+                overrides["SystemSettings:RememberRefreshLifetimeMinutes"] =
+                    rememberLifetime.ToString();
             if (document.EntraEnabled is { } entraEnabled)
                 overrides["SystemSettings:EntraEnabled"] = entraEnabled.ToString();
             if (TryNormalizeNonEmpty(document.EntraTenantId, out var tenantId))
@@ -103,7 +105,10 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
             if (TryNormalizeNonEmpty(document.PasswordResetSigningKey, out var signingKey))
                 overrides["JwtSettings:SecretKey"] = signingKey;
             if (
-                TryNormalizeNonEmpty(document.PreviousPasswordResetSigningKey, out var previousSigningKey)
+                TryNormalizeNonEmpty(
+                    document.PreviousPasswordResetSigningKey,
+                    out var previousSigningKey
+                )
                 && document.PreviousPasswordResetSigningKeyExpiresAtUtc is { } previousExpiresAtUtc
             )
             {
@@ -112,7 +117,8 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
                     previousExpiresAtUtc.ToString("O");
             }
             if (document.UpdatedAtUtc is { } updatedAtUtc)
-                overrides["SystemSettings:AppliedConfigurationUpdatedAtUtc"] = updatedAtUtc.ToString("O");
+                overrides["SystemSettings:AppliedConfigurationUpdatedAtUtc"] =
+                    updatedAtUtc.ToString("O");
 
             if (overrides.Count > 0)
                 configuration.AddInMemoryCollection(overrides);
@@ -141,8 +147,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
                 Resolve(environment, null),
                 restartRequired: false,
                 configurationManagementAvailable: false,
-                configurationManagementDescription:
-                    "Azure Key Vault is not configured. Deployment configuration values are active and system configuration is read-only."
+                configurationManagementDescription: "Azure Key Vault is not configured. Deployment configuration values are active and system configuration is read-only."
             );
         }
 
@@ -153,8 +158,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
                 Resolve(environment, null),
                 restartRequired: false,
                 configurationManagementAvailable: false,
-                configurationManagementDescription:
-                    "Azure Key Vault is unavailable. Deployment configuration values remain active and system configuration is read-only."
+                configurationManagementDescription: "Azure Key Vault is unavailable. Deployment configuration values remain active and system configuration is read-only."
             );
         }
 
@@ -162,8 +166,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
             Resolve(environment, secret.Document),
             restartRequired: RequiresRestart(secret.Document),
             configurationManagementAvailable: true,
-            configurationManagementDescription:
-                "Azure Key Vault is available for secure system configuration management."
+            configurationManagementDescription: "Azure Key Vault is available for secure system configuration management."
         );
     }
 
@@ -269,10 +272,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
             );
         }
 
-        var metadata = new SystemConfigurationUpdateMetadata(
-            Guid.NewGuid(),
-            DateTimeOffset.UtcNow
-        );
+        var metadata = new SystemConfigurationUpdateMetadata(Guid.NewGuid(), DateTimeOffset.UtcNow);
         var normalizedActor = string.IsNullOrWhiteSpace(actor) ? "unknown-actor" : actor.Trim();
         var changedSettingArray = changedSettings.ToArray();
 
@@ -603,8 +603,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
 
         if (update.RememberRefreshLifetime is { } rememberRefreshLifetime)
         {
-            document.RememberRefreshLifetimeMinutes = (int)
-                rememberRefreshLifetime.TotalMinutes;
+            document.RememberRefreshLifetimeMinutes = (int)rememberRefreshLifetime.TotalMinutes;
             changedSettings.Add(RememberRefreshLifetimeSetting);
         }
 
@@ -640,8 +639,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
                     currentPasswordResetSigningKey,
                     nextSigningKey,
                     StringComparison.Ordinal
-                )
-                && !string.IsNullOrWhiteSpace(currentPasswordResetSigningKey)
+                ) && !string.IsNullOrWhiteSpace(currentPasswordResetSigningKey)
             )
             {
                 document.PreviousPasswordResetSigningKey = currentPasswordResetSigningKey;
@@ -655,10 +653,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
         }
     }
 
-    private static bool TryValidateUpdate(
-        SystemConfigurationUpdate update,
-        out string? error
-    )
+    private static bool TryValidateUpdate(SystemConfigurationUpdate update, out string? error)
     {
         error = null;
 
@@ -667,7 +662,8 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
             && !IsValidRefreshLifetime(standardRefreshLifetime)
         )
         {
-            error = "Session refresh lifetime must be between 15 minutes and 30 days in whole minutes.";
+            error =
+                "Session refresh lifetime must be between 15 minutes and 30 days in whole minutes.";
             return false;
         }
 
@@ -676,14 +672,19 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
             && !IsValidRefreshLifetime(rememberRefreshLifetime)
         )
         {
-            error = "Remember refresh lifetime must be between 15 minutes and 30 days in whole minutes.";
+            error =
+                "Remember refresh lifetime must be between 15 minutes and 30 days in whole minutes.";
             return false;
         }
 
         if (
             !TryValidateIdentifier(update.EntraTenantId, "Microsoft Entra tenant ID", out error)
             || !TryValidateIdentifier(update.EntraClientId, "Microsoft Entra client ID", out error)
-            || !TryValidateSecret(update.EntraClientSecret, "Microsoft Entra client secret", out error)
+            || !TryValidateSecret(
+                update.EntraClientSecret,
+                "Microsoft Entra client secret",
+                out error
+            )
             || !TryValidateSecret(
                 update.PasswordResetSigningKey,
                 "password-reset signing key",
@@ -697,11 +698,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
         return true;
     }
 
-    private static bool TryValidateIdentifier(
-        string? value,
-        string label,
-        out string? error
-    )
+    private static bool TryValidateIdentifier(string? value, string label, out string? error)
     {
         error = null;
         if (value is null)
@@ -721,11 +718,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
         return true;
     }
 
-    private static bool TryValidateSecret(
-        string? value,
-        string label,
-        out string? error
-    )
+    private static bool TryValidateSecret(string? value, string label, out string? error)
     {
         error = null;
         if (value is null)
@@ -749,10 +742,7 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
     private static bool IsValidRefreshLifetimeMinutes(int value) =>
         value >= MinimumRefreshLifetimeMinutes && value <= MaximumRefreshLifetimeMinutes;
 
-    private static bool TryValidateDocument(
-        SystemConfigurationDocument document,
-        out string? error
-    )
+    private static bool TryValidateDocument(SystemConfigurationDocument document, out string? error)
     {
         error = null;
 
@@ -776,7 +766,11 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
 
         return TryValidateIdentifier(document.EntraTenantId, "Microsoft Entra tenant ID", out error)
             && TryValidateIdentifier(document.EntraClientId, "Microsoft Entra client ID", out error)
-            && TryValidateSecret(document.EntraClientSecret, "Microsoft Entra client secret", out error)
+            && TryValidateSecret(
+                document.EntraClientSecret,
+                "Microsoft Entra client secret",
+                out error
+            )
             && TryValidateSecret(
                 document.PasswordResetSigningKey,
                 "password-reset signing key",
@@ -808,9 +802,10 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
             return false;
 
         return !DateTimeOffset.TryParse(
-            _configuration["SystemSettings:AppliedConfigurationUpdatedAtUtc"],
-            out var appliedAtUtc
-        ) || appliedAtUtc < updatedAtUtc;
+                _configuration["SystemSettings:AppliedConfigurationUpdatedAtUtc"],
+                out var appliedAtUtc
+            )
+            || appliedAtUtc < updatedAtUtc;
     }
 
     private TimeSpan GetPasswordResetTokenLifetime()
@@ -855,25 +850,12 @@ public sealed class SystemConfigurationService : ISystemConfigurationService
     }
 
     private static SystemConfigurationUpdateResult Rejected(string description) =>
-        new(
-            SystemConfigurationUpdateStatus.Rejected,
-            true,
-            description,
-            Array.Empty<string>()
-        );
+        new(SystemConfigurationUpdateStatus.Rejected, true, description, Array.Empty<string>());
 
     private static SystemConfigurationUpdateResult Unavailable(string description) =>
-        new(
-            SystemConfigurationUpdateStatus.Unavailable,
-            false,
-            description,
-            Array.Empty<string>()
-        );
+        new(SystemConfigurationUpdateStatus.Unavailable, false, description, Array.Empty<string>());
 
-    private sealed record SecretReadResult(
-        bool Operational,
-        SystemConfigurationDocument? Document
-    );
+    private sealed record SecretReadResult(bool Operational, SystemConfigurationDocument? Document);
 
     private sealed record SystemConfigurationEnvironmentConfiguration(
         int SessionRefreshLifetimeMinutes,

@@ -66,6 +66,104 @@ public sealed class LossTypeRepository : ILossTypeRepository
 
     public async Task<IEnumerable<LossType>> GetAllAsync() => await QueryAsync();
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The page query uses fixed compatibility columns and a parameterized search term and offset."
+    )]
+    public async Task<LossTypePage> GetPageAsync(LossTypePageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var searchTerm = query.SearchTerm?.Trim() ?? string.Empty;
+        var availableColumns = await GetAvailableColumnsAsync();
+        var projection = RequiredColumns
+            .Select(column => $"[{column}] AS [{column}]")
+            .Concat(
+                OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column))
+            )
+            .ToArray();
+        var conditions = new List<string> { GetNotDeletedFilter(availableColumns) };
+        if (searchTerm.Length > 0)
+        {
+            conditions.Add("LOWER(COALESCE([loss_description], '')) LIKE @searchTerm");
+        }
+
+        var whereClause = string.Join(" AND ", conditions);
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            await using var countCommand = connection.CreateCommand();
+            countCommand.Transaction = transaction;
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{TableName}]
+                WHERE {whereClause}
+                """;
+            if (searchTerm.Length > 0)
+            {
+                AddParameter(
+                    countCommand,
+                    "@searchTerm",
+                    DbType.String,
+                    $"%{searchTerm.ToLowerInvariant()}%"
+                );
+            }
+
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var offset = checked((long)(page - 1) * pageSize);
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = transaction;
+            dataCommand.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}]
+                WHERE {whereClause}
+                ORDER BY [loss_description], [loss_type_code]
+                OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            if (searchTerm.Length > 0)
+            {
+                AddParameter(
+                    dataCommand,
+                    "@searchTerm",
+                    DbType.String,
+                    $"%{searchTerm.ToLowerInvariant()}%"
+                );
+            }
+
+            AddParameter(dataCommand, "@offset", DbType.Int64, offset);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<LossType>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(MapLossType(reader));
+            }
+
+            return new LossTypePage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IEnumerable<LossType>> SearchAsync(string searchTerm)
     {
         if (string.IsNullOrWhiteSpace(searchTerm))

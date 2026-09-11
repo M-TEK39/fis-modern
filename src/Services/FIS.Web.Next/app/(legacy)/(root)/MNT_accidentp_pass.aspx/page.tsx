@@ -1,5 +1,3 @@
-import HqAccidentPage, { type HqPageProps } from "@/app/(fleet-operations)/accidents/hq/page";
+import { createLegacyHqAccidentPage } from "@/app/(fleet-operations)/accidents/hq/_route";
 
-export default function LegacyPtaHqPage({ searchParams }: HqPageProps) {
-  return <HqAccidentPage searchParams={searchParams} locationCode={2} />;
-}
+export default createLegacyHqAccidentPage(2);

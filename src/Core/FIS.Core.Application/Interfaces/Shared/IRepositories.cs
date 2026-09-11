@@ -21,6 +21,13 @@ public interface IVehicleRepository
     Task<Vehicle?> GetByRegistrationNumberAsync(string registrationNumber);
     Task<IEnumerable<Vehicle>> GetActiveVehiclesAsync();
     Task<VehicleMasterSnapshotPage> GetSnapshotPageAsync(int page, int pageSize);
+    Task<RenumberedVehicleReportPage> GetRenumberedVehicleReportPageAsync(int page, int pageSize);
+    Task<VehicleLookupPage> GetVehicleLookupPageAsync(
+        string? keyword,
+        string? searchMode,
+        int page,
+        int pageSize
+    );
     Task<IEnumerable<Vehicle>> GetAvailableVehiclesAsync();
     Task<IEnumerable<Vehicle>> GetAllAsync();
     Task<IEnumerable<Vehicle>> SearchVehiclesAsync(string searchTerm);
@@ -40,6 +47,55 @@ public sealed record VehicleMasterSnapshotPage(
 )
 {
     public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
+}
+
+public sealed record RenumberedVehicleReportRow(
+    int OldVmfCode,
+    string? OldFleetNumber,
+    string? OldStatusDescription,
+    string? NewFleetNumber,
+    string? NewStatusDescription
+);
+
+public sealed record RenumberedVehicleReportPage(
+    IReadOnlyList<RenumberedVehicleReportRow> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
+
+/// <summary>
+/// Server-paginated vehicle lookup data for the vehicle-photo search table.
+/// The description fields are nullable because their legacy lookup tables may
+/// be unavailable on a compatible database. No replacement value is inferred.
+/// MakeAndModel is the existing model description; the legacy photo lookup did
+/// not expose a combined make/model value.
+/// </summary>
+public sealed record VehicleLookupPageItem(
+    int VmfCode,
+    string? GgNumber,
+    string? RegistrationNumber,
+    string? MakeAndModel,
+    short? YearManufactured,
+    string? Colour,
+    string? HireType,
+    string? Status,
+    string? HiredFrom,
+    DateTime? StatusDate,
+    short ModelCode
+);
+
+public sealed record VehicleLookupPage(
+    IReadOnlyList<VehicleLookupPageItem> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 /// <summary>
@@ -286,6 +342,7 @@ public sealed record RecoveredVehicleUpdateResult(
 public interface IDemoVehicleRepository
 {
     Task<IReadOnlyList<DemoVehicleRecord>> GetAllAsync();
+    Task<DemoVehiclePage> GetPageAsync(int page = 1, int pageSize = 24);
     Task<IReadOnlyList<DemoVehicleRecord>> SearchAsync(string searchTerm, bool byRegistration);
     Task<DemoVehicleRecord?> GetByIdAsync(int demoVehicleCode);
     Task<DemoVehicleRecord> CreateAsync(DemoVehicleInput input, int currentUserId);
@@ -329,6 +386,16 @@ public sealed record DemoVehicleRecord(
     int? ModifiedByUserCode
 );
 
+public sealed record DemoVehiclePage(
+    IReadOnlyList<DemoVehicleRecord> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
+
 /// <summary>
 /// Repository interface for vehicle authorization (pre-capture) operations
 /// </summary>
@@ -336,10 +403,7 @@ public interface IVehicleAuthorizationRepository
 {
     Task<PreVehicleMaster?> GetByIdAsync(int tempVmfCode);
     Task<PreVehicleMaster?> GetByChassisNumberAsync(string chassisNumber);
-    Task<VehicleAuthorizationPage> GetPendingAuthorizationsAsync(
-        int page = 1,
-        int pageSize = 24
-    );
+    Task<VehicleAuthorizationPage> GetPendingAuthorizationsAsync(int page = 1, int pageSize = 24);
     Task<VehicleAuthorizationPage> GetAuthorizedVehiclesAsync(int page = 1, int pageSize = 24);
     Task<VehicleAuthorizationPage> GetRejectedVehiclesAsync(int page = 1, int pageSize = 24);
     Task<IEnumerable<PreVehicleMaster>> GetByStatusAsync(string status);
@@ -472,12 +536,27 @@ public interface IUserProfileRepository
     Task<UserAccessOld?> GetByFirstNameAsync(string firstName);
     Task<UserAccessOld?> GetByEmailAsync(string email);
     Task<IEnumerable<UserAccessOld>> GetAllActiveAsync();
+    Task<UserProfileAdministrationPage> GetAdministrationPageAsync(
+        string alphabet,
+        int page,
+        int pageSize
+    );
     Task<IEnumerable<UserAccessOld>> GetBySiteAsync(short siteCode);
     Task<IEnumerable<UserAccessOld>> SearchAsync(string searchTerm);
     Task<UserAccessOld> CreateAsync(UserAccessOld userProfile, int currentUserId);
     Task UpdateAsync(UserAccessOld userProfile, int currentUserId);
     Task DeleteAsync(short userAccessCode, int currentUserId);
     Task<bool> ValidateCredentialsAsync(string firstName, string password);
+}
+
+public sealed record UserProfileAdministrationPage(
+    IReadOnlyList<UserAccessOld> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 /// <summary>
@@ -503,6 +582,7 @@ public interface ISiteRepository
     Task<Site?> GetByIdAsync(int siteCode);
     Task<Site?> GetByNameAsync(string siteName);
     Task<IEnumerable<Site>> GetActiveSitesAsync();
+    Task<SitePage> GetPageAsync(int page = 1, int pageSize = 24);
     Task<IEnumerable<Site>> SearchSitesAsync(string searchTerm);
     Task<SiteDeleteCheck> GetDeleteCheckAsync(int siteCode);
     Task<bool> HasActiveContractsAsync(int siteCode);
@@ -516,6 +596,11 @@ public sealed record SiteDeleteCheck(int ContractCount)
     public bool CanDelete => ContractCount == 0;
 }
 
+public sealed record SitePage(IReadOnlyList<Site> Items, int Page, int PageSize, int Total)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
+
 /// <summary>
 /// Repository interface for department operations
 /// </summary>
@@ -524,6 +609,7 @@ public interface IDepartmentRepository
     Task<Department?> GetByIdAsync(int departmentCode);
     Task<Department?> GetByNameAsync(string departmentName);
     Task<IEnumerable<Department>> GetAllAsync();
+    Task<DepartmentPage> GetPageAsync(int page = 1, int pageSize = 24);
     Task<IEnumerable<Department>> GetActiveDepartmentsAsync();
     Task<IEnumerable<Department>> GetByCompanyAsync(int companyCode);
     Task<IEnumerable<Department>> SearchDepartmentsAsync(string searchTerm);
@@ -537,6 +623,16 @@ public interface IDepartmentRepository
 public sealed record DepartmentDeleteCheck(int SiteCount, int LogsheetCount)
 {
     public bool CanDelete => SiteCount == 0 && LogsheetCount == 0;
+}
+
+public sealed record DepartmentPage(
+    IReadOnlyList<Department> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 /// <summary>
@@ -561,7 +657,14 @@ public interface ITripRepository
     Task<Trip?> GetByIdAsync(int tripId);
     Task<TripAuthorityDetails?> GetDetailsAsync(int tripId);
     Task<IEnumerable<Trip>> GetAllAsync();
+    Task<TripSummaryPage> GetTripSummaryPageAsync(TripSummaryPageQuery query);
     Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync();
+    Task<TripAuthorityVehiclePage> GetTripAuthorityInServicePageAsync(
+        TripAuthorityVehiclePageQuery query
+    );
+    Task<TripAuthorityVehiclePage> GetTripAuthorityOutPageAsync(
+        TripAuthorityVehiclePageQuery query
+    );
     Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode);
     Task<IEnumerable<Trip>> GetTripsByDriverAsync(string driverId);
     Task<IEnumerable<Trip>> GetTripsByContractAsync(int contractCode);
@@ -582,6 +685,45 @@ public interface ITripRepository
         int currentUserId
     );
     Task DeleteAsync(int tripId, int currentUserId);
+}
+
+/// <summary>
+/// Filters for the two server-paginated Trip Authority vehicle lists.
+/// The selected location filters are data filters only; callers must retain
+/// the existing role-based access filtering because this contract intentionally
+/// does not accept an access mode or role override.
+/// </summary>
+public sealed record TripAuthorityVehiclePageQuery(
+    int Page = 1,
+    int PageSize = 24,
+    string SearchMode = "GG",
+    string? SearchTerm = null,
+    short? DepartmentCode = null,
+    short? SiteCode = null,
+    int? TripAuthorityCode = null
+);
+
+public sealed record TripAuthorityVehiclePageItem(
+    int VmfCode,
+    int ContractCode,
+    short SiteCode,
+    string? FleetNumber,
+    string? RegistrationNumber,
+    DateTime? LicenceDueDate,
+    string? MakeDescription,
+    string? ModelDescription,
+    string? ContractType,
+    int? TripAuthorityCode = null
+);
+
+public sealed record TripAuthorityVehiclePage(
+    IReadOnlyList<TripAuthorityVehiclePageItem> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 /// <summary>
@@ -623,6 +765,7 @@ public interface IMakeRepository
     Task<Make?> GetByIdAsync(short makeCode);
     Task<Make?> GetByNameAsync(string makeName);
     Task<IEnumerable<Make>> GetAllMakesAsync();
+    Task<MakePage> GetPageAsync(int page = 1, int pageSize = 24);
     Task<IEnumerable<Make>> SearchMakesAsync(string searchTerm);
     Task<MakeDeleteCheck> GetDeleteCheckAsync(short makeCode);
     Task<Make> CreateAsync(Make make, int currentUserId);
@@ -635,6 +778,11 @@ public sealed record MakeDeleteCheck(int ModelCount)
     public bool CanDelete => ModelCount == 0;
 }
 
+public sealed record MakePage(IReadOnlyList<Make> Items, int Page, int PageSize, int Total)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
+
 /// <summary>
 /// Repository interface for model operations
 /// </summary>
@@ -643,6 +791,7 @@ public interface IModelRepository
     Task<Model?> GetByIdAsync(short modelCode);
     Task<Model?> GetByNameAsync(string modelName);
     Task<IEnumerable<Model>> GetAllModelsAsync();
+    Task<ModelPage> GetPageAsync(int page = 1, int pageSize = 24, short? makeCode = null);
     Task<IEnumerable<Model>> GetModelsByMakeAsync(short makeCode);
     Task<IEnumerable<Model>> GetModelsByEngineTypeAsync(string engineType);
     Task<IEnumerable<Model>> SearchModelsAsync(string searchTerm);
@@ -658,6 +807,11 @@ public sealed record ModelDeleteCheck(int VehicleCount)
     public bool CanDelete => VehicleCount == 0;
 }
 
+public sealed record ModelPage(IReadOnlyList<Model> Items, int Page, int PageSize, int Total)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
+
 /// <summary>
 /// Repository interface for type operations
 /// </summary>
@@ -667,9 +821,15 @@ public interface ITypeRepository
     Task<TypeEntity?> GetByNameAsync(string typeName);
     Task<IEnumerable<TypeEntity>> GetAllTypesAsync();
     Task<IEnumerable<TypeEntity>> SearchTypesAsync(string searchTerm);
+    Task<TypePage> GetPageAsync(int page, int pageSize);
     Task<TypeEntity> CreateAsync(TypeEntity type, int currentUserId);
     Task<TypeEntity> UpdateAsync(TypeEntity type, int currentUserId);
     Task DeleteAsync(short typeCode, int currentUserId);
+}
+
+public sealed record TypePage(IReadOnlyList<TypeEntity> Items, int Page, int PageSize, int Total)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 /// <summary>
@@ -699,11 +859,13 @@ public interface IPrivateHireRepository
     Task<IEnumerable<PrivateHire>> GetByVehicleAsync(int vmfCode);
     Task<IEnumerable<PrivateHire>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
     Task<IEnumerable<PrivateHire>> GetActiveHiresAsync();
+    Task<PrivateHirePage> GetPageAsync(PrivateHirePageQuery query);
     Task<PrivateHire> CreateAsync(PrivateHire privateHire, int currentUserId);
     Task UpdateAsync(PrivateHire privateHire, int currentUserId);
     Task DeleteAsync(int privateHireCode, int currentUserId);
     Task<IEnumerable<PrivateHire>> SearchHiresAsync(string searchTerm);
     Task<IEnumerable<PrivateHireContractorRecord>> GetContractorsAsync();
+    Task<PrivateHireContractorPage> GetContractorPageAsync(PrivateHireContractorPageQuery query);
     Task<PrivateHireContractorRecord?> GetContractorByIdAsync(int contractorId);
     Task<PrivateHireContractorRecord> CreateContractorAsync(
         PrivateHireContractorRecord contractor,
@@ -711,6 +873,34 @@ public interface IPrivateHireRepository
     );
     Task UpdateContractorAsync(PrivateHireContractorRecord contractor, int currentUserId);
     Task DeleteContractorAsync(int contractorId, int currentUserId);
+}
+
+public sealed record PrivateHirePageQuery(
+    int Page = 1,
+    int PageSize = 24,
+    string? SearchTerm = null
+);
+
+public sealed record PrivateHirePage(
+    IReadOnlyList<PrivateHire> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
+
+public sealed record PrivateHireContractorPageQuery(int Page = 1, int PageSize = 24);
+
+public sealed record PrivateHireContractorPage(
+    IReadOnlyList<PrivateHireContractorRecord> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 /// <summary>
@@ -721,12 +911,18 @@ public interface ILocationRepository
     Task<Location?> GetByIdAsync(int locationId);
     Task<Location?> GetByNameAsync(string locationName);
     Task<IEnumerable<Location>> GetAllLocationsAsync();
+    Task<LocationPage> GetPageAsync(int page = 1, int pageSize = 24);
     Task<IEnumerable<Location>> GetByCountryAsync(string country);
     Task<IEnumerable<Location>> GetByProvinceAsync(string province);
     Task<Location> CreateAsync(Location location, int currentUserId);
     Task UpdateAsync(Location location, int currentUserId);
     Task DeleteAsync(int locationId, int currentUserId);
     Task<IEnumerable<Location>> SearchLocationsAsync(string searchTerm);
+}
+
+public sealed record LocationPage(IReadOnlyList<Location> Items, int Page, int PageSize, int Total)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 /// <summary>
@@ -751,6 +947,7 @@ public interface IMaintenanceRecordRepository
 public interface IJournalDetailRepository
 {
     Task<IEnumerable<JournalDetail>> GetAllAsync();
+    Task<JournalDetailPage> GetUninvoicedPageAsync(int? departmentCode, int page, int pageSize);
     Task<JournalDetail?> GetByIdAsync(int journalDetailId);
     Task<JournalDetail?> GetByCodeAsync(Guid journalDetailCode);
     Task<IEnumerable<JournalDetail>> GetByVehicleAsync(int vmfCode);
@@ -762,6 +959,21 @@ public interface IJournalDetailRepository
     Task<JournalDetail> CreateAsync(JournalDetail journalDetail, int currentUserId);
     Task UpdateAsync(JournalDetail journalDetail, int currentUserId);
     Task DeleteAsync(int journalDetailId, int currentUserId);
+}
+
+/// <summary>
+/// Bounded journal-detail result for operational finance grids. The repository
+/// owns the compatibility projection so callers never need to materialize the
+/// full legacy journal_detail table merely to display a page.
+/// </summary>
+public sealed record JournalDetailPage(
+    IReadOnlyList<JournalDetail> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 /// <summary>
@@ -940,11 +1152,28 @@ public interface IDriverLicenceRepository
     Task<DriverLicence?> GetByIdAsync(short licenceCode);
     Task<DriverLicence?> GetByDescriptionAsync(string description);
     Task<IEnumerable<DriverLicence>> GetAllAsync();
+    Task<DriverLicencePage> GetPageAsync(DriverLicencePageQuery query);
     Task<IEnumerable<DriverLicence>> SearchAsync(string searchTerm);
     Task<DriverLicenceDeleteCheck> GetDeleteCheckAsync(short licenceCode);
     Task<DriverLicence> CreateAsync(DriverLicence driverLicence, int currentUserId);
     Task UpdateAsync(DriverLicence driverLicence, int currentUserId);
     Task DeleteAsync(short licenceCode, int currentUserId);
+}
+
+public sealed record DriverLicencePageQuery(
+    int Page = 1,
+    int PageSize = 24,
+    string? SearchTerm = null
+);
+
+public sealed record DriverLicencePage(
+    IReadOnlyList<DriverLicence> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 public sealed record DriverLicenceDeleteCheck(int ModelCount)
@@ -960,11 +1189,28 @@ public interface ILicenseFeeRepository
     Task<LicenseFee?> GetByIdAsync(short licenceFeeCode);
     Task<LicenseFee?> GetByDescriptionAsync(string description);
     Task<IEnumerable<LicenseFee>> GetAllAsync();
+    Task<LicenseFeePage> GetPageAsync(LicenseFeePageQuery query);
     Task<IEnumerable<LicenseFee>> SearchAsync(string searchTerm);
     Task<LicenseFeeDeleteCheck> GetDeleteCheckAsync(short licenceFeeCode);
     Task<LicenseFee> CreateAsync(LicenseFee licenseFee, int currentUserId);
     Task UpdateAsync(LicenseFee licenseFee, int currentUserId);
     Task DeleteAsync(short licenceFeeCode, int currentUserId);
+}
+
+public sealed record LicenseFeePageQuery(
+    int Page = 1,
+    int PageSize = 24,
+    string? SearchTerm = null
+);
+
+public sealed record LicenseFeePage(
+    IReadOnlyList<LicenseFee> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 public sealed record LicenseFeeDeleteCheck(int ModelCount)
@@ -980,12 +1226,25 @@ public interface IExtraCodeRepository
     Task<ExtraCode?> GetByIdAsync(short extraCode);
     Task<ExtraCode?> GetByDescriptionAsync(string description);
     Task<IEnumerable<ExtraCode>> GetAllAsync();
+    Task<ExtraCodePage> GetPageAsync(ExtraCodePageQuery query);
     Task<IEnumerable<ExtraCode>> SearchAsync(string searchTerm);
     Task<IEnumerable<ExtraCode>> GetByCategoryAsync(int categoryTypeCode);
     Task<ExtraCodeDeleteCheck> GetDeleteCheckAsync(short extraCode);
     Task<ExtraCode> CreateAsync(ExtraCode extraCode, int currentUserId);
     Task UpdateAsync(ExtraCode extraCode, int currentUserId);
     Task DeleteAsync(short extraCode, int currentUserId);
+}
+
+public sealed record ExtraCodePageQuery(int Page = 1, int PageSize = 24, string? SearchTerm = null);
+
+public sealed record ExtraCodePage(
+    IReadOnlyList<ExtraCode> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 public sealed record ExtraCodeDeleteCheck(
@@ -1005,11 +1264,19 @@ public interface ILossTypeRepository
     Task<LossType?> GetByIdAsync(short lossTypeCode);
     Task<LossType?> GetByDescriptionAsync(string description);
     Task<IEnumerable<LossType>> GetAllAsync();
+    Task<LossTypePage> GetPageAsync(LossTypePageQuery query);
     Task<IEnumerable<LossType>> SearchAsync(string searchTerm);
     Task<LossType> CreateAsync(LossType lossType, int currentUserId);
     Task UpdateAsync(LossType lossType, int currentUserId);
     Task<LossTypeDeleteCheck> GetDeleteCheckAsync(short lossTypeCode);
     Task DeleteAsync(short lossTypeCode, int currentUserId);
+}
+
+public sealed record LossTypePageQuery(int Page = 1, int PageSize = 24, string? SearchTerm = null);
+
+public sealed record LossTypePage(IReadOnlyList<LossType> Items, int Page, int PageSize, int Total)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 public sealed record LossTypeDeleteDependency(
@@ -1093,6 +1360,12 @@ public interface IVehicleLicenceHistoryRepository
 public interface ILicenseCertificateRepository
 {
     Task<IEnumerable<LicenseCertificateDocument>> GetAllAsync();
+    Task<LicenseCertificatePage> GetPageAsync(int page = 1, int pageSize = 24);
+    Task<MissingLicenseCertificatePage> GetMissingPageAsync(
+        short? locationCode,
+        int page = 1,
+        int pageSize = 24
+    );
     Task<IEnumerable<LicenseCertificateDocument>> GetByVehicleAsync(int vmfCode);
     Task<LicenseCertificateDocument?> GetByKeyAsync(string source, int vmfCode, string documentKey);
     Task<bool> HasAnyForVehicleAsync(int vmfCode);
@@ -1102,6 +1375,39 @@ public interface ILicenseCertificateRepository
         int currentUserId
     );
     Task DeleteAsync(string source, int vmfCode, string documentKey, int currentUserId);
+}
+
+public sealed record LicenseCertificatePageItem(
+    LicenseCertificateDocument Document,
+    string? FleetNumber,
+    string? RegistrationNumber
+);
+
+public sealed record LicenseCertificatePage(
+    IReadOnlyList<LicenseCertificatePageItem> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
+
+public sealed record MissingLicenseCertificatePageItem(
+    int VmfCode,
+    string? FleetNumber,
+    string? RegistrationNumber,
+    short LocationCode
+);
+
+public sealed record MissingLicenseCertificatePage(
+    IReadOnlyList<MissingLicenseCertificatePageItem> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 /// <summary>

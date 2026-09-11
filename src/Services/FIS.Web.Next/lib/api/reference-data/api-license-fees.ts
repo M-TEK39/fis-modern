@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_LICENSE_FEE_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type LicenseFeeRecord = {
@@ -14,6 +15,14 @@ export type LicenseFeeRecord = {
   createdByUserCode: number | null;
   modifiedByUserCode: number | null;
   isDeleted: boolean;
+};
+
+export type LicenseFeePage = {
+  items: LicenseFeeRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type LicenseFeeWriteInput = {
@@ -75,6 +84,44 @@ function asBoolean(value: unknown) {
   if (typeof value === "string") return value.toLowerCase() === "true" || value === "1";
   if (typeof value === "number") return value !== 0;
   return false;
+}
+
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_LICENSE_FEE_PAGE_SIZE)
+      : DEFAULT_LICENSE_FEE_PAGE_SIZE;
+  return Math.min(100, pageSize);
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
@@ -159,6 +206,40 @@ export async function getLicenseFees() {
   if (!Array.isArray(payload))
     throw new LicenseFeeApiError("invalid-response", "The licence fee response was not a list.");
   return payload.map(mapLicenseFee).filter((item): item is LicenseFeeRecord => item !== null);
+}
+
+export async function getLicenseFeesPage(
+  options: { page?: number; pageSize?: number; searchTerm?: string } = {},
+): Promise<LicenseFeePage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const searchTerm = options.searchTerm?.trim();
+  if (searchTerm) params.set("searchTerm", searchTerm);
+
+  const payload = await readJson(await requestApi(`api/licensefee/page?${params.toString()}`));
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new LicenseFeeApiError(
+      "invalid-response",
+      "The FIS API returned an invalid licence fee page.",
+    );
+  }
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata) {
+    throw new LicenseFeeApiError(
+      "invalid-response",
+      "The FIS API returned incomplete licence fee pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items
+      .map(mapLicenseFee)
+      .filter((item): item is LicenseFeeRecord => item !== null),
+    ...metadata,
+  };
 }
 
 export async function getLicenseFee(licenceFeeCode: number) {

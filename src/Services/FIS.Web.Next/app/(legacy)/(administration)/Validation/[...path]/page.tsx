@@ -1,7 +1,9 @@
 import { type ReportQuery } from "@/app/(fleet-operations)/reports/_components";
-import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/page";
+import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/_route";
+import { Suspense } from "react";
+import RouteLoading from "@/components/app-shell/route-loading";
 
-export default async function LegacyTariffReportsPage({
+async function LegacyTariffReportsPageContent({
   params,
   searchParams,
 }: Readonly<{ params: Promise<{ path: string[] }>; searchParams: Promise<ReportQuery> }>) {
@@ -11,5 +13,15 @@ export default async function LegacyTariffReportsPage({
       slug={path.join("/").toLowerCase().includes("tariff") ? "tariffs" : "tariffs"}
       searchParams={searchParams}
     />
+  );
+}
+
+export default function LegacyTariffReportsPage(
+  props: NonNullable<Parameters<typeof LegacyTariffReportsPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LegacyTariffReportsPageContent {...props} />
+    </Suspense>
   );
 }

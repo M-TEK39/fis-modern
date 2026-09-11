@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import {
   createFuelTypeAction,
@@ -17,13 +18,15 @@ import {
   updateVehicleTypeAction,
 } from "@/app/(administration)/reference-data/actions";
 import ReferenceDataClient from "@/app/(administration)/reference-data/reference-data-client";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
-  getFuelTypes,
-  getLicenseTypes,
-  getUnitsOfMeasure,
-  getVehicleTypes,
+  DEFAULT_REFERENCE_DATA_PAGE_SIZE,
+  getFuelTypesPage,
+  getLicenseTypesPage,
+  getUnitsOfMeasurePage,
+  getVehicleTypesPage,
   ReferenceDataApiError,
 } from "@/lib/api/reference-data/api-reference-data";
 import { getSession } from "@/lib/auth/session";
@@ -36,6 +39,11 @@ function queryValue(value: string | string[] | undefined) {
 }
 function tabValue(value: string | undefined): Tab {
   return value === "fueltypes" || value === "units" || value === "licenses" ? value : "types";
+}
+
+function pageValue(value: string | undefined) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
 }
 
 function AccessRestricted() {
@@ -69,9 +77,7 @@ function ApiUnavailable({ tab }: Readonly<{ tab: Tab }>) {
   );
 }
 
-export default async function ReferenceDataPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function ReferenceDataContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -96,12 +102,18 @@ export default async function ReferenceDataPage({
 
   const query = await searchParams;
   const activeTab = tabValue(queryValue(query.tab));
+  const page = pageValue(queryValue(query.page));
   try {
-    if (activeTab === "fueltypes")
+    if (activeTab === "fueltypes") {
+      const result = await getFuelTypesPage({ page, pageSize: DEFAULT_REFERENCE_DATA_PAGE_SIZE });
       return (
         <ReferenceDataClient
           activeTab={activeTab}
-          records={await getFuelTypes()}
+          records={result.items}
+          page={result.page}
+          pageSize={result.pageSize}
+          total={result.total}
+          totalPages={result.totalPages}
           createAction={createFuelTypeAction}
           updateAction={updateFuelTypeAction}
           deleteAction={deleteFuelTypeAction}
@@ -109,11 +121,20 @@ export default async function ReferenceDataPage({
           error={queryValue(query.error)}
         />
       );
-    if (activeTab === "units")
+    }
+    if (activeTab === "units") {
+      const result = await getUnitsOfMeasurePage({
+        page,
+        pageSize: DEFAULT_REFERENCE_DATA_PAGE_SIZE,
+      });
       return (
         <ReferenceDataClient
           activeTab={activeTab}
-          records={await getUnitsOfMeasure()}
+          records={result.items}
+          page={result.page}
+          pageSize={result.pageSize}
+          total={result.total}
+          totalPages={result.totalPages}
           createAction={createUnitOfMeasureAction}
           updateAction={updateUnitOfMeasureAction}
           deleteAction={deleteUnitOfMeasureAction}
@@ -121,11 +142,20 @@ export default async function ReferenceDataPage({
           error={queryValue(query.error)}
         />
       );
-    if (activeTab === "licenses")
+    }
+    if (activeTab === "licenses") {
+      const result = await getLicenseTypesPage({
+        page,
+        pageSize: DEFAULT_REFERENCE_DATA_PAGE_SIZE,
+      });
       return (
         <ReferenceDataClient
           activeTab={activeTab}
-          records={await getLicenseTypes()}
+          records={result.items}
+          page={result.page}
+          pageSize={result.pageSize}
+          total={result.total}
+          totalPages={result.totalPages}
           createAction={createLicenseTypeAction}
           updateAction={updateLicenseTypeAction}
           deleteAction={deleteLicenseTypeAction}
@@ -133,10 +163,16 @@ export default async function ReferenceDataPage({
           error={queryValue(query.error)}
         />
       );
+    }
+    const result = await getVehicleTypesPage({ page, pageSize: DEFAULT_REFERENCE_DATA_PAGE_SIZE });
     return (
       <ReferenceDataClient
         activeTab={activeTab}
-        records={await getVehicleTypes()}
+        records={result.items}
+        page={result.page}
+        pageSize={result.pageSize}
+        total={result.total}
+        totalPages={result.totalPages}
         createAction={createVehicleTypeAction}
         updateAction={updateVehicleTypeAction}
         deleteAction={deleteVehicleTypeAction}
@@ -161,4 +197,12 @@ export default async function ReferenceDataPage({
       </main>
     );
   }
+}
+
+export default function ReferenceDataPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <ReferenceDataContent {...props} />
+    </Suspense>
+  );
 }

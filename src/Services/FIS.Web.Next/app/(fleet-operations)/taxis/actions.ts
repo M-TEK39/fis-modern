@@ -106,10 +106,7 @@ function existingTaxiInput(taxi: Awaited<ReturnType<typeof getTaxi>>): TaxiInput
   return { ...fields, requestId };
 }
 
-async function validateProviderClass(
-  contractorId: number | null,
-  vehicleTypeCode: number | null,
-) {
+async function validateProviderClass(contractorId: number | null, vehicleTypeCode: number | null) {
   if (contractorId === null && vehicleTypeCode === null) return;
   if (contractorId === null)
     throw new TaxiValidationError("Choose a service provider before selecting a vehicle class.");

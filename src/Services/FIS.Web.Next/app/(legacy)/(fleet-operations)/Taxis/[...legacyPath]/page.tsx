@@ -1,9 +1,12 @@
 import TaxiHelpPage from "@/app/(fleet-operations)/taxis/help/page";
 import TaxiLogsPage from "@/app/(fleet-operations)/taxis/logs/page";
 import TaxiMaintenanceInfoPage from "@/app/(fleet-operations)/taxis/maintenance/info/page";
-import TaxiReportsPage, { type TaxiReportKind } from "@/app/(fleet-operations)/taxis/reports/page";
+import TaxiReportsPage, {
+  type TaxiReportKind,
+} from "@/app/(fleet-operations)/taxis/reports/_route";
 import TaxiRequestsPage from "@/app/(fleet-operations)/taxis/requests/page";
 import TaxiScanRequisitionPage from "@/app/(fleet-operations)/taxis/scan-requisition/page";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 
 type LegacyTaxiRouteProps = Readonly<{
   params: Promise<{ legacyPath: string[] }>;
@@ -21,7 +24,7 @@ function reportKind(path: string): TaxiReportKind {
   return "logs-requisitions-status";
 }
 
-export default async function LegacyTaxiRoute({ params, searchParams }: LegacyTaxiRouteProps) {
+async function LegacyTaxiRouteContent({ params, searchParams }: LegacyTaxiRouteProps) {
   const path = (await params).legacyPath.join("/").toLowerCase();
   if (path.includes("doc")) return <TaxiHelpPage />;
   if (
@@ -72,5 +75,13 @@ export default async function LegacyTaxiRoute({ params, searchParams }: LegacyTa
               : "add"
       }
     />
+  );
+}
+
+export default function LegacyTaxiRoute(props: LegacyTaxiRouteProps) {
+  return (
+    <StreamedRoute>
+      <LegacyTaxiRouteContent {...props} />
+    </StreamedRoute>
   );
 }

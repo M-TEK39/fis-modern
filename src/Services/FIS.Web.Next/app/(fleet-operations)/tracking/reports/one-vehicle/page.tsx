@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -22,7 +26,7 @@ import {
 } from "@/lib/api/fleet-operations/api-tracking";
 import { getVehicleOptions } from "@/lib/api/vehicles/api-vehicles";
 
-export default async function TrackingOneVehicleReportPage({
+async function TrackingOneVehicleReportPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getTrackingSession();
@@ -90,4 +94,14 @@ export default async function TrackingOneVehicleReportPage({
       </TrackingShell>
     );
   }
+}
+
+export default function TrackingOneVehicleReportPage(
+  props: Parameters<typeof TrackingOneVehicleReportPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TrackingOneVehicleReportPageContent {...props} />
+    </Suspense>
+  );
 }

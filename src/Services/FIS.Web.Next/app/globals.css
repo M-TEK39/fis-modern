@@ -77,41 +77,43 @@
 
 .dark {
   color-scheme: dark;
-  --fis-page-background: 72 3.4% 28.82%;
+  --fis-page-background: 0 0% 12%;
   --sidebar: 0 0% 9%;
   --background: 0 0% 0%;
   /* Keep every readable text token white in dark mode. Brand colours belong on
      surfaces and focus treatments, never on text against charcoal. */
   --foreground: 0 0% 100%;
-  --card: 73 3% 12%;
+  /* Structural dark surfaces intentionally use neutral grayscale. The old
+     low-saturation olive values appeared as green seams beside cards. */
+  --card: 0 0% 12%;
   --card-foreground: 0 0% 100%;
-  --popover: 73 3% 12%;
+  --popover: 0 0% 12%;
   --popover-foreground: 0 0% 100%;
   --primary: 0 0% 100%;
   --primary-foreground: 0 0% 0%;
-  --secondary: 51.89 18% 19%;
+  --secondary: 0 0% 16%;
   --secondary-foreground: 0 0% 100%;
-  --muted: 53.14 8% 16%;
+  --muted: 0 0% 16%;
   --muted-foreground: 0 0% 100%;
-  --accent: 33.62 45% 18%;
+  --accent: 0 0% 18%;
   --accent-foreground: 0 0% 100%;
   --destructive: 0 72% 63%;
   --destructive-foreground: 0 0% 100%;
-  --border: 0 0% 20%;
-  --input: 73 3% 30%;
+  --border: 0 0% 24%;
+  --input: 0 0% 30%;
   --ring: 34 92% 49%;
   --chart-1: 0 0% 96%;
   --chart-2: 53 37% 48%;
   --chart-3: 34 92% 49%;
-  --chart-4: 73 3% 70%;
-  --chart-5: 73 3% 42%;
+  --chart-4: 0 0% 70%;
+  --chart-5: 0 0% 42%;
   --sidebar-background: 0 0% 9%;
   --sidebar-foreground: 0 0% 100%;
-  --sidebar-primary: 72 3.4% 28.82%;
+  --sidebar-primary: 0 0% 20%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 51.89 16% 18%;
+  --sidebar-accent: 0 0% 18%;
   --sidebar-accent-foreground: 0 0% 100%;
-  --sidebar-border: 73 3% 22%;
+  --sidebar-border: 0 0% 22%;
   --sidebar-ring: 34 92% 49%;
   --fis-app-bg: hsl(var(--fis-page-background));
   --fis-surface: hsl(var(--card));
@@ -179,6 +181,13 @@ a:focus-visible,
 input:focus-visible {
   outline: 3px solid var(--fis-ring);
   outline-offset: 2px;
+}
+
+/* Command input focus is contained inside the dialog's input row. The generic
+   input outline intentionally remains available everywhere else. */
+[data-cmdk-input-wrapper] input:focus-visible {
+  outline: 0;
+  outline-offset: 0;
 }
 
 .page-shell {
@@ -1208,6 +1217,175 @@ input:focus-visible {
 .vehicle-card > .vehicle-status-maintenance-panel,
 .vehicle-card > .vehicle-footer-actions {
   margin-top: 0;
+}
+
+/* Shared help-document presentation. Individual modules retain their legacy
+   wording and actions, but use the same readable hierarchy and rhythm. */
+.module-help-page .vehicle-page-header {
+  margin-bottom: 0.1rem;
+}
+
+.module-help-content {
+  display: grid;
+  gap: clamp(1.25rem, 2vw, 1.75rem);
+}
+
+.module-help-section {
+  display: grid;
+  gap: 0.65rem;
+  max-width: 74rem;
+}
+
+.module-help-section > h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
+  color: var(--fis-text);
+  font-size: clamp(1.05rem, 1.5vw, 1.2rem);
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+}
+
+.module-help-section > h2::before {
+  width: 0.3rem;
+  height: 1.25em;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: hsl(var(--ring));
+  content: "";
+}
+
+.module-help-section > p,
+.module-help-intro,
+.module-help-note {
+  max-width: 78ch;
+  margin: 0;
+  color: var(--fis-muted-text);
+  line-height: 1.65;
+}
+
+.module-help-intro {
+  color: var(--fis-text);
+  font-size: 1.03rem;
+}
+
+.module-help-note {
+  border-left: 3px solid hsl(var(--ring));
+  padding: 0.15rem 0 0.15rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+.module-help-table {
+  min-width: min(46rem, 100%);
+}
+
+.module-help-table th[scope="row"] {
+  width: min(28vw, 22rem);
+  background: var(--fis-accent-soft);
+  color: var(--fis-text);
+}
+
+.module-help-steps {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: help-steps;
+}
+
+.module-help-steps > li {
+  position: relative;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem 0.65rem 3rem;
+  color: var(--fis-text);
+  counter-increment: help-steps;
+}
+
+.module-help-steps > li::before {
+  position: absolute;
+  top: 0.65rem;
+  left: 0;
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid var(--fis-border);
+  border-radius: 999px;
+  background: var(--fis-accent-soft);
+  color: var(--fis-text);
+  content: counter(help-steps);
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.module-help-disclosure {
+  overflow: clip;
+  border: 1px solid var(--fis-border);
+  border-radius: 0.75rem;
+  background: var(--fis-elevated);
+}
+
+.module-help-disclosure > summary {
+  display: flex;
+  min-height: 3.2rem;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  list-style: none;
+  padding: 0.75rem 1rem;
+  color: var(--fis-text);
+  font-weight: 700;
+}
+
+.module-help-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.module-help-disclosure > summary::after {
+  margin-left: auto;
+  content: "+";
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+.module-help-disclosure[open] > summary {
+  border-bottom: 1px solid var(--fis-border);
+  background: var(--fis-hover);
+}
+
+.module-help-disclosure[open] > summary::after {
+  content: "−";
+}
+
+.module-help-disclosure > :not(summary) {
+  margin: 0;
+  padding: 1rem;
+}
+
+.legacy-help-document,
+.document-help-frame,
+.fis-help-frame {
+  display: block;
+  width: 100%;
+  min-height: clamp(40rem, 75svh, 62rem);
+  border: 1px solid var(--fis-border);
+  border-radius: 0.75rem;
+  background: hsl(0 0% 100%);
+}
+
+.document-help-card {
+  align-content: start;
+}
+
+.document-help-content {
+  min-width: 0;
+}
+
+.document-help-content > .muted-copy {
+  margin: 0 0 0.85rem;
 }
 
 .fis-module-page-header {
@@ -2559,6 +2737,21 @@ input:focus-visible {
 }
 
 @media (max-width: 48rem) {
+  .module-help-section > h2 {
+    font-size: 1.05rem;
+  }
+
+  .module-help-table th[scope="row"] {
+    width: auto;
+  }
+
+  .legacy-help-document,
+  .document-help-frame,
+  .fis-help-frame {
+    min-height: 38rem;
+    border-radius: 0.55rem;
+  }
+
   .vehicle-create-grid {
     grid-template-columns: 1fr;
   }

@@ -391,6 +391,26 @@ public class TripSummaryLine
     public DateTime LastTrip { get; set; }
 }
 
+public sealed record TripSummaryPageQuery(
+    int Page = 1,
+    int PageSize = 24,
+    int? VmfCode = null,
+    DateTime StartDate = default,
+    DateTime EndDate = default,
+    string? Search = null,
+    string? Filter = null
+);
+
+public sealed record TripSummaryPage(
+    IReadOnlyList<TripSummaryLine> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
+
 /// <summary>
 /// Trip detail report
 /// </summary>

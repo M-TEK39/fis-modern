@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import {
   changeVehicleStatusAgainstApi,
-  searchVehiclesForStatus,
+  searchVehiclesForStatusPage,
   VehicleStatusApiError,
   type VehicleStatusVehicle,
 } from "@/lib/api/vehicles/api-vehicle-status";
@@ -19,6 +19,11 @@ export type VehicleStatusActionState = {
   status: "idle" | "success" | "error";
   message?: string;
   results?: VehicleStatusVehicle[];
+  page?: number;
+  total?: number;
+  totalPages?: number;
+  searchMode?: "GG" | "GP";
+  searchTerm?: string;
 };
 
 const initialSearchState: VehicleStatusActionState = { status: "idle", results: [] };
@@ -149,29 +154,25 @@ export async function searchVehicleStatusAction(
 
   const searchTerm = getText(formData, "searchTerm");
   const searchMode = getText(formData, "searchMode").toUpperCase() === "GP" ? "GP" : "GG";
+  const rawPage = Number(getText(formData, "page"));
+  const requestedPage = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
   if (!searchTerm) {
     return { status: "error", message: "Enter a GG or GP number to search.", results: [] };
   }
 
   try {
-    const matches = await searchVehiclesForStatus(searchTerm);
-    const results = matches
-      .filter((vehicle) => {
-        const value = searchMode === "GP" ? vehicle.registrationNumber : vehicle.fleetNumber;
-        return value?.toLocaleLowerCase().includes(searchTerm.toLocaleLowerCase()) === true;
-      })
-      .toSorted((left, right) => {
-        const leftValue = searchMode === "GP" ? left.registrationNumber : left.fleetNumber;
-        const rightValue = searchMode === "GP" ? right.registrationNumber : right.fleetNumber;
-        const leftExact =
-          leftValue?.trim().localeCompare(searchTerm, undefined, { sensitivity: "accent" }) === 0;
-        const rightExact =
-          rightValue?.trim().localeCompare(searchTerm, undefined, { sensitivity: "accent" }) === 0;
-        return Number(rightExact) - Number(leftExact) || left.vmfCode - right.vmfCode;
-      });
+    const result = await searchVehiclesForStatusPage(searchTerm, searchMode, requestedPage);
 
-    return results.length > 0
-      ? { status: "success", results }
+    return result.items.length > 0
+      ? {
+          status: "success",
+          results: result.items,
+          page: result.page,
+          total: result.total,
+          totalPages: result.totalPages,
+          searchMode,
+          searchTerm,
+        }
       : { status: "success", message: "No matching vehicles found.", results: [] };
   } catch (error) {
     if (error instanceof VehicleStatusApiError) {

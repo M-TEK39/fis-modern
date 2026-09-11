@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   hasReportsRole,
@@ -19,7 +20,7 @@ function queryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
-export default async function ReportRequestPage({ searchParams }: RequestPageProps) {
+async function ReportRequestPageContent({ searchParams }: RequestPageProps) {
   await connection();
   const [session, query] = await Promise.all([getSession(), searchParams]);
   if (session.status === "anonymous") redirect("/login");
@@ -163,5 +164,13 @@ export default async function ReportRequestPage({ searchParams }: RequestPagePro
         </form>
       </section>
     </ReportsFrame>
+  );
+}
+
+export default function ReportRequestPage(props: RequestPageProps) {
+  return (
+    <StreamedRoute>
+      <ReportRequestPageContent {...props} />
+    </StreamedRoute>
   );
 }

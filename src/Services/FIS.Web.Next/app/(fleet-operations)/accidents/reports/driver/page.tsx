@@ -40,7 +40,7 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading driver report...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -59,6 +59,7 @@ function ErrorState() {
 }
 
 async function DriverReportContent({ searchParams }: DriverReportPageProps) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
@@ -196,8 +197,7 @@ async function DriverReportContent({ searchParams }: DriverReportPageProps) {
   );
 }
 
-export default async function AccidentDriverReportPage({ searchParams }: DriverReportPageProps) {
-  await connection();
+export default function AccidentDriverReportPage({ searchParams }: DriverReportPageProps) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="driver-report-title">

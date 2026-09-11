@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
+
+async function LegacyCheckScoaPageContent(): Promise<never> {
+  redirect("/finance/batch-management/check-scoa");
+}
 
 export default function LegacyCheckScoaPage() {
-  redirect("/finance/batch-management/check-scoa");
+  return (
+    <StreamedRoute>
+      <LegacyCheckScoaPageContent />
+    </StreamedRoute>
+  );
 }

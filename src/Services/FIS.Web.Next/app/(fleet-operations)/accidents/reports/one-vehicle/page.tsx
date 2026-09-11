@@ -38,7 +38,7 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading vehicle accident report...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -57,6 +57,7 @@ function ErrorState() {
 }
 
 async function OneVehicleReportContent({ searchParams }: OneVehicleReportPageProps) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
@@ -168,10 +169,7 @@ async function OneVehicleReportContent({ searchParams }: OneVehicleReportPagePro
   );
 }
 
-export default async function OneVehicleAccidentReportPage({
-  searchParams,
-}: OneVehicleReportPageProps) {
-  await connection();
+export default function OneVehicleAccidentReportPage({ searchParams }: OneVehicleReportPageProps) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="one-vehicle-report-title">

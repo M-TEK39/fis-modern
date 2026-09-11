@@ -1,14 +1,7 @@
-import { FineReportPage } from "@/app/(fleet-operations)/fines/reports/[mode]/page";
+import { createLegacyFineReportPage } from "@/app/(fleet-operations)/fines/reports/[mode]/_route";
 
-export default function LegacyFineReissueSelectionPage(
-  props: Parameters<typeof FineReportPage>[0],
-) {
-  return (
-    <FineReportPage
-      {...props}
-      forcedMode="letter"
-      legacyResult
-      routePath="/fines/RPT_letter_main2_Fines.aspx"
-    />
-  );
-}
+export default createLegacyFineReportPage({
+  forcedMode: "letter",
+  legacyResult: true,
+  routePath: "/fines/RPT_letter_main2_Fines.aspx",
+});

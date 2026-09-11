@@ -90,7 +90,7 @@ export function LoginForm05({
               type="checkbox"
               className="size-4 rounded border-input accent-primary"
             />
-            Remember me for up to 7 days
+            Remember me
           </label>
 
           <SubmitButton />

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
-import AuctionReportsPage from "@/app/(fleet-operations)/auction/reports/page";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import AuctionReportsPage from "@/app/(fleet-operations)/auction/reports/_route";
 
 type LegacyAuctionReportsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -33,7 +34,7 @@ function copyQueryValue(
   }
 }
 
-export default async function ReportsAuctionPage({ searchParams }: LegacyAuctionReportsPageProps) {
+async function ReportsAuctionPageContent({ searchParams }: LegacyAuctionReportsPageProps) {
   const query = await searchParams;
   const reportType = first(query.rtype)?.trim().toLowerCase();
   const mode = reportType
@@ -52,4 +53,12 @@ export default async function ReportsAuctionPage({ searchParams }: LegacyAuction
   }
 
   return <AuctionReportsPage routePath="/reports/auction" />;
+}
+
+export default function ReportsAuctionPage(props: LegacyAuctionReportsPageProps) {
+  return (
+    <StreamedRoute>
+      <ReportsAuctionPageContent {...props} />
+    </StreamedRoute>
+  );
 }

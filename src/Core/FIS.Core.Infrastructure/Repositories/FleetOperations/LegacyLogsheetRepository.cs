@@ -52,6 +52,73 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
 
     public Task<IEnumerable<Logsheet>> GetAllAsync() => QueryAsEnumerableAsync();
 
+    public async Task<LogsheetPage> GetPageAsync(LogsheetPageQuery query)
+    {
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var columns = await GetAvailableColumnsAsync();
+        var conditions = BuildListConditions(columns);
+        if (query.VmfCode is > 0)
+            conditions.Add("l.[vmf_code] = @vmfCode");
+        if (!string.IsNullOrWhiteSpace(query.RequisitionNumber))
+            conditions.Add("l.[rek_num] = @requisitionNumber");
+        var whereClause = string.Join(" AND ", conditions);
+
+        await using var scope = await OpenConnectionAsync();
+
+        await using var countCommand = scope.Connection.CreateCommand();
+        countCommand.Transaction = CurrentTransaction;
+        countCommand.CommandText = $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{TableName}] l
+            LEFT JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = l.[vmf_code]
+            LEFT JOIN [dbo].[site] s ON s.[Site_code] = l.[site_code]
+            WHERE {whereClause}
+            """;
+        AddPageParameters(countCommand, query);
+        var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Min(requestedPage, totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = CurrentTransaction;
+        dataCommand.CommandText = $"""
+            SELECT
+                {BuildProjection(columns)}
+            FROM [dbo].[{TableName}] l
+            LEFT JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = l.[vmf_code]
+            LEFT JOIN [dbo].[site] s ON s.[Site_code] = l.[site_code]
+            WHERE {whereClause}
+            ORDER BY l.[month] DESC, l.[log_code] DESC
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+        AddPageParameters(dataCommand, query);
+
+        var items = new List<Logsheet>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            items.Add(Map(reader));
+
+        return new LogsheetPage(items, page, pageSize, total);
+    }
+
+    private static void AddPageParameters(DbCommand command, LogsheetPageQuery query)
+    {
+        if (query.VmfCode is > 0)
+            AddParameter(command, "@vmfCode", DbType.Int32, query.VmfCode.Value);
+        if (!string.IsNullOrWhiteSpace(query.RequisitionNumber))
+            AddParameter(
+                command,
+                "@requisitionNumber",
+                DbType.String,
+                query.RequisitionNumber.Trim()
+            );
+    }
+
     public async Task<IEnumerable<Logsheet>> GetByVehicleAsync(int vmfCode) =>
         await QueryAsync(
             "l.[vmf_code] = @vmfCode",
@@ -319,11 +386,7 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
-        var conditions = new List<string>();
-        if (!string.IsNullOrWhiteSpace(predicate))
-            conditions.Add($"({predicate})");
-        if (columns.ContainsKey("is_deleted"))
-            conditions.Add("ISNULL(l.[is_deleted], 0) = 0");
+        var conditions = BuildListConditions(columns, predicate);
         command.CommandText = $"""
             SELECT
                 {BuildProjection(columns)}
@@ -340,6 +403,21 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
         while (await reader.ReadAsync())
             results.Add(Map(reader));
         return results;
+    }
+
+    private static List<string> BuildListConditions(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string? predicate = null
+    )
+    {
+        var conditions = new List<string>();
+        if (!string.IsNullOrWhiteSpace(predicate))
+            conditions.Add($"({predicate})");
+        if (columns.ContainsKey("is_deleted"))
+            conditions.Add("ISNULL(l.[is_deleted], 0) = 0");
+        if (conditions.Count == 0)
+            conditions.Add("1 = 1");
+        return conditions;
     }
 
     private async Task ExecuteUpdateAsync(int logCode, IReadOnlyCollection<WriteValue> values)
@@ -392,16 +470,13 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
                 OptionalExpression(columns, "trans_date", "datetime2") + " AS [trans_date]",
                 OptionalExpression(columns, "driver_time", "float") + " AS [driver_time]",
                 OptionalExpression(columns, "FBS_comp", "datetime2") + " AS [FBS_comp]",
-                OptionalExpression(columns, "user_access_code", "int")
-                    + " AS [user_access_code]",
+                OptionalExpression(columns, "user_access_code", "int") + " AS [user_access_code]",
                 OptionalExpression(columns, "trans_time", "time") + " AS [trans_time]",
-                OptionalExpression(columns, "department_code", "int")
-                    + " AS [department_code]",
+                OptionalExpression(columns, "department_code", "int") + " AS [department_code]",
                 OptionalExpression(columns, "contract_code", "int") + " AS [contract_code]",
                 OptionalExpression(columns, "journal_detail_code", "uniqueidentifier")
                     + " AS [journal_detail_code]",
-                OptionalExpression(columns, "parent_log_code", "int")
-                    + " AS [parent_log_code]",
+                OptionalExpression(columns, "parent_log_code", "int") + " AS [parent_log_code]",
                 "v.[fleet_number] AS [fleet_number]",
                 "v.[registration_number] AS [registration_number]",
                 "s.[description] AS [site_description]",

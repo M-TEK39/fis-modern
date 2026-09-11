@@ -4,6 +4,68 @@ export function queryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
+export function taxiPageHref(
+  path: string,
+  query: Record<string, string | string[] | undefined>,
+  page: number,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (key === "page" || value === undefined) continue;
+    const item = Array.isArray(value) ? value[0] : value;
+    if (item) params.set(key, item);
+  }
+  if (page > 1) params.set("page", String(page));
+  const search = params.toString();
+  return search ? `${path}?${search}` : path;
+}
+
+export function TaxiPagination({
+  path,
+  query,
+  page,
+  totalPages,
+}: Readonly<{
+  path: string;
+  query: Record<string, string | string[] | undefined>;
+  page: number;
+  totalPages: number;
+}>) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <nav className="vehicle-pagination" aria-label="Taxi result pages">
+      {page <= 1 ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Previous
+        </span>
+      ) : (
+        <Link className="vehicle-pagination-button" href={taxiPageHref(path, query, page - 1)}>
+          Previous
+        </Link>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {page} of {totalPages}
+      </span>
+      {page >= totalPages ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Next
+        </span>
+      ) : (
+        <Link className="vehicle-pagination-button" href={taxiPageHref(path, query, page + 1)}>
+          Next
+        </Link>
+      )}
+    </nav>
+  );
+}
+
 export function valueOrDash(value: string | number | null | undefined) {
   return value === null || value === undefined || (typeof value === "string" && !value.trim())
     ? "-"

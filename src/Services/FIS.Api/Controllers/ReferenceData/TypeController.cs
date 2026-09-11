@@ -50,6 +50,35 @@ public class TypeController : BaseApiController
         }
     }
 
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage([FromQuery] int page = 1, [FromQuery] int pageSize = 24)
+    {
+        try
+        {
+            _ = GetCurrentUserId();
+            var result = await _typeRepository.GetPageAsync(page, pageSize);
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(type => new TypeResponseDto
+                    {
+                        type_code = type.type_code,
+                        type_description = type.type_description,
+                    }),
+                    result.Page,
+                    result.PageSize,
+                    result.Total,
+                    result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged vehicle types");
+            return StatusCode(500, "An error occurred while retrieving types");
+        }
+    }
+
     /// <summary>
     /// Gets a specific vehicle type by code
     /// </summary>

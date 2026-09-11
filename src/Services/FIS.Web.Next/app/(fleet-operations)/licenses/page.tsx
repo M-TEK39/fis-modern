@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -18,7 +22,7 @@ import {
   ReferenceDataApiError,
 } from "@/lib/api/reference-data/api-reference-data";
 
-export default async function LicensesPage({
+async function LicensesPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLicenseSession();
@@ -85,5 +89,13 @@ export default async function LicensesPage({
         </Link>
       </div>
     </LicenseShell>
+  );
+}
+
+export default function LicensesPage(props: Parameters<typeof LicensesPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LicensesPageContent {...props} />
+    </Suspense>
   );
 }

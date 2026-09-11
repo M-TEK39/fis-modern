@@ -23,6 +23,15 @@ namespace FIS.Core.Infrastructure.Repositories;
 )]
 public sealed class LicenseCertificateRepository : ILicenseCertificateRepository
 {
+    private static readonly string[] MissingVehicleRequiredColumns =
+    [
+        "vmf_code",
+        "vehicle_status_code",
+        "location_code",
+        "fleet_number",
+        "registration_number",
+    ];
+
     private static readonly Regex ModernPeriodPattern = new(
         @"\[period:(?<begin>\d{4}-\d{2}-\d{2})?\.\.(?<end>\d{4}-\d{2}-\d{2})?\]",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase
@@ -49,6 +58,146 @@ public sealed class LicenseCertificateRepository : ILicenseCertificateRepository
             )
             .ThenBy(document => document.vmf_code)
             .ThenBy(document => document.DocumentKey);
+    }
+
+    public async Task<LicenseCertificatePage> GetPageAsync(int page = 1, int pageSize = 24)
+    {
+        var normalizedPageSize = Math.Clamp(pageSize, 1, 100);
+        var requestedPage = Math.Max(1, page);
+        var schema = await GetSchemaAsync();
+        if (schema.Modern is null && schema.Legacy is null)
+            return new LicenseCertificatePage([], 1, normalizedPageSize, 0);
+
+        var vehicleColumns = await GetTableColumnsAsync("vehicle_master");
+        EnsureVehicleColumns(vehicleColumns);
+        var unionQuery = BuildCertificateUnionQuery(schema);
+        await using var scope = await OpenConnectionAsync();
+
+        await using var countCommand = scope.Connection.CreateCommand();
+        countCommand.Transaction = CurrentTransaction;
+        countCommand.CommandText = $"""
+            WITH [certificate_documents] AS (
+                {unionQuery}
+            )
+            SELECT COUNT(1)
+            FROM [certificate_documents]
+            """;
+        AddCertificateCategoryParameter(countCommand, schema);
+        var total = Convert.ToInt32(
+            await countCommand.ExecuteScalarAsync(),
+            CultureInfo.InvariantCulture
+        );
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)normalizedPageSize));
+        var normalizedPage = Math.Min(requestedPage, totalPages);
+        var skip = checked((long)(normalizedPage - 1) * normalizedPageSize);
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = CurrentTransaction;
+        dataCommand.CommandText = $"""
+            WITH [certificate_documents] AS (
+                {unionQuery}
+            )
+            SELECT
+                [certificates].[source],
+                [certificates].[document_key],
+                [certificates].[vmf_code],
+                [certificates].[image],
+                [certificates].[document_description],
+                [certificates].[original_file_name],
+                [certificates].[stored_file_path],
+                [certificates].[mime_type],
+                [certificates].[file_size_bytes],
+                [certificates].[period_begin],
+                [certificates].[period_end],
+                [certificates].[date_created],
+                [certificates].[date_updated],
+                [vehicles].[fleet_number] AS [fleet_number],
+                [vehicles].[registration_number] AS [registration_number]
+            FROM [certificate_documents] AS [certificates]
+            LEFT JOIN [dbo].[vehicle_master] AS [vehicles]
+                ON [vehicles].[vmf_code] = [certificates].[vmf_code]
+            ORDER BY
+                COALESCE([vehicles].[fleet_number], ''),
+                [certificates].[vmf_code],
+                [certificates].[sort_date] DESC,
+                [certificates].[source],
+                [certificates].[document_sort_key]
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddCertificateCategoryParameter(dataCommand, schema);
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, normalizedPageSize);
+
+        var items = await ReadPageAsync(dataCommand);
+
+        return new LicenseCertificatePage(items, normalizedPage, normalizedPageSize, total);
+    }
+
+    public async Task<MissingLicenseCertificatePage> GetMissingPageAsync(
+        short? locationCode,
+        int page = 1,
+        int pageSize = 24
+    )
+    {
+        var normalizedPageSize = Math.Clamp(pageSize, 1, 100);
+        var requestedPage = Math.Max(1, page);
+        var schema = await GetSchemaAsync();
+        var vehicleColumns = await GetTableColumnsAsync("vehicle_master");
+        EnsureVehicleColumns(vehicleColumns);
+        var whereClause = BuildMissingVehicleWhereClause(schema, vehicleColumns, locationCode);
+
+        await using var scope = await OpenConnectionAsync();
+
+        await using var countCommand = scope.Connection.CreateCommand();
+        countCommand.Transaction = CurrentTransaction;
+        countCommand.CommandText = $"""
+            SELECT COUNT(1)
+            FROM [dbo].[vehicle_master] AS [vehicles]
+            WHERE {whereClause}
+            """;
+        AddMissingVehicleParameters(countCommand, schema, locationCode);
+        var total = Convert.ToInt32(
+            await countCommand.ExecuteScalarAsync(),
+            CultureInfo.InvariantCulture
+        );
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)normalizedPageSize));
+        var normalizedPage = Math.Min(requestedPage, totalPages);
+        var skip = checked((long)(normalizedPage - 1) * normalizedPageSize);
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = CurrentTransaction;
+        dataCommand.CommandText = $"""
+            SELECT
+                [vehicles].[vmf_code],
+                [vehicles].[fleet_number],
+                [vehicles].[registration_number],
+                [vehicles].[location_code]
+            FROM [dbo].[vehicle_master] AS [vehicles]
+            WHERE {whereClause}
+            ORDER BY COALESCE([vehicles].[fleet_number], ''), [vehicles].[vmf_code]
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddMissingVehicleParameters(dataCommand, schema, locationCode);
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, normalizedPageSize);
+
+        var items = new List<MissingLicenseCertificatePageItem>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            items.Add(
+                new MissingLicenseCertificatePageItem(
+                    ReadInt(reader, "vmf_code") ?? 0,
+                    ReadString(reader, "fleet_number"),
+                    ReadString(reader, "registration_number"),
+                    Convert.ToInt16(reader["location_code"], CultureInfo.InvariantCulture)
+                )
+            );
+        }
+
+        return new MissingLicenseCertificatePage(items, normalizedPage, normalizedPageSize, total);
     }
 
     public async Task<IEnumerable<LicenseCertificateDocument>> GetByVehicleAsync(int vmfCode)
@@ -381,6 +530,134 @@ public sealed class LicenseCertificateRepository : ILicenseCertificateRepository
         return await ReadAsync(command, "legacy");
     }
 
+    private static string BuildCertificateUnionQuery(SchemaSet schema)
+    {
+        var queries = new List<string>();
+        if (schema.Modern is not null)
+        {
+            queries.Add(
+                $"""
+                SELECT
+                    CAST('modern' AS nvarchar(10)) AS [source],
+                    CONVERT(nvarchar(max), documents.[document_id]) AS [document_key],
+                    CONVERT(nvarchar(450), documents.[document_id]) AS [document_sort_key],
+                    CONVERT(int, documents.[vmf_code]) AS [vmf_code],
+                    CAST(NULL AS nvarchar(max)) AS [image],
+                    CONVERT(nvarchar(max), {StringProjection(
+                    schema.Modern,
+                    "document_description"
+                )}) AS [document_description],
+                    CONVERT(nvarchar(max), documents.[original_file_name]) AS [original_file_name],
+                    CONVERT(nvarchar(max), documents.[stored_file_path]) AS [stored_file_path],
+                    CONVERT(nvarchar(100), documents.[mime_type]) AS [mime_type],
+                    CONVERT(bigint, documents.[file_size_bytes]) AS [file_size_bytes],
+                    CAST(NULL AS datetime2) AS [period_begin],
+                    CAST(NULL AS datetime2) AS [period_end],
+                    {Projection(schema.Modern, "date_created")} AS [date_created],
+                    {Projection(schema.Modern, "date_updated")} AS [date_updated],
+                    {Projection(schema.Modern, "date_created")} AS [sort_date]
+                FROM [dbo].[vehicle_documents] AS documents
+                WHERE {ActiveFilter(schema.Modern, "documents")}
+                  AND documents.[document_category] = @category
+                """
+            );
+        }
+
+        if (schema.Legacy is not null)
+        {
+            queries.Add(
+                $"""
+                SELECT
+                    CAST('legacy' AS nvarchar(10)) AS [source],
+                    CONVERT(nvarchar(max), documents.[image]) AS [document_key],
+                    CONVERT(nvarchar(450), documents.[image]) AS [document_sort_key],
+                    CONVERT(int, documents.[vmf_code]) AS [vmf_code],
+                    CONVERT(nvarchar(max), documents.[image]) AS [image],
+                    CAST(NULL AS nvarchar(max)) AS [document_description],
+                    CAST(NULL AS nvarchar(max)) AS [original_file_name],
+                    CAST(NULL AS nvarchar(max)) AS [stored_file_path],
+                    CAST(NULL AS nvarchar(100)) AS [mime_type],
+                    CAST(NULL AS bigint) AS [file_size_bytes],
+                    documents.[period_begin] AS [period_begin],
+                    documents.[period_end] AS [period_end],
+                    {Projection(schema.Legacy, "date_created")} AS [date_created],
+                    {Projection(schema.Legacy, "date_updated")} AS [date_updated],
+                    documents.[period_begin] AS [sort_date]
+                FROM [dbo].[scan_docs] AS documents
+                WHERE {ActiveFilter(schema.Legacy, "documents")}
+                """
+            );
+        }
+
+        return string.Join("\nUNION ALL\n", queries);
+    }
+
+    private static void AddCertificateCategoryParameter(DbCommand command, SchemaSet schema)
+    {
+        if (schema.Modern is not null)
+            AddParameter(command, "@category", DbType.String, "Licence");
+    }
+
+    private static string BuildMissingVehicleWhereClause(
+        SchemaSet schema,
+        IReadOnlySet<string> vehicleColumns,
+        short? locationCode
+    )
+    {
+        var conditions = new List<string>
+        {
+            "[vehicles].[vehicle_status_code] > 0",
+            vehicleColumns.Contains("is_deleted")
+                ? "ISNULL([vehicles].[is_deleted], 0) = 0"
+                : "1 = 1",
+        };
+
+        if (locationCode.HasValue)
+            conditions.Add("[vehicles].[location_code] = @locationCode");
+
+        if (schema.Modern is not null)
+        {
+            conditions.Add(
+                $"""
+                NOT EXISTS (
+                    SELECT 1
+                    FROM [dbo].[vehicle_documents] AS [modern_documents]
+                    WHERE {ActiveFilter(schema.Modern, "modern_documents")}
+                      AND [modern_documents].[document_category] = @category
+                      AND [modern_documents].[vmf_code] = [vehicles].[vmf_code]
+                )
+                """
+            );
+        }
+
+        if (schema.Legacy is not null)
+        {
+            conditions.Add(
+                $"""
+                NOT EXISTS (
+                    SELECT 1
+                    FROM [dbo].[scan_docs] AS [legacy_documents]
+                    WHERE {ActiveFilter(schema.Legacy, "legacy_documents")}
+                      AND [legacy_documents].[vmf_code] = [vehicles].[vmf_code]
+                )
+                """
+            );
+        }
+
+        return string.Join(" AND ", conditions);
+    }
+
+    private static void AddMissingVehicleParameters(
+        DbCommand command,
+        SchemaSet schema,
+        short? locationCode
+    )
+    {
+        AddCertificateCategoryParameter(command, schema);
+        if (locationCode.HasValue)
+            AddParameter(command, "@locationCode", DbType.Int16, locationCode.Value);
+    }
+
     private static async Task<List<LicenseCertificateDocument>> ReadAsync(
         DbCommand command,
         string source
@@ -389,30 +666,47 @@ public sealed class LicenseCertificateRepository : ILicenseCertificateRepository
         var result = new List<LicenseCertificateDocument>();
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
+            result.Add(ReadDocument(reader, source));
+        return result;
+    }
+
+    private static LicenseCertificateDocument ReadDocument(DbDataReader reader, string source)
+    {
+        var description = ReadString(reader, "document_description");
+        var period = ParseModernPeriod(description);
+        return new LicenseCertificateDocument
+        {
+            Source = source,
+            DocumentKey = ReadString(reader, "document_key") ?? string.Empty,
+            vmf_code = ReadInt(reader, "vmf_code") ?? 0,
+            image = ReadString(reader, "image"),
+            document_description = description,
+            original_file_name = ReadString(reader, "original_file_name"),
+            stored_file_path = ReadString(reader, "stored_file_path"),
+            mime_type = ReadString(reader, "mime_type") ?? "application/octet-stream",
+            file_size_bytes = ReadLong(reader, "file_size_bytes") ?? 0,
+            period_begin = ReadDate(reader, "period_begin") ?? period.Begin,
+            period_end = ReadDate(reader, "period_end") ?? period.End,
+            date_created = ReadDate(reader, "date_created"),
+            date_updated = ReadDate(reader, "date_updated"),
+        };
+    }
+
+    private async Task<List<LicenseCertificatePageItem>> ReadPageAsync(DbCommand command)
+    {
+        var result = new List<LicenseCertificatePageItem>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
         {
             result.Add(
-                new LicenseCertificateDocument
-                {
-                    Source = source,
-                    DocumentKey = ReadString(reader, "document_key") ?? string.Empty,
-                    vmf_code = ReadInt(reader, "vmf_code") ?? 0,
-                    image = ReadString(reader, "image"),
-                    document_description = ReadString(reader, "document_description"),
-                    original_file_name = ReadString(reader, "original_file_name"),
-                    stored_file_path = ReadString(reader, "stored_file_path"),
-                    mime_type = ReadString(reader, "mime_type") ?? "application/octet-stream",
-                    file_size_bytes = ReadLong(reader, "file_size_bytes") ?? 0,
-                    period_begin =
-                        ReadDate(reader, "period_begin")
-                        ?? ParseModernPeriod(ReadString(reader, "document_description")).Begin,
-                    period_end =
-                        ReadDate(reader, "period_end")
-                        ?? ParseModernPeriod(ReadString(reader, "document_description")).End,
-                    date_created = ReadDate(reader, "date_created"),
-                    date_updated = ReadDate(reader, "date_updated"),
-                }
+                new LicenseCertificatePageItem(
+                    ReadDocument(reader, ReadString(reader, "source") ?? string.Empty),
+                    ReadString(reader, "fleet_number"),
+                    ReadString(reader, "registration_number")
+                )
             );
         }
+
         return result;
     }
 
@@ -461,6 +755,40 @@ public sealed class LicenseCertificateRepository : ILicenseCertificateRepository
                 ? new TableSchema(legacyColumns)
                 : null;
         return new SchemaSet(modern, legacy);
+    }
+
+    private async Task<HashSet<string>> GetTableColumnsAsync(string tableName)
+    {
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandText = """
+            SELECT [COLUMN_NAME]
+            FROM [INFORMATION_SCHEMA].[COLUMNS]
+            WHERE [TABLE_SCHEMA] = @schema
+              AND [TABLE_NAME] = @table
+            """;
+        AddParameter(command, "@schema", DbType.String, "dbo");
+        AddParameter(command, "@table", DbType.String, tableName);
+
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            columns.Add(reader.GetString(0));
+        return columns;
+    }
+
+    private static void EnsureVehicleColumns(IReadOnlySet<string> vehicleColumns)
+    {
+        var missingColumns = MissingVehicleRequiredColumns
+            .Where(column => !vehicleColumns.Contains(column))
+            .ToArray();
+        if (missingColumns.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"The required vehicle_master compatibility columns are not available: {string.Join(", ", missingColumns)}"
+            );
+        }
     }
 
     private static string Projection(TableSchema schema, string column) =>

@@ -7,14 +7,31 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_components";
 import {
   accessRestricted,
-  filterByVehicle,
   getJobCardSession,
+  JobCardPageBoundary,
+  jobCardPageHref,
+  queryPage,
+  querySearchType,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/job-cards/_page";
-import { getJobCards, JobCardApiError } from "@/lib/api/fleet-operations/api-job-cards";
+import {
+  DEFAULT_JOB_CARD_PAGE_SIZE,
+  getJobCardsPage,
+  JobCardApiError,
+} from "@/lib/api/fleet-operations/api-job-cards";
 
-export default async function AuthorizerVehicleViewPage({
+export default function AuthorizerVehicleViewPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
+  return (
+    <JobCardPageBoundary>
+      <AuthorizerVehicleViewContent searchParams={searchParams} />
+    </JobCardPageBoundary>
+  );
+}
+
+async function AuthorizerVehicleViewContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
@@ -29,12 +46,21 @@ export default async function AuthorizerVehicleViewPage({
     return accessRestricted("Your profile does not include Job Card authorizer access.");
   const query = await searchParams;
   const search = queryValue(query.search);
-  const mode = queryValue(query.mode) || "GG";
+  const mode = querySearchType(query.mode);
+  const page = queryPage(query.page);
   try {
-    const cards = (await getJobCards()).filter(
-      (card) => card.statusCode === 1 || card.statusCode === 2,
+    const pageData = await getJobCardsPage({
+      page,
+      pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+      search,
+      searchType: mode,
+      statusCodes: [1, 2],
+    });
+    const tableReturnPath = jobCardPageHref(
+      "/job-cards/authorizer-vehicles",
+      { ...query, id: undefined },
+      pageData.page,
     );
-    const filtered = filterByVehicle(cards, search, mode);
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="authorizer-vehicles-title">
@@ -50,6 +76,7 @@ export default async function AuthorizerVehicleViewPage({
           </header>
           <section className="vehicle-status-maintenance-panel">
             <form className="vehicle-search-row" method="get">
+              <input type="hidden" name="page" value="1" />
               <fieldset className="vehicle-search-options">
                 <legend>Find by</legend>
                 <label className="vehicle-checkbox-label">
@@ -78,13 +105,18 @@ export default async function AuthorizerVehicleViewPage({
             </form>
           </section>
           <section className="vehicle-status-maintenance-panel">
-            <p className="eyebrow">{filtered.length} pending</p>
+            <p className="eyebrow">{pageData.totalRecords} pending</p>
             <h2>Matching Job Cards</h2>
             <JobCardTable
-              cards={filtered}
+              cards={pageData.items}
               mode="review"
-              returnPath="/job-cards/authorizer-vehicles"
+              returnPath={tableReturnPath}
               currentUserCode={Number(session.userAccessCode) || null}
+              page={pageData.page}
+              totalPages={pageData.totalPages}
+              pageHref={(nextPage) =>
+                jobCardPageHref("/job-cards/authorizer-vehicles", query, nextPage)
+              }
             />
           </section>
         </section>

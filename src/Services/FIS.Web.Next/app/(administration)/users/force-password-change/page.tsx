@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import ForcePasswordForm from "@/app/(administration)/users/force-password-change/force-password-form";
@@ -10,6 +11,7 @@ import {
   UserAdminApiError,
 } from "@/lib/api/administration/api-user-admin";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 const USER_ADMIN_ROLE = "User Administration";
 const ALPHABET = /^[A-Z]$/;
@@ -73,7 +75,7 @@ function getMessage(result: string | undefined) {
   }
 }
 
-export default async function ForcePasswordChangePage({
+async function ForcePasswordChangePageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -180,4 +182,14 @@ export default async function ForcePasswordChangePage({
       </main>
     );
   }
+}
+
+export default function ForcePasswordChangePage(
+  props: NonNullable<Parameters<typeof ForcePasswordChangePageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <ForcePasswordChangePageContent {...props} />
+    </Suspense>
+  );
 }

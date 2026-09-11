@@ -11,6 +11,9 @@ namespace FIS.Api.Controllers;
 [Authorize]
 public class LossTypeController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly ILogger<LossTypeController> _logger;
     private readonly ILossTypeRepository _repository;
 
@@ -18,6 +21,41 @@ public class LossTypeController : BaseApiController
     {
         _logger = logger;
         _repository = repository;
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] string? searchTerm = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new LossTypePageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize),
+                    searchTerm
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(MapToDto).ToList(),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged loss types");
+            return StatusCode(500, "Error retrieving loss types");
+        }
     }
 
     [HttpGet]

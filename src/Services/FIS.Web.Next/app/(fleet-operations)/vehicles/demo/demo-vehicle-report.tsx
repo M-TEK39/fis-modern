@@ -5,8 +5,6 @@ import { useState, useTransition } from "react";
 import { loadDemoVehicleReportAction } from "@/app/(fleet-operations)/vehicles/demo/actions";
 import type { DemoVehicleRecord } from "@/lib/api/vehicles/api-demo-vehicles";
 
-const PAGE_SIZE = 12;
-
 function valueOrDash(value: string | number | null) {
   return value === null || value === "" ? "-" : String(value);
 }
@@ -15,23 +13,38 @@ export default function DemoVehicleReport() {
   const [loaded, setLoaded] = useState(false);
   const [rows, setRows] = useState<DemoVehicleRecord[]>([]);
   const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const visibleRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const loadReport = () => {
+  const loadReport = (requestedPage: number) => {
     setError(null);
     startTransition(async () => {
-      const result = await loadDemoVehicleReportAction();
+      const result = await loadDemoVehicleReportAction(requestedPage);
       setLoaded(true);
       if (result.status === "error") {
-        setRows([]);
+        if (!loaded) {
+          setRows([]);
+          setTotal(0);
+          setTotalPages(0);
+        }
         setError(result.message ?? "The demo vehicle report could not be loaded.");
         return;
       }
-      setRows(result.matches ?? []);
-      setPage(1);
+      if (!result.report) {
+        if (!loaded) {
+          setRows([]);
+          setTotal(0);
+          setTotalPages(0);
+        }
+        setError("The demo vehicle report returned an incomplete page.");
+        return;
+      }
+      setRows(result.report.items);
+      setPage(result.report.page);
+      setTotal(result.report.total);
+      setTotalPages(result.report.totalPages);
     });
   };
 
@@ -41,7 +54,7 @@ export default function DemoVehicleReport() {
         <button
           className="button button-primary"
           type="button"
-          onClick={loadReport}
+          onClick={() => loadReport(1)}
           disabled={isPending}
         >
           {isPending ? "Loading..." : loaded ? "Reload Report" : "Load Report"}
@@ -52,7 +65,7 @@ export default function DemoVehicleReport() {
           {error}
         </div>
       ) : null}
-      {loaded && rows.length === 0 && !error ? (
+      {loaded && total === 0 && !error ? (
         <div className="vehicle-empty-state">
           <p className="eyebrow">No demo vehicles found</p>
           <p>No demo vehicles are available for this report.</p>
@@ -62,10 +75,10 @@ export default function DemoVehicleReport() {
         <>
           <div className="vehicle-overview-header">
             <p className="muted-copy" aria-live="polite">
-              {rows.length} demo vehicle{rows.length === 1 ? "" : "s"}
+              {total} demo vehicle{total === 1 ? "" : "s"}
             </p>
           </div>
-          <div className="vehicle-table-wrapper">
+          <div className="vehicle-table-wrapper" aria-busy={isPending}>
             <table className="vehicle-table">
               <caption className="sr-only">All demo vehicles</caption>
               <thead>
@@ -82,7 +95,7 @@ export default function DemoVehicleReport() {
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map((row) => (
+                {rows.map((row) => (
                   <tr key={row.demoVehicleCode}>
                     <td>{valueOrDash(row.ggNumber)}</td>
                     <td>{valueOrDash(row.registrationNumber)}</td>
@@ -101,10 +114,10 @@ export default function DemoVehicleReport() {
           {totalPages > 1 ? (
             <nav className="vehicle-pagination" aria-label="Demo vehicle report pagination">
               <button
-                className="vehicle-pagination-button"
+                className={`vehicle-pagination-button${page <= 1 || isPending ? " vehicle-pagination-disabled" : ""}`}
                 type="button"
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-                disabled={page <= 1}
+                onClick={() => loadReport(page - 1)}
+                disabled={isPending || page <= 1}
               >
                 Previous
               </button>
@@ -112,10 +125,10 @@ export default function DemoVehicleReport() {
                 Page {page} of {totalPages}
               </span>
               <button
-                className="vehicle-pagination-button"
+                className={`vehicle-pagination-button${page >= totalPages || isPending ? " vehicle-pagination-disabled" : ""}`}
                 type="button"
-                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                disabled={page >= totalPages}
+                onClick={() => loadReport(page + 1)}
+                disabled={isPending || page >= totalPages}
               >
                 Next
               </button>

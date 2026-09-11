@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -18,7 +22,8 @@ import {
   sessionMessage,
 } from "@/app/(fleet-operations)/log-books/_page";
 import {
-  getLogbooks,
+  DEFAULT_LOGBOOK_PAGE_SIZE,
+  getLogbookPage,
   LogbookApiError,
   type LogbookRecord,
 } from "@/lib/api/fleet-operations/api-logbooks";
@@ -28,6 +33,72 @@ import {
   VehicleApiError,
   type VehicleOption,
 } from "@/lib/api/vehicles/api-vehicles";
+
+const routePath = "/log-books/maintenance";
+
+function historyPath(search: string, mode: string, vmfCode: number | null, page: number) {
+  const params = new URLSearchParams({ mode });
+  if (search) params.set("search", search);
+  if (vmfCode) params.set("vmfCode", String(vmfCode));
+  if (page > 1) params.set("page", String(page));
+  return `${routePath}?${params.toString()}`;
+}
+
+function LogbookMaintenancePagination({
+  search,
+  mode,
+  vmfCode,
+  page,
+  totalPages,
+}: Readonly<{
+  search: string;
+  mode: string;
+  vmfCode: number;
+  page: number;
+  totalPages: number;
+}>) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <nav className="vehicle-pagination" aria-label="Vehicle logbook handout pages">
+      {page > 1 ? (
+        <Link
+          className="vehicle-pagination-button"
+          href={historyPath(search, mode, vmfCode, page - 1)}
+          aria-label={`Go to logbook handout page ${page - 1}`}
+        >
+          Previous
+        </Link>
+      ) : (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Previous
+        </span>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {page} of {totalPages}
+      </span>
+      {page < totalPages ? (
+        <Link
+          className="vehicle-pagination-button"
+          href={historyPath(search, mode, vmfCode, page + 1)}
+          aria-label={`Go to logbook handout page ${page + 1}`}
+        >
+          Next
+        </Link>
+      ) : (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Next
+        </span>
+      )}
+    </nav>
+  );
+}
 
 function filterVehicles(options: readonly VehicleOption[], search: string, mode: string) {
   const normalized = search.trim().toLocaleLowerCase();
@@ -186,7 +257,7 @@ function LogbookForm({
   );
 }
 
-export default async function LogbookMaintenancePage({
+async function LogbookMaintenancePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogbookSession();
@@ -202,21 +273,26 @@ export default async function LogbookMaintenancePage({
   const mode = queryValue(query.mode) === "GP" ? "GP" : "GG";
   const vmfCode = parsePositiveInteger(queryValue(query.vmfCode));
   const editCode = parsePositiveInteger(queryValue(query.edit));
-  const params = new URLSearchParams();
-  if (search) params.set("search", search);
-  params.set("mode", mode);
-  if (vmfCode) params.set("vmfCode", String(vmfCode));
-  const basePath = `/log-books/maintenance?${params.toString()}`;
+  const requestedPage = parsePositiveInteger(queryValue(query.page)) ?? 1;
+  const retryPath = historyPath(search, mode, vmfCode, requestedPage);
   const message = statusMessage(query);
 
   try {
-    const [options, sites, records] = await Promise.all([
+    const [options, sites, logbookPage] = await Promise.all([
       getVehicleOptions(),
       getSites(),
-      getLogbooks(),
+      vmfCode
+        ? getLogbookPage({
+            page: requestedPage,
+            pageSize: DEFAULT_LOGBOOK_PAGE_SIZE,
+            vmfCode,
+          })
+        : Promise.resolve(null),
     ]);
     const matches = filterVehicles(options, search, mode);
-    const selectedRecords = vmfCode ? records.filter((record) => record.vmfCode === vmfCode) : [];
+    const currentPage = logbookPage?.page ?? requestedPage;
+    const basePath = historyPath(search, mode, vmfCode, currentPage);
+    const selectedRecords = logbookPage?.items ?? [];
     const editing = editCode
       ? (selectedRecords.find((record) => record.logbookCode === editCode) ?? null)
       : null;
@@ -259,12 +335,26 @@ export default async function LogbookMaintenancePage({
             <div className="vehicle-form-section-header">
               <div>
                 <p className="eyebrow">
-                  {selectedRecords.length} record{selectedRecords.length === 1 ? "" : "s"}
+                  {logbookPage?.total ?? 0} record{logbookPage?.total === 1 ? "" : "s"}
                 </p>
                 <h2 id="logbook-maintenance-results-title">Vehicle logbook handouts</h2>
               </div>
             </div>
             <LogbookTable records={selectedRecords} mode="maintenance" returnPath={basePath} />
+            {logbookPage ? (
+              <>
+                <LogbookMaintenancePagination
+                  search={search}
+                  mode={mode}
+                  vmfCode={vmfCode}
+                  page={logbookPage.page}
+                  totalPages={logbookPage.totalPages}
+                />
+                <div className="pagination-meta">
+                  Total records: {logbookPage.total} | Page size: {logbookPage.pageSize}
+                </div>
+              </>
+            ) : null}
           </section>
         ) : (
           <p className="muted-copy">
@@ -290,11 +380,21 @@ export default async function LogbookMaintenancePage({
       >
         <section className="vehicle-status-card" role="alert">
           <h2>{messageText}</h2>
-          <Link className="button button-secondary" href={basePath}>
+          <Link className="button button-secondary" href={retryPath}>
             Try again
           </Link>
         </section>
       </LogbookShell>
     );
   }
+}
+
+export default function LogbookMaintenancePage(
+  props: Parameters<typeof LogbookMaintenancePageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LogbookMaintenancePageContent {...props} />
+    </Suspense>
+  );
 }

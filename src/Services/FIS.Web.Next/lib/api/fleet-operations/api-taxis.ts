@@ -151,6 +151,16 @@ export type TaxiScanDocRecord = {
   fileUrl: string;
 };
 
+export type TaxiPage<TItem> = {
+  items: TItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_TAXI_PAGE_SIZE = 24;
+
 export type TaxiApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class TaxiApiError extends Error {
@@ -340,6 +350,76 @@ function mapTaxiScanDoc(value: unknown): TaxiScanDocRecord | null {
   };
 }
 
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "totalRecords", "total_records"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_TAXI_PAGE_SIZE)
+      : DEFAULT_TAXI_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
+function readTaxiPage(payload: unknown): TaxiPage<TaxiRecord> {
+  if (!isRecord(payload) || !Array.isArray(payload.items))
+    throw new TaxiApiError("invalid-response", "The FIS API returned an invalid taxi page.");
+  const metadata = readPageMetadata(payload);
+  if (!metadata)
+    throw new TaxiApiError("invalid-response", "The FIS API returned incomplete taxi pagination.");
+  return {
+    items: payload.items.map(mapTaxi).filter((taxi): taxi is TaxiRecord => taxi !== null),
+    ...metadata,
+  };
+}
+
+function readTaxiScanDocPage(payload: unknown): TaxiPage<TaxiScanDocRecord> {
+  if (!isRecord(payload) || !Array.isArray(payload.items))
+    throw new TaxiApiError(
+      "invalid-response",
+      "The FIS API returned an invalid scan-document page.",
+    );
+  const metadata = readPageMetadata(payload);
+  if (!metadata)
+    throw new TaxiApiError(
+      "invalid-response",
+      "The FIS API returned incomplete scan-document pagination.",
+    );
+  return {
+    items: payload.items
+      .map(mapTaxiScanDoc)
+      .filter((document): document is TaxiScanDocRecord => document !== null),
+    ...metadata,
+  };
+}
+
 function taxiPayload(input: TaxiInput) {
   return {
     request_id: input.requestId ?? 0,
@@ -397,6 +477,23 @@ function taxiPayload(input: TaxiInput) {
 
 export async function getTaxis() {
   return getTaxiCollection(await readJson(await requestApi("api/Taxi")));
+}
+
+export async function getTaxiPage(
+  options: {
+    page?: number;
+    pageSize?: number;
+    pendingOnly?: boolean;
+    jiaPickupOnly?: boolean;
+  } = {},
+): Promise<TaxiPage<TaxiRecord>> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  if (options.pendingOnly) params.set("pendingOnly", "true");
+  if (options.jiaPickupOnly) params.set("jiaPickupOnly", "true");
+  return readTaxiPage(await readJson(await requestApi(`api/Taxi/page?${params.toString()}`)));
 }
 
 export async function getTaxi(requestId: number) {
@@ -608,6 +705,24 @@ export async function getTaxiScanDocs() {
   return getCollection(await readJson(await requestApi("api/taxi-scan-docs")))
     .map(mapTaxiScanDoc)
     .filter((document): document is TaxiScanDocRecord => document !== null);
+}
+
+export async function getTaxiScanDocsPage(
+  options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+  } = {},
+): Promise<TaxiPage<TaxiScanDocRecord>> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const search = options.search?.trim();
+  if (search) params.set("search", search);
+  return readTaxiScanDocPage(
+    await readJson(await requestApi(`api/taxi-scan-docs/page?${params.toString()}`)),
+  );
 }
 
 export async function uploadTaxiScanDoc(input: {

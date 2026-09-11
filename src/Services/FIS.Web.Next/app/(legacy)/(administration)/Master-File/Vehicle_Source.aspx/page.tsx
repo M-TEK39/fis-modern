@@ -1,5 +1,3 @@
-import VehicleSourcePage from "@/app/(fleet-operations)/vehicles/source-maintenance/page";
+import { createLegacyVehicleSourcePage } from "@/app/(fleet-operations)/vehicles/source-maintenance/_route";
 
-export default function VehicleSourceLegacyPage(props: Parameters<typeof VehicleSourcePage>[0]) {
-  return <VehicleSourcePage {...props} routePath="/Master-File/Vehicle_Source.aspx" />;
-}
+export default createLegacyVehicleSourcePage("/Master-File/Vehicle_Source.aspx");

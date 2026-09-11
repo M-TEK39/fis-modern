@@ -1232,14 +1232,22 @@ export async function getGarageAccidentPage(
 
   const payload = await requestApi(`api/accidents/maintenance?${params.toString()}`);
   if (!isRecord(payload)) {
-    throw new AccidentApiError("invalid-response", "The FIS API returned an invalid accident page.");
+    throw new AccidentApiError(
+      "invalid-response",
+      "The FIS API returned an invalid accident page.",
+    );
   }
 
   const parsedPage = asNumber(getValue(payload, "page"));
   const parsedPageSize = asNumber(getValue(payload, "pageSize", "page_size"));
   const totalRecords = asNumber(getValue(payload, "totalRecords", "total_records"));
   const totalPages = asNumber(getValue(payload, "totalPages", "total_pages"));
-  if (parsedPage === null || parsedPageSize === null || totalRecords === null || totalPages === null) {
+  if (
+    parsedPage === null ||
+    parsedPageSize === null ||
+    totalRecords === null ||
+    totalPages === null
+  ) {
     throw new AccidentApiError(
       "invalid-response",
       "The FIS API returned incomplete accident pagination metadata.",

@@ -1634,6 +1634,20 @@ public class ReportingService : IReportingService
         };
     }
 
+    public async Task<TripSummaryPage> GenerateTripSummaryPageAsync(TripSummaryPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        _logger.LogInformation(
+            "Generating paged trip summary report from {StartDate} to {EndDate} for VMF: {VmfCode}",
+            query.StartDate,
+            query.EndDate,
+            query.VmfCode?.ToString() ?? "All"
+        );
+
+        return await _tripRepository.GetTripSummaryPageAsync(query);
+    }
+
     public async Task<TripDetailReport> GenerateTripDetailReportAsync(int tripId)
     {
         _logger.LogInformation("Generating trip detail report for trip: {TripId}", tripId);

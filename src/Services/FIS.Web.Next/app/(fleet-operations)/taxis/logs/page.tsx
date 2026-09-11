@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -438,7 +442,7 @@ function LogSummary({ lookup }: Readonly<{ lookup: TaxiLogLookup }>) {
   );
 }
 
-export default async function TaxiLogsPage({
+async function TaxiLogsPageContent({
   searchParams,
   mode: forcedMode,
 }: Readonly<{ searchParams: SearchParams; mode?: string }>) {
@@ -527,4 +531,12 @@ export default async function TaxiLogsPage({
       </main>
     );
   }
+}
+
+export default function TaxiLogsPage(props: Parameters<typeof TaxiLogsPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TaxiLogsPageContent {...props} />
+    </Suspense>
+  );
 }

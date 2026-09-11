@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -8,6 +9,7 @@ import { createClassAction } from "@/app/(administration)/validation-data/classe
 import ClassForm from "@/app/(administration)/validation-data/classes/class-form";
 import { ClassApiError, type ClassRecord } from "@/lib/api/reference-data/api-classes";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 const emptyClass: ClassRecord = {
   classCode: 0,
@@ -38,7 +40,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function ClassAddPage() {
+async function ClassAddPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -96,4 +98,12 @@ export default async function ClassAddPage() {
       </main>
     );
   }
+}
+
+export default function ClassAddPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <ClassAddPageContent />
+    </Suspense>
+  );
 }

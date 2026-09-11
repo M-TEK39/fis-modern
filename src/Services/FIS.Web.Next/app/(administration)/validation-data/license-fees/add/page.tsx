@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -11,6 +12,7 @@ import {
   type LicenseFeeRecord,
 } from "@/lib/api/reference-data/api-license-fees";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 const emptyFee: LicenseFeeRecord = {
   licenceFeeCode: 0,
@@ -35,7 +37,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function LicenseFeeAddPage() {
+async function LicenseFeeAddPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -88,4 +90,12 @@ export default async function LicenseFeeAddPage() {
       </main>
     );
   }
+}
+
+export default function LicenseFeeAddPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LicenseFeeAddPageContent />
+    </Suspense>
+  );
 }

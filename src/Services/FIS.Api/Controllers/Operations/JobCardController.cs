@@ -53,6 +53,68 @@ public class JobCardController : BaseApiController
     }
 
     /// <summary>
+    /// Get a filtered page of job cards without changing the legacy unpaginated
+    /// GET /api/jobcards response used by existing consumers.
+    /// </summary>
+    [HttpGet("page")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24,
+        [FromQuery] string? search = null,
+        [FromQuery] string? searchType = "GG",
+        [FromQuery] int? jobCardId = null,
+        [FromQuery] string[]? statusCodes = null,
+        [FromQuery] string? mode = null
+    )
+    {
+        var normalizedSearchType = (mode ?? searchType)?.Trim().ToUpperInvariant() ?? "GG";
+        if (normalizedSearchType is not ("GG" or "GP"))
+            return BadRequest(new { error = "Search type must be GG or GP." });
+
+        if (!TryParseStatusCodes(statusCodes, out var parsedStatusCodes))
+            return BadRequest(new { error = "Status codes must be integers." });
+
+        if (jobCardId is <= 0)
+            return BadRequest(new { error = "Job card ID must be a positive integer." });
+
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new JobCardPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100),
+                    search,
+                    normalizedSearchType,
+                    parsedStatusCodes,
+                    jobCardId
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(MapToDto),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    totalRecords = result.TotalRecords,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting paged job cards");
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new { error = "An error occurred while retrieving job cards" }
+            );
+        }
+    }
+
+    /// <summary>
     /// Get job card by ID
     /// </summary>
     [HttpGet("{id}")]
@@ -128,6 +190,47 @@ public class JobCardController : BaseApiController
             _logger.LogError(ex, "Error getting priority unassigned job cards");
             return StatusCode(
                 500,
+                new { error = "An error occurred while retrieving priority unassigned job cards" }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Get the legacy priority-unassigned job cards as a bounded page.
+    /// </summary>
+    [HttpGet("priority/unassigned/page")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult> GetPriorityUnassignedPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24
+    )
+    {
+        try
+        {
+            var result = await _repository.GetPriorityUnassignedPageAsync(
+                new PriorityUnassignedJobCardPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100)
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(MapToDto),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.TotalRecords,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting paged priority unassigned job cards");
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
                 new { error = "An error occurred while retrieving priority unassigned job cards" }
             );
         }
@@ -682,6 +785,96 @@ public class JobCardController : BaseApiController
     }
 
     /// <summary>
+    /// Repair cost report with complete filtered totals and a server-side page
+    /// of line items. The unpaged report endpoint remains unchanged.
+    /// </summary>
+    [HttpGet("repair-cost-report/page")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult> RepairCostReportPage(
+        [FromQuery] int? vmfCode = null,
+        [FromQuery] short? siteCode = null,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24
+    )
+    {
+        try
+        {
+            IReadOnlyCollection<int>? vehiclesAtSite = null;
+            if (siteCode.HasValue)
+            {
+                vehiclesAtSite = (await _contractRepository.GetAllAsync())
+                    .Where(c => c.site_code == siteCode.Value)
+                    .Select(c => c.vmf_code)
+                    .Distinct()
+                    .ToArray();
+            }
+
+            var result = await _repository.GetRepairCostReportPageAsync(
+                new RepairCostReportPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100),
+                    vmfCode,
+                    vehiclesAtSite,
+                    fromDate,
+                    toDate
+                )
+            );
+            var lineItems = result
+                .Items.Select(j => new
+                {
+                    job_card_id = j.job_card_id,
+                    vmf_code = j.vmf_code,
+                    fleet_number = j.Vehicle?.fleet_number,
+                    registration = j.Vehicle?.registration_number,
+                    damages = j.damages,
+                    service_provider = j.service_provider,
+                    invoice_number = j.invoice_number,
+                    invoice_date = j.invoice_date?.ToString("yyyy-MM-dd"),
+                    labour_cost = j.labour_cost,
+                    parts_cost = j.parts_cost,
+                    other_cost = j.other_cost,
+                    total_cost = j.total_cost,
+                    closed_date = j.date_updated?.ToString("yyyy-MM-dd"),
+                })
+                .ToList();
+
+            return Ok(
+                new
+                {
+                    filters_applied = new
+                    {
+                        vmfCode,
+                        siteCode,
+                        fromDate,
+                        toDate,
+                    },
+                    total_records = result.TotalRecords,
+                    grand_total = result.GrandTotal,
+                    total_labour = result.TotalLabour,
+                    total_parts = result.TotalParts,
+                    total_other = result.TotalOther,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.TotalRecords,
+                    totalPages = result.TotalPages,
+                    line_items = lineItems,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating paged repair cost report");
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new { error = "Failed to generate report", message = ex.Message }
+            );
+        }
+    }
+
+    /// <summary>
     /// Validates that the current user is not the job card capturer (prevents self-approval)
     /// </summary>
     /// <returns>Null if validation passes, or ForbidResult with error message if validation fails</returns>
@@ -730,6 +923,39 @@ public class JobCardController : BaseApiController
             7 => "Canceled",
             _ => "Unknown",
         };
+    }
+
+    private static bool TryParseStatusCodes(string[]? values, out int[] statusCodes)
+    {
+        var parsed = new List<int>();
+        foreach (var value in values ?? [])
+        {
+            foreach (
+                var token in value.Split(
+                    ',',
+                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+                )
+            )
+            {
+                if (
+                    !int.TryParse(
+                        token,
+                        System.Globalization.NumberStyles.Integer,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var statusCode
+                    )
+                )
+                {
+                    statusCodes = [];
+                    return false;
+                }
+
+                parsed.Add(statusCode);
+            }
+        }
+
+        statusCodes = parsed.Distinct().ToArray();
+        return true;
     }
 
     /// <summary>

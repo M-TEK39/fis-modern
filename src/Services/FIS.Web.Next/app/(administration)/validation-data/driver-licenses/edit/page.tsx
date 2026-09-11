@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -11,6 +12,7 @@ import {
   getDriverLicence,
 } from "@/lib/api/reference-data/api-driver-licences";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 type DriverLicenceEditPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -37,7 +39,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function DriverLicenceEditPage({ searchParams }: DriverLicenceEditPageProps) {
+async function DriverLicenceEditPageContent({ searchParams }: DriverLicenceEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -124,4 +126,14 @@ export default async function DriverLicenceEditPage({ searchParams }: DriverLice
       </main>
     );
   }
+}
+
+export default function DriverLicenceEditPage(
+  props: NonNullable<Parameters<typeof DriverLicenceEditPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DriverLicenceEditPageContent {...props} />
+    </Suspense>
+  );
 }

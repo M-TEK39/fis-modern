@@ -26,12 +26,28 @@ export type TowingRecord = {
   towTruckCode: number | null;
 };
 
+export type TowingPage = {
+  items: TowingRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 export type TowTruckRecord = {
   towCode: number;
   area: string | null;
   name: string | null;
   telephone: string | null;
   fax: string | null;
+};
+
+export type TowTruckPage = {
+  items: TowTruckRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type TowingSite = {
@@ -255,6 +271,41 @@ export async function getTowings() {
   return mapTowingCollection(await readJson(await requestApi("api/towing")));
 }
 
+export async function getTowingPage(
+  options: { vmfCodes?: readonly number[]; page?: number; pageSize?: number } = {},
+): Promise<TowingPage> {
+  const page = Math.max(1, Math.trunc(options.page ?? 1));
+  const pageSize = Math.min(100, Math.max(1, Math.trunc(options.pageSize ?? 24)));
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  for (const vmfCode of options.vmfCodes ?? []) {
+    if (Number.isSafeInteger(vmfCode) && vmfCode > 0) {
+      params.append("vmfCode", String(vmfCode));
+    }
+  }
+
+  const payload = await readJson(await requestApi(`api/towing/page?${params.toString()}`));
+  if (!isRecord(payload)) {
+    throw new TowingApiError("invalid-response", "The FIS API returned an invalid towing page.");
+  }
+
+  const items = getCollection(payload)
+    .map(mapTowing)
+    .filter((item): item is TowingRecord => item !== null);
+  const resolvedPage = pageNumber(getValue(payload, "page", "Page"), page);
+  const resolvedPageSize = pageNumber(getValue(payload, "pageSize", "PageSize"), pageSize);
+  const total = Math.max(0, asNumber(getValue(payload, "total", "Total")) ?? items.length);
+  return {
+    items,
+    page: resolvedPage,
+    pageSize: resolvedPageSize,
+    total,
+    totalPages: pageNumber(
+      getValue(payload, "totalPages", "TotalPages"),
+      Math.max(1, Math.ceil(total / resolvedPageSize)),
+    ),
+  };
+}
+
 export async function getTowing(towingCode: number) {
   const record = mapTowing(
     await readJson(await requestApi(`api/towing/${encodeURIComponent(towingCode)}`)),
@@ -297,6 +348,39 @@ export async function getTowTrucks() {
     .map(mapTowTruck)
     .filter((truck): truck is TowTruckRecord => truck !== null)
     .sort((left, right) => (left.name ?? "").localeCompare(right.name ?? ""));
+}
+
+function pageNumber(value: unknown, fallback: number) {
+  const parsed = asNumber(value);
+  return parsed !== null && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export async function getTowTruckPage(
+  search: string,
+  page = 1,
+  pageSize = 24,
+): Promise<TowTruckPage> {
+  const params = new URLSearchParams({ search, page: String(page), pageSize: String(pageSize) });
+  const payload = await readJson(await requestApi(`api/towing/tow-trucks/page?${params}`));
+  if (!isRecord(payload))
+    throw new TowingApiError("invalid-response", "The FIS API returned an invalid tow truck page.");
+
+  const items = getCollection(payload)
+    .map(mapTowTruck)
+    .filter((truck): truck is TowTruckRecord => truck !== null);
+  const resolvedPage = pageNumber(getValue(payload, "page", "Page"), 1);
+  const resolvedPageSize = pageNumber(getValue(payload, "pageSize", "PageSize"), pageSize);
+  const total = Math.max(0, asNumber(getValue(payload, "total", "Total")) ?? items.length);
+  return {
+    items,
+    page: resolvedPage,
+    pageSize: resolvedPageSize,
+    total,
+    totalPages: pageNumber(
+      getValue(payload, "totalPages", "TotalPages"),
+      Math.max(1, Math.ceil(total / resolvedPageSize)),
+    ),
+  };
 }
 
 export async function createTowingAgainstApi(request: TowingRequest) {

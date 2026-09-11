@@ -242,19 +242,16 @@ public static class Program
         var tableAvailability = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
         var legacySchemaAudit = await LegacySchemaAudit.BuildAsync(connection, legacyDdlRoot);
         issues.AddRange(
-            legacySchemaAudit.Issues.Select(
-                issue =>
-                    new AuditIssue(
-                        issue.IssueCode,
-                        issue.Severity,
-                        issue.TableName,
-                        issue.FieldName,
-                        null,
-                        issue.Occurrences,
-                        issue.Description,
-                        issue.RecommendedAction
-                    )
-            )
+            legacySchemaAudit.Issues.Select(issue => new AuditIssue(
+                issue.IssueCode,
+                issue.Severity,
+                issue.TableName,
+                issue.FieldName,
+                null,
+                issue.Occurrences,
+                issue.Description,
+                issue.RecommendedAction
+            ))
         );
 
         foreach (var table in RequiredTables)
@@ -453,7 +450,13 @@ public static class Program
         }
 
         if (missingColumns.Count > 0)
-            AddUnexpectedShapeIssue(issues, table, string.Join(',', missingColumns), description, recommendation);
+            AddUnexpectedShapeIssue(
+                issues,
+                table,
+                string.Join(',', missingColumns),
+                description,
+                recommendation
+            );
     }
 
     private static async Task AuditUsersAsync(SqlConnection connection, List<AuditIssue> issues)
@@ -1049,8 +1052,10 @@ public static class Program
         List<AuditIssue> issues,
         string table,
         string columns,
-        string description = "A required audit column is missing, so this data rule was not evaluated.",
-        string recommendation = "Compare the database to the client schema and resolve manually; the tool will not reshape it."
+        string description =
+            "A required audit column is missing, so this data rule was not evaluated.",
+        string recommendation =
+            "Compare the database to the client schema and resolve manually; the tool will not reshape it."
     )
     {
         issues.Add(

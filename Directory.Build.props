@@ -7,9 +7,9 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <WarningsNotAsErrors>NU1701</WarningsNotAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);1591</NoWarn> <!-- Missing XML comment -->
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <!-- Missing XML comment -->
   </PropertyGroup>
-
   <!-- Common package versions -->
   <PropertyGroup>
     <MicrosoftExtensionsVersion>10.0.7</MicrosoftExtensionsVersion>
@@ -23,14 +23,12 @@
     <xUnitVersion>2.6.2</xUnitVersion>
     <MoqVersion>4.20.69</MoqVersion>
   </PropertyGroup>
-
   <!-- Code analysis -->
   <PropertyGroup>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
     <CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)CodeAnalysis.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
-
   <!-- Source Link for debugging -->
   <PropertyGroup>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
@@ -38,15 +36,18 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All"/>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
   </ItemGroup>
-
   <!-- Common packages for all projects -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
+    <PackageReference
+      Include="Microsoft.Extensions.Logging.Abstractions"
+      Version="$(MicrosoftExtensionsVersion)"
+    />
+    <PackageReference
+      Include="Microsoft.Extensions.Options.ConfigurationExtensions"
+      Version="8.0.0"
+    />
   </ItemGroup>
-
 </Project>

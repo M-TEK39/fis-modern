@@ -4,9 +4,6 @@ const nextConfig: NextConfig = {
   output: "standalone",
   cacheComponents: true,
   partialPrefetching: true,
-  experimental: {
-    useTypeScriptCli: false,
-  },
   poweredByHeader: false,
   reactStrictMode: true,
   images: {

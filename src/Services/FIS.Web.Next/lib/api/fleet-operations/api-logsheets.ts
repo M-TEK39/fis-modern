@@ -36,6 +36,16 @@ export type LogsheetWriteInput = {
   bund_num: number | null;
 };
 
+export type LogsheetPage = {
+  items: LogsheetRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_LOGSHEET_PAGE_SIZE = 24;
+
 export type LogsheetApiErrorReason =
   "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
@@ -189,6 +199,69 @@ export async function getLogsheets() {
   return getCollection(payload)
     .map(mapLogsheet)
     .filter((item): item is LogsheetRecord => item !== null && !item.isDeleted);
+}
+
+export async function getLogsheetsPage(
+  options: {
+    page?: number;
+    pageSize?: number;
+    vmfCode?: number;
+    requisition?: string;
+  } = {},
+): Promise<LogsheetPage> {
+  const requestedPage =
+    Number.isInteger(options.page) && (options.page ?? 0) > 0 ? (options.page ?? 1) : 1;
+  const requestedPageSize =
+    Number.isInteger(options.pageSize) && (options.pageSize ?? 0) > 0
+      ? (options.pageSize ?? DEFAULT_LOGSHEET_PAGE_SIZE)
+      : DEFAULT_LOGSHEET_PAGE_SIZE;
+  const params = new URLSearchParams({
+    page: String(requestedPage),
+    pageSize: String(Math.min(100, requestedPageSize)),
+  });
+  if (Number.isInteger(options.vmfCode) && (options.vmfCode ?? 0) > 0)
+    params.set("vmfCode", String(options.vmfCode));
+  if (options.requisition?.trim()) params.set("requisition", options.requisition.trim());
+  const payload = await readJson(await requestApi(`api/logsheet/page?${params.toString()}`));
+  if (!isRecord(payload) || !Array.isArray(payload.items))
+    throw new LogsheetApiError(
+      "invalid-response",
+      "The FIS API returned an invalid logsheet page.",
+    );
+
+  const page = asNumber(getValue(payload, "page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "totalRecords", "total_records"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "total_pages"));
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    throw new LogsheetApiError(
+      "invalid-response",
+      "The FIS API returned incomplete logsheet pagination.",
+    );
+  }
+
+  return {
+    items: payload.items
+      .map(mapLogsheet)
+      .filter((item): item is LogsheetRecord => item !== null && !item.isDeleted),
+    page,
+    pageSize,
+    total,
+    totalPages,
+  };
 }
 
 export async function getLogsheet(logCode: number) {

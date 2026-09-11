@@ -61,6 +61,7 @@ function AccidentNotFound() {
 }
 
 async function GarageDeleteConfirmContent({ searchParams }: GarageDeleteConfirmPageProps) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") {
     redirect("/login");
@@ -141,11 +142,7 @@ async function GarageDeleteConfirmContent({ searchParams }: GarageDeleteConfirmP
   }
 }
 
-export default async function GarageDeleteConfirmPage({
-  searchParams,
-}: GarageDeleteConfirmPageProps) {
-  await connection();
-
+export default function GarageDeleteConfirmPage({ searchParams }: GarageDeleteConfirmPageProps) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="garage-delete-confirm-title">
@@ -153,7 +150,7 @@ export default async function GarageDeleteConfirmPage({
           fallback={
             <div className="loading-card" aria-busy="true">
               <span className="spinner" aria-hidden="true" />
-              <p>Loading accident details...</p>
+              <p>Loading page…</p>
             </div>
           }
         >

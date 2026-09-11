@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -11,6 +12,7 @@ import {
   type DriverLicenceRecord,
 } from "@/lib/api/reference-data/api-driver-licences";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 const emptyLicence: DriverLicenceRecord = {
   licenceCode: 0,
@@ -34,7 +36,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function DriverLicenceAddPage() {
+async function DriverLicenceAddPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -77,5 +79,13 @@ export default async function DriverLicenceAddPage() {
         />
       </section>
     </main>
+  );
+}
+
+export default function DriverLicenceAddPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DriverLicenceAddPageContent />
+    </Suspense>
   );
 }

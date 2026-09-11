@@ -22,6 +22,10 @@ type RecordValue = VehicleTypeRecord | FuelTypeRecord | UnitOfMeasureRecord | Li
 type Props = {
   activeTab: Tab;
   records: RecordValue[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
   createAction: ReferenceDataAction;
   updateAction: ReferenceDataAction;
   deleteAction: ReferenceDataDeleteAction;
@@ -335,6 +339,65 @@ function addLabel(activeTab: Tab) {
         : "License Type";
 }
 
+function pageHref(activeTab: Tab, page: number) {
+  const query = new URLSearchParams({ tab: activeTab });
+  if (page > 1) query.set("page", String(page));
+  return `/reference-data?${query}`;
+}
+
+function Pagination({
+  activeTab,
+  page,
+  pageSize,
+  total,
+  totalPages,
+}: Readonly<{
+  activeTab: Tab;
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}>) {
+  return (
+    <>
+      {totalPages > 1 ? (
+        <nav className="vehicle-pagination" aria-label={`${recordLabel(activeTab)} pages`}>
+          {page > 1 ? (
+            <Link className="vehicle-pagination-button" href={pageHref(activeTab, page - 1)}>
+              Previous
+            </Link>
+          ) : (
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Previous
+            </span>
+          )}
+          <span className="vehicle-pagination-meta" aria-live="polite">
+            Page {page} of {totalPages}
+          </span>
+          {page < totalPages ? (
+            <Link className="vehicle-pagination-button" href={pageHref(activeTab, page + 1)}>
+              Next
+            </Link>
+          ) : (
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Next
+            </span>
+          )}
+        </nav>
+      ) : null}
+      <p className="pagination-meta">
+        Total records: {total} | Page size: {pageSize}
+      </p>
+    </>
+  );
+}
+
 function table(
   activeTab: Tab,
   records: RecordValue[],
@@ -516,6 +579,10 @@ function table(
 export default function ReferenceDataClient({
   activeTab,
   records,
+  page,
+  pageSize,
+  total,
+  totalPages,
   createAction,
   updateAction,
   deleteAction,
@@ -579,6 +646,13 @@ export default function ReferenceDataClient({
           </button>
         </div>
         <div className="table-container">{table(activeTab, records, setEditing, setDeleting)}</div>
+        <Pagination
+          activeTab={activeTab}
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          totalPages={totalPages}
+        />
         <div className="vehicle-footer-actions">
           <Link className="button button-secondary" href="/home">
             Home

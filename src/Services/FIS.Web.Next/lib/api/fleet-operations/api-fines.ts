@@ -3,6 +3,8 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_FINE_PAGE_SIZE = 24;
+export const DEFAULT_TRAFFIC_DEPT_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type FineSearchType = "GG" | "GP";
@@ -27,6 +29,14 @@ export type FineRecord = {
   deptPersonId: string | null;
   documentType: string | null;
   trafficDeptCode: number | null;
+};
+
+export type FinePage = {
+  items: FineRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type FineRequest = {
@@ -69,6 +79,14 @@ export type TrafficDeptRecord = {
   fax: string | null;
   cell: string | null;
   email: string | null;
+};
+
+export type TrafficDeptPage = {
+  items: TrafficDeptRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type TrafficDeptRequest = {
@@ -177,6 +195,40 @@ function getCollection(payload: unknown) {
   }
 
   return [];
+}
+
+function getPageItems(payload: JsonRecord) {
+  const items = getValue(payload, "items", "Items");
+  return Array.isArray(items) ? items : null;
+}
+
+function readPageMetadata(payload: JsonRecord, resource: string) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isSafeInteger(page) ||
+    !Number.isSafeInteger(pageSize) ||
+    !Number.isSafeInteger(total) ||
+    !Number.isSafeInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    throw new FineApiError(
+      "invalid-response",
+      `The FIS API returned incomplete ${resource} pagination metadata.`,
+    );
+  }
+
+  return { page, pageSize, total, totalPages };
 }
 
 function mapPresent<T>(values: readonly unknown[], mapper: (value: unknown) => T | null) {
@@ -358,6 +410,46 @@ function mapTrafficDept(value: unknown): TrafficDeptRecord | null {
   };
 }
 
+function mapFinePage(value: unknown): FinePage {
+  if (!isRecord(value)) {
+    throw new FineApiError("invalid-response", "The FIS API returned an invalid fine page.");
+  }
+
+  const rawItems = getPageItems(value);
+  if (!rawItems) {
+    throw new FineApiError("invalid-response", "The FIS API returned an invalid fine page.");
+  }
+
+  const metadata = readPageMetadata(value, "fine");
+  return {
+    items: rawItems.map(mapFine).filter((fine): fine is FineRecord => fine !== null),
+    ...metadata,
+  };
+}
+
+function mapTrafficDeptPage(value: unknown): TrafficDeptPage {
+  if (!isRecord(value)) {
+    throw new FineApiError(
+      "invalid-response",
+      "The FIS API returned an invalid traffic department page.",
+    );
+  }
+
+  const rawItems = getPageItems(value);
+  if (!rawItems) {
+    throw new FineApiError(
+      "invalid-response",
+      "The FIS API returned an invalid traffic department page.",
+    );
+  }
+
+  const metadata = readPageMetadata(value, "traffic department");
+  return {
+    items: rawItems.map(mapTrafficDept).filter((dept): dept is TrafficDeptRecord => dept !== null),
+    ...metadata,
+  };
+}
+
 function mapFineReport(value: unknown): FineReport | null {
   if (!isRecord(value)) {
     return null;
@@ -432,6 +524,21 @@ export async function getFines() {
     });
 }
 
+export async function getFinePage(
+  searchType: FineSearchType,
+  searchQuery: string,
+  page = 1,
+  pageSize = DEFAULT_FINE_PAGE_SIZE,
+): Promise<FinePage> {
+  const params = new URLSearchParams({
+    searchType,
+    searchQuery,
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  return mapFinePage(await readJson(await requestApi(`api/Fine/page?${params.toString()}`)));
+}
+
 export async function getFine(fineCode: number) {
   const response = await requestApi(`api/fine/${encodeURIComponent(fineCode)}`);
   const fine = mapFine(await readJson(response));
@@ -500,6 +607,21 @@ export async function getTrafficDepts() {
     .map(mapTrafficDept)
     .filter((dept): dept is TrafficDeptRecord => dept !== null)
     .toSorted((left, right) => (left.name ?? "").localeCompare(right.name ?? ""));
+}
+
+export async function getTrafficDeptPage(
+  searchQuery: string,
+  page = 1,
+  pageSize = DEFAULT_TRAFFIC_DEPT_PAGE_SIZE,
+): Promise<TrafficDeptPage> {
+  const params = new URLSearchParams({
+    searchQuery,
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  return mapTrafficDeptPage(
+    await readJson(await requestApi(`api/TrafficDept/page?${params.toString()}`)),
+  );
 }
 
 export async function getFineReport(

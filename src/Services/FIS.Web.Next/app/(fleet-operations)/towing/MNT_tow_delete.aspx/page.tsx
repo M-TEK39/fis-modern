@@ -1,3 +1,3 @@
-import TowingDetailPage from "@/app/(fleet-operations)/towing/request/detail/page";
+import { createLegacyTowingDetailPage } from "@/app/(fleet-operations)/towing/request/detail/_route";
 
-export default TowingDetailPage;
+export default createLegacyTowingDetailPage("/towing/MNT_tow_delete.aspx");

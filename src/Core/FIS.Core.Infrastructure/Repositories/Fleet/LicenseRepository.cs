@@ -127,6 +127,23 @@ public sealed class LicenseRepository : ILicenseRepository
         return MergePreferModern(modernRows, legacyRows);
     }
 
+    public async Task<LicensePage> GetPageAsync(int page, int pageSize)
+    {
+        var resolvedPage = Math.Max(1, page);
+        var resolvedPageSize = Math.Clamp(pageSize, 1, 100);
+
+        // License records can be merged from either the expanded license table,
+        // the legacy licence_fees table, or both. Merge first so a modern row
+        // consistently wins, then expose only the requested page to the API.
+        var all = (await GetAllLicensesAsync())
+            .OrderBy(license => license.licence_description)
+            .ThenBy(license => license.licence_code)
+            .ToList();
+        var total = all.Count;
+        var items = all.Skip((resolvedPage - 1) * resolvedPageSize).Take(resolvedPageSize).ToList();
+        return new LicensePage(items, resolvedPage, resolvedPageSize, total);
+    }
+
     public async Task<License> CreateAsync(License license, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(license);

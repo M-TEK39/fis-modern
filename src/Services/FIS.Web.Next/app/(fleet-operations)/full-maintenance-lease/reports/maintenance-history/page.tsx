@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   FmlFrame,
@@ -25,7 +26,7 @@ function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function FmlMaintenanceHistoryPage({
+async function FmlMaintenanceHistoryPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -104,4 +105,12 @@ export default async function FmlMaintenanceHistoryPage({
       return reportError(error, "The FML maintenance history report could not be loaded.");
     return reportError(error, "The FML maintenance history report could not be loaded.");
   }
+}
+
+export default function FmlMaintenanceHistoryPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <FmlMaintenanceHistoryPageContent {...props} />
+    </StreamedRoute>
+  );
 }

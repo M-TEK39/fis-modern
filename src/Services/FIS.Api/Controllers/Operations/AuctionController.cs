@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -10,19 +12,65 @@ namespace FIS.Api.Controllers;
 [Authorize]
 public class AuctionController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly IAuctionRepository _repository;
+    private readonly AuctionMaintenanceCompatibilityService _maintenanceService;
     private readonly IVehicleRepository _vehicleRepository;
     private readonly ILogger<AuctionController> _logger;
 
     public AuctionController(
         IAuctionRepository repository,
+        AuctionMaintenanceCompatibilityService maintenanceService,
         IVehicleRepository vehicleRepository,
         ILogger<AuctionController> logger
     )
     {
         _repository = repository;
+        _maintenanceService = maintenanceService;
         _vehicleRepository = vehicleRepository;
         _logger = logger;
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetMaintenancePage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] string? searchType = null,
+        [FromQuery] string? searchQuery = null
+    )
+    {
+        if (!HasReportsRole())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var result = await _maintenanceService.GetPageAsync(
+                NormalizeSearchTerm(searchQuery),
+                string.Equals(searchType?.Trim(), "GP", StringComparison.OrdinalIgnoreCase),
+                Math.Clamp(page, 1, 1_000_000),
+                Math.Clamp(pageSize, 1, MaximumPageSize),
+                HttpContext.RequestAborted
+            );
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged auction maintenance records");
+            return StatusCode(500, "Error retrieving auction maintenance records");
+        }
     }
 
     [HttpGet]
@@ -343,6 +391,40 @@ public class AuctionController : BaseApiController
 
     private async Task<List<Auction>> GetLiveItemsAsync() =>
         (await _repository.GetAllAsync()).Where(item => !item.is_deleted).ToList();
+
+    private bool HasReportsRole() => HasAnyRole("Reports");
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Any(User.IsInRole))
+        {
+            return true;
+        }
+
+        return User.Claims.Any(claim =>
+            (
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            && claim
+                .Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+                .Any(role =>
+                    expectedRoles.Any(expected =>
+                        string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+                    )
+                )
+        );
+    }
+
+    private static string? NormalizeSearchTerm(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed[..Math.Min(trimmed.Length, 8)];
+    }
 
     private static bool MatchesAuctionNumberAndGarage(
         Auction item,

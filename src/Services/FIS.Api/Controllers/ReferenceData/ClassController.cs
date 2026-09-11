@@ -11,6 +11,9 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 public class ClassController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly IClassRepository _classRepository;
     private readonly ILogger<ClassController> _logger;
 
@@ -30,6 +33,37 @@ public class ClassController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving classes");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        try
+        {
+            var result = await _classRepository.GetPageAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumPageSize)
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(MapToDto),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged classes");
             return StatusCode(500, "Internal server error");
         }
     }

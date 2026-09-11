@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -15,26 +19,28 @@ import {
   sessionMessage,
   statusMessage,
 } from "@/app/(fleet-operations)/log-sheets/_page";
-import {
-  getLogsheets,
-  LogsheetApiError,
-  type LogsheetRecord,
-} from "@/lib/api/fleet-operations/api-logsheets";
+import { getLogsheetsPage, LogsheetApiError } from "@/lib/api/fleet-operations/api-logsheets";
 import { getSites, SiteApiError } from "@/lib/api/reference-data/api-sites";
 import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
 
-function findRecords(records: readonly LogsheetRecord[], requisition: string, vmfCode: number) {
-  if (requisition)
-    return records.filter(
-      (record) =>
-        record.requisitionNumber?.localeCompare(requisition, undefined, {
-          sensitivity: "accent",
-        }) === 0,
-    );
-  return vmfCode > 0 ? records.filter((record) => record.vmfCode === vmfCode) : [];
+const PAGE_SIZE = 24;
+
+function pageValue(value: string | string[] | undefined) {
+  const parsed = Number(queryValue(value));
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
 }
 
-export default async function LogsheetEditPage({
+function pageHref(values: Record<string, string | number | undefined>, page: number) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
+  if (page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return `/log-sheets/edit${query ? `?${query}` : ""}`;
+}
+
+async function LogsheetEditPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogsheetSession();
@@ -53,30 +59,36 @@ export default async function LogsheetEditPage({
   const mode = queryValue(query.mode).toUpperCase() === "GP" ? "GP" : "GG";
   const vmfCode = Number(queryValue(query.vmfCode));
   const editCode = Number(queryValue(query.edit));
+  const requestedPage = pageValue(query.page);
   const message = statusMessage(query);
   try {
-    const [options, sites, records] = await Promise.all([
-      getVehicleOptions(),
-      getSites(),
-      getLogsheets(),
-    ]);
+    const [options, sites] = await Promise.all([getVehicleOptions(), getSites()]);
     const matches = filterVehicles(options, search, mode);
     const selectedVehicle =
       Number.isInteger(vmfCode) && vmfCode > 0
         ? options.find((vehicle) => vehicle.vmfCode === vmfCode)
         : null;
-    const selectedRecords = findRecords(records, requisition, vmfCode);
+    const recordPage =
+      requisition || selectedVehicle
+        ? await getLogsheetsPage({
+            page: requestedPage,
+            pageSize: PAGE_SIZE,
+            requisition: requisition || undefined,
+            vmfCode: requisition ? undefined : selectedVehicle?.vmfCode,
+          })
+        : null;
+    const selectedRecords = recordPage?.items ?? [];
     const editing =
       Number.isInteger(editCode) && editCode > 0
         ? (selectedRecords.find((record) => record.logCode === editCode) ?? null)
         : null;
-    const params = new URLSearchParams({
+    const pageValues = {
       ...(search ? { search } : {}),
       mode,
       ...(requisition ? { requisition } : {}),
-      ...(selectedVehicle ? { vmfCode: String(vmfCode) } : {}),
-    });
-    const returnPath = `/log-sheets/edit?${params.toString()}`;
+      ...(selectedVehicle ? { vmfCode } : {}),
+    };
+    const returnPath = pageHref(pageValues, recordPage?.page ?? 1);
     return (
       <LogsheetShell
         title="Edit Logsheets"
@@ -97,6 +109,7 @@ export default async function LogsheetEditPage({
           vmfCode={selectedVehicle ? String(vmfCode) : ""}
           options={matches}
           requisition={requisition}
+          resetPage
         />
         {selectedRecords.length > 0 || requisition || selectedVehicle ? (
           <section
@@ -106,12 +119,43 @@ export default async function LogsheetEditPage({
             <div className="vehicle-form-section-header">
               <div>
                 <p className="eyebrow">
-                  {selectedRecords.length} record{selectedRecords.length === 1 ? "" : "s"}
+                  {recordPage?.total ?? 0} record{recordPage?.total === 1 ? "" : "s"}
                 </p>
                 <h2 id="logsheet-edit-results-title">Matching logsheets</h2>
               </div>
             </div>
             <LogsheetTable records={selectedRecords} mode="edit" returnPath={returnPath} />
+            {recordPage && recordPage.totalPages > 1 ? (
+              <nav className="vehicle-pagination" aria-label="Matching logsheets pages">
+                {recordPage.page > 1 ? (
+                  <Link
+                    className="vehicle-pagination-button"
+                    href={pageHref(pageValues, recordPage.page - 1)}
+                  >
+                    Previous
+                  </Link>
+                ) : (
+                  <span className="vehicle-pagination-button vehicle-pagination-disabled">
+                    Previous
+                  </span>
+                )}
+                <span className="vehicle-pagination-meta" aria-live="polite">
+                  Page {recordPage.page} of {recordPage.totalPages}
+                </span>
+                {recordPage.page < recordPage.totalPages ? (
+                  <Link
+                    className="vehicle-pagination-button"
+                    href={pageHref(pageValues, recordPage.page + 1)}
+                  >
+                    Next
+                  </Link>
+                ) : (
+                  <span className="vehicle-pagination-button vehicle-pagination-disabled">
+                    Next
+                  </span>
+                )}
+              </nav>
+            ) : null}
           </section>
         ) : (
           <p className="muted-copy">Search by requisition or vehicle to load logsheets.</p>
@@ -152,4 +196,12 @@ export default async function LogsheetEditPage({
       </LogsheetShell>
     );
   }
+}
+
+export default function LogsheetEditPage(props: Parameters<typeof LogsheetEditPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LogsheetEditPageContent {...props} />
+    </Suspense>
+  );
 }

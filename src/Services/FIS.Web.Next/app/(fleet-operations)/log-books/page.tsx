@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -9,12 +13,23 @@ import {
   accessRestricted,
   getLogbookSession,
   hasLogbookAccess,
+  parsePositiveInteger,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/log-books/_page";
-import { getLogbooks, LogbookApiError } from "@/lib/api/fleet-operations/api-logbooks";
+import {
+  DEFAULT_LOGBOOK_PAGE_SIZE,
+  getLogbookPage,
+  LogbookApiError,
+} from "@/lib/api/fleet-operations/api-logbooks";
 
-export default async function LogBooksPage({
+function pageHref(search: string, page: number) {
+  const params = new URLSearchParams({ page: String(page) });
+  if (search) params.set("search", search);
+  return `/log-books?${params.toString()}`;
+}
+
+async function LogBooksPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogbookSession();
@@ -26,27 +41,15 @@ export default async function LogBooksPage({
     return accessRestricted("Your profile does not include Logbooks access.");
 
   const query = await searchParams;
-  const search = queryValue(query.search).toLocaleLowerCase();
+  const search = queryValue(query.search).trim();
+  const requestedPage = parsePositiveInteger(queryValue(query.page)) ?? 1;
   try {
-    const records = await getLogbooks();
-    const filtered = records.filter(
-      (record) =>
-        !search ||
-        [
-          record.vmfCode,
-          record.ggNumber,
-          record.registrationNumber,
-          record.beginNumber,
-          record.endNumber,
-          record.receiverName,
-          record.comment,
-          record.siteDescription,
-        ].some((value) =>
-          String(value ?? "")
-            .toLocaleLowerCase()
-            .includes(search),
-        ),
-    );
+    const logbookPage = await getLogbookPage({
+      page: requestedPage,
+      pageSize: DEFAULT_LOGBOOK_PAGE_SIZE,
+      search,
+    });
+    const { items, page, pageSize, total, totalPages } = logbookPage;
     return (
       <LogbookShell
         title="Logbook Maintenance Menu"
@@ -60,12 +63,13 @@ export default async function LogBooksPage({
           <div className="vehicle-form-section-header">
             <div>
               <p className="eyebrow">
-                {filtered.length} of {records.length} record{records.length === 1 ? "" : "s"}
+                {total} active record{total === 1 ? "" : "s"}
               </p>
               <h2 id="logbook-preview-title">Logbook Handout Preview</h2>
             </div>
           </div>
           <form className="vehicle-search-row" method="get">
+            <input name="page" type="hidden" value="1" />
             <label className="sr-only" htmlFor="logbook-preview-search">
               Search logbook handouts
             </label>
@@ -83,7 +87,41 @@ export default async function LogBooksPage({
               Clear
             </Link>
           </form>
-          <LogbookTable records={filtered} mode="preview" returnPath="/log-books" />
+          <LogbookTable records={items} mode="preview" returnPath="/log-books" />
+          {totalPages > 1 ? (
+            <nav className="vehicle-pagination" aria-label="Logbook handout pages">
+              {page > 1 ? (
+                <Link className="vehicle-pagination-button" href={pageHref(search, page - 1)}>
+                  Previous
+                </Link>
+              ) : (
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
+                  Previous
+                </span>
+              )}
+              <span className="vehicle-pagination-meta" aria-live="polite">
+                Page {page} of {totalPages}
+              </span>
+              {page < totalPages ? (
+                <Link className="vehicle-pagination-button" href={pageHref(search, page + 1)}>
+                  Next
+                </Link>
+              ) : (
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
+                  Next
+                </span>
+              )}
+            </nav>
+          ) : null}
+          <div className="pagination-meta">
+            Total records: {total} | Page size: {pageSize}
+          </div>
         </section>
       </LogbookShell>
     );
@@ -106,4 +144,12 @@ export default async function LogBooksPage({
       </LogbookShell>
     );
   }
+}
+
+export default function LogBooksPage(props: Parameters<typeof LogBooksPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LogBooksPageContent {...props} />
+    </Suspense>
+  );
 }

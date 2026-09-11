@@ -39,6 +39,79 @@ public sealed class AssetVerificationRepository : IAssetVerificationRepository
 
     public Task<IEnumerable<AssetVerification>> GetAllAsync() => QueryAsEnumerableAsync();
 
+    public async Task<AssetVerificationPage> GetPageAsync(AssetVerificationPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            var columns = await GetTableColumnsAsync(connection);
+            if (!columns.Contains("asset_verification_code"))
+            {
+                throw new InvalidOperationException(
+                    "The required dbo.Asset_Verification table is not available."
+                );
+            }
+
+            var activePredicate = BuildActivePredicate(columns);
+
+            await using var countCommand = connection.CreateCommand();
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[Asset_Verification] AS av
+                WHERE {activePredicate};
+                """;
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.CommandText = $"""
+                SELECT
+                    {BuildSelectList(columns)}
+                FROM [dbo].[Asset_Verification] AS av
+                OUTER APPLY (
+                    SELECT TOP (1)
+                        v.[vmf_code], v.[fleet_number], v.[registration_number]
+                    FROM [dbo].[vehicle_master] AS v
+                    WHERE {BuildVehicleMatchPredicate(columns)}
+                    ORDER BY v.[vmf_code]
+                ) AS v
+                WHERE {activePredicate}
+                ORDER BY av.[asset_verification_code]
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY;
+                """;
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<AssetVerification>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(Map(reader));
+            }
+
+            return new AssetVerificationPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IEnumerable<AssetVerification>> GetByVehicleAsync(int vmfCode)
     {
         var records = await QueryAsync(
@@ -262,7 +335,7 @@ public sealed class AssetVerificationRepository : IAssetVerificationRepository
                 );
             }
 
-            var activePredicate = columns.Contains("is_deleted") ? "av.[is_deleted] = 0" : "1 = 1";
+            var activePredicate = BuildActivePredicate(columns);
             var predicates = new List<string> { activePredicate };
             if (!string.IsNullOrWhiteSpace(filter))
             {
@@ -306,6 +379,9 @@ public sealed class AssetVerificationRepository : IAssetVerificationRepository
             }
         }
     }
+
+    private static string BuildActivePredicate(IReadOnlySet<string> columns) =>
+        columns.Contains("is_deleted") ? "av.[is_deleted] = 0" : "1 = 1";
 
     private static string ReplacePlaceholders(string filter, IReadOnlySet<string> columns) =>
         filter

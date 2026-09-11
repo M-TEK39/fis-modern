@@ -1,14 +1,13 @@
 import IncidentCapturePage, {
   type IncidentCapturePageProps,
 } from "@/app/(fleet-operations)/call-centre/incident/capture/page";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function LegacyAccidentCapturePage({
-  searchParams,
-}: IncidentCapturePageProps) {
+async function LegacyAccidentCapturePageContent({ searchParams }: IncidentCapturePageProps) {
   const values = await searchParams;
   const vmfCode = first(values.vmfCode) ?? first(values.ccVMF);
 
@@ -22,5 +21,13 @@ export default async function LegacyAccidentCapturePage({
         ...(vmfCode ? { vmfCode } : {}),
       })}
     />
+  );
+}
+
+export default function LegacyAccidentCapturePage(props: IncidentCapturePageProps) {
+  return (
+    <StreamedRoute>
+      <LegacyAccidentCapturePageContent {...props} />
+    </StreamedRoute>
   );
 }

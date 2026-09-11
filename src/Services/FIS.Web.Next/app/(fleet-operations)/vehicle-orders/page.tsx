@@ -1,8 +1,10 @@
-import VehicleMasterPage, {
-  type VehicleMasterPageProps,
-} from "@/app/(fleet-operations)/vehicles/page";
+import VehicleMasterPage from "@/app/(fleet-operations)/vehicles/_route";
 
-export default function VehicleOrdersPage({ searchParams }: VehicleMasterPageProps) {
+type PageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default function VehicleOrdersPage({ searchParams }: Readonly<PageProps>) {
   return (
     <VehicleMasterPage
       searchParams={searchParams}

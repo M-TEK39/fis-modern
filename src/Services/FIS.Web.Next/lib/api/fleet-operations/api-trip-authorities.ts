@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_TRIP_AUTHORITY_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type TripAuthorityVehicle = {
@@ -15,6 +16,28 @@ export type TripAuthorityVehicle = {
   model: string | null;
   contractType: string | null;
   siteCode: number | null;
+};
+
+export type TripAuthorityVehiclePageItem = TripAuthorityVehicle & {
+  tripId: number | null;
+};
+
+export type TripAuthorityVehiclePage = {
+  items: TripAuthorityVehiclePageItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type TripAuthorityVehiclePageOptions = {
+  searchMode?: "GG" | "GP";
+  number?: string;
+  departmentCode?: number;
+  siteCode?: number;
+  authority?: number;
+  page?: number;
+  pageSize?: number;
 };
 
 export type TripAuthorityRecord = {
@@ -193,6 +216,44 @@ function getCollection(payload: unknown) {
   return [];
 }
 
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isSafeInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isSafeInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_TRIP_AUTHORITY_PAGE_SIZE)
+      : DEFAULT_TRIP_AUTHORITY_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
 function statusDescriptionForCode(statusCode: number) {
   const descriptions: Record<number, string> = {
     1: "In Service",
@@ -232,6 +293,42 @@ function mapVehicle(value: unknown): TripAuthorityVehicle | null {
       asString(getValue(value, "contractType", "contract_type")) ??
       statusDescriptionForCode(statusCode),
     siteCode: asNumber(getValue(value, "siteCode", "site_code")),
+  };
+}
+
+function mapVehiclePageItem(value: unknown): TripAuthorityVehiclePageItem | null {
+  const vehicle = mapVehicle(value);
+  if (!vehicle || !isRecord(value)) return null;
+
+  return {
+    ...vehicle,
+    tripId: asNumber(
+      getValue(value, "tripAuthorityCode", "TripAuthorityCode", "trip_authority_code"),
+    ),
+  };
+}
+
+function readTripAuthorityVehiclePage(payload: unknown): TripAuthorityVehiclePage {
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new TripAuthorityApiError(
+      "invalid-response",
+      "The FIS API returned an invalid Trip Authority vehicle page.",
+    );
+  }
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata) {
+    throw new TripAuthorityApiError(
+      "invalid-response",
+      "The FIS API returned incomplete Trip Authority vehicle pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items
+      .map(mapVehiclePageItem)
+      .filter((item): item is TripAuthorityVehiclePageItem => item !== null),
+    ...metadata,
   };
 }
 
@@ -379,6 +476,50 @@ export async function getTripAuthorityVehicles() {
   return getCollection(payload)
     .map(mapVehicle)
     .filter((vehicle): vehicle is TripAuthorityVehicle => vehicle !== null);
+}
+
+async function getTripAuthorityVehiclePage(
+  endpoint: "vehicles/page" | "vehicles/out/page",
+  options: TripAuthorityVehiclePageOptions = {},
+) {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+    searchMode: options.searchMode === "GP" ? "GP" : "GG",
+  });
+  const number = options.number?.trim();
+  if (number) params.set("number", number);
+  if (Number.isSafeInteger(options.departmentCode) && (options.departmentCode ?? 0) > 0) {
+    params.set("departmentCode", String(options.departmentCode));
+  }
+  if (Number.isSafeInteger(options.siteCode) && (options.siteCode ?? 0) > 0) {
+    params.set("siteCode", String(options.siteCode));
+  }
+  if (Number.isSafeInteger(options.authority) && (options.authority ?? 0) > 0) {
+    params.set("authority", String(options.authority));
+  }
+
+  return readTripAuthorityVehiclePage(
+    await requestApi(`api/Trip/${endpoint}?${params.toString()}`),
+  );
+}
+
+export function emptyTripAuthorityVehiclePage(page = 1): TripAuthorityVehiclePage {
+  return {
+    items: [],
+    page: normalizePage(page),
+    pageSize: DEFAULT_TRIP_AUTHORITY_PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  };
+}
+
+export function getTripAuthorityInPage(options: TripAuthorityVehiclePageOptions = {}) {
+  return getTripAuthorityVehiclePage("vehicles/page", options);
+}
+
+export function getTripAuthorityOutPage(options: TripAuthorityVehiclePageOptions = {}) {
+  return getTripAuthorityVehiclePage("vehicles/out/page", options);
 }
 
 export async function getTripAuthorities() {

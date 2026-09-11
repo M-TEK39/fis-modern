@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import StatusMaintenanceClient from "@/app/(fleet-operations)/vehicles/status-maintenance/status-maintenance-client";
 import {
   getSitesForVehicleStatus,
@@ -134,7 +136,7 @@ async function resolveInitialVehicle(
   return vehicle ? getVehicleForStatus(vehicle.vmfCode) : null;
 }
 
-export default async function StatusMaintenancePage({ searchParams }: StatusMaintenancePageProps) {
+async function StatusMaintenancePageContent({ searchParams }: StatusMaintenancePageProps) {
   await connection();
   const session = await getSession();
 
@@ -249,5 +251,13 @@ export default async function StatusMaintenancePage({ searchParams }: StatusMain
         </div>
       </section>
     </main>
+  );
+}
+
+export default function StatusMaintenancePage(props: StatusMaintenancePageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <StatusMaintenancePageContent {...props} />
+    </Suspense>
   );
 }

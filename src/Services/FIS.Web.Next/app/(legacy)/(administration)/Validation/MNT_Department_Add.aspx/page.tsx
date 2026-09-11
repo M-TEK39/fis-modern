@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { Suspense } from "react";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { redirect } from "next/navigation";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
@@ -9,7 +11,7 @@ import { createDepartmentAction } from "@/app/(administration)/validation-data/d
 import { emptyDepartment } from "@/app/(administration)/validation-data/departments/department-defaults";
 import { getSession } from "@/lib/auth/session";
 
-export default async function DepartmentAddPage() {
+async function DepartmentAddPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -59,5 +61,13 @@ export default async function DepartmentAddPage() {
         />
       </section>
     </main>
+  );
+}
+
+export default function DepartmentAddPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DepartmentAddPageContent />
+    </Suspense>
   );
 }

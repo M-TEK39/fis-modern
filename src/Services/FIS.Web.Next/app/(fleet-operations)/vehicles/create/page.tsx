@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
+import RouteLoading from "@/components/app-shell/route-loading";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import VehicleCreateClient from "@/app/(fleet-operations)/vehicles/create/vehicle-create-client";
 import {
@@ -74,7 +76,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function VehicleCreatePage() {
+async function VehicleCreatePageContent() {
   await connection();
   const session = await getSession();
 
@@ -162,4 +164,12 @@ export default async function VehicleCreatePage() {
       </main>
     );
   }
+}
+
+export default function VehicleCreatePage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <VehicleCreatePageContent />
+    </Suspense>
+  );
 }

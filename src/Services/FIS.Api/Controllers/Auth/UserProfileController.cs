@@ -23,6 +23,9 @@ namespace FIS.Api.Controllers;
 [Route("api/userprofile")]
 public class UserProfileController : BaseApiController
 {
+    private const int DefaultAdministrationPageSize = 24;
+    private const int MaximumAdministrationPageSize = 100;
+
     private readonly IUserProfileRepository _repository;
     private readonly FisDbContext _context;
     private readonly ILogger<UserProfileController> _logger;
@@ -155,6 +158,59 @@ public class UserProfileController : BaseApiController
                 ex,
                 "Error fetching User Administration rows for alphabet {Alphabet}",
                 alphabet
+            );
+            return StatusCode(500, "Error retrieving user administration rows");
+        }
+    }
+
+    /// <summary>
+    /// Get one server-paginated page of the active user rows used by the
+    /// legacy User Administration grid. The unpaged administration endpoint
+    /// remains available for existing consumers.
+    /// </summary>
+    [HttpGet("administration/page")]
+    [Authorize(Roles = "User Administration")]
+    public async Task<ActionResult> GetForAdministrationPage(
+        [FromQuery] string? alphabet,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultAdministrationPageSize
+    )
+    {
+        try
+        {
+            var selectedAlphabet = NormalizeAlphabet(alphabet);
+            var result = await _repository.GetAdministrationPageAsync(
+                selectedAlphabet,
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumAdministrationPageSize)
+            );
+
+            var siteNames = await GetLookupNamesAsync("site", "Site_code", "description");
+            var positionNames = await GetLookupNamesAsync(
+                "Positions",
+                "Position_Code",
+                "Position_Name"
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(user => MapToDto(user, siteNames, positionNames)),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error fetching paged User Administration rows for alphabet {Alphabet}, page {Page}, page size {PageSize}",
+                alphabet,
+                page,
+                pageSize
             );
             return StatusCode(500, "Error retrieving user administration rows");
         }

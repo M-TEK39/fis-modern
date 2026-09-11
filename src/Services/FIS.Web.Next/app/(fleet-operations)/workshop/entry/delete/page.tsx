@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -18,7 +22,7 @@ function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
 }
 
-export default async function WorkshopEntryDeletePage({
+async function WorkshopEntryDeletePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -163,4 +167,14 @@ export default async function WorkshopEntryDeletePage({
       </main>
     );
   }
+}
+
+export default function WorkshopEntryDeletePage(
+  props: Parameters<typeof WorkshopEntryDeletePageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <WorkshopEntryDeletePageContent {...props} />
+    </Suspense>
+  );
 }
