@@ -54,9 +54,11 @@ USER fisapi
 # Configure ports
 EXPOSE 8080
 
-# Configure health check endpoint
+# A container restart should depend on process liveness, not a transient
+# external SQL Server outage. Compose uses /health/ready when it needs to
+# sequence the web tier behind database readiness.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:8080/health || exit 1
+  CMD curl -f http://localhost:8080/health/live || exit 1
 
 # Set entry point
 ENTRYPOINT ["dotnet", "FIS.Api.dll"]
