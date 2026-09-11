@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export function ReliefVehicleNotFound() {
+function ReliefVehicleNotFound() {
   return (
     <section className="vehicle-status-card" role="alert">
       <p className="eyebrow">Record not found</p>
@@ -11,3 +11,6 @@ export function ReliefVehicleNotFound() {
     </section>
   );
 }
+
+export { ReliefVehicleNotFound };
+export default ReliefVehicleNotFound;
