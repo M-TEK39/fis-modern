@@ -34,7 +34,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function MakeEditPageContent({ searchParams }: MakeEditPageProps) {
+async function renderMakeEditPage({ searchParams }: MakeEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -118,12 +118,6 @@ async function MakeEditPageContent({ searchParams }: MakeEditPageProps) {
   }
 }
 
-export default function MakeEditPage(
-  props: NonNullable<Parameters<typeof MakeEditPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <MakeEditPageContent {...props} />
-    </Suspense>
-  );
+export default function MakeEditPage(props: MakeEditPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderMakeEditPage(props)}</Suspense>;
 }

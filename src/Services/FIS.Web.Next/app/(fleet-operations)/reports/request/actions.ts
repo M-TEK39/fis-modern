@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { hasReportsRole } from "@/app/(fleet-operations)/reports/_components";
+import { hasReportsRole } from "@/app/(fleet-operations)/reports/_utils";
 import {
   LegacyReportApiError,
   submitAdditionalReportRequest,

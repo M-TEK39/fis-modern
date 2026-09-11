@@ -1,10 +1,13 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
 
 import Link from "next/link";
 
-import { LogsheetShell, formatNumber } from "@/app/(fleet-operations)/log-sheets/_components";
+import { LogsheetShell } from "@/app/(fleet-operations)/log-sheets/_components";
+import { formatNumber } from "@/app/(fleet-operations)/log-sheets/_utils";
 import {
   accessRestricted,
   getLogsheetSession,
@@ -21,7 +24,9 @@ function monthStart(value: string) {
   return /^\d{4}-\d{2}$/.test(value) ? new Date(`${value}-01T00:00:00.000Z`) : null;
 }
 
-async function LogsheetTotalKmReportPageContent({
+const LogsheetTotalKmReportPageContent = renderLogsheetTotalKmReportPageContent;
+
+async function renderLogsheetTotalKmReportPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogsheetSession();
@@ -52,18 +57,20 @@ async function LogsheetTotalKmReportPageContent({
         getModels(),
         getClasses(),
       ]);
-      const modelToClass = new Map(
-        models
-          .filter((model) => model.modelCode > 0 && model.classCode > 0)
-          .map((model) => [model.modelCode, model.classCode]),
-      );
+      const modelToClass = new Map<number, number>();
+      for (const model of models) {
+        if (model.modelCode > 0 && model.classCode > 0) {
+          modelToClass.set(model.modelCode, model.classCode);
+        }
+      }
       const classDescriptions = new Map(
         classes.map((item) => [item.classCode, item.description || String(item.classCode)]),
       );
+      const vehicleByVmfCode = new Map(vehicles.map((vehicle) => [vehicle.vmfCode, vehicle]));
       const totals = new Map<number, number>();
       for (const logsheet of logsheets) {
         const month = new Date(logsheet.month);
-        const vehicle = vehicles.find((item) => item.vmfCode === logsheet.vmfCode);
+        const vehicle = vehicleByVmfCode.get(logsheet.vmfCode);
         const classCode = vehicle?.modelCode ? modelToClass.get(vehicle.modelCode) : undefined;
         if (!classCode || Number.isNaN(month.getTime()) || month < start || month >= endExclusive)
           continue;
@@ -139,13 +146,13 @@ async function LogsheetTotalKmReportPageContent({
             <div className="vehicle-table-wrapper">
               <table className="vehicle-table">
                 <caption className="sr-only">Total kilometres by class</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Class ID</th>
-                    <th scope="col">Class description</th>
-                    <th scope="col">Total distance</th>
-                  </tr>
-                </thead>
+                <DataTableHeader
+                  columns={[
+                    { key: "column-1", label: <>Class ID</> },
+                    { key: "column-2", label: <>Class description</> },
+                    { key: "column-3", label: <>Total distance</> },
+                  ]}
+                />
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.classCode}>

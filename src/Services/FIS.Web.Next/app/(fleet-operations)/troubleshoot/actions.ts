@@ -91,16 +91,17 @@ export async function updateTroubleshootLogsAction(formData: FormData) {
   if (!userAccessCode || userAccessCode <= 0)
     pathWithMessage("/troubleshoot/log", "Select a user/site before updating logs.");
 
+  let updated = 0;
   try {
-    const updated = await updateTroubleshootLogs();
+    updated = await updateTroubleshootLogs();
     revalidatePath("/troubleshoot/log");
-    redirect(`/troubleshoot/log?userAccessCode=${userAccessCode}&saved=${updated}`);
   } catch (error) {
     pathWithMessage(
       `/troubleshoot/log?userAccessCode=${userAccessCode}`,
       apiMessage(error, "Troubleshoot logs could not be updated."),
     );
   }
+  redirect(`/troubleshoot/log?userAccessCode=${userAccessCode}&saved=${updated}`);
 }
 
 export async function saveApproverRanksAction(formData: FormData) {
@@ -127,10 +128,10 @@ export async function saveApproverRanksAction(formData: FormData) {
     if (ranks.length === 0) throw new Error("Add at least one approver rank before saving.");
     await saveApproverRanks(ranks);
     revalidatePath("/troubleshoot/approver-ranks");
-    redirect(`${returnPath}&saved=1`);
   } catch (error) {
     pathWithMessage(returnPath, apiMessage(error, "Approver ranks could not be saved."));
   }
+  redirect(`${returnPath}&saved=1`);
 }
 
 export async function removeTripsWithoutRoutesAction(formData: FormData) {
@@ -142,21 +143,22 @@ export async function removeTripsWithoutRoutesAction(formData: FormData) {
       "Confirm that you want to remove trips without routes.",
     );
 
+  let removed = 0;
   try {
     const fromDate = date(formData, "fromDate", "From date");
     const toDate = date(formData, "toDate", "To date");
     if (fromDate && toDate && fromDate > toDate)
       throw new Error("The To date must be on or after the From date.");
-    const removed = await removeTripsWithoutRoutes({
+    removed = await removeTripsWithoutRoutes({
       fromDate: fromDate ?? undefined,
       toDate: toDate ?? undefined,
     });
     revalidatePath("/troubleshoot/remove-trips-no-routes");
-    redirect(`/troubleshoot/remove-trips-no-routes?saved=${removed}`);
   } catch (error) {
     pathWithMessage(
       "/troubleshoot/remove-trips-no-routes",
       apiMessage(error, "Trips without routes could not be removed."),
     );
   }
+  redirect(`/troubleshoot/remove-trips-no-routes?saved=${removed}`);
 }

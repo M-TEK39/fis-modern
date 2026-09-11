@@ -1,9 +1,12 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 import {
   DEFAULT_FINE_PAGE_SIZE,
   FineApiError,
@@ -118,17 +121,7 @@ function SearchForm({
 }: Readonly<{ searchType: FineSearchType; searchQuery: string }>) {
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
-      <fieldset className="vehicle-search-options">
-        <legend>Search by</legend>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="searchType" value="GG" defaultChecked={searchType === "GG"} />{" "}
-          GG
-        </label>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="searchType" value="GP" defaultChecked={searchType === "GP"} />{" "}
-          GP
-        </label>
-      </fieldset>
+      <SearchTypeFieldset selectedType={searchType} legend="Search by" />
       <div className="vehicle-search-row">
         <label className="sr-only" htmlFor="fine-delete-search">
           {searchType === "GG" ? "GG number" : "GP number"}
@@ -200,14 +193,14 @@ function FineRows({ fines }: Readonly<{ fines: FineRecord[] }>) {
     <div className="vehicle-table-wrapper" aria-live="polite">
       <table className="vehicle-table">
         <caption className="sr-only">Fines available for deletion</caption>
-        <thead>
-          <tr>
-            <th scope="col">Offence Date</th>
-            <th scope="col">Document Type</th>
-            <th scope="col">Date at GMT</th>
-            <th scope="col">Action</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Offence Date</> },
+            { key: "column-2", label: <>Document Type</> },
+            { key: "column-3", label: <>Date at GMT</> },
+            { key: "column-4", label: <>Action</> },
+          ]}
+        />
         <tbody>
           {fines.map((fine) => (
             <tr key={fine.fineCode}>
@@ -248,7 +241,9 @@ function ApiUnavailable() {
   );
 }
 
-async function FineDeletePageContent({
+const FineDeletePageContent = renderFineDeletePageContent;
+
+async function renderFineDeletePageContent({
   searchParams,
   routePath = "/fines/delete",
 }: FineDeletePageProps) {
@@ -379,14 +374,4 @@ export default function FineDeletePage(props: FineDeletePageProps) {
       <FineDeletePageContent {...props} />
     </StreamedRoute>
   );
-}
-
-type LegacyFineDeletePageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyFineDeletePage(routePath: string) {
-  return function LegacyFineDeletePage({ searchParams }: Readonly<LegacyFineDeletePageProps>) {
-    return <FineDeletePage routePath={routePath} searchParams={searchParams} />;
-  };
 }

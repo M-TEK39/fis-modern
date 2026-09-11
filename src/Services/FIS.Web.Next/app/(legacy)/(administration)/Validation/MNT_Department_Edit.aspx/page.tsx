@@ -37,7 +37,7 @@ function ErrorCard({ children }: Readonly<{ children: ReactNode }>) {
   );
 }
 
-async function DepartmentEditPageContent({ searchParams }: DepartmentEditPageProps) {
+async function renderDepartmentEditPage({ searchParams }: DepartmentEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -132,12 +132,6 @@ async function DepartmentEditPageContent({ searchParams }: DepartmentEditPagePro
   }
 }
 
-export default function DepartmentEditPage(
-  props: NonNullable<Parameters<typeof DepartmentEditPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <DepartmentEditPageContent {...props} />
-    </Suspense>
-  );
+export default function DepartmentEditPage(props: DepartmentEditPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderDepartmentEditPage(props)}</Suspense>;
 }

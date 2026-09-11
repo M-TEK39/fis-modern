@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -75,12 +77,12 @@ function DetailTable({
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
           <caption className="sr-only">Licence details for {displayName(driver)}</caption>
-          <thead>
-            <tr>
-              <th scope="col">Field</th>
-              <th scope="col">Value</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Field</> },
+              { key: "column-2", label: <>Value</> },
+            ]}
+          />
           <tbody>
             {details.map(([label, value]) => (
               <tr key={label}>
@@ -108,7 +110,9 @@ function ApiUnavailable() {
   );
 }
 
-async function DriverLicenceDetailsPageContent({
+const DriverLicenceDetailsPageContent = renderDriverLicenceDetailsPageContent;
+
+async function renderDriverLicenceDetailsPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();

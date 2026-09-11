@@ -118,6 +118,15 @@ function getCollection(payload: unknown) {
   return [];
 }
 
+function mapPresent<T>(values: readonly unknown[], mapper: (value: unknown) => T | null) {
+  const result: T[] = [];
+  for (const value of values) {
+    const mapped = mapper(value);
+    if (mapped !== null) result.push(mapped);
+  }
+  return result;
+}
+
 function readPageMetadata(payload: JsonRecord) {
   const page = asNumber(getValue(payload, "page", "Page"));
   const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
@@ -351,9 +360,10 @@ export async function getMonitorReportByReference(monitorCode: number) {
   const payload = await readJson(
     await requestApi(`api/monitor/reports/one-reference-number/${encodeURIComponent(monitorCode)}`),
   );
-  return getCollection(isRecord(payload) ? getValue(payload, "data", "Data") : payload)
-    .map(mapReportRow)
-    .filter((item): item is MonitorReportRow => item !== null);
+  return mapPresent(
+    getCollection(isRecord(payload) ? getValue(payload, "data", "Data") : payload),
+    mapReportRow,
+  );
 }
 
 export async function getInquiryStatistics(startDate: string, endDate: string) {
@@ -364,14 +374,13 @@ export async function getInquiryStatistics(startDate: string, endDate: string) {
   });
   const payload = await readJson(response);
   const data = isRecord(payload) ? getValue(payload, "data", "Data") : payload;
-  return getCollection(data)
-    .filter(isRecord)
-    .map((item) => ({
+  return mapPresent(getCollection(data), (item) => {
+    if (!isRecord(item)) return null;
+    return {
       inquiryType: asString(getValue(item, "inquiryType", "InquiryType")) ?? "(Unknown)",
       count: asNumber(getValue(item, "count", "Count")) ?? 0,
-    }))
-    .sort(
-      (left, right) =>
-        right.count - left.count || left.inquiryType.localeCompare(right.inquiryType),
-    );
+    };
+  }).sort(
+    (left, right) => right.count - left.count || left.inquiryType.localeCompare(right.inquiryType),
+  );
 }

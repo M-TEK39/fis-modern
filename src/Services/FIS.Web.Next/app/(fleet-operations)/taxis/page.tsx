@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -8,13 +10,12 @@ import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
-  dateValue,
   TaxiNotice,
   TaxiPagination,
   TaxiRestricted,
   TaxiUnavailable,
-  valueOrDash,
 } from "@/app/(fleet-operations)/taxis/_components";
+import { dateValue, valueOrDash } from "@/app/(fleet-operations)/taxis/_utils";
 import { MenuSection } from "@/components/ui/menu-section";
 import {
   DEFAULT_TAXI_PAGE_SIZE,
@@ -177,16 +178,16 @@ async function TaxisPageContent({
                 <div className="vehicle-table-wrapper">
                   <table className="vehicle-table">
                     <caption className="sr-only">Taxi records summary</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Requisition</th>
-                        <th scope="col">Official</th>
-                        <th scope="col">Vehicle</th>
-                        <th scope="col">Department</th>
-                        <th scope="col">Date required</th>
-                        <th scope="col">Status</th>
-                      </tr>
-                    </thead>
+                    <DataTableHeader
+                      columns={[
+                        { key: "column-1", label: <>Requisition</> },
+                        { key: "column-2", label: <>Official</> },
+                        { key: "column-3", label: <>Vehicle</> },
+                        { key: "column-4", label: <>Department</> },
+                        { key: "column-5", label: <>Date required</> },
+                        { key: "column-6", label: <>Status</> },
+                      ]}
+                    />
                     <tbody>
                       {taxiPage.items.map((taxi) => (
                         <tr key={taxi.requestId}>

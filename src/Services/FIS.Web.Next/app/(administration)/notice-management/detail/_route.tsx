@@ -80,7 +80,11 @@ function errorMessage(value: string | undefined) {
   }
 }
 
-async function NoticeDetailContent({
+export function NoticeDetailContent(props: NoticeDetailPageProps) {
+  return <>{renderNoticeDetailContent(props)}</>;
+}
+
+async function renderNoticeDetailContent({
   searchParams,
   routePath = "/notice-management/detail",
 }: NoticeDetailPageProps) {
@@ -252,14 +256,4 @@ export default function NoticeDetailRoute({ searchParams }: Readonly<NoticeDetai
       <NoticeDetailContent searchParams={searchParams} />
     </Suspense>
   );
-}
-
-export function createLegacyNoticeDetailPage(routePath: (typeof DETAIL_ROUTES)[number]) {
-  return function LegacyNoticeDetailPage({ searchParams }: Readonly<NoticeDetailRouteProps>) {
-    return (
-      <Suspense fallback={<RouteLoading />}>
-        <NoticeDetailContent routePath={routePath} searchParams={searchParams} />
-      </Suspense>
-    );
-  };
 }

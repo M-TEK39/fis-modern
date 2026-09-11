@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
@@ -11,7 +13,9 @@ import {
 } from "@/app/(fleet-operations)/monitor/_page";
 import { getInquiryStatistics, MonitorApiError } from "@/lib/api/fleet-operations/api-monitor";
 
-async function MonitorStatisticsPageContent({
+const MonitorStatisticsPageContent = renderMonitorStatisticsPageContent;
+
+async function renderMonitorStatisticsPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getMonitorSession();
@@ -87,12 +91,12 @@ async function MonitorStatisticsPageContent({
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Inquiry statistics</caption>
-            <thead>
-              <tr>
-                <th scope="col">Inquiry type</th>
-                <th scope="col">Count</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Inquiry type</> },
+                { key: "column-2", label: <>Count</> },
+              ]}
+            />
             <tbody>
               {stats.length ? (
                 stats.map((item) => (

@@ -24,6 +24,8 @@ export function WorkshopEntryForm({
   vehicles: WorkshopVehicle[];
   returnPath: string;
 }>) {
+  const defaultReceiveDate =
+    dateValue(record?.receiveDate) || new Date().toISOString().slice(0, 10);
   return (
     <form className="vehicle-status-maintenance-panel" action={saveWorkshopAction}>
       <input name="returnPath" type="hidden" value={returnPath} />
@@ -69,7 +71,7 @@ export function WorkshopEntryForm({
             id="workshop-receive-date"
             name="receiveDate"
             type="date"
-            defaultValue={dateValue(record?.receiveDate) || new Date().toISOString().slice(0, 10)}
+            defaultValue={defaultReceiveDate}
             required
           />
         </div>

@@ -8,8 +8,8 @@ import {
   AccessRestricted,
   ApiUnavailable,
   FmlFrame,
-  hasFmlPermission,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+import { hasFmlPermission } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import { getSession } from "@/lib/auth/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;

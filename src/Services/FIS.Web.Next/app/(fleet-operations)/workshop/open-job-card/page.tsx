@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -22,7 +24,9 @@ function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
 }
 
-async function OpenWorkshopJobCardPageContent({
+const OpenWorkshopJobCardPageContent = renderOpenWorkshopJobCardPageContent;
+
+async function renderOpenWorkshopJobCardPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -101,14 +105,14 @@ async function OpenWorkshopJobCardPageContent({
               <div className="vehicle-table-wrapper">
                 <table className="vehicle-table">
                   <caption className="sr-only">Closed workshop entries</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Entry</th>
-                      <th scope="col">Vehicle</th>
-                      <th scope="col">Completed</th>
-                      <th scope="col">Action</th>
-                    </tr>
-                  </thead>
+                  <DataTableHeader
+                    columns={[
+                      { key: "column-1", label: <>Entry</> },
+                      { key: "column-2", label: <>Vehicle</> },
+                      { key: "column-3", label: <>Completed</> },
+                      { key: "column-4", label: <>Action</> },
+                    ]}
+                  />
                   <tbody>
                     {closed.map((entry) => {
                       const vehicle =

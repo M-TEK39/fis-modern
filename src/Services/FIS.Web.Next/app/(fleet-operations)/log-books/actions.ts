@@ -183,14 +183,16 @@ export async function collectLogbooksAction(formData: FormData) {
   const access = await authorizeLogbooks();
   if (!access.ok) redirectWithMessage(path, "error", access.message);
   try {
-    const vmfCodes = formData
-      .getAll("vmfCode")
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value > 0);
+    const vmfCodes = formData.getAll("vmfCode").reduce<number[]>((codes, value) => {
+      const vmfCode = Number(value);
+      if (Number.isInteger(vmfCode) && vmfCode > 0) codes.push(vmfCode);
+      return codes;
+    }, []);
     if (vmfCodes.length === 0) throw new LogbookValidationError("Select at least one vehicle.");
     const base = getWriteInput(formData);
-    for (const vmfCode of [...new Set(vmfCodes)])
-      await createLogbook({ ...base, vmf_code: vmfCode });
+    await Promise.all(
+      [...new Set(vmfCodes)].map((vmfCode) => createLogbook({ ...base, vmf_code: vmfCode })),
+    );
     revalidateLogbookPages();
     redirectWithMessage(
       path,

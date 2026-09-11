@@ -1,5 +1,7 @@
 "use client";
 
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { useState, useTransition } from "react";
 
 import DemoVehicleForm, {
@@ -252,14 +254,14 @@ export default function DemoVehicleSearch({
           <div className="table-wrapper">
             <table className="data-table">
               <caption className="sr-only">Demo vehicle deletion matches</caption>
-              <thead>
-                <tr>
-                  <th scope="col">GG Number</th>
-                  <th scope="col">Reg Number</th>
-                  <th scope="col">Model</th>
-                  <th scope="col">Actions</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>GG Number</> },
+                  { key: "column-2", label: <>Reg Number</> },
+                  { key: "column-3", label: <>Model</> },
+                  { key: "column-4", label: <>Actions</> },
+                ]}
+              />
               <tbody>
                 {matches.map((vehicle) => (
                   <tr key={vehicle.demoVehicleCode}>

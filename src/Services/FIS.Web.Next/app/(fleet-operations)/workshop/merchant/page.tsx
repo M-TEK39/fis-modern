@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -102,7 +104,9 @@ function MerchantForm({ merchant }: Readonly<{ merchant: WorkshopMerchantRecord 
   );
 }
 
-async function WorkshopMerchantPageContent({
+const WorkshopMerchantPageContent = renderWorkshopMerchantPageContent;
+
+async function renderWorkshopMerchantPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -224,15 +228,15 @@ async function WorkshopMerchantPageContent({
               <div className="vehicle-table-wrapper">
                 <table className="vehicle-table">
                   <caption className="sr-only">Workshop merchants</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Merchant ID</th>
-                      <th scope="col">Name</th>
-                      <th scope="col">Telephone</th>
-                      <th scope="col">Fax</th>
-                      <th scope="col">Actions</th>
-                    </tr>
-                  </thead>
+                  <DataTableHeader
+                    columns={[
+                      { key: "column-1", label: <>Merchant ID</> },
+                      { key: "column-2", label: <>Name</> },
+                      { key: "column-3", label: <>Telephone</> },
+                      { key: "column-4", label: <>Fax</> },
+                      { key: "column-5", label: <>Actions</> },
+                    ]}
+                  />
                   <tbody>
                     {merchantPage.items.map((merchant) => (
                       <tr key={merchant.merchantCode}>

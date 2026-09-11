@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -11,11 +13,11 @@ import {
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import { getSession } from "@/lib/auth/session";
 import {
-  hasTroubleshootingRole,
   StatusCard,
   TroubleshootMenu,
   TroubleshootShell,
 } from "@/app/(fleet-operations)/troubleshoot/_components";
+import { hasTroubleshootingRole } from "@/app/(fleet-operations)/troubleshoot/_utils";
 import { saveApproverRanksAction } from "@/app/(fleet-operations)/troubleshoot/actions";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -23,7 +25,9 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
-async function ApproverRanksPageContent({
+const ApproverRanksPageContent = renderApproverRanksPageContent;
+
+async function renderApproverRanksPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -120,18 +124,19 @@ async function ApproverRanksPageContent({
             <div className="vehicle-table-wrapper">
               <table className="vehicle-table">
                 <caption className="sr-only">Trip approver ranks</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Rank name</th>
-                    <th scope="col">Description</th>
-                  </tr>
-                </thead>
+                <DataTableHeader
+                  columns={[
+                    { key: "column-1", label: <>Rank name</> },
+                    { key: "column-2", label: <>Description</> },
+                  ]}
+                />
                 <tbody>
                   {ranks.items.map((rank) => (
                     <tr key={rank.id}>
                       <td>
                         <input
                           className="form-input"
+                          aria-label={`Rank name for rank ${rank.id}`}
                           name="rankName"
                           defaultValue={rank.rankName ?? ""}
                           maxLength={200}
@@ -142,6 +147,7 @@ async function ApproverRanksPageContent({
                       <td>
                         <input
                           className="form-input"
+                          aria-label={`Description for rank ${rank.id}`}
                           name="description"
                           defaultValue={rank.description ?? rank.rankName ?? ""}
                           maxLength={500}
@@ -153,8 +159,12 @@ async function ApproverRanksPageContent({
                   {add ? (
                     <tr>
                       <td>
+                        <label className="sr-only" htmlFor="new-approver-rank-name">
+                          Rank name
+                        </label>
                         <input
                           className="form-input"
+                          id="new-approver-rank-name"
                           name="rankName"
                           placeholder="Rank name"
                           maxLength={200}
@@ -163,8 +173,12 @@ async function ApproverRanksPageContent({
                         <input type="hidden" name="rankId" value="0" />
                       </td>
                       <td>
+                        <label className="sr-only" htmlFor="new-approver-rank-description">
+                          Description
+                        </label>
                         <input
                           className="form-input"
+                          id="new-approver-rank-description"
                           name="description"
                           placeholder="Description"
                           maxLength={500}

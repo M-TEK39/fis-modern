@@ -38,7 +38,9 @@ function pageHref(values: Record<string, string | number | undefined>, page: num
   return `/log-sheets/delete${query ? `?${query}` : ""}`;
 }
 
-async function LogsheetDeletePageContent({
+const LogsheetDeletePageContent = renderLogsheetDeletePageContent;
+
+async function renderLogsheetDeletePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogsheetSession();

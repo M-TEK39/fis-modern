@@ -1,17 +1,12 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 
 import { saveMonitorAction } from "@/app/(fleet-operations)/monitor/actions";
 import { MenuSection } from "@/components/ui/menu-section";
 import type { MonitorDriverOption, MonitorRecord } from "@/lib/api/fleet-operations/api-monitor";
 import type { SiteRecord } from "@/lib/api/reference-data/api-sites";
-
-export function valueOrDash(value: string | number | null | undefined) {
-  return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
-}
-
-export function formatDate(value: string | null | undefined) {
-  return value?.slice(0, 10) || "-";
-}
+import { formatDate, queryText, valueOrDash } from "@/app/(fleet-operations)/monitor/_utils";
 
 export function MonitorShell({
   title,
@@ -40,8 +35,6 @@ export function MonitorShell({
 export function MonitorNotice({
   query,
 }: Readonly<{ query: Record<string, string | string[] | undefined> }>) {
-  const queryText = (value: string | string[] | undefined) =>
-    Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
   const saved = valueOrDash(queryText(query.saved));
   const updated = valueOrDash(queryText(query.updated));
   const error = valueOrDash(queryText(query.error));
@@ -89,17 +82,17 @@ export function MonitorTable({
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">{title}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Reference</th>
-            <th scope="col">Capture date</th>
-            <th scope="col">Vehicle</th>
-            <th scope="col">Inquiry type</th>
-            <th scope="col">Driver</th>
-            <th scope="col">Site</th>
-            <th scope="col">Description</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Reference</> },
+            { key: "column-2", label: <>Capture date</> },
+            { key: "column-3", label: <>Vehicle</> },
+            { key: "column-4", label: <>Inquiry type</> },
+            { key: "column-5", label: <>Driver</> },
+            { key: "column-6", label: <>Site</> },
+            { key: "column-7", label: <>Description</> },
+          ]}
+        />
         <tbody>
           {records.map((record) => (
             <tr key={record.monitorCode}>
@@ -292,17 +285,17 @@ export function ReportTable({
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Monitor report results</caption>
-        <thead>
-          <tr>
-            <th scope="col">Reference</th>
-            <th scope="col">Capture date</th>
-            <th scope="col">Vehicle</th>
-            <th scope="col">Inquiry type</th>
-            <th scope="col">Driver</th>
-            <th scope="col">Site</th>
-            <th scope="col">Description</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Reference</> },
+            { key: "column-2", label: <>Capture date</> },
+            { key: "column-3", label: <>Vehicle</> },
+            { key: "column-4", label: <>Inquiry type</> },
+            { key: "column-5", label: <>Driver</> },
+            { key: "column-6", label: <>Site</> },
+            { key: "column-7", label: <>Description</> },
+          ]}
+        />
         <tbody>
           {rows.map((row) => (
             <tr key={row.monitorCode}>

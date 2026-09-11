@@ -23,9 +23,12 @@ import {
   getTrackingDeptPeriodReport,
   TrackingApiError,
 } from "@/lib/api/fleet-operations/api-tracking";
+import TrackingScopeFieldset from "@/components/ui/tracking-scope-fieldset";
 import { getDepartments } from "@/lib/api/reference-data/api-departments";
 
-async function TrackingDeptPeriodReportPageContent({
+const TrackingDeptPeriodReportPageContent = renderTrackingDeptPeriodReportPageContent;
+
+async function renderTrackingDeptPeriodReportPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getTrackingSession();
@@ -59,17 +62,11 @@ async function TrackingDeptPeriodReportPageContent({
       >
         <TrackingNotice query={query} />
         <form className="vehicle-status-maintenance-panel" method="get">
-          <fieldset className="vehicle-search-options">
-            <legend>Scope</legend>
-            <label className="vehicle-checkbox-label">
-              <input type="radio" name="scope" value="all" defaultChecked={scope === "all"} /> All
-              departments
-            </label>
-            <label className="vehicle-checkbox-label">
-              <input type="radio" name="scope" value="one" defaultChecked={scope !== "all"} /> Only
-              one department
-            </label>
-          </fieldset>
+          <TrackingScopeFieldset
+            selectedScope={scope}
+            allLabel="All departments"
+            oneLabel="Only one department"
+          />
           <div className="form-field">
             <label className="form-label" htmlFor="tracking-department">
               Department

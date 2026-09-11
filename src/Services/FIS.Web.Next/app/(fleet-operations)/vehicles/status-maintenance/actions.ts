@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
 import {
   changeVehicleStatusAgainstApi,
@@ -274,9 +275,11 @@ export async function changeVehicleStatusAction(
     );
 
     if (endOdometer !== null || comments) {
-      console.warn(
-        "Vehicle status API does not persist the status-maintenance odometer/comments fields; status update completed.",
-      );
+      after(() => {
+        console.warn(
+          "Vehicle status API does not persist the status-maintenance odometer/comments fields; status update completed.",
+        );
+      });
     }
 
     redirectUrl = buildRedirectUrl(vmfCode, getSafeReturnUrl(formData));

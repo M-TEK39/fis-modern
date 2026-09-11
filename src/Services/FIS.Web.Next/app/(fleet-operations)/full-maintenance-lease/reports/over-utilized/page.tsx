@@ -6,17 +6,19 @@ import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   FmlFrame,
+} from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+import {
   formatCurrency,
   formatDate,
   hasFmlPermission,
-} from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+} from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import {
   ReportEmpty,
   ReportFooter,
   ReportTable,
-  reportError,
-  valueOrDash,
 } from "@/app/(fleet-operations)/full-maintenance-lease/reports/_components";
+import { valueOrDash } from "@/app/(fleet-operations)/full-maintenance-lease/reports/_utils";
+import { reportError } from "@/app/(fleet-operations)/full-maintenance-lease/reports/_route-helpers";
 import { FmlApiError, getFmlOverUtilized } from "@/lib/api/finance/api-fml";
 import { getSession } from "@/lib/auth/session";
 
@@ -89,8 +91,17 @@ async function FmlOverUtilizedPageContent({
               "Purchase Amount",
             ]}
           >
-            {report.vehicles.map((row, index) => (
-              <tr key={`${row.ggNumber ?? "row"}-${row.month ?? "month"}-${index}`}>
+            {report.vehicles.map((row) => (
+              <tr
+                key={JSON.stringify([
+                  row.vehicleCounter,
+                  row.ggNumber,
+                  row.gpNumber,
+                  row.hiredFrom,
+                  row.month,
+                  row.projectedEndDate,
+                ])}
+              >
                 <td>{valueOrDash(row.vehicleCounter)}</td>
                 <td>{valueOrDash(row.ggNumber)}</td>
                 <td>{valueOrDash(row.gpNumber)}</td>

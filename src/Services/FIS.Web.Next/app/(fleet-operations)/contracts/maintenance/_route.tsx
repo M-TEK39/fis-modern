@@ -1,11 +1,15 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { ClipboardList } from "lucide-react";
 
 import ModulePageHeader from "@/components/app-shell/module-page-header";
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { runContractAction } from "@/app/(fleet-operations)/contracts/actions";
+import { ContractVehicleSearchFieldset } from "@/app/(fleet-operations)/contracts/_components";
 import {
   canCloseActiveContract,
   canEditContract,
@@ -17,13 +21,11 @@ import {
 } from "@/app/(fleet-operations)/contracts/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
-  ContractApiError,
   getContractPage,
-  searchContractVehicles,
   type ContractRecord,
   type ContractVehicleSearchResult,
 } from "@/lib/api/finance/api-contracts";
-import { SiteApiError, getSites, type SiteRecord } from "@/lib/api/reference-data/api-sites";
+import type { SiteRecord } from "@/lib/api/reference-data/api-sites";
 import { getSession } from "@/lib/auth/session";
 import {
   Pagination,
@@ -32,6 +34,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+
+import { loadContractMaintenanceData } from "./_data";
 
 export type ContractMaintenancePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -146,17 +150,12 @@ function SearchForm({
         const value = getQueryValue(query[key]);
         return value ? <input key={key} name={key} type="hidden" value={value} /> : null;
       })}
-      <fieldset className="vehicle-search-options">
-        <legend>Select the vehicle to manage</legend>
-        <label className="vehicle-checkbox-label">
-          <input name="searchType" type="radio" value="GG" defaultChecked={searchType === "GG"} />
-          GG Number
-        </label>
-        <label className="vehicle-checkbox-label">
-          <input name="searchType" type="radio" value="GP" defaultChecked={searchType === "GP"} />
-          Registration Number
-        </label>
-      </fieldset>
+      <ContractVehicleSearchFieldset
+        ggLabel="GG Number"
+        legend="Select the vehicle to manage"
+        registrationLabel="Registration Number"
+        searchType={searchType}
+      />
       <div className="vehicle-search-row">
         <label className="sr-only" htmlFor="contract-vehicle-search">
           {searchType === "GG" ? "GG number" : "Registration number"}
@@ -322,13 +321,13 @@ function VehicleSearchResults({ vehicles }: Readonly<{ vehicles: ContractVehicle
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
           <caption className="sr-only">Vehicles matched by contract search</caption>
-          <thead>
-            <tr>
-              <th scope="col">GG number</th>
-              <th scope="col">Registration</th>
-              <th scope="col">Action</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>GG number</> },
+              { key: "column-2", label: <>Registration</> },
+              { key: "column-3", label: <>Action</> },
+            ]}
+          />
           <tbody>
             {vehicles.slice(0, 10).map((vehicle) => (
               <tr key={vehicle.vmfCode}>
@@ -393,18 +392,18 @@ function ContractTable({
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Vehicle contracts</caption>
-        <thead>
-          <tr>
-            <th scope="col">Contract</th>
-            <th scope="col">Vehicle</th>
-            <th scope="col">Site</th>
-            <th scope="col">Driver</th>
-            <th scope="col">Start date</th>
-            <th scope="col">Target return</th>
-            <th scope="col">Status</th>
-            <th scope="col">Action</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Contract</> },
+            { key: "column-2", label: <>Vehicle</> },
+            { key: "column-3", label: <>Site</> },
+            { key: "column-4", label: <>Driver</> },
+            { key: "column-5", label: <>Start date</> },
+            { key: "column-6", label: <>Target return</> },
+            { key: "column-7", label: <>Status</> },
+            { key: "column-8", label: <>Action</> },
+          ]}
+        />
         <tbody>
           {contracts.map((contract) => (
             <tr key={contract.contractCode}>
@@ -511,25 +510,136 @@ function ContractTable({
 
 function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">API unavailable</p>
-      <h2>Contract maintenance could not be loaded.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/login">
-          Sign in
-        </Link>
+    <ApiUnavailableCard
+      message="Contract maintenance could not be loaded."
+      retryHref={routePath}
+      secondaryHref="/login"
+      secondaryLabel="Sign in"
+      showIcon={false}
+    />
+  );
+}
+
+function ContractResultsSection({
+  pageData,
+  query,
+  session,
+}: Readonly<{
+  pageData: Awaited<ReturnType<typeof getContractPage>>;
+  query: Record<string, string | string[] | undefined>;
+  session: ContractSession;
+}>) {
+  return (
+    <section className="vehicle-status-maintenance-panel" aria-labelledby="contract-results-title">
+      <div className="vehicle-form-section-header">
+        <div>
+          <p className="eyebrow">
+            {pageData.totalRecords} record{pageData.totalRecords === 1 ? "" : "s"}
+          </p>
+          <h2 id="contract-results-title">Existing contracts</h2>
+        </div>
       </div>
+      <ContractTable contracts={pageData.items} session={session} />
+      <Pagination className="mt-4" aria-label="Contract results pages">
+        <PaginationContent className="flex-wrap justify-center gap-2">
+          <PaginationItem>
+            <PaginationPrevious
+              aria-disabled={pageData.page <= 1}
+              className={pageData.page <= 1 ? "pointer-events-none opacity-50" : undefined}
+              href={
+                pageData.page <= 1
+                  ? buildPageHref(query, pageData.page)
+                  : buildPageHref(query, pageData.page - 1)
+              }
+              tabIndex={pageData.page <= 1 ? -1 : undefined}
+            />
+          </PaginationItem>
+          <PaginationItem>
+            <span className="inline-flex h-9 items-center whitespace-nowrap px-2 text-sm font-medium text-muted-foreground">
+              Page {pageData.page} of {pageData.totalPages}
+            </span>
+          </PaginationItem>
+          <PaginationItem>
+            <PaginationNext
+              aria-disabled={pageData.page >= pageData.totalPages}
+              className={
+                pageData.page >= pageData.totalPages ? "pointer-events-none opacity-50" : undefined
+              }
+              href={
+                pageData.page >= pageData.totalPages
+                  ? buildPageHref(query, pageData.page)
+                  : buildPageHref(query, pageData.page + 1)
+              }
+              tabIndex={pageData.page >= pageData.totalPages ? -1 : undefined}
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
     </section>
   );
 }
 
-async function ContractMaintenancePageContent({
+function ContractMaintenancePageView({
+  filteredVehicles,
+  notice,
+  pageData,
+  query,
+  searchQuery,
+  searchType,
+  siteLookupUnavailable,
+  sites,
+  session,
+}: Readonly<{
+  filteredVehicles: ContractVehicleSearchResult[];
+  notice?: string;
+  pageData: Awaited<ReturnType<typeof getContractPage>>;
+  query: Record<string, string | string[] | undefined>;
+  searchQuery: string;
+  searchType: "GG" | "GP";
+  siteLookupUnavailable: boolean;
+  sites: SiteRecord[];
+  session: ContractSession;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="contract-maintenance-title">
+        <ModulePageHeader
+          icon={ClipboardList}
+          eyebrow="Contract maintenance"
+          title="Vehicle Contract Maintenance"
+          titleId="contract-maintenance-title"
+          description="Search a vehicle and manage its existing or new legacy contract."
+          actions={
+            <Link className="button button-secondary" href="/contracts">
+              Contracts Menu
+            </Link>
+          }
+        />
+        {notice ? (
+          <div
+            className={getQueryValue(query.error) ? "notice notice-error" : "notice notice-success"}
+            role={getQueryValue(query.error) ? "alert" : "status"}
+          >
+            {notice}
+          </div>
+        ) : null}
+        <SearchForm searchType={searchType} searchQuery={searchQuery} query={query} />
+        <VehicleSearchResults vehicles={filteredVehicles} />
+        <Filters query={query} siteLookupUnavailable={siteLookupUnavailable} sites={sites} />
+        <ContractResultsSection pageData={pageData} query={query} session={session} />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const ContractMaintenancePageContent = renderContractMaintenancePageContent;
+
+async function renderContractMaintenancePageContent({
   searchParams,
   routePath = "/contracts/maintenance",
 }: ContractMaintenancePageProps) {
@@ -580,147 +690,41 @@ async function ContractMaintenancePageContent({
         : getQueryValue(query.success)
           ? `Contract ${getQueryValue(query.success)} successfully.`
           : getQueryValue(query.error);
-
-  try {
-    const [pageData, vehicles] = await Promise.all([
-      getContractPage({
-        page,
-        pageSize: 24,
-        statusCode: statusFilter,
-        siteCode,
-        stillCurrent: getQueryValue(query.stillCurrent),
-        startDateFrom: getQueryValue(query.startDateFrom),
-        startDateTo: getQueryValue(query.startDateTo),
-      }),
-      searchQuery
-        ? searchContractVehicles(searchQuery)
-        : Promise.resolve([] as ContractVehicleSearchResult[]),
-    ]);
-    let sites: SiteRecord[] = [];
-    let siteLookupUnavailable = false;
-    try {
-      sites = await getSites();
-    } catch (error) {
-      if (error instanceof SiteApiError) {
-        siteLookupUnavailable = true;
-      } else {
-        throw error;
-      }
-    }
-    const filteredVehicles = searchQuery
-      ? vehicles.filter((vehicle) =>
-          (searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber)
-            ?.toLocaleLowerCase()
-            .includes(searchQuery.toLocaleLowerCase()),
-        )
-      : [];
+  const data = await loadContractMaintenanceData({
+    page,
+    searchQuery,
+    searchType,
+    siteCode: siteCode ?? undefined,
+    startDateFrom: getQueryValue(query.startDateFrom),
+    startDateTo: getQueryValue(query.startDateTo),
+    statusFilter: statusFilter ?? undefined,
+    stillCurrent: getQueryValue(query.stillCurrent),
+  });
+  if (data.kind === "unauthorized")
     return (
       <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="contract-maintenance-title">
-          <ModulePageHeader
-            icon={ClipboardList}
-            eyebrow="Contract maintenance"
-            title="Vehicle Contract Maintenance"
-            titleId="contract-maintenance-title"
-            description="Search a vehicle and manage its existing or new legacy contract."
-            actions={
-              <Link className="button button-secondary" href="/contracts">
-                Contracts Menu
-              </Link>
-            }
-          />
-          {notice ? (
-            <div
-              className={
-                getQueryValue(query.error) ? "notice notice-error" : "notice notice-success"
-              }
-              role={getQueryValue(query.error) ? "alert" : "status"}
-            >
-              {notice}
-            </div>
-          ) : null}
-          <SearchForm searchType={searchType} searchQuery={searchQuery} query={query} />
-          <VehicleSearchResults vehicles={filteredVehicles} />
-          <Filters query={query} siteLookupUnavailable={siteLookupUnavailable} sites={sites} />
-          <section
-            className="vehicle-status-maintenance-panel"
-            aria-labelledby="contract-results-title"
-          >
-            <div className="vehicle-form-section-header">
-              <div>
-                <p className="eyebrow">
-                  {pageData.totalRecords} record{pageData.totalRecords === 1 ? "" : "s"}
-                </p>
-                <h2 id="contract-results-title">Existing contracts</h2>
-              </div>
-            </div>
-            <ContractTable contracts={pageData.items} session={session} />
-            <Pagination className="mt-4" aria-label="Contract results pages">
-              <PaginationContent className="flex-wrap justify-center gap-2">
-                <PaginationItem>
-                  <PaginationPrevious
-                    aria-disabled={pageData.page <= 1}
-                    className={pageData.page <= 1 ? "pointer-events-none opacity-50" : undefined}
-                    href={
-                      pageData.page <= 1
-                        ? buildPageHref(query, pageData.page)
-                        : buildPageHref(query, pageData.page - 1)
-                    }
-                    tabIndex={pageData.page <= 1 ? -1 : undefined}
-                  />
-                </PaginationItem>
-                <PaginationItem>
-                  <span className="inline-flex h-9 items-center whitespace-nowrap px-2 text-sm font-medium text-muted-foreground">
-                    Page {pageData.page} of {pageData.totalPages}
-                  </span>
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationNext
-                    aria-disabled={pageData.page >= pageData.totalPages}
-                    className={
-                      pageData.page >= pageData.totalPages
-                        ? "pointer-events-none opacity-50"
-                        : undefined
-                    }
-                    href={
-                      pageData.page >= pageData.totalPages
-                        ? buildPageHref(query, pageData.page)
-                        : buildPageHref(query, pageData.page + 1)
-                    }
-                    tabIndex={pageData.page >= pageData.totalPages ? -1 : undefined}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </section>
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-          </div>
-        </section>
+        <SessionRecovery returnPath={routePath} />
       </main>
     );
-  } catch (error) {
-    if (
-      (error instanceof ContractApiError || error instanceof SiteApiError) &&
-      error.reason === "unauthorized"
-    )
-      return (
-        <main className="page-shell vehicle-page-shell">
-          <SessionRecovery returnPath={routePath} />
-        </main>
-      );
-    console.error(
-      "FIS contract maintenance request failed",
-      error instanceof Error ? error.message : "unknown error",
-    );
+  if (data.kind === "error")
     return (
       <main className="page-shell vehicle-page-shell">
         <ApiUnavailable routePath={routePath} />
       </main>
     );
-  }
+  return (
+    <ContractMaintenancePageView
+      filteredVehicles={data.filteredVehicles}
+      notice={notice}
+      pageData={data.pageData}
+      query={query}
+      searchQuery={searchQuery}
+      searchType={searchType}
+      siteLookupUnavailable={data.siteLookupUnavailable}
+      sites={data.sites}
+      session={session}
+    />
+  );
 }
 
 export function ContractMaintenanceRoute(props: ContractMaintenancePageProps) {

@@ -1,8 +1,11 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import { FieldSet } from "@/components/ui/field";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   AuctionApiError,
@@ -105,7 +108,7 @@ function SearchForm({
 }: Readonly<{ searchType: AuctionSearchType; searchQuery: string }>) {
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
-      <fieldset className="vehicle-search-options">
+      <FieldSet className="vehicle-search-options">
         <legend>Search by</legend>
         <label className="vehicle-checkbox-label">
           <input type="radio" name="searchType" value="GG" defaultChecked={searchType === "GG"} />{" "}
@@ -115,7 +118,7 @@ function SearchForm({
           <input type="radio" name="searchType" value="GP" defaultChecked={searchType === "GP"} />{" "}
           GP
         </label>
-      </fieldset>
+      </FieldSet>
       <div className="vehicle-search-row">
         <label className="sr-only" htmlFor="auction-delete-search">
           {searchType === "GG" ? "GG number" : "GP number"}
@@ -164,14 +167,14 @@ function AuctionRows({
     <div className="vehicle-table-wrapper" aria-live="polite">
       <table className="vehicle-table">
         <caption className="sr-only">Auction records available for deletion</caption>
-        <thead>
-          <tr>
-            <th scope="col">Number</th>
-            <th scope="col">Auction Number</th>
-            <th scope="col">Auction Garage</th>
-            <th scope="col">Action</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Number</> },
+            { key: "column-2", label: <>Auction Number</> },
+            { key: "column-3", label: <>Auction Garage</> },
+            { key: "column-4", label: <>Action</> },
+          ]}
+        />
         <tbody>
           {auctions.map((auction) => (
             <tr key={auction.auctionCode}>

@@ -85,7 +85,9 @@ function filterReport(
   return { records: [], error: "Unknown report type." };
 }
 
-async function LogsheetCapturedReportPageContent({
+const LogsheetCapturedReportPageContent = renderLogsheetCapturedReportPageContent;
+
+async function renderLogsheetCapturedReportPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogsheetSession();

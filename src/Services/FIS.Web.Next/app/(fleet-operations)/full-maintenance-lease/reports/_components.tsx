@@ -4,20 +4,7 @@ import type { ReactNode } from "react";
 import {
   ApiUnavailable,
   FmlFrame,
-  formatCurrency,
-  formatDate,
-  valueOrDash,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
-
-export function reportError(error: unknown, message: string) {
-  return (
-    <FmlFrame title="FML Report" description="The report could not be loaded.">
-      <ApiUnavailable
-        message={error instanceof Error && error.name === "FmlApiError" ? error.message : message}
-      />
-    </FmlFrame>
-  );
-}
 
 export function ReportTable({
   caption,
@@ -64,5 +51,3 @@ export function ReportFooter() {
     </div>
   );
 }
-
-export { formatCurrency, formatDate, valueOrDash };

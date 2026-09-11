@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -9,6 +11,8 @@ import {
   ActionNotice,
   ApiUnavailable,
   FmlFrame,
+} from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+import {
   formatCurrency,
   formatDate,
   getStatusClass,
@@ -16,7 +20,7 @@ import {
   hasFinancialPermission,
   hasFmlPermission,
   vehicleLabel,
-} from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+} from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import {
   DEFAULT_LEASE_TERMS_PAGE_SIZE,
   FmlApiError,
@@ -61,7 +65,9 @@ function workflowMode(
   return "view";
 }
 
-async function FmlTariffQueuePageContent({
+const FmlTariffQueuePageContent = renderFmlTariffQueuePageContent;
+
+async function renderFmlTariffQueuePageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -153,17 +159,17 @@ async function FmlTariffQueuePageContent({
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">FML tariff capture queue</caption>
-            <thead>
-              <tr>
-                <th scope="col">ID</th>
-                <th scope="col">Vehicle</th>
-                <th scope="col">Status</th>
-                <th scope="col">Start</th>
-                <th scope="col">End</th>
-                <th scope="col">Fixed amount</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>ID</> },
+                { key: "column-2", label: <>Vehicle</> },
+                { key: "column-3", label: <>Status</> },
+                { key: "column-4", label: <>Start</> },
+                { key: "column-5", label: <>End</> },
+                { key: "column-6", label: <>Fixed amount</> },
+                { key: "column-7", label: <>Action</> },
+              ]}
+            />
             <tbody>
               {termsPage.items.map((term) => {
                 const mode = workflowMode(term, currentUser, canReview);

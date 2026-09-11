@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
 import {
   ClassApiError,
   DEFAULT_CLASS_PAGE_SIZE,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/api/reference-data/api-classes";
 import { getSession } from "@/lib/auth/session";
 import RouteLoading from "@/components/app-shell/route-loading";
+import { TableHeader } from "@/components/ui/table";
 
 export type ClassListPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -72,21 +74,13 @@ function AccessRestricted() {
 
 function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">API unavailable</p>
-      <h2>Vehicle classes could not be loaded.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/validation-data">
-          Validation Data
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message="Vehicle classes could not be loaded."
+      retryHref={routePath}
+      secondaryHref="/validation-data"
+      secondaryLabel="Validation Data"
+      showIcon={false}
+    />
   );
 }
 
@@ -113,7 +107,7 @@ function ClassTable({ classes, total }: Readonly<{ classes: ClassRecord[]; total
       <div className="table-wrapper">
         <table className="data-table">
           <caption className="sr-only">Legacy vehicle classes</caption>
-          <thead>
+          <TableHeader>
             <tr>
               <th scope="col">Class code</th>
               <th scope="col">Description</th>
@@ -122,7 +116,7 @@ function ClassTable({ classes, total }: Readonly<{ classes: ClassRecord[]; total
               <th scope="col">Months life</th>
               <th scope="col">Actions</th>
             </tr>
-          </thead>
+          </TableHeader>
           <tbody>
             {classes.map((classRecord) => (
               <tr key={classRecord.classCode}>
@@ -210,7 +204,70 @@ function ClassPagination({
   );
 }
 
-async function ClassListPageContent({
+function ClassListView({
+  classPage,
+  error,
+  notice,
+  query,
+  routePath,
+}: Readonly<{
+  classPage: Awaited<ReturnType<typeof getClassesPage>>;
+  error: string | undefined;
+  notice: string | undefined;
+  query: Record<string, string | string[] | undefined>;
+  routePath: string;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="class-list-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Vehicle</p>
+            <h1 id="class-list-title">Class Maintenance</h1>
+            <p>Maintain the complete legacy class record used by vehicle workflows.</p>
+          </div>
+          <div className="button-row">
+            <Link className="button button-primary" href="/Validation/MNT_Class_Add.aspx">
+              Add Class
+            </Link>
+            <Link className="button button-secondary" href="/validation-data">
+              Validation Data
+            </Link>
+          </div>
+        </header>
+        {notice ? (
+          <div
+            className={`notice ${error ? "notice-error" : "notice-success"}`}
+            role={error ? "alert" : "status"}
+          >
+            {notice}
+          </div>
+        ) : null}
+        <ClassTable classes={classPage.items} total={classPage.total} />
+        <ClassPagination
+          routePath={routePath}
+          query={query}
+          page={classPage.page}
+          totalPages={classPage.totalPages}
+        />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const ClassListPageContent = renderClassListPageContent;
+
+async function renderClassListPageContent({
   searchParams,
   routePath = "/validation-data/classes",
 }: ClassListPageProps) {
@@ -254,50 +311,13 @@ async function ClassListPageContent({
             ? "Class deleted successfully."
             : error;
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="class-list-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Vehicle</p>
-              <h1 id="class-list-title">Class Maintenance</h1>
-              <p>Maintain the complete legacy class record used by vehicle workflows.</p>
-            </div>
-            <div className="button-row">
-              <Link className="button button-primary" href="/Validation/MNT_Class_Add.aspx">
-                Add Class
-              </Link>
-              <Link className="button button-secondary" href="/validation-data">
-                Validation Data
-              </Link>
-            </div>
-          </header>
-          {notice ? (
-            <div
-              className={`notice ${error ? "notice-error" : "notice-success"}`}
-              role={error ? "alert" : "status"}
-            >
-              {notice}
-            </div>
-          ) : null}
-          <ClassTable classes={classPage.items} total={classPage.total} />
-          <ClassPagination
-            routePath={routePath}
-            query={query}
-            page={classPage.page}
-            totalPages={classPage.totalPages}
-          />
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <ClassListView
+        classPage={classPage}
+        error={error}
+        notice={notice}
+        query={query}
+        routePath={routePath}
+      />
     );
   } catch (caughtError) {
     if (caughtError instanceof ClassApiError && caughtError.reason === "unauthorized")

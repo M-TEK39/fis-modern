@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -132,14 +134,14 @@ function DepartmentTable({ departments }: Readonly<{ departments: TrafficDeptRec
     <div className="vehicle-table-wrapper" aria-live="polite">
       <table className="vehicle-table">
         <caption className="sr-only">Traffic departments</caption>
-        <thead>
-          <tr>
-            <th scope="col">Traffic Dept Name</th>
-            <th scope="col">Responsible Person</th>
-            <th scope="col">Telephone</th>
-            <th scope="col">Action</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Traffic Dept Name</> },
+            { key: "column-2", label: <>Responsible Person</> },
+            { key: "column-3", label: <>Telephone</> },
+            { key: "column-4", label: <>Action</> },
+          ]}
+        />
         <tbody>
           {departments.map((dept) => (
             <tr key={dept.trafficDeptCode}>
@@ -188,7 +190,9 @@ function ApiUnavailable() {
   );
 }
 
-async function TrafficDeptPageContent({
+const TrafficDeptPageContent = renderTrafficDeptPageContent;
+
+async function renderTrafficDeptPageContent({
   searchParams,
   routePath = "/fines/traffic-dept",
 }: TrafficDeptPageProps) {
@@ -326,14 +330,4 @@ export default function TrafficDeptPage(props: TrafficDeptPageProps) {
       <TrafficDeptPageContent {...props} />
     </StreamedRoute>
   );
-}
-
-type LegacyTrafficDeptPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyTrafficDeptPage(routePath: string) {
-  return function LegacyTrafficDeptPage({ searchParams }: Readonly<LegacyTrafficDeptPageProps>) {
-    return <TrafficDeptPage routePath={routePath} searchParams={searchParams} />;
-  };
 }

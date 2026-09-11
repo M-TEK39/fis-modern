@@ -1,4 +1,4 @@
-import { type ReportQuery } from "@/app/(fleet-operations)/reports/_components";
+import { type ReportQuery } from "@/app/(fleet-operations)/reports/_utils";
 import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/_route";
 
 export default function LegacyVehicleReportsPage({

@@ -94,7 +94,9 @@ function TrackingHistoryPagination({
   );
 }
 
-async function TrackingMaintenancePageContent({
+const TrackingMaintenancePageContent = renderTrackingMaintenancePageContent;
+
+async function renderTrackingMaintenancePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getTrackingSession();

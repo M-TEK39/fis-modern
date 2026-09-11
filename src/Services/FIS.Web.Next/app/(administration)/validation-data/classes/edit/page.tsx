@@ -34,7 +34,32 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function ClassEditPageContent({ searchParams }: ClassEditPageProps) {
+function ClassEditView({
+  classCode,
+  classRecord,
+}: Readonly<{ classCode: number; classRecord: Awaited<ReturnType<typeof getClass>> }>) {
+  if (!classRecord) return null;
+
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="class-edit-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Vehicle</p>
+            <h1 id="class-edit-title">Edit Class</h1>
+            <p>Update class {classCode} without dropping any legacy class fields.</p>
+          </div>
+          <Link className="button button-secondary" href="/Validation/MNT_Class.aspx">
+            Class Maintenance
+          </Link>
+        </header>
+        <ClassForm action={updateClassAction} classRecord={classRecord} mode="update" />
+      </section>
+    </main>
+  );
+}
+
+async function renderClassEditPage({ searchParams }: ClassEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -79,23 +104,7 @@ async function ClassEditPageContent({ searchParams }: ClassEditPageProps) {
           <ErrorCard message={`Class ${classCode} was not found.`} />
         </main>
       );
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="class-edit-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Vehicle</p>
-              <h1 id="class-edit-title">Edit Class</h1>
-              <p>Update class {classCode} without dropping any legacy class fields.</p>
-            </div>
-            <Link className="button button-secondary" href="/Validation/MNT_Class.aspx">
-              Class Maintenance
-            </Link>
-          </header>
-          <ClassForm action={updateClassAction} classRecord={classRecord} mode="update" />
-        </section>
-      </main>
-    );
+    return <ClassEditView classCode={classCode} classRecord={classRecord} />;
   } catch (error) {
     if (error instanceof ClassApiError && error.reason === "unauthorized")
       return (
@@ -121,12 +130,6 @@ async function ClassEditPageContent({ searchParams }: ClassEditPageProps) {
   }
 }
 
-export default function ClassEditPage(
-  props: NonNullable<Parameters<typeof ClassEditPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <ClassEditPageContent {...props} />
-    </Suspense>
-  );
+export default function ClassEditPage(props: ClassEditPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderClassEditPage(props)}</Suspense>;
 }

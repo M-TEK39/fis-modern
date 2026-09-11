@@ -40,7 +40,9 @@ function pageHref(values: Record<string, string | number | undefined>, page: num
   return `/log-sheets/edit${query ? `?${query}` : ""}`;
 }
 
-async function LogsheetEditPageContent({
+const LogsheetEditPageContent = renderLogsheetEditPageContent;
+
+async function renderLogsheetEditPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogsheetSession();

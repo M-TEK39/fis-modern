@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -22,7 +24,9 @@ function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
 }
 
-async function WorkshopEntryDeletePageContent({
+const WorkshopEntryDeletePageContent = renderWorkshopEntryDeletePageContent;
+
+async function renderWorkshopEntryDeletePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -111,14 +115,14 @@ async function WorkshopEntryDeletePageContent({
               <div className="vehicle-table-wrapper">
                 <table className="vehicle-table">
                   <caption className="sr-only">Workshop entries available for deletion</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Entry</th>
-                      <th scope="col">Vehicle</th>
-                      <th scope="col">Received</th>
-                      <th scope="col">Action</th>
-                    </tr>
-                  </thead>
+                  <DataTableHeader
+                    columns={[
+                      { key: "column-1", label: <>Entry</> },
+                      { key: "column-2", label: <>Vehicle</> },
+                      { key: "column-3", label: <>Received</> },
+                      { key: "column-4", label: <>Action</> },
+                    ]}
+                  />
                   <tbody>
                     {workshops.map((entry) => {
                       const vehicle =

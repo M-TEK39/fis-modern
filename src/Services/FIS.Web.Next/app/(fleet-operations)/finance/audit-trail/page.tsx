@@ -11,8 +11,8 @@ import {
   FinanceMenuSection,
   FinanceRestricted,
   FinanceUnavailable,
-  hasFinanceRole,
 } from "@/app/(fleet-operations)/finance/_components";
+import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
 import { getSession } from "@/lib/auth/session";
 
 async function FinanceAuditTrailContent() {

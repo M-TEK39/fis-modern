@@ -108,7 +108,9 @@ function statusMessage(query: Record<string, string | string[] | undefined>) {
   return key ? { key, value: queryValue(query[key]) } : null;
 }
 
-async function LogbookDeletePageContent({
+const LogbookDeletePageContent = renderLogbookDeletePageContent;
+
+async function renderLogbookDeletePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogbookSession();

@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_components";
+import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
 import { activateBasSegments, FinanceApiError, importBas } from "@/lib/api/finance/api-finance";
 import { getSession } from "@/lib/auth/session";
 
@@ -111,10 +111,11 @@ export async function activateBasSegmentsAction(formData: FormData) {
       ),
     );
 
-  const segmentCodes = formData
-    .getAll("segmentCode")
-    .map((value) => (typeof value === "string" ? Number(value) : NaN))
-    .filter((value) => Number.isSafeInteger(value) && value > 0);
+  const segmentCodes: number[] = [];
+  for (const value of formData.getAll("segmentCode")) {
+    const code = typeof value === "string" ? Number(value) : NaN;
+    if (Number.isSafeInteger(code) && code > 0) segmentCodes.push(code);
+  }
   if (segmentCodes.length === 0)
     redirect(
       resultPath(

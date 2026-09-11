@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -6,6 +8,7 @@ import { Suspense } from "react";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import StatusCardView from "@/components/app-shell/status-card";
 import { createExtraCodeAction } from "@/app/(administration)/validation-data/extras/actions";
 import ExtraCodeForm from "@/app/(administration)/validation-data/extras/extra-code-form";
 import {
@@ -55,18 +58,13 @@ function ErrorCard({
   routePath = "/validation-data/extras",
 }: Readonly<{ message: string; routePath?: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">Access restricted</p>
-      <h2>{message}</h2>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/validation-data">
-          Validation Data
-        </Link>
-      </div>
-    </section>
+    <StatusCardView
+      title="Access restricted"
+      message={message}
+      retryHref={routePath}
+      secondaryHref="/validation-data"
+      secondaryLabel="Validation Data"
+    />
   );
 }
 
@@ -98,13 +96,13 @@ function ExtraCodeTable({
       <div className="table-wrapper">
         <table className="data-table">
           <caption className="sr-only">Optional extras</caption>
-          <thead>
-            <tr>
-              <th scope="col">Extra code</th>
-              <th scope="col">Extra description</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Extra code</> },
+              { key: "column-2", label: <>Extra description</> },
+              { key: "column-3", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {extras.map((extra) => (
               <tr key={extra.extraCode}>
@@ -184,6 +182,91 @@ function Pagination({
   );
 }
 
+function ExtraCodeListView({
+  extraPage,
+  error,
+  notice,
+  query,
+  routePath,
+  searchTerm,
+}: Readonly<{
+  extraPage: Awaited<ReturnType<typeof getExtraCodesPage>>;
+  error: string | undefined;
+  notice: string | undefined;
+  query: Record<string, string | string[] | undefined>;
+  routePath: string;
+  searchTerm: string;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="extra-code-list-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Vehicle</p>
+            <h1 id="extra-code-list-title">Optional Extras Maintenance</h1>
+            <p>Maintain the optional extras used by vehicle data and job-card workflows.</p>
+          </div>
+          <div className="button-row">
+            <Link className="button button-secondary" href="/validation-data">
+              Validation Data
+            </Link>
+          </div>
+        </header>
+        {notice ? (
+          <div
+            className={`notice ${error ? "notice-error" : "notice-success"}`}
+            role={error ? "alert" : "status"}
+          >
+            {notice}
+          </div>
+        ) : null}
+        <form className="vehicle-quick-search-form" method="get" action={routePath}>
+          <div className="field">
+            <label htmlFor="extra-code-search">Search extra descriptions</label>
+            <input
+              id="extra-code-search"
+              name="searchTerm"
+              type="search"
+              defaultValue={searchTerm}
+              placeholder="Enter a description"
+            />
+          </div>
+          <div className="button-row vehicle-quick-search-actions">
+            <button className="button button-primary" type="submit">
+              Search
+            </button>
+            {searchTerm ? (
+              <Link className="button button-secondary" href={routePath}>
+                Clear
+              </Link>
+            ) : null}
+          </div>
+        </form>
+        <ExtraCodeTable extras={extraPage.items} searchTerm={searchTerm} total={extraPage.total} />
+        <Pagination
+          page={extraPage.page}
+          pageSize={extraPage.pageSize}
+          query={query}
+          routePath={routePath}
+          total={extraPage.total}
+          totalPages={extraPage.totalPages}
+        />
+        <ExtraCodeForm action={createExtraCodeAction} />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 async function ExtraCodeListPageContent({
   searchParams,
   routePath = "/validation-data/extras",
@@ -231,76 +314,14 @@ async function ExtraCodeListPageContent({
           ? "Extra deleted successfully."
           : error;
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="extra-code-list-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Vehicle</p>
-              <h1 id="extra-code-list-title">Optional Extras Maintenance</h1>
-              <p>Maintain the optional extras used by vehicle data and job-card workflows.</p>
-            </div>
-            <div className="button-row">
-              <Link className="button button-secondary" href="/validation-data">
-                Validation Data
-              </Link>
-            </div>
-          </header>
-          {notice ? (
-            <div
-              className={`notice ${error ? "notice-error" : "notice-success"}`}
-              role={error ? "alert" : "status"}
-            >
-              {notice}
-            </div>
-          ) : null}
-          <form className="vehicle-quick-search-form" method="get" action={routePath}>
-            <div className="field">
-              <label htmlFor="extra-code-search">Search extra descriptions</label>
-              <input
-                id="extra-code-search"
-                name="searchTerm"
-                type="search"
-                defaultValue={searchTerm}
-                placeholder="Enter a description"
-              />
-            </div>
-            <div className="button-row vehicle-quick-search-actions">
-              <button className="button button-primary" type="submit">
-                Search
-              </button>
-              {searchTerm ? (
-                <Link className="button button-secondary" href={routePath}>
-                  Clear
-                </Link>
-              ) : null}
-            </div>
-          </form>
-          <ExtraCodeTable
-            extras={extraPage.items}
-            searchTerm={searchTerm}
-            total={extraPage.total}
-          />
-          <Pagination
-            page={extraPage.page}
-            pageSize={extraPage.pageSize}
-            query={query}
-            routePath={routePath}
-            total={extraPage.total}
-            totalPages={extraPage.totalPages}
-          />
-          <ExtraCodeForm action={createExtraCodeAction} />
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <ExtraCodeListView
+        extraPage={extraPage}
+        error={error}
+        notice={notice}
+        query={query}
+        routePath={routePath}
+        searchTerm={searchTerm}
+      />
     );
   } catch (caughtError) {
     if (caughtError instanceof ExtraCodeApiError && caughtError.reason === "unauthorized")

@@ -24,7 +24,9 @@ function reportKind(path: string): TaxiReportKind {
   return "logs-requisitions-status";
 }
 
-async function LegacyTaxiRouteContent({ params, searchParams }: LegacyTaxiRouteProps) {
+const LegacyTaxiRouteContent = renderLegacyTaxiRouteContent;
+
+async function renderLegacyTaxiRouteContent({ params, searchParams }: LegacyTaxiRouteProps) {
   const path = (await params).legacyPath.join("/").toLowerCase();
   if (path.includes("doc")) return <TaxiHelpPage />;
   if (

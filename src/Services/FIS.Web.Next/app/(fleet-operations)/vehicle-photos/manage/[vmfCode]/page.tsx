@@ -43,7 +43,9 @@ function StatusCard({ title, message }: Readonly<{ title: string; message: strin
   );
 }
 
-async function VehiclePhotosManagePageContent({ params, searchParams }: PageProps) {
+const VehiclePhotosManagePageContent = renderVehiclePhotosManagePageContent;
+
+async function renderVehiclePhotosManagePageContent({ params, searchParams }: PageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");

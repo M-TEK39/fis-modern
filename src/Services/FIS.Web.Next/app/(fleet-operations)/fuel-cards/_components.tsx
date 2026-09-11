@@ -1,19 +1,12 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 import type { FuelCardRecord } from "@/lib/api/fleet-operations/api-fuel-cards";
 import type { WorkshopVehicle } from "@/lib/api/fleet-operations/api-workshop";
-
-export function valueOrDash(value: string | number | null | undefined) {
-  return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
-}
-
-export function queryValue(value: string | string[] | undefined) {
-  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
-}
-
-export function dateValue(value: string | null | undefined) {
-  return value?.slice(0, 10) || "-";
-}
+import { dateValue, queryValue, valueOrDash } from "./_utils";
 
 export function VehicleSearchForm({
   path,
@@ -22,15 +15,7 @@ export function VehicleSearchForm({
 }: Readonly<{ path: string; type: string; search: string }>) {
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
-      <fieldset className="vehicle-search-options">
-        <legend>Search by</legend>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="type" value="GG" defaultChecked={type !== "GP"} /> GG
-        </label>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="type" value="GP" defaultChecked={type === "GP"} /> GP Number
-        </label>
-      </fieldset>
+      <SearchTypeFieldset selectedType={type} legend="Search by" name="type" gpLabel="GP Number" />
       <div className="vehicle-search-row">
         <label className="sr-only" htmlFor={`${path.replaceAll("/", "-")}-search`}>
           {type === "GP" ? "GP number" : "GG number"}
@@ -73,14 +58,14 @@ export function VehicleResults({
     <div className="vehicle-table-wrapper" aria-live="polite">
       <table className="vehicle-table">
         <caption className="sr-only">Vehicles matching the fuelcard search</caption>
-        <thead>
-          <tr>
-            <th scope="col">Vehicle</th>
-            <th scope="col">GG Number</th>
-            <th scope="col">GP Number</th>
-            <th scope="col">Action</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Vehicle</> },
+            { key: "column-2", label: <>GG Number</> },
+            { key: "column-3", label: <>GP Number</> },
+            { key: "column-4", label: <>Action</> },
+          ]}
+        />
         <tbody>
           {vehicles.slice(0, 100).map((vehicle) => {
             const params = new URLSearchParams({ type, search, vmfCode: String(vehicle.vmfCode) });
@@ -125,22 +110,21 @@ export function FuelCardTable({
 }>) {
   if (cards.length === 0)
     return <p className="muted-copy">No fuelcard records found for this vehicle.</p>;
+  const columns = [
+    { key: "card-number", label: "Card Number" },
+    { key: "pan-number", label: "PAN Number" },
+    { key: "counter", label: "Counter" },
+    { key: "status", label: "Status" },
+    { key: "expiry", label: "Expiry" },
+    ...(deleteAction ? [{ key: "action", label: "Action" }] : []),
+  ];
   return (
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">
           {privateHire ? "Private hire fuelcards" : "Fuelcards"}
         </caption>
-        <thead>
-          <tr>
-            <th scope="col">Card Number</th>
-            <th scope="col">PAN Number</th>
-            <th scope="col">Counter</th>
-            <th scope="col">Status</th>
-            <th scope="col">Expiry</th>
-            {deleteAction ? <th scope="col">Action</th> : null}
-          </tr>
-        </thead>
+        <DataTableHeader columns={columns} />
         <tbody>
           {cards.map((card) => (
             <tr key={card.fuelCardCode}>
@@ -173,24 +157,12 @@ export function ApiUnavailable({
   subject = "Fuelcards",
 }: Readonly<{ path: string; subject?: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">
-        !
-      </div>
-      <p className="eyebrow">API unavailable</p>
-      <h2>{subject} could not be loaded.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={path}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/login">
-          Sign in
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message={`${subject} could not be loaded.`}
+      retryHref={path}
+      secondaryHref="/login"
+      secondaryLabel="Sign in"
+    />
   );
 }
 

@@ -1,13 +1,12 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
-import {
-  AccessRestricted,
-  hasReportsRole,
-  ReportsFrame,
-} from "@/app/(fleet-operations)/reports/_components";
+import { AccessRestricted, ReportsFrame } from "@/app/(fleet-operations)/reports/_components";
+import { hasReportsRole } from "@/app/(fleet-operations)/reports/_utils";
 import {
   AuditApiError,
   getAuditTrail,
@@ -263,17 +262,17 @@ function AuditChangesTable({ items }: Readonly<{ items: AuditItem[] }>) {
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">System entity changes</caption>
-        <thead>
-          <tr>
-            <th scope="col">Timestamp (UTC)</th>
-            <th scope="col">Action</th>
-            <th scope="col">Table</th>
-            <th scope="col">Record PK</th>
-            <th scope="col">Changed By</th>
-            <th scope="col">User Code</th>
-            <th scope="col">Old / New Values</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Timestamp (UTC)</> },
+            { key: "column-2", label: <>Action</> },
+            { key: "column-3", label: <>Table</> },
+            { key: "column-4", label: <>Record PK</> },
+            { key: "column-5", label: <>Changed By</> },
+            { key: "column-6", label: <>User Code</> },
+            { key: "column-7", label: <>Old / New Values</> },
+          ]}
+        />
         <tbody>
           {items.map((item) => (
             <tr key={item.auditId}>
@@ -385,16 +384,16 @@ function UserStatusTable({ items }: Readonly<{ items: UserStatusItem[] }>) {
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">User status history</caption>
-        <thead>
-          <tr>
-            <th scope="col">Timestamp (UTC)</th>
-            <th scope="col">User Code</th>
-            <th scope="col">New Status</th>
-            <th scope="col">Previous Status</th>
-            <th scope="col">Changed By</th>
-            <th scope="col">Reason</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Timestamp (UTC)</> },
+            { key: "column-2", label: <>User Code</> },
+            { key: "column-3", label: <>New Status</> },
+            { key: "column-4", label: <>Previous Status</> },
+            { key: "column-5", label: <>Changed By</> },
+            { key: "column-6", label: <>Reason</> },
+          ]}
+        />
         <tbody>
           {items.map((item) => (
             <tr key={item.statusHistoryId}>
@@ -492,17 +491,17 @@ function PasswordHistoryTable({ items }: Readonly<{ items: PasswordHistoryItem[]
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Password history</caption>
-        <thead>
-          <tr>
-            <th scope="col">User Code</th>
-            <th scope="col">Last Changed (UTC)</th>
-            <th scope="col">Expires On</th>
-            <th scope="col">Status</th>
-            <th scope="col">Changed By</th>
-            <th scope="col">Failed Logins</th>
-            <th scope="col">Locked Until</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>User Code</> },
+            { key: "column-2", label: <>Last Changed (UTC)</> },
+            { key: "column-3", label: <>Expires On</> },
+            { key: "column-4", label: <>Status</> },
+            { key: "column-5", label: <>Changed By</> },
+            { key: "column-6", label: <>Failed Logins</> },
+            { key: "column-7", label: <>Locked Until</> },
+          ]}
+        />
         <tbody>
           {items.map((item) => (
             <tr key={`${item.userAccessCode}-${item.lastPasswordChange}`}>
@@ -531,7 +530,9 @@ function PasswordHistoryTable({ items }: Readonly<{ items: PasswordHistoryItem[]
   );
 }
 
-async function SystemAuditTrailPageContent({
+const SystemAuditTrailPageContent = renderSystemAuditTrailPageContent;
+
+async function renderSystemAuditTrailPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Query> }>) {
   await connection();

@@ -10,10 +10,10 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   ApiUnavailable,
   FuelCardTable,
-  queryValue,
   VehicleResults,
   VehicleSearchForm,
 } from "@/app/(fleet-operations)/fuel-cards/_components";
+import { queryValue } from "@/app/(fleet-operations)/fuel-cards/_utils";
 import {
   FuelCardApiError,
   getPrivateHireFuelCardsByRegistration,
@@ -21,7 +21,9 @@ import {
 import { getSession } from "@/lib/auth/session";
 import { searchWorkshopVehicles } from "@/lib/api/fleet-operations/api-workshop";
 
-async function PrivateHireFuelCardCollectionPageContent({
+const PrivateHireFuelCardCollectionPageContent = renderPrivateHireFuelCardCollectionPageContent;
+
+async function renderPrivateHireFuelCardCollectionPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();

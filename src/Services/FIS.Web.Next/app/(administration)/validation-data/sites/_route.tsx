@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -6,6 +8,7 @@ import { Suspense } from "react";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
 import {
   DEFAULT_SITE_PAGE_SIZE,
   getSitesPage,
@@ -68,21 +71,13 @@ function AccessRestricted() {
 }
 function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">API unavailable</p>
-      <h2>Site data could not be loaded.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/validation-data">
-          Validation Data
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message="Site data could not be loaded."
+      retryHref={routePath}
+      secondaryHref="/validation-data"
+      secondaryLabel="Validation Data"
+      showIcon={false}
+    />
   );
 }
 
@@ -107,16 +102,16 @@ function SiteTable({ sites, total }: Readonly<{ sites: SiteRecord[]; total: numb
       <div className="table-wrapper">
         <table className="data-table">
           <caption className="sr-only">Active legacy site records</caption>
-          <thead>
-            <tr>
-              <th scope="col">Site number</th>
-              <th scope="col">Description</th>
-              <th scope="col">Responsible person</th>
-              <th scope="col">Telephone</th>
-              <th scope="col">Status</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Site number</> },
+              { key: "column-2", label: <>Description</> },
+              { key: "column-3", label: <>Responsible person</> },
+              { key: "column-4", label: <>Telephone</> },
+              { key: "column-5", label: <>Status</> },
+              { key: "column-6", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {sites.map((site) => (
               <tr key={site.siteCode}>
@@ -208,7 +203,70 @@ function SitePagination({
   );
 }
 
-async function SiteListPageContent({
+function SiteListView({
+  sitePage,
+  error,
+  notice,
+  query,
+  routePath,
+}: Readonly<{
+  sitePage: Awaited<ReturnType<typeof getSitesPage>>;
+  error: string | undefined;
+  notice: string | undefined;
+  query: Record<string, string | string[] | undefined>;
+  routePath: string;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="site-list-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Organisation</p>
+            <h1 id="site-list-title">Site Maintenance</h1>
+            <p>Maintain active and inactive site records without dropping legacy fields.</p>
+          </div>
+          <div className="button-row">
+            <Link className="button button-primary" href="/Validation/MNT_SiteAdd.aspx">
+              Add Site
+            </Link>
+            <Link className="button button-secondary" href="/validation-data">
+              Validation Data
+            </Link>
+          </div>
+        </header>
+        {notice ? (
+          <div
+            className={`notice ${error ? "notice-error" : "notice-success"}`}
+            role={error ? "alert" : "status"}
+          >
+            {notice}
+          </div>
+        ) : null}
+        <SiteTable sites={sitePage.items} total={sitePage.total} />
+        <SitePagination
+          routePath={routePath}
+          query={query}
+          page={sitePage.page}
+          totalPages={sitePage.totalPages}
+        />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const SiteListPageContent = renderSiteListPageContent;
+
+async function renderSiteListPageContent({
   searchParams,
   routePath = "/validation-data/sites",
 }: SiteListPageProps) {
@@ -252,50 +310,13 @@ async function SiteListPageContent({
             ? "Site deleted successfully."
             : error;
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="site-list-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Organisation</p>
-              <h1 id="site-list-title">Site Maintenance</h1>
-              <p>Maintain active and inactive site records without dropping legacy fields.</p>
-            </div>
-            <div className="button-row">
-              <Link className="button button-primary" href="/Validation/MNT_SiteAdd.aspx">
-                Add Site
-              </Link>
-              <Link className="button button-secondary" href="/validation-data">
-                Validation Data
-              </Link>
-            </div>
-          </header>
-          {notice ? (
-            <div
-              className={`notice ${error ? "notice-error" : "notice-success"}`}
-              role={error ? "alert" : "status"}
-            >
-              {notice}
-            </div>
-          ) : null}
-          <SiteTable sites={sitePage.items} total={sitePage.total} />
-          <SitePagination
-            routePath={routePath}
-            query={query}
-            page={sitePage.page}
-            totalPages={sitePage.totalPages}
-          />
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <SiteListView
+        sitePage={sitePage}
+        error={error}
+        notice={notice}
+        query={query}
+        routePath={routePath}
+      />
     );
   } catch (error) {
     if (error instanceof SiteApiError && error.reason === "unauthorized")

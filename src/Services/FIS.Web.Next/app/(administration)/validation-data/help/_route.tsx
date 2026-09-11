@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -80,12 +82,12 @@ async function ValidationHelpContent({ routePath }: Required<ValidationHelpPageP
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table module-help-table">
             <caption className="sr-only">Validation Data terms and definitions</caption>
-            <thead>
-              <tr>
-                <th scope="col">Term / Field</th>
-                <th scope="col">Definition</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Term / Field</> },
+                { key: "column-2", label: <>Definition</> },
+              ]}
+            />
             <tbody>
               {HELP_ENTRIES.map(([term, description]) => (
                 <tr key={term}>

@@ -138,7 +138,9 @@ function DeleteForm({ truck }: Readonly<{ truck: TowTruckRecord }>) {
   );
 }
 
-async function TowTruckDetailPageContent({
+const TowTruckDetailPageContent = renderTowTruckDetailPageContent;
+
+async function renderTowTruckDetailPageContent({
   searchParams,
   routePath = "/towing/tow-truck-data/detail",
 }: TowTruckDetailPageProps) {
@@ -250,16 +252,4 @@ export default function TowTruckDetailPage(props: Parameters<typeof TowTruckDeta
       <TowTruckDetailPageContent {...props} />
     </Suspense>
   );
-}
-
-type LegacyTowTruckDetailPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyTowTruckDetailPage(routePath: string) {
-  return function LegacyTowTruckDetailPage({
-    searchParams,
-  }: Readonly<LegacyTowTruckDetailPageProps>) {
-    return <TowTruckDetailPage routePath={routePath} searchParams={searchParams} />;
-  };
 }

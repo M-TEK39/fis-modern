@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -139,14 +141,14 @@ function Rows({
     <div className="vehicle-table-wrapper" aria-live="polite">
       <table className="vehicle-table">
         <caption className="sr-only">Tow truck companies</caption>
-        <thead>
-          <tr>
-            <th scope="col">Tow Truck Name</th>
-            <th scope="col">Area Operate</th>
-            <th scope="col">Tel</th>
-            <th scope="col">Action</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Tow Truck Name</> },
+            { key: "column-2", label: <>Area Operate</> },
+            { key: "column-3", label: <>Tel</> },
+            { key: "column-4", label: <>Action</> },
+          ]}
+        />
         <tbody>
           {trucks.map((truck) => (
             <tr key={truck.towCode}>
@@ -177,7 +179,9 @@ function Rows({
   );
 }
 
-async function TowTruckDataPageContent({
+const TowTruckDataPageContent = renderTowTruckDataPageContent;
+
+async function renderTowTruckDataPageContent({
   searchParams,
   routePath = "/towing/tow-truck-data",
 }: TowTruckDataPageProps) {
@@ -316,14 +320,4 @@ export default function TowTruckDataPage(props: Parameters<typeof TowTruckDataPa
       <TowTruckDataPageContent {...props} />
     </Suspense>
   );
-}
-
-type LegacyTowTruckDataPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyTowTruckDataPage(routePath: string) {
-  return function LegacyTowTruckDataPage({ searchParams }: Readonly<LegacyTowTruckDataPageProps>) {
-    return <TowTruckDataPage routePath={routePath} searchParams={searchParams} />;
-  };
 }

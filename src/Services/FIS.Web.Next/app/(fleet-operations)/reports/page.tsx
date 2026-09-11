@@ -3,11 +3,8 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
-import {
-  AccessRestricted,
-  hasReportsRole,
-  ReportsFrame,
-} from "@/app/(fleet-operations)/reports/_components";
+import { AccessRestricted, ReportsFrame } from "@/app/(fleet-operations)/reports/_components";
+import { hasReportsRole } from "@/app/(fleet-operations)/reports/_utils";
 import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/auth/session";
 

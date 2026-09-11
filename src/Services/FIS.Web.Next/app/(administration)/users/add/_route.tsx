@@ -99,6 +99,65 @@ function ApiUnavailable() {
   );
 }
 
+function UserAdminAddView({
+  message,
+  displayName,
+  sites,
+  positions,
+  approvers,
+}: Readonly<{
+  message: ReturnType<typeof resultMessage>;
+  displayName: string;
+  sites: Awaited<ReturnType<typeof getUserAdminSites>>;
+  positions: Awaited<ReturnType<typeof getUserAdminPositions>>;
+  approvers: Awaited<ReturnType<typeof getUserAdminUserChoices>>;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="user-add-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">User Administration</p>
+            <h1 id="user-add-title">Add New User</h1>
+            <p>Capture a complete user profile in the established legacy sequence.</p>
+          </div>
+          <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+            Menu
+          </Link>
+        </header>
+        {message ? (
+          <div
+            className={`notice notice-${message.tone}`}
+            role={message.tone === "error" ? "alert" : "status"}
+          >
+            {message.text}
+          </div>
+        ) : null}
+        <UserAddForm
+          action={createUserAdminAction}
+          displayName={displayName}
+          positions={positions}
+          sites={sites}
+          approvers={approvers}
+        />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+            Back to Menu
+          </Link>
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 async function UserAdminAddPageContent({
   searchParams,
 }: Readonly<{ searchParams?: SearchParams }> = {}) {
@@ -147,49 +206,13 @@ async function UserAdminAddPageContent({
       (session.userAccessCode ? `User ${session.userAccessCode}` : "Authenticated User");
 
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="user-add-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">User Administration</p>
-              <h1 id="user-add-title">Add New User</h1>
-              <p>Capture a complete user profile in the established legacy sequence.</p>
-            </div>
-            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
-              Menu
-            </Link>
-          </header>
-
-          {message ? (
-            <div
-              className={`notice notice-${message.tone}`}
-              role={message.tone === "error" ? "alert" : "status"}
-            >
-              {message.text}
-            </div>
-          ) : null}
-          <UserAddForm
-            action={createUserAdminAction}
-            displayName={displayName}
-            positions={positions}
-            sites={sites}
-            approvers={approvers}
-          />
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
-              Back to Menu
-            </Link>
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <UserAdminAddView
+        message={message}
+        displayName={displayName}
+        sites={sites}
+        positions={positions}
+        approvers={approvers}
+      />
     );
   } catch (error) {
     if (error instanceof UserAdminApiError && error.reason === "unauthorized") {

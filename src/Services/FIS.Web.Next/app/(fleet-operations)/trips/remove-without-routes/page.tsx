@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -23,6 +25,10 @@ import {
 } from "@/lib/api/fleet-operations/api-trip-tools";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function tripsPageHref(nextPage: number) {
+  return `/trips/remove-without-routes?${new URLSearchParams({ page: String(nextPage) }).toString()}`;
+}
 
 function queryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -79,19 +85,26 @@ function TripsTable({ result }: Readonly<{ result: TripsWithoutRoutesPage }>) {
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Trips without routes available for removal</caption>
-            <thead>
-              <tr>
-                <th scope="col">Trip Authority</th>
-                <th scope="col">Contract</th>
-                <th scope="col">Issue Date</th>
-                <th scope="col">Trip Request</th>
-                <th scope="col">Trip Reason</th>
-                <th scope="col">Approver</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Trip Authority</> },
+                { key: "column-2", label: <>Contract</> },
+                { key: "column-3", label: <>Issue Date</> },
+                { key: "column-4", label: <>Trip Request</> },
+                { key: "column-5", label: <>Trip Reason</> },
+                { key: "column-6", label: <>Approver</> },
+              ]}
+            />
             <tbody>
-              {rows.map((row, index) => (
-                <tr key={`${row.tripAuthorityCode ?? "trip"}-${index}`}>
+              {rows.map((row) => (
+                <tr
+                  key={
+                    row.tripAuthorityCode ??
+                    [row.contractCode, row.issueDate, row.tripRequestNumber, row.approverName].join(
+                      "|",
+                    )
+                  }
+                >
                   <td>{valueOrDash(row.tripAuthorityCode)}</td>
                   <td>{valueOrDash(row.contractCode)}</td>
                   <td>{formatDate(row.issueDate)}</td>
@@ -111,13 +124,10 @@ function TripsTable({ result }: Readonly<{ result: TripsWithoutRoutesPage }>) {
 function TripsPagination({ page }: Readonly<{ page: TripsWithoutRoutesPage }>) {
   if (page.totalPages <= 1) return null;
 
-  const href = (nextPage: number) =>
-    `/trips/remove-without-routes?${new URLSearchParams({ page: String(nextPage) }).toString()}`;
-
   return (
     <nav className="table-pagination" aria-label="Trips without routes pages">
       {page.page > 1 ? (
-        <Link className="button button-secondary button-small" href={href(page.page - 1)}>
+        <Link className="button button-secondary button-small" href={tripsPageHref(page.page - 1)}>
           Previous
         </Link>
       ) : (
@@ -129,7 +139,7 @@ function TripsPagination({ page }: Readonly<{ page: TripsWithoutRoutesPage }>) {
         Page {page.page} of {page.totalPages}
       </span>
       {page.page < page.totalPages ? (
-        <Link className="button button-secondary button-small" href={href(page.page + 1)}>
+        <Link className="button button-secondary button-small" href={tripsPageHref(page.page + 1)}>
           Next
         </Link>
       ) : (

@@ -1,23 +1,19 @@
 import Link from "next/link";
 
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import type { ModelRecord } from "@/lib/api/reference-data/api-models";
 import type {
   PrivateHireContractorRecord,
   PrivateHireVehicleRecord,
 } from "@/lib/api/fleet-operations/api-private-hire";
 import type { SiteRecord } from "@/lib/api/reference-data/api-sites";
-
-export function valueOrDash(value: string | number | null | undefined) {
-  return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
-}
-
-export function dateValue(value: string | null | undefined) {
-  return value?.slice(0, 10) || "-";
-}
-
-export function queryValue(value: string | string[] | undefined) {
-  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
-}
+import { dateValue, queryValue, valueOrDash } from "@/app/(fleet-operations)/private-hire/_utils";
+import {
+  PrivateHireVehicleIdentityFields,
+  PrivateHireVehicleOperationalFields,
+} from "@/app/(fleet-operations)/private-hire/_vehicle-form-fields";
 
 function privateHirePageHref(
   path: string,
@@ -108,29 +104,33 @@ export function PrivateHireNotice({
   return null;
 }
 
+export function PrivateHireReportTableHeader({
+  columns,
+}: Readonly<{ columns: readonly string[] }>) {
+  return (
+    <thead>
+      <tr>
+        {columns.map((column) => (
+          <th key={column} scope="col">
+            {column}
+          </th>
+        ))}
+      </tr>
+    </thead>
+  );
+}
+
 export function ApiUnavailable({
   path,
   subject = "Private Hire",
 }: Readonly<{ path: string; subject?: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">
-        !
-      </div>
-      <p className="eyebrow">API unavailable</p>
-      <h2>{subject} could not be loaded.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={path}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/login">
-          Sign in
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message={`${subject} could not be loaded.`}
+      retryHref={path}
+      secondaryHref="/login"
+      secondaryLabel="Sign in"
+    />
   );
 }
 
@@ -144,21 +144,20 @@ export function PrivateHireVehicleTable({
   mode?: string;
 }>) {
   if (vehicles.length === 0) return <p className="muted-copy">No Private Hire vehicles found.</p>;
+  const columns = [
+    { key: "registration", label: "Registration" },
+    { key: "model", label: "Model" },
+    { key: "site", label: "Site" },
+    { key: "contractor", label: "Contractor" },
+    { key: "take-on", label: "Take-on" },
+    { key: "return", label: "Return" },
+    ...(selectPath ? [{ key: "action", label: "Action" }] : []),
+  ];
   return (
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Private Hire vehicles</caption>
-        <thead>
-          <tr>
-            <th scope="col">Registration</th>
-            <th scope="col">Model</th>
-            <th scope="col">Site</th>
-            <th scope="col">Contractor</th>
-            <th scope="col">Take-on</th>
-            <th scope="col">Return</th>
-            {selectPath ? <th scope="col">Action</th> : null}
-          </tr>
-        </thead>
+        <DataTableHeader columns={columns} />
         <tbody>
           {vehicles.map((vehicle) => (
             <tr key={vehicle.phvCode}>
@@ -203,20 +202,19 @@ export function PrivateHireContractorTable({
 }>) {
   if (contractors.length === 0)
     return <p className="muted-copy">No Private Hire contractors found.</p>;
+  const columns = [
+    { key: "company", label: "Company" },
+    { key: "contact", label: "Contact" },
+    { key: "phone", label: "Phone" },
+    { key: "email", label: "Email" },
+    { key: "status", label: "Status" },
+    ...(selectPath ? [{ key: "action", label: "Action" }] : []),
+  ];
   return (
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Private Hire contractors</caption>
-        <thead>
-          <tr>
-            <th scope="col">Company</th>
-            <th scope="col">Contact</th>
-            <th scope="col">Phone</th>
-            <th scope="col">Email</th>
-            <th scope="col">Status</th>
-            {selectPath ? <th scope="col">Action</th> : null}
-          </tr>
-        </thead>
+        <DataTableHeader columns={columns} />
         <tbody>
           {contractors.map((contractor) => (
             <tr key={contractor.contractorId}>
@@ -291,293 +289,13 @@ export function PrivateHireVehicleForm({
         </div>
       </div>
       <div className="form-grid">
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-registration">
-            Registration number
-          </label>
-          <input
-            className="form-input"
-            id="phv-registration"
-            name="registrationNumber"
-            defaultValue={textValue(vehicle?.registrationNumber)}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-model-code">
-            Model
-          </label>
-          <select
-            className="form-select"
-            id="phv-model-code"
-            name="modelCode"
-            defaultValue={numberValue(vehicle?.modelCode)}
-            required
-          >
-            <option value="">Select model...</option>
-            {sortedModels.map((model) => (
-              <option key={model.modelCode} value={model.modelCode}>
-                {model.modelDescription} ({model.modelCode})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field form-group-full">
-          <label className="form-label" htmlFor="phv-model-description">
-            Model description
-          </label>
-          <input
-            className="form-input"
-            id="phv-model-description"
-            name="modelDescription"
-            defaultValue={textValue(vehicle?.modelDescription)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-site">
-            Site
-          </label>
-          <select
-            className="form-select"
-            id="phv-site"
-            name="siteCode"
-            defaultValue={numberValue(vehicle?.siteCode)}
-            required
-          >
-            <option value="">Select site...</option>
-            {sortedSites.map((site) => (
-              <option key={site.siteCode} value={site.siteCode}>
-                {site.description ?? "Unnamed site"} ({site.siteCode})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-contracted-to">
-            Contracted to
-          </label>
-          <select
-            className="form-select"
-            id="phv-contracted-to"
-            name="contractedTo"
-            defaultValue={numberValue(vehicle?.contractedTo)}
-          >
-            <option value="">Select site...</option>
-            {sortedSites.map((site) => (
-              <option key={site.siteCode} value={site.siteCode}>
-                {site.description ?? "Unnamed site"} ({site.siteCode})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-contractor">
-            Contractor
-          </label>
-          <select
-            className="form-select"
-            id="phv-contractor"
-            name="contractorId"
-            defaultValue={numberValue(vehicle?.contractorId)}
-            required
-          >
-            <option value="">Select contractor...</option>
-            {sortedContractors.map((contractor) => (
-              <option key={contractor.contractorId} value={contractor.contractorId}>
-                {contractor.companyName} ({contractor.contractorId})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-engine">
-            Engine number
-          </label>
-          <input
-            className="form-input"
-            id="phv-engine"
-            name="engineNumber"
-            defaultValue={textValue(vehicle?.engineNumber)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-chassis">
-            Chassis number
-          </label>
-          <input
-            className="form-input"
-            id="phv-chassis"
-            name="chassisNumber"
-            defaultValue={textValue(vehicle?.chassisNumber)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-year">
-            Year manufactured
-          </label>
-          <input
-            className="form-input"
-            id="phv-year"
-            name="yearManufactured"
-            defaultValue={textValue(vehicle?.yearManufactured)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-bank">
-            Bank code
-          </label>
-          <input
-            className="form-input"
-            id="phv-bank"
-            name="bankCode"
-            defaultValue={textValue(vehicle?.bankCode)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-colour">
-            Colour
-          </label>
-          <input
-            className="form-input"
-            id="phv-colour"
-            name="colour"
-            defaultValue={textValue(vehicle?.colour)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-tank">
-            Tank capacity (litres)
-          </label>
-          <input
-            className="form-input"
-            id="phv-tank"
-            name="tankCapacity"
-            type="number"
-            min="0"
-            defaultValue={numberValue(vehicle?.tankCapacity)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-fuel-card">
-            Fuel card
-          </label>
-          <input
-            className="form-input"
-            id="phv-fuel-card"
-            name="fuelCard"
-            defaultValue={textValue(vehicle?.fuelCard)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-fuel-receiver">
-            Fuel card receiver
-          </label>
-          <input
-            className="form-input"
-            id="phv-fuel-receiver"
-            name="fuelCardReceiver"
-            defaultValue={textValue(vehicle?.fuelCardReceiver)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-take-on-date">
-            Take-on date
-          </label>
-          <input
-            className="form-input"
-            id="phv-take-on-date"
-            name="takeOnDate"
-            type="date"
-            defaultValue={
-              dateValue(vehicle?.takeOnDate) === "-" ? "" : dateValue(vehicle?.takeOnDate)
-            }
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-take-on-odo">
-            Take-on odometer
-          </label>
-          <input
-            className="form-input"
-            id="phv-take-on-odo"
-            name="takeOnOdo"
-            type="number"
-            min="0"
-            defaultValue={numberValue(vehicle?.takeOnOdo)}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-return-date">
-            Return date
-          </label>
-          <input
-            className="form-input"
-            id="phv-return-date"
-            name="returnDate"
-            type="date"
-            defaultValue={
-              dateValue(vehicle?.returnDate) === "-" ? "" : dateValue(vehicle?.returnDate)
-            }
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-return-odo">
-            Return odometer
-          </label>
-          <input
-            className="form-input"
-            id="phv-return-odo"
-            name="returnOdo"
-            type="number"
-            min="0"
-            defaultValue={numberValue(vehicle?.returnOdo)}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-km-tariff">
-            Kilometre tariff
-          </label>
-          <input
-            className="form-input"
-            id="phv-km-tariff"
-            name="kmTariff"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={numberValue(vehicle?.kmTariff)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-daily-tariff">
-            Daily tariff
-          </label>
-          <input
-            className="form-input"
-            id="phv-daily-tariff"
-            name="dailyTariff"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={numberValue(vehicle?.dailyTariff)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="phv-hourly-tariff">
-            Hourly tariff
-          </label>
-          <input
-            className="form-input"
-            id="phv-hourly-tariff"
-            name="hourlyTariff"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={numberValue(vehicle?.hourlyTariff)}
-          />
-        </div>
+        <PrivateHireVehicleIdentityFields
+          vehicle={vehicle}
+          models={sortedModels}
+          sites={sortedSites}
+          contractors={sortedContractors}
+        />
+        <PrivateHireVehicleOperationalFields vehicle={vehicle} />
       </div>
       <div className="button-row">
         <button className="button button-primary" type="submit">

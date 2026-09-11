@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -8,14 +10,12 @@ import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
-  dateValue,
-  queryValue,
   TaxiHeader,
   TaxiNotice,
   TaxiRestricted,
   TaxiUnavailable,
-  valueOrDash,
 } from "@/app/(fleet-operations)/taxis/_components";
+import { dateValue, queryValue, valueOrDash } from "@/app/(fleet-operations)/taxis/_utils";
 import {
   getLegacyReport,
   LegacyReportApiError,
@@ -71,17 +71,17 @@ function TaxiRows({ rows }: Readonly<{ rows: TaxiRecord[] }>) {
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Taxi report results</caption>
-        <thead>
-          <tr>
-            <th scope="col">Requisition</th>
-            <th scope="col">Date required</th>
-            <th scope="col">Official</th>
-            <th scope="col">GG / vehicle</th>
-            <th scope="col">Registration</th>
-            <th scope="col">Contractor</th>
-            <th scope="col">Department</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Requisition</> },
+            { key: "column-2", label: <>Date required</> },
+            { key: "column-3", label: <>Official</> },
+            { key: "column-4", label: <>GG / vehicle</> },
+            { key: "column-5", label: <>Registration</> },
+            { key: "column-6", label: <>Contractor</> },
+            { key: "column-7", label: <>Department</> },
+          ]}
+        />
         <tbody>
           {rows.length === 0 ? (
             <tr>
@@ -176,7 +176,12 @@ function reportKey(kind: TaxiReportKind) {
   return "taxis-financial";
 }
 
-async function TaxiReportsPageContent({ searchParams, kind: forcedKind }: TaxiReportPageProps) {
+const TaxiReportsPageContent = renderTaxiReportsPageContent;
+
+async function renderTaxiReportsPageContent({
+  searchParams,
+  kind: forcedKind,
+}: TaxiReportPageProps) {
   await connection();
   const session = await getSession();
   const routePath = "/taxis/reports";

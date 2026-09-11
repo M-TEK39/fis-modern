@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -11,13 +13,15 @@ import {
   DEFAULT_TROUBLESHOOT_PAGE_SIZE,
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import {
-  hasTroubleshootingRole,
   StatusCard,
   TroubleshootMenu,
   TroubleshootShell,
-  valueOrDash,
-  dateValue,
 } from "@/app/(fleet-operations)/troubleshoot/_components";
+import {
+  dateValue,
+  hasTroubleshootingRole,
+  valueOrDash,
+} from "@/app/(fleet-operations)/troubleshoot/_utils";
 import { removeTripsWithoutRoutesAction } from "@/app/(fleet-operations)/troubleshoot/actions";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -25,7 +29,9 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
-async function RemoveTripsWithoutRoutesPageContent({
+const RemoveTripsWithoutRoutesPageContent = renderRemoveTripsWithoutRoutesPageContent;
+
+async function renderRemoveTripsWithoutRoutesPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -113,19 +119,29 @@ async function RemoveTripsWithoutRoutesPageContent({
           <div className="vehicle-table-wrapper">
             <table className="vehicle-table">
               <caption className="sr-only">Trips without routes</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Trip Authority</th>
-                  <th scope="col">Contract</th>
-                  <th scope="col">Issue date</th>
-                  <th scope="col">Trip reason</th>
-                  <th scope="col">Request number</th>
-                  <th scope="col">Approver</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>Trip Authority</> },
+                  { key: "column-2", label: <>Contract</> },
+                  { key: "column-3", label: <>Issue date</> },
+                  { key: "column-4", label: <>Trip reason</> },
+                  { key: "column-5", label: <>Request number</> },
+                  { key: "column-6", label: <>Approver</> },
+                ]}
+              />
               <tbody>
-                {trips.items.map((trip, index) => (
-                  <tr key={`${trip.tripAuthorityCode ?? "trip"}-${index}`}>
+                {trips.items.map((trip) => (
+                  <tr
+                    key={
+                      trip.tripAuthorityCode ??
+                      [
+                        trip.contractCode,
+                        trip.issueDate,
+                        trip.tripRequestNumber,
+                        trip.approverName,
+                      ].join("|")
+                    }
+                  >
                     <td>{valueOrDash(trip.tripAuthorityCode)}</td>
                     <td>{valueOrDash(trip.contractCode)}</td>
                     <td>{dateValue(trip.issueDate)}</td>

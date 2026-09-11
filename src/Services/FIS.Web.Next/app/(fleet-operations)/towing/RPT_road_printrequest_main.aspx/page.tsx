@@ -1,3 +1,3 @@
-import { createLegacyTowingRequestReportPage } from "@/app/(fleet-operations)/towing/reports/request/_route";
+import { createLegacyTowingRequestReportPage } from "@/app/(fleet-operations)/towing/reports/request/legacy-route";
 
 export default createLegacyTowingRequestReportPage("/towing/RPT_road_printrequest_main.aspx");

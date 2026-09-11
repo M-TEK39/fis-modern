@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -22,21 +24,22 @@ import {
 type SearchParams = Record<string, string | string[] | undefined>;
 type TripQueryPageProps = Readonly<{ searchParams: Promise<SearchParams> }>;
 
+const TRIP_DATE_FORMATTER = new Intl.DateTimeFormat("en-ZA", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: "UTC",
+});
+const TRIP_NUMBER_FORMATTER = new Intl.NumberFormat("en-ZA", { maximumFractionDigits: 2 });
+
 function formatDate(value: string | null) {
   if (!value) return "-";
   const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat("en-ZA", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        timeZone: "UTC",
-      }).format(date);
+  return Number.isNaN(date.getTime()) ? value : TRIP_DATE_FORMATTER.format(date);
 }
 
 function formatNumber(value: number) {
-  return new Intl.NumberFormat("en-ZA", { maximumFractionDigits: 2 }).format(value);
+  return TRIP_NUMBER_FORMATTER.format(value);
 }
 
 function pageHref(search: string, filter: string, page: number) {
@@ -47,7 +50,9 @@ function pageHref(search: string, filter: string, page: number) {
   return `/trip-query?${params.toString()}`;
 }
 
-async function TripQueryPageContent({ searchParams }: TripQueryPageProps) {
+const TripQueryPageContent = renderTripQueryPageContent;
+
+async function renderTripQueryPageContent({ searchParams }: TripQueryPageProps) {
   const session = await getTripSession();
   const sessionMessage = tripSessionMessage(session, "/trip-query");
   if (sessionMessage) return sessionMessage;
@@ -162,20 +167,20 @@ async function TripQueryPageContent({ searchParams }: TripQueryPageProps) {
             <div className="vehicle-table-wrapper">
               <table className="vehicle-table">
                 <caption className="sr-only">Trip summary results</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Contract / VMF</th>
-                    <th scope="col">Vehicle</th>
-                    <th scope="col">Site / Department</th>
-                    <th scope="col">Trips</th>
-                    <th scope="col">Kilometres</th>
-                    <th scope="col">First Trip</th>
-                    <th scope="col">Last Trip</th>
-                  </tr>
-                </thead>
+                <DataTableHeader
+                  columns={[
+                    { key: "column-1", label: <>Contract / VMF</> },
+                    { key: "column-2", label: <>Vehicle</> },
+                    { key: "column-3", label: <>Site / Department</> },
+                    { key: "column-4", label: <>Trips</> },
+                    { key: "column-5", label: <>Kilometres</> },
+                    { key: "column-6", label: <>First Trip</> },
+                    { key: "column-7", label: <>Last Trip</> },
+                  ]}
+                />
                 <tbody>
-                  {rows.map((row, index) => (
-                    <tr key={`${row.key}-${index}`}>
+                  {rows.map((row) => (
+                    <tr key={row.key}>
                       <td>{row.key}</td>
                       <td>{row.vehicle}</td>
                       <td>{row.department}</td>

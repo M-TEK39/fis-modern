@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -216,17 +218,17 @@ function ReportTable({ rows }: Readonly<{ rows: AuctionRecord[] }>) {
     <div className="vehicle-table-wrapper" aria-live="polite">
       <table className="vehicle-table">
         <caption className="sr-only">Auction report results</caption>
-        <thead>
-          <tr>
-            <th scope="col">GG</th>
-            <th scope="col">GP</th>
-            <th scope="col">Auction</th>
-            <th scope="col">Lot</th>
-            <th scope="col">Auth Date</th>
-            <th scope="col">Sold To</th>
-            <th scope="col">Sold Amount</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>GG</> },
+            { key: "column-2", label: <>GP</> },
+            { key: "column-3", label: <>Auction</> },
+            { key: "column-4", label: <>Lot</> },
+            { key: "column-5", label: <>Auth Date</> },
+            { key: "column-6", label: <>Sold To</> },
+            { key: "column-7", label: <>Sold Amount</> },
+          ]}
+        />
         <tbody>
           {rows.map((row) => (
             <tr key={row.auctionCode}>
@@ -263,7 +265,9 @@ function ApiUnavailable() {
   );
 }
 
-async function AuctionReportPageContent({
+const AuctionReportPageContent = renderAuctionReportPageContent;
+
+async function renderAuctionReportPageContent({
   params,
   searchParams,
   routePath = "/auction/reports",

@@ -1,4 +1,7 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
@@ -10,21 +13,25 @@ import {
   TroubleshootApiError,
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import {
-  hasTroubleshootingRole,
   Pagination,
-  pageNumber,
   StatusCard,
   TroubleshootMenu,
   TroubleshootShell,
-  valueOrDash,
 } from "@/app/(fleet-operations)/troubleshoot/_components";
+import {
+  hasTroubleshootingRole,
+  pageNumber,
+  valueOrDash,
+} from "@/app/(fleet-operations)/troubleshoot/_utils";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
-async function VehicleMasterEditPageContent({
+const VehicleMasterEditPageContent = renderVehicleMasterEditPageContent;
+
+async function renderVehicleMasterEditPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -108,9 +115,9 @@ async function VehicleMasterEditPageContent({
             <button className="button button-primary" type="submit">
               Load Vehicle
             </button>
-            <a className="button button-secondary" href="/troubleshoot/vehicle-master-edit">
+            <Link className="button button-secondary" href="/troubleshoot/vehicle-master-edit">
               Clear
-            </a>
+            </Link>
           </div>
         </form>
       </section>
@@ -143,14 +150,14 @@ async function VehicleMasterEditPageContent({
           <div className="vehicle-table-wrapper">
             <table className="vehicle-table">
               <caption className="sr-only">Vehicle master lookup results</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Vehicle (GG / GP / VMF)</th>
-                  <th scope="col">Registration</th>
-                  <th scope="col">Current Odometer</th>
-                  <th scope="col">Recovered GG</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>Vehicle (GG / GP / VMF)</> },
+                  { key: "column-2", label: <>Registration</> },
+                  { key: "column-3", label: <>Current Odometer</> },
+                  { key: "column-4", label: <>Recovered GG</> },
+                ]}
+              />
               <tbody>
                 {pageData?.items.map((vehicle) => (
                   <tr key={vehicle.vmfCode}>

@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -71,19 +73,19 @@ function Results({
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Vehicle loss records sorted by loss date</caption>
-            <thead>
-              <tr>
-                <th scope="col">Loss Date</th>
-                <th scope="col">Reference</th>
-                <th scope="col">Description</th>
-                <th scope="col">Amount</th>
-                <th scope="col">Department Claim</th>
-                <th scope="col">SAPD</th>
-                <th scope="col">Remarks</th>
-                <th scope="col">HQ Reference</th>
-                <th scope="col">Actions</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Loss Date</> },
+                { key: "column-2", label: <>Reference</> },
+                { key: "column-3", label: <>Description</> },
+                { key: "column-4", label: <>Amount</> },
+                { key: "column-5", label: <>Department Claim</> },
+                { key: "column-6", label: <>SAPD</> },
+                { key: "column-7", label: <>Remarks</> },
+                { key: "column-8", label: <>HQ Reference</> },
+                { key: "column-9", label: <>Actions</> },
+              ]}
+            />
             <tbody>
               {losses.map((loss) => (
                 <tr key={loss.lossCode}>
@@ -166,7 +168,9 @@ function Results({
   );
 }
 
-async function LossMaintenancePageContent({
+const LossMaintenancePageContent = renderLossMaintenancePageContent;
+
+async function renderLossMaintenancePageContent({
   searchParams,
   routePath = "/losses/maintenance",
 }: LossMaintenancePageProps) {

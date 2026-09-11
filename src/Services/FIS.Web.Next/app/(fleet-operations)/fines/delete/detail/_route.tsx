@@ -224,15 +224,3 @@ export default function FineDeleteDetailPage(props: FineDeleteDetailPageProps) {
     </StreamedRoute>
   );
 }
-
-type LegacyFineDeleteDetailPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyFineDeleteDetailPage(routePath: string) {
-  return function LegacyFineDeleteDetailPage({
-    searchParams,
-  }: Readonly<LegacyFineDeleteDetailPageProps>) {
-    return <FineDeleteDetailPage routePath={routePath} searchParams={searchParams} />;
-  };
-}

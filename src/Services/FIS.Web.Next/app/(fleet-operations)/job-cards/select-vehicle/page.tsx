@@ -1,17 +1,13 @@
 import Link from "next/link";
 
+import { JobCardVehicleResults } from "@/app/(fleet-operations)/job-cards/_components";
 import {
-  accessRestricted,
-  getJobCardSession,
+  AccessRestricted,
   JobCardPageBoundary,
-  queryValue,
-  sessionMessage,
+  SessionProblem,
 } from "@/app/(fleet-operations)/job-cards/_page";
-import {
-  hasJobCardAccess,
-  hasRole,
-  valueOrDash,
-} from "@/app/(fleet-operations)/job-cards/_components";
+import { getJobCardSession, queryValue } from "@/app/(fleet-operations)/job-cards/_page-utils";
+import { hasJobCardAccess, hasRole } from "@/app/(fleet-operations)/job-cards/_utils";
 import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
 
 export default function SelectJobCardVehiclePage({
@@ -28,12 +24,12 @@ async function SelectJobCardVehicleContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
-  const problem = sessionMessage(session, "/job-cards/select-vehicle");
-  if (problem) return problem;
+  if (session.status === "expired" || session.status === "unavailable")
+    return <SessionProblem returnPath="/job-cards/select-vehicle" />;
   if (session.status !== "authenticated")
-    return accessRestricted("Your session could not be loaded.");
+    return <AccessRestricted message="Your session could not be loaded." />;
   if (!hasRole(session.roles, "capturer") && !hasJobCardAccess(session.accessLevel, session.roles))
-    return accessRestricted("Your profile does not include Job Card capturer access.");
+    return <AccessRestricted message="Your profile does not include Job Card capturer access." />;
   const query = await searchParams;
   const search = queryValue(query.search).trim();
   try {
@@ -94,36 +90,10 @@ async function SelectJobCardVehicleContent({
             {filtered.length === 0 ? (
               <p className="muted-copy">No matching vehicles found.</p>
             ) : (
-              <div className="vehicle-table-wrapper">
-                <table className="vehicle-table">
-                  <caption className="sr-only">Vehicles available for job card creation</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">VMF code</th>
-                      <th scope="col">GG number</th>
-                      <th scope="col">Registration</th>
-                      <th scope="col">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((vehicle) => (
-                      <tr key={vehicle.vmfCode}>
-                        <td>{vehicle.vmfCode}</td>
-                        <td>{valueOrDash(vehicle.fleetNumber)}</td>
-                        <td>{valueOrDash(vehicle.registrationNumber)}</td>
-                        <td>
-                          <Link
-                            className="button button-primary button-small"
-                            href={`/job-cards/create?vmfCode=${vehicle.vmfCode}`}
-                          >
-                            Select
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <JobCardVehicleResults
+                caption="Vehicles available for job card creation"
+                vehicles={filtered}
+              />
             )}
           </section>
         </section>

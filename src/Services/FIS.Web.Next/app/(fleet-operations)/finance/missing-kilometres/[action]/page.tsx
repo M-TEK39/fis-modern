@@ -9,8 +9,8 @@ import {
   FinanceFrame,
   FinanceRestricted,
   FinanceUnavailable,
-  hasFinanceRole,
 } from "@/app/(fleet-operations)/finance/_components";
+import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions } from "@/app/(fleet-operations)/finance/_location-options";
 import { FinanceReportTable } from "@/app/(fleet-operations)/finance/report-table";
 import { getDepartments } from "@/lib/api/reference-data/api-departments";
@@ -92,7 +92,9 @@ function checked(query: Query, name: string) {
   return ["1", "true", "on", "yes"].includes(queryValue(query, name).toLowerCase());
 }
 
-async function MissingKilometresContent({ params, searchParams }: Props) {
+const MissingKilometresContent = renderMissingKilometresContent;
+
+async function renderMissingKilometresContent({ params, searchParams }: Props) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");

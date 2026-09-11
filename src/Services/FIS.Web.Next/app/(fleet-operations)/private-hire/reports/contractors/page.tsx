@@ -7,10 +7,9 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   ApiUnavailable,
   PrivateHireNotice,
-  dateValue,
-  queryValue,
-  valueOrDash,
+  PrivateHireReportTableHeader,
 } from "@/app/(fleet-operations)/private-hire/_components";
+import { dateValue, queryValue, valueOrDash } from "@/app/(fleet-operations)/private-hire/_utils";
 import {
   getPrivateHireContractors,
   PrivateHireApiError,
@@ -110,22 +109,22 @@ async function PrivateHireContractorReportPageContent({
               <div className="vehicle-table-wrapper">
                 <table className="vehicle-table">
                   <caption className="sr-only">Private Hire contractor report</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Contractor name</th>
-                      <th scope="col">Physical address</th>
-                      <th scope="col">Postal address</th>
-                      <th scope="col">Telephone</th>
-                      <th scope="col">Fax</th>
-                      <th scope="col">Email</th>
-                      <th scope="col">Contact person</th>
-                      <th scope="col">Quotations</th>
-                      <th scope="col">Type</th>
-                      <th scope="col">Project name</th>
-                      <th scope="col">Project begin</th>
-                      <th scope="col">Project end</th>
-                    </tr>
-                  </thead>
+                  <PrivateHireReportTableHeader
+                    columns={[
+                      "Contractor name",
+                      "Physical address",
+                      "Postal address",
+                      "Telephone",
+                      "Fax",
+                      "Email",
+                      "Contact person",
+                      "Quotations",
+                      "Type",
+                      "Project name",
+                      "Project begin",
+                      "Project end",
+                    ]}
+                  />
                   <tbody>
                     {filtered.slice(0, 500).map((contractor) => (
                       <tr key={contractor.contractorId}>

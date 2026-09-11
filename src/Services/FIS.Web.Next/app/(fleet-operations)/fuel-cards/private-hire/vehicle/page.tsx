@@ -11,10 +11,10 @@ import {
   ApiUnavailable,
   FuelCardNotice,
   FuelCardTable,
-  queryValue,
   VehicleResults,
   VehicleSearchForm,
 } from "@/app/(fleet-operations)/fuel-cards/_components";
+import { queryValue } from "@/app/(fleet-operations)/fuel-cards/_utils";
 import { savePrivateHireFuelCardAction } from "@/app/(fleet-operations)/fuel-cards/actions";
 import {
   FuelCardApiError,
@@ -23,7 +23,9 @@ import {
 import { getSession } from "@/lib/auth/session";
 import { searchWorkshopVehicles } from "@/lib/api/fleet-operations/api-workshop";
 
-async function PrivateHireFuelCardVehiclePageContent({
+const PrivateHireFuelCardVehiclePageContent = renderPrivateHireFuelCardVehiclePageContent;
+
+async function renderPrivateHireFuelCardVehiclePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();

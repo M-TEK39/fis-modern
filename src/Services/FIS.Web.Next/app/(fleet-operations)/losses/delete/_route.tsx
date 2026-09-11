@@ -28,7 +28,9 @@ function valueOrDash(value: string | number | null | undefined) {
   return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
 }
 
-async function DeleteLossPageContent({
+const DeleteLossPageContent = renderDeleteLossPageContent;
+
+async function renderDeleteLossPageContent({
   searchParams,
   routePath = "/losses/delete",
 }: {

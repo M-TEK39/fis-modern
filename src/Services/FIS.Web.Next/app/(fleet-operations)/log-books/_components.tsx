@@ -3,14 +3,7 @@ import Link from "next/link";
 import { deleteLogbookAction } from "@/app/(fleet-operations)/log-books/actions";
 import { MenuSection } from "@/components/ui/menu-section";
 import type { LogbookRecord } from "@/lib/api/fleet-operations/api-logbooks";
-
-export function valueOrDash(value: string | number | null | undefined) {
-  return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
-}
-
-export function formatDate(value: string | null | undefined) {
-  return value?.slice(0, 10) || "-";
-}
+import { formatDate, valueOrDash } from "@/app/(fleet-operations)/log-books/_utils";
 
 export function LogbookShell({
   title,
@@ -76,6 +69,7 @@ export function VehicleSearchForm({
   multiple?: boolean;
   selectedVmfCodes?: readonly number[];
 }>) {
+  const selectedVmfCodeSet = new Set(selectedVmfCodes);
   return (
     <form className="vehicle-status-maintenance-panel" method="get" action={action}>
       <div className="vehicle-form-section-header">
@@ -118,7 +112,7 @@ export function VehicleSearchForm({
             <option
               key={vehicle.vmfCode}
               value={vehicle.vmfCode}
-              selected={multiple && selectedVmfCodes.includes(vehicle.vmfCode)}
+              selected={multiple && selectedVmfCodeSet.has(vehicle.vmfCode)}
             >
               {valueOrDash(vehicle.fleetNumber)} / {valueOrDash(vehicle.registrationNumber)} (
               {vehicle.vmfCode})

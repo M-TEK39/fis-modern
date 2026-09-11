@@ -148,10 +148,12 @@ export async function getLicenseReport(
     month: filters.month,
     year: filters.year,
   });
-  const rows = reportRows(payload)
-    .filter(isRecord)
-    .map((row) =>
+  const rows = reportRows(payload).reduce<Array<Record<string, string | null>>>((result, row) => {
+    if (!isRecord(row)) return result;
+    result.push(
       Object.fromEntries(Object.entries(row).map(([key, value]) => [key, asString(value)])),
     );
+    return result;
+  }, []);
   return { columns: rows.length > 0 ? Object.keys(rows[0]) : [], rows };
 }

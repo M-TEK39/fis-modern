@@ -5,6 +5,7 @@ import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import RouteLoading from "@/components/app-shell/route-loading";
+import StatusCardView from "@/components/app-shell/status-card";
 import RecoveredVehicleClient from "@/app/(fleet-operations)/vehicles/recovered/recovered-vehicle-client";
 import {
   getRecoveredVehicleDetails,
@@ -44,21 +45,14 @@ function StatusCard({
   href,
 }: Readonly<{ title: string; message: string; href: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">
-        !
-      </div>
-      <p className="eyebrow">{title}</p>
-      <h2>{message}</h2>
-      <div className="button-row">
-        <Link className="button button-primary" href={href}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/login">
-          Sign in
-        </Link>
-      </div>
-    </section>
+    <StatusCardView
+      title={title}
+      message={message}
+      retryHref={href}
+      secondaryHref="/login"
+      secondaryLabel="Sign in"
+      showIcon
+    />
   );
 }
 
@@ -204,16 +198,4 @@ export default function RecoveredVehiclePage(props: RecoveredVehiclePageProps) {
       <RecoveredVehiclePageContent {...props} />
     </Suspense>
   );
-}
-
-type LegacyRecoveredVehiclePageProps = {
-  searchParams: NonNullable<RecoveredVehiclePageProps["searchParams"]>;
-};
-
-export function createLegacyRecoveredVehiclePage(routePath: RecoveredVehicleRoutePath) {
-  return function LegacyRecoveredVehiclePage({
-    searchParams,
-  }: Readonly<LegacyRecoveredVehiclePageProps>) {
-    return <RecoveredVehiclePage routePath={routePath} searchParams={searchParams} />;
-  };
 }

@@ -1,6 +1,9 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -31,15 +34,7 @@ function valueOrDash(value: string | number | null | undefined) {
 function VehicleSearch({ search, type }: Readonly<{ search: string; type: string }>) {
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
-      <fieldset className="vehicle-search-options">
-        <legend>Search by</legend>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="type" value="GG" defaultChecked={type !== "GP"} /> GG
-        </label>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="type" value="GP" defaultChecked={type === "GP"} /> GP
-        </label>
-      </fieldset>
+      <SearchTypeFieldset selectedType={type} legend="Search by" name="type" />
       <div className="vehicle-search-row">
         <label className="sr-only" htmlFor="workshop-entry-search">
           {type === "GP" ? "GP Number" : "GG Number"}
@@ -69,17 +64,17 @@ function EntryTable({ workshops }: Readonly<{ workshops: WorkshopPageItem[] }>) 
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Previous workshop entries</caption>
-        <thead>
-          <tr>
-            <th scope="col">Vehicle Number</th>
-            <th scope="col">Department</th>
-            <th scope="col">Date Received</th>
-            <th scope="col">Inquiry Refer</th>
-            <th scope="col">Workshop</th>
-            <th scope="col">Job Card CLOSED?</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Vehicle Number</> },
+            { key: "column-2", label: <>Department</> },
+            { key: "column-3", label: <>Date Received</> },
+            { key: "column-4", label: <>Inquiry Refer</> },
+            { key: "column-5", label: <>Workshop</> },
+            { key: "column-6", label: <>Job Card CLOSED?</> },
+            { key: "column-7", label: <>Actions</> },
+          ]}
+        />
         <tbody>
           {workshops.map((entry) => {
             const closed = entry.completeDate !== null || entry.completeTime !== null;
@@ -120,7 +115,9 @@ function EntryTable({ workshops }: Readonly<{ workshops: WorkshopPageItem[] }>) 
   );
 }
 
-async function WorkshopEntryPageContent({
+const WorkshopEntryPageContent = renderWorkshopEntryPageContent;
+
+async function renderWorkshopEntryPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();

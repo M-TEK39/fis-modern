@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { hasReportsRole } from "@/app/(fleet-operations)/reports/_components";
+import { hasReportsRole } from "@/app/(fleet-operations)/reports/_utils";
 import { AuditApiError, getAuditTrail } from "@/lib/api/administration/api-audit";
 import { getSession } from "@/lib/auth/session";
 

@@ -13,7 +13,7 @@ import {
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/monitor/_page";
-import { getMonitors } from "@/lib/api/fleet-operations/api-monitor";
+import { getMonitors, type MonitorReportRow } from "@/lib/api/fleet-operations/api-monitor";
 import { getSites } from "@/lib/api/reference-data/api-sites";
 
 async function MonitorDeptSiteReportPageContent({
@@ -33,15 +33,16 @@ async function MonitorDeptSiteReportPageContent({
   const [sites, records] = await Promise.all([getSites(), getMonitors()]);
   const fromDate = from ? new Date(`${from}T00:00:00.000Z`) : null;
   const toDate = to ? new Date(`${to}T23:59:59.999Z`) : null;
-  const rows = records
-    .filter(
-      (record) =>
-        !record.isDeleted &&
-        (!siteCode || record.driverSite === siteCode) &&
-        (!fromDate || (record.captureDate && new Date(record.captureDate) >= fromDate)) &&
-        (!toDate || (record.captureDate && new Date(record.captureDate) <= toDate)),
-    )
-    .map((record) => ({
+  const rows = records.reduce<MonitorReportRow[]>((result, record) => {
+    if (
+      record.isDeleted ||
+      (siteCode && record.driverSite !== siteCode) ||
+      (fromDate && (!record.captureDate || new Date(record.captureDate) < fromDate)) ||
+      (toDate && (!record.captureDate || new Date(record.captureDate) > toDate))
+    ) {
+      return result;
+    }
+    result.push({
       monitorCode: record.monitorCode,
       vmfCode: record.vmfCode,
       captureDate: record.captureDate,
@@ -50,7 +51,9 @@ async function MonitorDeptSiteReportPageContent({
       driverName: record.driverName ?? "",
       driverPersalNo: record.driverPersalNo ?? "",
       driverSite: record.driverSite,
-    }));
+    });
+    return result;
+  }, []);
   return (
     <MonitorShell
       title="Inquiry Info, for a Dept / Site, for a period"

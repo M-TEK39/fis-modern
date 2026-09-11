@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -8,8 +10,8 @@ import {
   LicenseMenu,
   LicenseNotice,
   LicenseShell,
-  valueOrDash,
 } from "@/app/(fleet-operations)/licenses/_components";
+import { valueOrDash } from "@/app/(fleet-operations)/licenses/_utils";
 import {
   accessRestricted,
   getLicenseSession,
@@ -63,13 +65,13 @@ async function LicensesPageContent({
           <div className="vehicle-table-wrapper">
             <table className="vehicle-table">
               <caption className="sr-only">Licence type preview</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Code</th>
-                  <th scope="col">Description</th>
-                  <th scope="col">Category</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>Code</> },
+                  { key: "column-2", label: <>Description</> },
+                  { key: "column-3", label: <>Category</> },
+                ]}
+              />
               <tbody>
                 {types.slice(0, 100).map((type) => (
                   <tr key={type.licenceCode}>

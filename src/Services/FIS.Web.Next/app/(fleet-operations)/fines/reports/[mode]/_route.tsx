@@ -4,6 +4,7 @@ import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 import {
   FineApiError,
   getFineReport,
@@ -102,17 +103,7 @@ function VehicleFields({
 }>) {
   return (
     <>
-      <fieldset className="vehicle-search-options">
-        <legend>Find vehicle by</legend>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="searchType" value="GP" defaultChecked={searchType === "GP"} />{" "}
-          GP
-        </label>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="searchType" value="GG" defaultChecked={searchType === "GG"} />{" "}
-          GG
-        </label>
-      </fieldset>
+      <SearchTypeFieldset selectedType={searchType} legend="Find vehicle by" firstOption="GP" />
       <div className="form-field">
         <label className="form-label" htmlFor="fine-report-vehicle-search">
           {searchType === "GG" ? "GG Number" : "GP Number"}
@@ -476,15 +467,16 @@ function ApiUnavailable({ path }: Readonly<{ path: string }>) {
   );
 }
 
-async function FineReportPageContent({
+const FineReportPageContent = renderFineReportPageContent;
+
+async function renderFineReportPageContent({
   searchParams,
   forcedMode,
   routePath: routePathValue = "/fines/reports",
   legacyResult = false,
 }: FineReportPageProps) {
   await connection();
-  const routePath = await routePathValue;
-  const session = await getSession();
+  const [routePath, session] = await Promise.all([Promise.resolve(routePathValue), getSession()]);
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
     return (
@@ -711,31 +703,6 @@ export function FineReportRoute({
       searchParams={searchParams}
     />
   );
-}
-
-type LegacyFineReportPageProps = {
-  searchParams: SearchParams;
-};
-
-export function createLegacyFineReportPage({
-  forcedMode,
-  routePath,
-  legacyResult = false,
-}: Readonly<{
-  forcedMode: string;
-  routePath: string;
-  legacyResult?: boolean;
-}>) {
-  return function LegacyFineReportPage({ searchParams }: Readonly<LegacyFineReportPageProps>) {
-    return (
-      <FineReportPage
-        forcedMode={forcedMode}
-        legacyResult={legacyResult}
-        routePath={routePath}
-        searchParams={searchParams}
-      />
-    );
-  };
 }
 
 export default FineReportRoute;

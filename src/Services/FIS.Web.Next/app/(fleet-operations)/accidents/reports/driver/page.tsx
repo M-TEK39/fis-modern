@@ -1,19 +1,25 @@
-import Link from "next/link";
-import { connection } from "next/server";
-import { redirect } from "next/navigation";
-import { Suspense } from "react";
-
-import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { Suspense } from "react";
 import {
-  AccidentApiError,
+  AccidentReportAccessRestricted,
+  AccidentReportErrorState,
+  AccidentReportFooter,
+  AccidentReportFormActions,
+  AccidentReportLoadingState,
+  AccidentReportPageShell,
+} from "@/app/(fleet-operations)/accidents/reports/_report-components";
+import {
+  authorizeAccidentReport,
+  loadAccidentReport,
+} from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
+import VehicleTable, {
+  type VehicleTableColumn,
+} from "@/app/(fleet-operations)/accidents/vehicle-table";
+import {
   getAccidentDriverReport,
   type AccidentDriverReportMode,
+  type AccidentDriverReportRow,
 } from "@/lib/api/fleet-operations/api-accidents";
-import { getSession } from "@/lib/auth/session";
-
-const ACCIDENTS_ROLE = "Accidents";
-
 type DriverReportPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
@@ -26,52 +32,123 @@ function getMode(value: string | undefined): AccidentDriverReportMode {
   return value === "id" || value === "Radioid" ? "id" : "name";
 }
 
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
-
 function valueOrDash(value: string | number | null) {
   return value === null || value === "" ? "-" : String(value);
 }
 
-function LoadingState() {
+const driverReportColumns: readonly VehicleTableColumn<AccidentDriverReportRow>[] = [
+  {
+    key: "registrationNumber",
+    label: "Registration Number",
+    render: (row) => valueOrDash(row.registrationNumber),
+  },
+  { key: "fleetNumber", label: "Fleet Number", render: (row) => valueOrDash(row.fleetNumber) },
+  { key: "driverName", label: "Driver Name", render: (row) => valueOrDash(row.driverName) },
+  {
+    key: "driverEmployNumber",
+    label: "ID Number",
+    render: (row) => valueOrDash(row.driverEmployNumber),
+  },
+  {
+    key: "accidentDate",
+    label: "Accident Date",
+    render: (row) => row.accidentDate?.slice(0, 10) ?? "-",
+  },
+  {
+    key: "departmentNumber",
+    label: "Dept/Site Number",
+    render: (row) => valueOrDash(row.departmentNumber),
+  },
+  {
+    key: "siteDescription",
+    label: "Department/Site Desciption",
+    render: (row) => valueOrDash(row.siteDescription),
+  },
+  { key: "costOfRepair", label: "Damage Amount", render: (row) => valueOrDash(row.costOfRepair) },
+];
+
+function DriverReportForm({
+  mode,
+  searchTerm,
+}: {
+  mode: AccidentDriverReportMode;
+  searchTerm: string;
+}) {
   return (
-    <div className="loading-card" aria-busy="true">
-      <span className="spinner" aria-hidden="true" />
-      <p>Loading page…</p>
-    </div>
+    <form className="vehicle-status-maintenance-panel" method="get">
+      <fieldset className="vehicle-search-options">
+        <legend>Search by</legend>
+        <label className="vehicle-checkbox-label">
+          <input type="radio" name="mode" value="name" defaultChecked={mode === "name"} /> Driver
+          name
+        </label>
+        <label className="vehicle-checkbox-label">
+          <input type="radio" name="mode" value="id" defaultChecked={mode === "id"} /> ID number
+        </label>
+      </fieldset>
+      <div className="field">
+        <label htmlFor="driver-report-search">
+          {mode === "name" ? "Driver name" : "ID number"}
+        </label>
+        <input
+          id="driver-report-search"
+          name="searchTerm"
+          maxLength={20}
+          defaultValue={searchTerm}
+          required
+        />
+      </div>
+      <AccidentReportFormActions submitLabel="SUBMIT" />
+    </form>
   );
 }
 
-function ErrorState() {
-  return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">API unavailable</p>
-      <h2>The driver report could not be loaded.</h2>
-      <p className="muted-copy">Retry when the FIS API is available.</p>
-      <Link className="button button-primary" href="/accidents/reports/driver">
-        Try again
-      </Link>
-    </section>
-  );
+function DriverReportResults({ rows }: { rows: AccidentDriverReportRow[] | null }) {
+  return rows !== null ? (
+    rows.length === 0 ? (
+      <div className="vehicle-empty-state">
+        <p className="eyebrow">No accidents found</p>
+        <h2>No accidents matched this driver search.</h2>
+        <p className="muted-copy">Try a different driver name or ID number.</p>
+      </div>
+    ) : (
+      <>
+        <div className="vehicle-table-wrapper" aria-live="polite">
+          <VehicleTable
+            caption="Accident report by driver name or ID number"
+            columns={driverReportColumns}
+            rows={rows}
+            rowKey={(row) =>
+              [
+                row.registrationNumber,
+                row.fleetNumber,
+                row.driverEmployNumber,
+                row.accidentDate,
+                row.departmentNumber,
+              ].join("|")
+            }
+          />
+        </div>
+        <p className="vehicle-pagination-meta">Total Number: {rows.length}</p>
+      </>
+    )
+  ) : null;
 }
 
 async function DriverReportContent({ searchParams }: DriverReportPageProps) {
-  await connection();
-  const session = await getSession();
-  if (session.status === "anonymous") redirect("/login");
-  if (session.status === "expired")
+  const authorization = await authorizeAccidentReport();
+  if (authorization === "expired")
     return <SessionRecovery returnPath="/accidents/reports/driver" />;
-  if (session.status === "unavailable") return <ErrorState />;
-  if (!hasRole(session.roles, ACCIDENTS_ROLE)) {
+  if (authorization === "unavailable") {
     return (
-      <section className="vehicle-status-card" role="alert">
-        <p className="eyebrow">Access restricted</p>
-        <h2>You do not have permission to run accident reports.</h2>
-      </section>
+      <AccidentReportErrorState
+        title="The driver report could not be loaded."
+        retryHref="/accidents/reports/driver"
+      />
     );
+  }
+  if (authorization === "forbidden") {
+    return <AccidentReportAccessRestricted />;
   }
 
   const query = await searchParams;
@@ -82,139 +159,46 @@ async function DriverReportContent({ searchParams }: DriverReportPageProps) {
     ""
   ).trim();
   const shouldRun = getQueryValue(query.run) === "1";
-  let rows = null;
-  if (shouldRun && searchTerm) {
-    try {
-      rows = await getAccidentDriverReport(searchTerm, mode);
-    } catch (error) {
-      if (error instanceof AccidentApiError && error.reason === "unauthorized")
-        return <SessionRecovery returnPath="/accidents/reports/driver" />;
-      console.error(
-        "FIS accident driver report failed",
-        error instanceof Error ? error.message : "unknown error",
-      );
-      return <ErrorState />;
-    }
+  const report = await loadAccidentReport({
+    shouldRun: shouldRun && Boolean(searchTerm),
+    errorMessage: null,
+    load: () => getAccidentDriverReport(searchTerm, mode),
+    context: "FIS accident driver report failed",
+  });
+  if (report.status === "unauthorized") {
+    return <SessionRecovery returnPath="/accidents/reports/driver" />;
   }
+  if (report.status === "error") {
+    return (
+      <AccidentReportErrorState
+        title="The driver report could not be loaded."
+        retryHref="/accidents/reports/driver"
+      />
+    );
+  }
+  const rows = report.data;
 
   return (
     <>
-      <form className="vehicle-status-maintenance-panel" method="get">
-        <fieldset className="vehicle-search-options">
-          <legend>Search by</legend>
-          <label className="vehicle-checkbox-label">
-            <input type="radio" name="mode" value="name" defaultChecked={mode === "name"} /> Driver
-            name
-          </label>
-          <label className="vehicle-checkbox-label">
-            <input type="radio" name="mode" value="id" defaultChecked={mode === "id"} /> ID number
-          </label>
-        </fieldset>
-        <div className="field">
-          <label htmlFor="driver-report-search">
-            {mode === "name" ? "Driver name" : "ID number"}
-          </label>
-          <input
-            id="driver-report-search"
-            name="searchTerm"
-            maxLength={20}
-            defaultValue={searchTerm}
-            required
-          />
-        </div>
-        <input name="run" type="hidden" value="1" />
-        <div className="button-row">
-          <button className="button button-primary" type="submit">
-            SUBMIT
-          </button>
-          <Link className="button button-secondary" href="/accidents/reports">
-            Report Menu
-          </Link>
-        </div>
-      </form>
+      <DriverReportForm mode={mode} searchTerm={searchTerm} />
+      <DriverReportResults rows={rows} />
 
-      {rows !== null ? (
-        rows.length === 0 ? (
-          <div className="vehicle-empty-state">
-            <p className="eyebrow">No accidents found</p>
-            <h2>No accidents matched this driver search.</h2>
-            <p className="muted-copy">Try a different driver name or ID number.</p>
-          </div>
-        ) : (
-          <>
-            <div className="vehicle-table-wrapper" aria-live="polite">
-              <table className="vehicle-table">
-                <caption className="sr-only">Accident report by driver name or ID number</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Registration Number</th>
-                    <th scope="col">Fleet Number</th>
-                    <th scope="col">Driver Name</th>
-                    <th scope="col">ID Number</th>
-                    <th scope="col">Accident Date</th>
-                    <th scope="col">Dept/Site Number</th>
-                    <th scope="col">Department/Site Desciption</th>
-                    <th scope="col">Damage Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row, index) => (
-                    <tr
-                      key={`${row.fleetNumber ?? "vehicle"}-${row.accidentDate ?? "date"}-${index}`}
-                    >
-                      <td>{valueOrDash(row.registrationNumber)}</td>
-                      <td>{valueOrDash(row.fleetNumber)}</td>
-                      <td>{valueOrDash(row.driverName)}</td>
-                      <td>{valueOrDash(row.driverEmployNumber)}</td>
-                      <td>{row.accidentDate?.slice(0, 10) ?? "-"}</td>
-                      <td>{valueOrDash(row.departmentNumber)}</td>
-                      <td>{valueOrDash(row.siteDescription)}</td>
-                      <td>{valueOrDash(row.costOfRepair)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <p className="vehicle-pagination-meta">Total Number: {rows.length}</p>
-          </>
-        )
-      ) : null}
-
-      <div className="vehicle-footer-actions">
-        <Link className="button button-secondary" href="/accidents">
-          Accident Menu
-        </Link>
-        <Link className="button button-secondary" href="/home">
-          Home
-        </Link>
-        <form action={logoutAction}>
-          <button className="button button-secondary" type="submit">
-            Sign out
-          </button>
-        </form>
-      </div>
+      <AccidentReportFooter />
     </>
   );
 }
 
 export default function AccidentDriverReportPage({ searchParams }: DriverReportPageProps) {
   return (
-    <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card" aria-labelledby="driver-report-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Accident reports</p>
-            <h1 id="driver-report-title">Accident Report By Driver Name Or ID Number</h1>
-            <p>Search by the beginning of a driver name or ID number.</p>
-          </div>
-          <Link className="button button-secondary" href="/accidents/reports">
-            Report Menu
-          </Link>
-        </header>
-        <Suspense fallback={<LoadingState />}>
-          <DriverReportContent searchParams={searchParams} />
-        </Suspense>
-      </section>
-    </main>
+    <AccidentReportPageShell
+      titleId="driver-report-title"
+      title="Accident Report By Driver Name Or ID Number"
+      description="Search by the beginning of a driver name or ID number."
+      fallback={<AccidentReportLoadingState />}
+    >
+      <Suspense fallback={<AccidentReportLoadingState />}>
+        <DriverReportContent searchParams={searchParams} />
+      </Suspense>
+    </AccidentReportPageShell>
   );
 }

@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -6,6 +8,7 @@ import { Suspense } from "react";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
 import {
   DEFAULT_MODEL_PAGE_SIZE,
   getModelsPage,
@@ -79,21 +82,13 @@ function AccessRestricted() {
 
 function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">API unavailable</p>
-      <h2>Vehicle models could not be loaded.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/validation-data">
-          Validation Data
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message="Vehicle models could not be loaded."
+      retryHref={routePath}
+      secondaryHref="/validation-data"
+      secondaryLabel="Validation Data"
+      showIcon={false}
+    />
   );
 }
 
@@ -120,17 +115,17 @@ function ModelTable({ models, total }: Readonly<{ models: ModelRecord[]; total: 
       <div className="table-wrapper">
         <table className="data-table">
           <caption className="sr-only">Legacy vehicle models</caption>
-          <thead>
-            <tr>
-              <th scope="col">Model code</th>
-              <th scope="col">Description</th>
-              <th scope="col">Make</th>
-              <th scope="col">Engine</th>
-              <th scope="col">Fuel type code</th>
-              <th scope="col">Transmission</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Model code</> },
+              { key: "column-2", label: <>Description</> },
+              { key: "column-3", label: <>Make</> },
+              { key: "column-4", label: <>Engine</> },
+              { key: "column-5", label: <>Fuel type code</> },
+              { key: "column-6", label: <>Transmission</> },
+              { key: "column-7", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {models.map((model) => (
               <tr key={model.modelCode}>
@@ -259,7 +254,75 @@ function ModelPagination({
   );
 }
 
-async function ModelListPageContent({
+function ModelListView({
+  modelPage,
+  makes,
+  makeCode,
+  error,
+  notice,
+  query,
+  routePath,
+}: Readonly<{
+  modelPage: ModelPage;
+  makes: MakeRecord[];
+  makeCode: number | null;
+  error: string | undefined;
+  notice: string | undefined;
+  query: Record<string, string | string[] | undefined>;
+  routePath: string;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="model-list-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Vehicle</p>
+            <h1 id="model-list-title">Model Maintenance</h1>
+            <p>Maintain the complete legacy model record used by vehicle workflows.</p>
+          </div>
+          <div className="button-row">
+            <Link className="button button-primary" href="/Validation/MNT_Model_Add.aspx">
+              Add Model
+            </Link>
+            <Link className="button button-secondary" href="/validation-data">
+              Validation Data
+            </Link>
+          </div>
+        </header>
+        {notice ? (
+          <div
+            className={`notice ${error ? "notice-error" : "notice-success"}`}
+            role={error ? "alert" : "status"}
+          >
+            {notice}
+          </div>
+        ) : null}
+        <ModelFilter routePath={routePath} selectedMakeCode={makeCode} makes={makes} />
+        <ModelTable models={modelPage.items} total={modelPage.total} />
+        <ModelPagination
+          routePath={routePath}
+          query={query}
+          page={modelPage.page}
+          totalPages={modelPage.totalPages}
+        />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const ModelListPageContent = renderModelListPageContent;
+
+async function renderModelListPageContent({
   searchParams,
   routePath = "/validation-data/models",
 }: ModelListPageProps) {
@@ -308,51 +371,15 @@ async function ModelListPageContent({
             ? "Model deleted successfully."
             : error;
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="model-list-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Vehicle</p>
-              <h1 id="model-list-title">Model Maintenance</h1>
-              <p>Maintain the complete legacy model record used by vehicle workflows.</p>
-            </div>
-            <div className="button-row">
-              <Link className="button button-primary" href="/Validation/MNT_Model_Add.aspx">
-                Add Model
-              </Link>
-              <Link className="button button-secondary" href="/validation-data">
-                Validation Data
-              </Link>
-            </div>
-          </header>
-          {notice ? (
-            <div
-              className={`notice ${error ? "notice-error" : "notice-success"}`}
-              role={error ? "alert" : "status"}
-            >
-              {notice}
-            </div>
-          ) : null}
-          <ModelFilter routePath={routePath} selectedMakeCode={makeCode} makes={makes} />
-          <ModelTable models={modelPage.items} total={modelPage.total} />
-          <ModelPagination
-            routePath={routePath}
-            query={query}
-            page={modelPage.page}
-            totalPages={modelPage.totalPages}
-          />
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <ModelListView
+        modelPage={modelPage}
+        makes={makes}
+        makeCode={makeCode}
+        error={error}
+        notice={notice}
+        query={query}
+        routePath={routePath}
+      />
     );
   } catch (error) {
     if (

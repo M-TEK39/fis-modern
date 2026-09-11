@@ -1,7 +1,12 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import ReportResultsPanel from "@/components/ui/report-results-panel";
+import TroubleshootResultsTable from "@/components/ui/troubleshoot-results-table";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
 import {
@@ -11,15 +16,17 @@ import {
   TroubleshootApiError,
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import {
-  hasTroubleshootingRole,
   Pagination,
-  pageNumber,
   StatusCard,
   TroubleshootMenu,
   TroubleshootShell,
   UserLabel,
-  valueOrDash,
 } from "@/app/(fleet-operations)/troubleshoot/_components";
+import {
+  hasTroubleshootingRole,
+  pageNumber,
+  valueOrDash,
+} from "@/app/(fleet-operations)/troubleshoot/_utils";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -39,7 +46,9 @@ function dateInput(value: string | undefined) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
 }
 
-async function TroubleshootReportsPageContent({
+const TroubleshootReportsPageContent = renderTroubleshootReportsPageContent;
+
+async function renderTroubleshootReportsPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -224,9 +233,9 @@ async function TroubleshootReportsPageContent({
             <button className="button button-primary" type="submit">
               Submit
             </button>
-            <a className="button button-secondary" href="/troubleshoot/reports">
+            <Link className="button button-secondary" href="/troubleshoot/reports">
               Clear
-            </a>
+            </Link>
           </div>
         </form>
       </section>
@@ -244,43 +253,15 @@ async function TroubleshootReportsPageContent({
           <p>No records found.</p>
         </div>
       ) : (
-        <section
-          className="vehicle-status-maintenance-panel"
-          aria-labelledby="troubleshoot-report-results-title"
+        <ReportResultsPanel
+          headingId="troubleshoot-report-results-title"
+          eyebrow={`${pageData?.total ?? 0} result${pageData?.total === 1 ? "" : "s"}`}
+          heading="Report results"
         >
-          <div className="vehicle-form-section-header">
-            <div>
-              <p className="eyebrow">
-                {pageData?.total ?? 0} result{pageData?.total === 1 ? "" : "s"}
-              </p>
-              <h2 id="troubleshoot-report-results-title">Report results</h2>
-            </div>
-          </div>
-          <div className="vehicle-table-wrapper">
-            <table className="vehicle-table">
-              <caption className="sr-only">Troubleshoot report results</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Vehicle</th>
-                  <th scope="col">Description</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Logged date</th>
-                  <th scope="col">Logged by</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageData?.items.map((row) => (
-                  <tr key={row.id}>
-                    <td>{valueOrDash(row.vehicleIdentifier)}</td>
-                    <td>{valueOrDash(row.problemDescription)}</td>
-                    <td>{valueOrDash(row.status)}</td>
-                    <td>{dateValue(row.loggedDate)}</td>
-                    <td>{valueOrDash(row.loggedBy)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TroubleshootResultsTable
+            rows={pageData?.items ?? []}
+            caption="Troubleshoot report results"
+          />
           <Pagination
             path="/troubleshoot/reports"
             page={pageData?.page ?? page}
@@ -294,7 +275,7 @@ async function TroubleshootReportsPageContent({
               openInExcel: openInExcel ? 1 : undefined,
             }}
           />
-        </section>
+        </ReportResultsPanel>
       )}
     </TroubleshootShell>
   );

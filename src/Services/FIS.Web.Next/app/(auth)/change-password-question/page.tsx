@@ -101,7 +101,65 @@ function StatusState({
   );
 }
 
-async function ChangePasswordQuestionContent({
+function ChangePasswordQuestionView({
+  canManageOthers,
+  users,
+  username,
+  email,
+  message,
+}: Readonly<{
+  canManageOthers: boolean;
+  users: Awaited<ReturnType<typeof getUserAdminUserChoices>>;
+  username: string;
+  email: string;
+  message: ReturnType<typeof getMessage>;
+}>) {
+  return (
+    <AuthPage>
+      <AuthBrand caption="Secure account settings" />
+      <AuthHeader
+        id="change-password-question-title"
+        title="Change Password and Question"
+        description="Update the password and recovery question used by the FIS account."
+      />
+
+      <p className="mb-6 text-center text-xs leading-relaxed text-muted-foreground">
+        The security answer is case sensitive. Keep it safe so the password recovery process remains
+        available.
+      </p>
+      {message ? <AuthNotice tone={message.tone}>{message.text}</AuthNotice> : null}
+
+      <section aria-labelledby="change-password-question-form-title">
+        <div className="mb-6 text-center">
+          <p className="text-xs font-medium uppercase tracking-[0.11em] text-muted-foreground">
+            Account credentials
+          </p>
+          <h2 id="change-password-question-form-title" className="mt-1 text-base font-semibold">
+            Enter the required account details
+          </h2>
+        </div>
+        <ChangePasswordQuestionForm
+          action={changePasswordQuestionAction}
+          canManageOthers={canManageOthers}
+          users={users}
+          username={username}
+          email={email}
+        />
+      </section>
+
+      <AuthFooter>
+        <Link
+          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+          href={canManageOthers ? "/UserAdmin/UserAdminMenu.aspx" : "/home"}
+        >
+          {canManageOthers ? "Menu" : "Home"}
+        </Link>
+      </AuthFooter>
+    </AuthPage>
+  );
+}
+
+async function renderChangePasswordQuestion({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -183,47 +241,13 @@ async function ChangePasswordQuestionContent({
   const email = selectedUser?.email ?? session.email ?? "";
 
   return (
-    <AuthPage>
-      <AuthBrand caption="Secure account settings" />
-      <AuthHeader
-        id="change-password-question-title"
-        title="Change Password and Question"
-        description="Update the password and recovery question used by the FIS account."
-      />
-
-      <p className="mb-6 text-center text-xs leading-relaxed text-muted-foreground">
-        The security answer is case sensitive. Keep it safe so the password recovery process remains
-        available.
-      </p>
-      {message ? <AuthNotice tone={message.tone}>{message.text}</AuthNotice> : null}
-
-      <section aria-labelledby="change-password-question-form-title">
-        <div className="mb-6 text-center">
-          <p className="text-xs font-medium uppercase tracking-[0.11em] text-muted-foreground">
-            Account credentials
-          </p>
-          <h2 id="change-password-question-form-title" className="mt-1 text-base font-semibold">
-            Enter the required account details
-          </h2>
-        </div>
-        <ChangePasswordQuestionForm
-          action={changePasswordQuestionAction}
-          canManageOthers={canManageOthers}
-          users={users}
-          username={username}
-          email={email}
-        />
-      </section>
-
-      <AuthFooter>
-        <Link
-          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-          href={canManageOthers ? "/UserAdmin/UserAdminMenu.aspx" : "/home"}
-        >
-          {canManageOthers ? "Menu" : "Home"}
-        </Link>
-      </AuthFooter>
-    </AuthPage>
+    <ChangePasswordQuestionView
+      canManageOthers={canManageOthers}
+      email={email}
+      message={message}
+      users={users}
+      username={username}
+    />
   );
 }
 
@@ -232,7 +256,7 @@ export default function ChangePasswordQuestionPage({
 }: Readonly<{ searchParams: SearchParams }>) {
   return (
     <Suspense fallback={<RouteLoading />}>
-      <ChangePasswordQuestionContent searchParams={searchParams} />
+      {renderChangePasswordQuestion({ searchParams })}
     </Suspense>
   );
 }

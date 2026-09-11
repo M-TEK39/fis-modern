@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import ReportResultsPanel from "@/components/ui/report-results-panel";
+import ReportRowsTable from "@/components/ui/report-rows-table";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   getLegacyReport,
@@ -11,9 +13,7 @@ import {
 } from "@/lib/api/reports/api-legacy-reports";
 import { getSites, type SiteRecord } from "@/lib/api/reference-data/api-sites";
 import { getSession } from "@/lib/auth/session";
-
-const REPORT_MODES = ["per-site-province-date", "not-verified", "verified-by-date-range"] as const;
-type AssetVerificationReportMode = (typeof REPORT_MODES)[number];
+import { assetVerificationReportMode, type AssetVerificationReportMode } from "./_utils";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export type AssetVerificationReportPageProps = {
@@ -203,48 +203,22 @@ function ReportResults({ report }: Readonly<{ report: LegacyReport }>) {
   }
 
   return (
-    <section
-      className="vehicle-status-maintenance-panel"
-      aria-labelledby="asset-report-results-title"
-    >
-      <div className="vehicle-form-section-header">
-        <div>
-          <p className="eyebrow">Report results</p>
-          <h2 id="asset-report-results-title">{report.totalCount} record(s) returned</h2>
-        </div>
+    <ReportResultsPanel
+      headingId="asset-report-results-title"
+      heading={`${report.totalCount} record(s) returned`}
+      trailing={
         <span className="form-hint">
           {report.isApproximate ? "Compatibility result" : "Legacy-aligned result"}
         </span>
-      </div>
+      }
+    >
       {report.isApproximate && report.approximationReason ? (
         <div className="notice notice-info" role="status">
           {report.approximationReason}
         </div>
       ) : null}
-      <div className="vehicle-table-wrapper">
-        <table className="vehicle-table">
-          <caption className="sr-only">{report.title}</caption>
-          <thead>
-            <tr>
-              {report.columns.map((column) => (
-                <th key={column.key} scope="col">
-                  {column.header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {report.rows.map((row, index) => (
-              <tr key={`${row[report.columns[0]?.key] ?? "row"}-${index}`}>
-                {report.columns.map((column) => (
-                  <td key={column.key}>{valueOrDash(row[column.key])}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <ReportRowsTable columns={report.columns} rows={report.rows} caption={report.title} />
+    </ReportResultsPanel>
   );
 }
 
@@ -263,7 +237,9 @@ function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   );
 }
 
-async function AssetVerificationReportPageContent({
+const AssetVerificationReportPageContent = renderAssetVerificationReportPageContent;
+
+async function renderAssetVerificationReportPageContent({
   mode,
   searchParams,
   routePath = `/reports/asset-verification/${mode}`,
@@ -395,15 +371,6 @@ export function AssetVerificationReportPage(props: AssetVerificationReportPagePr
       <AssetVerificationReportPageContent {...props} />
     </StreamedRoute>
   );
-}
-
-export function isAssetVerificationReportMode(value: string): value is AssetVerificationReportMode {
-  return REPORT_MODES.includes(value as AssetVerificationReportMode);
-}
-
-export function assetVerificationReportMode(value: string): AssetVerificationReportMode {
-  if (!isAssetVerificationReportMode(value)) notFound();
-  return value;
 }
 
 async function AssetVerificationReportRouteContent({

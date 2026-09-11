@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -150,13 +152,13 @@ function MerchantList({
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Existing clearance merchants</caption>
-            <thead>
-              <tr>
-                <th scope="col">Merchant ID</th>
-                <th scope="col">Name</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Merchant ID</> },
+                { key: "column-2", label: <>Name</> },
+                { key: "column-3", label: <>Action</> },
+              ]}
+            />
             <tbody>
               {merchants.map((merchant) => (
                 <tr key={merchant.merchantCode}>
@@ -213,7 +215,9 @@ function MerchantList({
   );
 }
 
-async function ClearanceMerchantContent({
+const ClearanceMerchantContent = renderClearanceMerchantContent;
+
+async function renderClearanceMerchantContent({
   searchParams,
   deletionMode = false,
   routePath = "/clearance/merchant",

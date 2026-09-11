@@ -12,6 +12,7 @@ import type {
   RecoveredVehicleDetails,
   RecoveredVehicleSearchMode,
   RecoveredVehicleSearchResult,
+  RecoveredVehicleStatusOption,
 } from "@/lib/api/vehicles/api-recovered-vehicles";
 
 type RecoveredVehicleClientProps = {
@@ -33,6 +34,13 @@ function getStatusLabel(vehicle: RecoveredVehicleSearchResult) {
   return `${valueOrDash(vehicle.fleetNumber)} / ${valueOrDash(vehicle.registrationNumber)} (${vehicle.vmfCode})`;
 }
 
+function availableStatusOptions(options: readonly RecoveredVehicleStatusOption[]) {
+  return options.reduce<RecoveredVehicleStatusOption[]>((result, option) => {
+    if (option.code !== 4) result.push(option);
+    return result;
+  }, []);
+}
+
 export default function RecoveredVehicleClient({
   initialSearchTerm,
   initialMode,
@@ -47,7 +55,7 @@ export default function RecoveredVehicleClient({
   );
   const [details, setDetails] = useState<RecoveredVehicleDetails | null>(initialDetails);
   const [recoveredFleetNumber, setRecoveredFleetNumber] = useState("");
-  const [dateChanged, setDateChanged] = useState(
+  const [dateChanged, setDateChanged] = useState(() =>
     dateInputValue(initialDetails?.previousDateChanged ?? null),
   );
   const [newStatusCode, setNewStatusCode] = useState(
@@ -293,13 +301,11 @@ export default function RecoveredVehicleClient({
                   value={newStatusCode}
                   onChange={(event) => setNewStatusCode(Number(event.target.value))}
                 >
-                  {details.statusOptions
-                    .filter((status) => status.code !== 4)
-                    .map((status) => (
-                      <option key={status.code} value={status.code}>
-                        {status.description}
-                      </option>
-                    ))}
+                  {availableStatusOptions(details.statusOptions).map((status) => (
+                    <option key={status.code} value={status.code}>
+                      {status.description}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="form-field">

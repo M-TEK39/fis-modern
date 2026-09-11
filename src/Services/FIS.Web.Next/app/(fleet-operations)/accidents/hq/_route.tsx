@@ -5,8 +5,14 @@ import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
+import VehicleTable, {
+  type VehicleTableColumn,
+} from "@/app/(fleet-operations)/accidents/vehicle-table";
 import {
   AccidentApiError,
+  type GarageAccidentPage,
+  type GarageAccidentRow,
   getHqAccidentPage,
   type GarageSearchType,
 } from "@/lib/api/fleet-operations/api-accidents";
@@ -60,6 +66,29 @@ function buildHqAddHref(searchType: GarageSearchType, searchTerm: string, locati
 
   return `/accidents/hq/add?${params.toString()}`;
 }
+
+const hqTableColumns: readonly VehicleTableColumn<GarageAccidentRow>[] = [
+  { key: "vehicleNumber", label: "Vehicle Number", render: (row) => row.vehicleNumber ?? "-" },
+  { key: "hireType", label: "Hire Type", render: (row) => row.hireType ?? "-" },
+  {
+    key: "accidentDate",
+    label: "Accident Date",
+    render: (row) => row.accidentDate?.slice(0, 10) ?? "-",
+  },
+  { key: "reference", label: "Reference", render: (row) => row.reference ?? "-" },
+  {
+    key: "action",
+    label: "Action",
+    render: (row) => (
+      <Link
+        className="button button-secondary button-small"
+        href={`/accidents/hq/edit?accidentId=${encodeURIComponent(row.accidentCode)}`}
+      >
+        Edit
+      </Link>
+    ),
+  },
+];
 
 function LoadingState() {
   return (
@@ -120,6 +149,113 @@ function NoRecords({ searchTerm }: { searchTerm: string }) {
   );
 }
 
+function HqSearchForm({
+  searchType,
+  searchTerm,
+}: {
+  searchType: GarageSearchType;
+  searchTerm: string;
+}) {
+  return (
+    <form className="accident-garage-search" method="get">
+      <SearchTypeFieldset
+        selectedType={searchType}
+        legend="Search by"
+        name="type"
+        className="accident-garage-search-options"
+      />
+      <div className="vehicle-search-row">
+        <label className="sr-only" htmlFor="hq-search">
+          {searchType === "GG" ? "GG Number" : "GP Number"}
+        </label>
+        <input
+          className="vehicle-search"
+          id="hq-search"
+          maxLength={8}
+          name="q"
+          placeholder={searchType === "GG" ? "Enter GG number" : "Enter GP number"}
+          defaultValue={searchTerm}
+        />
+      </div>
+      <div className="button-row">
+        <button className="button button-primary" type="submit">
+          Submit
+        </button>
+        <Link className="button button-secondary" href="/accidents">
+          Menu
+        </Link>
+      </div>
+    </form>
+  );
+}
+
+function HqPageResults({
+  pageData,
+  searchType,
+  searchTerm,
+  locationCode,
+}: {
+  pageData: GarageAccidentPage;
+  searchType: GarageSearchType;
+  searchTerm: string;
+  locationCode?: number;
+}) {
+  if (pageData.totalRecords === 0) return <NoRecords searchTerm={searchTerm} />;
+
+  return (
+    <>
+      <div className="vehicle-table-wrapper" aria-live="polite">
+        <VehicleTable
+          caption="HQ accident records"
+          columns={hqTableColumns}
+          rows={pageData.rows}
+          rowKey={(row) => row.accidentCode}
+        />
+      </div>
+      {pageData.totalPages > 1 ? (
+        <nav className="vehicle-pagination" aria-label="HQ accident pages">
+          {pageData.page > 1 ? (
+            <Link
+              className="vehicle-pagination-button"
+              href={buildHqHref(searchType, searchTerm, pageData.page - 1, locationCode)}
+            >
+              Previous
+            </Link>
+          ) : (
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Previous
+            </span>
+          )}
+          <span>
+            Page {pageData.page} of {pageData.totalPages}
+          </span>
+          {pageData.page < pageData.totalPages ? (
+            <Link
+              className="vehicle-pagination-button"
+              href={buildHqHref(searchType, searchTerm, pageData.page + 1, locationCode)}
+            >
+              Next
+            </Link>
+          ) : (
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Next
+            </span>
+          )}
+        </nav>
+      ) : null}
+      <p className="vehicle-pagination-meta">
+        Total records: {pageData.totalRecords} | Page size: {pageData.pageSize}
+      </p>
+    </>
+  );
+}
+
 async function HqContent({ searchParams, locationCode }: HqPageProps) {
   await connection();
   const session = await getSession();
@@ -161,117 +297,13 @@ async function HqContent({ searchParams, locationCode }: HqPageProps) {
           Accident updated successfully.
         </div>
       ) : null}
-      <form className="accident-garage-search" method="get">
-        <fieldset className="accident-garage-search-options">
-          <legend>Search by</legend>
-          <label className="vehicle-checkbox-label">
-            <input type="radio" name="type" value="GG" defaultChecked={searchType === "GG"} /> GG
-          </label>
-          <label className="vehicle-checkbox-label">
-            <input type="radio" name="type" value="GP" defaultChecked={searchType === "GP"} /> GP
-          </label>
-        </fieldset>
-        <div className="vehicle-search-row">
-          <label className="sr-only" htmlFor="hq-search">
-            {searchType === "GG" ? "GG Number" : "GP Number"}
-          </label>
-          <input
-            className="vehicle-search"
-            id="hq-search"
-            maxLength={8}
-            name="q"
-            placeholder={searchType === "GG" ? "Enter GG number" : "Enter GP number"}
-            defaultValue={searchTerm}
-          />
-        </div>
-        <div className="button-row">
-          <button className="button button-primary" type="submit">
-            Submit
-          </button>
-          <Link className="button button-secondary" href="/accidents">
-            Menu
-          </Link>
-        </div>
-      </form>
-
-      {pageData.totalRecords === 0 ? (
-        <NoRecords searchTerm={searchTerm} />
-      ) : (
-        <>
-          <div className="vehicle-table-wrapper" aria-live="polite">
-            <table className="vehicle-table">
-              <caption className="sr-only">HQ accident records</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Vehicle Number</th>
-                  <th scope="col">Hire Type</th>
-                  <th scope="col">Accident Date</th>
-                  <th scope="col">Reference</th>
-                  <th scope="col">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageData.rows.map((row) => (
-                  <tr key={row.accidentCode}>
-                    <td>{row.vehicleNumber ?? "-"}</td>
-                    <td>{row.hireType ?? "-"}</td>
-                    <td>{row.accidentDate?.slice(0, 10) ?? "-"}</td>
-                    <td>{row.reference ?? "-"}</td>
-                    <td>
-                      <Link
-                        className="button button-secondary button-small"
-                        href={`/accidents/hq/edit?accidentId=${encodeURIComponent(row.accidentCode)}`}
-                      >
-                        Edit
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {pageData.totalPages > 1 ? (
-            <nav className="vehicle-pagination" aria-label="HQ accident pages">
-              {pageData.page > 1 ? (
-                <Link
-                  className="vehicle-pagination-button"
-                  href={buildHqHref(searchType, searchTerm, pageData.page - 1, locationCode)}
-                >
-                  Previous
-                </Link>
-              ) : (
-                <span
-                  className="vehicle-pagination-button vehicle-pagination-disabled"
-                  aria-disabled="true"
-                >
-                  Previous
-                </span>
-              )}
-              <span>
-                Page {pageData.page} of {pageData.totalPages}
-              </span>
-              {pageData.page < pageData.totalPages ? (
-                <Link
-                  className="vehicle-pagination-button"
-                  href={buildHqHref(searchType, searchTerm, pageData.page + 1, locationCode)}
-                >
-                  Next
-                </Link>
-              ) : (
-                <span
-                  className="vehicle-pagination-button vehicle-pagination-disabled"
-                  aria-disabled="true"
-                >
-                  Next
-                </span>
-              )}
-            </nav>
-          ) : null}
-          <p className="vehicle-pagination-meta">
-            Total records: {pageData.totalRecords} | Page size: {pageData.pageSize}
-          </p>
-        </>
-      )}
+      <HqSearchForm searchType={searchType} searchTerm={searchTerm} />
+      <HqPageResults
+        pageData={pageData}
+        searchType={searchType}
+        searchTerm={searchTerm}
+        locationCode={locationCode}
+      />
 
       <div className="vehicle-footer-actions">
         <Link
@@ -316,16 +348,6 @@ export function HqAccidentRoute({ searchParams, locationCode }: HqPageProps) {
       </section>
     </main>
   );
-}
-
-type LegacyHqAccidentPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyHqAccidentPage(locationCode: number) {
-  return function LegacyHqAccidentPage({ searchParams }: Readonly<LegacyHqAccidentPageProps>) {
-    return <HqAccidentRoute locationCode={locationCode} searchParams={searchParams} />;
-  };
 }
 
 export default function HqAccidentPage({ searchParams }: Pick<HqPageProps, "searchParams">) {

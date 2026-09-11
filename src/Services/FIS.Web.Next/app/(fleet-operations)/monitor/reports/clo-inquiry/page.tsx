@@ -13,7 +13,7 @@ import {
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/monitor/_page";
-import { getMonitors } from "@/lib/api/fleet-operations/api-monitor";
+import { getMonitors, type MonitorReportRow } from "@/lib/api/fleet-operations/api-monitor";
 
 async function MonitorCloReportPageContent({
   searchParams,
@@ -28,13 +28,14 @@ async function MonitorCloReportPageContent({
   const query = await searchParams;
   const inquiryType = queryValue(query.inquiryType).toLocaleLowerCase();
   const records = await getMonitors();
-  const rows = records
-    .filter(
-      (record) =>
-        !record.isDeleted &&
-        (!inquiryType || record.inquiryType?.toLocaleLowerCase() === inquiryType),
-    )
-    .map((record) => ({
+  const rows = records.reduce<MonitorReportRow[]>((result, record) => {
+    if (
+      record.isDeleted ||
+      (inquiryType && record.inquiryType?.toLocaleLowerCase() !== inquiryType)
+    ) {
+      return result;
+    }
+    result.push({
       monitorCode: record.monitorCode,
       vmfCode: record.vmfCode,
       captureDate: record.captureDate,
@@ -43,7 +44,9 @@ async function MonitorCloReportPageContent({
       driverName: record.driverName ?? "",
       driverPersalNo: record.driverPersalNo ?? "",
       driverSite: record.driverSite,
-    }));
+    });
+    return result;
+  }, []);
   return (
     <MonitorShell
       title="Client Liaison Officer (CLO) Inquiry Report"

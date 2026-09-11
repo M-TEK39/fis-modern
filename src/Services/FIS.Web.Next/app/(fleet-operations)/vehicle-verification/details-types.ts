@@ -1,0 +1,28 @@
+export type AssetVerificationInitial = {
+  province: string;
+  departmentName: string;
+  siteName: string;
+  siteCode: string;
+  responsibleManager: string;
+  telNo: string;
+  faxNo: string;
+  vehicleMake: string;
+  vehicleModel: string;
+  vehicleColour: string;
+  mobitrackFitted: string;
+  petrolCard: string;
+  lamination: string;
+  tyreBands: string;
+  barcode: string;
+  logbook: string;
+  gearlock: string;
+  radio: string;
+  carKeys: string;
+  licenceExpiryDate: string;
+  barcodeNumber: string;
+  vehicleEngineNumber: string;
+  vehicleChassisNumber: string;
+  currentKm: string;
+  lastVerified: string;
+  comments: string;
+};

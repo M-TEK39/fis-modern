@@ -146,23 +146,26 @@ export async function createJobCardAction(formData: FormData) {
   if (!access.ok) redirectWithMessage(path, "error", access.message);
 
   try {
-    const extraCodes = formData
-      .getAll("extraCode")
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value > 0);
+    const extraCodes = formData.getAll("extraCode").reduce<number[]>((codes, value) => {
+      const extraCode = Number(value);
+      if (Number.isInteger(extraCode) && extraCode > 0) codes.push(extraCode);
+      return codes;
+    }, []);
     if (extraCodes.length === 0)
       throw new JobCardValidationError("Select at least one job card category.");
     const comment = optionalText(formData, "jcsComment", "Comment", 2000);
     const damages = optionalText(formData, "damages", "Damages", 2000);
-    for (const extraCode of extraCodes) {
-      await createJobCard({
-        vmf_code: vmfCode,
-        extra_code: extraCode,
-        jcs_comment: comment,
-        damages,
-        priority: text(formData, "priority") || "N",
-      });
-    }
+    await Promise.all(
+      extraCodes.map((extraCode) =>
+        createJobCard({
+          vmf_code: vmfCode,
+          extra_code: extraCode,
+          jcs_comment: comment,
+          damages,
+          priority: text(formData, "priority") || "N",
+        }),
+      ),
+    );
     revalidateJobCardPages();
     redirectWithMessage(path, "saved", "1");
   } catch (error) {

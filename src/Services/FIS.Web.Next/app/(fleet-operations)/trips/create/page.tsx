@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -105,15 +107,15 @@ function VehiclePicker({ vehicles }: Readonly<{ vehicles: TripAuthorityVehicle[]
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Current vehicle contracts</caption>
-            <thead>
-              <tr>
-                <th scope="col">Fleet / registration</th>
-                <th scope="col">VMF</th>
-                <th scope="col">Contract</th>
-                <th scope="col">Site</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Fleet / registration</> },
+                { key: "column-2", label: <>VMF</> },
+                { key: "column-3", label: <>Contract</> },
+                { key: "column-4", label: <>Site</> },
+                { key: "column-5", label: <>Action</> },
+              ]}
+            />
             <tbody>
               {vehicles.map((vehicle) => (
                 <tr key={`${vehicle.contractCode}-${vehicle.vmfCode}`}>
@@ -152,7 +154,11 @@ function unavailablePage(message: string) {
   );
 }
 
-async function CreateTripPageContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+const CreateTripPageContent = renderCreateTripPageContent;
+
+async function renderCreateTripPageContent({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getTripSession();
   const sessionMessage = tripSessionMessage(session, "/trips/create");
@@ -170,7 +176,7 @@ async function CreateTripPageContent({ searchParams }: Readonly<{ searchParams: 
 
   if (vmfCode === null && requestedContractCode === null) {
     try {
-      return VehiclePicker({ vehicles: await getTripAuthorityVehicles() });
+      return <VehiclePicker vehicles={await getTripAuthorityVehicles()} />;
     } catch (error) {
       console.error(
         "FIS trip vehicle selection failed",
@@ -243,6 +249,7 @@ async function CreateTripPageContent({ searchParams }: Readonly<{ searchParams: 
   }
 
   const message = resultMessage(result);
+  const today = new Date().toISOString().slice(0, 10);
   return pageShell(
     <article className="vehicle-card" aria-labelledby="trip-create-title">
       <header className="vehicle-page-header">
@@ -277,7 +284,7 @@ async function CreateTripPageContent({ searchParams }: Readonly<{ searchParams: 
         drivers={drivers}
         mode={mode}
         result={result}
-        today={new Date().toISOString().slice(0, 10)}
+        today={today}
       />
     </article>,
   );

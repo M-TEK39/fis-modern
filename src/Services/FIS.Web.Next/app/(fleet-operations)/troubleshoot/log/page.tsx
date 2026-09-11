@@ -1,7 +1,11 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import ReportResultsPanel from "@/components/ui/report-results-panel";
+import TroubleshootResultsTable from "@/components/ui/troubleshoot-results-table";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   DEFAULT_TROUBLESHOOT_PAGE_SIZE,
@@ -11,13 +15,12 @@ import {
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import { getSession } from "@/lib/auth/session";
 import {
-  hasTroubleshootingRole,
   Pagination,
   StatusCard,
   TroubleshootMenu,
   TroubleshootShell,
-  valueOrDash,
 } from "@/app/(fleet-operations)/troubleshoot/_components";
+import { hasTroubleshootingRole, valueOrDash } from "@/app/(fleet-operations)/troubleshoot/_utils";
 import { updateTroubleshootLogsAction } from "@/app/(fleet-operations)/troubleshoot/actions";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -34,7 +37,9 @@ function dateValue(value: string | null) {
   return value ? value.slice(0, 10) : "-";
 }
 
-async function TroubleshootLogPageContent({
+const TroubleshootLogPageContent = renderTroubleshootLogPageContent;
+
+async function renderTroubleshootLogPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -174,56 +179,27 @@ async function TroubleshootLogPageContent({
           <p>No logs match the selected user/site.</p>
         </div>
       ) : (
-        <section
-          className="vehicle-status-maintenance-panel"
-          aria-labelledby="troubleshoot-log-results-title"
-        >
-          <div className="vehicle-form-section-header">
-            <div>
-              <p className="eyebrow">
-                {pageData?.total ?? 0} log{pageData?.total === 1 ? "" : "s"}
-              </p>
-              <h2 id="troubleshoot-log-results-title">Report results</h2>
-            </div>
+        <ReportResultsPanel
+          headingId="troubleshoot-log-results-title"
+          eyebrow={`${pageData?.total ?? 0} log${pageData?.total === 1 ? "" : "s"}`}
+          heading="Report results"
+          trailing={
             <form action={updateTroubleshootLogsAction}>
               <input type="hidden" name="userAccessCode" value={userAccessCode} />
               <button className="button button-secondary button-small" type="submit">
                 Update Logs
               </button>
             </form>
-          </div>
-          <div className="vehicle-table-wrapper">
-            <table className="vehicle-table">
-              <caption className="sr-only">Troubleshoot logs</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Vehicle</th>
-                  <th scope="col">Description</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Logged date</th>
-                  <th scope="col">Logged by</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageData?.items.map((log) => (
-                  <tr key={log.id}>
-                    <td>{valueOrDash(log.vehicleIdentifier)}</td>
-                    <td>{valueOrDash(log.problemDescription)}</td>
-                    <td>{valueOrDash(log.status)}</td>
-                    <td>{dateValue(log.loggedDate)}</td>
-                    <td>{valueOrDash(log.loggedBy)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          }
+        >
+          <TroubleshootResultsTable rows={pageData?.items ?? []} caption="Troubleshoot logs" />
           <Pagination
             path="/troubleshoot/log"
             page={pageData?.page ?? page}
             totalPages={pageData?.totalPages ?? 1}
             query={{ userAccessCode }}
           />
-        </section>
+        </ReportResultsPanel>
       )}
     </TroubleshootShell>
   );

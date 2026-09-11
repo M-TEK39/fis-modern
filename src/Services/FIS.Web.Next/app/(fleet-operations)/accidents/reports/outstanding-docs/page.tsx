@@ -1,19 +1,28 @@
 import Link from "next/link";
-import { connection } from "next/server";
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
-
-import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
-  AccidentApiError,
+  AccidentReportAccessRestricted,
+  AccidentReportErrorState,
+  AccidentReportFooter,
+  AccidentReportFormActions,
+  AccidentReportFormError,
+  AccidentReportLoadingState,
+  AccidentReportPageShell,
+  AccidentVehicleSearchFieldsWithMode,
+} from "@/app/(fleet-operations)/accidents/reports/_report-components";
+import {
+  authorizeAccidentReport,
+  loadAccidentReport,
+} from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
+import VehicleTable, {
+  type VehicleTableColumn,
+} from "@/app/(fleet-operations)/accidents/vehicle-table";
+import {
   getAccidentOutstandingDocumentLookup,
   type AccidentOutstandingDocumentLookupRow,
   type AccidentVehicleReportMode,
 } from "@/lib/api/fleet-operations/api-accidents";
-import { getSession } from "@/lib/auth/session";
-
-const ACCIDENTS_ROLE = "Accidents";
 type QueryValue = string | string[] | undefined;
 type ReportQuery = Record<string, QueryValue>;
 
@@ -35,12 +44,6 @@ function getMode(value: string | undefined): AccidentVehicleReportMode {
     : "registration";
 }
 
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
-
 function valueOrDash(value: string | null) {
   return value?.trim() || "-";
 }
@@ -49,26 +52,34 @@ function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
 }
 
-function LoadingState() {
-  return (
-    <div className="loading-card" aria-busy="true">
-      <span className="spinner" aria-hidden="true" />
-      <p>Loading page…</p>
-    </div>
-  );
-}
-
-function ErrorState() {
-  return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">API unavailable</p>
-      <h2>The outstanding document lookup could not be loaded.</h2>
-      <p className="muted-copy">Retry when the FIS API is available.</p>
-      <Link className="button button-primary" href="/accidents/reports/outstanding-docs">
-        Try again
-      </Link>
-    </section>
-  );
+function getOutstandingDocumentsColumns(
+  mode: AccidentVehicleReportMode,
+): readonly VehicleTableColumn<AccidentOutstandingDocumentLookupRow>[] {
+  return [
+    {
+      key: "vehicleNumber",
+      label: "Vehicle Number",
+      render: (row) => valueOrDash(mode === "fleet" ? row.fleetNumber : row.registrationNumber),
+    },
+    {
+      key: "ggReference",
+      label: "Refer Number (GMT Number)",
+      render: (row) => valueOrDash(row.ggReference),
+    },
+    { key: "accidentDate", label: "Accident Date", render: (row) => formatDate(row.accidentDate) },
+    {
+      key: "action",
+      label: "Action",
+      render: (row) => (
+        <Link
+          className="button button-secondary button-small"
+          href={`/accidents/reports/outstanding-docs/letter?accidentCode=${encodeURIComponent(row.accidentCode)}`}
+        >
+          Report
+        </Link>
+      ),
+    },
+  ];
 }
 
 function LookupTable({
@@ -92,37 +103,59 @@ function LookupTable({
         <span className="form-hint">{rows.length} record(s)</span>
       </div>
       <div className="vehicle-table-wrapper">
-        <table className="vehicle-table">
-          <caption className="sr-only">Accidents found for the selected vehicle number</caption>
-          <thead>
-            <tr>
-              <th scope="col">Vehicle Number</th>
-              <th scope="col">Refer Number (GMT Number)</th>
-              <th scope="col">Accident Date</th>
-              <th scope="col">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.accidentCode}>
-                <td>{valueOrDash(mode === "fleet" ? row.fleetNumber : row.registrationNumber)}</td>
-                <td>{valueOrDash(row.ggReference)}</td>
-                <td>{formatDate(row.accidentDate)}</td>
-                <td>
-                  <Link
-                    className="button button-secondary button-small"
-                    href={`/accidents/reports/outstanding-docs/letter?accidentCode=${encodeURIComponent(row.accidentCode)}`}
-                  >
-                    Report
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <VehicleTable
+          caption="Accidents found for the selected vehicle number"
+          columns={getOutstandingDocumentsColumns(mode)}
+          rows={rows}
+          rowKey={(row) => row.accidentCode}
+        />
       </div>
     </section>
   );
+}
+
+function OutstandingDocumentsForm({
+  errorMessage,
+  mode,
+  searchTerm,
+}: {
+  errorMessage: string | null;
+  mode: AccidentVehicleReportMode;
+  searchTerm: string;
+}) {
+  return (
+    <>
+      <AccidentReportFormError message={errorMessage} />
+      <form className="vehicle-status-maintenance-panel" method="get">
+        <AccidentVehicleSearchFieldsWithMode
+          inputId="outstanding-documents-search"
+          mode={mode}
+          searchTerm={searchTerm}
+        />
+        <AccidentReportFormActions />
+      </form>
+    </>
+  );
+}
+
+function OutstandingDocumentsResults({
+  rows,
+  mode,
+}: {
+  rows: AccidentOutstandingDocumentLookupRow[] | null;
+  mode: AccidentVehicleReportMode;
+}) {
+  return rows !== null ? (
+    rows.length > 0 ? (
+      <LookupTable rows={rows} mode={mode} />
+    ) : (
+      <section className="vehicle-empty-state" aria-live="polite">
+        <p className="eyebrow">Vehicle not found</p>
+        <h2>This vehicle number does not exist.</h2>
+        <p className="muted-copy">Try another GP or GG number.</p>
+      </section>
+    )
+  ) : null;
 }
 
 async function OutstandingDocumentsContent({
@@ -130,19 +163,19 @@ async function OutstandingDocumentsContent({
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
-  await connection();
-  const session = await getSession();
-  if (session.status === "anonymous") redirect("/login");
-  if (session.status === "expired")
+  const authorization = await authorizeAccidentReport();
+  if (authorization === "expired")
     return <SessionRecovery returnPath="/accidents/reports/outstanding-docs" />;
-  if (session.status === "unavailable") return <ErrorState />;
-  if (!hasRole(session.roles, ACCIDENTS_ROLE)) {
+  if (authorization === "unavailable") {
     return (
-      <section className="vehicle-status-card" role="alert">
-        <p className="eyebrow">Access restricted</p>
-        <h2>You do not have permission to run accident reports.</h2>
-      </section>
+      <AccidentReportErrorState
+        title="The outstanding document lookup could not be loaded."
+        retryHref="/accidents/reports/outstanding-docs"
+      />
     );
+  }
+  if (authorization === "forbidden") {
+    return <AccidentReportAccessRestricted />;
   }
 
   const query = await searchParams;
@@ -160,91 +193,30 @@ async function OutstandingDocumentsContent({
         ? "Vehicle numbers can contain no more than 8 characters."
         : null;
 
-  let rows: AccidentOutstandingDocumentLookupRow[] | null = null;
-  if (shouldRun && !errorMessage) {
-    try {
-      rows = await getAccidentOutstandingDocumentLookup(searchTerm, mode);
-    } catch (error) {
-      if (error instanceof AccidentApiError && error.reason === "unauthorized")
-        return <SessionRecovery returnPath="/accidents/reports/outstanding-docs" />;
-      console.error(
-        "FIS outstanding accident document lookup failed",
-        error instanceof Error ? error.message : "unknown error",
-      );
-      return <ErrorState />;
-    }
+  const report = await loadAccidentReport({
+    shouldRun,
+    errorMessage,
+    load: () => getAccidentOutstandingDocumentLookup(searchTerm, mode),
+    context: "FIS outstanding accident document lookup failed",
+  });
+  if (report.status === "unauthorized") {
+    return <SessionRecovery returnPath="/accidents/reports/outstanding-docs" />;
   }
+  if (report.status === "error") {
+    return (
+      <AccidentReportErrorState
+        title="The outstanding document lookup could not be loaded."
+        retryHref="/accidents/reports/outstanding-docs"
+      />
+    );
+  }
+  const rows = report.data;
 
   return (
     <>
-      {errorMessage ? (
-        <div className="notice notice-error" role="alert">
-          {errorMessage}
-        </div>
-      ) : null}
-      <form className="vehicle-status-maintenance-panel" method="get">
-        <fieldset className="vehicle-search-options">
-          <legend>Find vehicle by</legend>
-          <label className="vehicle-checkbox-label">
-            <input
-              type="radio"
-              name="mode"
-              value="registration"
-              defaultChecked={mode === "registration"}
-            />{" "}
-            GP
-          </label>
-          <label className="vehicle-checkbox-label">
-            <input type="radio" name="mode" value="fleet" defaultChecked={mode === "fleet"} /> GG
-          </label>
-        </fieldset>
-        <div className="field">
-          <label htmlFor="outstanding-documents-search">Number</label>
-          <input
-            id="outstanding-documents-search"
-            name="searchTerm"
-            maxLength={8}
-            defaultValue={searchTerm}
-            required
-          />
-        </div>
-        <input name="run" type="hidden" value="1" />
-        <div className="button-row">
-          <button className="button button-primary" type="submit">
-            Submit
-          </button>
-          <Link className="button button-secondary" href="/accidents/reports">
-            Report Menu
-          </Link>
-        </div>
-      </form>
-      {rows !== null ? (
-        rows.length > 0 ? (
-          <LookupTable rows={rows} mode={mode} />
-        ) : (
-          <section className="vehicle-empty-state" aria-live="polite">
-            <p className="eyebrow">Vehicle not found</p>
-            <h2>This vehicle number does not exist.</h2>
-            <p className="muted-copy">Try another GP or GG number.</p>
-          </section>
-        )
-      ) : null}
-      <div className="vehicle-footer-actions">
-        <Link className="button button-secondary" href="/accidents">
-          Accident Menu
-        </Link>
-        <Link className="button button-secondary" href="/accidents/reports/outstanding-docs">
-          Clear
-        </Link>
-        <Link className="button button-secondary" href="/home">
-          Home
-        </Link>
-        <form action={logoutAction}>
-          <button className="button button-secondary" type="submit">
-            Sign out
-          </button>
-        </form>
-      </div>
+      <OutstandingDocumentsForm errorMessage={errorMessage} mode={mode} searchTerm={searchTerm} />
+      <OutstandingDocumentsResults rows={rows} mode={mode} />
+      <AccidentReportFooter clearHref="/accidents/reports/outstanding-docs" />
     </>
   );
 }
@@ -255,22 +227,15 @@ export default function OutstandingDocumentsPage({
   searchParams: Promise<ReportQuery>;
 }) {
   return (
-    <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card" aria-labelledby="outstanding-documents-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Accident reports</p>
-            <h1 id="outstanding-documents-title">LETTER for Outstanding Accident documents</h1>
-            <p>Find an accident by GP or GG number and print the outstanding-document letter.</p>
-          </div>
-          <Link className="button button-secondary" href="/accidents/reports">
-            Report Menu
-          </Link>
-        </header>
-        <Suspense fallback={<LoadingState />}>
-          <OutstandingDocumentsContent searchParams={searchParams} />
-        </Suspense>
-      </section>
-    </main>
+    <AccidentReportPageShell
+      titleId="outstanding-documents-title"
+      title="LETTER for Outstanding Accident documents"
+      description="Find an accident by GP or GG number and print the outstanding-document letter."
+      fallback={<AccidentReportLoadingState />}
+    >
+      <Suspense fallback={<AccidentReportLoadingState />}>
+        <OutstandingDocumentsContent searchParams={searchParams} />
+      </Suspense>
+    </AccidentReportPageShell>
   );
 }

@@ -22,7 +22,9 @@ import { getSites, SiteApiError } from "@/lib/api/reference-data/api-sites";
 import { LogsheetApiError } from "@/lib/api/fleet-operations/api-logsheets";
 import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
 
-async function LogsheetEntryPageContent({
+const LogsheetEntryPageContent = renderLogsheetEntryPageContent;
+
+async function renderLogsheetEntryPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogsheetSession();

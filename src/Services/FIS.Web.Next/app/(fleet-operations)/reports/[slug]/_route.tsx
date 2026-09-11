@@ -5,18 +5,22 @@ import Link from "next/link";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
-  queryValue,
   ReportFilterForm,
   ReportMenu,
   ReportResult,
   ReportsFrame,
   ReportsUnavailable,
-  REPORT_MENU_ENTRIES,
-  hasReportsRole,
-  type ReportField,
-  type ReportMenuEntry,
-  type ReportQuery,
 } from "@/app/(fleet-operations)/reports/_components";
+import {
+  hasReportsRole,
+  queryValue,
+  REPORT_MENU_ENTRIES,
+} from "@/app/(fleet-operations)/reports/_utils";
+import type {
+  ReportField,
+  ReportMenuEntry,
+  ReportQuery,
+} from "@/app/(fleet-operations)/reports/_utils";
 import { getLegacyReport, LegacyReportApiError } from "@/lib/api/reports/api-legacy-reports";
 import { getSession } from "@/lib/auth/session";
 
@@ -560,7 +564,13 @@ function filterQuery(query: ReportQuery) {
   return filters;
 }
 
-async function ReportsRoutePageContent({ slug, searchParams, forcedReportKey }: ReportRouteProps) {
+const ReportsRoutePageContent = renderReportsRoutePageContent;
+
+async function renderReportsRoutePageContent({
+  slug,
+  searchParams,
+  forcedReportKey,
+}: ReportRouteProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");

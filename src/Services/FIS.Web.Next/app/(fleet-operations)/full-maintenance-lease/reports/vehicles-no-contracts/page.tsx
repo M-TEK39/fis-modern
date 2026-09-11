@@ -6,16 +6,18 @@ import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   FmlFrame,
-  hasFmlPermission,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+import { hasFmlPermission } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import {
   ReportEmpty,
   ReportFooter,
   ReportTable,
-  formatCurrency,
-  reportError,
-  valueOrDash,
 } from "@/app/(fleet-operations)/full-maintenance-lease/reports/_components";
+import {
+  formatCurrency,
+  valueOrDash,
+} from "@/app/(fleet-operations)/full-maintenance-lease/reports/_utils";
+import { reportError } from "@/app/(fleet-operations)/full-maintenance-lease/reports/_route-helpers";
 import { FmlApiError, getFmlVehiclesNoContracts } from "@/lib/api/finance/api-fml";
 import { getSession } from "@/lib/auth/session";
 
@@ -66,8 +68,20 @@ async function FmlVehiclesNoContractsPageContent() {
               "Purchase Amount",
             ]}
           >
-            {report.vehicles.map((row, index) => (
-              <tr key={`${row.ggNumber ?? "row"}-${index}`}>
+            {report.vehicles.map((row) => (
+              <tr
+                key={
+                  row.vehicleCounter ??
+                  JSON.stringify([
+                    row.ggNumber,
+                    row.registrationNumber,
+                    row.hiredFrom,
+                    row.vehicleStatus,
+                    row.location,
+                    row.yearModel,
+                  ])
+                }
+              >
                 <td>{valueOrDash(row.vehicleCounter)}</td>
                 <td>{valueOrDash(row.ggNumber)}</td>
                 <td>{valueOrDash(row.registrationNumber)}</td>

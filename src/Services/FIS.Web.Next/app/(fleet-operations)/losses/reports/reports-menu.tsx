@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import ApiUnavailablePage from "@/components/app-shell/api-unavailable-page";
+import ReportsMenuLayout from "@/components/ui/reports-menu-layout";
 import { getSession } from "@/lib/auth/session";
 
 const REPORT_LINKS = [
@@ -50,18 +52,7 @@ export default async function LossReportsMenu({
       </main>
     );
   if (session.status === "unavailable") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-status-card" role="alert">
-          <p className="eyebrow">API unavailable</p>
-          <h1>Losses reports are unavailable.</h1>
-          <p className="muted-copy">Retry when the FIS API is available.</p>
-          <Link className="button button-primary" href={routePath}>
-            Try again
-          </Link>
-        </section>
-      </main>
-    );
+    return <ApiUnavailablePage message="Losses reports are unavailable." retryHref={routePath} />;
   }
   if (!hasLossReportAccess(session.roles)) {
     return (
@@ -75,34 +66,14 @@ export default async function LossReportsMenu({
   }
 
   return (
-    <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card" aria-labelledby="loss-reports-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Losses</p>
-            <h1 id="loss-reports-title">Losses Reports Menu</h1>
-            <p>Legacy loss report filters and outputs, rendered from the compatible FIS API.</p>
-          </div>
-          <Link className="button button-secondary" href={backHref}>
-            Back
-          </Link>
-        </header>
-        <div className="vehicle-menu-tiles">
-          {REPORT_LINKS.map(([mode, title, description]) => (
-            <section className="vehicle-menu-tile" key={mode}>
-              <h2 className="vehicle-menu-header">
-                <Link href={`${linkBase}/${mode}`}>{title}</Link>
-              </h2>
-              <div className="vehicle-menu-body">
-                <p className="muted-copy">{description}</p>
-                <Link className="button button-primary button-small" href={`${linkBase}/${mode}`}>
-                  Open report
-                </Link>
-              </div>
-            </section>
-          ))}
-        </div>
-      </section>
-    </main>
+    <ReportsMenuLayout
+      headingId="loss-reports-title"
+      eyebrow="Losses"
+      title="Losses Reports Menu"
+      description="Legacy loss report filters and outputs, rendered from the compatible FIS API."
+      backHref={backHref}
+      linkBase={linkBase}
+      links={REPORT_LINKS}
+    />
   );
 }

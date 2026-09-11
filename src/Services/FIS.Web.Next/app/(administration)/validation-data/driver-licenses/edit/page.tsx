@@ -39,7 +39,32 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function DriverLicenceEditPageContent({ searchParams }: DriverLicenceEditPageProps) {
+function DriverLicenceEditView({
+  licenceCode,
+  licence,
+}: Readonly<{ licenceCode: number; licence: Awaited<ReturnType<typeof getDriverLicence>> }>) {
+  if (!licence) return null;
+
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="driver-licence-edit-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Licence</p>
+            <h1 id="driver-licence-edit-title">Edit Driver Licence</h1>
+            <p>Update driver licence {licenceCode} without changing its legacy code.</p>
+          </div>
+          <Link className="button button-secondary" href="/Validation/MNT_DriversLicence.aspx">
+            Driver Licence Maintenance
+          </Link>
+        </header>
+        <DriverLicenceForm action={updateDriverLicenceAction} licence={licence} mode="update" />
+      </section>
+    </main>
+  );
+}
+
+async function renderDriverLicenceEditPage({ searchParams }: DriverLicenceEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -84,23 +109,7 @@ async function DriverLicenceEditPageContent({ searchParams }: DriverLicenceEditP
           <ErrorCard message={`Driver licence ${licenceCode} was not found.`} />
         </main>
       );
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="driver-licence-edit-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Licence</p>
-              <h1 id="driver-licence-edit-title">Edit Driver Licence</h1>
-              <p>Update driver licence {licenceCode} without changing its legacy code.</p>
-            </div>
-            <Link className="button button-secondary" href="/Validation/MNT_DriversLicence.aspx">
-              Driver Licence Maintenance
-            </Link>
-          </header>
-          <DriverLicenceForm action={updateDriverLicenceAction} licence={licence} mode="update" />
-        </section>
-      </main>
-    );
+    return <DriverLicenceEditView licenceCode={licenceCode} licence={licence} />;
   } catch (error) {
     if (error instanceof DriverLicenceApiError && error.reason === "unauthorized")
       return (
@@ -128,12 +137,6 @@ async function DriverLicenceEditPageContent({ searchParams }: DriverLicenceEditP
   }
 }
 
-export default function DriverLicenceEditPage(
-  props: NonNullable<Parameters<typeof DriverLicenceEditPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <DriverLicenceEditPageContent {...props} />
-    </Suspense>
-  );
+export default function DriverLicenceEditPage(props: DriverLicenceEditPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderDriverLicenceEditPage(props)}</Suspense>;
 }

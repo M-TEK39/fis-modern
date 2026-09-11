@@ -257,7 +257,9 @@ function LogbookForm({
   );
 }
 
-async function LogbookMaintenancePageContent({
+const LogbookMaintenancePageContent = renderLogbookMaintenancePageContent;
+
+async function renderLogbookMaintenancePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogbookSession();

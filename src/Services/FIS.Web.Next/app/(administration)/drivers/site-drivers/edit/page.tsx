@@ -15,6 +15,10 @@ import {
 } from "@/app/(administration)/drivers/access";
 import {
   DriverManagementApiError,
+  type DriverManagementDepartment,
+  type DriverManagementDriver,
+  type DriverManagementLicenceType,
+  type DriverManagementSite,
   getDriverManagementDepartments,
   getDriverManagementLicenceTypes,
   getDriverManagementSiteDriver,
@@ -54,7 +58,265 @@ function dateInputValue(value: string | null | undefined) {
   return value ? value.slice(0, 10) : "";
 }
 
-async function SiteDriverEditContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+const SiteDriverEditView = renderSiteDriverEditView;
+
+function renderSiteDriverEditView({
+  departmentCode,
+  siteCode,
+  department,
+  site,
+  driver,
+  licenceTypes,
+  backPath,
+  message,
+}: Readonly<{
+  departmentCode: number;
+  siteCode: number;
+  department: DriverManagementDepartment | undefined;
+  site: DriverManagementSite | undefined;
+  driver: DriverManagementDriver | null;
+  licenceTypes: DriverManagementLicenceType[];
+  backPath: string;
+  message: ReturnType<typeof resultMessage>;
+}>) {
+  const title = driver ? "Edit Site Driver" : "Add Site Driver";
+
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="site-driver-edit-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">
+              {department?.description ?? `Department ${departmentCode}`} /{" "}
+              {site?.description ?? `Site ${siteCode}`}
+            </p>
+            <h1 id="site-driver-edit-title">{title}</h1>
+            <p>Capture every field from the original SiteDriverEdit workflow.</p>
+          </div>
+          <Link className="button button-secondary" href={backPath}>
+            Back
+          </Link>
+        </header>
+        {message ? (
+          <div
+            className={`notice notice-${message.tone}`}
+            role={message.tone === "error" ? "alert" : "status"}
+          >
+            {message.text}
+          </div>
+        ) : null}
+        <form action={saveSiteDriverAction} className="vehicle-status-maintenance-panel">
+          <input name="departmentCode" type="hidden" value={departmentCode} />
+          <input name="siteCode" type="hidden" value={siteCode} />
+          {driver ? (
+            <input name="siteDriverCode" type="hidden" value={driver.siteDriverCode} />
+          ) : null}
+          <div className="vehicle-form-section-header">
+            <div>
+              <p className="eyebrow">Legacy fields</p>
+              <h2>Site driver details</h2>
+              <p>Identity and licence validation follows the established workflow.</p>
+            </div>
+          </div>
+          <div className="form-grid">
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-firstname">
+                First Name
+              </label>
+              <input
+                className="form-input"
+                id="site-driver-firstname"
+                maxLength={50}
+                name="driverFirstname"
+                defaultValue={driver?.driverFirstname ?? ""}
+                required
+              />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-surname">
+                Surname
+              </label>
+              <input
+                className="form-input"
+                id="site-driver-surname"
+                maxLength={50}
+                name="driverSurname"
+                defaultValue={driver?.driverSurname ?? ""}
+                required
+              />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-persal">
+                Persal Number
+              </label>
+              <input
+                className="form-input"
+                id="site-driver-persal"
+                maxLength={10}
+                name="driverPersonalNumber"
+                defaultValue={driver?.driverPersonalNumber ?? ""}
+              />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-contract">
+                Contract Number
+              </label>
+              <input
+                className="form-input"
+                id="site-driver-contract"
+                maxLength={10}
+                name="driverContractNumber"
+                defaultValue={driver?.driverContractNumber ?? ""}
+              />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-sa-id">
+                South African ID
+              </label>
+              <input
+                className="form-input"
+                id="site-driver-sa-id"
+                inputMode="numeric"
+                maxLength={13}
+                name="driverSAId"
+                defaultValue={driver?.driverSAId ?? ""}
+              />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-passport">
+                Passport Number
+              </label>
+              <input
+                className="form-input"
+                id="site-driver-passport"
+                maxLength={20}
+                name="driverPassportNumber"
+                defaultValue={driver?.driverPassportNumber ?? ""}
+              />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-licence">
+                Licence Number
+              </label>
+              <input
+                className="form-input"
+                id="site-driver-licence"
+                maxLength={20}
+                name="driverLicenceNumber"
+                defaultValue={driver?.driverLicenceNumber ?? ""}
+                required
+              />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-issue-date">
+                Licence Issue Date
+              </label>
+              <input
+                className="form-input"
+                id="site-driver-issue-date"
+                name="driverLicenceIssueDate"
+                type="date"
+                defaultValue={dateInputValue(driver?.driverLicenceIssueDate)}
+                required
+              />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-verified-date">
+                Licence Last Verified Date
+              </label>
+              <input
+                className="form-input"
+                id="site-driver-verified-date"
+                name="driverLicenceLastVerifiedDate"
+                type="date"
+                defaultValue={dateInputValue(driver?.driverLicenceLastVerifiedDate)}
+                required
+              />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-pdp">
+                Driver has PDP
+              </label>
+              <label className="vehicle-checkbox-label" htmlFor="site-driver-pdp">
+                <input
+                  id="site-driver-pdp"
+                  name="driverHasPDP"
+                  type="checkbox"
+                  value="true"
+                  defaultChecked={driver?.driverHasPDP ?? false}
+                />{" "}
+                PDP recorded
+              </label>
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-pdp-expiry">
+                PDP Expiry Date
+              </label>
+              <input
+                className="form-input"
+                id="site-driver-pdp-expiry"
+                name="driverPDPExpiryDate"
+                type="date"
+                defaultValue={dateInputValue(driver?.driverPDPExpiryDate)}
+              />
+            </div>
+            <div className="form-field">
+              <label className="form-label" htmlFor="site-driver-licence-expiry">
+                Licence Expiry Date
+              </label>
+              <input
+                className="form-input"
+                id="site-driver-licence-expiry"
+                name="driverLicenceExpiryDate"
+                type="date"
+                defaultValue={dateInputValue(driver?.driverLicenceExpiryDate)}
+              />
+            </div>
+            <div className="form-field form-group-full">
+              <label className="form-label" htmlFor="site-driver-licence-type">
+                Driver Licence Type
+              </label>
+              <select
+                className="form-select"
+                id="site-driver-licence-type"
+                name="driverLicenceTypeId"
+                defaultValue={driver?.driverLicenceTypeId ?? ""}
+                required
+              >
+                <option value="">Select driver licence type</option>
+                {licenceTypes.map((licenceType) => (
+                  <option key={licenceType.id} value={licenceType.id}>
+                    {licenceType.description || licenceType.code || `Licence ${licenceType.id}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="button-row">
+            <button className="button button-primary" type="submit">
+              {driver ? "Save Changes" : "Add Site Driver"}
+            </button>
+            <Link className="button button-secondary" href={backPath}>
+              Cancel
+            </Link>
+          </div>
+        </form>
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+async function renderSiteDriverEdit({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -130,240 +392,17 @@ async function SiteDriverEditContent({ searchParams }: Readonly<{ searchParams: 
     const site = sites.find((item) => item.code === siteCode);
     const backPath = contextPath("/drivers/site-drivers", departmentCode, siteCode);
     const message = resultMessage(getQueryValue(query.result), getQueryValue(query.message));
-    const title = driver ? "Edit Site Driver" : "Add Site Driver";
-
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="site-driver-edit-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">
-                {department?.description ?? `Department ${departmentCode}`} /{" "}
-                {site?.description ?? `Site ${siteCode}`}
-              </p>
-              <h1 id="site-driver-edit-title">{title}</h1>
-              <p>Capture every field from the original SiteDriverEdit workflow.</p>
-            </div>
-            <Link className="button button-secondary" href={backPath}>
-              Back
-            </Link>
-          </header>
-          {message ? (
-            <div
-              className={`notice notice-${message.tone}`}
-              role={message.tone === "error" ? "alert" : "status"}
-            >
-              {message.text}
-            </div>
-          ) : null}
-          <form action={saveSiteDriverAction} className="vehicle-status-maintenance-panel">
-            <input name="departmentCode" type="hidden" value={departmentCode} />
-            <input name="siteCode" type="hidden" value={siteCode} />
-            {driver ? (
-              <input name="siteDriverCode" type="hidden" value={driver.siteDriverCode} />
-            ) : null}
-            <div className="vehicle-form-section-header">
-              <div>
-                <p className="eyebrow">Legacy fields</p>
-                <h2>Site driver details</h2>
-                <p>Identity and licence validation follows the established workflow.</p>
-              </div>
-            </div>
-            <div className="form-grid">
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-firstname">
-                  First Name
-                </label>
-                <input
-                  className="form-input"
-                  id="site-driver-firstname"
-                  maxLength={50}
-                  name="driverFirstname"
-                  defaultValue={driver?.driverFirstname ?? ""}
-                  required
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-surname">
-                  Surname
-                </label>
-                <input
-                  className="form-input"
-                  id="site-driver-surname"
-                  maxLength={50}
-                  name="driverSurname"
-                  defaultValue={driver?.driverSurname ?? ""}
-                  required
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-persal">
-                  Persal Number
-                </label>
-                <input
-                  className="form-input"
-                  id="site-driver-persal"
-                  maxLength={10}
-                  name="driverPersonalNumber"
-                  defaultValue={driver?.driverPersonalNumber ?? ""}
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-contract">
-                  Contract Number
-                </label>
-                <input
-                  className="form-input"
-                  id="site-driver-contract"
-                  maxLength={10}
-                  name="driverContractNumber"
-                  defaultValue={driver?.driverContractNumber ?? ""}
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-sa-id">
-                  South African ID
-                </label>
-                <input
-                  className="form-input"
-                  id="site-driver-sa-id"
-                  inputMode="numeric"
-                  maxLength={13}
-                  name="driverSAId"
-                  defaultValue={driver?.driverSAId ?? ""}
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-passport">
-                  Passport Number
-                </label>
-                <input
-                  className="form-input"
-                  id="site-driver-passport"
-                  maxLength={20}
-                  name="driverPassportNumber"
-                  defaultValue={driver?.driverPassportNumber ?? ""}
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-licence">
-                  Licence Number
-                </label>
-                <input
-                  className="form-input"
-                  id="site-driver-licence"
-                  maxLength={20}
-                  name="driverLicenceNumber"
-                  defaultValue={driver?.driverLicenceNumber ?? ""}
-                  required
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-issue-date">
-                  Licence Issue Date
-                </label>
-                <input
-                  className="form-input"
-                  id="site-driver-issue-date"
-                  name="driverLicenceIssueDate"
-                  type="date"
-                  defaultValue={dateInputValue(driver?.driverLicenceIssueDate)}
-                  required
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-verified-date">
-                  Licence Last Verified Date
-                </label>
-                <input
-                  className="form-input"
-                  id="site-driver-verified-date"
-                  name="driverLicenceLastVerifiedDate"
-                  type="date"
-                  defaultValue={dateInputValue(driver?.driverLicenceLastVerifiedDate)}
-                  required
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-pdp">
-                  Driver has PDP
-                </label>
-                <label className="vehicle-checkbox-label" htmlFor="site-driver-pdp">
-                  <input
-                    id="site-driver-pdp"
-                    name="driverHasPDP"
-                    type="checkbox"
-                    value="true"
-                    defaultChecked={driver?.driverHasPDP ?? false}
-                  />{" "}
-                  PDP recorded
-                </label>
-              </div>
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-pdp-expiry">
-                  PDP Expiry Date
-                </label>
-                <input
-                  className="form-input"
-                  id="site-driver-pdp-expiry"
-                  name="driverPDPExpiryDate"
-                  type="date"
-                  defaultValue={dateInputValue(driver?.driverPDPExpiryDate)}
-                />
-              </div>
-              <div className="form-field">
-                <label className="form-label" htmlFor="site-driver-licence-expiry">
-                  Licence Expiry Date
-                </label>
-                <input
-                  className="form-input"
-                  id="site-driver-licence-expiry"
-                  name="driverLicenceExpiryDate"
-                  type="date"
-                  defaultValue={dateInputValue(driver?.driverLicenceExpiryDate)}
-                />
-              </div>
-              <div className="form-field form-group-full">
-                <label className="form-label" htmlFor="site-driver-licence-type">
-                  Driver Licence Type
-                </label>
-                <select
-                  className="form-select"
-                  id="site-driver-licence-type"
-                  name="driverLicenceTypeId"
-                  defaultValue={driver?.driverLicenceTypeId ?? ""}
-                  required
-                >
-                  <option value="">Select driver licence type</option>
-                  {licenceTypes.map((licenceType) => (
-                    <option key={licenceType.id} value={licenceType.id}>
-                      {licenceType.description || licenceType.code || `Licence ${licenceType.id}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="button-row">
-              <button className="button button-primary" type="submit">
-                {driver ? "Save Changes" : "Add Site Driver"}
-              </button>
-              <Link className="button button-secondary" href={backPath}>
-                Cancel
-              </Link>
-            </div>
-          </form>
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <SiteDriverEditView
+        backPath={backPath}
+        department={department}
+        departmentCode={departmentCode}
+        driver={driver}
+        licenceTypes={licenceTypes}
+        message={message}
+        site={site}
+        siteCode={siteCode}
+      />
     );
   } catch (error) {
     if (error instanceof DriverManagementApiError && error.reason === "unauthorized")
@@ -396,9 +435,5 @@ async function SiteDriverEditContent({ searchParams }: Readonly<{ searchParams: 
 }
 
 export default function SiteDriverEditPage(props: Readonly<{ searchParams: SearchParams }>) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <SiteDriverEditContent {...props} />
-    </Suspense>
-  );
+  return <Suspense fallback={<RouteLoading />}>{renderSiteDriverEdit(props)}</Suspense>;
 }

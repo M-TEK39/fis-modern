@@ -2,17 +2,16 @@ import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
 
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import {
   FinanceFrame,
   FinanceRestricted,
   FinanceUnavailable,
-  hasFinanceRole,
 } from "@/app/(fleet-operations)/finance/_components";
+import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions, siteOptions } from "@/app/(fleet-operations)/finance/_location-options";
-import { FinanceReportTable } from "@/app/(fleet-operations)/finance/report-table";
+import { RegionalFinanceView } from "@/app/(fleet-operations)/finance/regional/[action]/regional-finance-view";
 import { DepartmentApiError, getDepartments } from "@/lib/api/reference-data/api-departments";
 import {
   FinanceApiError,
@@ -102,19 +101,6 @@ function outputHref(action: string, reportAction: string, query: Query, format: 
   return `/finance/reports/output?${params.toString()}`;
 }
 
-function optionList(options: FinanceOption[], emptyLabel: string) {
-  return (
-    <>
-      <option value="">{emptyLabel}</option>
-      {options.map((item) => (
-        <option key={item.value} value={item.value}>
-          {item.label}
-        </option>
-      ))}
-    </>
-  );
-}
-
 function legacyToFinanceReport(report: LegacyReport): FinanceReport {
   return { title: report.title, rows: report.rows, supportsDateFilter: null };
 }
@@ -128,7 +114,9 @@ function regionalSummaryType(action: string, reportAction: string) {
       : `SummaryReport${provincePrefix}ByCostType`;
 }
 
-async function RegionalFinanceActionContent({ params, searchParams }: PageProps) {
+const RegionalFinanceActionContent = renderRegionalFinanceActionContent;
+
+async function renderRegionalFinanceActionContent({ params, searchParams }: PageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -256,190 +244,19 @@ async function RegionalFinanceActionContent({ params, searchParams }: PageProps)
   }
 
   return (
-    <FinanceFrame title={titleFor(action)} description="Regional finance reporting.">
-      {error ? (
-        <div className="notice notice-error" role="alert">
-          {error}
-        </div>
-      ) : null}
-      {assetReport ? (
-        <form className="vehicle-status-maintenance-panel" method="get">
-          <input name="run" type="hidden" value="1" />
-          <div className="form-grid">
-            {action === "assets-province" ? (
-              <div className="form-field">
-                <label className="form-label" htmlFor="regional-province">
-                  Province
-                </label>
-                <select
-                  className="form-select"
-                  id="regional-province"
-                  name="provinceCode"
-                  defaultValue={queryValue(query, "provinceCode")}
-                  required
-                >
-                  {optionList(provinces, "Select Province")}
-                </select>
-              </div>
-            ) : null}
-            {action === "assets-department" || action === "assets-site" ? (
-              <div className="form-field">
-                <label className="form-label" htmlFor="regional-department">
-                  Department
-                </label>
-                <select
-                  className="form-select"
-                  id="regional-department"
-                  name="departmentCode"
-                  defaultValue={queryValue(query, "departmentCode")}
-                  required
-                >
-                  {optionList(departments, "Select Department")}
-                </select>
-              </div>
-            ) : null}
-            {action === "assets-site" ? (
-              <div className="form-field">
-                <label className="form-label" htmlFor="regional-site">
-                  Site
-                </label>
-                <select
-                  className="form-select"
-                  id="regional-site"
-                  name="siteCode"
-                  defaultValue={queryValue(query, "siteCode")}
-                  required
-                >
-                  {optionList(sites, "Select Site")}
-                </select>
-              </div>
-            ) : null}
-          </div>
-          <div className="button-row">
-            <button className="button button-primary" type="submit">
-              View Report
-            </button>
-            <Link className="button button-secondary" href="/finance/regional/assets">
-              Back
-            </Link>
-          </div>
-        </form>
-      ) : (
-        <form className="vehicle-status-maintenance-panel" method="get">
-          <input name="run" type="hidden" value="1" />
-          <div className="form-grid">
-            <div className="form-field">
-              <label className="form-label" htmlFor="regional-start">
-                Posting Start Date
-              </label>
-              <input
-                className="form-input"
-                id="regional-start"
-                name="startDate"
-                type="date"
-                defaultValue={queryValue(query, "startDate")}
-                required
-              />
-            </div>
-            <div className="form-field">
-              <label className="form-label" htmlFor="regional-end">
-                Posting End Date
-              </label>
-              <input
-                className="form-input"
-                id="regional-end"
-                name="endDate"
-                type="date"
-                defaultValue={queryValue(query, "endDate")}
-                required
-              />
-            </div>
-            {action === "summary-per-province" ? (
-              <div className="form-field">
-                <label className="form-label" htmlFor="regional-summary-province">
-                  Province
-                </label>
-                <select
-                  className="form-select"
-                  id="regional-summary-province"
-                  name="provinceCode"
-                  defaultValue={queryValue(query, "provinceCode")}
-                  required
-                >
-                  {optionList(provinces, "Select Province")}
-                </select>
-              </div>
-            ) : null}
-          </div>
-          <div className="form-section">
-            <h2 className="form-section-title">Show Reports</h2>
-            <div className="button-row">
-              {SUMMARY_REPORTS.filter((item) => !item.download).map((item) => (
-                <button
-                  className="button button-secondary"
-                  key={item.key}
-                  name="reportAction"
-                  type="submit"
-                  value={item.key}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="form-section">
-            <h2 className="form-section-title">Download Reports</h2>
-            <div className="button-row">
-              {SUMMARY_REPORTS.filter((item) => item.download).map((item) => (
-                <button
-                  className="button button-secondary"
-                  key={item.key}
-                  name="reportAction"
-                  type="submit"
-                  value={item.key}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="button-row">
-            <Link className="button button-secondary" href="/finance/regional">
-              Back
-            </Link>
-          </div>
-        </form>
-      )}
-      {assetReport ? (
-        <div className="notice notice-info" role="note">
-          The asset list is read from the compatibility report endpoint and includes New and
-          In-Service vehicles.
-        </div>
-      ) : (
-        <div className="notice notice-info" role="note">
-          Detailed reports can be large. Save Excel files before opening them.
-        </div>
-      )}
-      {output ? (
-        <section className="vehicle-status-maintenance-panel" aria-labelledby="regional-output">
-          <h2 id="regional-output">Report ready</h2>
-          <p className="muted-copy">
-            The report is generated through the authenticated server path.
-          </p>
-          <a className="button button-primary" href={output.href} target="_blank" rel="noreferrer">
-            {output.label}
-          </a>
-        </section>
-      ) : null}
-      {report ? (
-        <FinanceReportTable
-          report={report}
-          basePath={`/finance/regional/${action}`}
-          query={query}
-          page={Number(queryValue(query, "page")) || 1}
-        />
-      ) : null}
-    </FinanceFrame>
+    <RegionalFinanceView
+      action={action}
+      title={titleFor(action)}
+      query={query}
+      assetReport={assetReport}
+      departments={departments}
+      sites={sites}
+      provinces={provinces}
+      summaryReports={SUMMARY_REPORTS}
+      error={error}
+      output={output}
+      report={report}
+    />
   );
 }
 

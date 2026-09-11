@@ -9,8 +9,8 @@ import {
   FinanceFrame,
   FinanceRestricted,
   FinanceUnavailable,
-  hasFinanceRole,
 } from "@/app/(fleet-operations)/finance/_components";
+import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
 import {
   FinanceApiError,
   getFinanceProvinces,
@@ -118,6 +118,27 @@ const REPORTS: Record<string, readonly { key: string; label: string; download: b
   ],
 };
 
+type ReportDefinition = { key: string; label: string; download: boolean };
+
+function reportButtons(reports: readonly ReportDefinition[], download: boolean) {
+  const buttons = [];
+  for (const item of reports) {
+    if (item.download !== download) continue;
+    buttons.push(
+      <button
+        className="button button-secondary"
+        key={item.key}
+        name="reportAction"
+        type="submit"
+        value={item.key}
+      >
+        {item.label}
+      </button>,
+    );
+  }
+  return buttons;
+}
+
 function queryValue(query: Query, name: string) {
   const value = query[name];
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
@@ -158,7 +179,9 @@ function optionList(options: FinanceOption[], emptyLabel: string) {
   );
 }
 
-async function WesbankReportContent({ params, searchParams }: PageProps) {
+const WesbankReportContent = renderWesbankReportContent;
+
+async function renderWesbankReportContent({ params, searchParams }: PageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -286,40 +309,12 @@ async function WesbankReportContent({ params, searchParams }: PageProps) {
           <h2 className="form-section-title">
             {action.startsWith("detailed") ? "Download Reports" : "Show Reports"}
           </h2>
-          <div className="button-row">
-            {reports
-              .filter((item) => !item.download)
-              .map((item) => (
-                <button
-                  className="button button-secondary"
-                  key={item.key}
-                  name="reportAction"
-                  type="submit"
-                  value={item.key}
-                >
-                  {item.label}
-                </button>
-              ))}
-          </div>
+          <div className="button-row">{reportButtons(reports, false)}</div>
         </div>
         {reports.some((item) => item.download) ? (
           <div className="form-section">
             <h2 className="form-section-title">Download Reports</h2>
-            <div className="button-row">
-              {reports
-                .filter((item) => item.download)
-                .map((item) => (
-                  <button
-                    className="button button-secondary"
-                    key={item.key}
-                    name="reportAction"
-                    type="submit"
-                    value={item.key}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-            </div>
+            <div className="button-row">{reportButtons(reports, true)}</div>
           </div>
         ) : null}
         <div className="button-row">

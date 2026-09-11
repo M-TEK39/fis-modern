@@ -39,7 +39,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function DepartmentDeleteCheckPageContent({ searchParams }: DepartmentDeleteCheckPageProps) {
+async function renderDepartmentDeleteCheckPage({ searchParams }: DepartmentDeleteCheckPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -176,12 +176,6 @@ async function DepartmentDeleteCheckPageContent({ searchParams }: DepartmentDele
   }
 }
 
-export default function DepartmentDeleteCheckPage(
-  props: NonNullable<Parameters<typeof DepartmentDeleteCheckPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <DepartmentDeleteCheckPageContent {...props} />
-    </Suspense>
-  );
+export default function DepartmentDeleteCheckPage(props: DepartmentDeleteCheckPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderDepartmentDeleteCheckPage(props)}</Suspense>;
 }

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -15,7 +16,9 @@ import {
 } from "@/lib/api/fleet-operations/api-workshop";
 import { getSession } from "@/lib/auth/session";
 
-async function WorkshopEntryDetailsPageContent({
+const WorkshopEntryDetailsPageContent = renderWorkshopEntryDetailsPageContent;
+
+async function renderWorkshopEntryDetailsPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -84,15 +87,7 @@ async function WorkshopEntryDetailsPageContent({
           </Link>
         </header>
         <form className="vehicle-status-maintenance-panel" method="get">
-          <fieldset className="vehicle-search-options">
-            <legend>Find vehicle</legend>
-            <label className="vehicle-checkbox-label">
-              <input type="radio" name="type" value="GG" defaultChecked={type !== "GP"} /> GG
-            </label>
-            <label className="vehicle-checkbox-label">
-              <input type="radio" name="type" value="GP" defaultChecked={type === "GP"} /> GP
-            </label>
-          </fieldset>
+          <SearchTypeFieldset selectedType={type} legend="Find vehicle" name="type" />
           <div className="vehicle-search-row">
             <label className="sr-only" htmlFor="new-workshop-vehicle-search">
               Vehicle number

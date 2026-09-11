@@ -12,11 +12,13 @@ import {
   FinanceNotice,
   FinanceRestricted,
   FinanceUnavailable,
+} from "@/app/(fleet-operations)/finance/_components";
+import {
   hasCoisIdentity,
   hasFinanceRole,
   hasHeadOfficeFinanceAccess,
   hasRole,
-} from "@/app/(fleet-operations)/finance/_components";
+} from "@/app/(fleet-operations)/finance/_utils";
 import {
   FinanceApiError,
   getBatchStatus,
@@ -24,7 +26,9 @@ import {
 } from "@/lib/api/finance/api-finance";
 import { getSession } from "@/lib/auth/session";
 
-async function FinancePageContent() {
+const FinancePageContent = renderFinancePageContent;
+
+async function renderFinancePageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");

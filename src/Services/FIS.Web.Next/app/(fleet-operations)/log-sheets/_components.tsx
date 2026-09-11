@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 
 import {
@@ -9,18 +11,7 @@ import { MenuSection } from "@/components/ui/menu-section";
 import type { LogsheetRecord } from "@/lib/api/fleet-operations/api-logsheets";
 import type { SiteRecord } from "@/lib/api/reference-data/api-sites";
 import type { VehicleOption } from "@/lib/api/vehicles/api-vehicles";
-
-export function valueOrDash(value: string | number | null | undefined) {
-  return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
-}
-
-export function formatDate(value: string | null | undefined) {
-  return value?.slice(0, 10) || "-";
-}
-
-export function formatNumber(value: number) {
-  return new Intl.NumberFormat("en-ZA", { maximumFractionDigits: 2 }).format(value);
-}
+import { formatDate, formatNumber, valueOrDash } from "@/app/(fleet-operations)/log-sheets/_utils";
 
 export function LogsheetShell({
   title,
@@ -380,18 +371,18 @@ export function LogsheetReportTable({ records }: Readonly<{ records: readonly Lo
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Logsheet report results</caption>
-        <thead>
-          <tr>
-            <th scope="col">Log ID</th>
-            <th scope="col">GG number</th>
-            <th scope="col">Captured</th>
-            <th scope="col">Month</th>
-            <th scope="col">Start ODO</th>
-            <th scope="col">End ODO</th>
-            <th scope="col">Site</th>
-            <th scope="col">Requisition</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Log ID</> },
+            { key: "column-2", label: <>GG number</> },
+            { key: "column-3", label: <>Captured</> },
+            { key: "column-4", label: <>Month</> },
+            { key: "column-5", label: <>Start ODO</> },
+            { key: "column-6", label: <>End ODO</> },
+            { key: "column-7", label: <>Site</> },
+            { key: "column-8", label: <>Requisition</> },
+          ]}
+        />
         <tbody>
           {records.map((record) => (
             <tr key={record.logCode}>

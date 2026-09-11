@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -10,6 +12,8 @@ import {
   ActionNotice,
   ApiUnavailable,
   FmlFrame,
+} from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+import {
   formatDate,
   getStatusClass,
   getStatusLabel,
@@ -17,7 +21,7 @@ import {
   termNotes,
   vehicleLabel,
   valueOrDash,
-} from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+} from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import {
   DEFAULT_LEASE_TERMS_PAGE_SIZE,
   FmlApiError,
@@ -47,7 +51,9 @@ function lookupPageHref(search: string, mode: string, page: number) {
   return query ? `/full-maintenance-lease?${query}` : "/full-maintenance-lease";
 }
 
-async function FullMaintenanceLeasePageContent({
+const FullMaintenanceLeasePageContent = renderFullMaintenanceLeasePageContent;
+
+async function renderFullMaintenanceLeasePageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -79,7 +85,7 @@ async function FullMaintenanceLeasePageContent({
   const result = firstQueryValue(query.result);
   const message = firstQueryValue(query.message);
   let termsPage: LeaseTermsPage | null = null;
-  let vehicles: VehicleOption[] = [];
+  let vehicles: VehicleOption[] | undefined;
   let lookupError = false;
 
   if (search.trim()) {
@@ -99,7 +105,9 @@ async function FullMaintenanceLeasePageContent({
   }
 
   const terms = termsPage?.items ?? [];
-  const labels = new Map(vehicles.map((vehicle) => [vehicle.vmfCode, vehicleLabel(vehicle)]));
+  const labels = new Map(
+    (vehicles ?? []).map((vehicle) => [vehicle.vmfCode, vehicleLabel(vehicle)]),
+  );
   return (
     <FmlFrame
       title="Full Maintenance Lease"
@@ -178,16 +186,16 @@ async function FullMaintenanceLeasePageContent({
           <div className="vehicle-table-wrapper">
             <table className="vehicle-table">
               <caption className="sr-only">Lease records matching the search</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Lease #</th>
-                  <th scope="col">Vehicle</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Start</th>
-                  <th scope="col">End</th>
-                  <th scope="col">Notes</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>Lease #</> },
+                  { key: "column-2", label: <>Vehicle</> },
+                  { key: "column-3", label: <>Status</> },
+                  { key: "column-4", label: <>Start</> },
+                  { key: "column-5", label: <>End</> },
+                  { key: "column-6", label: <>Notes</> },
+                ]}
+              />
               <tbody>
                 {terms.map((term) => (
                   <tr key={term.termId}>

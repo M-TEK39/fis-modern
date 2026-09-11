@@ -1,4 +1,4 @@
-import { createLegacyFineReportPage } from "@/app/(fleet-operations)/fines/reports/[mode]/_route";
+import { createLegacyFineReportPage } from "@/app/(fleet-operations)/fines/reports/[mode]/legacy-route";
 
 export default createLegacyFineReportPage({
   forcedMode: "all",

@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -7,6 +9,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
 import { MenuSection } from "@/components/ui/menu-section";
 import {
   DEFAULT_WORKSHOP_PAGE_SIZE,
@@ -50,24 +53,12 @@ function AccessRestricted() {
 
 function ApiUnavailable() {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">
-        !
-      </div>
-      <p className="eyebrow">API unavailable</p>
-      <h2>Workshop could not be opened.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href="/workshop">
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/login">
-          Sign in
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message="Workshop could not be opened."
+      retryHref="/workshop"
+      secondaryHref="/login"
+      secondaryLabel="Sign in"
+    />
   );
 }
 
@@ -121,15 +112,15 @@ function WorkshopSnapshot({
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Workshop entry snapshot</caption>
-            <thead>
-              <tr>
-                <th scope="col">Entry ID</th>
-                <th scope="col">Vehicle</th>
-                <th scope="col">Date Received</th>
-                <th scope="col">Date Completed</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Entry ID</> },
+                { key: "column-2", label: <>Vehicle</> },
+                { key: "column-3", label: <>Date Received</> },
+                { key: "column-4", label: <>Date Completed</> },
+                { key: "column-5", label: <>Status</> },
+              ]}
+            />
             <tbody>
               {items.map((workshop) => {
                 const hasVehicleLabel =
@@ -190,7 +181,9 @@ function WorkshopSnapshot({
   );
 }
 
-async function WorkshopPageContent({
+const WorkshopPageContent = renderWorkshopPageContent;
+
+async function renderWorkshopPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();

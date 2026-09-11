@@ -27,6 +27,10 @@ import { getNotifyLists, type NotifyListRecord } from "@/lib/api/administration/
 import { getSession } from "@/lib/auth/session";
 
 const CALL_CENTRE_ROLE = "Call Centre";
+const EMPTY_CALL_CENTRE_SITES: CallCentreSiteOption[] = [];
+const EMPTY_NOTIFY_LISTS: NotifyListRecord[] = [];
+const EMPTY_TOW_TRUCKS: TowTruckOption[] = [];
+const EMPTY_LOSS_TYPES: LossTypeOption[] = [];
 const INCIDENT_TYPES = [
   { value: "Query", label: "Query" },
   { value: "Booking", label: "Booking" },
@@ -1154,7 +1158,9 @@ function RoadAssistanceForm({
   );
 }
 
-async function IncidentCapturePageContent({ searchParams }: IncidentCapturePageProps) {
+const IncidentCapturePageContent = renderIncidentCapturePageContent;
+
+async function renderIncidentCapturePageContent({ searchParams }: IncidentCapturePageProps) {
   await connection();
   const session = await getSession();
 
@@ -1203,10 +1209,10 @@ async function IncidentCapturePageContent({ searchParams }: IncidentCapturePageP
 
   let vehicle: CallCentreVehicleOption | null = null;
   let vehicles: CallCentreVehicleOption[] = [];
-  let sites: CallCentreSiteOption[] = [];
-  let notifyLists: NotifyListRecord[] = [];
-  let towTrucks: TowTruckOption[] = [];
-  let lossTypes: LossTypeOption[] = [];
+  let sites: CallCentreSiteOption[] = EMPTY_CALL_CENTRE_SITES;
+  let notifyLists: NotifyListRecord[] = EMPTY_NOTIFY_LISTS;
+  let towTrucks: TowTruckOption[] = EMPTY_TOW_TRUCKS;
+  let lossTypes: LossTypeOption[] = EMPTY_LOSS_TYPES;
   let loadError = "";
 
   try {

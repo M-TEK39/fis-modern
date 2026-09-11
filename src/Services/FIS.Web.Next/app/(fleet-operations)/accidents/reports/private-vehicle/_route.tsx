@@ -64,7 +64,78 @@ function ErrorState() {
   );
 }
 
-async function PrivateVehicleReportContent({
+function PrivateVehicleReportForm({
+  descriptionMode,
+  searchTerm,
+}: {
+  descriptionMode: boolean;
+  searchTerm: string;
+}) {
+  return (
+    <form className="vehicle-status-maintenance-panel" method="get">
+      <div className="field">
+        <label htmlFor="private-vehicle-report-search">Private Vehicle Number</label>
+        <input
+          id="private-vehicle-report-search"
+          name="searchTerm"
+          maxLength={8}
+          defaultValue={searchTerm}
+          required
+        />
+      </div>
+      <input name="run" type="hidden" value="1" />
+      <div className="button-row">
+        <button className="button button-primary" type="submit">
+          {descriptionMode ? "QUERY" : "SUBMIT"}
+        </button>
+        <Link className="button button-secondary" href="/accidents/reports">
+          Report Menu
+        </Link>
+      </div>
+    </form>
+  );
+}
+
+function PrivateVehicleReportResults({
+  rows,
+  title,
+}: {
+  rows: AccidentVehicleReportRow[] | null;
+  title: string;
+}) {
+  return rows !== null ? (
+    rows.length === 0 ? (
+      <div className="vehicle-empty-state">
+        <p className="eyebrow">No vehicles found</p>
+        <h2>No accidents matched this private vehicle search.</h2>
+        <p className="muted-copy">Try another private vehicle number.</p>
+      </div>
+    ) : (
+      <section aria-live="polite" aria-labelledby="private-vehicle-report-results-title">
+        <div className="vehicle-form-section-header">
+          <div>
+            <p className="eyebrow">Report results</p>
+            <h2 id="private-vehicle-report-results-title">
+              {title}: {rows.length}
+            </h2>
+          </div>
+        </div>
+        {rows.map((row, index) => (
+          <VehicleReportResult
+            key={row.accidentCode}
+            row={row}
+            index={index}
+            includeAccidentCategory={false}
+          />
+        ))}
+      </section>
+    )
+  ) : null;
+}
+
+const PrivateVehicleReportContent = renderPrivateVehicleReportContent;
+
+async function renderPrivateVehicleReportContent({
   searchParams,
   defaultMode,
 }: Required<PrivateVehicleReportPageProps>) {
@@ -112,56 +183,8 @@ async function PrivateVehicleReportContent({
 
   return (
     <>
-      <form className="vehicle-status-maintenance-panel" method="get">
-        <div className="field">
-          <label htmlFor="private-vehicle-report-search">Private Vehicle Number</label>
-          <input
-            id="private-vehicle-report-search"
-            name="searchTerm"
-            maxLength={8}
-            defaultValue={searchTerm}
-            required
-          />
-        </div>
-        <input name="run" type="hidden" value="1" />
-        <div className="button-row">
-          <button className="button button-primary" type="submit">
-            {descriptionMode ? "QUERY" : "SUBMIT"}
-          </button>
-          <Link className="button button-secondary" href="/accidents/reports">
-            Report Menu
-          </Link>
-        </div>
-      </form>
-
-      {rows !== null ? (
-        rows.length === 0 ? (
-          <div className="vehicle-empty-state">
-            <p className="eyebrow">No vehicles found</p>
-            <h2>No accidents matched this private vehicle search.</h2>
-            <p className="muted-copy">Try another private vehicle number.</p>
-          </div>
-        ) : (
-          <section aria-live="polite" aria-labelledby="private-vehicle-report-results-title">
-            <div className="vehicle-form-section-header">
-              <div>
-                <p className="eyebrow">Report results</p>
-                <h2 id="private-vehicle-report-results-title">
-                  {title}: {rows.length}
-                </h2>
-              </div>
-            </div>
-            {rows.map((row, index) => (
-              <VehicleReportResult
-                key={row.accidentCode}
-                row={row}
-                index={index}
-                includeAccidentCategory={false}
-              />
-            ))}
-          </section>
-        )
-      ) : null}
+      <PrivateVehicleReportForm descriptionMode={descriptionMode} searchTerm={searchTerm} />
+      <PrivateVehicleReportResults rows={rows} title={title} />
 
       <div className="vehicle-footer-actions">
         <Link className="button button-secondary" href="/accidents">
@@ -213,20 +236,6 @@ export function PrivateVehicleReportPage({
       </section>
     </main>
   );
-}
-
-type LegacyPrivateVehicleReportPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyPrivateVehicleReportPage(
-  defaultMode: AccidentPrivateVehicleReportMode = "third-party",
-) {
-  return function LegacyPrivateVehicleReportPage({
-    searchParams,
-  }: Readonly<LegacyPrivateVehicleReportPageProps>) {
-    return <PrivateVehicleReportPage defaultMode={defaultMode} searchParams={searchParams} />;
-  };
 }
 
 export default function PrivateVehicleReportPageDefault({

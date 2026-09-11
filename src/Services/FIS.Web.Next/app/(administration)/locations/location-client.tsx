@@ -7,6 +7,8 @@ import { useFormStatus } from "react-dom";
 
 import type { LocationActionState } from "@/app/(administration)/locations/actions";
 import { deleteLocationAction, saveLocationAction } from "@/app/(administration)/locations/actions";
+import { ModalDialog } from "@/components/ui/modal-dialog";
+import { TableHeader } from "@/components/ui/table";
 import type { LocationRecord } from "@/lib/api/reference-data/api-locations";
 
 const initialState: LocationActionState = { status: "idle" };
@@ -45,82 +47,75 @@ function LocationForm({
   const editing = location !== null;
 
   return (
-    <div className="modal-overlay" role="presentation">
-      <section
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="location-form-title"
-      >
-        <h2 id="location-form-title">{editing ? "Edit Location" : "Add Location"}</h2>
-        <p className="muted-copy">Manage the location name, address, and geographic references.</p>
-        {state.status === "error" && state.message ? (
-          <div className="notice notice-error" role="alert">
-            <span aria-hidden="true">!</span>
-            <span>{state.message}</span>
-          </div>
-        ) : null}
-        <form action={formAction} className="field-grid">
-          <input name="locationId" type="hidden" value={location?.locationId ?? 0} readOnly />
-          <div className="field">
-            <label htmlFor="location-name">
-              Location Name <span aria-hidden="true">*</span>
-              <span className="sr-only"> required</span>
-            </label>
-            <input
-              id="location-name"
-              name="locationName"
-              type="text"
-              maxLength={100}
-              defaultValue={location?.locationName ?? ""}
-              required
-            />
-          </div>
-          <div className="field field-group-full">
-            <label htmlFor="location-address">Address</label>
-            <textarea
-              id="location-address"
-              name="address"
-              maxLength={100}
-              rows={3}
-              defaultValue={location?.addressLine1 ?? ""}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="location-latitude">Latitude</label>
-            <input
-              id="location-latitude"
-              name="latitude"
-              type="number"
-              step="any"
-              min={-90}
-              max={90}
-              placeholder="e.g. -26.2041"
-              defaultValue={coordinateValue(location?.latitude ?? null)}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="location-longitude">Longitude</label>
-            <input
-              id="location-longitude"
-              name="longitude"
-              type="number"
-              step="any"
-              min={-180}
-              max={180}
-              placeholder="e.g. 28.0473"
-              defaultValue={coordinateValue(location?.longitude ?? null)}
-            />
-          </div>
-          <div className="button-row field-group-full">
-            <SaveButton editing={editing} />
-            <button className="button button-secondary" type="button" onClick={onCancel}>
-              Cancel
-            </button>
-          </div>
-        </form>
-      </section>
-    </div>
+    <ModalDialog open labelledBy="location-form-title" className="modal-card" onClose={onCancel}>
+      <h2 id="location-form-title">{editing ? "Edit Location" : "Add Location"}</h2>
+      <p className="muted-copy">Manage the location name, address, and geographic references.</p>
+      {state.status === "error" && state.message ? (
+        <div className="notice notice-error" role="alert">
+          <span aria-hidden="true">!</span>
+          <span>{state.message}</span>
+        </div>
+      ) : null}
+      <form action={formAction} className="field-grid">
+        <input name="locationId" type="hidden" value={location?.locationId ?? 0} readOnly />
+        <div className="field">
+          <label htmlFor="location-name">
+            Location Name <span aria-hidden="true">*</span>
+            <span className="sr-only"> required</span>
+          </label>
+          <input
+            id="location-name"
+            name="locationName"
+            type="text"
+            maxLength={100}
+            defaultValue={location?.locationName ?? ""}
+            required
+          />
+        </div>
+        <div className="field field-group-full">
+          <label htmlFor="location-address">Address</label>
+          <textarea
+            id="location-address"
+            name="address"
+            maxLength={100}
+            rows={3}
+            defaultValue={location?.addressLine1 ?? ""}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="location-latitude">Latitude</label>
+          <input
+            id="location-latitude"
+            name="latitude"
+            type="number"
+            step="any"
+            min={-90}
+            max={90}
+            placeholder="e.g. -26.2041"
+            defaultValue={coordinateValue(location?.latitude ?? null)}
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="location-longitude">Longitude</label>
+          <input
+            id="location-longitude"
+            name="longitude"
+            type="number"
+            step="any"
+            min={-180}
+            max={180}
+            placeholder="e.g. 28.0473"
+            defaultValue={coordinateValue(location?.longitude ?? null)}
+          />
+        </div>
+        <div className="button-row field-group-full">
+          <SaveButton editing={editing} />
+          <button className="button button-secondary" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </ModalDialog>
   );
 }
 
@@ -129,27 +124,20 @@ function DeleteDialog({
   onCancel,
 }: Readonly<{ location: LocationRecord; onCancel: () => void }>) {
   return (
-    <div className="modal-overlay" role="presentation">
-      <section
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="location-delete-title"
-      >
-        <h2 id="location-delete-title">Confirm Delete</h2>
-        <p>
-          Are you sure you want to delete <strong>{location.locationName}</strong>?
-        </p>
-        <p className="warning-text">This action cannot be undone.</p>
-        <form action={deleteLocationAction} className="button-row">
-          <input name="locationId" type="hidden" value={location.locationId} readOnly />
-          <DeleteButton />
-          <button className="button button-secondary" type="button" onClick={onCancel}>
-            Cancel
-          </button>
-        </form>
-      </section>
-    </div>
+    <ModalDialog open labelledBy="location-delete-title" className="modal-card" onClose={onCancel}>
+      <h2 id="location-delete-title">Confirm Delete</h2>
+      <p>
+        Are you sure you want to delete <strong>{location.locationName}</strong>?
+      </p>
+      <p className="warning-text">This action cannot be undone.</p>
+      <form action={deleteLocationAction} className="button-row">
+        <input name="locationId" type="hidden" value={location.locationId} readOnly />
+        <DeleteButton />
+        <button className="button button-secondary" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </form>
+    </ModalDialog>
   );
 }
 
@@ -199,14 +187,14 @@ export default function LocationClient({
           <div className="table-wrapper">
             <table className="data-table">
               <caption className="sr-only">Active location records</caption>
-              <thead>
+              <TableHeader>
                 <tr>
                   <th scope="col">Location Name</th>
                   <th scope="col">Address</th>
                   <th scope="col">Coordinates</th>
                   <th scope="col">Actions</th>
                 </tr>
-              </thead>
+              </TableHeader>
               <tbody>
                 {locations.map((location) => (
                   <tr key={location.locationId}>

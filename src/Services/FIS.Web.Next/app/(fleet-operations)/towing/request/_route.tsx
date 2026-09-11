@@ -1,6 +1,9 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -66,17 +69,7 @@ function SearchForm({
 }: Readonly<{ searchType: TowingSearchType; searchQuery: string }>) {
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
-      <fieldset className="vehicle-search-options">
-        <legend>Search by</legend>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="searchType" value="GG" defaultChecked={searchType === "GG"} />{" "}
-          GG
-        </label>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="searchType" value="GP" defaultChecked={searchType === "GP"} />{" "}
-          GP
-        </label>
-      </fieldset>
+      <SearchTypeFieldset selectedType={searchType} legend="Search by" />
       <div className="vehicle-search-row">
         <label className="sr-only" htmlFor="towing-vehicle-search">
           {searchType === "GG" ? "GG number" : "GP number"}
@@ -127,15 +120,15 @@ function TowingRows({
     <div className="vehicle-table-wrapper" aria-live="polite">
       <table className="vehicle-table">
         <caption className="sr-only">Towing requests</caption>
-        <thead>
-          <tr>
-            <th scope="col">Vehicle</th>
-            <th scope="col">Request Date</th>
-            <th scope="col">Reference</th>
-            <th scope="col">Location</th>
-            <th scope="col">Action</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Vehicle</> },
+            { key: "column-2", label: <>Request Date</> },
+            { key: "column-3", label: <>Reference</> },
+            { key: "column-4", label: <>Location</> },
+            { key: "column-5", label: <>Action</> },
+          ]}
+        />
         <tbody>
           {rows.map((item) => (
             <tr key={item.towingCode}>
@@ -221,7 +214,9 @@ function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   );
 }
 
-async function TowingRequestPageContent({
+const TowingRequestPageContent = renderTowingRequestPageContent;
+
+async function renderTowingRequestPageContent({
   searchParams,
   routePath = "/towing/request",
 }: TowingRequestPageProps) {
@@ -396,16 +391,4 @@ export default function TowingRequestPage(props: Parameters<typeof TowingRequest
       <TowingRequestPageContent {...props} />
     </Suspense>
   );
-}
-
-type LegacyTowingRequestPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyTowingRequestPage(routePath: string) {
-  return function LegacyTowingRequestPage({
-    searchParams,
-  }: Readonly<LegacyTowingRequestPageProps>) {
-    return <TowingRequestPage routePath={routePath} searchParams={searchParams} />;
-  };
 }

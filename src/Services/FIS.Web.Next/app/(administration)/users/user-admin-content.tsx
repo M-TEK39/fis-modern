@@ -1,8 +1,11 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
 import { MenuSection } from "@/components/ui/menu-section";
 import {
   UserAdminApiError,
@@ -63,24 +66,12 @@ function AccessRestricted() {
 
 function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">
-        !
-      </div>
-      <p className="eyebrow">API unavailable</p>
-      <h2>User Administration could not be loaded.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/login">
-          Sign in
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message="User Administration could not be loaded."
+      retryHref={routePath}
+      secondaryHref="/login"
+      secondaryLabel="Sign in"
+    />
   );
 }
 
@@ -212,21 +203,21 @@ function UserRows({ users, alphabet }: Readonly<{ users: UserAdminProfile[]; alp
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Active FIS users filtered by last name</caption>
-        <thead>
-          <tr>
-            <th scope="col">Edit</th>
-            <th scope="col">De-Activate</th>
-            <th scope="col">Reset Login</th>
-            <th scope="col">Reset Password</th>
-            <th scope="col">Lastname</th>
-            <th scope="col">Firstname</th>
-            <th scope="col">User Name</th>
-            <th scope="col">Site Name</th>
-            <th scope="col">Position</th>
-            <th scope="col">Telephone</th>
-            <th scope="col">LastLoginDate</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Edit</> },
+            { key: "column-2", label: <>De-Activate</> },
+            { key: "column-3", label: <>Reset Login</> },
+            { key: "column-4", label: <>Reset Password</> },
+            { key: "column-5", label: <>Lastname</> },
+            { key: "column-6", label: <>Firstname</> },
+            { key: "column-7", label: <>User Name</> },
+            { key: "column-8", label: <>Site Name</> },
+            { key: "column-9", label: <>Position</> },
+            { key: "column-10", label: <>Telephone</> },
+            { key: "column-11", label: <>LastLoginDate</> },
+          ]}
+        />
         <tbody>
           {users.map((user) => (
             <tr key={user.userAccessCode}>

@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
+import ApiUnavailablePage from "@/components/app-shell/api-unavailable-page";
+import ReportsMenuLayout from "@/components/ui/reports-menu-layout";
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -62,18 +64,7 @@ async function WorkshopReportsMenuContent({
       </main>
     );
   if (session.status === "unavailable")
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-status-card" role="alert">
-          <p className="eyebrow">API unavailable</p>
-          <h1>Workshop reports are unavailable.</h1>
-          <p className="muted-copy">Retry when the FIS API is available.</p>
-          <Link className="button button-primary" href={routePath}>
-            Try again
-          </Link>
-        </section>
-      </main>
-    );
+    return <ApiUnavailablePage message="Workshop reports are unavailable." retryHref={routePath} />;
   if (!hasWorkshopReportAccess(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
@@ -85,35 +76,15 @@ async function WorkshopReportsMenuContent({
     );
 
   return (
-    <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card" aria-labelledby="workshop-reports-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Workshop</p>
-            <h1 id="workshop-reports-title">Workshop Reports Menu</h1>
-            <p>Run the legacy Workshop report workflows against compatible data.</p>
-          </div>
-          <Link className="button button-secondary" href={backHref}>
-            Back
-          </Link>
-        </header>
-        <div className="vehicle-menu-tiles">
-          {REPORT_LINKS.map(([mode, title, description]) => (
-            <section className="vehicle-menu-tile" key={mode}>
-              <h2 className="vehicle-menu-header">
-                <Link href={`${linkBase}/${mode}`}>{title}</Link>
-              </h2>
-              <div className="vehicle-menu-body">
-                <p className="muted-copy">{description}</p>
-                <Link className="button button-primary button-small" href={`${linkBase}/${mode}`}>
-                  Open report
-                </Link>
-              </div>
-            </section>
-          ))}
-        </div>
-      </section>
-    </main>
+    <ReportsMenuLayout
+      headingId="workshop-reports-title"
+      eyebrow="Workshop"
+      title="Workshop Reports Menu"
+      description="Run the legacy Workshop report workflows against compatible data."
+      backHref={backHref}
+      linkBase={linkBase}
+      links={REPORT_LINKS}
+    />
   );
 }
 

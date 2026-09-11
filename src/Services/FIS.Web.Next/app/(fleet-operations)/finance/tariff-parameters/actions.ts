@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { hasTariffApproverRole } from "@/app/(fleet-operations)/finance/_components";
+import { hasTariffApproverRole } from "@/app/(fleet-operations)/finance/_utils";
 import { FinanceApiError, runFinanceAction } from "@/lib/api/finance/api-finance";
 import { getSession } from "@/lib/auth/session";
 

@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -12,16 +14,18 @@ import {
   saveTaxiRequestAction,
 } from "@/app/(fleet-operations)/taxis/actions";
 import {
-  dateValue,
-  queryValue,
   TaxiHeader,
   TaxiNotice,
   TaxiPagination,
   TaxiRestricted,
   TaxiUnavailable,
+} from "@/app/(fleet-operations)/taxis/_components";
+import {
+  dateValue,
+  queryValue,
   timeValue,
   valueOrDash,
-} from "@/app/(fleet-operations)/taxis/_components";
+} from "@/app/(fleet-operations)/taxis/_utils";
 import {
   getTaxi,
   getTaxiByRequisition,
@@ -98,14 +102,17 @@ function classOptions(references: Awaited<ReturnType<typeof getTaxiLogReferences
   );
 
   return references.classes
-    .filter((taxiClass) => contractorNames.has(taxiClass.contractorId))
-    .map((taxiClass) => ({
-      classId: taxiClass.classId,
-      contractorId: taxiClass.contractorId,
-      contractorName:
-        contractorNames.get(taxiClass.contractorId) ?? `Contractor ${taxiClass.contractorId}`,
-      description: taxiClass.description,
-    }))
+    .reduce<TaxiClassLookupOption[]>((result, taxiClass) => {
+      if (!contractorNames.has(taxiClass.contractorId)) return result;
+      result.push({
+        classId: taxiClass.classId,
+        contractorId: taxiClass.contractorId,
+        contractorName:
+          contractorNames.get(taxiClass.contractorId) ?? `Contractor ${taxiClass.contractorId}`,
+        description: taxiClass.description,
+      });
+      return result;
+    }, [])
     .toSorted((left, right) =>
       `${left.contractorName} ${left.description}`.localeCompare(
         `${right.contractorName} ${right.description}`,
@@ -115,23 +122,27 @@ function classOptions(references: Awaited<ReturnType<typeof getTaxiLogReferences
 
 function departmentOptions(departments: Awaited<ReturnType<typeof getDepartments>>) {
   return departments
-    .filter((department) => department.deptActive)
-    .map((department) => namedOption(department.departmentCode, department.description))
-    .filter((option): option is LookupOption => option !== null)
+    .reduce<LookupOption[]>((result, department) => {
+      if (!department.deptActive) return result;
+      const option = namedOption(department.departmentCode, department.description);
+      if (option) result.push(option);
+      return result;
+    }, [])
     .toSorted((left, right) => left.label.localeCompare(right.label));
 }
 
 function siteOptions(sites: Awaited<ReturnType<typeof getSites>>) {
   return sites
-    .filter((site) => site.siteActive)
-    .map((site) => {
+    .reduce<LookupOption[]>((result, site) => {
+      if (!site.siteActive) return result;
       const department = site.departmentNumber ?? site.departmentCode;
       const description = department
         ? `${site.description ?? "Site"} — Department ${department}`
         : site.description;
-      return namedOption(site.siteCode, description);
-    })
-    .filter((option): option is LookupOption => option !== null)
+      const option = namedOption(site.siteCode, description);
+      if (option) result.push(option);
+      return result;
+    }, [])
     .toSorted((left, right) => left.label.localeCompare(right.label));
 }
 
@@ -357,8 +368,12 @@ function RequestSearch({
           placeholder="Request ID"
         />
         <span className="muted-copy">or use</span>
+        <label className="form-label" htmlFor="taxi-request-requisition">
+          Requisition number
+        </label>
         <input
           className="vehicle-search"
+          id="taxi-request-requisition"
           name="rekNum"
           defaultValue={queryValue(query.rekNum)}
           placeholder="Requisition number"
@@ -371,7 +386,9 @@ function RequestSearch({
   );
 }
 
-function TaxiRequestForm({
+const TaxiRequestForm = renderTaxiRequestForm;
+
+function renderTaxiRequestForm({
   taxi,
   lookups,
 }: Readonly<{ taxi?: TaxiRecord; lookups: TaxiRequestLookups }>) {
@@ -671,7 +688,9 @@ function RequestSummary({ taxi }: Readonly<{ taxi: TaxiRecord }>) {
   );
 }
 
-async function TaxiRequestsPageContent({
+const TaxiRequestsPageContent = renderTaxiRequestsPageContent;
+
+async function renderTaxiRequestsPageContent({
   searchParams,
   mode: forcedMode,
 }: Readonly<{ searchParams: SearchParams; mode?: string }>) {
@@ -720,15 +739,15 @@ async function TaxiRequestsPageContent({
             <div className="vehicle-table-wrapper">
               <table className="vehicle-table">
                 <caption className="sr-only">Pending taxi requests</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Requisition</th>
-                    <th scope="col">Official</th>
-                    <th scope="col">Date</th>
-                    <th scope="col">Vehicle</th>
-                    <th scope="col">Department</th>
-                  </tr>
-                </thead>
+                <DataTableHeader
+                  columns={[
+                    { key: "column-1", label: <>Requisition</> },
+                    { key: "column-2", label: <>Official</> },
+                    { key: "column-3", label: <>Date</> },
+                    { key: "column-4", label: <>Vehicle</> },
+                    { key: "column-5", label: <>Department</> },
+                  ]}
+                />
                 <tbody>
                   {taxiPage.total === 0 ? (
                     <tr>

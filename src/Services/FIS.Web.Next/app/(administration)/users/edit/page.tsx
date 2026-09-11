@@ -111,6 +111,91 @@ function findSelectedProfile(profiles: readonly UserAdminProfile[], username: st
   );
 }
 
+function UserAdminEditView({
+  message,
+  username,
+  alphabet,
+  userChoices,
+  selectedProfile,
+  displayName,
+  sites,
+  positions,
+  profiles,
+}: Readonly<{
+  message: ReturnType<typeof resultMessage>;
+  username: string;
+  alphabet: string;
+  userChoices: readonly UserAdminProfile[];
+  selectedProfile: UserAdminProfile | null;
+  displayName: string;
+  sites: Awaited<ReturnType<typeof getUserAdminSites>>;
+  positions: Awaited<ReturnType<typeof getUserAdminPositions>>;
+  profiles: Awaited<ReturnType<typeof getUserAdminUserChoices>>;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="user-edit-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">User Administration</p>
+            <h1 id="user-edit-title">Update or Modify User Details</h1>
+            <p>Search for a username, then update its complete legacy profile.</p>
+          </div>
+          <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+            Menu
+          </Link>
+        </header>
+        {message ? (
+          <div
+            className={`notice notice-${message.tone}`}
+            role={message.tone === "error" ? "alert" : "status"}
+          >
+            {message.text}
+          </div>
+        ) : null}
+        <section className="vehicle-form-section" aria-labelledby="user-edit-search-title">
+          <div className="vehicle-form-section-header">
+            <div>
+              <p className="eyebrow">Find profile</p>
+              <h2 id="user-edit-search-title">Select a username</h2>
+            </div>
+          </div>
+          <UserEditSearchForm alphabet={alphabet} users={userChoices} username={username} />
+        </section>
+        {username && !selectedProfile ? (
+          <div className="notice notice-error" role="alert">
+            No profile could be found for user {username}.
+          </div>
+        ) : null}
+        {selectedProfile ? (
+          <UserEditForm
+            action={updateUserAdminAction}
+            alphabet={alphabet}
+            approvers={profiles}
+            displayName={displayName}
+            positions={positions}
+            profile={selectedProfile}
+            sites={sites}
+          />
+        ) : null}
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
+            Back to Menu
+          </Link>
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 async function UserAdminEditPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
@@ -165,70 +250,17 @@ async function UserAdminEditPageContent({
       (session.userAccessCode ? `User ${session.userAccessCode}` : "Authenticated User");
 
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="user-edit-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">User Administration</p>
-              <h1 id="user-edit-title">Update or Modify User Details</h1>
-              <p>Search for a username, then update its complete legacy profile.</p>
-            </div>
-            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
-              Menu
-            </Link>
-          </header>
-
-          {message ? (
-            <div
-              className={`notice notice-${message.tone}`}
-              role={message.tone === "error" ? "alert" : "status"}
-            >
-              {message.text}
-            </div>
-          ) : null}
-
-          <section className="vehicle-form-section" aria-labelledby="user-edit-search-title">
-            <div className="vehicle-form-section-header">
-              <div>
-                <p className="eyebrow">Find profile</p>
-                <h2 id="user-edit-search-title">Select a username</h2>
-              </div>
-            </div>
-            <UserEditSearchForm alphabet={alphabet} users={userChoices} username={username} />
-          </section>
-
-          {username && !selectedProfile ? (
-            <div className="notice notice-error" role="alert">
-              No profile could be found for user {username}.
-            </div>
-          ) : null}
-          {selectedProfile ? (
-            <UserEditForm
-              action={updateUserAdminAction}
-              alphabet={alphabet}
-              approvers={profiles}
-              displayName={displayName}
-              positions={positions}
-              profile={selectedProfile}
-              sites={sites}
-            />
-          ) : null}
-
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">
-              Back to Menu
-            </Link>
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <UserAdminEditView
+        message={message}
+        username={username}
+        alphabet={alphabet}
+        userChoices={userChoices}
+        selectedProfile={selectedProfile}
+        displayName={displayName}
+        sites={sites}
+        positions={positions}
+        profiles={profiles}
+      />
     );
   } catch (error) {
     if (error instanceof UserAdminApiError && error.reason === "unauthorized") {

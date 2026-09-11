@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -218,7 +220,9 @@ function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   );
 }
 
-function SupplierForm({
+const SupplierForm = renderSupplierForm;
+
+function renderSupplierForm({
   supplier,
   services,
   mode,
@@ -491,16 +495,16 @@ function SupplierTab({
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Third-party supplier register</caption>
-            <thead>
-              <tr>
-                <th scope="col">Supplier</th>
-                <th scope="col">Service</th>
-                <th scope="col">Contact</th>
-                <th scope="col">Telephone</th>
-                <th scope="col">Status</th>
-                <th scope="col">Actions</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Supplier</> },
+                { key: "column-2", label: <>Service</> },
+                { key: "column-3", label: <>Contact</> },
+                { key: "column-4", label: <>Telephone</> },
+                { key: "column-5", label: <>Status</> },
+                { key: "column-6", label: <>Actions</> },
+              ]}
+            />
             <tbody>
               {supplierPage.items.map((item) => (
                 <tr key={item.supplierId}>
@@ -541,7 +545,9 @@ function SupplierTab({
   );
 }
 
-function ProjectForm({
+const ProjectForm = renderProjectForm;
+
+function renderProjectForm({
   project,
   departments,
   sites,
@@ -911,16 +917,16 @@ function ProjectTab({
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Third-party project register</caption>
-            <thead>
-              <tr>
-                <th scope="col">Description</th>
-                <th scope="col">Department</th>
-                <th scope="col">Start</th>
-                <th scope="col">End</th>
-                <th scope="col">Responsible Person</th>
-                <th scope="col">Actions</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Description</> },
+                { key: "column-2", label: <>Department</> },
+                { key: "column-3", label: <>Start</> },
+                { key: "column-4", label: <>End</> },
+                { key: "column-5", label: <>Responsible Person</> },
+                { key: "column-6", label: <>Actions</> },
+              ]}
+            />
             <tbody>
               {projectPage.items.map((item) => (
                 <tr key={item.projectId}>
@@ -961,7 +967,9 @@ function ProjectTab({
   );
 }
 
-function AllocationTab({
+const AllocationTab = renderAllocationTab;
+
+function renderAllocationTab({
   departments,
   suppliers,
   projects,
@@ -1039,7 +1047,10 @@ function AllocationTab({
             >
               <option value="">Select...</option>
               {suppliers
-                .filter((supplier) => supplier.active !== false)
+                .reduce<ThirdPartySupplier[]>((activeSuppliers, supplier) => {
+                  if (supplier.active !== false) activeSuppliers.push(supplier);
+                  return activeSuppliers;
+                }, [])
                 .map((supplier) => (
                   <option key={supplier.supplierId} value={supplier.supplierId}>
                     {valueOrDash(supplier.name)} ({supplier.supplierId})
@@ -1088,15 +1099,15 @@ function AllocationTab({
             <div className="vehicle-table-wrapper">
               <table className="vehicle-table">
                 <caption className="sr-only">Supplier vehicle allocation</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Vehicle ID</th>
-                    <th scope="col">Registration</th>
-                    <th scope="col">Model</th>
-                    <th scope="col">Year</th>
-                    <th scope="col">Class and action</th>
-                  </tr>
-                </thead>
+                <DataTableHeader
+                  columns={[
+                    { key: "column-1", label: <>Vehicle ID</> },
+                    { key: "column-2", label: <>Registration</> },
+                    { key: "column-3", label: <>Model</> },
+                    { key: "column-4", label: <>Year</> },
+                    { key: "column-5", label: <>Class and action</> },
+                  ]}
+                />
                 <tbody>
                   {vehiclePage.items.map((vehicle) => (
                     <tr key={vehicle.vehicleId}>
@@ -1180,15 +1191,15 @@ function AllocationTab({
             <div className="vehicle-table-wrapper">
               <table className="vehicle-table">
                 <caption className="sr-only">Current project allocations</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Allocation</th>
-                    <th scope="col">Supplier</th>
-                    <th scope="col">Vehicle</th>
-                    <th scope="col">Class</th>
-                    <th scope="col">Action</th>
-                  </tr>
-                </thead>
+                <DataTableHeader
+                  columns={[
+                    { key: "column-1", label: <>Allocation</> },
+                    { key: "column-2", label: <>Supplier</> },
+                    { key: "column-3", label: <>Vehicle</> },
+                    { key: "column-4", label: <>Class</> },
+                    { key: "column-5", label: <>Action</> },
+                  ]}
+                />
                 <tbody>
                   {allocationPage.items.map((allocation) => (
                     <tr key={allocation.allocationId}>
@@ -1232,7 +1243,9 @@ function AllocationTab({
   );
 }
 
-async function ThirdPartyPageContent({
+const ThirdPartyPageContent = renderThirdPartyPageContent;
+
+async function renderThirdPartyPageContent({
   searchParams,
   routePath = "/third-party",
 }: ThirdPartyPageProps) {

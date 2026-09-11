@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -9,6 +11,7 @@ import {
   hasVehicleManagementPermission,
 } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import StatusCardView from "@/components/app-shell/status-card";
 import RouteLoading from "@/components/app-shell/route-loading";
 import {
   getVehicleSearchCriteria,
@@ -62,21 +65,14 @@ function StatusCard({
   routePath = "/vehicle-photos",
 }: Readonly<{ title: string; message: string; routePath?: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">{title}</p>
-      <h2>{message}</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/home">
-          Home
-        </Link>
-      </div>
-    </section>
+    <StatusCardView
+      title={title}
+      message={message}
+      description="The application is still running. Retry when the FIS API is available."
+      retryHref={routePath}
+      secondaryHref="/home"
+      secondaryLabel="Home"
+    />
   );
 }
 
@@ -112,20 +108,20 @@ function VehicleResults({
         <div className="table-wrapper">
           <table className="data-table">
             <caption className="sr-only">Vehicle photo search results</caption>
-            <thead>
-              <tr>
-                <th scope="col">GG Number</th>
-                <th scope="col">Registration Number</th>
-                <th scope="col">Make and Model</th>
-                <th scope="col">Year Manufactured</th>
-                <th scope="col">Colour</th>
-                <th scope="col">Hire Type</th>
-                <th scope="col">Status</th>
-                <th scope="col">Hired From</th>
-                <th scope="col">Status Date</th>
-                <th scope="col">Actions</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>GG Number</> },
+                { key: "column-2", label: <>Registration Number</> },
+                { key: "column-3", label: <>Make and Model</> },
+                { key: "column-4", label: <>Year Manufactured</> },
+                { key: "column-5", label: <>Colour</> },
+                { key: "column-6", label: <>Hire Type</> },
+                { key: "column-7", label: <>Status</> },
+                { key: "column-8", label: <>Hired From</> },
+                { key: "column-9", label: <>Status Date</> },
+                { key: "column-10", label: <>Actions</> },
+              ]}
+            />
             <tbody>
               {items.map((vehicle) => (
                 <tr key={vehicle.vmfCode}>
@@ -191,7 +187,9 @@ function VehicleResults({
   );
 }
 
-async function VehiclePhotosPageContent({
+const VehiclePhotosPageContent = renderVehiclePhotosPageContent;
+
+async function renderVehiclePhotosPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();

@@ -61,6 +61,7 @@ async function AssetVerificationHelpContent() {
         src="/legacy/asset-verification.html"
         title="Asset Verification Help"
         className="fis-help-frame document-help-frame"
+        sandbox=""
       />
     </div>
   );

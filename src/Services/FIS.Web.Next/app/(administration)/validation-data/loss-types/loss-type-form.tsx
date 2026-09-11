@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import ValidationDescriptionSection from "@/components/ui/validation-description-section";
 import type { LossTypeActionState } from "@/app/(administration)/validation-data/loss-types/actions";
 import type { LossTypeRecord } from "@/lib/api/fleet-operations/api-loss-types";
 
@@ -47,35 +48,19 @@ export default function LossTypeForm({ action, lossType, mode }: LossTypeFormPro
       {mode === "update" ? (
         <input name="lossTypeCode" type="hidden" value={lossType.lossTypeCode} readOnly />
       ) : null}
-      <section className="vehicle-form-section" aria-labelledby="loss-type-details-title">
-        <div className="vehicle-form-section-header">
-          <div>
-            <p className="eyebrow">Legacy loss validation</p>
-            <h2 id="loss-type-details-title">Loss description details</h2>
-          </div>
-          <span className="vehicle-required-note">* Required</span>
-        </div>
-        <div className="field-grid">
-          <div className="field">
-            <label htmlFor="description">
-              Loss description <span aria-hidden="true">*</span>
-              <span className="sr-only"> required</span>
-            </label>
-            <input
-              id="description"
-              name="description"
-              type="text"
-              maxLength={30}
-              defaultValue={lossType.description ?? ""}
-              required
-            />
-          </div>
-        </div>
-        <p className="muted-copy">
-          The description is stored in the legacy <code>Loss_type</code> table and remains available
-          to loss/theft workflows.
-        </p>
-      </section>
+      <ValidationDescriptionSection
+        headingId="loss-type-details-title"
+        eyebrow="Legacy loss validation"
+        heading="Loss description details"
+        label="Loss description"
+        value={lossType.description}
+        note={
+          <>
+            The description is stored in the legacy <code>Loss_type</code> table and remains
+            available to loss/theft workflows.
+          </>
+        }
+      />
       {mode === "update" ? (
         <section className="vehicle-form-section" aria-labelledby="loss-type-audit-title">
           <div className="vehicle-form-section-header">

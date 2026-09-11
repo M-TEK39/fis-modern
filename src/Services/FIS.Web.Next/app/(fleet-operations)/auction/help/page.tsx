@@ -1,9 +1,12 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import HelpEntriesSection from "@/components/ui/help-entries-section";
 import { getSession } from "@/lib/auth/session";
 
 const REPORTS_ROLE = "Reports";
@@ -174,32 +177,12 @@ async function AuctionHelpContent() {
           </p>
         </section>
 
-        <section className="module-help-section" aria-labelledby="auction-help-fields-title">
-          <h2 id="auction-help-fields-title">Term / Field Analysis</h2>
-          <p>
-            The required data fields are mostly self-explanatory; the definitions below specify
-            their intended meaning.
-          </p>
-          <div className="vehicle-table-wrapper">
-            <table className="vehicle-table module-help-table">
-              <caption className="sr-only">Auction maintenance terms and field definitions</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Term / Field</th>
-                  <th scope="col">Definition</th>
-                </tr>
-              </thead>
-              <tbody>
-                {HELP_ENTRIES.map((entry) => (
-                  <tr key={entry.term}>
-                    <th scope="row">{entry.term}</th>
-                    <td>{entry.description}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <HelpEntriesSection
+          headingId="auction-help-fields-title"
+          description="The required data fields are mostly self-explanatory; the definitions below specify their intended meaning."
+          caption="Auction maintenance terms and field definitions"
+          entries={HELP_ENTRIES}
+        />
       </div>
       <div className="vehicle-footer-actions">
         <Link className="button button-secondary" href="/auction">

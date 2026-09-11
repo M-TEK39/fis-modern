@@ -8,6 +8,7 @@ import {
   DateRangeFields,
   TrackingNotice,
   TrackingReportTable,
+  TrackingReportDateForm,
   TrackingShell,
 } from "@/app/(fleet-operations)/tracking/_components";
 import {
@@ -44,18 +45,7 @@ async function TrackingInstallPeriodReportPageContent({
         description="View tracker installations captured during a selected period."
       >
         <TrackingNotice query={query} />
-        <form className="vehicle-status-maintenance-panel" method="get">
-          <DateRangeFields startDate={range.startDate} endDate={range.endDate} />
-          <input name="run" type="hidden" value="1" />
-          <div className="button-row">
-            <button className="button button-primary" type="submit">
-              Submit
-            </button>
-            <Link className="button button-secondary" href="/tracking/reports">
-              Report menu
-            </Link>
-          </div>
-        </form>
+        <TrackingReportDateForm startDate={range.startDate} endDate={range.endDate} />
         {run ? (
           <TrackingReportTable records={rows} title="Tracking report for install period" />
         ) : (

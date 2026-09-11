@@ -5,11 +5,8 @@ import RouteLoading from "@/components/app-shell/route-loading";
 import Link from "next/link";
 
 import { collectLogbooksAction } from "@/app/(fleet-operations)/log-books/actions";
-import {
-  LogbookShell,
-  VehicleSearchForm,
-  valueOrDash,
-} from "@/app/(fleet-operations)/log-books/_components";
+import { LogbookShell, VehicleSearchForm } from "@/app/(fleet-operations)/log-books/_components";
+import { valueOrDash } from "@/app/(fleet-operations)/log-books/_utils";
 import {
   accessRestricted,
   getLogbookSession,
@@ -58,6 +55,7 @@ async function LogbookCollectionPageContent({
   const selectedCodes = queryValues(query.vmfCode)
     .map(parsePositiveInteger)
     .filter((code): code is number => code !== null);
+  const selectedCodeSet = new Set(selectedCodes);
   const message = statusMessage(query);
   try {
     const [options, sites] = await Promise.all([getVehicleOptions(), getSites()]);
@@ -165,7 +163,7 @@ async function LogbookCollectionPageContent({
                       name="vmfCode"
                       type="checkbox"
                       value={vehicle.vmfCode}
-                      defaultChecked={selectedCodes.includes(vehicle.vmfCode)}
+                      defaultChecked={selectedCodeSet.has(vehicle.vmfCode)}
                     />
                     {valueOrDash(vehicle.fleetNumber)} / {valueOrDash(vehicle.registrationNumber)} (
                     {vehicle.vmfCode})

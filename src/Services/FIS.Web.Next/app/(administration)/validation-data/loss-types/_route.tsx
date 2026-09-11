@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -6,6 +8,7 @@ import { Suspense } from "react";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import StatusCardView from "@/components/app-shell/status-card";
 import { createLossTypeAction } from "@/app/(administration)/validation-data/loss-types/actions";
 import LossTypeForm from "@/app/(administration)/validation-data/loss-types/loss-type-form";
 import {
@@ -63,18 +66,13 @@ function ErrorCard({
   routePath = "/validation-data/loss-types",
 }: Readonly<{ message: string; routePath?: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">Loss description maintenance</p>
-      <h2>{message}</h2>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/validation-data">
-          Validation Data
-        </Link>
-      </div>
-    </section>
+    <StatusCardView
+      title="Loss description maintenance"
+      message={message}
+      retryHref={routePath}
+      secondaryHref="/validation-data"
+      secondaryLabel="Validation Data"
+    />
   );
 }
 
@@ -105,14 +103,14 @@ function LossTypeTable({
       <div className="table-wrapper">
         <table className="data-table">
           <caption className="sr-only">Loss descriptions</caption>
-          <thead>
-            <tr>
-              <th scope="col">Loss type code</th>
-              <th scope="col">Loss description</th>
-              <th scope="col">Last updated</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Loss type code</> },
+              { key: "column-2", label: <>Loss description</> },
+              { key: "column-3", label: <>Last updated</> },
+              { key: "column-4", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {lossTypes.map((lossType) => (
               <tr key={lossType.lossTypeCode}>
@@ -201,7 +199,110 @@ function Pagination({
   );
 }
 
-async function LossTypeListPageContent({
+function LossTypeListView({
+  lossTypePage,
+  error,
+  notice,
+  query,
+  routePath,
+  searchTerm,
+}: Readonly<{
+  lossTypePage: Awaited<ReturnType<typeof getLossTypesPage>>;
+  error: string | undefined;
+  notice: string | undefined;
+  query: Record<string, string | string[] | undefined>;
+  routePath: string;
+  searchTerm: string;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="loss-type-list-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Operational</p>
+            <h1 id="loss-type-list-title">Loss Description Maintenance</h1>
+            <p>Maintain the loss descriptions used by loss/theft workflows.</p>
+          </div>
+          <div className="button-row">
+            <Link className="button button-secondary" href="/validation-data">
+              Validation Data
+            </Link>
+            <Link className="button button-secondary" href="/home">
+              Home
+            </Link>
+          </div>
+        </header>
+        {notice ? (
+          <div
+            className={`notice ${error ? "notice-error" : "notice-success"}`}
+            role={error ? "alert" : "status"}
+          >
+            {notice}
+          </div>
+        ) : null}
+        <form className="vehicle-quick-search-form" method="get" action={routePath}>
+          <div className="field">
+            <label htmlFor="loss-type-search">Search loss descriptions</label>
+            <input
+              id="loss-type-search"
+              name="searchTerm"
+              type="search"
+              defaultValue={searchTerm}
+              placeholder="Enter a description"
+            />
+          </div>
+          <div className="button-row vehicle-quick-search-actions">
+            <button className="button button-primary" type="submit">
+              Search
+            </button>
+            {searchTerm ? (
+              <Link className="button button-secondary" href={routePath}>
+                Clear
+              </Link>
+            ) : null}
+          </div>
+        </form>
+        <LossTypeTable
+          lossTypes={lossTypePage.items}
+          searchTerm={searchTerm}
+          total={lossTypePage.total}
+        />
+        <Pagination
+          page={lossTypePage.page}
+          pageSize={lossTypePage.pageSize}
+          query={query}
+          routePath={routePath}
+          total={lossTypePage.total}
+          totalPages={lossTypePage.totalPages}
+        />
+        <LossTypeForm
+          action={createLossTypeAction}
+          lossType={{
+            lossTypeCode: 0,
+            description: "",
+            dateCreated: null,
+            dateUpdated: null,
+            createdByUserCode: null,
+            modifiedByUserCode: null,
+            isDeleted: false,
+          }}
+          mode="create"
+        />
+        <div className="vehicle-footer-actions">
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const LossTypeListPageContent = renderLossTypeListPageContent;
+
+async function renderLossTypeListPageContent({
   searchParams,
   routePath = "/validation-data/loss-types",
 }: LossTypeListPageProps) {
@@ -253,88 +354,14 @@ async function LossTypeListPageContent({
             ? "Loss description deleted successfully."
             : error;
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="loss-type-list-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Operational</p>
-              <h1 id="loss-type-list-title">Loss Description Maintenance</h1>
-              <p>Maintain the loss descriptions used by loss/theft workflows.</p>
-            </div>
-            <div className="button-row">
-              <Link className="button button-secondary" href="/validation-data">
-                Validation Data
-              </Link>
-              <Link className="button button-secondary" href="/home">
-                Home
-              </Link>
-            </div>
-          </header>
-          {notice ? (
-            <div
-              className={`notice ${error ? "notice-error" : "notice-success"}`}
-              role={error ? "alert" : "status"}
-            >
-              {notice}
-            </div>
-          ) : null}
-          <form className="vehicle-quick-search-form" method="get" action={routePath}>
-            <div className="field">
-              <label htmlFor="loss-type-search">Search loss descriptions</label>
-              <input
-                id="loss-type-search"
-                name="searchTerm"
-                type="search"
-                defaultValue={searchTerm}
-                placeholder="Enter a description"
-              />
-            </div>
-            <div className="button-row vehicle-quick-search-actions">
-              <button className="button button-primary" type="submit">
-                Search
-              </button>
-              {searchTerm ? (
-                <Link className="button button-secondary" href={routePath}>
-                  Clear
-                </Link>
-              ) : null}
-            </div>
-          </form>
-          <LossTypeTable
-            lossTypes={lossTypePage.items}
-            searchTerm={searchTerm}
-            total={lossTypePage.total}
-          />
-          <Pagination
-            page={lossTypePage.page}
-            pageSize={lossTypePage.pageSize}
-            query={query}
-            routePath={routePath}
-            total={lossTypePage.total}
-            totalPages={lossTypePage.totalPages}
-          />
-          <LossTypeForm
-            action={createLossTypeAction}
-            lossType={{
-              lossTypeCode: 0,
-              description: "",
-              dateCreated: null,
-              dateUpdated: null,
-              createdByUserCode: null,
-              modifiedByUserCode: null,
-              isDeleted: false,
-            }}
-            mode="create"
-          />
-          <div className="vehicle-footer-actions">
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <LossTypeListView
+        lossTypePage={lossTypePage}
+        error={error}
+        notice={notice}
+        query={query}
+        routePath={routePath}
+        searchTerm={searchTerm}
+      />
     );
   } catch (caughtError) {
     if (caughtError instanceof LossTypeApiError && caughtError.reason === "unauthorized")

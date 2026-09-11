@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import PrintButton from "@/app/(fleet-operations)/accidents/reports/print-button";
+import {
+  AccidentLetterClosing,
+  AccidentLetterHeader,
+} from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -100,17 +104,7 @@ function Letter({ report }: { report: AccidentOutstandingDocumentReport }) {
           <PrintButton />
         </div>
       </header>
-      <section className="vehicle-status-maintenance-panel accident-letter-header">
-        <p className="accident-letter-government">
-          <strong>GOVERNMENT GARAGE - STAATSGARAGE : JOHANNESBURG</strong>
-        </p>
-        <p>
-          16 BOEINGSTR. EAST, BEDFORDVIEW, PRIVATE BAG X1 BEDFORDVIEW 2008, TEL : 3729048 / 67 / 00
-        </p>
-        <p>
-          <strong>ENQUIRIES:</strong> M. Abbott <strong>Ref Number:</strong> {reference}
-        </p>
-      </section>
+      <AccidentLetterHeader reference={reference} />
       <section className="vehicle-status-maintenance-panel">
         <h2>The Transport Manager</h2>
         <p>
@@ -144,19 +138,7 @@ function Letter({ report }: { report: AccidentOutstandingDocumentReport }) {
         <p>Please review and provide the outstanding documents listed below.</p>
       </section>
       <OutstandingDocuments report={report} />
-      <section className="vehicle-status-maintenance-panel">
-        <p>Please mention my reference number in all correspondence.</p>
-        <p>
-          All correspondence addressed to this office must be accompanied by a departmental
-          letterhead.
-        </p>
-        <p>Thank you in advance.</p>
-        <p>
-          _______________________
-          <br />
-          for Deputy Manager
-        </p>
-      </section>
+      <AccidentLetterClosing />
       <div className="vehicle-footer-actions">
         <Link className="button button-secondary" href="/accidents/reports/outstanding-docs">
           Report Menu

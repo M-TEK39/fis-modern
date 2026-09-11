@@ -36,6 +36,8 @@ import {
 import { getSites, type SiteRecord } from "@/lib/api/reference-data/api-sites";
 import { getSession } from "@/lib/auth/session";
 
+import { loadContractDetailData, type ContractDetailData } from "./_data";
+
 export type ContractDetailPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
   routePath?: string;
@@ -100,6 +102,7 @@ function SiteSelect({
   const hasSelectedValue = sites.some((site) => String(site.siteCode) === selectedValue);
   return (
     <select
+      aria-label="Site"
       className="form-select"
       defaultValue={selectedValue}
       id={id}
@@ -138,6 +141,7 @@ function DepartmentSelect({
   );
   return (
     <select
+      aria-label="Department"
       className="form-select"
       defaultValue={selectedValue}
       id={id}
@@ -178,6 +182,7 @@ function SiteDriverSelect({
   );
   return (
     <select
+      aria-label="Site driver"
       className="form-select"
       defaultValue={selectedValue}
       id={id}
@@ -220,6 +225,193 @@ function statusLabel(contract: ContractRecord) {
   }
 }
 
+type DetailActionState = Readonly<{
+  canActivate: boolean;
+  canCancelClose: boolean;
+  canEdit: boolean;
+  canManage: boolean;
+  canRecall: boolean;
+  canReview: boolean;
+  canSubmit: boolean;
+  isActive: boolean;
+  status: number | null;
+}>;
+
+function getDetailActionState(
+  contract: ContractRecord,
+  session: ContractSession,
+): DetailActionState {
+  const status = contract.contractStatusCode;
+  const isActive =
+    status === 3 || (status === null && contract.stillCurrent?.toUpperCase() === "Y");
+  return {
+    canActivate: (status === 1 || status === 2) && canReviewContract(contract, session),
+    canCancelClose: isActive && canCloseActiveContract(session.roles),
+    canEdit: (status === 0 || status === 4) && canEditContract(contract, session),
+    canManage: isActive && canManageActiveContract(session.roles),
+    canRecall: status === 1 && canSubmitContract(contract, session),
+    canReview: status === 1 && canReviewContract(contract, session),
+    canSubmit: (status === 0 || status === 4) && canSubmitContract(contract, session),
+    isActive,
+    status,
+  };
+}
+
+function ActionLink({
+  children,
+  href,
+  show,
+}: Readonly<{ children: React.ReactNode; href: string; show: boolean }>) {
+  if (!show) return null;
+  return (
+    <Link className="button button-secondary" href={href}>
+      {children}
+    </Link>
+  );
+}
+
+function ActionForm({
+  action,
+  buttonClassName = "button button-secondary",
+  children,
+  contract,
+  returnPath,
+  show,
+}: Readonly<{
+  action: string;
+  buttonClassName?: string;
+  children: React.ReactNode;
+  contract: ContractRecord;
+  returnPath: string;
+  show: boolean;
+}>) {
+  if (!show) return null;
+  return (
+    <form action={runContractAction}>
+      <input name="contractId" type="hidden" value={contract.contractCode} />
+      <input name="returnPath" type="hidden" value={returnPath} />
+      <input name="action" type="hidden" value={action} />
+      <button className={buttonClassName} type="submit">
+        {children}
+      </button>
+    </form>
+  );
+}
+
+function WorkflowActionForms({
+  contract,
+  returnPath,
+  state,
+}: Readonly<{ contract: ContractRecord; returnPath: string; state: DetailActionState }>) {
+  return (
+    <>
+      <ActionForm
+        action="submit"
+        contract={contract}
+        returnPath={returnPath}
+        show={state.canSubmit}
+      >
+        Submit for approval
+      </ActionForm>
+      <ActionForm
+        action="recall"
+        contract={contract}
+        returnPath={returnPath}
+        show={state.canRecall}
+      >
+        Recall to draft
+      </ActionForm>
+      <ActionForm
+        action="approve-activate"
+        buttonClassName="button button-primary"
+        contract={contract}
+        returnPath={returnPath}
+        show={state.canReview}
+      >
+        Approve and activate
+      </ActionForm>
+      <ActionForm
+        action="approve-activate"
+        buttonClassName="button button-primary"
+        contract={contract}
+        returnPath={returnPath}
+        show={state.status === 2 && state.canActivate}
+      >
+        Activate approved contract
+      </ActionForm>
+    </>
+  );
+}
+
+function LifecycleActionLinks({
+  contract,
+  returnPath,
+  state,
+}: Readonly<{ contract: ContractRecord; returnPath: string; state: DetailActionState }>) {
+  return (
+    <>
+      <ActionLink href={`${returnPath}#extend-contract`} show={state.canManage}>
+        Extend
+      </ActionLink>
+      <ActionLink href={`${returnPath}#reassign-contract`} show={state.canManage}>
+        Reassign contract
+      </ActionLink>
+      <ActionLink href={`${returnPath}#close-contract`} show={state.canCancelClose}>
+        Close and return home
+      </ActionLink>
+      <ActionForm
+        action="cancel"
+        buttonClassName="button button-danger"
+        contract={contract}
+        returnPath={returnPath}
+        show={state.canCancelClose}
+      >
+        Cancel
+      </ActionForm>
+      <ActionLink
+        href={`/contracts/relief-vehicle-search?contractId=${contract.contractCode}`}
+        show={state.canManage && contract.reliefVehicleOption === true}
+      >
+        Create relief contract
+      </ActionLink>
+    </>
+  );
+}
+
+function ReviewActionForm({
+  contract,
+  returnPath,
+  state,
+}: Readonly<{ contract: ContractRecord; returnPath: string; state: DetailActionState }>) {
+  if (!state.canReview) return null;
+  return (
+    <form action={runContractAction} className="form-grid contract-action-form">
+      <input name="contractId" type="hidden" value={contract.contractCode} />
+      <input name="returnPath" type="hidden" value={returnPath} />
+      <label className="form-field form-group-full">
+        <span className="form-label">Approval notes</span>
+        <textarea className="form-textarea" name="approvalNotes" rows={2} />
+      </label>
+      <div className="button-row">
+        <button className="button button-secondary" name="action" value="approve" type="submit">
+          Approve only
+        </button>
+        <button
+          className="button button-warning"
+          name="action"
+          value="decline-correction"
+          type="submit"
+        >
+          Return for correction
+        </button>
+        <button className="button button-danger" name="action" value="decline" type="submit">
+          Decline
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function DetailActions({
   contract,
   session,
@@ -228,126 +420,19 @@ function DetailActions({
   session: ContractSession;
 }>) {
   const returnPath = `/contracts/detail?contractId=${contract.contractCode}`;
-  const status = contract.contractStatusCode;
-  const isActive =
-    status === 3 || (status === null && contract.stillCurrent?.toUpperCase() === "Y");
-  const canEdit = (status === 0 || status === 4) && canEditContract(contract, session);
-  const canSubmit = (status === 0 || status === 4) && canSubmitContract(contract, session);
-  const canRecall = status === 1 && canSubmitContract(contract, session);
-  const canReview = status === 1 && canReviewContract(contract, session);
-  const canActivate = (status === 1 || status === 2) && canReviewContract(contract, session);
-  const canManage = isActive && canManageActiveContract(session.roles);
-  const canCancelClose = isActive && canCloseActiveContract(session.roles);
+  const state = getDetailActionState(contract, session);
   return (
     <section className="vehicle-status-maintenance-panel" aria-labelledby="contract-actions-title">
       <p className="eyebrow">Available actions</p>
       <h2 id="contract-actions-title">{statusLabel(contract)}</h2>
       <div className="button-row">
-        {canEdit ? (
-          <Link className="button button-primary" href={`${returnPath}#edit-contract`}>
-            Edit contract
-          </Link>
-        ) : null}
-        {canSubmit ? (
-          <form action={runContractAction}>
-            <input name="contractId" type="hidden" value={contract.contractCode} />
-            <input name="returnPath" type="hidden" value={returnPath} />
-            <input name="action" type="hidden" value="submit" />
-            <button className="button button-secondary" type="submit">
-              Submit for approval
-            </button>
-          </form>
-        ) : null}
-        {canRecall ? (
-          <form action={runContractAction}>
-            <input name="contractId" type="hidden" value={contract.contractCode} />
-            <input name="returnPath" type="hidden" value={returnPath} />
-            <input name="action" type="hidden" value="recall" />
-            <button className="button button-secondary" type="submit">
-              Recall to draft
-            </button>
-          </form>
-        ) : null}
-        {canReview ? (
-          <form action={runContractAction}>
-            <input name="contractId" type="hidden" value={contract.contractCode} />
-            <input name="returnPath" type="hidden" value={returnPath} />
-            <input name="action" type="hidden" value="approve-activate" />
-            <button className="button button-primary" type="submit">
-              Approve and activate
-            </button>
-          </form>
-        ) : null}
-        {status === 2 && canActivate ? (
-          <form action={runContractAction}>
-            <input name="contractId" type="hidden" value={contract.contractCode} />
-            <input name="returnPath" type="hidden" value={returnPath} />
-            <input name="action" type="hidden" value="approve-activate" />
-            <button className="button button-primary" type="submit">
-              Activate approved contract
-            </button>
-          </form>
-        ) : null}
-        {canManage ? (
-          <Link className="button button-secondary" href={`${returnPath}#extend-contract`}>
-            Extend
-          </Link>
-        ) : null}
-        {canManage ? (
-          <Link className="button button-secondary" href={`${returnPath}#reassign-contract`}>
-            Reassign contract
-          </Link>
-        ) : null}
-        {canCancelClose ? (
-          <Link className="button button-secondary" href={`${returnPath}#close-contract`}>
-            Close and return home
-          </Link>
-        ) : null}
-        {canCancelClose ? (
-          <form action={runContractAction}>
-            <input name="contractId" type="hidden" value={contract.contractCode} />
-            <input name="returnPath" type="hidden" value={returnPath} />
-            <input name="action" type="hidden" value="cancel" />
-            <button className="button button-danger" type="submit">
-              Cancel
-            </button>
-          </form>
-        ) : null}
-        {canManage && contract.reliefVehicleOption === true ? (
-          <Link
-            className="button button-secondary"
-            href={`/contracts/relief-vehicle-search?contractId=${contract.contractCode}`}
-          >
-            Create relief contract
-          </Link>
-        ) : null}
+        <ActionLink href={`${returnPath}#edit-contract`} show={state.canEdit}>
+          Edit contract
+        </ActionLink>
+        <WorkflowActionForms contract={contract} returnPath={returnPath} state={state} />
+        <LifecycleActionLinks contract={contract} returnPath={returnPath} state={state} />
       </div>
-      {status === 1 && canReview ? (
-        <form action={runContractAction} className="form-grid contract-action-form">
-          <input name="contractId" type="hidden" value={contract.contractCode} />
-          <input name="returnPath" type="hidden" value={returnPath} />
-          <label className="form-field form-group-full">
-            <span className="form-label">Approval notes</span>
-            <textarea className="form-textarea" name="approvalNotes" rows={2} />
-          </label>
-          <div className="button-row">
-            <button className="button button-secondary" name="action" value="approve" type="submit">
-              Approve only
-            </button>
-            <button
-              className="button button-warning"
-              name="action"
-              value="decline-correction"
-              type="submit"
-            >
-              Return for correction
-            </button>
-            <button className="button button-danger" name="action" value="decline" type="submit">
-              Decline
-            </button>
-          </div>
-        </form>
-      ) : null}
+      <ReviewActionForm contract={contract} returnPath={returnPath} state={state} />
     </section>
   );
 }
@@ -934,7 +1019,104 @@ function ApiUnavailable() {
   );
 }
 
-async function ContractDetailPageContent({
+function ContractExistingView({
+  data,
+  session,
+}: Readonly<{
+  data: Extract<ContractDetailData, { kind: "ok" }>;
+  session: ContractSession;
+}>) {
+  if (!data.contract) return null;
+  return (
+    <>
+      <DetailActions contract={data.contract} session={session} />
+      <ContractFacts contract={data.contract} />
+      {data.canEdit ? (
+        <EditForm contract={data.contract} references={data.references} today={data.today} />
+      ) : null}
+      {data.isActive && data.canManage ? (
+        <ExtendForm contract={data.contract} today={data.today} />
+      ) : null}
+      {data.isActive && data.canManage ? (
+        <ReassignForm contract={data.contract} references={data.references} today={data.today} />
+      ) : null}
+      {data.isActive && data.canCancelClose ? (
+        <CloseForm contract={data.contract} references={data.references} today={data.today} />
+      ) : null}
+    </>
+  );
+}
+
+function ContractVehicleView({
+  data,
+}: Readonly<{ data: Extract<ContractDetailData, { kind: "ok" }> }>) {
+  if (!data.vehicle) return null;
+  return data.canCapture ? (
+    <HireForm references={data.references} vehicle={data.vehicle} />
+  ) : (
+    <p className="muted-copy">You can view this vehicle but do not have capture access.</p>
+  );
+}
+
+function ContractDetailView({
+  data,
+  notice,
+  session,
+}: Readonly<{
+  data: Extract<ContractDetailData, { kind: "ok" }>;
+  notice?: { isError: boolean; message: string };
+  session: ContractSession;
+}>) {
+  const title = data.contract
+    ? `Contract ${data.contract.contractCode}`
+    : "Open a vehicle contract";
+  const description = data.contract
+    ? `${valueOrDash(data.contract.fleetNumber)} / ${valueOrDash(data.contract.registrationNumber)}`
+    : `${valueOrDash(data.vehicle?.fleetNumber)} / ${valueOrDash(data.vehicle?.registrationNumber)}`;
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="contract-detail-title">
+        <ModulePageHeader
+          icon={ClipboardList}
+          eyebrow="Vehicle contract management"
+          title={title}
+          titleId="contract-detail-title"
+          description={description}
+          actions={
+            <Link className="button button-secondary" href="/contracts/maintenance">
+              Return to Search
+            </Link>
+          }
+        />
+        {notice ? (
+          <div
+            className={notice.isError ? "notice notice-error" : "notice notice-success"}
+            role={notice.isError ? "alert" : "status"}
+          >
+            {notice.message}
+          </div>
+        ) : null}
+        {data.contract ? (
+          <ContractExistingView data={data} session={session} />
+        ) : (
+          <ContractVehicleView data={data} />
+        )}
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/contracts">
+            Contracts Menu
+          </Link>
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const ContractDetailPageContent = renderContractDetailPageContent;
+
+async function renderContractDetailPageContent({
   searchParams,
   routePath = "/contracts/detail",
 }: ContractDetailPageProps) {

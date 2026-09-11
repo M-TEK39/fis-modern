@@ -1,18 +1,17 @@
 import Link from "next/link";
 
+import { JobCardTable } from "@/app/(fleet-operations)/job-cards/_components";
+import { hasJobCardAccess, hasRole } from "@/app/(fleet-operations)/job-cards/_utils";
 import {
-  JobCardTable,
-  hasJobCardAccess,
-  hasRole,
-} from "@/app/(fleet-operations)/job-cards/_components";
-import {
-  accessRestricted,
-  getJobCardSession,
+  AccessRestricted,
   JobCardPageBoundary,
+  SessionProblem,
+} from "@/app/(fleet-operations)/job-cards/_page";
+import {
+  getJobCardSession,
   jobCardPageHref,
   queryPage,
-  sessionMessage,
-} from "@/app/(fleet-operations)/job-cards/_page";
+} from "@/app/(fleet-operations)/job-cards/_page-utils";
 import {
   DEFAULT_JOB_CARD_PAGE_SIZE,
   getPriorityUnassignedJobCardsPage,
@@ -33,12 +32,12 @@ async function JobCardCapturerContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
-  const problem = sessionMessage(session, "/job-cards/capturer-default");
-  if (problem) return problem;
+  if (session.status === "expired" || session.status === "unavailable")
+    return <SessionProblem returnPath="/job-cards/capturer-default" />;
   if (session.status !== "authenticated")
-    return accessRestricted("Your session could not be loaded.");
+    return <AccessRestricted message="Your session could not be loaded." />;
   if (!hasRole(session.roles, "capturer") && !hasJobCardAccess(session.accessLevel, session.roles))
-    return accessRestricted("Your profile does not include Job Card capturer access.");
+    return <AccessRestricted message="Your profile does not include Job Card capturer access." />;
   const query = await searchParams;
   const page = queryPage(query.page);
   try {

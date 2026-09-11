@@ -1,21 +1,21 @@
 import Link from "next/link";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
+import JobCardsSnapshotHeader from "@/components/ui/job-cards-snapshot-header";
 
+import { JobCardTable, JobCardMenu } from "@/app/(fleet-operations)/job-cards/_components";
+import { hasJobCardAccess, hasRole } from "@/app/(fleet-operations)/job-cards/_utils";
 import {
-  JobCardTable,
-  JobCardMenu,
-  hasJobCardAccess,
-  hasRole,
-} from "@/app/(fleet-operations)/job-cards/_components";
-import {
-  accessRestricted,
-  getJobCardSession,
+  AccessRestricted,
   JobCardPageBoundary,
+  SessionProblem,
+} from "@/app/(fleet-operations)/job-cards/_page";
+import {
+  getJobCardSession,
   jobCardPageHref,
   queryPage,
   querySearchType,
   queryValue,
-  sessionMessage,
-} from "@/app/(fleet-operations)/job-cards/_page";
+} from "@/app/(fleet-operations)/job-cards/_page-utils";
 import {
   DEFAULT_JOB_CARD_PAGE_SIZE,
   getJobCardsPage,
@@ -32,16 +32,18 @@ export default function JobCardsPage({
   );
 }
 
-async function JobCardsContent({
+const JobCardsContent = renderJobCardsContent;
+
+async function renderJobCardsContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
-  const problem = sessionMessage(session, "/job-cards");
-  if (problem) return problem;
+  if (session.status === "expired" || session.status === "unavailable")
+    return <SessionProblem returnPath="/job-cards" />;
   if (session.status !== "authenticated")
-    return accessRestricted("Your session could not be loaded.");
+    return <AccessRestricted message="Your session could not be loaded." />;
   if (!hasJobCardAccess(session.accessLevel, session.roles))
-    return accessRestricted("Your profile does not include Job Card access.");
+    return <AccessRestricted message="Your profile does not include Job Card access." />;
 
   const query = await searchParams;
   const search = queryValue(query.search);
@@ -66,16 +68,7 @@ async function JobCardsContent({
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="job-cards-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Fleet maintenance</p>
-              <h1 id="job-cards-title">Job Cards</h1>
-              <p>Capture, authorize, close, cancel, print, and review vehicle job cards.</p>
-            </div>
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-          </header>
+          <JobCardsSnapshotHeader />
           <JobCardMenu canCapturer={canCapturer} canAuthorizer={canAuthorizer} />
           <section
             className="vehicle-status-maintenance-panel"
@@ -91,17 +84,7 @@ async function JobCardsContent({
             </div>
             <form className="vehicle-search-row" method="get">
               <input type="hidden" name="page" value="1" />
-              <fieldset className="vehicle-search-options">
-                <legend>Find by</legend>
-                <label className="vehicle-checkbox-label">
-                  <input type="radio" name="mode" value="GG" defaultChecked={searchType === "GG"} />{" "}
-                  GG
-                </label>
-                <label className="vehicle-checkbox-label">
-                  <input type="radio" name="mode" value="GP" defaultChecked={searchType === "GP"} />{" "}
-                  GP
-                </label>
-              </fieldset>
+              <SearchTypeFieldset selectedType={searchType} legend="Find by" name="mode" />
               <label className="sr-only" htmlFor="job-card-search">
                 Search job cards by GG, GP, or job card number
               </label>

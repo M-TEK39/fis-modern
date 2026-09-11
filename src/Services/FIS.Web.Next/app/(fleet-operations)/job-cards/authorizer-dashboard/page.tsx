@@ -1,20 +1,19 @@
 import Link from "next/link";
 
+import { JobCardSearchForm, JobCardTable } from "@/app/(fleet-operations)/job-cards/_components";
+import { hasJobCardAccess, hasRole } from "@/app/(fleet-operations)/job-cards/_utils";
 import {
-  JobCardTable,
-  hasJobCardAccess,
-  hasRole,
-} from "@/app/(fleet-operations)/job-cards/_components";
-import {
-  accessRestricted,
+  AccessRestricted,
   JobCardPageBoundary,
+  SessionProblem,
+} from "@/app/(fleet-operations)/job-cards/_page";
+import {
   getJobCardSession,
   jobCardPageHref,
   queryPage,
   querySearchType,
   queryValue,
-  sessionMessage,
-} from "@/app/(fleet-operations)/job-cards/_page";
+} from "@/app/(fleet-operations)/job-cards/_page-utils";
 import {
   DEFAULT_JOB_CARD_PAGE_SIZE,
   getJobCardsPage,
@@ -35,15 +34,15 @@ async function AuthorizerDashboardContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
-  const problem = sessionMessage(session, "/job-cards/authorizer-dashboard");
-  if (problem) return problem;
+  if (session.status === "expired" || session.status === "unavailable")
+    return <SessionProblem returnPath="/job-cards/authorizer-dashboard" />;
   if (session.status !== "authenticated")
-    return accessRestricted("Your session could not be loaded.");
+    return <AccessRestricted message="Your session could not be loaded." />;
   if (
     !hasRole(session.roles, "authorizer") &&
     !hasJobCardAccess(session.accessLevel, session.roles)
   )
-    return accessRestricted("Your profile does not include Job Card authorizer access.");
+    return <AccessRestricted message="Your profile does not include Job Card authorizer access." />;
   const query = await searchParams;
   const search = queryValue(query.search);
   const mode = querySearchType(query.mode);
@@ -75,34 +74,14 @@ async function AuthorizerDashboardContent({
             </Link>
           </header>
           <section className="vehicle-status-maintenance-panel">
-            <form className="vehicle-search-row" method="get">
-              <input type="hidden" name="page" value="1" />
-              <fieldset className="vehicle-search-options">
-                <legend>Find by</legend>
-                <label className="vehicle-checkbox-label">
-                  <input type="radio" name="mode" value="GG" defaultChecked={mode !== "GP"} /> GG
-                </label>
-                <label className="vehicle-checkbox-label">
-                  <input type="radio" name="mode" value="GP" defaultChecked={mode === "GP"} /> GP
-                </label>
-              </fieldset>
-              <label className="sr-only" htmlFor="authorizer-search">
-                Vehicle or job card
-              </label>
-              <input
-                className="vehicle-search"
-                id="authorizer-search"
-                name="search"
-                defaultValue={search}
-                placeholder="GG, GP, or job card number"
-              />
-              <button className="button button-primary" type="submit">
-                Search
-              </button>
-              <Link className="button button-secondary" href="/job-cards/authorizer-dashboard">
-                Clear
-              </Link>
-            </form>
+            <JobCardSearchForm
+              action="/job-cards/authorizer-dashboard"
+              inputId="authorizer-search"
+              inputLabel="Vehicle or job card"
+              mode={mode}
+              placeholder="GG, GP, or job card number"
+              search={search}
+            />
           </section>
           <section
             className="vehicle-status-maintenance-panel"

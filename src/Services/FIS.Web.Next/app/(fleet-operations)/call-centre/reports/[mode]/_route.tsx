@@ -1,9 +1,12 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 import {
   CallCentreApiError,
   getCallCentreIncident,
@@ -168,7 +171,9 @@ function ApiUnavailable({ path }: Readonly<{ path: string }>) {
   );
 }
 
-function ReportForm({
+const ReportForm = renderReportForm;
+
+function renderReportForm({
   mode,
   params,
   sites,
@@ -219,27 +224,7 @@ function ReportForm({
       ) : null}
       {mode === "one-vehicle" ? (
         <div className="form-grid">
-          <fieldset className="vehicle-search-options">
-            <legend>Find vehicle by</legend>
-            <label className="vehicle-checkbox-label">
-              <input
-                type="radio"
-                name="searchType"
-                value="GP"
-                defaultChecked={searchType === "GP"}
-              />{" "}
-              GP
-            </label>
-            <label className="vehicle-checkbox-label">
-              <input
-                type="radio"
-                name="searchType"
-                value="GG"
-                defaultChecked={searchType === "GG"}
-              />{" "}
-              GG
-            </label>
-          </fieldset>
+          <SearchTypeFieldset selectedType={searchType} legend="Find vehicle by" firstOption="GP" />
           <div className="field">
             <label htmlFor="call-report-vehicle-search">Vehicle Number</label>
             <input
@@ -537,17 +522,17 @@ function RecordTable({
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
           <caption className="sr-only">{title}</caption>
-          <thead>
-            <tr>
-              <th scope="col">Reference Number</th>
-              <th scope="col">Incident</th>
-              <th scope="col">Call Date</th>
-              <th scope="col">Caller</th>
-              <th scope="col">Driver</th>
-              <th scope="col">Site</th>
-              <th scope="col">GG Number</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Reference Number</> },
+              { key: "column-2", label: <>Incident</> },
+              { key: "column-3", label: <>Call Date</> },
+              { key: "column-4", label: <>Caller</> },
+              { key: "column-5", label: <>Driver</> },
+              { key: "column-6", label: <>Site</> },
+              { key: "column-7", label: <>GG Number</> },
+            ]}
+          />
           <tbody>
             {records.map((record) => (
               <tr key={record.code}>
@@ -604,12 +589,12 @@ function StatisticsResults({
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
           <caption className="sr-only">Call Centre statistics by capture name</caption>
-          <thead>
-            <tr>
-              <th scope="col">Capture Name</th>
-              <th scope="col">Count</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Capture Name</> },
+              { key: "column-2", label: <>Count</> },
+            ]}
+          />
           <tbody>
             {groups.map(([name, count]) => (
               <tr key={name}>
@@ -669,14 +654,14 @@ function DataAccessResults({
           <div className="vehicle-table-wrapper">
             <table className="vehicle-table">
               <caption className="sr-only">Call Centre data access history</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Counter</th>
-                  <th scope="col">Data Capture ID</th>
-                  <th scope="col">Data Capture Date</th>
-                  <th scope="col">Data Capture Time</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>Counter</> },
+                  { key: "column-2", label: <>Data Capture ID</> },
+                  { key: "column-3", label: <>Data Capture Date</> },
+                  { key: "column-4", label: <>Data Capture Time</> },
+                ]}
+              />
               <tbody>
                 {entries.map((entry) => (
                   <tr
@@ -700,7 +685,9 @@ function DataAccessResults({
   );
 }
 
-async function CallCentreReportContent({
+const CallCentreReportContent = renderCallCentreReportContent;
+
+async function renderCallCentreReportContent({
   searchParams,
   forcedMode,
   routePath = "/call-centre/reports",

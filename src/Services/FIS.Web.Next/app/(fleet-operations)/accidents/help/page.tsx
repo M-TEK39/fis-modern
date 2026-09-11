@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -223,12 +225,12 @@ async function AccidentHelpContent() {
               <caption className="sr-only">
                 Accident maintenance terms and field definitions
               </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Term / Field</th>
-                  <th scope="col">Definition</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>Term / Field</> },
+                  { key: "column-2", label: <>Definition</> },
+                ]}
+              />
               <tbody>
                 {HELP_ENTRIES.map((entry) => (
                   <tr key={entry.id ?? entry.term}>

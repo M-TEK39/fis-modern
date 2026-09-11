@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -15,6 +15,9 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import ReviewModalActionForm from "./review-modal-action-form";
+import ReviewModalReadonly from "./review-modal-readonly";
+import ReviewModalSummary from "./review-modal-summary";
 import type {
   VehicleAuthorization,
   VehicleAuthorizationQueuePage,
@@ -350,15 +353,6 @@ function QueueTable({
   );
 }
 
-function SummaryField({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="vehicle-summary-field">
-      <dt>{label}</dt>
-      <dd>{value}</dd>
-    </div>
-  );
-}
-
 function ReviewModal({
   vehicle,
   currentUserAccessCode,
@@ -375,9 +369,6 @@ function ReviewModal({
   onClose: () => void;
 }>) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [comment, setComment] = useState("");
-  const [rejectionReason, setRejectionReason] = useState("");
-  const [formError, setFormError] = useState<string | null>(null);
   const canReview = canReviewVehicle(vehicle, currentUserAccessCode);
   const actionable = isAwaiting(vehicle) && canReview;
 
@@ -395,33 +386,6 @@ function ReviewModal({
     };
   }, []);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-    const intent = submitter?.value;
-
-    if (!intent || !["approve", "reject", "comment"].includes(intent)) {
-      return;
-    }
-
-    if (!comment.trim()) {
-      event.preventDefault();
-      setFormError(
-        intent === "comment"
-          ? "Comment cannot be empty."
-          : "Please supply a comment before continuing.",
-      );
-      return;
-    }
-
-    if (intent === "reject" && !rejectionReason.trim()) {
-      event.preventDefault();
-      setFormError("Rejection reason is required.");
-      return;
-    }
-
-    setFormError(null);
-  }
-
   return (
     <dialog
       ref={dialogRef}
@@ -430,11 +394,6 @@ function ReviewModal({
       onCancel={(event) => {
         event.preventDefault();
         if (!pending) {
-          onClose();
-        }
-      }}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !pending) {
           onClose();
         }
       }}
@@ -473,146 +432,18 @@ function ReviewModal({
           </div>
         )}
 
-        <dl className="vehicle-review-grid">
-          <SummaryField
-            label="Current GG Number"
-            value={
-              valueOrDash(vehicle.fleetNumber) === "-"
-                ? "Allocated on authorization"
-                : vehicle.fleetNumber!
-            }
-          />
-          <SummaryField label="Status" value={valueOrDash(vehicle.authorityStatus)} />
-          <SummaryField label="Make & Model" value={valueOrDash(vehicle.modelDescription)} />
-          <SummaryField
-            label="Year Manufactured"
-            value={getYear(vehicle.yearManufactured ?? vehicle.purchaseDate)}
-          />
-          <SummaryField label="VIN/Chassis Number" value={valueOrDash(vehicle.chassisNumber)} />
-          <SummaryField label="Engine Number" value={valueOrDash(vehicle.engineNumber)} />
-          <SummaryField
-            label="GP Number"
-            value={valueOrDash(vehicle.gpNumber ?? vehicle.registrationNumber)}
-          />
-          <SummaryField label="Location Code" value={vehicle.locationCode?.toString() ?? "-"} />
-          <SummaryField label="Hire Type Code" value={vehicle.typeCode?.toString() ?? "-"} />
-          <SummaryField label="Hired From Code" value={vehicle.vsCode?.toString() ?? "-"} />
-          <SummaryField label="Site Code" value={vehicle.siteCode?.toString() ?? "-"} />
-          <SummaryField label="Invoice Number" value={valueOrDash(vehicle.invoiceNumber)} />
-          <SummaryField label="Purchase Date" value={formatDate(vehicle.purchaseDate)} />
-          <SummaryField label="Purchase Amount" value={formatAmount(vehicle.purchaseAmount)} />
-          <SummaryField label="Purchase From" value={valueOrDash(vehicle.purchaseFrom)} />
-          <SummaryField label="Colour" value={valueOrDash(vehicle.colour)} />
-          <SummaryField label="Take-on Date" value={formatDate(vehicle.takeOnDate)} />
-          <SummaryField label="Take-on Odometer" value={vehicle.takeOnOdo?.toString() ?? "-"} />
-          <div className="vehicle-summary-field vehicle-summary-field-wide">
-            <dt>Fleet Notes</dt>
-            <dd>{valueOrDash(vehicle.fleetNotes)}</dd>
-          </div>
-          <div className="vehicle-summary-field vehicle-summary-field-wide">
-            <dt>Damage Details</dt>
-            <dd>
-              {[vehicle.damageStatus, vehicle.damagesComment].filter(Boolean).join(" — ") || "-"}
-            </dd>
-          </div>
-          {vehicle.rejectionReason ? (
-            <SummaryField label="Latest Rejection Reason" value={vehicle.rejectionReason} />
-          ) : null}
-          {vehicle.authorizationComment ? (
-            <SummaryField label="Latest Reviewer Comment" value={vehicle.authorizationComment} />
-          ) : null}
-        </dl>
+        <ReviewModalSummary vehicle={vehicle} />
 
         {actionable ? (
-          <form action={formAction} onSubmit={handleSubmit} className="vehicle-review-form">
-            <input type="hidden" name="id" value={vehicle.tempVmfCode} />
-            {actionState.status === "error" && actionState.message ? (
-              <div className="notice notice-error" role="alert">
-                <span aria-hidden="true">!</span>
-                <span>{actionState.message}</span>
-              </div>
-            ) : null}
-            {formError ? (
-              <div className="notice notice-error" role="alert">
-                {formError}
-              </div>
-            ) : null}
-            <div className="field">
-              <label htmlFor="vehicle-authorizer-comment">
-                Authorizer&apos;s Comment <span aria-hidden="true">*</span>
-              </label>
-              <textarea
-                id="vehicle-authorizer-comment"
-                name="comment"
-                rows={3}
-                value={comment}
-                onChange={(event) => setComment(event.target.value)}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="vehicle-rejection-reason">Rejection Reason</label>
-              <input
-                id="vehicle-rejection-reason"
-                name="rejectionReason"
-                type="text"
-                value={rejectionReason}
-                onChange={(event) => setRejectionReason(event.target.value)}
-              />
-            </div>
-            <div className="vehicle-create-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={onClose}
-                disabled={pending}
-              >
-                Close
-              </button>
-              <button
-                className="button button-secondary"
-                type="submit"
-                name="intent"
-                value="comment"
-                disabled={pending}
-              >
-                {pending ? "Saving..." : "Add Comment"}
-              </button>
-              <button
-                className="button button-primary"
-                type="submit"
-                name="intent"
-                value="approve"
-                disabled={pending}
-              >
-                {pending ? "Saving..." : "Approve"}
-              </button>
-              <button
-                className="button button-danger"
-                type="submit"
-                name="intent"
-                value="reject"
-                disabled={pending}
-              >
-                {pending ? "Saving..." : "Reject"}
-              </button>
-            </div>
-          </form>
+          <ReviewModalActionForm
+            vehicle={vehicle}
+            pending={pending}
+            actionState={actionState}
+            formAction={formAction}
+            onClose={onClose}
+          />
         ) : (
-          <div className="vehicle-review-readonly">
-            <div className="vehicle-summary-field vehicle-summary-field-wide">
-              <dt>Authorizer&apos;s Comment</dt>
-              <dd>{valueOrDash(vehicle.authorizationComment)}</dd>
-            </div>
-            <button
-              className="button button-secondary"
-              type="button"
-              onClick={onClose}
-              disabled={pending}
-            >
-              Close
-            </button>
-          </div>
+          <ReviewModalReadonly vehicle={vehicle} pending={pending} onClose={onClose} />
         )}
       </section>
     </dialog>
