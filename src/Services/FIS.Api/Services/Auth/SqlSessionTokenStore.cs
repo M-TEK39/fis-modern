@@ -181,20 +181,28 @@ public class SqlSessionTokenStore : ISessionTokenStore
         var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
 
         SessionToken? record;
+        using var transaction = db.Database.BeginTransaction(IsolationLevel.Serializable);
         try
         {
-            record = db.SessionTokens.FirstOrDefault(t =>
-                t.token_id == refreshToken && t.token_type == RefreshType
-            );
+            // Serializable isolation keeps two simultaneous refresh requests from
+            // both observing the same one-time refresh token. The token row is
+            // read without tracking because it is removed and replaced below.
+            record = db
+                .SessionTokens.AsNoTracking()
+                .FirstOrDefault(t => t.token_id == refreshToken && t.token_type == RefreshType);
         }
         catch (SqlException exception) when (IsMissingObject(exception))
         {
+            transaction.Rollback();
             MarkSqlStoreUnavailable(exception);
             return _legacyFallback.TryRefresh(refreshToken, out refreshedTokens, out claims);
         }
 
         if (record is null)
+        {
+            transaction.Rollback();
             return false;
+        }
 
         var sessionId = record.session_id;
         var claimsJson = record.claims_json;
@@ -204,25 +212,76 @@ public class SqlSessionTokenStore : ISessionTokenStore
             var expired = db.SessionTokens.Where(t => t.session_id == sessionId).ToList();
             db.SessionTokens.RemoveRange(expired);
             db.SaveChanges();
+            transaction.Commit();
             return false;
         }
 
-        // Atomic rotate: delete entire old session, issue new pair.
+        // Atomic rotate: delete the old session and issue the replacement pair
+        // in the same transaction. A failed request therefore cannot consume the
+        // old token without creating its replacement.
         var all = db.SessionTokens.Where(t => t.session_id == sessionId).ToList();
         db.SessionTokens.RemoveRange(all);
-        db.SaveChanges();
 
         var deserialized = DeserializeClaims(claimsJson);
-        claims = deserialized;
-        refreshedTokens = IssueTokens(
-            deserialized,
-            SessionTokenConventions.IsRememberedSession(
-                record.created_at,
-                record.expires_at,
-                _standardRefreshLifetime
-            )
+        var rememberMe = SessionTokenConventions.IsRememberedSession(
+            record.created_at,
+            record.expires_at,
+            _standardRefreshLifetime
         );
+        var replacement = CreateTokenPair(db, deserialized, rememberMe);
+        db.SaveChanges();
+        transaction.Commit();
+
+        claims = deserialized;
+        refreshedTokens = replacement;
         return true;
+    }
+
+    private (
+        string AccessToken,
+        DateTimeOffset AccessExpiresAt,
+        string RefreshToken,
+        DateTimeOffset RefreshExpiresAt
+    ) CreateTokenPair(FisDbContext db, IEnumerable<Claim> claims, bool rememberMe)
+    {
+        var claimList = claims.ToList();
+        var claimsJson = SerializeClaims(claimList);
+        var now = DateTime.UtcNow;
+        var sessionId = GenerateToken();
+        var accessToken = GenerateToken();
+        var refreshToken = GenerateToken();
+        var accessExpiresAt = now.Add(AccessLifetime);
+        var refreshExpiresAt = now.Add(
+            rememberMe ? _rememberedRefreshLifetime : _standardRefreshLifetime
+        );
+
+        db.SessionTokens.AddRange(
+            new SessionToken
+            {
+                token_id = accessToken,
+                token_type = AccessType,
+                session_id = sessionId,
+                claims_json = claimsJson,
+                expires_at = accessExpiresAt,
+                created_at = now,
+            },
+            new SessionToken
+            {
+                token_id = refreshToken,
+                token_type = RefreshType,
+                session_id = sessionId,
+                claims_json = claimsJson,
+                expires_at = refreshExpiresAt,
+                created_at = now,
+            }
+        );
+
+        return (
+            accessToken,
+            new DateTimeOffset(accessExpiresAt, TimeSpan.Zero),
+            refreshToken,
+            new DateTimeOffset(refreshExpiresAt, TimeSpan.Zero)
+        );
     }
 
     public void RevokeByAccessToken(string accessToken)

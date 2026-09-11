@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using AspNetCoreRateLimit;
 using DotNetEnv;
 using FIS.Api.Services;
@@ -21,8 +22,10 @@ using FIS.Data.SqlServer.Interceptors;
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Identity.Web;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -484,8 +487,13 @@ builder.Services.AddScoped<ContractExpiryReminderJob>();
 builder.Services.AddScoped<MonthlyBillingJob>();
 builder.Services.AddScoped<FinancialYearRolloverJob>();
 
-// Add health checks
-builder.Services.AddHealthChecks().AddDbContextCheck<FisDbContext>();
+// Add health checks. Liveness is process-only; readiness includes the database
+// dependency. The original /health endpoint intentionally keeps reporting all
+// registered checks for backwards compatibility.
+builder
+    .Services.AddHealthChecks()
+    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "live" })
+    .AddDbContextCheck<FisDbContext>("database", tags: new[] { "ready" });
 
 var app = builder.Build();
 
@@ -512,6 +520,40 @@ if (app.Environment.IsDevelopment())
 // MUST come first: respect X-Forwarded-Proto from nginx so Request.IsHttps is correct behind the reverse proxy
 app.UseForwardedHeaders();
 
+// Attach a bounded correlation identifier and record request duration without
+// logging URLs, query strings, bodies, cookies, or authorization data.
+app.Use(
+    async (context, next) =>
+    {
+        var requestedCorrelationId = context.Request.Headers["X-Correlation-ID"].ToString();
+        var correlationId = Guid.TryParse(requestedCorrelationId, out var parsedCorrelationId)
+            ? parsedCorrelationId.ToString("N")
+            : Guid.NewGuid().ToString("N");
+        context.TraceIdentifier = correlationId;
+        context.Response.Headers["X-Correlation-ID"] = correlationId;
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            await next(context);
+        }
+        finally
+        {
+            stopwatch.Stop();
+            var logger = context
+                .RequestServices.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("FIS.Api.Requests");
+            logger.LogInformation(
+                "HTTP request completed {RequestMethod} with status {StatusCode} in {DurationMilliseconds} ms (correlation {CorrelationId})",
+                context.Request.Method,
+                context.Response.StatusCode,
+                stopwatch.Elapsed.TotalMilliseconds,
+                correlationId
+            );
+        }
+    }
+);
+
 // Add security headers
 app.UseHttpsRedirection();
 
@@ -526,8 +568,16 @@ app.UseCors("AllowNetwork");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Add health check endpoints
+// Add health check endpoints. /health remains the legacy aggregate endpoint.
 app.MapHealthChecks("/health");
+app.MapHealthChecks(
+    "/health/live",
+    new HealthCheckOptions { Predicate = check => check.Tags.Contains("live") }
+);
+app.MapHealthChecks(
+    "/health/ready",
+    new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") }
+);
 
 // Add controllers
 app.MapControllers();

@@ -1,6 +1,9 @@
+using System.Data;
 using FIS.Core.Application.Interfaces;
+using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Services;
@@ -24,16 +27,19 @@ namespace FIS.Api.Services;
 public class MonthlyBillingJob
 {
     private readonly FisDbContext _context;
+    private readonly IContractRepository _contractRepository;
     private readonly IJournalDetailService _journalDetailService;
     private readonly ILogger<MonthlyBillingJob> _logger;
 
     public MonthlyBillingJob(
         FisDbContext context,
+        IContractRepository contractRepository,
         IJournalDetailService journalDetailService,
         ILogger<MonthlyBillingJob> logger
     )
     {
         _context = context;
+        _contractRepository = contractRepository;
         _journalDetailService = journalDetailService;
         _logger = logger;
     }
@@ -41,6 +47,7 @@ public class MonthlyBillingJob
     /// <summary>
     /// Entry point called by Hangfire on the 1st of each month at 06:00.
     /// </summary>
+    [DisableConcurrentExecution(timeoutInSeconds: 3600)]
     public async Task RunAsync()
     {
         var today = DateTime.Today;
@@ -52,21 +59,20 @@ public class MonthlyBillingJob
 
         // Load all active contracts — still_current = 'Y' is the ONLY stop condition.
         // end_date is intentionally NOT filtered here.
-        var contracts = await _context
-            .Contracts.Where(c => !c.is_deleted && c.still_current == "Y")
-            .ToListAsync();
+        var contracts = (await _contractRepository.GetActiveContractsAsync()).ToList();
 
         _logger.LogInformation(
             "MonthlyBillingJob: found {Count} active contracts to evaluate",
             contracts.Count
         );
 
-        foreach (var contract in contracts)
+        foreach (var listedContract in contracts)
         {
             try
             {
                 // Billing starts from where we last left off, or from contract start_date
-                var billingFrom = contract.Charged_Until?.Date ?? contract.start_date.Date;
+                var billingFrom =
+                    listedContract.Charged_Until?.Date ?? listedContract.start_date.Date;
 
                 // Skip if already billed up to today
                 if (billingFrom >= today)
@@ -84,9 +90,8 @@ public class MonthlyBillingJob
                     continue;
                 }
 
-                // Resolve department from site
-                var site = await _context.Sites.FindAsync(contract.site_code);
-                var departmentCode = site?.Depatrment_code ?? 150;
+                // Resolve department from the compatibility repository projection.
+                var departmentCode = listedContract.Site?.Depatrment_code ?? 150;
 
                 // Calculate tariff-based amount for the billing period
                 decimal amount;
@@ -95,12 +100,12 @@ public class MonthlyBillingJob
                     amount = await _journalDetailService.CalculateJournalAmountAsync(
                         billingFrom,
                         billingTo,
-                        contract.start_odometer,
-                        contract.end_odometer ?? 0,
-                        contract.vmf_code,
-                        contract.site_code,
+                        listedContract.start_odometer,
+                        listedContract.end_odometer ?? 0,
+                        listedContract.vmf_code,
+                        listedContract.site_code,
                         departmentCode,
-                        contract.contract_type ?? "H",
+                        listedContract.contract_type ?? "H",
                         today
                     );
 
@@ -110,8 +115,8 @@ public class MonthlyBillingJob
                         _logger.LogWarning(
                             "MonthlyBillingJob: tariff lookup failed (code {Code}) for contract {ContractCode}, vehicle {VmfCode}. Billing at R0.",
                             amount,
-                            contract.contract_code,
-                            contract.vmf_code
+                            listedContract.contract_code,
+                            listedContract.vmf_code
                         );
                         amount = 0m;
                     }
@@ -121,12 +126,37 @@ public class MonthlyBillingJob
                     _logger.LogError(
                         tariffEx,
                         "MonthlyBillingJob: tariff calculation error for contract {ContractCode}. Billing at R0.",
-                        contract.contract_code
+                        listedContract.contract_code
                     );
                     amount = 0m;
                 }
 
-                // Create journal detail
+                // Keep the short serializable section to the journal insert and
+                // Charged_Until update. Tariff calculation can perform several
+                // reads, so holding a contract lock while it runs would cause
+                // unnecessary production blocking.
+                await using var transaction = await _context.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable
+                );
+                var contract = await _contractRepository.GetByIdAsync(listedContract.contract_code);
+                var currentBillingFrom = contract?.Charged_Until?.Date ?? contract?.start_date.Date;
+                var currentDepartmentCode = contract?.Site?.Depatrment_code ?? 150;
+                if (
+                    contract is null
+                    || contract.is_deleted
+                    || contract.still_current != "Y"
+                    || currentBillingFrom != billingFrom
+                    || currentDepartmentCode != departmentCode
+                    || !MatchesBillingInputs(contract, listedContract)
+                )
+                {
+                    skipped++;
+                    await transaction.CommitAsync();
+                    continue;
+                }
+
+                // The locked contract still matches the data used for tariff
+                // calculation, so this journal and watermark advance are atomic.
                 var journalDetail = new JournalDetail
                 {
                     vmf_code = contract.vmf_code,
@@ -144,8 +174,8 @@ public class MonthlyBillingJob
 
                 // Advance Charged_Until so the next run picks up from today
                 contract.Charged_Until = today;
-                _context.Contracts.Update(contract);
-                await _context.SaveChangesAsync();
+                await _contractRepository.UpdateAsync(contract, 0);
+                await transaction.CommitAsync();
 
                 billed++;
 
@@ -163,7 +193,7 @@ public class MonthlyBillingJob
                 _logger.LogError(
                     ex,
                     "MonthlyBillingJob: unhandled error processing contract {ContractCode}",
-                    contract.contract_code
+                    listedContract.contract_code
                 );
             }
         }
@@ -175,4 +205,11 @@ public class MonthlyBillingJob
             errors
         );
     }
+
+    private static bool MatchesBillingInputs(Contract current, Contract listed) =>
+        current.vmf_code == listed.vmf_code
+        && current.site_code == listed.site_code
+        && current.start_odometer == listed.start_odometer
+        && current.end_odometer == listed.end_odometer
+        && string.Equals(current.contract_type, listed.contract_type, StringComparison.Ordinal);
 }

@@ -1,5 +1,6 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Services;
@@ -40,6 +41,7 @@ public class ContractExpiryReminderJob
     /// Finds all active contracts whose target_return_date falls on a reminder milestone
     /// and dispatches the expiry reminder email.
     /// </summary>
+    [DisableConcurrentExecution(timeoutInSeconds: 3600)]
     public async Task RunAsync()
     {
         _logger.LogInformation("ContractExpiryReminderJob: starting daily check");
