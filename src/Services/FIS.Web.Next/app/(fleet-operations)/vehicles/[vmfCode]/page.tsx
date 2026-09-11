@@ -80,7 +80,9 @@ function VehicleNotFound() {
   );
 }
 
-async function VehicleDetailPageContent({ params }: VehicleDetailPageProps) {
+const VehicleDetailPageContent = renderVehicleDetailPageContent;
+
+async function renderVehicleDetailPageContent({ params }: VehicleDetailPageProps) {
   await connection();
   const session = await getSession();
 

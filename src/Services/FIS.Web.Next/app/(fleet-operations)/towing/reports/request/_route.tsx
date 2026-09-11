@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -106,16 +108,16 @@ function Rows({ records }: Readonly<{ records: TowingRecord[] }>) {
     <div className="vehicle-table-wrapper" aria-live="polite">
       <table className="vehicle-table">
         <caption className="sr-only">Road side assistance request report</caption>
-        <thead>
-          <tr>
-            <th scope="col">Reference</th>
-            <th scope="col">VMF</th>
-            <th scope="col">Request Date</th>
-            <th scope="col">Location</th>
-            <th scope="col">Problem</th>
-            <th scope="col">Keys</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Reference</> },
+            { key: "column-2", label: <>VMF</> },
+            { key: "column-3", label: <>Request Date</> },
+            { key: "column-4", label: <>Location</> },
+            { key: "column-5", label: <>Problem</> },
+            { key: "column-6", label: <>Keys</> },
+          ]}
+        />
         <tbody>
           {records.map((item) => (
             <tr key={item.towingCode}>
@@ -133,7 +135,9 @@ function Rows({ records }: Readonly<{ records: TowingRecord[] }>) {
   );
 }
 
-async function TowingRequestReportPageContent({
+const TowingRequestReportPageContent = renderTowingRequestReportPageContent;
+
+async function renderTowingRequestReportPageContent({
   searchParams,
   routePath = "/towing/reports/request",
 }: TowingRequestReportPageProps) {
@@ -254,16 +258,4 @@ export default function TowingRequestReportPage(
       <TowingRequestReportPageContent {...props} />
     </Suspense>
   );
-}
-
-type LegacyTowingRequestReportPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyTowingRequestReportPage(routePath: string) {
-  return function LegacyTowingRequestReportPage({
-    searchParams,
-  }: Readonly<LegacyTowingRequestReportPageProps>) {
-    return <TowingRequestReportPage routePath={routePath} searchParams={searchParams} />;
-  };
 }

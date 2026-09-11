@@ -409,8 +409,8 @@ function getCollection(payload: unknown) {
   return [];
 }
 
-function mapPresent<T>(values: readonly unknown[], mapper: (value: unknown) => T | null) {
-  const result: T[] = [];
+function mapPresent<T, U>(values: readonly T[], mapper: (value: T) => U | null) {
+  const result: U[] = [];
   for (const value of values) {
     const mapped = mapper(value);
     if (mapped !== null) {
@@ -516,32 +516,31 @@ export async function getAccidentVehicleOptions(
   const vehicles = mapPresent(getCollection(await requestApi(path)), mapVehicle);
 
   const normalizedLowerTerm = normalizedSearchTerm.toLowerCase();
-  return vehicles
-    .filter((vehicle) => {
-      if (locationCode !== undefined && vehicle.locationCode !== locationCode) {
-        return false;
-      }
+  return mapPresent(vehicles, (vehicle) => {
+    if (locationCode !== undefined && vehicle.locationCode !== locationCode) {
+      return null;
+    }
 
-      if (!normalizedLowerTerm) {
-        return true;
-      }
+    if (!normalizedLowerTerm) {
+      return {
+        vmfCode: vehicle.vmfCode,
+        fleetNumber: vehicle.fleetNumber,
+        registrationNumber: vehicle.registrationNumber,
+      } satisfies AccidentVehicleOption;
+    }
 
-      const value = searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber;
-      return (value?.trim().toLowerCase() ?? "") === normalizedLowerTerm;
-    })
-    .map(
-      (vehicle) =>
-        ({
-          vmfCode: vehicle.vmfCode,
-          fleetNumber: vehicle.fleetNumber,
-          registrationNumber: vehicle.registrationNumber,
-        }) satisfies AccidentVehicleOption,
-    )
-    .toSorted((left, right) => {
-      const leftLabel = left.fleetNumber ?? left.registrationNumber ?? String(left.vmfCode);
-      const rightLabel = right.fleetNumber ?? right.registrationNumber ?? String(right.vmfCode);
-      return leftLabel.localeCompare(rightLabel);
-    });
+    const value = searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber;
+    if ((value?.trim().toLowerCase() ?? "") !== normalizedLowerTerm) return null;
+    return {
+      vmfCode: vehicle.vmfCode,
+      fleetNumber: vehicle.fleetNumber,
+      registrationNumber: vehicle.registrationNumber,
+    } satisfies AccidentVehicleOption;
+  }).toSorted((left, right) => {
+    const leftLabel = left.fleetNumber ?? left.registrationNumber ?? String(left.vmfCode);
+    const rightLabel = right.fleetNumber ?? right.registrationNumber ?? String(right.vmfCode);
+    return leftLabel.localeCompare(rightLabel);
+  });
 }
 
 function mapAccidentEditRecord(value: unknown): AccidentEditRecord {

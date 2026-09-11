@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -6,6 +8,7 @@ import { Suspense } from "react";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
 import {
   DEFAULT_DRIVER_LICENCE_PAGE_SIZE,
   DriverLicenceApiError,
@@ -70,21 +73,13 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
 
 function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">API unavailable</p>
-      <h2>Driver licences could not be loaded.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/validation-data">
-          Validation Data
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message="Driver licences could not be loaded."
+      retryHref={routePath}
+      secondaryHref="/validation-data"
+      secondaryLabel="Validation Data"
+      showIcon={false}
+    />
   );
 }
 
@@ -118,14 +113,14 @@ function DriverLicenceTable({
       <div className="table-wrapper">
         <table className="data-table">
           <caption className="sr-only">Legacy driver licence types</caption>
-          <thead>
-            <tr>
-              <th scope="col">Licence code</th>
-              <th scope="col">Description</th>
-              <th scope="col">Last updated</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Licence code</> },
+              { key: "column-2", label: <>Description</> },
+              { key: "column-3", label: <>Last updated</> },
+              { key: "column-4", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {licences.map((licence) => (
               <tr key={licence.licenceCode}>
@@ -214,7 +209,100 @@ function Pagination({
   );
 }
 
-async function DriverLicenceListPageContent({
+function DriverLicenceListView({
+  licencePage,
+  error,
+  notice,
+  query,
+  routePath,
+  searchTerm,
+}: Readonly<{
+  licencePage: Awaited<ReturnType<typeof getDriverLicencesPage>>;
+  error: string | undefined;
+  notice: string | undefined;
+  query: Record<string, string | string[] | undefined>;
+  routePath: string;
+  searchTerm: string;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="driver-licence-list-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Licence</p>
+            <h1 id="driver-licence-list-title">Drivers Licence Maintenance</h1>
+            <p>Maintain the legacy driver licence descriptions used by vehicle models.</p>
+          </div>
+          <div className="button-row">
+            <Link className="button button-primary" href="/Validation/MNT_Driverslicence_Add.aspx">
+              Add Driver Licence
+            </Link>
+            <Link className="button button-secondary" href="/validation-data">
+              Validation Data
+            </Link>
+          </div>
+        </header>
+        {notice ? (
+          <div
+            className={`notice ${error ? "notice-error" : "notice-success"}`}
+            role={error ? "alert" : "status"}
+          >
+            {notice}
+          </div>
+        ) : null}
+        <form className="vehicle-quick-search-form" method="get" action={routePath}>
+          <div className="field">
+            <label htmlFor="driver-licence-search">Search driver licence descriptions</label>
+            <input
+              id="driver-licence-search"
+              name="searchTerm"
+              type="search"
+              defaultValue={searchTerm}
+              placeholder="Enter a description"
+            />
+          </div>
+          <div className="button-row vehicle-quick-search-actions">
+            <button className="button button-primary" type="submit">
+              Search
+            </button>
+            {searchTerm ? (
+              <Link className="button button-secondary" href={routePath}>
+                Clear
+              </Link>
+            ) : null}
+          </div>
+        </form>
+        <DriverLicenceTable
+          licences={licencePage.items}
+          searchTerm={searchTerm}
+          total={licencePage.total}
+        />
+        <Pagination
+          page={licencePage.page}
+          pageSize={licencePage.pageSize}
+          query={query}
+          routePath={routePath}
+          total={licencePage.total}
+          totalPages={licencePage.totalPages}
+        />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const DriverLicenceListPageContent = renderDriverLicenceListPageContent;
+
+async function renderDriverLicenceListPageContent({
   searchParams,
   routePath = "/validation-data/driver-licenses",
 }: DriverLicenceListPageProps) {
@@ -260,81 +348,14 @@ async function DriverLicenceListPageContent({
             ? "Driver licence deleted successfully."
             : error;
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="driver-licence-list-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Licence</p>
-              <h1 id="driver-licence-list-title">Drivers Licence Maintenance</h1>
-              <p>Maintain the legacy driver licence descriptions used by vehicle models.</p>
-            </div>
-            <div className="button-row">
-              <Link
-                className="button button-primary"
-                href="/Validation/MNT_Driverslicence_Add.aspx"
-              >
-                Add Driver Licence
-              </Link>
-              <Link className="button button-secondary" href="/validation-data">
-                Validation Data
-              </Link>
-            </div>
-          </header>
-          {notice ? (
-            <div
-              className={`notice ${error ? "notice-error" : "notice-success"}`}
-              role={error ? "alert" : "status"}
-            >
-              {notice}
-            </div>
-          ) : null}
-          <form className="vehicle-quick-search-form" method="get" action={routePath}>
-            <div className="field">
-              <label htmlFor="driver-licence-search">Search driver licence descriptions</label>
-              <input
-                id="driver-licence-search"
-                name="searchTerm"
-                type="search"
-                defaultValue={searchTerm}
-                placeholder="Enter a description"
-              />
-            </div>
-            <div className="button-row vehicle-quick-search-actions">
-              <button className="button button-primary" type="submit">
-                Search
-              </button>
-              {searchTerm ? (
-                <Link className="button button-secondary" href={routePath}>
-                  Clear
-                </Link>
-              ) : null}
-            </div>
-          </form>
-          <DriverLicenceTable
-            licences={licencePage.items}
-            searchTerm={searchTerm}
-            total={licencePage.total}
-          />
-          <Pagination
-            page={licencePage.page}
-            pageSize={licencePage.pageSize}
-            query={query}
-            routePath={routePath}
-            total={licencePage.total}
-            totalPages={licencePage.totalPages}
-          />
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <DriverLicenceListView
+        licencePage={licencePage}
+        error={error}
+        notice={notice}
+        query={query}
+        routePath={routePath}
+        searchTerm={searchTerm}
+      />
     );
   } catch (caughtError) {
     if (caughtError instanceof DriverLicenceApiError && caughtError.reason === "unauthorized")

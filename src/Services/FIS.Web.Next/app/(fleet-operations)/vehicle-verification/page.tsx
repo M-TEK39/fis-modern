@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -45,7 +47,9 @@ function pageHref(query: Query, page: number) {
   return queryString ? `/vehicle-verification?${queryString}` : "/vehicle-verification";
 }
 
-async function VehicleVerificationPageContent({
+const VehicleVerificationPageContent = renderVehicleVerificationPageContent;
+
+async function renderVehicleVerificationPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -159,18 +163,18 @@ async function VehicleVerificationPageContent({
               <div className="vehicle-table-wrapper">
                 <table className="vehicle-table">
                   <caption className="sr-only">Asset verification records</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Registration</th>
-                      <th scope="col">GG Code</th>
-                      <th scope="col">Department</th>
-                      <th scope="col">Site</th>
-                      <th scope="col">Verified</th>
-                      <th scope="col">Status</th>
-                      <th scope="col">Manager</th>
-                      <th scope="col">Action</th>
-                    </tr>
-                  </thead>
+                  <DataTableHeader
+                    columns={[
+                      { key: "column-1", label: <>Registration</> },
+                      { key: "column-2", label: <>GG Code</> },
+                      { key: "column-3", label: <>Department</> },
+                      { key: "column-4", label: <>Site</> },
+                      { key: "column-5", label: <>Verified</> },
+                      { key: "column-6", label: <>Status</> },
+                      { key: "column-7", label: <>Manager</> },
+                      { key: "column-8", label: <>Action</> },
+                    ]}
+                  />
                   <tbody>
                     {verificationPage.items.map((record) => (
                       <tr key={record.assetVerificationCode}>

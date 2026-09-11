@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -87,6 +89,213 @@ function AccessRestricted() {
   );
 }
 
+function SiteDriverTable({
+  drivers,
+  total,
+  departmentCode,
+  siteCode,
+  editPath,
+}: Readonly<{
+  drivers: DriverManagementDriver[];
+  total: number;
+  departmentCode: number;
+  siteCode: number;
+  editPath: string;
+}>) {
+  if (drivers.length === 0) {
+    return (
+      <div className="empty-state">
+        <h2>No site drivers found</h2>
+        <p>Add the first site driver for this site.</p>
+        <Link className="button button-primary" href={editPath}>
+          Add Site Driver
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="table-container">
+      <div className="table-header">
+        <span className="table-title">{total} site driver(s)</span>
+      </div>
+      <div className="table-wrapper">
+        <table className="data-table">
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>First Name</> },
+              { key: "column-2", label: <>Surname</> },
+              { key: "column-3", label: <>South African ID</> },
+              { key: "column-4", label: <>Passport Number</> },
+              { key: "column-5", label: <>Licence Number</> },
+              { key: "column-6", label: <>Actions</> },
+            ]}
+          />
+          <tbody>
+            {drivers.map((driver) => (
+              <tr key={driver.siteDriverCode}>
+                <td>{driver.driverFirstname || "-"}</td>
+                <td>{driver.driverSurname || "-"}</td>
+                <td>{driver.driverSAId || "-"}</td>
+                <td>{driver.driverPassportNumber || "-"}</td>
+                <td>{driver.driverLicenceNumber || "-"}</td>
+                <td className="actions-column">
+                  <div className="table-actions">
+                    <Link
+                      aria-label={`Edit ${displayName(driver)}`}
+                      className="button button-secondary button-small"
+                      href={`${editPath}&siteDriverCode=${driver.siteDriverCode}`}
+                    >
+                      Edit
+                    </Link>
+                    <DeleteButton
+                      action={deleteSiteDriverAction}
+                      departmentCode={departmentCode}
+                      fieldName="siteDriverCode"
+                      id={driver.siteDriverCode}
+                      name={displayName(driver)}
+                      siteCode={siteCode}
+                    />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SiteDriverPagination({
+  page,
+  totalPages,
+  departmentCode,
+  siteCode,
+}: Readonly<{
+  page: number;
+  totalPages: number;
+  departmentCode: number;
+  siteCode: number;
+}>) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <nav className="vehicle-pagination" aria-label="Site driver pages">
+      {page <= 1 ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Previous
+        </span>
+      ) : (
+        <Link
+          className="vehicle-pagination-button"
+          href={pagePath(departmentCode, siteCode, page - 1)}
+        >
+          Previous
+        </Link>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {page} of {totalPages}
+      </span>
+      {page >= totalPages ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Next
+        </span>
+      ) : (
+        <Link
+          className="vehicle-pagination-button"
+          href={pagePath(departmentCode, siteCode, page + 1)}
+        >
+          Next
+        </Link>
+      )}
+    </nav>
+  );
+}
+
+function SiteDriversView({
+  driverPage,
+  department,
+  site,
+  departmentCode,
+  siteCode,
+  message,
+}: Readonly<{
+  driverPage: Awaited<ReturnType<typeof getDriverManagementSiteDriversPage>>;
+  department: { description: string } | undefined;
+  site: { description: string } | undefined;
+  departmentCode: number;
+  siteCode: number;
+  message: ReturnType<typeof resultMessage>;
+}>) {
+  const editPath = contextPath("/drivers/site-drivers/edit", departmentCode, siteCode);
+
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="site-driver-management-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Driver and Authoriser Management</p>
+            <h1 id="site-driver-management-title">Site Driver Management</h1>
+            <p>
+              {department?.description ?? `Department ${departmentCode}`} /{" "}
+              {site?.description ?? `Site ${siteCode}`}
+            </p>
+          </div>
+          <div className="button-row">
+            <Link className="button button-primary" href={editPath}>
+              Add Site Driver
+            </Link>
+            <Link
+              className="button button-secondary"
+              href={contextPath("/drivers", departmentCode, siteCode)}
+            >
+              Back
+            </Link>
+          </div>
+        </header>
+        {message ? (
+          <div
+            className={`notice notice-${message.tone}`}
+            role={message.tone === "error" ? "alert" : "status"}
+          >
+            {message.text}
+          </div>
+        ) : null}
+        <SiteDriverTable
+          drivers={driverPage.items}
+          total={driverPage.total}
+          departmentCode={departmentCode}
+          siteCode={siteCode}
+          editPath={editPath}
+        />
+        <SiteDriverPagination
+          departmentCode={departmentCode}
+          siteCode={siteCode}
+          page={driverPage.page}
+          totalPages={driverPage.totalPages}
+        />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 async function SiteDriversContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
@@ -143,147 +352,15 @@ async function SiteDriversContent({ searchParams }: Readonly<{ searchParams: Sea
     ]);
     const department = departments.find((item) => item.code === departmentCode);
     const site = sites.find((item) => item.code === siteCode);
-    const editPath = contextPath("/drivers/site-drivers/edit", departmentCode, siteCode);
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="site-driver-management-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Driver and Authoriser Management</p>
-              <h1 id="site-driver-management-title">Site Driver Management</h1>
-              <p>
-                {department?.description ?? `Department ${departmentCode}`} /{" "}
-                {site?.description ?? `Site ${siteCode}`}
-              </p>
-            </div>
-            <div className="button-row">
-              <Link className="button button-primary" href={editPath}>
-                Add Site Driver
-              </Link>
-              <Link
-                className="button button-secondary"
-                href={contextPath("/drivers", departmentCode, siteCode)}
-              >
-                Back
-              </Link>
-            </div>
-          </header>
-          {message ? (
-            <div
-              className={`notice notice-${message.tone}`}
-              role={message.tone === "error" ? "alert" : "status"}
-            >
-              {message.text}
-            </div>
-          ) : null}
-          {driverPage.total === 0 ? (
-            <div className="empty-state">
-              <h2>No site drivers found</h2>
-              <p>Add the first site driver for this site.</p>
-              <Link className="button button-primary" href={editPath}>
-                Add Site Driver
-              </Link>
-            </div>
-          ) : (
-            <div className="table-container">
-              <div className="table-header">
-                <span className="table-title">{driverPage.total} site driver(s)</span>
-              </div>
-              <div className="table-wrapper">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>First Name</th>
-                      <th>Surname</th>
-                      <th>South African ID</th>
-                      <th>Passport Number</th>
-                      <th>Licence Number</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {driverPage.items.map((driver) => (
-                      <tr key={driver.siteDriverCode}>
-                        <td>{driver.driverFirstname || "-"}</td>
-                        <td>{driver.driverSurname || "-"}</td>
-                        <td>{driver.driverSAId || "-"}</td>
-                        <td>{driver.driverPassportNumber || "-"}</td>
-                        <td>{driver.driverLicenceNumber || "-"}</td>
-                        <td className="actions-column">
-                          <div className="table-actions">
-                            <Link
-                              aria-label={`Edit ${displayName(driver)}`}
-                              className="button button-secondary button-small"
-                              href={`${editPath}&siteDriverCode=${driver.siteDriverCode}`}
-                            >
-                              Edit
-                            </Link>
-                            <DeleteButton
-                              action={deleteSiteDriverAction}
-                              departmentCode={departmentCode}
-                              fieldName="siteDriverCode"
-                              id={driver.siteDriverCode}
-                              name={displayName(driver)}
-                              siteCode={siteCode}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {driverPage.totalPages > 1 ? (
-                <nav className="vehicle-pagination" aria-label="Site driver pages">
-                  {driverPage.page <= 1 ? (
-                    <span
-                      className="vehicle-pagination-button vehicle-pagination-disabled"
-                      aria-disabled="true"
-                    >
-                      Previous
-                    </span>
-                  ) : (
-                    <Link
-                      className="vehicle-pagination-button"
-                      href={pagePath(departmentCode, siteCode, driverPage.page - 1)}
-                    >
-                      Previous
-                    </Link>
-                  )}
-                  <span className="vehicle-pagination-meta" aria-live="polite">
-                    Page {driverPage.page} of {driverPage.totalPages}
-                  </span>
-                  {driverPage.page >= driverPage.totalPages ? (
-                    <span
-                      className="vehicle-pagination-button vehicle-pagination-disabled"
-                      aria-disabled="true"
-                    >
-                      Next
-                    </span>
-                  ) : (
-                    <Link
-                      className="vehicle-pagination-button"
-                      href={pagePath(departmentCode, siteCode, driverPage.page + 1)}
-                    >
-                      Next
-                    </Link>
-                  )}
-                </nav>
-              ) : null}
-            </div>
-          )}
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <SiteDriversView
+        driverPage={driverPage}
+        department={department}
+        site={site}
+        departmentCode={departmentCode}
+        siteCode={siteCode}
+        message={message}
+      />
     );
   } catch (error) {
     if (error instanceof DriverManagementApiError && error.reason === "unauthorized")

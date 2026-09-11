@@ -9,8 +9,8 @@ import {
   FinanceFrame,
   FinanceRestricted,
   FinanceUnavailable,
-  hasFinanceRole,
 } from "@/app/(fleet-operations)/finance/_components";
+import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
 import {
   FinanceApiError,
   getFinanceBatchDates,
@@ -50,7 +50,9 @@ function optionList(options: FinanceOption[]) {
   );
 }
 
-async function FinanceInterfaceContent({
+const FinanceInterfaceContent = renderFinanceInterfaceContent;
+
+async function renderFinanceInterfaceContent({
   params,
   searchParams,
 }: Readonly<{ params: Promise<{ action: string }>; searchParams: Promise<Query> }>) {

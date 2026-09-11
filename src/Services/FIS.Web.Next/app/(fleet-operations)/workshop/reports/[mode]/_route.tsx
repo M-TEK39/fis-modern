@@ -1,9 +1,12 @@
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
+import ReportResultsPanel from "@/components/ui/report-results-panel";
+import ReportRowsTable from "@/components/ui/report-rows-table";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -13,15 +16,7 @@ import {
   type LegacyReport,
 } from "@/lib/api/reports/api-legacy-reports";
 import { getSession } from "@/lib/auth/session";
-
-const REPORT_MODES = [
-  "one-vehicle",
-  "print-job-card",
-  "period",
-  "in-workshop",
-  "merchants",
-] as const;
-type WorkshopReportMode = (typeof REPORT_MODES)[number];
+import { workshopReportMode, type WorkshopReportMode } from "./_utils";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export type WorkshopReportPageProps = {
@@ -87,27 +82,11 @@ function ReportForm({
       <input name="run" type="hidden" value="1" />
       {mode === "one-vehicle" || mode === "print-job-card" ? (
         <div className="form-grid">
-          <fieldset className="vehicle-search-options">
-            <legend>Find vehicle by</legend>
-            <label className="vehicle-checkbox-label">
-              <input
-                type="radio"
-                name="searchMode"
-                value="GG"
-                defaultChecked={query.searchMode !== "GP"}
-              />{" "}
-              GG
-            </label>
-            <label className="vehicle-checkbox-label">
-              <input
-                type="radio"
-                name="searchMode"
-                value="GP"
-                defaultChecked={query.searchMode === "GP"}
-              />{" "}
-              GP
-            </label>
-          </fieldset>
+          <SearchTypeFieldset
+            selectedType={query.searchMode}
+            legend="Find vehicle by"
+            name="searchMode"
+          />
           <div className="form-field">
             <label className="form-label" htmlFor="workshop-report-vehicle">
               Vehicle number
@@ -251,46 +230,18 @@ function ReportResults({ report }: Readonly<{ report: LegacyReport }>) {
     );
 
   return (
-    <section
-      className="vehicle-status-maintenance-panel"
-      aria-labelledby="workshop-report-results-title"
+    <ReportResultsPanel
+      headingId="workshop-report-results-title"
+      heading={`${report.totalCount} record(s) returned`}
+      trailing={<span className="form-hint">Compatibility result</span>}
     >
-      <div className="vehicle-form-section-header">
-        <div>
-          <p className="eyebrow">Report results</p>
-          <h2 id="workshop-report-results-title">{report.totalCount} record(s) returned</h2>
-        </div>
-        <span className="form-hint">Compatibility result</span>
-      </div>
       {report.approximationReason ? (
         <div className="notice notice-info" role="status">
           {report.approximationReason}
         </div>
       ) : null}
-      <div className="vehicle-table-wrapper">
-        <table className="vehicle-table">
-          <caption className="sr-only">{report.title}</caption>
-          <thead>
-            <tr>
-              {report.columns.map((column) => (
-                <th key={column.key} scope="col">
-                  {column.header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {report.rows.map((row, index) => (
-              <tr key={`${row[report.columns[0]?.key] ?? "row"}-${index}`}>
-                {report.columns.map((column) => (
-                  <td key={column.key}>{valueOrDash(row[column.key])}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <ReportRowsTable columns={report.columns} rows={report.rows} caption={report.title} />
+    </ReportResultsPanel>
   );
 }
 
@@ -309,7 +260,9 @@ function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   );
 }
 
-async function WorkshopReportPageContent({
+const WorkshopReportPageContent = renderWorkshopReportPageContent;
+
+async function renderWorkshopReportPageContent({
   mode,
   searchParams,
   routePath = `/workshop/reports/${mode}`,
@@ -449,11 +402,6 @@ export function WorkshopReportPage(props: WorkshopReportPageProps) {
       <WorkshopReportPageContent {...props} />
     </Suspense>
   );
-}
-
-export function workshopReportMode(value: string): WorkshopReportMode {
-  if (!REPORT_MODES.includes(value as WorkshopReportMode)) notFound();
-  return value as WorkshopReportMode;
 }
 
 async function WorkshopReportRouteContent({

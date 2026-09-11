@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -5,6 +7,7 @@ import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import {
   DepartmentApiError,
@@ -73,21 +76,13 @@ function AccessRestricted() {
 
 function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">API unavailable</p>
-      <h2>Department data could not be loaded.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/validation-data">
-          Validation Data
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message="Department data could not be loaded."
+      retryHref={routePath}
+      secondaryHref="/validation-data"
+      secondaryLabel="Validation Data"
+      showIcon={false}
+    />
   );
 }
 
@@ -117,16 +112,16 @@ function DepartmentTable({
       <div className="table-wrapper">
         <table className="data-table">
           <caption className="sr-only">Legacy department records</caption>
-          <thead>
-            <tr>
-              <th scope="col">Department number</th>
-              <th scope="col">Description</th>
-              <th scope="col">Responsible person</th>
-              <th scope="col">Telephone</th>
-              <th scope="col">Status</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Department number</> },
+              { key: "column-2", label: <>Description</> },
+              { key: "column-3", label: <>Responsible person</> },
+              { key: "column-4", label: <>Telephone</> },
+              { key: "column-5", label: <>Status</> },
+              { key: "column-6", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {departments.map((department) => (
               <tr key={department.departmentCode}>
@@ -220,7 +215,73 @@ function DepartmentPagination({
   );
 }
 
-async function DepartmentListPageContent({
+function DepartmentListView({
+  departmentPage,
+  error,
+  notice,
+  query,
+  routePath,
+}: Readonly<{
+  departmentPage: DepartmentPage;
+  error: string | undefined;
+  notice: string | undefined;
+  query: Record<string, string | string[] | undefined>;
+  routePath: string;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="department-list-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Organisation</p>
+            <h1 id="department-list-title">Department Maintenance</h1>
+            <p>
+              Maintain the complete legacy department record, including active and inactive
+              departments.
+            </p>
+          </div>
+          <div className="button-row">
+            <Link className="button button-primary" href="/Validation/MNT_Department_Add.aspx">
+              Add Department
+            </Link>
+            <Link className="button button-secondary" href="/validation-data">
+              Validation Data
+            </Link>
+          </div>
+        </header>
+        {notice ? (
+          <div
+            className={`notice ${error ? "notice-error" : "notice-success"}`}
+            role={error ? "alert" : "status"}
+          >
+            {notice}
+          </div>
+        ) : null}
+        <DepartmentTable departments={departmentPage.items} total={departmentPage.total} />
+        <DepartmentPagination
+          routePath={routePath}
+          query={query}
+          page={departmentPage.page}
+          totalPages={departmentPage.totalPages}
+        />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const DepartmentListPageContent = renderDepartmentListPageContent;
+
+async function renderDepartmentListPageContent({
   searchParams,
   routePath = "/validation-data/departments",
 }: DepartmentListPageProps) {
@@ -287,53 +348,13 @@ async function DepartmentListPageContent({
           : error;
 
   return (
-    <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card" aria-labelledby="department-list-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Validation / Organisation</p>
-            <h1 id="department-list-title">Department Maintenance</h1>
-            <p>
-              Maintain the complete legacy department record, including active and inactive
-              departments.
-            </p>
-          </div>
-          <div className="button-row">
-            <Link className="button button-primary" href="/Validation/MNT_Department_Add.aspx">
-              Add Department
-            </Link>
-            <Link className="button button-secondary" href="/validation-data">
-              Validation Data
-            </Link>
-          </div>
-        </header>
-        {notice ? (
-          <div
-            className={`notice ${error ? "notice-error" : "notice-success"}`}
-            role={error ? "alert" : "status"}
-          >
-            {notice}
-          </div>
-        ) : null}
-        <DepartmentTable departments={departmentPage.items} total={departmentPage.total} />
-        <DepartmentPagination
-          routePath={routePath}
-          query={query}
-          page={departmentPage.page}
-          totalPages={departmentPage.totalPages}
-        />
-        <div className="vehicle-footer-actions">
-          <Link className="button button-secondary" href="/home">
-            Home
-          </Link>
-          <form action={logoutAction}>
-            <button className="button button-secondary" type="submit">
-              Sign out
-            </button>
-          </form>
-        </div>
-      </section>
-    </main>
+    <DepartmentListView
+      departmentPage={departmentPage}
+      error={error}
+      notice={notice}
+      query={query}
+      routePath={routePath}
+    />
   );
 }
 

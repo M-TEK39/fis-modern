@@ -248,14 +248,16 @@ export async function createTripAuthorityAction(formData: FormData) {
     routes,
   };
 
+  let createdTripId: number;
   try {
     const created = await createTripAuthority(request);
+    createdTripId = created.tripId;
     revalidatePath("/trip-authorities");
     revalidatePath("/trips");
-    redirect(`/trips/show?tripId=${created.tripId}&result=created`);
   } catch (error) {
     redirect(createResultPath(formData, apiResult(error)));
   }
+  redirect(`/trips/show?tripId=${createdTripId}&result=created`);
 }
 
 export async function closeTripAuthorityAction(formData: FormData) {

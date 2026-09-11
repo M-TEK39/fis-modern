@@ -9,13 +9,15 @@ import {
   ActionNotice,
   ApiUnavailable,
   FmlFrame,
+} from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+import {
   formatCurrency,
   formatDate,
   getStatusClass,
   getStatusLabel,
   hasFmlPermission,
   vehicleLabel,
-} from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+} from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import { FmlApiError, getLeaseTerm } from "@/lib/api/finance/api-fml";
 import { getVehicleOptions } from "@/lib/api/vehicles/api-vehicles";
 import { getSession } from "@/lib/auth/session";
@@ -31,7 +33,9 @@ function positiveInteger(value: string | undefined) {
   return value && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-async function FmlTariffDetailsPageContent({
+const FmlTariffDetailsPageContent = renderFmlTariffDetailsPageContent;
+
+async function renderFmlTariffDetailsPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();

@@ -2067,6 +2067,16 @@ input:focus-visible {
   padding: 1.5rem;
 }
 
+.modal-dialog {
+  margin: auto;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+
+.modal-dialog::backdrop {
+  background: hsl(220 20% 10% / 0.55);
+}
+
 .modal-card h2 {
   margin: 0;
   font-size: 1.25rem;

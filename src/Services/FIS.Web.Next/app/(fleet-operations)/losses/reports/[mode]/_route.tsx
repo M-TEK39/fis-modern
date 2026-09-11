@@ -4,6 +4,9 @@ import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import ReportResultsPanel from "@/components/ui/report-results-panel";
+import ReportRowsTable from "@/components/ui/report-rows-table";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 import { getDepartments } from "@/lib/api/reference-data/api-departments";
 import {
   LossReportApiError,
@@ -96,27 +99,11 @@ function ReportForm({
       <input name="run" type="hidden" value="1" />
       {mode === "vehicle" ? (
         <div className="form-grid">
-          <fieldset className="vehicle-search-options">
-            <legend>Find vehicle by</legend>
-            <label className="vehicle-checkbox-label">
-              <input
-                type="radio"
-                name="searchMode"
-                value="GG"
-                defaultChecked={query.searchMode !== "GP"}
-              />{" "}
-              GG
-            </label>
-            <label className="vehicle-checkbox-label">
-              <input
-                type="radio"
-                name="searchMode"
-                value="GP"
-                defaultChecked={query.searchMode === "GP"}
-              />{" "}
-              GP
-            </label>
-          </fieldset>
+          <SearchTypeFieldset
+            selectedType={query.searchMode}
+            legend="Find vehicle by"
+            name="searchMode"
+          />
           <div className="form-field">
             <label className="form-label" htmlFor="loss-report-vehicle-search">
               Vehicle number
@@ -373,40 +360,16 @@ function ReportResults({
       </section>
     );
   return (
-    <section
-      className="vehicle-status-maintenance-panel"
-      aria-labelledby="loss-report-results-title"
+    <ReportResultsPanel
+      headingId="loss-report-results-title"
+      heading={`${report.rows.length} record(s) returned`}
     >
-      <div className="vehicle-form-section-header">
-        <div>
-          <p className="eyebrow">Report results</p>
-          <h2 id="loss-report-results-title">{report.rows.length} record(s) returned</h2>
-        </div>
-      </div>
-      <div className="vehicle-table-wrapper">
-        <table className="vehicle-table">
-          <caption className="sr-only">Loss report results</caption>
-          <thead>
-            <tr>
-              {report.columns.map((column) => (
-                <th key={column} scope="col">
-                  {column}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {report.rows.map((row, index) => (
-              <tr key={`${row[report.columns[0]] ?? "row"}-${index}`}>
-                {report.columns.map((column) => (
-                  <td key={column}>{valueOrDash(row[column])}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <ReportRowsTable
+        columns={report.columns.map((column) => ({ key: column, header: column }))}
+        rows={report.rows}
+        caption="Loss report results"
+      />
+    </ReportResultsPanel>
   );
 }
 
@@ -425,7 +388,9 @@ function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   );
 }
 
-async function LossReportPageContent({
+const LossReportPageContent = renderLossReportPageContent;
+
+async function renderLossReportPageContent({
   params,
   searchParams,
   routePath = "/losses/reports",

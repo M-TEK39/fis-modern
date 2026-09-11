@@ -41,7 +41,9 @@ function buildPath(
   return `/licenses/multi-collection?${params.toString()}`;
 }
 
-async function LicenseMultiCollectionPageContent({
+const LicenseMultiCollectionPageContent = renderLicenseMultiCollectionPageContent;
+
+async function renderLicenseMultiCollectionPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLicenseSession();

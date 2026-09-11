@@ -1,3 +1,3 @@
-import { createLegacyTowingRequestPage } from "@/app/(fleet-operations)/towing/request/_route";
+import { createLegacyTowingRequestPage } from "@/app/(fleet-operations)/towing/request/legacy-route";
 
 export default createLegacyTowingRequestPage("/towing/MNT_tow_load2reg.aspx");

@@ -11,16 +11,18 @@ import {
   ApiUnavailable,
   FuelCardNotice,
   FuelCardTable,
-  queryValue,
   VehicleResults,
   VehicleSearchForm,
 } from "@/app/(fleet-operations)/fuel-cards/_components";
+import { queryValue } from "@/app/(fleet-operations)/fuel-cards/_utils";
 import { deleteFuelCardAction } from "@/app/(fleet-operations)/fuel-cards/actions";
 import { FuelCardApiError, getFuelCardsByVehicle } from "@/lib/api/fleet-operations/api-fuel-cards";
 import { getSession } from "@/lib/auth/session";
 import { searchWorkshopVehicles } from "@/lib/api/fleet-operations/api-workshop";
 
-async function FuelCardDeletePageContent({
+const FuelCardDeletePageContent = renderFuelCardDeletePageContent;
+
+async function renderFuelCardDeletePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();

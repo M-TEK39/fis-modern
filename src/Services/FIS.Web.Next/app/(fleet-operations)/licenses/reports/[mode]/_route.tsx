@@ -1,11 +1,14 @@
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
+import ReportResultsPanel from "@/components/ui/report-results-panel";
+import ReportRowsTable from "@/components/ui/report-rows-table";
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { LicenseShell, valueOrDash } from "@/app/(fleet-operations)/licenses/_components";
+import { LicenseShell } from "@/app/(fleet-operations)/licenses/_components";
+import { valueOrDash } from "@/app/(fleet-operations)/licenses/_utils";
 import {
   accessRestricted,
   getLicenseSession,
@@ -87,7 +90,9 @@ function errorCard(message: string) {
   );
 }
 
-function ReportForm({
+const ReportForm = renderReportForm;
+
+function renderReportForm({
   mode,
   query,
   departments,
@@ -308,44 +313,22 @@ function Results({ report }: Readonly<{ report: Awaited<ReturnType<typeof getLic
       </section>
     );
   return (
-    <section
-      className="vehicle-status-maintenance-panel"
-      aria-labelledby="license-report-results-title"
+    <ReportResultsPanel
+      headingId="license-report-results-title"
+      heading={`${report.rows.length} record(s) returned`}
     >
-      <div className="vehicle-form-section-header">
-        <div>
-          <p className="eyebrow">Report results</p>
-          <h2 id="license-report-results-title">{report.rows.length} record(s) returned</h2>
-        </div>
-      </div>
-      <div className="vehicle-table-wrapper">
-        <table className="vehicle-table">
-          <caption className="sr-only">Licence report results</caption>
-          <thead>
-            <tr>
-              {report.columns.map((column) => (
-                <th key={column} scope="col">
-                  {column}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {report.rows.map((row, index) => (
-              <tr key={`${row[report.columns[0]] ?? "row"}-${index}`}>
-                {report.columns.map((column) => (
-                  <td key={column}>{valueOrDash(row[column])}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <ReportRowsTable
+        columns={report.columns.map((column) => ({ key: column, header: column }))}
+        rows={report.rows}
+        caption="Licence report results"
+      />
+    </ReportResultsPanel>
   );
 }
 
-async function LicenseReportPageContent({
+const LicenseReportPageContent = renderLicenseReportPageContent;
+
+async function renderLicenseReportPageContent({
   params,
   searchParams,
   forcedMode,
@@ -435,24 +418,6 @@ export function LicenseReportPage(props: LicenseReportPageProps) {
       <LicenseReportPageContent {...props} />
     </Suspense>
   );
-}
-
-type LegacyLicenseReportPageProps = {
-  searchParams: SearchParams;
-};
-
-export function createLegacyLicenseReportPage(forcedMode: LicenseReportMode) {
-  return function LegacyLicenseReportPage({
-    searchParams,
-  }: Readonly<LegacyLicenseReportPageProps>) {
-    return (
-      <LicenseReportPage
-        forcedMode={forcedMode}
-        params={Promise.resolve({ mode: forcedMode })}
-        searchParams={searchParams}
-      />
-    );
-  };
 }
 
 export default LicenseReportPage;

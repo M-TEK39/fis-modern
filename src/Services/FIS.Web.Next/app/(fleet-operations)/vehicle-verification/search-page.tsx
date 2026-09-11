@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -35,7 +37,9 @@ function filterVehicles(vehicles: VehicleSearchResult[], searchMode: "GG" | "GP"
     });
 }
 
-async function VehicleVerificationSearchContent({
+const VehicleVerificationSearchContent = renderVehicleVerificationSearchContent;
+
+async function renderVehicleVerificationSearchContent({
   mode,
   searchParams,
   routePath,
@@ -184,14 +188,14 @@ async function VehicleVerificationSearchContent({
                 <caption className="sr-only">
                   Vehicles matching the asset verification search
                 </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">GG Number</th>
-                    <th scope="col">Registration</th>
-                    <th scope="col">Chassis</th>
-                    <th scope="col">Action</th>
-                  </tr>
-                </thead>
+                <DataTableHeader
+                  columns={[
+                    { key: "column-1", label: <>GG Number</> },
+                    { key: "column-2", label: <>Registration</> },
+                    { key: "column-3", label: <>Chassis</> },
+                    { key: "column-4", label: <>Action</> },
+                  ]}
+                />
                 <tbody>
                   {matches.map((vehicle) => (
                     <tr key={vehicle.vmfCode}>

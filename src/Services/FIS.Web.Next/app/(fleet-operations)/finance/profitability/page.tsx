@@ -9,8 +9,8 @@ import {
   FinanceFrame,
   FinanceRestricted,
   FinanceUnavailable,
-  hasFinanceRole,
 } from "@/app/(fleet-operations)/finance/_components";
+import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
 import { FinanceReportTable } from "@/app/(fleet-operations)/finance/report-table";
 import {
   FinanceApiError,
@@ -28,7 +28,9 @@ function queryValue(query: Query, name: string) {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
-async function FinanceProfitabilityContent({
+const FinanceProfitabilityContent = renderFinanceProfitabilityContent;
+
+async function renderFinanceProfitabilityContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Query> }>) {
   await connection();

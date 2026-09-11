@@ -18,6 +18,9 @@ export const metadata: Metadata = {
     template: "%s | Fleet Information System",
   },
   description: "Fleet Information System",
+  icons: {
+    icon: "/logo/gauteng-g-fleet.webp",
+  },
 };
 
 async function AuthenticatedHeader() {

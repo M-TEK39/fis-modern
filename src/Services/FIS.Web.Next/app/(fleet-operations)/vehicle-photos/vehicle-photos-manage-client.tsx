@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
@@ -301,9 +302,12 @@ export default function VehiclePhotosManageClient({
                 <article className="vehicle-photo-card" key={photo.vehiclePhotoInfoCode}>
                   <div className="vehicle-photo-preview">
                     {url ? (
-                      <img
+                      <Image
                         src={url}
-                        alt={`${orientationLabel(photo.orientation)} vehicle photo${photo.description ? `: ${photo.description}` : ""}`}
+                        alt={`${orientationLabel(photo.orientation)} view${photo.description ? `: ${photo.description}` : ""}`}
+                        width={640}
+                        height={480}
+                        unoptimized
                       />
                     ) : (
                       <span>No image URL</span>

@@ -6,17 +6,19 @@ import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   FmlFrame,
-  hasFmlPermission,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+import { hasFmlPermission } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import {
   ReportEmpty,
   ReportFooter,
   ReportTable,
+} from "@/app/(fleet-operations)/full-maintenance-lease/reports/_components";
+import {
   formatCurrency,
   formatDate,
-  reportError,
   valueOrDash,
-} from "@/app/(fleet-operations)/full-maintenance-lease/reports/_components";
+} from "@/app/(fleet-operations)/full-maintenance-lease/reports/_utils";
+import { reportError } from "@/app/(fleet-operations)/full-maintenance-lease/reports/_route-helpers";
 import { FmlApiError, getFmlContractsExpiring } from "@/lib/api/finance/api-fml";
 import { getSession } from "@/lib/auth/session";
 
@@ -70,8 +72,20 @@ async function FmlContractsExpiringPageContent() {
               "Fixed Tariff",
             ]}
           >
-            {report.contracts.map((row, index) => (
-              <tr key={`${row.ggNumber ?? "row"}-${index}`}>
+            {report.contracts.map((row) => (
+              <tr
+                key={
+                  row.rowNumber ??
+                  JSON.stringify([
+                    row.ggNumber,
+                    row.gpNumber,
+                    row.contractStartDate,
+                    row.targetReturnDate,
+                    row.contractType,
+                    row.siteName,
+                  ])
+                }
+              >
                 <td>{valueOrDash(row.rowNumber)}</td>
                 <td>{valueOrDash(row.ggNumber)}</td>
                 <td>{valueOrDash(row.gpNumber)}</td>

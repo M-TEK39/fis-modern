@@ -2,21 +2,23 @@ import Link from "next/link";
 
 import {
   JobCardPrintPreview,
+  JobCardSearchForm,
   JobCardTable,
-  hasJobCardAccess,
-  hasRole,
 } from "@/app/(fleet-operations)/job-cards/_components";
+import { hasJobCardAccess, hasRole } from "@/app/(fleet-operations)/job-cards/_utils";
 import {
-  accessRestricted,
+  AccessRestricted,
+  JobCardPageBoundary,
+  SessionProblem,
+} from "@/app/(fleet-operations)/job-cards/_page";
+import {
   getJobCardForSelection,
   getJobCardSession,
-  JobCardPageBoundary,
   jobCardPageHref,
   queryPage,
   querySearchType,
   queryValue,
-  sessionMessage,
-} from "@/app/(fleet-operations)/job-cards/_page";
+} from "@/app/(fleet-operations)/job-cards/_page-utils";
 import {
   DEFAULT_JOB_CARD_PAGE_SIZE,
   getJobCardsPage,
@@ -37,12 +39,12 @@ async function PrintJobCardsContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
-  const problem = sessionMessage(session, "/job-cards/print");
-  if (problem) return problem;
+  if (session.status === "expired" || session.status === "unavailable")
+    return <SessionProblem returnPath="/job-cards/print" />;
   if (session.status !== "authenticated")
-    return accessRestricted("Your session could not be loaded.");
+    return <AccessRestricted message="Your session could not be loaded." />;
   if (!hasRole(session.roles, "capturer") && !hasJobCardAccess(session.accessLevel, session.roles))
-    return accessRestricted("Your profile does not include Job Card capturer access.");
+    return <AccessRestricted message="Your profile does not include Job Card capturer access." />;
   const query = await searchParams;
   const search = queryValue(query.search);
   const mode = querySearchType(query.mode);
@@ -79,34 +81,14 @@ async function PrintJobCardsContent({
               Main menu
             </Link>
           </header>
-          <form className="vehicle-search-row" method="get">
-            <input type="hidden" name="page" value="1" />
-            <fieldset className="vehicle-search-options">
-              <legend>Find by</legend>
-              <label className="vehicle-checkbox-label">
-                <input type="radio" name="mode" value="GG" defaultChecked={mode !== "GP"} /> GG
-              </label>
-              <label className="vehicle-checkbox-label">
-                <input type="radio" name="mode" value="GP" defaultChecked={mode === "GP"} /> GP
-              </label>
-            </fieldset>
-            <label className="sr-only" htmlFor="print-job-card-search">
-              Vehicle or job card number
-            </label>
-            <input
-              className="vehicle-search"
-              id="print-job-card-search"
-              name="search"
-              defaultValue={search}
-              placeholder="GG, GP, or job card number"
-            />
-            <button className="button button-primary" type="submit">
-              Search
-            </button>
-            <Link className="button button-secondary" href="/job-cards/print">
-              Clear
-            </Link>
-          </form>
+          <JobCardSearchForm
+            action="/job-cards/print"
+            inputId="print-job-card-search"
+            inputLabel="Vehicle or job card number"
+            mode={mode}
+            placeholder="GG, GP, or job card number"
+            search={search}
+          />
           <section className="vehicle-status-maintenance-panel">
             <p className="eyebrow">{pageData.totalRecords} authorized</p>
             <h2>Authorized Job Cards</h2>

@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -37,6 +39,13 @@ import {
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 type Tab = "vehicle" | "trip" | "drivers" | "passengers" | "routes";
+const TRIP_TABS: readonly [Tab, string][] = [
+  ["vehicle", "Vehicle Information"],
+  ["trip", "Trip Information"],
+  ["drivers", "Driver Information"],
+  ["passengers", "Passenger Information"],
+  ["routes", "Route Information"],
+];
 
 function positiveInteger(value: string) {
   const parsed = Number(value.trim());
@@ -100,18 +109,10 @@ function FactsTable({
 }
 
 function TripTabs({ tripId, activeTab }: Readonly<{ tripId: number; activeTab: Tab }>) {
-  const tabs: readonly [Tab, string][] = [
-    ["vehicle", "Vehicle Information"],
-    ["trip", "Trip Information"],
-    ["drivers", "Driver Information"],
-    ["passengers", "Passenger Information"],
-    ["routes", "Route Information"],
-  ];
-
   return (
     <nav className="reference-data-tabs" aria-label="Trip authority information">
       <>
-        {tabs.map(([tab, label]) => (
+        {TRIP_TABS.map(([tab, label]) => (
           <Link
             className={`reference-data-tab${activeTab === tab ? " active" : ""}`}
             aria-current={activeTab === tab ? "page" : undefined}
@@ -226,16 +227,16 @@ function DriverInformation({ details }: Readonly<{ details: TripAuthorityDetails
             <caption className="sr-only">
               Drivers assigned to trip authority {details.trip.tripId}
             </caption>
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Driver ID</th>
-                <th scope="col">Passport</th>
-                <th scope="col">Licence</th>
-                <th scope="col">Primary</th>
-                <th scope="col">Active</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Name</> },
+                { key: "column-2", label: <>Driver ID</> },
+                { key: "column-3", label: <>Passport</> },
+                { key: "column-4", label: <>Licence</> },
+                { key: "column-5", label: <>Primary</> },
+                { key: "column-6", label: <>Active</> },
+              ]}
+            />
             <tbody>
               {details.drivers.map((driver) => (
                 <tr key={driver.tripDriverCode}>
@@ -274,12 +275,12 @@ function PassengerInformation({ details }: Readonly<{ details: TripAuthorityDeta
             <caption className="sr-only">
               Passengers assigned to trip authority {details.trip.tripId}
             </caption>
-            <thead>
-              <tr>
-                <th scope="col">Passenger</th>
-                <th scope="col">Record</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Passenger</> },
+                { key: "column-2", label: <>Record</> },
+              ]}
+            />
             <tbody>
               {details.passengers.map((passenger) => (
                 <tr key={passenger.tripPassengerCode}>
@@ -317,18 +318,18 @@ function RouteInformation({ details }: Readonly<{ details: TripAuthorityDetails 
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Routes for trip authority {details.trip.tripId}</caption>
-            <thead>
-              <tr>
-                <th scope="col">Route</th>
-                <th scope="col">Start date</th>
-                <th scope="col">End date</th>
-                <th scope="col">Start ODO</th>
-                <th scope="col">End ODO</th>
-                <th scope="col">Distance</th>
-                <th scope="col">Locations</th>
-                <th scope="col">BAS codes</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Route</> },
+                { key: "column-2", label: <>Start date</> },
+                { key: "column-3", label: <>End date</> },
+                { key: "column-4", label: <>Start ODO</> },
+                { key: "column-5", label: <>End ODO</> },
+                { key: "column-6", label: <>Distance</> },
+                { key: "column-7", label: <>Locations</> },
+                { key: "column-8", label: <>BAS codes</> },
+              ]}
+            />
             <tbody>
               {details.routes.map((route) => {
                 const startOdometer = routeStartOdometer(route, previousEndOdometer);
@@ -404,13 +405,13 @@ function CloseTripForm({ details }: Readonly<{ details: TripAuthorityDetails }>)
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Enter route end odometers</caption>
-            <thead>
-              <tr>
-                <th scope="col">Route</th>
-                <th scope="col">Start ODO</th>
-                <th scope="col">End ODO</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Route</> },
+                { key: "column-2", label: <>Start ODO</> },
+                { key: "column-3", label: <>End ODO</> },
+              ]}
+            />
             <tbody>
               {details.routes.map((route) => (
                 <tr key={route.routeCode}>
@@ -502,7 +503,11 @@ function unavailableMessage() {
   );
 }
 
-async function ShowTripPageContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+const ShowTripPageContent = renderShowTripPageContent;
+
+async function renderShowTripPageContent({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getTripSession();
   const query = await searchParams;

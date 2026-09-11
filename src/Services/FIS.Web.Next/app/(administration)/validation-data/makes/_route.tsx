@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -6,6 +8,7 @@ import { Suspense } from "react";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
 import {
   DEFAULT_MAKE_PAGE_SIZE,
   getMakesPage,
@@ -73,21 +76,13 @@ function AccessRestricted() {
 
 function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">API unavailable</p>
-      <h2>Vehicle makes could not be loaded.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/validation-data">
-          Validation Data
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message="Vehicle makes could not be loaded."
+      retryHref={routePath}
+      secondaryHref="/validation-data"
+      secondaryLabel="Validation Data"
+      showIcon={false}
+    />
   );
 }
 
@@ -112,14 +107,14 @@ function MakeTable({ makes, total }: Readonly<{ makes: MakeRecord[]; total: numb
       <div className="table-wrapper">
         <table className="data-table">
           <caption className="sr-only">Legacy vehicle makes</caption>
-          <thead>
-            <tr>
-              <th scope="col">Make code</th>
-              <th scope="col">Make name</th>
-              <th scope="col">Last updated</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Make code</> },
+              { key: "column-2", label: <>Make name</> },
+              { key: "column-3", label: <>Last updated</> },
+              { key: "column-4", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {makes.map((make) => (
               <tr key={make.makeCode}>
@@ -205,7 +200,70 @@ function MakePagination({
   );
 }
 
-async function MakeListPageContent({
+function MakeListView({
+  makePage,
+  error,
+  notice,
+  query,
+  routePath,
+}: Readonly<{
+  makePage: MakePage;
+  error: string | undefined;
+  notice: string | undefined;
+  query: Record<string, string | string[] | undefined>;
+  routePath: string;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="make-list-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Vehicle</p>
+            <h1 id="make-list-title">Make Maintenance</h1>
+            <p>Maintain the legacy vehicle make list used by model and vehicle workflows.</p>
+          </div>
+          <div className="button-row">
+            <Link className="button button-primary" href="/Validation/MNT_Make_Add.aspx">
+              Add Make
+            </Link>
+            <Link className="button button-secondary" href="/validation-data">
+              Validation Data
+            </Link>
+          </div>
+        </header>
+        {notice ? (
+          <div
+            className={`notice ${error ? "notice-error" : "notice-success"}`}
+            role={error ? "alert" : "status"}
+          >
+            {notice}
+          </div>
+        ) : null}
+        <MakeTable makes={makePage.items} total={makePage.total} />
+        <MakePagination
+          routePath={routePath}
+          query={query}
+          page={makePage.page}
+          totalPages={makePage.totalPages}
+        />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const MakeListPageContent = renderMakeListPageContent;
+
+async function renderMakeListPageContent({
   searchParams,
   routePath = "/validation-data/makes",
 }: MakeListPageProps) {
@@ -249,50 +307,13 @@ async function MakeListPageContent({
             ? "Make deleted successfully."
             : error;
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="make-list-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Vehicle</p>
-              <h1 id="make-list-title">Make Maintenance</h1>
-              <p>Maintain the legacy vehicle make list used by model and vehicle workflows.</p>
-            </div>
-            <div className="button-row">
-              <Link className="button button-primary" href="/Validation/MNT_Make_Add.aspx">
-                Add Make
-              </Link>
-              <Link className="button button-secondary" href="/validation-data">
-                Validation Data
-              </Link>
-            </div>
-          </header>
-          {notice ? (
-            <div
-              className={`notice ${error ? "notice-error" : "notice-success"}`}
-              role={error ? "alert" : "status"}
-            >
-              {notice}
-            </div>
-          ) : null}
-          <MakeTable makes={makePage.items} total={makePage.total} />
-          <MakePagination
-            routePath={routePath}
-            query={query}
-            page={makePage.page}
-            totalPages={makePage.totalPages}
-          />
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <MakeListView
+        makePage={makePage}
+        error={error}
+        notice={notice}
+        query={query}
+        routePath={routePath}
+      />
     );
   } catch (error) {
     if (error instanceof MakeApiError && error.reason === "unauthorized")

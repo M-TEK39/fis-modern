@@ -9,8 +9,8 @@ import {
   FinanceFrame,
   FinanceRestricted,
   FinanceUnavailable,
-  hasHeadOfficeFinanceAccess,
 } from "@/app/(fleet-operations)/finance/_components";
+import { hasHeadOfficeFinanceAccess } from "@/app/(fleet-operations)/finance/_utils";
 import { getSession } from "@/lib/auth/session";
 
 import { importStandardBankAction } from "./actions";

@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
+import ReportResultsPanel from "@/components/ui/report-results-panel";
+import FinanceReportRowsTable from "@/components/ui/finance-report-rows-table";
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -9,8 +11,8 @@ import {
   FinanceFrame,
   FinanceRestricted,
   FinanceUnavailable,
-  hasFinanceRole,
 } from "@/app/(fleet-operations)/finance/_components";
+import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions, siteOptions } from "@/app/(fleet-operations)/finance/_location-options";
 import { DepartmentApiError, getDepartments } from "@/lib/api/reference-data/api-departments";
 import {
@@ -90,8 +92,8 @@ function formatFor(reportAction: string) {
 }
 
 function rowValue(row: FinanceRow, ...names: string[]) {
-  const expected = names.map((name) => name.toLowerCase());
-  const entry = Object.entries(row).find(([key]) => expected.includes(key.toLowerCase()));
+  const expected = new Set(names.map((name) => name.toLowerCase()));
+  const entry = Object.entries(row).find(([key]) => expected.has(key.toLowerCase()));
   if (!entry || entry[1] === null || entry[1] === undefined || entry[1] === "") return "-";
   return String(entry[1]);
 }
@@ -121,7 +123,9 @@ function reportButton(reportAction: string, label: string, className = "button b
   );
 }
 
-function ReportForm({
+const ReportForm = renderReportForm;
+
+function renderReportForm({
   action,
   query,
   departments,
@@ -401,46 +405,32 @@ function ReportTable({ report, page }: Readonly<{ report: FinanceReport; page: n
       </div>
     );
   return (
-    <section className="vehicle-status-maintenance-panel" aria-labelledby="finance-report-results">
-      <div className="vehicle-form-section-header">
-        <div>
-          <p className="eyebrow">{report.rows.length} record(s)</p>
-          <h2 id="finance-report-results">{report.title}</h2>
-        </div>
-      </div>
-      <div className="vehicle-table-wrapper">
-        <table className="vehicle-table">
-          <caption className="sr-only">{report.title}</caption>
-          <thead>
-            <tr>
-              {columns.map((column) => (
-                <th key={column} scope="col">
-                  {column.replaceAll("_", " ")}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={`${report.title}-${index}`}>
-                {columns.map((column) => (
-                  <td key={column}>{rowValue(row, column)}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <ReportResultsPanel
+      headingId="finance-report-results"
+      eyebrow={`${report.rows.length} record(s)`}
+      heading={report.title}
+    >
+      <FinanceReportRowsTable
+        columns={columns}
+        rows={rows}
+        caption={report.title}
+        formatValue={rowValue}
+        rowKey={(row) =>
+          `${report.title}-${columns.map((column) => String(row[column] ?? "")).join("|")}`
+        }
+      />
       {report.rows.length > pageSize ? (
         <p className="muted-copy">
           Showing page {page} of {Math.ceil(report.rows.length / pageSize)}.
         </p>
       ) : null}
-    </section>
+    </ReportResultsPanel>
   );
 }
 
-async function FinanceReportsContent({
+const FinanceReportsContent = renderFinanceReportsContent;
+
+async function renderFinanceReportsContent({
   action,
   searchParams,
 }: Readonly<{ action: string; searchParams: Promise<Query> }>) {

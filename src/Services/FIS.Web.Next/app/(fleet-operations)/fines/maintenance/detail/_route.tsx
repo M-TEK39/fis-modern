@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import { saveFineAction } from "@/app/(fleet-operations)/fines/actions";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 import {
   FineApiError,
   getFine,
@@ -77,17 +78,7 @@ function VehicleLookup({
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
       <input name="route" type="hidden" value="add" />
-      <fieldset className="vehicle-search-options">
-        <legend>Find vehicle by</legend>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="searchType" value="GG" defaultChecked={searchType === "GG"} />{" "}
-          GG
-        </label>
-        <label className="vehicle-checkbox-label">
-          <input type="radio" name="searchType" value="GP" defaultChecked={searchType === "GP"} />{" "}
-          GP
-        </label>
-      </fieldset>
+      <SearchTypeFieldset selectedType={searchType} legend="Find vehicle by" />
       <div className="vehicle-search-row">
         <label className="sr-only" htmlFor="fine-detail-vehicle-search">
           {searchType === "GG" ? "GG number" : "GP number"}
@@ -472,7 +463,9 @@ function ApiUnavailable() {
   );
 }
 
-async function FineDetailContent({ searchParams, routePath }: FineDetailPageProps) {
+const FineDetailContent = renderFineDetailContent;
+
+async function renderFineDetailContent({ searchParams, routePath }: FineDetailPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") {
@@ -584,14 +577,4 @@ export default function FineDetailPage(props: FineDetailPageProps) {
       </section>
     </main>
   );
-}
-
-type LegacyFineDetailPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyFineDetailPage(routePath: string) {
-  return function LegacyFineDetailPage({ searchParams }: Readonly<LegacyFineDetailPageProps>) {
-    return <FineDetailPage routePath={routePath} searchParams={searchParams} />;
-  };
 }

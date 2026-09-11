@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -97,14 +99,14 @@ function LicenseFeeTable({
       <div className="table-wrapper">
         <table className="data-table">
           <caption className="sr-only">Legacy licence fees</caption>
-          <thead>
-            <tr>
-              <th scope="col">Licence fee code</th>
-              <th scope="col">Description</th>
-              <th scope="col">Yearly tariff</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Licence fee code</> },
+              { key: "column-2", label: <>Description</> },
+              { key: "column-3", label: <>Yearly tariff</> },
+              { key: "column-4", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {fees.map((fee) => (
               <tr key={fee.licenceFeeCode}>
@@ -191,7 +193,96 @@ function Pagination({
   );
 }
 
-async function LicenseFeeListPageContent({
+function LicenseFeeListView({
+  feePage,
+  error,
+  notice,
+  query,
+  routePath,
+  searchTerm,
+}: Readonly<{
+  feePage: Awaited<ReturnType<typeof getLicenseFeesPage>>;
+  error: string | undefined;
+  notice: string | undefined;
+  query: Record<string, string | string[] | undefined>;
+  routePath: string;
+  searchTerm: string;
+}>) {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="license-fee-list-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Licence</p>
+            <h1 id="license-fee-list-title">License Fees Maintenance</h1>
+            <p>Maintain the legacy licence fee records used by vehicle models.</p>
+          </div>
+          <div className="button-row">
+            <Link className="button button-primary" href="/Validation/MNT_Licence_Fee_Add.aspx">
+              Add Licence Fee
+            </Link>
+            <Link className="button button-secondary" href="/validation-data">
+              Validation Data
+            </Link>
+          </div>
+        </header>
+        {notice ? (
+          <div
+            className={`notice ${error ? "notice-error" : "notice-success"}`}
+            role={error ? "alert" : "status"}
+          >
+            {notice}
+          </div>
+        ) : null}
+        <form className="vehicle-quick-search-form" method="get" action={routePath}>
+          <div className="field">
+            <label htmlFor="license-fee-search">Search licence fee descriptions</label>
+            <input
+              id="license-fee-search"
+              name="searchTerm"
+              type="search"
+              defaultValue={searchTerm}
+              placeholder="Enter a description"
+            />
+          </div>
+          <div className="button-row vehicle-quick-search-actions">
+            <button className="button button-primary" type="submit">
+              Search
+            </button>
+            {searchTerm ? (
+              <Link className="button button-secondary" href={routePath}>
+                Clear
+              </Link>
+            ) : null}
+          </div>
+        </form>
+        <LicenseFeeTable fees={feePage.items} searchTerm={searchTerm} total={feePage.total} />
+        <Pagination
+          page={feePage.page}
+          pageSize={feePage.pageSize}
+          query={query}
+          routePath={routePath}
+          total={feePage.total}
+          totalPages={feePage.totalPages}
+        />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+const LicenseFeeListPageContent = renderLicenseFeeListPageContent;
+
+async function renderLicenseFeeListPageContent({
   searchParams,
   routePath = "/validation-data/license-fees",
 }: LicenseFeeListPageProps) {
@@ -237,74 +328,14 @@ async function LicenseFeeListPageContent({
             ? "Licence fee deleted successfully."
             : error;
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="license-fee-list-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Licence</p>
-              <h1 id="license-fee-list-title">License Fees Maintenance</h1>
-              <p>Maintain the legacy licence fee records used by vehicle models.</p>
-            </div>
-            <div className="button-row">
-              <Link className="button button-primary" href="/Validation/MNT_Licence_Fee_Add.aspx">
-                Add Licence Fee
-              </Link>
-              <Link className="button button-secondary" href="/validation-data">
-                Validation Data
-              </Link>
-            </div>
-          </header>
-          {notice ? (
-            <div
-              className={`notice ${error ? "notice-error" : "notice-success"}`}
-              role={error ? "alert" : "status"}
-            >
-              {notice}
-            </div>
-          ) : null}
-          <form className="vehicle-quick-search-form" method="get" action={routePath}>
-            <div className="field">
-              <label htmlFor="license-fee-search">Search licence fee descriptions</label>
-              <input
-                id="license-fee-search"
-                name="searchTerm"
-                type="search"
-                defaultValue={searchTerm}
-                placeholder="Enter a description"
-              />
-            </div>
-            <div className="button-row vehicle-quick-search-actions">
-              <button className="button button-primary" type="submit">
-                Search
-              </button>
-              {searchTerm ? (
-                <Link className="button button-secondary" href={routePath}>
-                  Clear
-                </Link>
-              ) : null}
-            </div>
-          </form>
-          <LicenseFeeTable fees={feePage.items} searchTerm={searchTerm} total={feePage.total} />
-          <Pagination
-            page={feePage.page}
-            pageSize={feePage.pageSize}
-            query={query}
-            routePath={routePath}
-            total={feePage.total}
-            totalPages={feePage.totalPages}
-          />
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <LicenseFeeListView
+        feePage={feePage}
+        error={error}
+        notice={notice}
+        query={query}
+        routePath={routePath}
+        searchTerm={searchTerm}
+      />
     );
   } catch (caughtError) {
     if (caughtError instanceof LicenseFeeApiError && caughtError.reason === "unauthorized")

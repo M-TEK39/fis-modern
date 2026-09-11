@@ -11,8 +11,8 @@ import {
   FinanceMenuSection,
   FinanceRestricted,
   FinanceUnavailable,
-  hasFinanceRole,
 } from "@/app/(fleet-operations)/finance/_components";
+import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
 import {
   FinanceApiError,
   getBatchStatus,
@@ -44,7 +44,9 @@ function actionLabel(action: string) {
         : "Finish batch process and bring site back online";
 }
 
-async function BatchManagementContent({ searchParams, action }: BatchPageProps) {
+const BatchManagementContent = renderBatchManagementContent;
+
+async function renderBatchManagementContent({ searchParams, action }: BatchPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");

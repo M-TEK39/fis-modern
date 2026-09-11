@@ -1,5 +1,7 @@
 "use client";
 
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
@@ -15,6 +17,7 @@ import type {
   UnitOfMeasureRecord,
   VehicleTypeRecord,
 } from "@/lib/api/reference-data/api-reference-data";
+import { ModalDialog } from "@/components/ui/modal-dialog";
 
 type Tab = "types" | "fueltypes" | "units" | "licenses";
 type RecordValue = VehicleTypeRecord | FuelTypeRecord | UnitOfMeasureRecord | LicenseTypeRecord;
@@ -68,6 +71,167 @@ function ActionNotice({ state }: Readonly<{ state: ReferenceDataActionState }>) 
   ) : null;
 }
 
+function renderEditorFields({
+  activeTab,
+  editing,
+  record,
+}: Readonly<{
+  activeTab: Tab;
+  editing: boolean;
+  record: RecordValue | null;
+}>) {
+  return (
+    <>
+      {activeTab === "types" ? (
+        <div className="field">
+          <label htmlFor="reference-description">
+            Type name <span aria-hidden="true">*</span>
+          </label>
+          <input
+            id="reference-description"
+            name="description"
+            type="text"
+            maxLength={255}
+            defaultValue={editing ? (record as VehicleTypeRecord).description : ""}
+            required
+          />
+          {editing ? (
+            <input
+              name="typeCode"
+              type="hidden"
+              value={(record as VehicleTypeRecord).typeCode}
+              readOnly
+            />
+          ) : null}
+        </div>
+      ) : null}
+      {activeTab === "fueltypes" ? (
+        <>
+          <div className="field">
+            <label htmlFor="reference-description">
+              Fuel type name <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="reference-description"
+              name="description"
+              type="text"
+              maxLength={255}
+              defaultValue={editing ? (record as FuelTypeRecord).description : ""}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="reference-rate">Rate per litre</label>
+            <input
+              id="reference-rate"
+              name="ratePerLitre"
+              type="number"
+              min="0"
+              max="999999.99"
+              step="0.01"
+              defaultValue={
+                editing && (record as FuelTypeRecord).ratePerLitre !== null
+                  ? ((record as FuelTypeRecord).ratePerLitre ?? undefined)
+                  : undefined
+              }
+            />
+          </div>
+          {editing ? (
+            <input
+              name="fuelTypeCode"
+              type="hidden"
+              value={(record as FuelTypeRecord).fuelTypeCode}
+              readOnly
+            />
+          ) : null}
+        </>
+      ) : null}
+      {activeTab === "units" ? (
+        <>
+          <div className="field">
+            <label htmlFor="reference-description">
+              Description <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="reference-description"
+              name="description"
+              type="text"
+              maxLength={100}
+              defaultValue={editing ? (record as UnitOfMeasureRecord).description : ""}
+              required
+            />
+          </div>
+          <div className="field-grid">
+            <div className="field">
+              <label htmlFor="reference-abbreviation">Abbreviation</label>
+              <input
+                id="reference-abbreviation"
+                name="abbreviation"
+                type="text"
+                maxLength={10}
+                defaultValue={editing ? ((record as UnitOfMeasureRecord).abbreviation ?? "") : ""}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="reference-category">Category</label>
+              <input
+                id="reference-category"
+                name="category"
+                type="text"
+                maxLength={50}
+                defaultValue={editing ? ((record as UnitOfMeasureRecord).category ?? "") : ""}
+              />
+            </div>
+          </div>
+          {editing ? (
+            <input
+              name="unitCode"
+              type="hidden"
+              value={(record as UnitOfMeasureRecord).unitCode}
+              readOnly
+            />
+          ) : null}
+        </>
+      ) : null}
+      {activeTab === "licenses" ? (
+        <>
+          <div className="field">
+            <label htmlFor="reference-description">
+              Description <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="reference-description"
+              name="description"
+              type="text"
+              maxLength={255}
+              defaultValue={editing ? (record as LicenseTypeRecord).description : ""}
+              required
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="reference-category">Category</label>
+            <input
+              id="reference-category"
+              name="category"
+              type="text"
+              maxLength={20}
+              defaultValue={editing ? ((record as LicenseTypeRecord).category ?? "") : ""}
+            />
+          </div>
+          {editing ? (
+            <input
+              name="licenceCode"
+              type="hidden"
+              value={(record as LicenseTypeRecord).licenceCode}
+              readOnly
+            />
+          ) : null}
+        </>
+      ) : null}
+    </>
+  );
+}
+
 function Editor({
   activeTab,
   action,
@@ -84,179 +248,59 @@ function Editor({
   const title = editing ? "Edit reference data" : "Add reference data";
 
   return (
-    <div className="modal-overlay" role="presentation">
-      <section
-        className="modal-card reference-data-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="reference-data-dialog-title"
-      >
-        <div className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Reference Data</p>
-            <h2 id="reference-data-dialog-title">{title}</h2>
-          </div>
-          <button className="button button-secondary" type="button" onClick={onClose}>
-            Cancel
-          </button>
+    <ModalDialog
+      open
+      labelledBy="reference-data-dialog-title"
+      className="modal-card reference-data-dialog"
+      onClose={onClose}
+    >
+      <div className="vehicle-page-header">
+        <div>
+          <p className="eyebrow">Reference Data</p>
+          <h2 id="reference-data-dialog-title">{title}</h2>
         </div>
-        <form action={formAction} className="form-stack">
-          <ActionNotice state={state} />
-          {activeTab === "types" ? (
-            <div className="field">
-              <label htmlFor="reference-description">
-                Type name <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="reference-description"
-                name="description"
-                type="text"
-                maxLength={255}
-                defaultValue={editing ? (record as VehicleTypeRecord).description : ""}
-                required
-              />
-              {editing ? (
-                <input
-                  name="typeCode"
-                  type="hidden"
-                  value={(record as VehicleTypeRecord).typeCode}
-                  readOnly
-                />
-              ) : null}
-            </div>
-          ) : null}
-          {activeTab === "fueltypes" ? (
-            <>
-              <div className="field">
-                <label htmlFor="reference-description">
-                  Fuel type name <span aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="reference-description"
-                  name="description"
-                  type="text"
-                  maxLength={255}
-                  defaultValue={editing ? (record as FuelTypeRecord).description : ""}
-                  required
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="reference-rate">Rate per litre</label>
-                <input
-                  id="reference-rate"
-                  name="ratePerLitre"
-                  type="number"
-                  min="0"
-                  max="999999.99"
-                  step="0.01"
-                  defaultValue={
-                    editing && (record as FuelTypeRecord).ratePerLitre !== null
-                      ? ((record as FuelTypeRecord).ratePerLitre ?? undefined)
-                      : undefined
-                  }
-                />
-              </div>
-              {editing ? (
-                <input
-                  name="fuelTypeCode"
-                  type="hidden"
-                  value={(record as FuelTypeRecord).fuelTypeCode}
-                  readOnly
-                />
-              ) : null}
-            </>
-          ) : null}
-          {activeTab === "units" ? (
-            <>
-              <div className="field">
-                <label htmlFor="reference-description">
-                  Description <span aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="reference-description"
-                  name="description"
-                  type="text"
-                  maxLength={100}
-                  defaultValue={editing ? (record as UnitOfMeasureRecord).description : ""}
-                  required
-                />
-              </div>
-              <div className="field-grid">
-                <div className="field">
-                  <label htmlFor="reference-abbreviation">Abbreviation</label>
-                  <input
-                    id="reference-abbreviation"
-                    name="abbreviation"
-                    type="text"
-                    maxLength={10}
-                    defaultValue={
-                      editing ? ((record as UnitOfMeasureRecord).abbreviation ?? "") : ""
-                    }
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="reference-category">Category</label>
-                  <input
-                    id="reference-category"
-                    name="category"
-                    type="text"
-                    maxLength={50}
-                    defaultValue={editing ? ((record as UnitOfMeasureRecord).category ?? "") : ""}
-                  />
-                </div>
-              </div>
-              {editing ? (
-                <input
-                  name="unitCode"
-                  type="hidden"
-                  value={(record as UnitOfMeasureRecord).unitCode}
-                  readOnly
-                />
-              ) : null}
-            </>
-          ) : null}
-          {activeTab === "licenses" ? (
-            <>
-              <div className="field">
-                <label htmlFor="reference-description">
-                  Description <span aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="reference-description"
-                  name="description"
-                  type="text"
-                  maxLength={255}
-                  defaultValue={editing ? (record as LicenseTypeRecord).description : ""}
-                  required
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="reference-category">Category</label>
-                <input
-                  id="reference-category"
-                  name="category"
-                  type="text"
-                  maxLength={20}
-                  defaultValue={editing ? ((record as LicenseTypeRecord).category ?? "") : ""}
-                />
-              </div>
-              {editing ? (
-                <input
-                  name="licenceCode"
-                  type="hidden"
-                  value={(record as LicenseTypeRecord).licenceCode}
-                  readOnly
-                />
-              ) : null}
-            </>
-          ) : null}
-          <div className="button-row">
-            <SubmitButton label={editing ? "Update" : "Create"} />
-          </div>
-        </form>
-      </section>
-    </div>
+        <button className="button button-secondary" type="button" onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+      <form action={formAction} className="form-stack">
+        <ActionNotice state={state} />
+        {renderEditorFields({ activeTab, editing, record })}
+        <div className="button-row">
+          <SubmitButton label={editing ? "Update" : "Create"} />
+        </div>
+      </form>
+    </ModalDialog>
   );
+}
+
+function recordDetails(activeTab: Tab, record: RecordValue) {
+  switch (activeTab) {
+    case "types": {
+      const typedRecord = record as VehicleTypeRecord;
+      return { code: typedRecord.typeCode, codeKey: "typeCode", label: typedRecord.description };
+    }
+    case "fueltypes": {
+      const typedRecord = record as FuelTypeRecord;
+      return {
+        code: typedRecord.fuelTypeCode,
+        codeKey: "fuelTypeCode",
+        label: typedRecord.description,
+      };
+    }
+    case "units": {
+      const typedRecord = record as UnitOfMeasureRecord;
+      return { code: typedRecord.unitCode, codeKey: "unitCode", label: typedRecord.description };
+    }
+    case "licenses": {
+      const typedRecord = record as LicenseTypeRecord;
+      return {
+        code: typedRecord.licenceCode,
+        codeKey: "licenceCode",
+        label: typedRecord.description,
+      };
+    }
+  }
 }
 
 function DeleteConfirm({
@@ -270,52 +314,27 @@ function DeleteConfirm({
   action: ReferenceDataDeleteAction;
   onClose: () => void;
 }>) {
-  const label =
-    activeTab === "types"
-      ? (record as VehicleTypeRecord).description
-      : activeTab === "fueltypes"
-        ? (record as FuelTypeRecord).description
-        : activeTab === "units"
-          ? (record as UnitOfMeasureRecord).description
-          : (record as LicenseTypeRecord).description;
-  const code =
-    activeTab === "types"
-      ? (record as VehicleTypeRecord).typeCode
-      : activeTab === "fueltypes"
-        ? (record as FuelTypeRecord).fuelTypeCode
-        : activeTab === "units"
-          ? (record as UnitOfMeasureRecord).unitCode
-          : (record as LicenseTypeRecord).licenceCode;
-  const codeKey =
-    activeTab === "types"
-      ? "typeCode"
-      : activeTab === "fueltypes"
-        ? "fuelTypeCode"
-        : activeTab === "units"
-          ? "unitCode"
-          : "licenceCode";
+  const { code, codeKey, label } = recordDetails(activeTab, record);
   return (
-    <div className="modal-overlay" role="presentation">
-      <section
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="reference-data-delete-title"
-      >
-        <h2 id="reference-data-delete-title">Delete reference data?</h2>
-        <p>
-          This will remove <strong>{label}</strong> from active reference data. Existing records
-          that already use it are not changed.
-        </p>
-        <form action={action} className="button-row">
-          <input name={codeKey} type="hidden" value={code} readOnly />
-          <button className="button button-secondary" type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <DeleteButton />
-        </form>
-      </section>
-    </div>
+    <ModalDialog
+      open
+      labelledBy="reference-data-delete-title"
+      className="modal-card"
+      onClose={onClose}
+    >
+      <h2 id="reference-data-delete-title">Delete reference data?</h2>
+      <p>
+        This will remove <strong>{label}</strong> from active reference data. Existing records that
+        already use it are not changed.
+      </p>
+      <form action={action} className="button-row">
+        <input name={codeKey} type="hidden" value={code} readOnly />
+        <button className="button button-secondary" type="button" onClick={onClose}>
+          Cancel
+        </button>
+        <DeleteButton />
+      </form>
+    </ModalDialog>
   );
 }
 
@@ -416,12 +435,12 @@ function table(
       <div className="table-wrapper">
         <table className="data-table reference-data-table">
           <caption className="sr-only">Vehicle types</caption>
-          <thead>
-            <tr>
-              <th scope="col">Type name</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Type name</> },
+              { key: "column-2", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {(records as VehicleTypeRecord[]).map((record) => (
               <tr key={record.typeCode}>
@@ -455,13 +474,13 @@ function table(
       <div className="table-wrapper">
         <table className="data-table reference-data-table">
           <caption className="sr-only">Fuel types</caption>
-          <thead>
-            <tr>
-              <th scope="col">Fuel type name</th>
-              <th scope="col">Rate per litre</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Fuel type name</> },
+              { key: "column-2", label: <>Rate per litre</> },
+              { key: "column-3", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {(records as FuelTypeRecord[]).map((record) => (
               <tr key={record.fuelTypeCode}>
@@ -496,14 +515,14 @@ function table(
       <div className="table-wrapper">
         <table className="data-table reference-data-table">
           <caption className="sr-only">Units of measure</caption>
-          <thead>
-            <tr>
-              <th scope="col">Description</th>
-              <th scope="col">Abbreviation</th>
-              <th scope="col">Category</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Description</> },
+              { key: "column-2", label: <>Abbreviation</> },
+              { key: "column-3", label: <>Category</> },
+              { key: "column-4", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {(records as UnitOfMeasureRecord[]).map((record) => (
               <tr key={record.unitCode}>
@@ -538,13 +557,13 @@ function table(
     <div className="table-wrapper">
       <table className="data-table reference-data-table">
         <caption className="sr-only">License types</caption>
-        <thead>
-          <tr>
-            <th scope="col">Description</th>
-            <th scope="col">Category</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Description</> },
+            { key: "column-2", label: <>Category</> },
+            { key: "column-3", label: <>Actions</> },
+          ]}
+        />
         <tbody>
           {(records as LicenseTypeRecord[]).map((record) => (
             <tr key={record.licenceCode}>

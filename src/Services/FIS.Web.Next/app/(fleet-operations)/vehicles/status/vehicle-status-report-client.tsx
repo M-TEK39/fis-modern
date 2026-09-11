@@ -8,13 +8,6 @@ import {
   submitVehicleStatusRemarkAction,
 } from "@/app/(fleet-operations)/vehicles/status/actions";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
-import {
   VEHICLE_STATUS_OPTIONS,
   type VehicleStatusReport,
   type VehicleStatusReportRow,
@@ -22,112 +15,16 @@ import {
   type VehicleStatusType,
 } from "@/app/(fleet-operations)/vehicles/status/status-types";
 
-const EXPORT_FIELDS = [
-  ["fleetNumber", "GG Number"],
-  ["registrationNumber", "Registration Number"],
-  ["invoiceNumber", "Invoice Number"],
-  ["makeModel", "Make & Model"],
-  ["status", "Status"],
-  ["site", "Site"],
-  ["remarkText", "Active Remark"],
-  ["remarkCategory", "Remark Category"],
-] as const;
-
-type ExportField = (typeof EXPORT_FIELDS)[number][0];
-type FilterValues = {
-  search: string;
-  locationCode: string;
-  typeCode: string;
-  makeCode: string;
-  vehicleStatusCode: string;
-};
-
-const EMPTY_FILTERS: FilterValues = {
-  search: "",
-  locationCode: "",
-  typeCode: "",
-  makeCode: "",
-  vehicleStatusCode: "",
-};
-
-function valueOrDash(value: string | null) {
-  return value || "-";
-}
-
-function getStatusLabel(row: VehicleStatusReportRow) {
-  return (
-    row.statusText ||
-    VEHICLE_STATUS_OPTIONS.find((option) => option.code === row.statusCode)?.description ||
-    "-"
-  );
-}
-
-function getMakeModel(row: VehicleStatusReportRow) {
-  const make = row.makeDescription || "-";
-  const model = row.modelDescription || "-";
-  return `${make} / ${model}`;
-}
-
-function getSiteLabel(row: VehicleStatusReportRow) {
-  return row.siteName || "-";
-}
-
-function getVehicleLabel(row: VehicleStatusReportRow) {
-  return `${valueOrDash(row.fleetNumber)} / ${valueOrDash(row.registrationNumber)} (${row.vmfCode})`;
-}
-
-function csvCell(value: string | null) {
-  return `"${(value || "").replaceAll('"', '""')}"`;
-}
-
-function downloadCsv(rows: VehicleStatusReportRow[], selectedFields: Set<ExportField>) {
-  const fields = EXPORT_FIELDS.filter(([key]) => selectedFields.has(key));
-  if (fields.length === 0) {
-    return false;
-  }
-
-  const lines = [fields.map(([, label]) => csvCell(label)).join(",")];
-  for (const row of rows) {
-    const values = fields.map(([key]) => {
-      switch (key) {
-        case "fleetNumber":
-          return valueOrDash(row.fleetNumber);
-        case "registrationNumber":
-          return valueOrDash(row.registrationNumber);
-        case "invoiceNumber":
-          return valueOrDash(row.invoiceNumber);
-        case "makeModel":
-          return getMakeModel(row);
-        case "status":
-          return getStatusLabel(row);
-        case "site":
-          return getSiteLabel(row);
-        case "remarkText":
-          return valueOrDash(row.remark?.text ?? null);
-        case "remarkCategory":
-          return valueOrDash(row.remark?.category ?? null);
-      }
-    });
-    lines.push(values.map(csvCell).join(","));
-  }
-
-  const blob = new Blob([`${lines.join("\r\n")}\r\n`], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `vehicles_status_report_${new Date().toISOString().slice(0, 16).replaceAll(/[-:T]/g, "")}.csv`;
-  anchor.click();
-  URL.revokeObjectURL(url);
-  return true;
-}
-
-function appendFilters(formData: FormData, filters: FilterValues) {
-  formData.set("search", filters.search);
-  formData.set("locationCode", filters.locationCode);
-  formData.set("typeCode", filters.typeCode);
-  formData.set("makeCode", filters.makeCode);
-  formData.set("vehicleStatusCode", filters.vehicleStatusCode);
-}
+import VehicleStatusRemarkForm from "./vehicle-status-remark-form";
+import VehicleStatusReportResults from "./vehicle-status-report-results";
+import {
+  appendFilters,
+  downloadCsv,
+  EMPTY_FILTERS,
+  EXPORT_FIELDS,
+  type ExportField,
+  type FilterValues,
+} from "./vehicle-status-report-utils";
 
 function ReportFilters({
   filters,
@@ -142,7 +39,7 @@ function ReportFilters({
   filters: FilterValues;
   sites: VehicleStatusSite[];
   types: VehicleStatusType[];
-  makes: { code: number; name: string }[];
+  makes: { code: number; description: string }[];
   pending: boolean;
   onChange: (field: keyof FilterValues, value: string) => void;
   onReset: () => void;
@@ -205,7 +102,7 @@ function ReportFilters({
             <option value="">All makes</option>
             {makes.map((make) => (
               <option key={make.code} value={make.code}>
-                {make.name}
+                {make.description}
               </option>
             ))}
           </select>
@@ -246,15 +143,7 @@ function ReportFilters({
 
 export default function VehicleStatusReportClient({
   initialReport,
-  sites,
-  types,
-  makes,
-}: Readonly<{
-  initialReport: VehicleStatusReport;
-  sites: VehicleStatusSite[];
-  types: VehicleStatusType[];
-  makes: { code: number; name: string }[];
-}>) {
+}: Readonly<{ initialReport: VehicleStatusReport }>) {
   const [filters, setFilters] = useState<FilterValues>(EMPTY_FILTERS);
   const [report, setReport] = useState(initialReport);
   const [page, setPage] = useState(initialReport.page);
@@ -267,7 +156,6 @@ export default function VehicleStatusReportClient({
   const [resolveMode, setResolveMode] = useState(false);
   const [pending, startTransition] = useTransition();
   const [remarkPending, startRemarkTransition] = useTransition();
-
   const totalPages = report.totalPages;
   const visiblePage = Math.min(Math.max(page, 1), totalPages);
 
@@ -305,11 +193,6 @@ export default function VehicleStatusReportClient({
     });
   }
 
-  function resetFilters() {
-    setFilters(EMPTY_FILTERS);
-    requestReport(EMPTY_FILTERS);
-  }
-
   function handleRemarkSubmit(formData: FormData) {
     appendFilters(formData, filters);
     formData.set("page", "1");
@@ -344,10 +227,7 @@ export default function VehicleStatusReportClient({
   }
 
   function requestPage(requestedPage: number) {
-    if (pending || requestedPage < 1 || requestedPage > totalPages) {
-      return;
-    }
-
+    if (pending || requestedPage < 1 || requestedPage > totalPages) return;
     requestReport(filters, requestedPage);
   }
 
@@ -377,18 +257,19 @@ export default function VehicleStatusReportClient({
           </span>
         </div>
       ) : null}
-
       <ReportFilters
         filters={filters}
-        sites={sites}
-        types={types}
-        makes={makes}
+        sites={report.sites}
+        types={report.types}
+        makes={report.makes}
         pending={pending}
         onChange={updateFilter}
-        onReset={resetFilters}
+        onReset={() => {
+          setFilters(EMPTY_FILTERS);
+          requestReport(EMPTY_FILTERS);
+        }}
         onSubmit={handleReportSubmit}
       />
-
       {pending ? (
         <div className="loading-card" aria-busy="true">
           <span className="spinner" aria-hidden="true" />
@@ -400,236 +281,34 @@ export default function VehicleStatusReportClient({
           <p>No vehicles matched the selected filters.</p>
         </div>
       ) : (
-        <section className="vehicle-form-section" aria-labelledby="vehicle-status-results-title">
-          <div className="vehicle-form-section-header">
-            <div>
-              <p className="eyebrow">Vehicle status report</p>
-              <h2 id="vehicle-status-results-title">
-                Showing {report.totalCount} vehicle{report.totalCount === 1 ? "" : "s"}
-              </h2>
-            </div>
-            <div className="button-row">
-              <button
-                className="button button-secondary button-small"
-                type="button"
-                onClick={() => setShowFieldSelector((current) => !current)}
-                aria-expanded={showFieldSelector}
-              >
-                Select Fields
-              </button>
-              <button
-                className="button button-primary button-small"
-                type="button"
-                onClick={() => downloadCsv(report.rows, selectedFields)}
-                disabled={selectedFields.size === 0}
-              >
-                Download current page CSV
-              </button>
-            </div>
-          </div>
-
-          {showFieldSelector ? (
-            <fieldset className="field-grid">
-              <legend className="sr-only">CSV fields</legend>
-              {EXPORT_FIELDS.map(([key, label]) => (
-                <label className="vehicle-checkbox-label" key={key}>
-                  <input
-                    type="checkbox"
-                    checked={selectedFields.has(key)}
-                    onChange={() => toggleField(key)}
-                  />
-                  {label}
-                </label>
-              ))}
-            </fieldset>
-          ) : null}
-
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th scope="col">GG Number</th>
-                  <th scope="col">Registration Number</th>
-                  <th scope="col">Invoice Number</th>
-                  <th scope="col">Make &amp; Model</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Site</th>
-                  <th scope="col">Active Remark</th>
-                  <th scope="col">Remark Category</th>
-                  <th scope="col">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.rows.map((row) => (
-                  <tr key={row.vmfCode}>
-                    <td>{valueOrDash(row.fleetNumber)}</td>
-                    <td>{valueOrDash(row.registrationNumber)}</td>
-                    <td>{valueOrDash(row.invoiceNumber)}</td>
-                    <td>{getMakeModel(row)}</td>
-                    <td>{getStatusLabel(row)}</td>
-                    <td>{getSiteLabel(row)}</td>
-                    <td>{valueOrDash(row.remark?.text ?? null)}</td>
-                    <td>{valueOrDash(row.remark?.category ?? null)}</td>
-                    <td>
-                      <div className="table-actions">
-                        <button
-                          className="button button-secondary button-small"
-                          type="button"
-                          disabled={!report.remarksAvailable}
-                          onClick={() => {
-                            setRemarkTarget(row);
-                            setResolveMode(false);
-                          }}
-                        >
-                          Add Remark
-                        </button>
-                        {row.remark ? (
-                          <button
-                            className="button button-primary button-small"
-                            type="button"
-                            disabled={!report.remarksAvailable}
-                            onClick={() => {
-                              setRemarkTarget(row);
-                              setResolveMode(true);
-                            }}
-                          >
-                            Resolve
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {totalPages > 1 ? (
-            <Pagination className="mt-4" aria-label="Vehicle status report pagination">
-              <PaginationContent className="flex-wrap justify-center gap-2">
-                <PaginationItem>
-                  <PaginationPrevious
-                    href="#"
-                    aria-disabled={pending || visiblePage <= 1}
-                    className={
-                      pending || visiblePage <= 1 ? "pointer-events-none opacity-50" : undefined
-                    }
-                    tabIndex={pending || visiblePage <= 1 ? -1 : undefined}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      requestPage(visiblePage - 1);
-                    }}
-                  />
-                </PaginationItem>
-                <PaginationItem>
-                  <span
-                    className="inline-flex h-9 items-center whitespace-nowrap px-2 text-sm font-medium text-muted-foreground"
-                    aria-live="polite"
-                  >
-                    Page {visiblePage} of {totalPages} ({report.pageSize} per page)
-                  </span>
-                </PaginationItem>
-                <PaginationItem>
-                  <PaginationNext
-                    href="#"
-                    aria-disabled={pending || visiblePage >= totalPages}
-                    className={
-                      pending || visiblePage >= totalPages
-                        ? "pointer-events-none opacity-50"
-                        : undefined
-                    }
-                    tabIndex={pending || visiblePage >= totalPages ? -1 : undefined}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      requestPage(visiblePage + 1);
-                    }}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          ) : null}
-        </section>
+        <VehicleStatusReportResults
+          onDownload={() => downloadCsv(report.rows, selectedFields)}
+          onRemark={(row, resolve) => {
+            setRemarkTarget(row);
+            setResolveMode(resolve);
+          }}
+          onPage={requestPage}
+          onToggleField={toggleField}
+          onToggleSelector={() => setShowFieldSelector((current) => !current)}
+          pending={pending}
+          report={report}
+          selectedFields={selectedFields}
+          showFieldSelector={showFieldSelector}
+          visiblePage={visiblePage}
+        />
       )}
-
       {remarkTarget ? (
-        <section className="vehicle-form-section" aria-labelledby="vehicle-status-remark-title">
-          <div className="vehicle-form-section-header">
-            <div>
-              <p className="eyebrow">Vehicle remark</p>
-              <h2 id="vehicle-status-remark-title">
-                {resolveMode ? "Resolve Vehicle Remark" : "Add Vehicle Remark"}
-              </h2>
-            </div>
-          </div>
-          <form action={handleRemarkSubmit} className="vehicle-create-form">
-            <input name="vmfCode" type="hidden" value={remarkTarget.vmfCode} readOnly />
-            <input
-              name="operation"
-              type="hidden"
-              value={resolveMode ? "resolve" : "add"}
-              readOnly
-            />
-            <input
-              name="remarkId"
-              type="hidden"
-              value={remarkTarget.remark?.remarkId ?? ""}
-              readOnly
-            />
-            <div className="field">
-              <label htmlFor="vehicle-status-remark-vehicle">Vehicle</label>
-              <input
-                id="vehicle-status-remark-vehicle"
-                value={getVehicleLabel(remarkTarget)}
-                readOnly
-              />
-            </div>
-            {!resolveMode ? (
-              <div className="field">
-                <label htmlFor="vehicle-status-remark-category">Remark Category</label>
-                <select
-                  id="vehicle-status-remark-category"
-                  name="remarkCategory"
-                  defaultValue="General"
-                >
-                  <option value="General">General</option>
-                  <option value="Missing">Missing</option>
-                  <option value="UnderInvestigation">Under Investigation</option>
-                  <option value="AccidentHold">Accident Hold</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-            ) : null}
-            <div className="field">
-              <label htmlFor="vehicle-status-remark-text">
-                {resolveMode ? "Resolution Notes" : "Remark"}
-              </label>
-              <textarea
-                id="vehicle-status-remark-text"
-                name="remarkText"
-                rows={3}
-                maxLength={500}
-                required
-              />
-            </div>
-            <div className="button-row">
-              <button className="button button-primary" type="submit" disabled={remarkPending}>
-                {remarkPending ? "Saving..." : resolveMode ? "Resolve Remark" : "Save Remark"}
-              </button>
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => {
-                  setRemarkTarget(null);
-                  setResolveMode(false);
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </section>
+        <VehicleStatusRemarkForm
+          onCancel={() => {
+            setRemarkTarget(null);
+            setResolveMode(false);
+          }}
+          onSubmit={handleRemarkSubmit}
+          pending={remarkPending}
+          resolveMode={resolveMode}
+          row={remarkTarget}
+        />
       ) : null}
-
       <div className="vehicle-footer-actions">
         <Link className="button button-secondary" href="/vehicles">
           Back to Vehicle Master

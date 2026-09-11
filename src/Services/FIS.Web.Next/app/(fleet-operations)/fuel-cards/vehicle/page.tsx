@@ -11,10 +11,10 @@ import {
   ApiUnavailable,
   FuelCardNotice,
   FuelCardTable,
-  queryValue,
   VehicleResults,
   VehicleSearchForm,
 } from "@/app/(fleet-operations)/fuel-cards/_components";
+import { queryValue } from "@/app/(fleet-operations)/fuel-cards/_utils";
 import { saveFuelCardAction } from "@/app/(fleet-operations)/fuel-cards/actions";
 import { FuelCardApiError, getFuelCardsByVehicle } from "@/lib/api/fleet-operations/api-fuel-cards";
 import { getSession } from "@/lib/auth/session";
@@ -26,7 +26,9 @@ function hasRole(roles: readonly string[]) {
   );
 }
 
-async function FuelCardVehiclePageContent({
+const FuelCardVehiclePageContent = renderFuelCardVehiclePageContent;
+
+async function renderFuelCardVehiclePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();

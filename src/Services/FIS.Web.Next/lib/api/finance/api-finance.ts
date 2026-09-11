@@ -207,6 +207,15 @@ function collection(value: unknown) {
   return [];
 }
 
+function mapPresent<T, U>(values: readonly T[], mapper: (value: T) => U | null) {
+  const result: U[] = [];
+  for (const value of values) {
+    const mapped = mapper(value);
+    if (mapped !== null) result.push(mapped);
+  }
+  return result;
+}
+
 function toOption(value: unknown, valueKeys: string[], labelKeys: string[]): FinanceOption | null {
   if (!isRecord(value)) return null;
   const rawValue = valueKeys
@@ -338,26 +347,32 @@ export async function getFinanceTariffParameters(year: number): Promise<FinanceT
       "The FIS API returned invalid tariff parameters.",
     );
   const mapRows = (keys: string[]) =>
-    collection(getValue(payload, ...keys))
-      .map(mapTariffClassRow)
-      .filter((item): item is NonNullable<ReturnType<typeof mapTariffClassRow>> => item !== null);
-  const parameters = collection(getValue(payload, "parameters", "Parameters"))
-    .filter(isRecord)
-    .map((item) => ({
-      parameterName: asString(getValue(item, "parameterName", "ParameterName")) ?? "",
-      value: asNumber(getValue(item, "value", "Value")),
-      unit: asString(getValue(item, "unit", "Unit")) ?? "",
-    }));
-  const maintenanceValues = collection(getValue(payload, "maintenanceValues", "MaintenanceValues"))
-    .filter(isRecord)
-    .map((item) => ({
-      classCode: asNumber(getValue(item, "classCode", "ClassCode")),
-      classDescription: asString(getValue(item, "classDescription", "ClassDescription")) ?? "",
-      monthsAge: asNumber(getValue(item, "monthsAge", "MonthsAge")),
-      kilometerAge: asNumber(getValue(item, "kilometerAge", "KilometerAge")),
-      amount: asNumber(getValue(item, "amount", "Amount")),
-      randPerKilometer: asNumber(getValue(item, "randPerKilometer", "RandPerKilometer")),
-    }));
+    mapPresent(collection(getValue(payload, ...keys)), mapTariffClassRow);
+  const parameters = mapPresent(
+    collection(getValue(payload, "parameters", "Parameters")),
+    (item) => {
+      if (!isRecord(item)) return null;
+      return {
+        parameterName: asString(getValue(item, "parameterName", "ParameterName")) ?? "",
+        value: asNumber(getValue(item, "value", "Value")),
+        unit: asString(getValue(item, "unit", "Unit")) ?? "",
+      };
+    },
+  );
+  const maintenanceValues = mapPresent(
+    collection(getValue(payload, "maintenanceValues", "MaintenanceValues")),
+    (item) => {
+      if (!isRecord(item)) return null;
+      return {
+        classCode: asNumber(getValue(item, "classCode", "ClassCode")),
+        classDescription: asString(getValue(item, "classDescription", "ClassDescription")) ?? "",
+        monthsAge: asNumber(getValue(item, "monthsAge", "MonthsAge")),
+        kilometerAge: asNumber(getValue(item, "kilometerAge", "KilometerAge")),
+        amount: asNumber(getValue(item, "amount", "Amount")),
+        randPerKilometer: asNumber(getValue(item, "randPerKilometer", "RandPerKilometer")),
+      };
+    },
+  );
   return {
     year: asNumber(getValue(payload, "year", "Year")) ?? year,
     isApproved: asBoolean(getValue(payload, "isApproved", "IsApproved", "is_approved")),
@@ -370,15 +385,22 @@ export async function getFinanceTariffParameters(year: number): Promise<FinanceT
   };
 }
 
+const BATCH_DATE_FORMATTER = new Intl.DateTimeFormat("en-ZA", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+const BATCH_MONTH_FORMATTER = new Intl.DateTimeFormat("en-ZA", {
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
 function formatBatchDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("en-ZA", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
+  return BATCH_DATE_FORMATTER.format(date);
 }
 
 function fallbackBatchDates(): FinanceOption[] {
@@ -389,11 +411,7 @@ function fallbackBatchDates(): FinanceOption[] {
     const value = month.toISOString().slice(0, 10);
     options.push({
       value,
-      label: new Intl.DateTimeFormat("en-ZA", {
-        month: "short",
-        year: "numeric",
-        timeZone: "UTC",
-      }).format(month),
+      label: BATCH_MONTH_FORMATTER.format(month),
     });
   }
   return options;

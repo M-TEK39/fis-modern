@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -28,7 +30,9 @@ function hasRole(roles: readonly string[]) {
   );
 }
 
-async function FuelCardReportsPageContent({
+const FuelCardReportsPageContent = renderFuelCardReportsPageContent;
+
+async function renderFuelCardReportsPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -137,18 +141,20 @@ async function FuelCardReportsPageContent({
               <div className="vehicle-table-wrapper">
                 <table className="vehicle-table">
                   <caption className="sr-only">Fuelcard report activity</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Date</th>
-                      <th scope="col">Vehicle</th>
-                      <th scope="col">Card Number</th>
-                      <th scope="col">Action</th>
-                      <th scope="col">Receiver</th>
-                    </tr>
-                  </thead>
+                  <DataTableHeader
+                    columns={[
+                      { key: "column-1", label: <>Date</> },
+                      { key: "column-2", label: <>Vehicle</> },
+                      { key: "column-3", label: <>Card Number</> },
+                      { key: "column-4", label: <>Action</> },
+                      { key: "column-5", label: <>Receiver</> },
+                    ]}
+                  />
                   <tbody>
-                    {report.recentActivity.map((item, index) => (
-                      <tr key={`${item.date}-${index}`}>
+                    {report.recentActivity.map((item) => (
+                      <tr
+                        key={`${item.date}-${item.vmfCode}-${item.cardNumber ?? "card"}-${item.action}-${item.receiver}`}
+                      >
                         <td>{item.date.slice(0, 16).replace("T", " ") || "-"}</td>
                         <td>{item.vmfCode}</td>
                         <td>{item.cardNumber ?? "-"}</td>

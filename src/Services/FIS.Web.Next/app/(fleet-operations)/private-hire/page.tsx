@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -9,9 +11,8 @@ import {
   ApiUnavailable,
   PrivateHirePagination,
   PrivateHireNotice,
-  valueOrDash,
-  dateValue,
 } from "@/app/(fleet-operations)/private-hire/_components";
+import { dateValue, valueOrDash } from "@/app/(fleet-operations)/private-hire/_utils";
 import {
   DEFAULT_PRIVATE_HIRE_PAGE_SIZE,
   PrivateHireApiError,
@@ -134,16 +135,16 @@ async function PrivateHirePageContent({
               <div className="vehicle-table-wrapper">
                 <table className="vehicle-table">
                   <caption className="sr-only">Private Hire vehicle preview</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Registration</th>
-                      <th scope="col">Model</th>
-                      <th scope="col">Site</th>
-                      <th scope="col">Contractor</th>
-                      <th scope="col">Take-on</th>
-                      <th scope="col">Return</th>
-                    </tr>
-                  </thead>
+                  <DataTableHeader
+                    columns={[
+                      { key: "column-1", label: <>Registration</> },
+                      { key: "column-2", label: <>Model</> },
+                      { key: "column-3", label: <>Site</> },
+                      { key: "column-4", label: <>Contractor</> },
+                      { key: "column-5", label: <>Take-on</> },
+                      { key: "column-6", label: <>Return</> },
+                    ]}
+                  />
                   <tbody>
                     {vehiclePage.items.map((vehicle) => (
                       <tr key={vehicle.phvCode}>

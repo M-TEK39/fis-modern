@@ -38,7 +38,42 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function ModelEditPageContent({ searchParams }: ModelEditPageProps) {
+function ModelEditView({
+  modelCode,
+  model,
+  referenceData,
+}: Readonly<{
+  modelCode: number;
+  model: Awaited<ReturnType<typeof getModel>>;
+  referenceData: Awaited<ReturnType<typeof getModelReferenceData>>;
+}>) {
+  if (!model) return null;
+
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="model-edit-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Vehicle</p>
+            <h1 id="model-edit-title">Edit Model</h1>
+            <p>Update model {modelCode} without dropping any legacy specification fields.</p>
+          </div>
+          <Link className="button button-secondary" href="/Validation/MNT_model.aspx">
+            Model Maintenance
+          </Link>
+        </header>
+        <ModelForm
+          action={updateModelAction}
+          model={model}
+          mode="update"
+          referenceData={referenceData}
+        />
+      </section>
+    </main>
+  );
+}
+
+async function renderModelEditPage({ searchParams }: ModelEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -83,28 +118,7 @@ async function ModelEditPageContent({ searchParams }: ModelEditPageProps) {
           <ErrorCard message={`Model ${modelCode} was not found.`} />
         </main>
       );
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="model-edit-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Vehicle</p>
-              <h1 id="model-edit-title">Edit Model</h1>
-              <p>Update model {modelCode} without dropping any legacy specification fields.</p>
-            </div>
-            <Link className="button button-secondary" href="/Validation/MNT_model.aspx">
-              Model Maintenance
-            </Link>
-          </header>
-          <ModelForm
-            action={updateModelAction}
-            model={model}
-            mode="update"
-            referenceData={referenceData}
-          />
-        </section>
-      </main>
-    );
+    return <ModelEditView modelCode={modelCode} model={model} referenceData={referenceData} />;
   } catch (error) {
     if (error instanceof ModelApiError && error.reason === "unauthorized")
       return (
@@ -130,12 +144,6 @@ async function ModelEditPageContent({ searchParams }: ModelEditPageProps) {
   }
 }
 
-export default function ModelEditPage(
-  props: NonNullable<Parameters<typeof ModelEditPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <ModelEditPageContent {...props} />
-    </Suspense>
-  );
+export default function ModelEditPage(props: ModelEditPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderModelEditPage(props)}</Suspense>;
 }

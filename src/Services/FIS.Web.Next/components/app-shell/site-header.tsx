@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  type TransitionStartFunction,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+} from "react";
 import {
   Bell,
   CheckCheck,
@@ -68,6 +77,24 @@ type NavigationGroup = Readonly<{
 }>;
 
 type ThemeMode = "light" | "dark" | "system";
+
+const NOTIFICATION_DATE_FORMATTER = new Intl.DateTimeFormat("en-ZA", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Africa/Johannesburg",
+});
+
+const subscribeToHydration = () => () => {};
+const getClientHydrationSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
+
+function useHydrated() {
+  return useSyncExternalStore(
+    subscribeToHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot,
+  );
+}
 
 function ThemeModeIcon({ mode }: Readonly<{ mode: ThemeMode }>) {
   if (mode === "light") return <Sun aria-hidden="true" />;
@@ -160,9 +187,7 @@ function HeaderSearch({ groups }: Readonly<{ groups: readonly NavigationGroup[] 
 
 function HeaderThemeMenu() {
   const { setTheme, theme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
 
   // next-themes reads the persisted preference in the browser. Keep the first
   // client render on the same system icon/value as SSR, then reveal that
@@ -197,6 +222,179 @@ function HeaderThemeMenu() {
   );
 }
 
+function NotificationLoading() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
+      <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
+      Loading your notifications…
+    </div>
+  );
+}
+
+function NotificationLoadError({
+  message,
+  onRetry,
+  isPending,
+}: Readonly<{ message: string; onRetry: () => void; isPending: boolean }>) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <div className="rounded-full bg-muted p-3 text-muted-foreground">
+        <Inbox aria-hidden="true" />
+      </div>
+      <div className="space-y-1">
+        <p className="font-medium text-foreground">Notifications are unavailable</p>
+        <p className="text-sm text-muted-foreground">{message}</p>
+      </div>
+      <Button type="button" variant="outline" size="sm" onClick={onRetry} disabled={isPending}>
+        <RefreshCw className={isPending ? "animate-spin" : undefined} aria-hidden="true" />
+        Try again
+      </Button>
+    </div>
+  );
+}
+
+function NotificationEmpty() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <div className="rounded-full bg-muted p-3 text-muted-foreground">
+        <CheckCheck aria-hidden="true" />
+      </div>
+      <div className="space-y-1">
+        <p className="font-medium text-foreground">You&apos;re all caught up</p>
+        <p className="text-sm text-muted-foreground">There are no notifications for you yet.</p>
+      </div>
+    </div>
+  );
+}
+
+function NotificationList({
+  inbox,
+  error,
+  isPending,
+  onMarkRead,
+}: Readonly<{
+  inbox: UserMessageInbox;
+  error: string | null;
+  isPending: boolean;
+  onMarkRead: (message: UserMessage) => void;
+}>) {
+  return (
+    <ScrollArea className="h-full">
+      <div className="space-y-2 p-4">
+        {error ? (
+          <p
+            role="status"
+            className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+          >
+            {error}
+          </p>
+        ) : null}
+        {inbox.items.map((message) => (
+          <button
+            key={message.id}
+            type="button"
+            onClick={() => onMarkRead(message)}
+            disabled={message.isRead || isPending}
+            className={`w-full rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default ${
+              message.isRead
+                ? "bg-background text-muted-foreground"
+                : "border-primary/40 bg-primary/5 text-foreground hover:bg-primary/10"
+            }`}
+            aria-label={message.isRead ? "Read notification" : "Mark notification as read"}
+          >
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1 space-y-2">
+                <p className="whitespace-pre-wrap text-sm leading-6">
+                  {message.message || "(No message text)"}
+                </p>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {message.createdAt ? (
+                    <span>{formatNotificationDate(message.createdAt)}</span>
+                  ) : null}
+                  {!message.isRead ? <Badge variant="secondary">Unread</Badge> : <span>Read</span>}
+                </div>
+              </div>
+              {!message.isRead ? (
+                <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" />
+              ) : null}
+            </div>
+          </button>
+        ))}
+      </div>
+    </ScrollArea>
+  );
+}
+
+function NotificationsBody({
+  inbox,
+  error,
+  isPending,
+  onRetry,
+  onMarkRead,
+}: Readonly<{
+  inbox: UserMessageInbox | null;
+  error: string | null;
+  isPending: boolean;
+  onRetry: () => void;
+  onMarkRead: (message: UserMessage) => void;
+}>) {
+  if (isPending && !inbox) return <NotificationLoading />;
+  if (error && !inbox) {
+    return <NotificationLoadError message={error} onRetry={onRetry} isPending={isPending} />;
+  }
+  if (inbox?.items.length === 0) return <NotificationEmpty />;
+  if (!inbox) return null;
+
+  return (
+    <NotificationList inbox={inbox} error={error} isPending={isPending} onMarkRead={onMarkRead} />
+  );
+}
+
+function loadUserMessageInbox(
+  startTransition: TransitionStartFunction,
+  setInbox: Dispatch<SetStateAction<UserMessageInbox | null>>,
+  setError: Dispatch<SetStateAction<string | null>>,
+) {
+  setError(null);
+  startTransition(async () => {
+    const result = await getUserMessagesAction();
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+
+    setInbox(result.data);
+  });
+}
+
+function markUserMessageAsRead(
+  message: UserMessage,
+  isPending: boolean,
+  startTransition: TransitionStartFunction,
+  setInbox: Dispatch<SetStateAction<UserMessageInbox | null>>,
+  setError: Dispatch<SetStateAction<string | null>>,
+) {
+  if (message.isRead || isPending) return;
+
+  setError(null);
+  startTransition(async () => {
+    const result = await markUserMessageReadAction(message.id);
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+
+    setInbox((current) => {
+      if (!current) return current;
+
+      return {
+        unreadCount: Math.max(0, current.unreadCount - (message.isRead ? 0 : 1)),
+        items: current.items.map((item) => (item.id === result.data.id ? result.data : item)),
+      };
+    });
+  });
+}
+
 function HeaderNotifications({
   noticeManagementHref,
 }: Readonly<{ noticeManagementHref?: string }>) {
@@ -206,16 +404,7 @@ function HeaderNotifications({
   const [isPending, startTransition] = useTransition();
 
   function loadInbox() {
-    setError(null);
-    startTransition(async () => {
-      const result = await getUserMessagesAction();
-      if (!result.ok) {
-        setError(result.message);
-        return;
-      }
-
-      setInbox(result.data);
-    });
+    loadUserMessageInbox(startTransition, setInbox, setError);
   }
 
   function handleOpenChange(nextOpen: boolean) {
@@ -226,25 +415,7 @@ function HeaderNotifications({
   }
 
   function markRead(message: UserMessage) {
-    if (message.isRead || isPending) return;
-
-    setError(null);
-    startTransition(async () => {
-      const result = await markUserMessageReadAction(message.id);
-      if (!result.ok) {
-        setError(result.message);
-        return;
-      }
-
-      setInbox((current) => {
-        if (!current) return current;
-
-        return {
-          unreadCount: Math.max(0, current.unreadCount - (message.isRead ? 0 : 1)),
-          items: current.items.map((item) => (item.id === result.data.id ? result.data : item)),
-        };
-      });
-    });
+    markUserMessageAsRead(message, isPending, startTransition, setInbox, setError);
   }
 
   return (
@@ -280,92 +451,13 @@ function HeaderNotifications({
           </SheetDescription>
         </SheetHeader>
         <div className="min-h-0 flex-1">
-          {isPending && !inbox ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
-              <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
-              Loading your notifications…
-            </div>
-          ) : error && !inbox ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-              <div className="rounded-full bg-muted p-3 text-muted-foreground">
-                <Inbox aria-hidden="true" />
-              </div>
-              <div className="space-y-1">
-                <p className="font-medium text-foreground">Notifications are unavailable</p>
-                <p className="text-sm text-muted-foreground">{error}</p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={loadInbox}
-                disabled={isPending}
-              >
-                <RefreshCw className={isPending ? "animate-spin" : undefined} aria-hidden="true" />
-                Try again
-              </Button>
-            </div>
-          ) : inbox?.items.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-              <div className="rounded-full bg-muted p-3 text-muted-foreground">
-                <CheckCheck aria-hidden="true" />
-              </div>
-              <div className="space-y-1">
-                <p className="font-medium text-foreground">You&apos;re all caught up</p>
-                <p className="text-sm text-muted-foreground">
-                  There are no notifications for you yet.
-                </p>
-              </div>
-            </div>
-          ) : inbox ? (
-            <ScrollArea className="h-full">
-              <div className="space-y-2 p-4">
-                {error ? (
-                  <p
-                    role="status"
-                    className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
-                  >
-                    {error}
-                  </p>
-                ) : null}
-                {inbox.items.map((message) => (
-                  <button
-                    key={message.id}
-                    type="button"
-                    onClick={() => markRead(message)}
-                    disabled={message.isRead || isPending}
-                    className={`w-full rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default ${
-                      message.isRead
-                        ? "bg-background text-muted-foreground"
-                        : "border-primary/40 bg-primary/5 text-foreground hover:bg-primary/10"
-                    }`}
-                    aria-label={message.isRead ? "Read notification" : "Mark notification as read"}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <p className="whitespace-pre-wrap text-sm leading-6">
-                          {message.message || "(No message text)"}
-                        </p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          {message.createdAt ? (
-                            <span>{formatNotificationDate(message.createdAt)}</span>
-                          ) : null}
-                          {!message.isRead ? (
-                            <Badge variant="secondary">Unread</Badge>
-                          ) : (
-                            <span>Read</span>
-                          )}
-                        </div>
-                      </div>
-                      {!message.isRead ? (
-                        <span className="mt-1.5 size-2 shrink-0 rounded-full bg-primary" />
-                      ) : null}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </ScrollArea>
-          ) : null}
+          <NotificationsBody
+            inbox={inbox}
+            error={error}
+            isPending={isPending}
+            onRetry={loadInbox}
+            onMarkRead={markRead}
+          />
         </div>
         <div className="flex shrink-0 items-center justify-between gap-3 border-t px-6 py-4">
           <p className="text-sm text-muted-foreground">
@@ -398,10 +490,7 @@ function formatNotificationDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
 
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
+  return NOTIFICATION_DATE_FORMATTER.format(date);
 }
 
 export default function SiteHeader({ groups }: Readonly<{ groups: readonly NavigationGroup[] }>) {

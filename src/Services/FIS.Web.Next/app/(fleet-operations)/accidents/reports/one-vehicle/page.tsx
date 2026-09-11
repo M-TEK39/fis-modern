@@ -1,20 +1,24 @@
-import Link from "next/link";
-import { connection } from "next/server";
-import { redirect } from "next/navigation";
-import { Suspense } from "react";
-
-import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { Suspense } from "react";
 import {
-  AccidentApiError,
+  AccidentReportAccessRestricted,
+  AccidentReportErrorState,
+  AccidentReportFooter,
+  AccidentReportFormActions,
+  AccidentReportLoadingState,
+  AccidentReportPageShell,
+  AccidentVehicleSearchFieldsWithMode,
+} from "@/app/(fleet-operations)/accidents/reports/_report-components";
+import {
+  authorizeAccidentReport,
+  loadAccidentReport,
+} from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
+import {
   getAccidentVehicleReport,
   type AccidentVehicleReportMode,
   type AccidentVehicleReportRow,
 } from "@/lib/api/fleet-operations/api-accidents";
-import { getSession } from "@/lib/auth/session";
 import VehicleReportResult from "@/app/(fleet-operations)/accidents/reports/vehicle-report-result";
-
-const ACCIDENTS_ROLE = "Accidents";
 
 type OneVehicleReportPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -28,165 +32,109 @@ function getMode(value: string | undefined): AccidentVehicleReportMode {
   return value === "fleet" || value === "gg" || value === "Radiogg" ? "fleet" : "registration";
 }
 
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+function OneVehicleReportForm({
+  mode,
+  searchTerm,
+}: {
+  mode: AccidentVehicleReportMode;
+  searchTerm: string;
+}) {
+  return (
+    <form className="vehicle-status-maintenance-panel" method="get">
+      <AccidentVehicleSearchFieldsWithMode
+        inputId="one-vehicle-report-search"
+        mode={mode}
+        searchTerm={searchTerm}
+      />
+      <AccidentReportFormActions submitLabel="SUBMIT" />
+    </form>
   );
 }
 
-function LoadingState() {
-  return (
-    <div className="loading-card" aria-busy="true">
-      <span className="spinner" aria-hidden="true" />
-      <p>Loading page…</p>
-    </div>
-  );
-}
-
-function ErrorState() {
-  return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">API unavailable</p>
-      <h2>The vehicle accident report could not be loaded.</h2>
-      <p className="muted-copy">Retry when the FIS API is available.</p>
-      <Link className="button button-primary" href="/accidents/reports/one-vehicle">
-        Try again
-      </Link>
-    </section>
-  );
+function OneVehicleReportResults({ rows }: { rows: AccidentVehicleReportRow[] | null }) {
+  return rows !== null ? (
+    rows.length === 0 ? (
+      <div className="vehicle-empty-state">
+        <p className="eyebrow">No vehicles found</p>
+        <h2>No accidents matched this vehicle number.</h2>
+        <p className="muted-copy">Try another GP or GG number.</p>
+      </div>
+    ) : (
+      <section aria-live="polite" aria-labelledby="vehicle-report-results-title">
+        <div className="vehicle-form-section-header">
+          <div>
+            <p className="eyebrow">Report results</p>
+            <h2 id="vehicle-report-results-title">Accidents found: {rows.length}</h2>
+          </div>
+        </div>
+        {rows.map((row, index) => (
+          <VehicleReportResult key={row.accidentCode} row={row} index={index} />
+        ))}
+      </section>
+    )
+  ) : null;
 }
 
 async function OneVehicleReportContent({ searchParams }: OneVehicleReportPageProps) {
-  await connection();
-  const session = await getSession();
-  if (session.status === "anonymous") redirect("/login");
-  if (session.status === "expired")
+  const authorization = await authorizeAccidentReport();
+  if (authorization === "expired")
     return <SessionRecovery returnPath="/accidents/reports/one-vehicle" />;
-  if (session.status === "unavailable") return <ErrorState />;
-  if (!hasRole(session.roles, ACCIDENTS_ROLE)) {
+  if (authorization === "unavailable") {
     return (
-      <section className="vehicle-status-card" role="alert">
-        <p className="eyebrow">Access restricted</p>
-        <h2>You do not have permission to run accident reports.</h2>
-      </section>
+      <AccidentReportErrorState
+        title="The vehicle accident report could not be loaded."
+        retryHref="/accidents/reports/one-vehicle"
+      />
     );
+  }
+  if (authorization === "forbidden") {
+    return <AccidentReportAccessRestricted />;
   }
 
   const query = await searchParams;
   const mode = getMode(getQueryValue(query.mode) ?? getQueryValue(query.Radio1));
   const searchTerm = (getQueryValue(query.searchTerm) ?? getQueryValue(query.xnumber) ?? "").trim();
   const shouldRun = getQueryValue(query.run) === "1" || searchTerm.length > 0;
-  let rows: AccidentVehicleReportRow[] | null = null;
-  if (shouldRun && searchTerm) {
-    try {
-      rows = await getAccidentVehicleReport(searchTerm, mode);
-    } catch (error) {
-      if (error instanceof AccidentApiError && error.reason === "unauthorized")
-        return <SessionRecovery returnPath="/accidents/reports/one-vehicle" />;
-      console.error(
-        "FIS accident vehicle report failed",
-        error instanceof Error ? error.message : "unknown error",
-      );
-      return <ErrorState />;
-    }
+  const report = await loadAccidentReport({
+    shouldRun: shouldRun && Boolean(searchTerm),
+    errorMessage: null,
+    load: () => getAccidentVehicleReport(searchTerm, mode),
+    context: "FIS accident vehicle report failed",
+  });
+  if (report.status === "unauthorized") {
+    return <SessionRecovery returnPath="/accidents/reports/one-vehicle" />;
   }
+  if (report.status === "error") {
+    return (
+      <AccidentReportErrorState
+        title="The vehicle accident report could not be loaded."
+        retryHref="/accidents/reports/one-vehicle"
+      />
+    );
+  }
+  const rows = report.data;
 
   return (
     <>
-      <form className="vehicle-status-maintenance-panel" method="get">
-        <fieldset className="vehicle-search-options">
-          <legend>Find vehicle by</legend>
-          <label className="vehicle-checkbox-label">
-            <input
-              type="radio"
-              name="mode"
-              value="registration"
-              defaultChecked={mode === "registration"}
-            />{" "}
-            GP
-          </label>
-          <label className="vehicle-checkbox-label">
-            <input type="radio" name="mode" value="fleet" defaultChecked={mode === "fleet"} /> GG
-          </label>
-        </fieldset>
-        <div className="field">
-          <label htmlFor="one-vehicle-report-search">Number</label>
-          <input
-            id="one-vehicle-report-search"
-            name="searchTerm"
-            maxLength={8}
-            defaultValue={searchTerm}
-            required
-          />
-        </div>
-        <input name="run" type="hidden" value="1" />
-        <div className="button-row">
-          <button className="button button-primary" type="submit">
-            SUBMIT
-          </button>
-          <Link className="button button-secondary" href="/accidents/reports">
-            Report Menu
-          </Link>
-        </div>
-      </form>
+      <OneVehicleReportForm mode={mode} searchTerm={searchTerm} />
+      <OneVehicleReportResults rows={rows} />
 
-      {rows !== null ? (
-        rows.length === 0 ? (
-          <div className="vehicle-empty-state">
-            <p className="eyebrow">No vehicles found</p>
-            <h2>No accidents matched this vehicle number.</h2>
-            <p className="muted-copy">Try another GP or GG number.</p>
-          </div>
-        ) : (
-          <section aria-live="polite" aria-labelledby="vehicle-report-results-title">
-            <div className="vehicle-form-section-header">
-              <div>
-                <p className="eyebrow">Report results</p>
-                <h2 id="vehicle-report-results-title">Accidents found: {rows.length}</h2>
-              </div>
-            </div>
-            {rows.map((row, index) => (
-              <VehicleReportResult key={row.accidentCode} row={row} index={index} />
-            ))}
-          </section>
-        )
-      ) : null}
-
-      <div className="vehicle-footer-actions">
-        <Link className="button button-secondary" href="/accidents">
-          Accident Menu
-        </Link>
-        <Link className="button button-secondary" href="/home">
-          Home
-        </Link>
-        <form action={logoutAction}>
-          <button className="button button-secondary" type="submit">
-            Sign out
-          </button>
-        </form>
-      </div>
+      <AccidentReportFooter />
     </>
   );
 }
 
 export default function OneVehicleAccidentReportPage({ searchParams }: OneVehicleReportPageProps) {
   return (
-    <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card" aria-labelledby="one-vehicle-report-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Accident reports</p>
-            <h1 id="one-vehicle-report-title">One Vehicle Accidents</h1>
-            <p>Search for all accident details by an exact GP or GG number.</p>
-          </div>
-          <Link className="button button-secondary" href="/accidents/reports">
-            Report Menu
-          </Link>
-        </header>
-        <Suspense fallback={<LoadingState />}>
-          <OneVehicleReportContent searchParams={searchParams} />
-        </Suspense>
-      </section>
-    </main>
+    <AccidentReportPageShell
+      titleId="one-vehicle-report-title"
+      title="One Vehicle Accidents"
+      description="Search for all accident details by an exact GP or GG number."
+      fallback={<AccidentReportLoadingState />}
+    >
+      <Suspense fallback={<AccidentReportLoadingState />}>
+        <OneVehicleReportContent searchParams={searchParams} />
+      </Suspense>
+    </AccidentReportPageShell>
   );
 }

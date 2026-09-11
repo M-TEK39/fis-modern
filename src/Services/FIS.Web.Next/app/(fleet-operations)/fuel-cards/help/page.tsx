@@ -43,6 +43,8 @@ async function FuelCardsHelpContent() {
         src="/legacy/fuelcard/Doc_Fuelcards.htm"
         title="Fuelcard Maintenance Help"
         className="help-iframe document-help-frame"
+        sandbox=""
+        referrerPolicy="no-referrer"
       />
     </div>
   );

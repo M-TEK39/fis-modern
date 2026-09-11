@@ -1,4 +1,7 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
@@ -10,14 +13,16 @@ import {
   TroubleshootApiError,
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import {
-  hasTroubleshootingRole,
   Pagination,
-  pageNumber,
   StatusCard,
   TroubleshootMenu,
   TroubleshootShell,
-  valueOrDash,
 } from "@/app/(fleet-operations)/troubleshoot/_components";
+import {
+  hasTroubleshootingRole,
+  pageNumber,
+  valueOrDash,
+} from "@/app/(fleet-operations)/troubleshoot/_utils";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 type SearchMode = "GG" | "REG" | "TA";
@@ -29,7 +34,9 @@ function modeValue(value: string | undefined): SearchMode {
   return value === "REG" || value === "TA" ? value : "GG";
 }
 
-async function OdometerCorrectionsPageContent({
+const OdometerCorrectionsPageContent = renderOdometerCorrectionsPageContent;
+
+async function renderOdometerCorrectionsPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -134,9 +141,9 @@ async function OdometerCorrectionsPageContent({
             <button className="button button-primary" type="submit">
               Submit Details
             </button>
-            <a className="button button-secondary" href="/troubleshoot/odometer-corrections">
+            <Link className="button button-secondary" href="/troubleshoot/odometer-corrections">
               Clear
-            </a>
+            </Link>
           </div>
         </form>
       </section>
@@ -169,18 +176,23 @@ async function OdometerCorrectionsPageContent({
           <div className="vehicle-table-wrapper">
             <table className="vehicle-table">
               <caption className="sr-only">Odometer correction results</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Vehicle</th>
-                  <th scope="col">Trip Authority</th>
-                  <th scope="col">Current Odometer</th>
-                  <th scope="col">Last Odometer</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>Vehicle</> },
+                  { key: "column-2", label: <>Trip Authority</> },
+                  { key: "column-3", label: <>Current Odometer</> },
+                  { key: "column-4", label: <>Last Odometer</> },
+                ]}
+              />
               <tbody>
-                {pageData?.items.map((row, index) => (
+                {pageData?.items.map((row) => (
                   <tr
-                    key={`${row.vehicleIdentifier ?? "vehicle"}-${row.tripAuthorityNumber ?? index}`}
+                    key={[
+                      row.vehicleIdentifier,
+                      row.tripAuthorityNumber,
+                      row.currentOdometer,
+                      row.lastOdometer,
+                    ].join("|")}
                   >
                     <td>{valueOrDash(row.vehicleIdentifier)}</td>
                     <td>{valueOrDash(row.tripAuthorityNumber)}</td>

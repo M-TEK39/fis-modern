@@ -33,7 +33,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function MakeDeleteCheckPageContent({ searchParams }: MakeDeleteCheckPageProps) {
+async function renderMakeDeleteCheckPage({ searchParams }: MakeDeleteCheckPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -155,12 +155,6 @@ async function MakeDeleteCheckPageContent({ searchParams }: MakeDeleteCheckPageP
   }
 }
 
-export default function MakeDeleteCheckPage(
-  props: NonNullable<Parameters<typeof MakeDeleteCheckPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <MakeDeleteCheckPageContent {...props} />
-    </Suspense>
-  );
+export default function MakeDeleteCheckPage(props: MakeDeleteCheckPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderMakeDeleteCheckPage(props)}</Suspense>;
 }

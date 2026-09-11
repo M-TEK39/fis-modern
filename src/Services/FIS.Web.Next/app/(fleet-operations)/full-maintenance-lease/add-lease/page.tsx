@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -9,12 +11,15 @@ import {
   AccessRestricted,
   ActionNotice,
   ApiUnavailable,
+  FmlVehicleSearchResults,
   FmlFrame,
+} from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+import {
   formatCurrency,
   formatDate,
   hasFmlPermission,
   vehicleLabel,
-} from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+} from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import { FmlApiError, getLatestLeaseTariff } from "@/lib/api/finance/api-fml";
 import { getVehicleOptions, type VehicleOption } from "@/lib/api/vehicles/api-vehicles";
 import { getSession } from "@/lib/auth/session";
@@ -41,7 +46,11 @@ function addOneMonth(value: string) {
   return date.toISOString().slice(0, 10);
 }
 
-async function FmlAddLeasePageContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+const FmlAddLeasePageContent = renderFmlAddLeasePageContent;
+
+async function renderFmlAddLeasePageContent({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -154,32 +163,12 @@ async function FmlAddLeasePageContent({ searchParams }: Readonly<{ searchParams:
             vehicleMatches.length === 0 ? (
               <p className="muted-copy">No vehicles matched that search.</p>
             ) : (
-              <div className="vehicle-table-wrapper">
-                <table className="vehicle-table">
-                  <caption className="sr-only">Vehicle search results</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Vehicle</th>
-                      <th scope="col">Select</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {vehicleMatches.map((vehicle) => (
-                      <tr key={vehicle.vmfCode}>
-                        <td>{vehicleLabel(vehicle)}</td>
-                        <td>
-                          <Link
-                            className="button button-secondary"
-                            href={`/full-maintenance-lease/add-lease?search=${encodeURIComponent(search)}&mode=${encodeURIComponent(mode)}&vmfCode=${vehicle.vmfCode}`}
-                          >
-                            Select
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <FmlVehicleSearchResults
+                vehicles={vehicleMatches}
+                search={search}
+                mode={mode}
+                routePath="/full-maintenance-lease/add-lease"
+              />
             )
           ) : null}
         </div>

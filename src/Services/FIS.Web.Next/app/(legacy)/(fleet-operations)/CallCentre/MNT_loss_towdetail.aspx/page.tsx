@@ -15,6 +15,7 @@ import {
 import { getSession } from "@/lib/auth/session";
 
 const CALL_CENTRE_ROLE = "Call Centre";
+const EMPTY_TOW_TRUCKS: TowTruckOption[] = [];
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function first(value: string | string[] | undefined) {
@@ -147,7 +148,9 @@ function LossTowingForm({
   );
 }
 
-async function LegacyLossTowDetailPageContent({
+const LegacyLossTowDetailPageContent = renderLegacyLossTowDetailPageContent;
+
+async function renderLegacyLossTowDetailPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -200,7 +203,7 @@ async function LegacyLossTowDetailPageContent({
   }
 
   let call: CallCentreIncidentRecord | null = null;
-  let towTrucks: TowTruckOption[] = [];
+  let towTrucks: TowTruckOption[] = EMPTY_TOW_TRUCKS;
   let loadError = "";
   try {
     [call, towTrucks] = await Promise.all([

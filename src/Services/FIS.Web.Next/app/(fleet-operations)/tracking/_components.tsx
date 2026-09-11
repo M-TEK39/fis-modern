@@ -1,16 +1,14 @@
 import Link from "next/link";
 
 import { saveTrackingAction } from "@/app/(fleet-operations)/tracking/actions";
+import DataTableHeader from "@/components/ui/data-table-header";
 import { MenuSection } from "@/components/ui/menu-section";
 import type { TrackingRecord } from "@/lib/api/fleet-operations/api-tracking";
 import type { VehicleOption } from "@/lib/api/vehicles/api-vehicles";
+import { valueOrDash, formatDate } from "./_utils";
 
-export function valueOrDash(value: string | number | null | undefined) {
-  return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
-}
-
-export function formatDate(value: string | null | undefined) {
-  return value?.slice(0, 10) || "-";
+function queryText(value: string | string[] | undefined) {
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
 export function TrackingShell({
@@ -40,11 +38,9 @@ export function TrackingShell({
 export function TrackingNotice({
   query,
 }: Readonly<{ query: Record<string, string | string[] | undefined> }>) {
-  const text = (value: string | string[] | undefined) =>
-    Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
-  const error = text(query.error);
-  const saved = text(query.saved);
-  const updated = text(query.updated);
+  const error = queryText(query.error);
+  const saved = queryText(query.saved);
+  const updated = queryText(query.updated);
   const message = error || saved || updated;
   if (!message) return null;
   return (
@@ -89,21 +85,20 @@ export function TrackingTable({
   returnPath?: string;
 }>) {
   if (records.length === 0) return <p className="muted-copy">No tracking records found.</p>;
+  const columns = [
+    { key: "tracker-number", label: "Tracker number" },
+    { key: "vehicle", label: "Vehicle" },
+    { key: "install-date", label: "Install date" },
+    { key: "status", label: "Status" },
+    { key: "type", label: "Type" },
+    { key: "remove-date", label: "Remove date" },
+    ...(editable ? [{ key: "action", label: "Action" }] : []),
+  ];
   return (
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">{title}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Tracker number</th>
-            <th scope="col">Vehicle</th>
-            <th scope="col">Install date</th>
-            <th scope="col">Status</th>
-            <th scope="col">Type</th>
-            <th scope="col">Remove date</th>
-            {editable ? <th scope="col">Action</th> : null}
-          </tr>
-        </thead>
+        <DataTableHeader columns={columns} />
         <tbody>
           {records.map((record) => (
             <tr key={record.trackCode}>
@@ -379,5 +374,25 @@ export function DateRangeFields({
         />
       </div>
     </div>
+  );
+}
+
+export function TrackingReportDateForm({
+  startDate,
+  endDate,
+}: Readonly<{ startDate: string; endDate: string }>) {
+  return (
+    <form className="vehicle-status-maintenance-panel" method="get">
+      <DateRangeFields startDate={startDate} endDate={endDate} />
+      <input name="run" type="hidden" value="1" />
+      <div className="button-row">
+        <button className="button button-primary" type="submit">
+          Submit
+        </button>
+        <Link className="button button-secondary" href="/tracking/reports">
+          Report menu
+        </Link>
+      </div>
+    </form>
   );
 }

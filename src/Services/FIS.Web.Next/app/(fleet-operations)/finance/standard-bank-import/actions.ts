@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { hasHeadOfficeFinanceAccess } from "@/app/(fleet-operations)/finance/_components";
+import { hasHeadOfficeFinanceAccess } from "@/app/(fleet-operations)/finance/_utils";
 import { FinanceApiError, importStandardBankFile } from "@/lib/api/finance/api-finance";
 import { getSession } from "@/lib/auth/session";
 

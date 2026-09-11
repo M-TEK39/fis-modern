@@ -12,11 +12,14 @@ import {
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/licenses/_page";
-import { LicenseShell, valueOrDash } from "@/app/(fleet-operations)/licenses/_components";
+import { LicenseShell } from "@/app/(fleet-operations)/licenses/_components";
+import { valueOrDash } from "@/app/(fleet-operations)/licenses/_utils";
 import { getLicenseFees, LicenseFeeApiError } from "@/lib/api/reference-data/api-license-fees";
 import { getModels, ModelApiError } from "@/lib/api/reference-data/api-models";
 
-async function LicenseModelFeesPageContent({
+const LicenseModelFeesPageContent = renderLicenseModelFeesPageContent;
+
+async function renderLicenseModelFeesPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLicenseSession();

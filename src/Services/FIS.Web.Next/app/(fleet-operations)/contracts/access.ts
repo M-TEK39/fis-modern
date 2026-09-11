@@ -47,7 +47,8 @@ export type ContractSession = Readonly<{
 }>;
 
 function hasNamedRole(roles: readonly string[], candidates: readonly string[]) {
-  return roles.some((role) => candidates.includes(role.trim().toLowerCase()));
+  const candidateSet = new Set(candidates);
+  return roles.some((role) => candidateSet.has(role.trim().toLowerCase()));
 }
 
 function hasAccessBit(accessLevel: string | undefined, permission: bigint) {

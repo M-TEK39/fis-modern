@@ -6,17 +6,19 @@ import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   FmlFrame,
-  hasFmlPermission,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+import { hasFmlPermission } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import {
   ReportEmpty,
   ReportFooter,
   ReportTable,
+} from "@/app/(fleet-operations)/full-maintenance-lease/reports/_components";
+import {
   formatCurrency,
   formatDate,
-  reportError,
   valueOrDash,
-} from "@/app/(fleet-operations)/full-maintenance-lease/reports/_components";
+} from "@/app/(fleet-operations)/full-maintenance-lease/reports/_utils";
+import { reportError } from "@/app/(fleet-operations)/full-maintenance-lease/reports/_route-helpers";
 import { FmlApiError, getFmlMaintenanceHistory } from "@/lib/api/finance/api-fml";
 import { getSession } from "@/lib/auth/session";
 
@@ -83,8 +85,18 @@ async function FmlMaintenanceHistoryPageContent({
               "Total Cost Over Date Range",
             ]}
           >
-            {report.records.map((row, index) => (
-              <tr key={`${row.ggNumber ?? "row"}-${row.maintenanceExpenseType ?? "type"}-${index}`}>
+            {report.records.map((row) => (
+              <tr
+                key={JSON.stringify([
+                  row.ggNumber,
+                  row.yearManufactured,
+                  row.modelDescription,
+                  row.currentStatus,
+                  row.currentStatusDate,
+                  row.hiredFrom,
+                  row.maintenanceExpenseType,
+                ])}
+              >
                 <td>{valueOrDash(row.ggNumber)}</td>
                 <td>{valueOrDash(row.yearManufactured)}</td>
                 <td>{valueOrDash(row.modelDescription)}</td>

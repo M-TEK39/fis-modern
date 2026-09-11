@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 
 import {
@@ -11,60 +13,14 @@ import {
 } from "@/app/(fleet-operations)/job-cards/actions";
 import { MenuSection } from "@/components/ui/menu-section";
 import type { JobCardRecord, RepairCostLine } from "@/lib/api/fleet-operations/api-job-cards";
-
-export function valueOrDash(value: string | number | null | undefined) {
-  return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
-}
-
-export function formatDate(value: string | null | undefined) {
-  return value?.slice(0, 10) || "-";
-}
-
-export function formatDateTimeInput(value: string | null | undefined) {
-  return value?.slice(0, 10) || "";
-}
-
-export function formatMoney(value: number | null | undefined) {
-  return value === null || value === undefined
-    ? "-"
-    : new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(value);
-}
-
-export function statusLabel(card: Pick<JobCardRecord, "statusCode" | "statusText">) {
-  return (
-    card.statusText ||
-    ({
-      0: "Pending review",
-      1: "Pending",
-      2: "Awaiting authorization",
-      3: "Authorized",
-      4: "In progress",
-      5: "Complete",
-      6: "Failed",
-      7: "Canceled",
-    }[card.statusCode] ??
-      "Unknown")
-  );
-}
-
-export function hasRole(roles: readonly string[], kind: "capturer" | "authorizer") {
-  return roles.some((role) => {
-    const normalized = role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
-    return (
-      normalized.includes("jobcard") &&
-      normalized.includes(kind === "capturer" ? "captur" : "author")
-    );
-  });
-}
-
-export function hasJobCardAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  const numericAccessLevel = Number(accessLevel);
-  return (
-    hasRole(roles, "capturer") ||
-    hasRole(roles, "authorizer") ||
-    (Number.isInteger(numericAccessLevel) && (numericAccessLevel & (1 | 32)) !== 0)
-  );
-}
+import type { VehicleOption } from "@/lib/api/vehicles/api-vehicles";
+import {
+  formatDate,
+  formatDateTimeInput,
+  formatMoney,
+  statusLabel,
+  valueOrDash,
+} from "@/app/(fleet-operations)/job-cards/_utils";
 
 export function AccessRestricted({ message }: Readonly<{ message: string }>) {
   return (
@@ -92,6 +48,91 @@ export function JobCardMenu({
         </Link>
       ) : null}
     </MenuSection>
+  );
+}
+
+export function JobCardSearchForm({
+  action,
+  inputId,
+  inputLabel,
+  mode,
+  placeholder,
+  search,
+}: Readonly<{
+  action: string;
+  inputId: string;
+  inputLabel: string;
+  mode: "GG" | "GP";
+  placeholder: string;
+  search: string;
+}>) {
+  return (
+    <form className="vehicle-search-row" method="get" action={action}>
+      <input type="hidden" name="page" value="1" />
+      <fieldset className="vehicle-search-options">
+        <legend>Find by</legend>
+        <label className="vehicle-checkbox-label">
+          <input type="radio" name="mode" value="GG" defaultChecked={mode !== "GP"} /> GG
+        </label>
+        <label className="vehicle-checkbox-label">
+          <input type="radio" name="mode" value="GP" defaultChecked={mode === "GP"} /> GP
+        </label>
+      </fieldset>
+      <label className="sr-only" htmlFor={inputId}>
+        {inputLabel}
+      </label>
+      <input
+        className="vehicle-search"
+        id={inputId}
+        name="search"
+        defaultValue={search}
+        placeholder={placeholder}
+      />
+      <button className="button button-primary" type="submit">
+        Search
+      </button>
+      <Link className="button button-secondary" href={action}>
+        Clear
+      </Link>
+    </form>
+  );
+}
+
+export function JobCardVehicleResults({
+  caption,
+  vehicles,
+}: Readonly<{ caption: string; vehicles: readonly VehicleOption[] }>) {
+  return (
+    <div className="vehicle-table-wrapper">
+      <table className="vehicle-table">
+        <caption className="sr-only">{caption}</caption>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>VMF code</> },
+            { key: "column-2", label: <>GG number</> },
+            { key: "column-3", label: <>Registration</> },
+            { key: "column-4", label: <>Action</> },
+          ]}
+        />
+        <tbody>
+          {vehicles.map((vehicle) => (
+            <tr key={vehicle.vmfCode}>
+              <td>{vehicle.vmfCode}</td>
+              <td>{valueOrDash(vehicle.fleetNumber)}</td>
+              <td>{valueOrDash(vehicle.registrationNumber)}</td>
+              <td>
+                <Link
+                  className="button button-primary button-small"
+                  href={`/job-cards/create?vmfCode=${vehicle.vmfCode}`}
+                >
+                  Select
+                </Link>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -687,19 +728,19 @@ export function RepairCostTable({ lines }: Readonly<{ lines: RepairCostLine[] }>
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Repair cost report</caption>
-        <thead>
-          <tr>
-            <th scope="col">Job card</th>
-            <th scope="col">Vehicle</th>
-            <th scope="col">Closed</th>
-            <th scope="col">Service provider</th>
-            <th scope="col">Invoice</th>
-            <th scope="col">Labour</th>
-            <th scope="col">Parts</th>
-            <th scope="col">Other</th>
-            <th scope="col">Total</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>Job card</> },
+            { key: "column-2", label: <>Vehicle</> },
+            { key: "column-3", label: <>Closed</> },
+            { key: "column-4", label: <>Service provider</> },
+            { key: "column-5", label: <>Invoice</> },
+            { key: "column-6", label: <>Labour</> },
+            { key: "column-7", label: <>Parts</> },
+            { key: "column-8", label: <>Other</> },
+            { key: "column-9", label: <>Total</> },
+          ]}
+        />
         <tbody>
           {lines.map((line) => (
             <tr key={line.jobCardId}>

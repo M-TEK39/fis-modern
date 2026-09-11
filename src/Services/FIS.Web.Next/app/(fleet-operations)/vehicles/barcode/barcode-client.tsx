@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import type {
@@ -57,15 +57,15 @@ export default function VehicleBarcodeClient({
   const selectedVehicle =
     searchState.results.find((vehicle) => String(vehicle.vmfCode) === selectedVmfCode) ?? null;
 
-  useEffect(() => {
-    setSelectedVmfCode("");
-    setBarcode("");
-  }, [searchState.results]);
-
   function selectVehicle(value: string) {
     setSelectedVmfCode(value);
     const vehicle = searchState.results.find((candidate) => String(candidate.vmfCode) === value);
     setBarcode(vehicle?.barcode ?? "");
+  }
+
+  function resetSelection() {
+    setSelectedVmfCode("");
+    setBarcode("");
   }
 
   return (
@@ -78,7 +78,11 @@ export default function VehicleBarcodeClient({
           </div>
         </div>
 
-        <form action={searchFormAction} className="vehicle-quick-search-form">
+        <form
+          action={searchFormAction}
+          className="vehicle-quick-search-form"
+          onSubmit={resetSelection}
+        >
           <fieldset className="field">
             <legend>Number type</legend>
             <label>

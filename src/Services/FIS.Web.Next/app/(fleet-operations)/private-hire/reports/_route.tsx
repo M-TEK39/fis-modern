@@ -7,10 +7,9 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   ApiUnavailable,
   PrivateHireNotice,
-  dateValue,
-  queryValue,
-  valueOrDash,
+  PrivateHireReportTableHeader,
 } from "@/app/(fleet-operations)/private-hire/_components";
+import { dateValue, queryValue, valueOrDash } from "@/app/(fleet-operations)/private-hire/_utils";
 import {
   getPrivateHireContractors,
   getPrivateHireVehicles,
@@ -20,6 +19,10 @@ import {
 } from "@/lib/api/fleet-operations/api-private-hire";
 import { getSites, type SiteRecord } from "@/lib/api/reference-data/api-sites";
 import { getSession } from "@/lib/auth/session";
+
+const REPORT_DATE_FORMATTER = new Intl.DateTimeFormat("en-ZA", {
+  timeZone: "Africa/Johannesburg",
+});
 
 const ROLE = "Private Hire Vehicles";
 export type PrivateHireReportKind =
@@ -62,22 +65,22 @@ function ReportTable({
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Private Hire vehicle report</caption>
-        <thead>
-          <tr>
-            <th scope="col">Registration</th>
-            <th scope="col">Model description</th>
-            <th scope="col">Engine no.</th>
-            <th scope="col">Chassis no.</th>
-            <th scope="col">Site</th>
-            <th scope="col">Contracted to</th>
-            <th scope="col">Year</th>
-            <th scope="col">Colour</th>
-            <th scope="col">Take-on</th>
-            <th scope="col">Take-on odo</th>
-            <th scope="col">Return</th>
-            <th scope="col">Return odo</th>
-          </tr>
-        </thead>
+        <PrivateHireReportTableHeader
+          columns={[
+            "Registration",
+            "Model description",
+            "Engine no.",
+            "Chassis no.",
+            "Site",
+            "Contracted to",
+            "Year",
+            "Colour",
+            "Take-on",
+            "Take-on odo",
+            "Return",
+            "Return odo",
+          ]}
+        />
         <tbody>
           {vehicles.slice(0, 500).map((vehicle) => (
             <tr key={vehicle.phvCode}>
@@ -212,7 +215,9 @@ function ReportFilter({
   );
 }
 
-async function PrivateHireReportPageContent({
+const PrivateHireReportPageContent = renderPrivateHireReportPageContent;
+
+async function renderPrivateHireReportPageContent({
   searchParams,
   kind = "all",
   routePath = "/private-hire/reports/all-vehicles",
@@ -272,6 +277,7 @@ async function PrivateHireReportPageContent({
               : kind === "one" && !search
                 ? []
                 : vehicles;
+    const reportDate = REPORT_DATE_FORMATTER.format(new Date());
 
     return (
       <main className="page-shell vehicle-page-shell">
@@ -280,7 +286,7 @@ async function PrivateHireReportPageContent({
             <div>
               <p className="eyebrow">Private Hire reports</p>
               <h1 id="private-hire-report-title">{reportTitle(kind)}</h1>
-              <p>Date of report: {new Date().toLocaleDateString()}</p>
+              <p>Date of report: {reportDate}</p>
             </div>
             <Link className="button button-secondary" href="/private-hire/maintenance-menu">
               Menu

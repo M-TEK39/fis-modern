@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
 import { getSession } from "@/lib/auth/session";
 
 const WORKSHOP_ROLE = "Workshop";
@@ -25,24 +26,12 @@ function HelpFallback() {
 
 function ApiUnavailable() {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">
-        !
-      </div>
-      <p className="eyebrow">API unavailable</p>
-      <h2>Workshop could not be opened.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href="/workshop">
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/login">
-          Sign in
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message="Workshop could not be opened."
+      retryHref="/workshop"
+      secondaryHref="/login"
+      secondaryLabel="Sign in"
+    />
   );
 }
 
@@ -79,6 +68,7 @@ async function WorkshopHelpContent() {
         src="/legacy/workshop/Doc_Workshop.htm"
         title="Workshop Help"
         className="help-iframe document-help-frame"
+        sandbox=""
       />
     </div>
   );

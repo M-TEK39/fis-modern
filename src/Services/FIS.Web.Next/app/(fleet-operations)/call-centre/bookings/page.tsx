@@ -518,7 +518,9 @@ function errorMessage(error: unknown) {
   return "The booking workflow could not load the requested record.";
 }
 
-async function BookingPageContent({ searchParams }: BookingPageProps) {
+const BookingPageContent = renderBookingPageContent;
+
+async function renderBookingPageContent({ searchParams }: BookingPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");

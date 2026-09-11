@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -59,12 +61,12 @@ async function TowingHelpContent() {
           <div className="vehicle-table-wrapper">
             <table className="vehicle-table module-help-table">
               <caption className="sr-only">Towing field guidance</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Field</th>
-                  <th scope="col">Use</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>Field</> },
+                  { key: "column-2", label: <>Use</> },
+                ]}
+              />
               <tbody>
                 <tr>
                   <th scope="row">Vehicle</th>

@@ -105,7 +105,11 @@ function ApiUnavailable() {
   );
 }
 
-async function DriverInfoPageContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+const DriverInfoPageContent = renderDriverInfoPageContent;
+
+async function renderDriverInfoPageContent({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getTripSession();
   const sessionProblem = tripSessionMessage(session, "/trips/driver-info");

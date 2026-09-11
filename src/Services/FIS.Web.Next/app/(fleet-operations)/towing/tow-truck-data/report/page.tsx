@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -73,14 +75,14 @@ async function TowTruckReportPageContent() {
           <div className="vehicle-table-wrapper">
             <table className="vehicle-table">
               <caption className="sr-only">Tow truck information report</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Tel Number</th>
-                  <th scope="col">Fax Number</th>
-                  <th scope="col">Area</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>Name</> },
+                  { key: "column-2", label: <>Tel Number</> },
+                  { key: "column-3", label: <>Fax Number</> },
+                  { key: "column-4", label: <>Area</> },
+                ]}
+              />
               <tbody>
                 {trucks.map((truck) => (
                   <tr key={truck.towCode}>

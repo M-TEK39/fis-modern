@@ -56,7 +56,9 @@ function timeInputValue(value: string | null | undefined) {
   return match?.[1] ?? value.slice(0, 5);
 }
 
-function TowingForm({
+const TowingForm = renderTowingForm;
+
+function renderTowingForm({
   record,
   vmfCode,
   sites,
@@ -339,7 +341,9 @@ function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   );
 }
 
-async function TowingDetailPageContent({
+const TowingDetailPageContent = renderTowingDetailPageContent;
+
+async function renderTowingDetailPageContent({
   searchParams,
   routePath = "/towing/request/detail",
 }: TowingDetailPageProps) {
@@ -470,14 +474,4 @@ export default function TowingDetailPage(props: Parameters<typeof TowingDetailPa
       <TowingDetailPageContent {...props} />
     </Suspense>
   );
-}
-
-type LegacyTowingDetailPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyTowingDetailPage(routePath: string) {
-  return function LegacyTowingDetailPage({ searchParams }: Readonly<LegacyTowingDetailPageProps>) {
-    return <TowingDetailPage routePath={routePath} searchParams={searchParams} />;
-  };
 }

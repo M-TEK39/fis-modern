@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -23,6 +25,8 @@ import {
 import { getSession } from "@/lib/auth/session";
 
 const CLEARANCE_ROLE = "Clearance";
+const EMPTY_CLEARANCE_RECORDS: ClearanceRecord[] = [];
+const EMPTY_MERCHANTS: MerchantRecord[] = [];
 
 export type ClearanceEntryPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -242,14 +246,14 @@ function ClearanceHistory({
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Clearance records for selected vehicle</caption>
-            <thead>
-              <tr>
-                <th scope="col">Comment</th>
-                <th scope="col">Date</th>
-                <th scope="col">Number</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Comment</> },
+                { key: "column-2", label: <>Date</> },
+                { key: "column-3", label: <>Number</> },
+                { key: "column-4", label: <>Action</> },
+              ]}
+            />
             <tbody>
               {records.map((record) => (
                 <tr key={record.clearanceCode}>
@@ -362,7 +366,9 @@ function ApiUnavailable() {
   );
 }
 
-async function ClearanceEntryContent({
+const ClearanceEntryContent = renderClearanceEntryContent;
+
+async function renderClearanceEntryContent({
   searchParams,
   forcedAction,
   routePath = "/clearance/entry",
@@ -403,8 +409,8 @@ async function ClearanceEntryContent({
     forcedAction ?? (getQueryValue(query.deleteCode) ? "delete" : code ? "edit" : null);
 
   let vehicle: ClearanceVehicle | null = null;
-  let records: ClearanceRecord[] = [];
-  let merchants: MerchantRecord[] = [];
+  let records: ClearanceRecord[] = EMPTY_CLEARANCE_RECORDS;
+  let merchants: MerchantRecord[] = EMPTY_MERCHANTS;
   let record: ClearanceRecord | null = null;
 
   try {

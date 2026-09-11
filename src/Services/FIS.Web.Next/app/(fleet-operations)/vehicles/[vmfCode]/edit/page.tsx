@@ -96,11 +96,14 @@ function toEditReferenceData(
     name: model.name,
     typeCode: model.typeCode,
   }));
-  const types = models
-    .map((model) => model.typeCode)
-    .filter((code): code is number => code !== null)
-    .filter((code, index, values) => values.indexOf(code) === index)
-    .map((code) => ({ code, label: "Vehicle type" }));
+  const typeCodes = new Set<number>();
+  const types = models.reduce<{ code: number; label: string }[]>((result, model) => {
+    if (model.typeCode !== null && !typeCodes.has(model.typeCode)) {
+      typeCodes.add(model.typeCode);
+      result.push({ code: model.typeCode, label: "Vehicle type" });
+    }
+    return result;
+  }, []);
   const statuses =
     vehicleStatusCode > 0
       ? [{ code: vehicleStatusCode, label: statusDescription || "Current status" }]
@@ -141,7 +144,9 @@ function toEditFormData(
   };
 }
 
-async function VehicleEditPageContent({ params }: VehicleEditPageProps) {
+const VehicleEditPageContent = renderVehicleEditPageContent;
+
+async function renderVehicleEditPageContent({ params }: VehicleEditPageProps) {
   await connection();
   const session = await getSession();
 

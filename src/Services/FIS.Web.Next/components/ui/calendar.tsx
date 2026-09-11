@@ -8,6 +8,15 @@ import { cn } from "../lib/utils";
 import { Button } from "./button";
 import { buttonVariants } from "./button.variants";
 
+const CALENDAR_MONTH_FORMATTER = new Intl.DateTimeFormat("en-ZA", {
+  month: "short",
+  timeZone: "UTC",
+});
+
+function formatCalendarDay(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
 function Calendar({
   className,
   classNames,
@@ -33,7 +42,7 @@ function Calendar({
       )}
       captionLayout={captionLayout}
       formatters={{
-        formatMonthDropdown: (date) => date.toLocaleString("default", { month: "short" }),
+        formatMonthDropdown: (date) => CALENDAR_MONTH_FORMATTER.format(date),
         ...formatters,
       }}
       classNames={{
@@ -149,7 +158,7 @@ function CalendarDayButton({
       autoFocus={modifiers.focused}
       variant="ghost"
       size="icon"
-      data-day={day.date.toLocaleDateString()}
+      data-day={formatCalendarDay(day.date)}
       data-selected-single={
         modifiers.selected &&
         !modifiers.range_start &&

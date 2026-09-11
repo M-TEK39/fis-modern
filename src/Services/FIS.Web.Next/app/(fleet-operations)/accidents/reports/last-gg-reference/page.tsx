@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -72,14 +74,14 @@ function ReferenceTable({ rows }: { rows: AccidentLastGgReferenceRow[] }) {
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
           <caption className="sr-only">Last GG reference numbers used</caption>
-          <thead>
-            <tr>
-              <th scope="col">GG Reference Number</th>
-              <th scope="col">Prov Reg Number</th>
-              <th scope="col">GG Number</th>
-              <th scope="col">Teller</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>GG Reference Number</> },
+              { key: "column-2", label: <>Prov Reg Number</> },
+              { key: "column-3", label: <>GG Number</> },
+              { key: "column-4", label: <>Teller</> },
+            ]}
+          />
           <tbody>
             {rows.map((row) => (
               <tr key={row.accidentCode}>

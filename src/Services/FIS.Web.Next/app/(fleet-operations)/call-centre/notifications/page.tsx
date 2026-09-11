@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -252,13 +254,13 @@ function NotifyListTable({
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
           <caption className="sr-only">Notification sections and email addresses</caption>
-          <thead>
-            <tr>
-              <th scope="col">Section Name</th>
-              <th scope="col">Email Address</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Section Name</> },
+              { key: "column-2", label: <>Email Address</> },
+              { key: "column-3", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {items.map((item) => (
               <tr key={item.code}>
@@ -326,7 +328,9 @@ function NotifyListTable({
   );
 }
 
-async function NotificationsPageContent({ searchParams }: NotificationsPageProps) {
+const NotificationsPageContent = renderNotificationsPageContent;
+
+async function renderNotificationsPageContent({ searchParams }: NotificationsPageProps) {
   await connection();
   const session = await getSession();
 

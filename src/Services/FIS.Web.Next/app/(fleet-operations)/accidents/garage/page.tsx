@@ -5,8 +5,14 @@ import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
+import VehicleTable, {
+  type VehicleTableColumn,
+} from "@/app/(fleet-operations)/accidents/vehicle-table";
 import {
   AccidentApiError,
+  type GarageAccidentPage,
+  type GarageAccidentRow,
   getGarageAccidentPage,
   type GarageSearchType,
 } from "@/lib/api/fleet-operations/api-accidents";
@@ -54,6 +60,29 @@ function buildGarageAddHref(searchType: GarageSearchType, searchTerm: string) {
 
   return `/accidents/garage/add?${params.toString()}`;
 }
+
+const garageTableColumns: readonly VehicleTableColumn<GarageAccidentRow>[] = [
+  { key: "vehicleNumber", label: "Vehicle Number", render: (row) => row.vehicleNumber ?? "-" },
+  { key: "hireType", label: "Hire Type", render: (row) => row.hireType ?? "-" },
+  {
+    key: "accidentDate",
+    label: "Accident Date",
+    render: (row) => row.accidentDate?.slice(0, 10) ?? "-",
+  },
+  { key: "reference", label: "GG Reference", render: (row) => row.reference ?? "-" },
+  {
+    key: "action",
+    label: "Action",
+    render: (row) => (
+      <Link
+        className="button button-secondary button-small"
+        href={`/accidents/garage/edit?accidentId=${encodeURIComponent(row.accidentCode)}`}
+      >
+        Edit
+      </Link>
+    ),
+  },
+];
 
 function GarageFallback() {
   return (
@@ -116,6 +145,109 @@ function NoRecords({ searchTerm }: { searchTerm: string }) {
   );
 }
 
+function GarageSearchForm({
+  searchType,
+  searchTerm,
+}: {
+  searchType: GarageSearchType;
+  searchTerm: string;
+}) {
+  return (
+    <form className="accident-garage-search" method="get">
+      <SearchTypeFieldset
+        selectedType={searchType}
+        legend="Search by"
+        name="type"
+        className="accident-garage-search-options"
+      />
+      <div className="vehicle-search-row">
+        <label className="sr-only" htmlFor="garage-search">
+          {searchType === "GG" ? "GG Number" : "GP Number"}
+        </label>
+        <input
+          className="vehicle-search"
+          id="garage-search"
+          maxLength={8}
+          name="q"
+          placeholder={searchType === "GG" ? "Enter GG number" : "Enter GP number"}
+          defaultValue={searchTerm}
+        />
+      </div>
+      <div className="button-row">
+        <button className="button button-primary" type="submit">
+          Submit
+        </button>
+        <Link className="button button-secondary" href="/accidents">
+          Menu
+        </Link>
+      </div>
+    </form>
+  );
+}
+
+function GaragePageResults({
+  pageData,
+  searchTerm,
+}: {
+  pageData: GarageAccidentPage;
+  searchTerm: string;
+}) {
+  if (pageData.totalRecords === 0) return <NoRecords searchTerm={searchTerm} />;
+
+  return (
+    <>
+      <div className="vehicle-table-wrapper" aria-live="polite">
+        <VehicleTable
+          caption="Garage accident records"
+          columns={garageTableColumns}
+          rows={pageData.rows}
+          rowKey={(row) => row.accidentCode}
+        />
+      </div>
+      {pageData.totalPages > 1 ? (
+        <nav className="vehicle-pagination" aria-label="Garage accident pages">
+          {pageData.page > 1 ? (
+            <Link
+              className="vehicle-pagination-button"
+              href={buildGarageHref(pageData.searchType, pageData.searchTerm, pageData.page - 1)}
+            >
+              Previous
+            </Link>
+          ) : (
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Previous
+            </span>
+          )}
+          <span>
+            Page {pageData.page} of {pageData.totalPages}
+          </span>
+          {pageData.page < pageData.totalPages ? (
+            <Link
+              className="vehicle-pagination-button"
+              href={buildGarageHref(pageData.searchType, pageData.searchTerm, pageData.page + 1)}
+            >
+              Next
+            </Link>
+          ) : (
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Next
+            </span>
+          )}
+        </nav>
+      ) : null}
+      <p className="vehicle-pagination-meta">
+        Total records: {pageData.totalRecords} | Page size: {pageData.pageSize}
+      </p>
+    </>
+  );
+}
+
 async function GarageContent({ searchParams }: GaragePageProps) {
   await connection();
   const session = await getSession();
@@ -171,119 +303,8 @@ async function GarageContent({ searchParams }: GaragePageProps) {
           Accident updated successfully.
         </div>
       ) : null}
-      <form className="accident-garage-search" method="get">
-        <fieldset className="accident-garage-search-options">
-          <legend>Search by</legend>
-          <label className="vehicle-checkbox-label">
-            <input type="radio" name="type" value="GG" defaultChecked={searchType === "GG"} /> GG
-          </label>
-          <label className="vehicle-checkbox-label">
-            <input type="radio" name="type" value="GP" defaultChecked={searchType === "GP"} /> GP
-          </label>
-        </fieldset>
-        <div className="vehicle-search-row">
-          <label className="sr-only" htmlFor="garage-search">
-            {searchType === "GG" ? "GG Number" : "GP Number"}
-          </label>
-          <input
-            className="vehicle-search"
-            id="garage-search"
-            maxLength={8}
-            name="q"
-            placeholder={searchType === "GG" ? "Enter GG number" : "Enter GP number"}
-            defaultValue={searchTerm}
-          />
-        </div>
-        <div className="button-row">
-          <button className="button button-primary" type="submit">
-            Submit
-          </button>
-          <Link className="button button-secondary" href="/accidents">
-            Menu
-          </Link>
-        </div>
-      </form>
-
-      {pageData.totalRecords === 0 ? (
-        <NoRecords searchTerm={searchTerm} />
-      ) : (
-        <>
-          <div className="vehicle-table-wrapper" aria-live="polite">
-            <table className="vehicle-table">
-              <caption className="sr-only">Garage accident records</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Vehicle Number</th>
-                  <th scope="col">Hire Type</th>
-                  <th scope="col">Accident Date</th>
-                  <th scope="col">GG Reference</th>
-                  <th scope="col">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pageData.rows.map((row) => (
-                  <tr key={row.accidentCode}>
-                    <td>{row.vehicleNumber ?? "-"}</td>
-                    <td>{row.hireType ?? "-"}</td>
-                    <td>{row.accidentDate?.slice(0, 10) ?? "-"}</td>
-                    <td>{row.reference ?? "-"}</td>
-                    <td>
-                      <Link
-                        className="button button-secondary button-small"
-                        href={`/accidents/garage/edit?accidentId=${encodeURIComponent(row.accidentCode)}`}
-                      >
-                        Edit
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {pageData.totalPages > 1 ? (
-            <nav className="vehicle-pagination" aria-label="Garage accident pages">
-              {pageData.page > 1 ? (
-                <Link
-                  className="vehicle-pagination-button"
-                  href={buildGarageHref(searchType, searchTerm, pageData.page - 1)}
-                >
-                  Previous
-                </Link>
-              ) : (
-                <span
-                  className="vehicle-pagination-button vehicle-pagination-disabled"
-                  aria-disabled="true"
-                >
-                  Previous
-                </span>
-              )}
-              <span>
-                Page {pageData.page} of {pageData.totalPages}
-              </span>
-              {pageData.page < pageData.totalPages ? (
-                <Link
-                  className="vehicle-pagination-button"
-                  href={buildGarageHref(searchType, searchTerm, pageData.page + 1)}
-                >
-                  Next
-                </Link>
-              ) : (
-                <span
-                  className="vehicle-pagination-button vehicle-pagination-disabled"
-                  aria-disabled="true"
-                >
-                  Next
-                </span>
-              )}
-            </nav>
-          ) : null}
-
-          <p className="vehicle-pagination-meta">
-            Total records: {pageData.totalRecords} | Page size: {pageData.pageSize}
-          </p>
-        </>
-      )}
+      <GarageSearchForm searchType={searchType} searchTerm={searchTerm} />
+      <GaragePageResults pageData={pageData} searchTerm={searchTerm} />
 
       <div className="vehicle-footer-actions">
         <Link className="button button-primary" href={buildGarageAddHref(searchType, searchTerm)}>

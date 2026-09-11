@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
-import { type ReportQuery } from "@/app/(fleet-operations)/reports/_components";
+import { type ReportQuery } from "@/app/(fleet-operations)/reports/_utils";
 import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/_route";
 
 export default function LegacyDepartmentReportsPage({

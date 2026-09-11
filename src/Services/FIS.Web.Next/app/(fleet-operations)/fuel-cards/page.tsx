@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -130,18 +132,20 @@ async function FuelCardsPageContent({
             <div className="vehicle-table-wrapper">
               <table className="vehicle-table">
                 <caption className="sr-only">Recent fuelcard activity</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Card No.</th>
-                    <th scope="col">GG Code</th>
-                    <th scope="col">Action</th>
-                    <th scope="col">Date</th>
-                    <th scope="col">Receiver</th>
-                  </tr>
-                </thead>
+                <DataTableHeader
+                  columns={[
+                    { key: "column-1", label: <>Card No.</> },
+                    { key: "column-2", label: <>GG Code</> },
+                    { key: "column-3", label: <>Action</> },
+                    { key: "column-4", label: <>Date</> },
+                    { key: "column-5", label: <>Receiver</> },
+                  ]}
+                />
                 <tbody>
-                  {preview.recentActivity.map((item, index) => (
-                    <tr key={`${item.cardNumber ?? "card"}-${item.date}-${index}`}>
+                  {preview.recentActivity.map((item) => (
+                    <tr
+                      key={`${item.cardNumber ?? "card"}-${item.vmfCode}-${item.date}-${item.action}-${item.receiver}`}
+                    >
                       <td>{item.cardNumber ?? "-"}</td>
                       <td>{item.vmfCode}</td>
                       <td>{item.action}</td>

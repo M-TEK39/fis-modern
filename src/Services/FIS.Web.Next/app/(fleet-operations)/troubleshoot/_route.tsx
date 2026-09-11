@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
@@ -9,14 +11,16 @@ import {
   TroubleshootApiError,
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import {
-  hasTroubleshootingRole,
   Pagination,
-  pageNumber,
   StatusCard,
   TroubleshootMenu,
   TroubleshootShell,
-  valueOrDash,
 } from "@/app/(fleet-operations)/troubleshoot/_components";
+import {
+  hasTroubleshootingRole,
+  pageNumber,
+  valueOrDash,
+} from "@/app/(fleet-operations)/troubleshoot/_utils";
 
 export type TroubleshootPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -85,14 +89,14 @@ async function TroubleshootPageContent({
             <div className="vehicle-table-wrapper">
               <table className="vehicle-table">
                 <caption className="sr-only">Active troubleshoot users</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Access Code</th>
-                    <th scope="col">User</th>
-                    <th scope="col">Site</th>
-                    <th scope="col">Status</th>
-                  </tr>
-                </thead>
+                <DataTableHeader
+                  columns={[
+                    { key: "column-1", label: <>Access Code</> },
+                    { key: "column-2", label: <>User</> },
+                    { key: "column-3", label: <>Site</> },
+                    { key: "column-4", label: <>Status</> },
+                  ]}
+                />
                 <tbody>
                   {users.items.map((user) => (
                     <tr key={user.userAccessCode}>

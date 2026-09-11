@@ -1,9 +1,12 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import HelpEntriesSection from "@/components/ui/help-entries-section";
 import { getSession } from "@/lib/auth/session";
 
 const REPORTS_ROLE = "Reports";
@@ -137,31 +140,12 @@ async function FinesHelpContent() {
           </p>
         </section>
 
-        <section className="module-help-section" aria-labelledby="fines-help-fields-title">
-          <h2 id="fines-help-fields-title">Term / Field Analysis</h2>
-          <p>
-            The definitions below describe the fields used throughout the Fines maintenance screens.
-          </p>
-          <div className="vehicle-table-wrapper">
-            <table className="vehicle-table module-help-table">
-              <caption className="sr-only">Fines maintenance terms and field definitions</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Term / Field</th>
-                  <th scope="col">Definition</th>
-                </tr>
-              </thead>
-              <tbody>
-                {HELP_ENTRIES.map((entry) => (
-                  <tr key={entry.term}>
-                    <th scope="row">{entry.term}</th>
-                    <td>{entry.description}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <HelpEntriesSection
+          headingId="fines-help-fields-title"
+          description="The definitions below describe the fields used throughout the Fines maintenance screens."
+          caption="Fines maintenance terms and field definitions"
+          entries={HELP_ENTRIES}
+        />
       </div>
       <div className="vehicle-footer-actions">
         <Link className="button button-secondary" href="/fines">

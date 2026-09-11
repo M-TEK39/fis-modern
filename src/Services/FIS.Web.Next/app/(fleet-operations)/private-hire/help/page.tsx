@@ -43,6 +43,7 @@ async function PrivateHireHelpContent() {
         src="/legacy/private-hire/Doc_PrivateHire.htm"
         title="Private Hire maintenance help"
         className="help-iframe document-help-frame"
+        sandbox=""
       />
     </div>
   );

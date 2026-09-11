@@ -44,6 +44,22 @@ function asString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function mapPresent<T>(
+  values: readonly unknown[],
+  mapper: (value: unknown, index: number) => T | null,
+) {
+  const result: T[] = [];
+  let index = 0;
+  for (const value of values) {
+    const mapped = mapper(value, index);
+    if (mapped !== null) {
+      result.push(mapped);
+      index += 1;
+    }
+  }
+  return result;
+}
+
 function mapSummaryLine(value: Record<string, unknown>, index: number): TripQueryRow {
   const tripId = asNumber(getValue(value, "tripId", "TripId"));
   const vmfCode = asNumber(getValue(value, "vmfCode", "VmfCode"));
@@ -155,7 +171,9 @@ export async function getTripQueryPage(
     );
 
   return {
-    items: items.filter(isRecord).map(mapSummaryLine),
+    items: mapPresent(items, (item, index) =>
+      isRecord(item) ? mapSummaryLine(item, index) : null,
+    ),
     ...metadata,
   };
 }

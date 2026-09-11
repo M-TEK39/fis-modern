@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -24,7 +25,9 @@ function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
 }
 
-async function WorkshopEntryModifyPageContent({
+const WorkshopEntryModifyPageContent = renderWorkshopEntryModifyPageContent;
+
+async function renderWorkshopEntryModifyPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -75,6 +78,12 @@ async function WorkshopEntryModifyPageContent({
             (vehicle): vehicle is WorkshopVehicle => vehicle !== undefined,
           )
         : options;
+    const workshopOptions = allWorkshops.reduce<WorkshopRecord[]>((result, entry) => {
+      if (!term || (entry.vmfCode !== null && optionCodes.has(entry.vmfCode))) {
+        result.push(entry);
+      }
+      return result;
+    }, []);
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="workshop-modify-title">
@@ -89,15 +98,7 @@ async function WorkshopEntryModifyPageContent({
             </Link>
           </header>
           <form className="vehicle-status-maintenance-panel" method="get">
-            <fieldset className="vehicle-search-options">
-              <legend>Find entry by vehicle</legend>
-              <label className="vehicle-checkbox-label">
-                <input type="radio" name="type" value="GG" defaultChecked={type !== "GP"} /> GG
-              </label>
-              <label className="vehicle-checkbox-label">
-                <input type="radio" name="type" value="GP" defaultChecked={type === "GP"} /> GP
-              </label>
-            </fieldset>
+            <SearchTypeFieldset selectedType={type} legend="Find entry by vehicle" name="type" />
             <div className="vehicle-search-row">
               <label className="sr-only" htmlFor="modify-workshop-search">
                 Vehicle number
@@ -123,15 +124,11 @@ async function WorkshopEntryModifyPageContent({
               defaultValue={selected?.wwCode ?? ""}
             >
               <option value="">Select workshop entry...</option>
-              {allWorkshops
-                .filter(
-                  (entry) => !term || (entry.vmfCode !== null && optionCodes.has(entry.vmfCode)),
-                )
-                .map((entry) => (
-                  <option key={entry.wwCode} value={entry.wwCode}>
-                    Entry #{entry.wwCode} - received {formatDate(entry.receiveDate)}
-                  </option>
-                ))}
+              {workshopOptions.map((entry) => (
+                <option key={entry.wwCode} value={entry.wwCode}>
+                  Entry #{entry.wwCode} - received {formatDate(entry.receiveDate)}
+                </option>
+              ))}
             </select>
           </form>
           {selected ? (

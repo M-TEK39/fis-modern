@@ -9,15 +9,17 @@ import { connection } from "next/server";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { saveTaxiLogAction, saveTaxiWhiteLogAction } from "@/app/(fleet-operations)/taxis/actions";
 import {
-  dateValue,
-  queryValue,
   TaxiHeader,
   TaxiNotice,
   TaxiRestricted,
   TaxiUnavailable,
+} from "@/app/(fleet-operations)/taxis/_components";
+import {
+  dateValue,
+  queryValue,
   timeValue,
   valueOrDash,
-} from "@/app/(fleet-operations)/taxis/_components";
+} from "@/app/(fleet-operations)/taxis/_utils";
 import {
   getTaxiLogLookup,
   getTaxiLogReferences,
@@ -157,7 +159,9 @@ function WhiteLogForm() {
   );
 }
 
-function LogForm({
+const LogForm = renderLogForm;
+
+function renderLogForm({
   lookup,
   references,
 }: Readonly<{ lookup: TaxiLogLookup; references: TaxiLogReference }>) {
@@ -442,7 +446,9 @@ function LogSummary({ lookup }: Readonly<{ lookup: TaxiLogLookup }>) {
   );
 }
 
-async function TaxiLogsPageContent({
+const TaxiLogsPageContent = renderTaxiLogsPageContent;
+
+async function renderTaxiLogsPageContent({
   searchParams,
   mode: forcedMode,
 }: Readonly<{ searchParams: SearchParams; mode?: string }>) {

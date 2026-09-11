@@ -50,6 +50,247 @@ function dateInputValue(value: string | null | undefined) {
   return value?.slice(0, 10) ?? "";
 }
 
+function AuctionBaseFields({ auction }: { auction: AuctionRecord }) {
+  return (
+    <>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-number">
+          Auction Number
+        </label>
+        <input
+          className="form-input"
+          id="auction-number"
+          maxLength={7}
+          name="auctionNumber"
+          defaultValue={auction.auctionNumber ?? ""}
+          required
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-camp">
+          Camp
+        </label>
+        <select
+          className="form-select"
+          id="auction-camp"
+          name="camp"
+          defaultValue={auction.camp ?? "Camp1"}
+          required
+        >
+          <option value="Camp1">Camp1</option>
+          <option value="Camp2">Camp2</option>
+        </select>
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-lot">
+          Lot Number
+        </label>
+        <input
+          className="form-input"
+          id="auction-lot"
+          min="0"
+          name="lot"
+          type="number"
+          defaultValue={auction.lot ?? ""}
+          required
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-garage">
+          Auction Garage
+        </label>
+        <input
+          className="form-input"
+          id="auction-garage"
+          readOnly
+          value={auction.auctionGarage ?? 1}
+        />
+        <input name="auctionGarage" type="hidden" value={auction.auctionGarage ?? 1} />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-barcode">
+          Bar Code
+        </label>
+        <input
+          className="form-input"
+          id="auction-barcode"
+          maxLength={15}
+          name="barcode"
+          defaultValue={auction.barcode ?? ""}
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-auth-number">
+          Auth Number
+        </label>
+        <input
+          className="form-input"
+          id="auction-auth-number"
+          maxLength={10}
+          name="authNumber"
+          defaultValue={auction.authNumber ?? ""}
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-auth-date">
+          Auth Date
+        </label>
+        <input
+          className="form-input"
+          id="auction-auth-date"
+          name="authDate"
+          type="date"
+          defaultValue={dateInputValue(auction.authDate)}
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-km">
+          Km
+        </label>
+        <input
+          className="form-input"
+          id="auction-km"
+          min="0"
+          name="auctionKm"
+          type="number"
+          defaultValue={auction.auctionKm ?? ""}
+          required
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-owner">
+          Garage Owner
+        </label>
+        <select
+          className="form-select"
+          id="auction-owner"
+          name="garageOwner"
+          defaultValue={auction.garageOwner ?? "Jhb"}
+          required
+        >
+          <option value="Jhb">Jhb</option>
+          <option value="Pta">Pta</option>
+        </select>
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-reason">
+          Sold Reason
+        </label>
+        <select
+          className="form-select"
+          id="auction-reason"
+          name="reasonSold"
+          defaultValue={auction.reasonSold ?? "Old & Obsolete"}
+          required
+        >
+          {REASON_OPTIONS.map((reason) => (
+            <option key={reason} value={reason}>
+              {reason}
+            </option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
+}
+
+function AuctionSaleFields({ auction }: { auction: AuctionRecord }) {
+  return (
+    <>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-estimate">
+          Estimate Price
+        </label>
+        <input
+          className="form-input"
+          id="auction-estimate"
+          min="0"
+          name="estimateAmount"
+          type="number"
+          defaultValue={auction.estimateAmount ?? ""}
+          required
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-reserve">
+          Reserve Price
+        </label>
+        <input
+          className="form-input"
+          id="auction-reserve"
+          min="0"
+          name="reserveAmount"
+          type="number"
+          defaultValue={auction.reserveAmount ?? ""}
+          required
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-sold-price">
+          Sold Price
+        </label>
+        <input
+          className="form-input"
+          id="auction-sold-price"
+          min="0"
+          name="soldAmount"
+          type="number"
+          defaultValue={auction.soldAmount ?? ""}
+          required
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-sold-to">
+          Sold To Name
+        </label>
+        <input
+          className="form-input"
+          id="auction-sold-to"
+          maxLength={30}
+          name="soldTo"
+          defaultValue={auction.soldTo ?? ""}
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-sold-id">
+          Sold To ID
+        </label>
+        <input
+          className="form-input"
+          id="auction-sold-id"
+          maxLength={13}
+          name="soldId"
+          defaultValue={auction.soldId ?? ""}
+        />
+      </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="auction-sold-date">
+          Sold Date
+        </label>
+        <input
+          className="form-input"
+          id="auction-sold-date"
+          name="soldDate"
+          type="date"
+          defaultValue={dateInputValue(auction.soldDate)}
+        />
+      </div>
+      <div className="form-field form-group-full">
+        <label className="form-label" htmlFor="auction-remark">
+          Remarks
+        </label>
+        <input
+          className="form-input"
+          id="auction-remark"
+          maxLength={30}
+          name="remark"
+          defaultValue={auction.remark ?? ""}
+        />
+      </div>
+    </>
+  );
+}
+
 function AuctionForm({
   auction,
   routePath,
@@ -86,233 +327,8 @@ function AuctionForm({
         </div>
       </div>
       <div className="form-grid">
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-number">
-            Auction Number
-          </label>
-          <input
-            className="form-input"
-            id="auction-number"
-            maxLength={7}
-            name="auctionNumber"
-            defaultValue={auction.auctionNumber ?? ""}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-camp">
-            Camp
-          </label>
-          <select
-            className="form-select"
-            id="auction-camp"
-            name="camp"
-            defaultValue={auction.camp ?? "Camp1"}
-            required
-          >
-            <option value="Camp1">Camp1</option>
-            <option value="Camp2">Camp2</option>
-          </select>
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-lot">
-            Lot Number
-          </label>
-          <input
-            className="form-input"
-            id="auction-lot"
-            min="0"
-            name="lot"
-            type="number"
-            defaultValue={auction.lot ?? ""}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-garage">
-            Auction Garage
-          </label>
-          <input
-            className="form-input"
-            id="auction-garage"
-            readOnly
-            value={auction.auctionGarage ?? 1}
-          />
-          <input name="auctionGarage" type="hidden" value={auction.auctionGarage ?? 1} />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-barcode">
-            Bar Code
-          </label>
-          <input
-            className="form-input"
-            id="auction-barcode"
-            maxLength={15}
-            name="barcode"
-            defaultValue={auction.barcode ?? ""}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-auth-number">
-            Auth Number
-          </label>
-          <input
-            className="form-input"
-            id="auction-auth-number"
-            maxLength={10}
-            name="authNumber"
-            defaultValue={auction.authNumber ?? ""}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-auth-date">
-            Auth Date
-          </label>
-          <input
-            className="form-input"
-            id="auction-auth-date"
-            name="authDate"
-            type="date"
-            defaultValue={dateInputValue(auction.authDate)}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-km">
-            Km
-          </label>
-          <input
-            className="form-input"
-            id="auction-km"
-            min="0"
-            name="auctionKm"
-            type="number"
-            defaultValue={auction.auctionKm ?? ""}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-owner">
-            Garage Owner
-          </label>
-          <select
-            className="form-select"
-            id="auction-owner"
-            name="garageOwner"
-            defaultValue={auction.garageOwner ?? "Jhb"}
-            required
-          >
-            <option value="Jhb">Jhb</option>
-            <option value="Pta">Pta</option>
-          </select>
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-reason">
-            Sold Reason
-          </label>
-          <select
-            className="form-select"
-            id="auction-reason"
-            name="reasonSold"
-            defaultValue={auction.reasonSold ?? "Old & Obsolete"}
-            required
-          >
-            {REASON_OPTIONS.map((reason) => (
-              <option key={reason} value={reason}>
-                {reason}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-estimate">
-            Estimate Price
-          </label>
-          <input
-            className="form-input"
-            id="auction-estimate"
-            min="0"
-            name="estimateAmount"
-            type="number"
-            defaultValue={auction.estimateAmount ?? ""}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-reserve">
-            Reserve Price
-          </label>
-          <input
-            className="form-input"
-            id="auction-reserve"
-            min="0"
-            name="reserveAmount"
-            type="number"
-            defaultValue={auction.reserveAmount ?? ""}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-sold-price">
-            Sold Price
-          </label>
-          <input
-            className="form-input"
-            id="auction-sold-price"
-            min="0"
-            name="soldAmount"
-            type="number"
-            defaultValue={auction.soldAmount ?? ""}
-            required
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-sold-to">
-            Sold To Name
-          </label>
-          <input
-            className="form-input"
-            id="auction-sold-to"
-            maxLength={30}
-            name="soldTo"
-            defaultValue={auction.soldTo ?? ""}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-sold-id">
-            Sold To ID
-          </label>
-          <input
-            className="form-input"
-            id="auction-sold-id"
-            maxLength={13}
-            name="soldId"
-            defaultValue={auction.soldId ?? ""}
-          />
-        </div>
-        <div className="form-field">
-          <label className="form-label" htmlFor="auction-sold-date">
-            Sold Date
-          </label>
-          <input
-            className="form-input"
-            id="auction-sold-date"
-            name="soldDate"
-            type="date"
-            defaultValue={dateInputValue(auction.soldDate)}
-          />
-        </div>
-        <div className="form-field form-group-full">
-          <label className="form-label" htmlFor="auction-remark">
-            Remarks
-          </label>
-          <input
-            className="form-input"
-            id="auction-remark"
-            maxLength={30}
-            name="remark"
-            defaultValue={auction.remark ?? ""}
-          />
-        </div>
+        <AuctionBaseFields auction={auction} />
+        <AuctionSaleFields auction={auction} />
       </div>
       <div className="button-row">
         <button className="button button-primary" type="submit">

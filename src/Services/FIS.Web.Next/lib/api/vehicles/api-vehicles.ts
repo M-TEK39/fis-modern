@@ -372,19 +372,19 @@ export async function getVehicleSnapshotPage(
 
 export async function getVehicleOptions(): Promise<VehicleOption[]> {
   const payload = await requestApi("api/vehicles");
-  return getCollection(payload)
-    .filter(isRecord)
-    .map((value) => {
-      const vmfCode = asNumber(getValue(value, "vmf_code", "vmfCode"));
-      if (vmfCode === null) return null;
-      return {
-        vmfCode,
-        fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
-        registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
-        modelCode: asNumber(getValue(value, "model_code", "modelCode")),
-      } satisfies VehicleOption;
-    })
-    .filter((vehicle): vehicle is VehicleOption => vehicle !== null);
+  const vehicles: VehicleOption[] = [];
+  for (const value of getCollection(payload)) {
+    if (!isRecord(value)) continue;
+    const vmfCode = asNumber(getValue(value, "vmf_code", "vmfCode"));
+    if (vmfCode === null) continue;
+    vehicles.push({
+      vmfCode,
+      fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
+      registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
+      modelCode: asNumber(getValue(value, "model_code", "modelCode")),
+    });
+  }
+  return vehicles;
 }
 
 export async function getRenumberedVehicleReportPage(

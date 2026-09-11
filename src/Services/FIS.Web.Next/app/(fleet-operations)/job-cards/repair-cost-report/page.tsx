@@ -1,21 +1,18 @@
 import Link from "next/link";
 
+import { JobCardPagination, RepairCostTable } from "@/app/(fleet-operations)/job-cards/_components";
+import { formatMoney, hasJobCardAccess, hasRole } from "@/app/(fleet-operations)/job-cards/_utils";
 import {
-  JobCardPagination,
-  RepairCostTable,
-  hasJobCardAccess,
-  hasRole,
-  formatMoney,
-} from "@/app/(fleet-operations)/job-cards/_components";
-import {
-  accessRestricted,
-  getJobCardSession,
+  AccessRestricted,
   JobCardPageBoundary,
+  SessionProblem,
+} from "@/app/(fleet-operations)/job-cards/_page";
+import {
+  getJobCardSession,
   jobCardPageHref,
   queryPage,
   queryValue,
-  sessionMessage,
-} from "@/app/(fleet-operations)/job-cards/_page";
+} from "@/app/(fleet-operations)/job-cards/_page-utils";
 import {
   DEFAULT_JOB_CARD_PAGE_SIZE,
   getRepairCostReportPage,
@@ -46,12 +43,12 @@ async function RepairCostReportContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
-  const problem = sessionMessage(session, "/job-cards/repair-cost-report");
-  if (problem) return problem;
+  if (session.status === "expired" || session.status === "unavailable")
+    return <SessionProblem returnPath="/job-cards/repair-cost-report" />;
   if (session.status !== "authenticated")
-    return accessRestricted("Your session could not be loaded.");
+    return <AccessRestricted message="Your session could not be loaded." />;
   if (!hasRole(session.roles, "capturer") && !hasJobCardAccess(session.accessLevel, session.roles))
-    return accessRestricted("Your profile does not include Job Card access.");
+    return <AccessRestricted message="Your profile does not include Job Card access." />;
   const query = await searchParams;
   const vmfCode = positiveNumber(queryValue(query.vmfCode));
   const siteCode = positiveNumber(queryValue(query.siteCode));

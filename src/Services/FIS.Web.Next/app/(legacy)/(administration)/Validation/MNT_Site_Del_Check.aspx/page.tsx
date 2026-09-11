@@ -32,7 +32,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function SiteDeleteCheckPageContent({ searchParams }: SiteDeleteCheckPageProps) {
+async function renderSiteDeleteCheckPage({ searchParams }: SiteDeleteCheckPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -156,12 +156,6 @@ async function SiteDeleteCheckPageContent({ searchParams }: SiteDeleteCheckPageP
   }
 }
 
-export default function SiteDeleteCheckPage(
-  props: NonNullable<Parameters<typeof SiteDeleteCheckPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <SiteDeleteCheckPageContent {...props} />
-    </Suspense>
-  );
+export default function SiteDeleteCheckPage(props: SiteDeleteCheckPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderSiteDeleteCheckPage(props)}</Suspense>;
 }

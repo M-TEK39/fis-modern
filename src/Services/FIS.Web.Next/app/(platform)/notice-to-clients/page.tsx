@@ -12,6 +12,19 @@ import {
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
+const NOTICE_DATE_FORMATTER = new Intl.DateTimeFormat("en-ZA", {
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+const NOTICE_CREATED_DATE_FORMATTER = new Intl.DateTimeFormat("en-ZA", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
 function queryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -26,22 +39,14 @@ function formatNoticeDate(value: string | null) {
   if (!value || value.startsWith("0001-01-01")) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value.slice(0, 10);
-  return new Intl.DateTimeFormat("en-ZA", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(date);
+  return NOTICE_DATE_FORMATTER.format(date);
 }
 
 function formatCreatedDate(value: string | null) {
   if (!value || value.startsWith("0001-01-01")) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value.slice(0, 10).replaceAll("-", "/");
-  return new Intl.DateTimeFormat("en-ZA", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  return NOTICE_CREATED_DATE_FORMATTER.format(date);
 }
 
 function NoticeBody({ value }: Readonly<{ value: string }>) {

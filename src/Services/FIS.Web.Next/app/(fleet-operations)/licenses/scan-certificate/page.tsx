@@ -1,6 +1,9 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 
 import Link from "next/link";
 
@@ -12,8 +15,8 @@ import {
   LicenseMenu,
   LicenseNotice,
   LicenseShell,
-  valueOrDash,
 } from "@/app/(fleet-operations)/licenses/_components";
+import { valueOrDash } from "@/app/(fleet-operations)/licenses/_utils";
 import {
   accessRestricted,
   getLicenseSession,
@@ -122,15 +125,7 @@ function VehicleSearch({
         <input name="lookup" type="hidden" value="1" />
         <input name="vmfCode" type="hidden" value={vmfCode} />
         <div className="form-grid">
-          <fieldset className="vehicle-search-options">
-            <legend>Number type</legend>
-            <label className="vehicle-checkbox-label">
-              <input name="mode" type="radio" value="GG" defaultChecked={mode === "GG"} /> GG
-            </label>
-            <label className="vehicle-checkbox-label">
-              <input name="mode" type="radio" value="GP" defaultChecked={mode === "GP"} /> GP
-            </label>
-          </fieldset>
+          <SearchTypeFieldset selectedType={mode} legend="Number type" name="mode" />
           <div className="form-field">
             <label className="form-label" htmlFor="certificate-vehicle-number">
               {mode === "GG" ? "GG Number" : "GP Number"}
@@ -179,14 +174,14 @@ function VehicleMatches({
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
           <caption className="sr-only">Vehicles matching certificate search</caption>
-          <thead>
-            <tr>
-              <th scope="col">GG Number</th>
-              <th scope="col">GP Number</th>
-              <th scope="col">VMF Code</th>
-              <th scope="col">Action</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>GG Number</> },
+              { key: "column-2", label: <>GP Number</> },
+              { key: "column-3", label: <>VMF Code</> },
+              { key: "column-4", label: <>Action</> },
+            ]}
+          />
           <tbody>
             {matches.map((vehicle) => (
               <tr key={vehicle.vmfCode}>
@@ -242,17 +237,17 @@ function CertificateTable({
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
           <caption className="sr-only">Scanned licence certificates</caption>
-          <thead>
-            <tr>
-              <th scope="col">GG Number</th>
-              <th scope="col">GP Number</th>
-              <th scope="col">Period From</th>
-              <th scope="col">Period To</th>
-              <th scope="col">File</th>
-              <th scope="col">Source</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>GG Number</> },
+              { key: "column-2", label: <>GP Number</> },
+              { key: "column-3", label: <>Period From</> },
+              { key: "column-4", label: <>Period To</> },
+              { key: "column-5", label: <>File</> },
+              { key: "column-6", label: <>Source</> },
+              { key: "column-7", label: <>Actions</> },
+            ]}
+          />
           <tbody>
             {certificates.map((certificate) => (
               <tr key={`${certificate.source}-${certificate.documentKey}-${certificate.vmfCode}`}>
@@ -352,15 +347,15 @@ function MissingCertificates({
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Vehicles without scanned licence certificates</caption>
-            <thead>
-              <tr>
-                <th scope="col">#</th>
-                <th scope="col">GG Number</th>
-                <th scope="col">GP Number</th>
-                <th scope="col">VMF Code</th>
-                <th scope="col">Action</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>#</> },
+                { key: "column-2", label: <>GG Number</> },
+                { key: "column-3", label: <>GP Number</> },
+                { key: "column-4", label: <>VMF Code</> },
+                { key: "column-5", label: <>Action</> },
+              ]}
+            />
             <tbody>
               {page.vehicles.map((vehicle) => (
                 <tr key={vehicle.vmfCode}>
@@ -459,7 +454,9 @@ function UploadForm({ vmfCode, returnPath }: Readonly<{ vmfCode: number; returnP
   );
 }
 
-async function LicenseScanCertificatePageContent({
+const LicenseScanCertificatePageContent = renderLicenseScanCertificatePageContent;
+
+async function renderLicenseScanCertificatePageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   const session = await getLicenseSession();

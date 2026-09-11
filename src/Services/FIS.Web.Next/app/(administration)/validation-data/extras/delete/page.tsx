@@ -39,7 +39,74 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function ExtraCodeDeletePageContent({ searchParams }: ExtraCodeDeletePageProps) {
+type ExtraCodeRecord = NonNullable<Awaited<ReturnType<typeof getExtraCode>>>;
+type ExtraCodeDependencies = Awaited<ReturnType<typeof getExtraCodeDeleteCheck>>;
+
+function ExtraCodeDeleteView({
+  extra,
+  dependencies,
+}: Readonly<{ extra: ExtraCodeRecord; dependencies: ExtraCodeDependencies }>) {
+  const blocked =
+    !dependencies.checkAvailable || !dependencies.canDelete || dependencies.vehicleCount > 0;
+
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="extra-code-delete-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Vehicle</p>
+            <h1 id="extra-code-delete-title">Delete Extra</h1>
+            <p>Check linked vehicle data before deleting this optional extra.</p>
+          </div>
+          <Link className="button button-secondary" href="/Validation/MNT_Extras.aspx">
+            Optional Extras Maintenance
+          </Link>
+        </header>
+        <section className="vehicle-status-card" role={blocked ? "alert" : "note"}>
+          <p className="eyebrow">Extra code {extra.extraCode}</p>
+          <h2>{extra.description || `Extra code ${extra.extraCode}`}</h2>
+          {!dependencies.checkAvailable ? (
+            <p className="muted-copy">
+              Linked vehicle data could not be verified, so this extra cannot be deleted yet.
+            </p>
+          ) : dependencies.vehicleCount > 0 ? (
+            <>
+              <p className="muted-copy">
+                Remove this extra from the following vehicles before deleting it:
+              </p>
+              <ul>
+                {dependencies.fleetNumbers.map((fleetNumber) => (
+                  <li key={fleetNumber}>{fleetNumber}</li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="muted-copy">
+              This extra is not linked to any vehicle data. Deleting it cannot be undone.
+            </p>
+          )}
+          {blocked ? (
+            <Link className="button button-secondary" href="/Validation/MNT_Extras.aspx">
+              Return to Optional Extras Maintenance
+            </Link>
+          ) : (
+            <form action={deleteExtraCodeAction} className="button-row">
+              <input name="extraCode" type="hidden" value={extra.extraCode} readOnly />
+              <button className="button button-primary" type="submit">
+                Confirm Delete
+              </button>
+              <Link className="button button-secondary" href="/Validation/MNT_Extras.aspx">
+                Cancel
+              </Link>
+            </form>
+          )}
+        </section>
+      </section>
+    </main>
+  );
+}
+
+async function renderExtraCodeDeletePage({ searchParams }: ExtraCodeDeletePageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -89,63 +156,7 @@ async function ExtraCodeDeletePageContent({ searchParams }: ExtraCodeDeletePageP
         </main>
       );
 
-    const blocked =
-      !dependencies.checkAvailable || !dependencies.canDelete || dependencies.vehicleCount > 0;
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="extra-code-delete-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Vehicle</p>
-              <h1 id="extra-code-delete-title">Delete Extra</h1>
-              <p>Check linked vehicle data before deleting this optional extra.</p>
-            </div>
-            <Link className="button button-secondary" href="/Validation/MNT_Extras.aspx">
-              Optional Extras Maintenance
-            </Link>
-          </header>
-          <section className="vehicle-status-card" role={blocked ? "alert" : "note"}>
-            <p className="eyebrow">Extra code {extra.extraCode}</p>
-            <h2>{extra.description || `Extra code ${extra.extraCode}`}</h2>
-            {!dependencies.checkAvailable ? (
-              <p className="muted-copy">
-                Linked vehicle data could not be verified, so this extra cannot be deleted yet.
-              </p>
-            ) : dependencies.vehicleCount > 0 ? (
-              <>
-                <p className="muted-copy">
-                  Remove this extra from the following vehicles before deleting it:
-                </p>
-                <ul>
-                  {dependencies.fleetNumbers.map((fleetNumber) => (
-                    <li key={fleetNumber}>{fleetNumber}</li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <p className="muted-copy">
-                This extra is not linked to any vehicle data. Deleting it cannot be undone.
-              </p>
-            )}
-            {blocked ? (
-              <Link className="button button-secondary" href="/Validation/MNT_Extras.aspx">
-                Return to Optional Extras Maintenance
-              </Link>
-            ) : (
-              <form action={deleteExtraCodeAction} className="button-row">
-                <input name="extraCode" type="hidden" value={extra.extraCode} readOnly />
-                <button className="button button-primary" type="submit">
-                  Confirm Delete
-                </button>
-                <Link className="button button-secondary" href="/Validation/MNT_Extras.aspx">
-                  Cancel
-                </Link>
-              </form>
-            )}
-          </section>
-        </section>
-      </main>
-    );
+    return <ExtraCodeDeleteView extra={extra} dependencies={dependencies} />;
   } catch (caughtError) {
     if (caughtError instanceof ExtraCodeApiError && caughtError.reason === "unauthorized")
       return (
@@ -171,12 +182,6 @@ async function ExtraCodeDeletePageContent({ searchParams }: ExtraCodeDeletePageP
   }
 }
 
-export default function ExtraCodeDeletePage(
-  props: NonNullable<Parameters<typeof ExtraCodeDeletePageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <ExtraCodeDeletePageContent {...props} />
-    </Suspense>
-  );
+export default function ExtraCodeDeletePage(props: ExtraCodeDeletePageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderExtraCodeDeletePage(props)}</Suspense>;
 }

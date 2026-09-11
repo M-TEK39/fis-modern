@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -5,6 +7,8 @@ import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import RouteLoading from "@/components/app-shell/route-loading";
+import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
+import AccessRestrictedCard from "@/components/app-shell/access-restricted-card";
 import {
   DEFAULT_RENUMBERED_REPORT_PAGE_SIZE,
   getRenumberedVehicleReportPage,
@@ -42,42 +46,17 @@ function valueOrDash(value: string | null) {
 }
 
 function AccessRestricted() {
-  return (
-    <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">
-        !
-      </div>
-      <p className="eyebrow">Access restricted</p>
-      <h2>You do not have permission to view renumbered vehicles.</h2>
-      <div className="button-row">
-        <Link className="button button-secondary" href="/vehicles">
-          Back to Vehicle Master
-        </Link>
-      </div>
-    </section>
-  );
+  return <AccessRestrictedCard message="You do not have permission to view renumbered vehicles." />;
 }
 
 function ApiUnavailable({ routePath }: Readonly<{ routePath: RenumberedReportRoutePath }>) {
   return (
-    <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">
-        !
-      </div>
-      <p className="eyebrow">API unavailable</p>
-      <h2>The renumbered vehicle report could not be loaded.</h2>
-      <p className="muted-copy">
-        The application is still running. Retry when the FIS API is available.
-      </p>
-      <div className="button-row">
-        <Link className="button button-primary" href={routePath}>
-          Try again
-        </Link>
-        <Link className="button button-secondary" href="/login">
-          Sign in
-        </Link>
-      </div>
-    </section>
+    <ApiUnavailableCard
+      message="The renumbered vehicle report could not be loaded."
+      retryHref={routePath}
+      secondaryHref="/login"
+      secondaryLabel="Sign in"
+    />
   );
 }
 
@@ -89,16 +68,16 @@ function ReportTable({
     <div className="vehicle-table-wrapper">
       <table className="vehicle-table">
         <caption className="sr-only">Report All Renumbered Vehicles results</caption>
-        <thead>
-          <tr>
-            <th scope="col">No.</th>
-            <th scope="col">Old GG Number</th>
-            <th scope="col">Status</th>
-            <th scope="col">New GG Number</th>
-            <th scope="col">Status</th>
-            <th scope="col">Fleet Number History of Renumbered</th>
-          </tr>
-        </thead>
+        <DataTableHeader
+          columns={[
+            { key: "column-1", label: <>No.</> },
+            { key: "column-2", label: <>Old GG Number</> },
+            { key: "column-3", label: <>Status</> },
+            { key: "column-4", label: <>New GG Number</> },
+            { key: "column-5", label: <>Status</> },
+            { key: "column-6", label: <>Fleet Number History of Renumbered</> },
+          ]}
+        />
         <tbody>
           {rows.length === 0 ? (
             <tr>

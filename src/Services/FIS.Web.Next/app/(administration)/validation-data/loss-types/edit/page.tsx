@@ -36,7 +36,32 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function LossTypeEditPageContent({ searchParams }: LossTypeEditPageProps) {
+function LossTypeEditView({
+  lossTypeCode,
+  lossType,
+}: Readonly<{ lossTypeCode: number; lossType: Awaited<ReturnType<typeof getLossType>> }>) {
+  if (!lossType) return null;
+
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="loss-type-edit-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Operational</p>
+            <h1 id="loss-type-edit-title">Edit Loss Description</h1>
+            <p>Update loss type {lossTypeCode} without changing its legacy code.</p>
+          </div>
+          <Link className="button button-secondary" href="/Validation/MNT_Loss_Type.aspx">
+            Loss Description Maintenance
+          </Link>
+        </header>
+        <LossTypeForm action={updateLossTypeAction} lossType={lossType} mode="update" />
+      </section>
+    </main>
+  );
+}
+
+async function renderLossTypeEditPage({ searchParams }: LossTypeEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -81,23 +106,7 @@ async function LossTypeEditPageContent({ searchParams }: LossTypeEditPageProps) 
           <ErrorCard message={`Loss type ${lossTypeCode} was not found.`} />
         </main>
       );
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="loss-type-edit-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Operational</p>
-              <h1 id="loss-type-edit-title">Edit Loss Description</h1>
-              <p>Update loss type {lossTypeCode} without changing its legacy code.</p>
-            </div>
-            <Link className="button button-secondary" href="/Validation/MNT_Loss_Type.aspx">
-              Loss Description Maintenance
-            </Link>
-          </header>
-          <LossTypeForm action={updateLossTypeAction} lossType={lossType} mode="update" />
-        </section>
-      </main>
-    );
+    return <LossTypeEditView lossTypeCode={lossTypeCode} lossType={lossType} />;
   } catch (error) {
     if (error instanceof LossTypeApiError && error.reason === "unauthorized")
       return (
@@ -125,12 +134,6 @@ async function LossTypeEditPageContent({ searchParams }: LossTypeEditPageProps) 
   }
 }
 
-export default function LossTypeEditPage(
-  props: NonNullable<Parameters<typeof LossTypeEditPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <LossTypeEditPageContent {...props} />
-    </Suspense>
-  );
+export default function LossTypeEditPage(props: LossTypeEditPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderLossTypeEditPage(props)}</Suspense>;
 }

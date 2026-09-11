@@ -7,7 +7,9 @@ type LegacyPrivateHireTaxiRouteProps = Readonly<{
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }>;
 
-async function LegacyPrivateHireTaxiRouteContent({
+const LegacyPrivateHireTaxiRouteContent = renderLegacyPrivateHireTaxiRouteContent;
+
+async function renderLegacyPrivateHireTaxiRouteContent({
   params,
   searchParams,
 }: LegacyPrivateHireTaxiRouteProps) {

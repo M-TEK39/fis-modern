@@ -39,7 +39,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function DriverLicenceDeleteCheckPageContent({
+async function renderDriverLicenceDeleteCheckPage({
   searchParams,
 }: DriverLicenceDeleteCheckPageProps) {
   await connection();
@@ -170,12 +170,8 @@ async function DriverLicenceDeleteCheckPageContent({
   }
 }
 
-export default function DriverLicenceDeleteCheckPage(
-  props: NonNullable<Parameters<typeof DriverLicenceDeleteCheckPageContent>[0]>,
-) {
+export default function DriverLicenceDeleteCheckPage(props: DriverLicenceDeleteCheckPageProps) {
   return (
-    <Suspense fallback={<RouteLoading />}>
-      <DriverLicenceDeleteCheckPageContent {...props} />
-    </Suspense>
+    <Suspense fallback={<RouteLoading />}>{renderDriverLicenceDeleteCheckPage(props)}</Suspense>
   );
 }

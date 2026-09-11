@@ -3,11 +3,8 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 
-import {
-  AccessRestricted,
-  hasReportsRole,
-  ReportsUnavailable,
-} from "@/app/(fleet-operations)/reports/_components";
+import { AccessRestricted, ReportsUnavailable } from "@/app/(fleet-operations)/reports/_components";
+import { hasReportsRole } from "@/app/(fleet-operations)/reports/_utils";
 import { getReportHelp, LegacyReportApiError } from "@/lib/api/reports/api-legacy-reports";
 import { getSession } from "@/lib/auth/session";
 

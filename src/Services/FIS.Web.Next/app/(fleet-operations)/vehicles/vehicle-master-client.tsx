@@ -1,5 +1,7 @@
 "use client";
 
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
@@ -210,17 +212,17 @@ export default function VehicleMasterClient({
           <>
             <div className="vehicle-table-wrapper">
               <table className="vehicle-table">
-                <thead>
-                  <tr>
-                    <th scope="col">GG Number</th>
-                    <th scope="col">Registration</th>
-                    <th scope="col">Invoice Number</th>
-                    <th scope="col">Model</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Contract State</th>
-                    <th scope="col">Target Return</th>
-                  </tr>
-                </thead>
+                <DataTableHeader
+                  columns={[
+                    { key: "column-1", label: <>GG Number</> },
+                    { key: "column-2", label: <>Registration</> },
+                    { key: "column-3", label: <>Invoice Number</> },
+                    { key: "column-4", label: <>Model</> },
+                    { key: "column-5", label: <>Status</> },
+                    { key: "column-6", label: <>Contract State</> },
+                    { key: "column-7", label: <>Target Return</> },
+                  ]}
+                />
                 <tbody>
                   {filteredRows.map((vehicle) => {
                     const contract = pageData.contractsByVmf[String(vehicle.vmfCode)] ?? {

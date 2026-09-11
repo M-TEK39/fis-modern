@@ -1,16 +1,16 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 
 import { saveLicenseVehicleAction } from "@/app/(fleet-operations)/licenses/actions";
+import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 import { MenuSection } from "@/components/ui/menu-section";
 import type { LicenseHistoryEntry, LicenseVehicleDetails } from "@/lib/api/vehicles/api-licenses";
 import type { SiteRecord } from "@/lib/api/reference-data/api-sites";
+import { formatDate, valueOrDash } from "@/app/(fleet-operations)/licenses/_utils";
 
-export function valueOrDash(value: string | number | null | undefined) {
-  return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
-}
-
-export function formatDate(value: string | null | undefined) {
-  return value?.slice(0, 10) || "-";
+function queryText(value: string | string[] | undefined) {
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
 export function LicenseShell({
@@ -40,10 +40,8 @@ export function LicenseShell({
 export function LicenseNotice({
   query,
 }: Readonly<{ query: Record<string, string | string[] | undefined> }>) {
-  const text = (value: string | string[] | undefined) =>
-    Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
-  const error = text(query.error);
-  const saved = text(query.saved);
+  const error = queryText(query.error);
+  const saved = queryText(query.saved);
   return error || saved ? (
     <div
       className={`notice ${error ? "notice-error" : "notice-success"}`}
@@ -111,15 +109,7 @@ export function LicenseVehicleSearch({
         </div>
       </div>
       <div className="form-grid">
-        <fieldset className="vehicle-search-options">
-          <legend>Number type</legend>
-          <label className="vehicle-checkbox-label">
-            <input name="mode" type="radio" value="GG" defaultChecked={mode === "GG"} /> GG
-          </label>
-          <label className="vehicle-checkbox-label">
-            <input name="mode" type="radio" value="GP" defaultChecked={mode === "GP"} /> GP
-          </label>
-        </fieldset>
+        <SearchTypeFieldset selectedType={mode} legend="Number type" name="mode" />
         <div className="form-field">
           <label className="form-label" htmlFor="license-vehicle-number">
             {mode === "GG" ? "GG Number" : "GP Number"}
@@ -403,20 +393,20 @@ export function LicenseHistoryTable({
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Historical licence captures</caption>
-            <thead>
-              <tr>
-                <th scope="col">Captured At</th>
-                <th scope="col">Due Date</th>
-                <th scope="col">Register Number</th>
-                <th scope="col">Reg Doc</th>
-                <th scope="col">COF Date</th>
-                <th scope="col">Receiver</th>
-                <th scope="col">Receiver ID</th>
-                <th scope="col">Receiver Tel</th>
-                <th scope="col">Captured By</th>
-                <th scope="col">Notes</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Captured At</> },
+                { key: "column-2", label: <>Due Date</> },
+                { key: "column-3", label: <>Register Number</> },
+                { key: "column-4", label: <>Reg Doc</> },
+                { key: "column-5", label: <>COF Date</> },
+                { key: "column-6", label: <>Receiver</> },
+                { key: "column-7", label: <>Receiver ID</> },
+                { key: "column-8", label: <>Receiver Tel</> },
+                { key: "column-9", label: <>Captured By</> },
+                { key: "column-10", label: <>Notes</> },
+              ]}
+            />
             <tbody>
               {entries.map((row) => (
                 <tr key={row.historyId}>

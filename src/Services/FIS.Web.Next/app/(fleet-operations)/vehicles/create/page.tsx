@@ -5,6 +5,7 @@ import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import RouteLoading from "@/components/app-shell/route-loading";
+import AccessRestrictedCard from "@/components/app-shell/access-restricted-card";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import VehicleCreateClient from "@/app/(fleet-operations)/vehicles/create/vehicle-create-client";
 import {
@@ -37,20 +38,7 @@ function hasRole(roles: readonly string[], role: string) {
 }
 
 function AccessRestricted() {
-  return (
-    <section className="vehicle-status-card" role="alert">
-      <div className="status-icon status-icon-error" aria-hidden="true">
-        !
-      </div>
-      <p className="eyebrow">Access restricted</p>
-      <h2>You do not have permission to capture a new vehicle.</h2>
-      <div className="button-row">
-        <Link className="button button-secondary" href="/vehicles">
-          Back to Vehicle Master
-        </Link>
-      </div>
-    </section>
-  );
+  return <AccessRestrictedCard message="You do not have permission to capture a new vehicle." />;
 }
 
 function ApiUnavailable() {

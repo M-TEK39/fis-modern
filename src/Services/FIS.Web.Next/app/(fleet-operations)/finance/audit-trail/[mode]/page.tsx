@@ -9,8 +9,8 @@ import {
   FinanceFrame,
   FinanceRestricted,
   FinanceUnavailable,
-  hasFinanceRole,
 } from "@/app/(fleet-operations)/finance/_components";
+import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions, siteOptions } from "@/app/(fleet-operations)/finance/_location-options";
 import { DepartmentApiError, getDepartments } from "@/lib/api/reference-data/api-departments";
 import { FinanceApiError, type FinanceOption } from "@/lib/api/finance/api-finance";
@@ -78,7 +78,9 @@ function outputHref(
   return `/finance/reports/output?${params.toString()}`;
 }
 
-async function FinanceAuditTrailModeContent({ params, searchParams }: AuditPageProps) {
+const FinanceAuditTrailModeContent = renderFinanceAuditTrailModeContent;
+
+async function renderFinanceAuditTrailModeContent({ params, searchParams }: AuditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");

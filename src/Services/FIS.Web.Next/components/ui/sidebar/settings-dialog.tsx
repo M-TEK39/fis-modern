@@ -35,6 +35,10 @@ type SettingsItem = {
   href?: string;
 };
 
+const subscribeToHydration = () => () => {};
+const getClientHydrationSnapshot = () => true;
+const getServerHydrationSnapshot = () => false;
+
 const data: { nav: readonly SettingsItem[] } = {
   nav: [
     {
@@ -56,6 +60,84 @@ const data: { nav: readonly SettingsItem[] } = {
   ],
 };
 
+function AppearanceSettings({
+  mounted,
+  theme,
+  setTheme,
+}: Readonly<{ mounted: boolean; theme?: string; setTheme: (theme: string) => void }>) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Use a light or dark theme, or follow your device settings.
+      </p>
+      <div className="flex flex-wrap gap-2" aria-label="Theme preference">
+        {(["light", "dark", "system"] as const).map((option) => (
+          <Button
+            key={option}
+            type="button"
+            variant={mounted && theme === option ? "default" : "outline"}
+            aria-pressed={mounted && theme === option}
+            onClick={() => setTheme(option)}
+          >
+            {option[0].toUpperCase() + option.slice(1)}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SettingsSectionContent({
+  activeItem,
+  mounted,
+  theme,
+  setTheme,
+  onClose,
+}: Readonly<{
+  activeItem: SettingsItem;
+  mounted: boolean;
+  theme?: string;
+  setTheme: (theme: string) => void;
+  onClose: () => void;
+}>) {
+  if (activeItem.href) {
+    return (
+      <Button asChild>
+        <NextLink href={activeItem.href} onClick={onClose}>
+          Open manuals
+        </NextLink>
+      </Button>
+    );
+  }
+
+  if (activeItem.name === "Appearance") {
+    return <AppearanceSettings mounted={mounted} theme={theme} setTheme={setTheme} />;
+  }
+
+  if (activeItem.name === "Email configuration") {
+    return <EmailConfigurationPanel />;
+  }
+
+  if (activeItem.name === "Session management") {
+    return (
+      <div className="grid gap-5">
+        <SystemConfigurationPanel section="session" />
+        <SessionManagementPanel />
+      </div>
+    );
+  }
+
+  if (activeItem.name === "Authentication configuration") {
+    return <SystemConfigurationPanel section="authentication" />;
+  }
+
+  if (activeItem.name === "Security") {
+    return <SecurityPanel onNavigate={onClose} />;
+  }
+
+  return null;
+}
+
 export function SettingsDialog({
   open,
   onOpenChange,
@@ -68,7 +150,11 @@ export function SettingsDialog({
   canManageSystemSettings?: boolean;
 }) {
   const [section, setSection] = React.useState("Appearance");
-  const [mounted, setMounted] = React.useState(false);
+  const mounted = React.useSyncExternalStore(
+    subscribeToHydration,
+    getClientHydrationSnapshot,
+    getServerHydrationSnapshot,
+  );
   const { setTheme, theme } = useTheme();
   const navigation = React.useMemo(
     () => [
@@ -97,14 +183,13 @@ export function SettingsDialog({
   );
   const activeItem = navigation.find((item) => item.name === section) ?? navigation[0];
 
-  React.useEffect(() => setMounted(true), []);
-
-  React.useEffect(() => {
-    if (!open) setSection("Appearance");
-  }, [open]);
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) setSection("Appearance");
+    onOpenChange(nextOpen);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         onCloseAutoFocus={onCloseAutoFocus}
         className="flex h-[min(90svh,32rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[700px] lg:max-w-[800px]"
@@ -175,43 +260,13 @@ export function SettingsDialog({
                   <h2 className="text-xl font-semibold tracking-tight">{activeItem.name}</h2>
                   <p className="text-sm text-muted-foreground">{activeItem.description}</p>
                 </div>
-                {activeItem.href ? (
-                  <Button asChild>
-                    <NextLink href={activeItem.href} onClick={() => onOpenChange(false)}>
-                      Open manuals
-                    </NextLink>
-                  </Button>
-                ) : activeItem.name === "Appearance" ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      Use a light or dark theme, or follow your device settings.
-                    </p>
-                    <div className="flex flex-wrap gap-2" aria-label="Theme preference">
-                      {(["light", "dark", "system"] as const).map((option) => (
-                        <Button
-                          key={option}
-                          type="button"
-                          variant={mounted && theme === option ? "default" : "outline"}
-                          aria-pressed={mounted && theme === option}
-                          onClick={() => setTheme(option)}
-                        >
-                          {option[0].toUpperCase() + option.slice(1)}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                ) : activeItem.name === "Email configuration" ? (
-                  <EmailConfigurationPanel />
-                ) : activeItem.name === "Session management" ? (
-                  <div className="grid gap-5">
-                    <SystemConfigurationPanel section="session" />
-                    <SessionManagementPanel />
-                  </div>
-                ) : activeItem.name === "Authentication configuration" ? (
-                  <SystemConfigurationPanel section="authentication" />
-                ) : activeItem.name === "Security" ? (
-                  <SecurityPanel onNavigate={() => onOpenChange(false)} />
-                ) : null}
+                <SettingsSectionContent
+                  activeItem={activeItem}
+                  mounted={mounted}
+                  theme={theme}
+                  setTheme={setTheme}
+                  onClose={() => handleOpenChange(false)}
+                />
               </section>
             </ScrollArea>
           </main>

@@ -19,10 +19,10 @@ export async function removeTripsWithoutRoutesAction() {
   if (session.status !== "authenticated") redirect(`${routePath}?result=unavailable`);
   if (!hasTripAuthorityAccess(session)) redirect(`${routePath}?result=forbidden`);
 
+  let removed: number;
   try {
-    const removed = await removeTripsWithoutRoutes();
+    removed = await removeTripsWithoutRoutes();
     revalidatePath(routePath);
-    redirect(`${routePath}?result=success&removed=${removed}`);
   } catch (error) {
     const result =
       error instanceof TripToolsApiError && error.reason === "unauthorized"
@@ -32,4 +32,5 @@ export async function removeTripsWithoutRoutesAction() {
           : "error";
     redirect(`${routePath}?result=${result}`);
   }
+  redirect(`${routePath}?result=success&removed=${removed}`);
 }

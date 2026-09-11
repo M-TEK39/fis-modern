@@ -172,7 +172,9 @@ function ApiUnavailable() {
   );
 }
 
-async function TrafficDeptDetailPageContent({
+const TrafficDeptDetailPageContent = renderTrafficDeptDetailPageContent;
+
+async function renderTrafficDeptDetailPageContent({
   searchParams,
   routePath = "/fines/traffic-dept/detail",
 }: TrafficDeptDetailPageProps) {
@@ -263,16 +265,4 @@ export default function TrafficDeptDetailPage(props: TrafficDeptDetailPageProps)
       <TrafficDeptDetailPageContent {...props} />
     </StreamedRoute>
   );
-}
-
-type LegacyTrafficDeptDetailPageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyTrafficDeptDetailPage(routePath: string) {
-  return function LegacyTrafficDeptDetailPage({
-    searchParams,
-  }: Readonly<LegacyTrafficDeptDetailPageProps>) {
-    return <TrafficDeptDetailPage routePath={routePath} searchParams={searchParams} />;
-  };
 }

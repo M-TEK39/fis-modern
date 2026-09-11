@@ -104,7 +104,12 @@ function ChoiceField({
   return (
     <div className="form-field">
       <span className="form-label">{label}</span>
-      <select className="form-select" defaultValue={checked(defaultValue)} name={name}>
+      <select
+        aria-label={label}
+        className="form-select"
+        defaultValue={checked(defaultValue)}
+        name={name}
+      >
         <option value="">Not specified</option>
         <option value="Yes">Yes</option>
         <option value="No">No</option>

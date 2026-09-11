@@ -13,7 +13,7 @@ import {
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/monitor/_page";
-import { getMonitors } from "@/lib/api/fleet-operations/api-monitor";
+import { getMonitors, type MonitorReportRow } from "@/lib/api/fleet-operations/api-monitor";
 import { getVehicleOptions, type VehicleOption } from "@/lib/api/vehicles/api-vehicles";
 
 function matches(options: readonly VehicleOption[], search: string, mode: string) {
@@ -46,9 +46,9 @@ async function MonitorOneVehiclePageContent({
   const vehicleMatches = matches(vehicles, search, mode);
   const rows =
     Number.isInteger(vmfCode) && vmfCode > 0
-      ? records
-          .filter((record) => !record.isDeleted && record.vmfCode === vmfCode)
-          .map((record) => ({
+      ? records.reduce<MonitorReportRow[]>((result, record) => {
+          if (record.isDeleted || record.vmfCode !== vmfCode) return result;
+          result.push({
             monitorCode: record.monitorCode,
             vmfCode: record.vmfCode,
             captureDate: record.captureDate,
@@ -57,7 +57,9 @@ async function MonitorOneVehiclePageContent({
             driverName: record.driverName ?? "",
             driverPersalNo: record.driverPersalNo ?? "",
             driverSite: record.driverSite,
-          }))
+          });
+          return result;
+        }, [])
       : [];
   return (
     <MonitorShell

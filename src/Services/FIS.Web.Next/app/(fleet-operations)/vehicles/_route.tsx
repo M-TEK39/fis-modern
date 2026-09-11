@@ -77,7 +77,9 @@ function ApiUnavailable() {
   );
 }
 
-async function VehicleMasterContent({ searchParams, routePath }: VehicleMasterPageProps) {
+const VehicleMasterContent = renderVehicleMasterContent;
+
+async function renderVehicleMasterContent({ searchParams, routePath }: VehicleMasterPageProps) {
   await connection();
   const currentRoute = routePath ?? "/vehicles";
   const session = await getSession();

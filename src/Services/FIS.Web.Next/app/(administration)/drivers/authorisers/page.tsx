@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -106,6 +108,220 @@ function ApiUnavailable({
   );
 }
 
+function AuthoriserTable({
+  authorisers,
+  total,
+  departmentCode,
+  siteCode,
+  editPath,
+}: Readonly<{
+  authorisers: DriverManagementAuthoriser[];
+  total: number;
+  departmentCode: number;
+  siteCode: number;
+  editPath: string;
+}>) {
+  if (authorisers.length === 0) {
+    return (
+      <div className="empty-state">
+        <h2>No authorisers found</h2>
+        <p>Add the first authoriser for this site.</p>
+        <Link className="button button-primary" href={editPath}>
+          Add Authoriser
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="table-container">
+      <div className="table-header">
+        <span className="table-title">{total} authoriser(s)</span>
+      </div>
+      <div className="table-wrapper">
+        <table className="data-table">
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>First Name</> },
+              { key: "column-2", label: <>Surname</> },
+              { key: "column-3", label: <>Persal Number</> },
+              { key: "column-4", label: <>Telephone Number</> },
+              { key: "column-5", label: <>Actions</> },
+            ]}
+          />
+          <tbody>
+            {authorisers.map((authoriser) => (
+              <tr key={authoriser.authoriserCode}>
+                <td>{authoriser.firstname || "-"}</td>
+                <td>{authoriser.surname || "-"}</td>
+                <td>{authoriser.persalNumber || "-"}</td>
+                <td>{authoriser.telephoneNumber || "-"}</td>
+                <td className="actions-column">
+                  <div className="table-actions">
+                    <Link
+                      aria-label={`Edit ${displayName(authoriser)}`}
+                      className="button button-secondary button-small"
+                      href={`${editPath}&authoriserCode=${authoriser.authoriserCode}`}
+                    >
+                      Edit
+                    </Link>
+                    <DeleteButton
+                      action={deleteAuthoriserAction}
+                      departmentCode={departmentCode}
+                      fieldName="authoriserCode"
+                      id={authoriser.authoriserCode}
+                      name={displayName(authoriser)}
+                      siteCode={siteCode}
+                    />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AuthoriserPagination({
+  page,
+  totalPages,
+  departmentCode,
+  siteCode,
+}: Readonly<{
+  page: number;
+  totalPages: number;
+  departmentCode: number;
+  siteCode: number;
+}>) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <nav className="vehicle-pagination" aria-label="Authoriser pages">
+      {page <= 1 ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Previous
+        </span>
+      ) : (
+        <Link
+          className="vehicle-pagination-button"
+          href={pagePath(departmentCode, siteCode, page - 1)}
+        >
+          Previous
+        </Link>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {page} of {totalPages}
+      </span>
+      {page >= totalPages ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Next
+        </span>
+      ) : (
+        <Link
+          className="vehicle-pagination-button"
+          href={pagePath(departmentCode, siteCode, page + 1)}
+        >
+          Next
+        </Link>
+      )}
+    </nav>
+  );
+}
+
+function AuthorisersView({
+  authoriserPage,
+  department,
+  site,
+  departmentCode,
+  siteCode,
+  message,
+  hasLegacyFields,
+}: Readonly<{
+  authoriserPage: Awaited<ReturnType<typeof getDriverManagementAuthorisersPage>>;
+  department: { description: string } | undefined;
+  site: { description: string } | undefined;
+  departmentCode: number;
+  siteCode: number;
+  message: ReturnType<typeof resultMessage>;
+  hasLegacyFields: boolean;
+}>) {
+  const editPath = contextPath("/drivers/authorisers/edit", departmentCode, siteCode);
+
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="authoriser-management-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Driver and Authoriser Management</p>
+            <h1 id="authoriser-management-title">Authoriser Management</h1>
+            <p>
+              {department?.description ?? `Department ${departmentCode}`} /{" "}
+              {site?.description ?? `Site ${siteCode}`}
+            </p>
+          </div>
+          <div className="button-row">
+            <Link className="button button-primary" href={editPath}>
+              Add Authoriser
+            </Link>
+            <Link
+              className="button button-secondary"
+              href={contextPath("/drivers", departmentCode, siteCode)}
+            >
+              Back
+            </Link>
+          </div>
+        </header>
+        {message ? (
+          <div
+            className={`notice notice-${message.tone}`}
+            role={message.tone === "error" ? "alert" : "status"}
+          >
+            {message.text}
+          </div>
+        ) : null}
+        {!hasLegacyFields ? (
+          <div className="notice notice-warning" role="alert">
+            This database shape does not expose every original Persal and telephone column. Existing
+            legacy records are never replaced; verify the client-compatible schema before saving new
+            values.
+          </div>
+        ) : null}
+        <AuthoriserTable
+          authorisers={authoriserPage.items}
+          total={authoriserPage.total}
+          departmentCode={departmentCode}
+          siteCode={siteCode}
+          editPath={editPath}
+        />
+        <AuthoriserPagination
+          departmentCode={departmentCode}
+          siteCode={siteCode}
+          page={authoriserPage.page}
+          totalPages={authoriserPage.totalPages}
+        />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 async function AuthorisersContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
@@ -162,153 +378,16 @@ async function AuthorisersContent({ searchParams }: Readonly<{ searchParams: Sea
     const hasLegacyFields = authoriserPage.items.every(
       (authoriser) => authoriser.legacyFieldsAvailable,
     );
-    const editPath = contextPath("/drivers/authorisers/edit", departmentCode, siteCode);
-
     return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="authoriser-management-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Driver and Authoriser Management</p>
-              <h1 id="authoriser-management-title">Authoriser Management</h1>
-              <p>
-                {department?.description ?? `Department ${departmentCode}`} /{" "}
-                {site?.description ?? `Site ${siteCode}`}
-              </p>
-            </div>
-            <div className="button-row">
-              <Link className="button button-primary" href={editPath}>
-                Add Authoriser
-              </Link>
-              <Link
-                className="button button-secondary"
-                href={contextPath("/drivers", departmentCode, siteCode)}
-              >
-                Back
-              </Link>
-            </div>
-          </header>
-          {message ? (
-            <div
-              className={`notice notice-${message.tone}`}
-              role={message.tone === "error" ? "alert" : "status"}
-            >
-              {message.text}
-            </div>
-          ) : null}
-          {!hasLegacyFields ? (
-            <div className="notice notice-warning" role="alert">
-              This database shape does not expose every original Persal and telephone column.
-              Existing legacy records are never replaced; verify the client-compatible schema before
-              saving new values.
-            </div>
-          ) : null}
-          {authoriserPage.total === 0 ? (
-            <div className="empty-state">
-              <h2>No authorisers found</h2>
-              <p>Add the first authoriser for this site.</p>
-              <Link className="button button-primary" href={editPath}>
-                Add Authoriser
-              </Link>
-            </div>
-          ) : (
-            <div className="table-container">
-              <div className="table-header">
-                <span className="table-title">{authoriserPage.total} authoriser(s)</span>
-              </div>
-              <div className="table-wrapper">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>First Name</th>
-                      <th>Surname</th>
-                      <th>Persal Number</th>
-                      <th>Telephone Number</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {authoriserPage.items.map((authoriser) => (
-                      <tr key={authoriser.authoriserCode}>
-                        <td>{authoriser.firstname || "-"}</td>
-                        <td>{authoriser.surname || "-"}</td>
-                        <td>{authoriser.persalNumber || "-"}</td>
-                        <td>{authoriser.telephoneNumber || "-"}</td>
-                        <td className="actions-column">
-                          <div className="table-actions">
-                            <Link
-                              aria-label={`Edit ${displayName(authoriser)}`}
-                              className="button button-secondary button-small"
-                              href={`${editPath}&authoriserCode=${authoriser.authoriserCode}`}
-                            >
-                              Edit
-                            </Link>
-                            <DeleteButton
-                              action={deleteAuthoriserAction}
-                              departmentCode={departmentCode}
-                              fieldName="authoriserCode"
-                              id={authoriser.authoriserCode}
-                              name={displayName(authoriser)}
-                              siteCode={siteCode}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {authoriserPage.totalPages > 1 ? (
-                <nav className="vehicle-pagination" aria-label="Authoriser pages">
-                  {authoriserPage.page <= 1 ? (
-                    <span
-                      className="vehicle-pagination-button vehicle-pagination-disabled"
-                      aria-disabled="true"
-                    >
-                      Previous
-                    </span>
-                  ) : (
-                    <Link
-                      className="vehicle-pagination-button"
-                      href={pagePath(departmentCode, siteCode, authoriserPage.page - 1)}
-                    >
-                      Previous
-                    </Link>
-                  )}
-                  <span className="vehicle-pagination-meta" aria-live="polite">
-                    Page {authoriserPage.page} of {authoriserPage.totalPages}
-                  </span>
-                  {authoriserPage.page >= authoriserPage.totalPages ? (
-                    <span
-                      className="vehicle-pagination-button vehicle-pagination-disabled"
-                      aria-disabled="true"
-                    >
-                      Next
-                    </span>
-                  ) : (
-                    <Link
-                      className="vehicle-pagination-button"
-                      href={pagePath(departmentCode, siteCode, authoriserPage.page + 1)}
-                    >
-                      Next
-                    </Link>
-                  )}
-                </nav>
-              ) : null}
-            </div>
-          )}
-          <div className="vehicle-footer-actions">
-            <Link className="button button-secondary" href="/home">
-              Home
-            </Link>
-            <form action={logoutAction}>
-              <button className="button button-secondary" type="submit">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </section>
-      </main>
+      <AuthorisersView
+        authoriserPage={authoriserPage}
+        department={department}
+        site={site}
+        departmentCode={departmentCode}
+        siteCode={siteCode}
+        message={message}
+        hasLegacyFields={hasLegacyFields}
+      />
     );
   } catch (error) {
     if (error instanceof DriverManagementApiError && error.reason === "unauthorized")

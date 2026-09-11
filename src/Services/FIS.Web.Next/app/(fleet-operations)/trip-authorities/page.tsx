@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -366,17 +368,17 @@ function VehicleTable({
           <div className="vehicle-table-wrapper">
             <table className="vehicle-table">
               <caption className="sr-only">{title}</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Fleet Number</th>
-                  <th scope="col">Registration Number</th>
-                  <th scope="col">License Disk Expires</th>
-                  <th scope="col">Make Description</th>
-                  <th scope="col">Model Description</th>
-                  <th scope="col">Contract Type</th>
-                  <th scope="col">Action</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>Fleet Number</> },
+                  { key: "column-2", label: <>Registration Number</> },
+                  { key: "column-3", label: <>License Disk Expires</> },
+                  { key: "column-4", label: <>Make Description</> },
+                  { key: "column-5", label: <>Model Description</> },
+                  { key: "column-6", label: <>Contract Type</> },
+                  { key: "column-7", label: <>Action</> },
+                ]}
+              />
               <tbody>
                 {result.items.map((row) => (
                   <tr key={`${title}-${row.vmfCode}-${row.tripId ?? "in"}`}>
@@ -419,7 +421,9 @@ function VehicleTable({
   );
 }
 
-async function TripAuthoritiesPageContent({
+const TripAuthoritiesPageContent = renderTripAuthoritiesPageContent;
+
+async function renderTripAuthoritiesPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<SearchParams> }>) {
   const session = await getTripSession();

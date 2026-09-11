@@ -178,15 +178,3 @@ export default function VehicleSourcePage(props: VehicleSourcePageProps) {
     </Suspense>
   );
 }
-
-type LegacyVehicleSourcePageProps = {
-  searchParams: Promise<{ saved?: string | string[] }>;
-};
-
-export function createLegacyVehicleSourcePage(routePath: (typeof ROUTE_PATHS)[number]) {
-  return function LegacyVehicleSourcePage({
-    searchParams,
-  }: Readonly<LegacyVehicleSourcePageProps>) {
-    return <VehicleSourcePage routePath={routePath} searchParams={searchParams} />;
-  };
-}

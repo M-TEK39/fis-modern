@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_components";
+import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
 import { FinanceApiError, getFinanceOutput } from "@/lib/api/finance/api-finance";
 import {
   dedicatedFinanceReportPath,

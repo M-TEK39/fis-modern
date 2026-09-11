@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -70,12 +72,12 @@ function CategoryTable({ categories }: { categories: AccidentTypeOption[] }) {
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
           <caption className="sr-only">Accident category list</caption>
-          <thead>
-            <tr>
-              <th scope="col">Category Number</th>
-              <th scope="col">Accident Category Description</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Category Number</> },
+              { key: "column-2", label: <>Accident Category Description</> },
+            ]}
+          />
           <tbody>
             {categories.map((category) => (
               <tr key={category.typeCode}>

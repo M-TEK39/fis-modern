@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
@@ -78,14 +80,14 @@ function HistoryTable({ history }: Readonly<{ history: GgBlockHistoryPage }>) {
       </div>
       <div className="table-wrapper">
         <table className="data-table">
-          <thead>
-            <tr>
-              <th scope="col">Captured By</th>
-              <th scope="col">Date Created</th>
-              <th scope="col">Start GG Number</th>
-              <th scope="col">End GG Number</th>
-            </tr>
-          </thead>
+          <DataTableHeader
+            columns={[
+              { key: "column-1", label: <>Captured By</> },
+              { key: "column-2", label: <>Date Created</> },
+              { key: "column-3", label: <>Start GG Number</> },
+              { key: "column-4", label: <>End GG Number</> },
+            ]}
+          />
           <tbody>
             {history.items.map((row) => (
               <tr key={`${row.blockId}-${row.startGgNumber}-${row.endGgNumber}`}>

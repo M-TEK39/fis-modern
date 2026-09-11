@@ -165,15 +165,8 @@ export async function saveLeaseTermAction(formData: FormData) {
   try {
     let updated: LeaseTermRecord | null;
     if (operation === "approve" || operation === "reject") {
-      if (!hasPermission(access.session.accessLevel, FINANCIAL_PERMISSION)) {
-        redirect(
-          resultPath(
-            `${path}?id=${termId}&mode=review`,
-            "error",
-            "You do not have financial authorisation for this workflow.",
-          ),
-        );
-      }
+      if (!hasPermission(access.session.accessLevel, FINANCIAL_PERMISSION))
+        throw new FmlValidationError("You do not have financial authorisation for this workflow.");
 
       const existing = await getLeaseTerm(termId);
       const currentUserCode = Number(access.session.userAccessCode);
@@ -181,22 +174,14 @@ export async function saveLeaseTermAction(formData: FormData) {
         Number.isSafeInteger(currentUserCode) &&
         currentUserCode > 0 &&
         existing.createdByUserCode === currentUserCode
-      ) {
-        redirect(
-          resultPath(
-            `${path}?id=${termId}&mode=review`,
-            "error",
-            "You cannot authorise a lease tariff that you captured yourself.",
-          ),
+      )
+        throw new FmlValidationError(
+          "You cannot authorise a lease tariff that you captured yourself.",
         );
-      }
 
       const rejectionReason = getText(formData, "rejectionReason");
-      if (operation === "reject" && !rejectionReason) {
-        redirect(
-          resultPath(`${path}?id=${termId}&mode=review`, "error", "Rejection reason is required."),
-        );
-      }
+      if (operation === "reject" && !rejectionReason)
+        throw new FmlValidationError("Rejection reason is required.");
 
       updated = await updateLeaseTerm(termId, {
         vmf_Code: existing.vmfCode,
@@ -353,11 +338,13 @@ export async function importLeaseTariffsAction(formData: FormData) {
     redirect(resultPath(path, "error", "Provide a CSV header and at least one data row."));
 
   const headers = parseCsvRow(lines[0]).map(normalizeHeader);
-  const indexOf = (...names: string[]) =>
-    names
-      .map(normalizeHeader)
-      .map((name) => headers.indexOf(name))
-      .find((index) => index >= 0) ?? -1;
+  const indexOf = (...names: string[]) => {
+    for (const name of names) {
+      const index = headers.indexOf(normalizeHeader(name));
+      if (index >= 0) return index;
+    }
+    return -1;
+  };
   const vmfIndex = indexOf("vmf_code", "vmfcode");
   if (vmfIndex < 0) redirect(resultPath(path, "error", "CSV header must include VMF_Code."));
 

@@ -1,12 +1,24 @@
-import Link from "next/link";
-import { connection } from "next/server";
-import { redirect } from "next/navigation";
-import { Suspense } from "react";
-
-import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { Suspense } from "react";
 import {
-  AccidentApiError,
+  AccidentDateRangeFields,
+  AccidentDepartmentSelect,
+  AccidentReportAccessRestricted,
+  AccidentReportErrorState,
+  AccidentReportFooter,
+  AccidentReportFormActions,
+  AccidentReportFormError,
+  AccidentReportLoadingState,
+  AccidentReportPageShell,
+} from "@/app/(fleet-operations)/accidents/reports/_report-components";
+import {
+  authorizeAccidentReport,
+  loadAccidentReport,
+} from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
+import VehicleTable, {
+  type VehicleTableColumn,
+} from "@/app/(fleet-operations)/accidents/vehicle-table";
+import {
   getAccidentPeriodReport,
   type AccidentPeriodReportRow,
   type AccidentPeriodReportStatus,
@@ -17,9 +29,6 @@ import {
   type DepartmentRecord,
 } from "@/lib/api/reference-data/api-departments";
 import { getSites, SiteApiError, type SiteRecord } from "@/lib/api/reference-data/api-sites";
-import { getSession } from "@/lib/auth/session";
-
-const ACCIDENTS_ROLE = "Accidents";
 type QueryValue = string | string[] | undefined;
 type ReportQuery = Record<string, QueryValue>;
 type LocationOption = { value: string; label: string };
@@ -92,12 +101,6 @@ function isValidDate(value: string) {
   );
 }
 
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
-
 function valueOrDash(value: string | number | null) {
   if (value === null || value === "") {
     return "-";
@@ -115,26 +118,43 @@ function formatDate(value: string | null) {
   return normalized || value;
 }
 
-function LoadingState() {
-  return (
-    <div className="loading-card" aria-busy="true">
-      <span className="spinner" aria-hidden="true" />
-      <p>Loading page…</p>
-    </div>
-  );
-}
+const periodReportColumns: readonly VehicleTableColumn<AccidentPeriodReportRow>[] = [
+  {
+    key: "registrationNumber",
+    label: "Reg Number",
+    render: (row) => valueOrDash(row.registrationNumber),
+  },
+  { key: "fleetNumber", label: "GG Number", render: (row) => valueOrDash(row.fleetNumber) },
+  { key: "accidentDate", label: "Accid Date", render: (row) => formatDate(row.accidentDate) },
+  {
+    key: "departmentNumber",
+    label: "Dept/Site Code",
+    render: (row) => valueOrDash(row.departmentNumber),
+  },
+  { key: "siteDescription", label: "Dept/Site", render: (row) => valueOrDash(row.siteDescription) },
+  { key: "hireType", label: "Hire Type", render: (row) => valueOrDash(row.hireType) },
+  {
+    key: "accidentDescription",
+    label: "Accident Description",
+    render: (row) => valueOrDash(row.accidentDescription),
+  },
+  { key: "driverName", label: "Driver", render: (row) => valueOrDash(row.driverName) },
+  {
+    key: "transportOfficerName",
+    label: "Trans Officer",
+    render: (row) => valueOrDash(row.transportOfficerName),
+  },
+  { key: "callRefer", label: "Call Refer", render: (row) => valueOrDash(row.callRefer) },
+  { key: "costOfRepair", label: "GG Car Damage", render: (row) => valueOrDash(row.costOfRepair) },
+  {
+    key: "fileCloseDate",
+    label: "File Close Date",
+    render: (row) => formatDate(row.fileCloseDate),
+  },
+];
 
-function ErrorState() {
-  return (
-    <section className="vehicle-status-card" role="alert">
-      <p className="eyebrow">API unavailable</p>
-      <h2>The accident period report could not be loaded.</h2>
-      <p className="muted-copy">Retry when the FIS API is available.</p>
-      <Link className="button button-primary" href="/accidents/reports/period">
-        Try again
-      </Link>
-    </section>
-  );
+function periodReportRowKey(row: AccidentPeriodReportRow) {
+  return JSON.stringify(row);
 }
 
 function ReportTable({
@@ -158,84 +178,136 @@ function ReportTable({
         <span className="form-hint">{rows.length} record(s)</span>
       </div>
       <div className="vehicle-table-wrapper">
-        <table className="vehicle-table">
-          <caption className="sr-only">{title} for the selected period</caption>
-          <thead>
-            <tr>
-              <th scope="col">Reg Number</th>
-              <th scope="col">GG Number</th>
-              <th scope="col">Accid Date</th>
-              <th scope="col">Dept/Site Code</th>
-              <th scope="col">Dept/Site</th>
-              <th scope="col">Hire Type</th>
-              <th scope="col">Accident Description</th>
-              <th scope="col">Driver</th>
-              <th scope="col">Trans Officer</th>
-              <th scope="col">Call Refer</th>
-              <th scope="col">GG Car Damage</th>
-              <th scope="col">File Close Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr
-                key={`${row.registrationNumber ?? "reg"}-${row.fleetNumber ?? "fleet"}-${row.accidentDate ?? "date"}-${index}`}
-              >
-                <td>{valueOrDash(row.registrationNumber)}</td>
-                <td>{valueOrDash(row.fleetNumber)}</td>
-                <td>{formatDate(row.accidentDate)}</td>
-                <td>{valueOrDash(row.departmentNumber)}</td>
-                <td>{valueOrDash(row.siteDescription)}</td>
-                <td>{valueOrDash(row.hireType)}</td>
-                <td>{valueOrDash(row.accidentDescription)}</td>
-                <td>{valueOrDash(row.driverName)}</td>
-                <td>{valueOrDash(row.transportOfficerName)}</td>
-                <td>{valueOrDash(row.callRefer)}</td>
-                <td>{valueOrDash(row.costOfRepair)}</td>
-                <td>{formatDate(row.fileCloseDate)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <VehicleTable
+          caption={`${title} for the selected period`}
+          columns={periodReportColumns}
+          rows={rows}
+          rowKey={periodReportRowKey}
+        />
       </div>
       <p className="form-hint">Total Number: {rows.length}</p>
     </section>
   );
 }
 
-async function PeriodReportContent({ searchParams }: { searchParams: Promise<ReportQuery> }) {
-  await connection();
-  const session = await getSession();
-  if (session.status === "anonymous") redirect("/login");
-  if (session.status === "expired")
-    return <SessionRecovery returnPath="/accidents/reports/period" />;
-  if (session.status === "unavailable") return <ErrorState />;
-  if (!hasRole(session.roles, ACCIDENTS_ROLE)) {
-    return (
-      <section className="vehicle-status-card" role="alert">
-        <p className="eyebrow">Access restricted</p>
-        <h2>You do not have permission to run accident reports.</h2>
+function PeriodReportForm({
+  errorMessage,
+  locationOptions,
+  departmentNumber,
+  startDate,
+  endDate,
+  status,
+}: {
+  errorMessage: string | null;
+  locationOptions: readonly LocationOption[];
+  departmentNumber: string;
+  startDate: string;
+  endDate: string;
+  status: AccidentPeriodReportStatus;
+}) {
+  return (
+    <>
+      <AccidentReportFormError message={errorMessage} />
+      <form className="vehicle-status-maintenance-panel" method="get">
+        <div className="form-grid">
+          <AccidentDepartmentSelect
+            id="accident-period-department"
+            value={departmentNumber}
+            options={locationOptions}
+          />
+          <AccidentDateRangeFields
+            startId="accident-period-start"
+            endId="accident-period-end"
+            startDate={startDate}
+            endDate={endDate}
+          />
+          <fieldset className="vehicle-search-options">
+            <legend>Accidents</legend>
+            <label className="vehicle-checkbox-label">
+              <input name="status" type="radio" value="open" defaultChecked={status === "open"} />{" "}
+              Open
+            </label>
+            <label className="vehicle-checkbox-label">
+              <input
+                name="status"
+                type="radio"
+                value="closed"
+                defaultChecked={status === "closed"}
+              />{" "}
+              Closed
+            </label>
+          </fieldset>
+        </div>
+        <AccidentReportFormActions submitLabel="SUBMIT" />
+      </form>
+    </>
+  );
+}
+
+function PeriodReportResults({
+  rows,
+  status,
+}: {
+  rows: AccidentPeriodReportRow[] | null;
+  status: AccidentPeriodReportStatus;
+}) {
+  return rows ? (
+    rows.length > 0 ? (
+      <ReportTable rows={rows} status={status} />
+    ) : (
+      <section className="vehicle-empty-state" aria-live="polite">
+        <p className="eyebrow">No accidents found</p>
+        <h2>No accidents matched the selected filters.</h2>
+        <p className="muted-copy">
+          Update the department, dates, or open/closed selection and submit again.
+        </p>
       </section>
+    )
+  ) : null;
+}
+
+const PeriodReportContent = renderPeriodReportContent;
+
+async function renderPeriodReportContent({ searchParams }: { searchParams: Promise<ReportQuery> }) {
+  const authorization = await authorizeAccidentReport();
+  if (authorization === "expired")
+    return <SessionRecovery returnPath="/accidents/reports/period" />;
+  if (authorization === "unavailable") {
+    return (
+      <AccidentReportErrorState
+        title="The accident period report could not be loaded."
+        retryHref="/accidents/reports/period"
+      />
     );
+  }
+  if (authorization === "forbidden") {
+    return <AccidentReportAccessRestricted />;
   }
 
-  let locationOptions: LocationOption[];
-  try {
-    const [departments, sites] = await Promise.all([getDepartments(), getSites()]);
-    locationOptions = getLocationOptions(departments, sites);
-  } catch (error) {
-    if (
+  const locations = await loadAccidentReport({
+    shouldRun: true,
+    errorMessage: null,
+    load: async () => {
+      const [departments, sites] = await Promise.all([getDepartments(), getSites()]);
+      return getLocationOptions(departments, sites);
+    },
+    context: "FIS accident period department/site lookup failed",
+    isUnauthorized: (error) =>
       (error instanceof DepartmentApiError && error.reason === "unauthorized") ||
-      (error instanceof SiteApiError && error.reason === "unauthorized")
-    ) {
-      return <SessionRecovery returnPath="/accidents/reports/period" />;
-    }
-    console.error(
-      "FIS accident period department/site lookup failed",
-      error instanceof Error ? error.message : "unknown error",
-    );
-    return <ErrorState />;
+      (error instanceof SiteApiError && error.reason === "unauthorized"),
+  });
+  if (locations.status === "unauthorized") {
+    return <SessionRecovery returnPath="/accidents/reports/period" />;
   }
+  if (locations.status !== "success") {
+    return (
+      <AccidentReportErrorState
+        title="The accident period report could not be loaded."
+        retryHref="/accidents/reports/period"
+      />
+    );
+  }
+  const locationOptions = locations.data;
 
   const query = await searchParams;
   const departmentNumber = (getQueryValue(query, "departmentNumber", "xdept") ?? "").trim();
@@ -260,121 +332,37 @@ async function PeriodReportContent({ searchParams }: { searchParams: Promise<Rep
     errorMessage = "The begin date must be on or before the end date.";
   }
 
-  let rows: AccidentPeriodReportRow[] | null = null;
-  if (shouldRun && !errorMessage) {
-    try {
-      rows = await getAccidentPeriodReport(departmentNumber, startDate, endDate, status);
-    } catch (error) {
-      if (error instanceof AccidentApiError && error.reason === "unauthorized")
-        return <SessionRecovery returnPath="/accidents/reports/period" />;
-      console.error(
-        "FIS accident period report failed",
-        error instanceof Error ? error.message : "unknown error",
-      );
-      return <ErrorState />;
-    }
+  const report = await loadAccidentReport({
+    shouldRun,
+    errorMessage,
+    load: () => getAccidentPeriodReport(departmentNumber, startDate, endDate, status),
+    context: "FIS accident period report failed",
+  });
+  if (report.status === "unauthorized") {
+    return <SessionRecovery returnPath="/accidents/reports/period" />;
   }
+  if (report.status === "error") {
+    return (
+      <AccidentReportErrorState
+        title="The accident period report could not be loaded."
+        retryHref="/accidents/reports/period"
+      />
+    );
+  }
+  const rows = report.data;
 
   return (
     <>
-      {errorMessage ? (
-        <div className="notice notice-error" role="alert">
-          {errorMessage}
-        </div>
-      ) : null}
-      <form className="vehicle-status-maintenance-panel" method="get">
-        <div className="form-grid">
-          <div className="field">
-            <label htmlFor="accident-period-department">Department or site</label>
-            <select
-              id="accident-period-department"
-              name="departmentNumber"
-              defaultValue={departmentNumber}
-            >
-              <option value="">All departments and sites</option>
-              {locationOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="accident-period-start">Begin Date</label>
-            <input
-              id="accident-period-start"
-              name="startDate"
-              type="date"
-              defaultValue={startDate}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="accident-period-end">End Date</label>
-            <input
-              id="accident-period-end"
-              name="endDate"
-              type="date"
-              defaultValue={endDate}
-              required
-            />
-          </div>
-          <fieldset className="vehicle-search-options">
-            <legend>Accidents</legend>
-            <label className="vehicle-checkbox-label">
-              <input name="status" type="radio" value="open" defaultChecked={status === "open"} />{" "}
-              Open
-            </label>
-            <label className="vehicle-checkbox-label">
-              <input
-                name="status"
-                type="radio"
-                value="closed"
-                defaultChecked={status === "closed"}
-              />{" "}
-              Closed
-            </label>
-          </fieldset>
-        </div>
-        <input name="run" type="hidden" value="1" />
-        <div className="button-row">
-          <button className="button button-primary" type="submit">
-            SUBMIT
-          </button>
-          <Link className="button button-secondary" href="/accidents/reports">
-            Report Menu
-          </Link>
-        </div>
-      </form>
-      {rows ? (
-        rows.length > 0 ? (
-          <ReportTable rows={rows} status={status} />
-        ) : (
-          <section className="vehicle-empty-state" aria-live="polite">
-            <p className="eyebrow">No accidents found</p>
-            <h2>No accidents matched the selected filters.</h2>
-            <p className="muted-copy">
-              Update the department, dates, or open/closed selection and submit again.
-            </p>
-          </section>
-        )
-      ) : null}
-      <div className="vehicle-footer-actions">
-        <Link className="button button-secondary" href="/accidents">
-          Accident Menu
-        </Link>
-        <Link className="button button-secondary" href="/accidents/reports/period">
-          Clear
-        </Link>
-        <Link className="button button-secondary" href="/home">
-          Home
-        </Link>
-        <form action={logoutAction}>
-          <button className="button button-secondary" type="submit">
-            Sign out
-          </button>
-        </form>
-      </div>
+      <PeriodReportForm
+        errorMessage={errorMessage}
+        locationOptions={locationOptions}
+        departmentNumber={departmentNumber}
+        startDate={startDate}
+        endDate={endDate}
+        status={status}
+      />
+      <PeriodReportResults rows={rows} status={status} />
+      <AccidentReportFooter clearHref="/accidents/reports/period" />
     </>
   );
 }
@@ -385,22 +373,15 @@ export default function AccidentPeriodReportPage({
   searchParams: Promise<ReportQuery>;
 }) {
   return (
-    <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card" aria-labelledby="accident-period-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Accident reports</p>
-            <h1 id="accident-period-title">Accident Report For A Period</h1>
-            <p>Review open or closed accidents for a department/site and inclusive date period.</p>
-          </div>
-          <Link className="button button-secondary" href="/accidents/reports">
-            Report Menu
-          </Link>
-        </header>
-        <Suspense fallback={<LoadingState />}>
-          <PeriodReportContent searchParams={searchParams} />
-        </Suspense>
-      </section>
-    </main>
+    <AccidentReportPageShell
+      titleId="accident-period-title"
+      title="Accident Report For A Period"
+      description="Review open or closed accidents for a department/site and inclusive date period."
+      fallback={<AccidentReportLoadingState />}
+    >
+      <Suspense fallback={<AccidentReportLoadingState />}>
+        <PeriodReportContent searchParams={searchParams} />
+      </Suspense>
+    </AccidentReportPageShell>
   );
 }

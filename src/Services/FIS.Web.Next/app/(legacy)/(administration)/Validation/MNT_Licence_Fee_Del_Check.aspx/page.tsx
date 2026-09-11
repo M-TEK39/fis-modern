@@ -36,7 +36,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function LicenseFeeDeleteCheckPageContent({ searchParams }: LicenseFeeDeleteCheckPageProps) {
+async function renderLicenseFeeDeleteCheckPage({ searchParams }: LicenseFeeDeleteCheckPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -152,12 +152,6 @@ async function LicenseFeeDeleteCheckPageContent({ searchParams }: LicenseFeeDele
   }
 }
 
-export default function LicenseFeeDeleteCheckPage(
-  props: NonNullable<Parameters<typeof LicenseFeeDeleteCheckPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <LicenseFeeDeleteCheckPageContent {...props} />
-    </Suspense>
-  );
+export default function LicenseFeeDeleteCheckPage(props: LicenseFeeDeleteCheckPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderLicenseFeeDeleteCheckPage(props)}</Suspense>;
 }

@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -57,7 +59,9 @@ function ApiUnavailable() {
   );
 }
 
-async function LossesContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+const LossesContent = renderLossesContent;
+
+async function renderLossesContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -128,17 +132,17 @@ async function LossesContent({ searchParams }: Readonly<{ searchParams: SearchPa
           <div className="vehicle-table-wrapper">
             <table className="vehicle-table">
               <caption className="sr-only">Vehicle loss records</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Loss Date</th>
-                  <th scope="col">Reference</th>
-                  <th scope="col">Vehicle</th>
-                  <th scope="col">Type</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Amount</th>
-                  <th scope="col">Actions</th>
-                </tr>
-              </thead>
+              <DataTableHeader
+                columns={[
+                  { key: "column-1", label: <>Loss Date</> },
+                  { key: "column-2", label: <>Reference</> },
+                  { key: "column-3", label: <>Vehicle</> },
+                  { key: "column-4", label: <>Type</> },
+                  { key: "column-5", label: <>Status</> },
+                  { key: "column-6", label: <>Amount</> },
+                  { key: "column-7", label: <>Actions</> },
+                ]}
+              />
               <tbody>
                 {lossPage.items.map((loss) => (
                   <tr key={loss.lossCode}>

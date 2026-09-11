@@ -29,7 +29,43 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function SiteEditPageContent({ searchParams }: SiteEditPageProps) {
+function SiteEditView({
+  siteCode,
+  site,
+  referenceData,
+}: Readonly<{
+  siteCode: number;
+  site: Awaited<ReturnType<typeof getSite>>;
+  referenceData: Awaited<ReturnType<typeof getSiteReferenceData>>;
+}>) {
+  if (!site) return null;
+
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="site-edit-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Organisation</p>
+            <h1 id="site-edit-title">Edit Site</h1>
+            <p>Update site {siteCode} without dropping legacy or expanded-schema values.</p>
+          </div>
+          <Link className="button button-secondary" href="/Validation/MNT_Site.aspx">
+            Site Maintenance
+          </Link>
+        </header>
+        <SiteForm
+          action={updateSiteAction}
+          site={site}
+          mode="update"
+          referenceData={referenceData}
+          returnPath="/Validation/MNT_Site.aspx"
+        />
+      </section>
+    </main>
+  );
+}
+
+async function renderSiteEditPage({ searchParams }: SiteEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -69,29 +105,7 @@ async function SiteEditPageContent({ searchParams }: SiteEditPageProps) {
           <ErrorCard message={`Site ${siteCode} was not found.`} />
         </main>
       );
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="site-edit-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Organisation</p>
-              <h1 id="site-edit-title">Edit Site</h1>
-              <p>Update site {siteCode} without dropping legacy or expanded-schema values.</p>
-            </div>
-            <Link className="button button-secondary" href="/Validation/MNT_Site.aspx">
-              Site Maintenance
-            </Link>
-          </header>
-          <SiteForm
-            action={updateSiteAction}
-            site={site}
-            mode="update"
-            referenceData={referenceData}
-            returnPath="/Validation/MNT_Site.aspx"
-          />
-        </section>
-      </main>
-    );
+    return <SiteEditView siteCode={siteCode} site={site} referenceData={referenceData} />;
   } catch (error) {
     if (error instanceof SiteApiError && error.reason === "unauthorized")
       return (
@@ -117,12 +131,6 @@ async function SiteEditPageContent({ searchParams }: SiteEditPageProps) {
   }
 }
 
-export default function SiteEditPage(
-  props: NonNullable<Parameters<typeof SiteEditPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <SiteEditPageContent {...props} />
-    </Suspense>
-  );
+export default function SiteEditPage(props: SiteEditPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderSiteEditPage(props)}</Suspense>;
 }

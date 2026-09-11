@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
+import ValidationDescriptionSection from "@/components/ui/validation-description-section";
 import type { DriverLicenceActionState } from "@/app/(administration)/validation-data/driver-licenses/actions";
 import type { DriverLicenceRecord } from "@/lib/api/reference-data/api-driver-licences";
 
@@ -43,35 +44,19 @@ export default function DriverLicenceForm({ action, licence, mode }: DriverLicen
       {mode === "update" ? (
         <input name="licenceCode" type="hidden" value={licence.licenceCode} readOnly />
       ) : null}
-      <section className="vehicle-form-section" aria-labelledby="driver-licence-details-title">
-        <div className="vehicle-form-section-header">
-          <div>
-            <p className="eyebrow">Legacy licence validation</p>
-            <h2 id="driver-licence-details-title">Driver licence details</h2>
-          </div>
-          <span className="vehicle-required-note">* Required</span>
-        </div>
-        <div className="field-grid">
-          <div className="field">
-            <label htmlFor="description">
-              Description <span aria-hidden="true">*</span>
-              <span className="sr-only"> required</span>
-            </label>
-            <input
-              id="description"
-              name="description"
-              type="text"
-              maxLength={30}
-              defaultValue={licence.description ?? ""}
-              required
-            />
-          </div>
-        </div>
-        <p className="muted-copy">
-          The description is stored in the legacy <code>driver_licence</code> table and remains
-          available to vehicle model validation.
-        </p>
-      </section>
+      <ValidationDescriptionSection
+        headingId="driver-licence-details-title"
+        eyebrow="Legacy licence validation"
+        heading="Driver licence details"
+        label="Description"
+        value={licence.description}
+        note={
+          <>
+            The description is stored in the legacy <code>driver_licence</code> table and remains
+            available to vehicle model validation.
+          </>
+        }
+      />
       {mode === "update" ? (
         <section className="vehicle-form-section" aria-labelledby="driver-licence-audit-title">
           <div className="vehicle-form-section-header">

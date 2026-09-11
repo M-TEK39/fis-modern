@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -34,7 +36,9 @@ function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
 }
 
-async function TowingFirmDatePageContent({
+const TowingFirmDatePageContent = renderTowingFirmDatePageContent;
+
+async function renderTowingFirmDatePageContent({
   searchParams,
   routePath = "/towing/reports/firm-date",
 }: TowingFirmDatePageProps) {
@@ -186,15 +190,15 @@ async function TowingFirmDatePageContent({
               <div className="vehicle-table-wrapper">
                 <table className="vehicle-table">
                   <caption className="sr-only">Firm towing calls</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Reference</th>
-                      <th scope="col">VMF</th>
-                      <th scope="col">Request Date</th>
-                      <th scope="col">Location</th>
-                      <th scope="col">Problem</th>
-                    </tr>
-                  </thead>
+                  <DataTableHeader
+                    columns={[
+                      { key: "column-1", label: <>Reference</> },
+                      { key: "column-2", label: <>VMF</> },
+                      { key: "column-3", label: <>Request Date</> },
+                      { key: "column-4", label: <>Location</> },
+                      { key: "column-5", label: <>Problem</> },
+                    ]}
+                  />
                   <tbody>
                     {records.map((item) => (
                       <tr key={item.towingCode}>
@@ -222,16 +226,4 @@ export default function TowingFirmDatePage(props: Parameters<typeof TowingFirmDa
       <TowingFirmDatePageContent {...props} />
     </Suspense>
   );
-}
-
-type LegacyTowingFirmDatePageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export function createLegacyTowingFirmDatePage(routePath: string) {
-  return function LegacyTowingFirmDatePage({
-    searchParams,
-  }: Readonly<LegacyTowingFirmDatePageProps>) {
-    return <TowingFirmDatePage routePath={routePath} searchParams={searchParams} />;
-  };
 }

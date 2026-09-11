@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -84,15 +86,15 @@ function ReportResults({ rows }: Readonly<{ rows: ClearanceReportRow[] }>) {
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Universal clearance report</caption>
-            <thead>
-              <tr>
-                <th scope="col">Fleet Number</th>
-                <th scope="col">Clearance Comment</th>
-                <th scope="col">Merchant Name</th>
-                <th scope="col">Clearance Number</th>
-                <th scope="col">Clearance Date</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Fleet Number</> },
+                { key: "column-2", label: <>Clearance Comment</> },
+                { key: "column-3", label: <>Merchant Name</> },
+                { key: "column-4", label: <>Clearance Number</> },
+                { key: "column-5", label: <>Clearance Date</> },
+              ]}
+            />
             <tbody>
               {rows.map((row) => (
                 <tr
@@ -116,7 +118,9 @@ function ReportResults({ rows }: Readonly<{ rows: ClearanceReportRow[] }>) {
   );
 }
 
-async function ClearanceUniversalReportContent({
+const ClearanceUniversalReportContent = renderClearanceUniversalReportContent;
+
+async function renderClearanceUniversalReportContent({
   searchParams,
   routePath = "/clearance/reports/universal",
 }: Readonly<{ searchParams: SearchParams; routePath?: string }>) {

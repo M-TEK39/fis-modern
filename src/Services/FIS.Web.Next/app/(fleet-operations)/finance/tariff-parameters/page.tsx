@@ -1,3 +1,5 @@
+import DataTableHeader from "@/components/ui/data-table-header";
+
 import { Suspense } from "react";
 
 import RouteLoading from "@/components/app-shell/route-loading";
@@ -9,9 +11,11 @@ import {
   FinanceFrame,
   FinanceRestricted,
   FinanceUnavailable,
+} from "@/app/(fleet-operations)/finance/_components";
+import {
   hasTariffApproverRole,
   hasTariffParametersRole,
-} from "@/app/(fleet-operations)/finance/_components";
+} from "@/app/(fleet-operations)/finance/_utils";
 import {
   FinanceApiError,
   getFinanceTariffParameters,
@@ -25,6 +29,17 @@ import { updateTariffParametersAction } from "./actions";
 
 type Query = Record<string, string | string[] | undefined>;
 
+const NUMBER_FORMATTER = new Intl.NumberFormat("en-ZA", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+const DATE_FORMATTER = new Intl.DateTimeFormat("en-ZA", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: "UTC",
+});
+
 function queryValue(query: Query, name: string) {
   const value = query[name];
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
@@ -36,24 +51,13 @@ function numberValue(value: string) {
 }
 
 function formatNumber(value: number | null) {
-  return value === null
-    ? "-"
-    : new Intl.NumberFormat("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-        value,
-      );
+  return value === null ? "-" : NUMBER_FORMATTER.format(value);
 }
 
 function formatDate(value: string | null) {
   if (!value) return "-";
   const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : new Intl.DateTimeFormat("en-ZA", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        timeZone: "UTC",
-      }).format(date);
+  return Number.isNaN(date.getTime()) ? value : DATE_FORMATTER.format(date);
 }
 
 function optionList(options: FinanceOption[]) {
@@ -79,13 +83,13 @@ function ParameterTable({ data }: Readonly<{ data: FinanceTariffParameters }>) {
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Global tariff parameters</caption>
-            <thead>
-              <tr>
-                <th scope="col">Parameter</th>
-                <th scope="col">Value</th>
-                <th scope="col">Unit</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Parameter</> },
+                { key: "column-2", label: <>Value</> },
+                { key: "column-3", label: <>Unit</> },
+              ]}
+            />
             <tbody>
               {data.parameters.length > 0 ? (
                 data.parameters.map((item) => (
@@ -111,19 +115,19 @@ function ParameterTable({ data }: Readonly<{ data: FinanceTariffParameters }>) {
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Fixed tariffs</caption>
-            <thead>
-              <tr>
-                <th scope="col">Class Code</th>
-                <th scope="col">Class Description</th>
-                <th scope="col">Amount</th>
-                <th scope="col">Unit</th>
-                <th scope="col">Effective Date</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Class Code</> },
+                { key: "column-2", label: <>Class Description</> },
+                { key: "column-3", label: <>Amount</> },
+                { key: "column-4", label: <>Unit</> },
+                { key: "column-5", label: <>Effective Date</> },
+              ]}
+            />
             <tbody>
               {data.fixedTariffs.length > 0 ? (
-                data.fixedTariffs.map((item, index) => (
-                  <tr key={`${item.classCode ?? "class"}-${index}`}>
+                data.fixedTariffs.map((item) => (
+                  <tr key={`${item.classCode ?? "class"}-${item.effectiveDate ?? "date"}`}>
                     <td>{item.classCode ?? "-"}</td>
                     <td>{item.classDescription || "-"}</td>
                     <td>{formatNumber(item.amount)}</td>
@@ -147,19 +151,19 @@ function ParameterTable({ data }: Readonly<{ data: FinanceTariffParameters }>) {
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Kilometre tariffs</caption>
-            <thead>
-              <tr>
-                <th scope="col">Class Code</th>
-                <th scope="col">Class Description</th>
-                <th scope="col">Amount</th>
-                <th scope="col">Unit</th>
-                <th scope="col">Effective Date</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Class Code</> },
+                { key: "column-2", label: <>Class Description</> },
+                { key: "column-3", label: <>Amount</> },
+                { key: "column-4", label: <>Unit</> },
+                { key: "column-5", label: <>Effective Date</> },
+              ]}
+            />
             <tbody>
               {data.kiloTariffs.length > 0 ? (
-                data.kiloTariffs.map((item, index) => (
-                  <tr key={`${item.classCode ?? "class"}-${index}`}>
+                data.kiloTariffs.map((item) => (
+                  <tr key={`${item.classCode ?? "class"}-${item.effectiveDate ?? "date"}`}>
                     <td>{item.classCode ?? "-"}</td>
                     <td>{item.classDescription || "-"}</td>
                     <td>{formatNumber(item.amount)}</td>
@@ -183,19 +187,21 @@ function ParameterTable({ data }: Readonly<{ data: FinanceTariffParameters }>) {
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
             <caption className="sr-only">Maintenance values</caption>
-            <thead>
-              <tr>
-                <th scope="col">Class</th>
-                <th scope="col">Months Age</th>
-                <th scope="col">KM Age</th>
-                <th scope="col">Maintenance Value</th>
-                <th scope="col">Rand per KM</th>
-              </tr>
-            </thead>
+            <DataTableHeader
+              columns={[
+                { key: "column-1", label: <>Class</> },
+                { key: "column-2", label: <>Months Age</> },
+                { key: "column-3", label: <>KM Age</> },
+                { key: "column-4", label: <>Maintenance Value</> },
+                { key: "column-5", label: <>Rand per KM</> },
+              ]}
+            />
             <tbody>
               {data.maintenanceValues.length > 0 ? (
-                data.maintenanceValues.map((item, index) => (
-                  <tr key={`${item.classCode ?? "class"}-${index}`}>
+                data.maintenanceValues.map((item) => (
+                  <tr
+                    key={`${item.classCode ?? item.classDescription ?? "class"}-${item.monthsAge ?? "months"}-${item.kilometerAge ?? "km"}`}
+                  >
                     <td>{item.classDescription || item.classCode || "-"}</td>
                     <td>{item.monthsAge ?? "-"}</td>
                     <td>{item.kilometerAge ?? "-"}</td>
@@ -216,7 +222,9 @@ function ParameterTable({ data }: Readonly<{ data: FinanceTariffParameters }>) {
   );
 }
 
-async function TariffParametersContent({
+const TariffParametersContent = renderTariffParametersContent;
+
+async function renderTariffParametersContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Query> }>) {
   await connection();

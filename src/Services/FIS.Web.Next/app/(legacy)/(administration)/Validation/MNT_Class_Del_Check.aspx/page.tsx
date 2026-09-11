@@ -35,7 +35,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function ClassDeleteCheckPageContent({ searchParams }: ClassDeleteCheckPageProps) {
+async function renderClassDeleteCheckPage({ searchParams }: ClassDeleteCheckPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -162,12 +162,6 @@ async function ClassDeleteCheckPageContent({ searchParams }: ClassDeleteCheckPag
   }
 }
 
-export default function ClassDeleteCheckPage(
-  props: NonNullable<Parameters<typeof ClassDeleteCheckPageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <ClassDeleteCheckPageContent {...props} />
-    </Suspense>
-  );
+export default function ClassDeleteCheckPage(props: ClassDeleteCheckPageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderClassDeleteCheckPage(props)}</Suspense>;
 }

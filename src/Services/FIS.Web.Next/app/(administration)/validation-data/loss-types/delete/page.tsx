@@ -39,7 +39,83 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-async function LossTypeDeletePageContent({ searchParams }: LossTypeDeletePageProps) {
+type LossTypeRecord = NonNullable<Awaited<ReturnType<typeof getLossType>>>;
+type LossTypeDependencies = Awaited<ReturnType<typeof getLossTypeDeleteCheck>>;
+
+function LossTypeDeleteView({
+  lossType,
+  dependencies,
+}: Readonly<{ lossType: LossTypeRecord; dependencies: LossTypeDependencies }>) {
+  const blocked =
+    !dependencies.checkAvailable || !dependencies.canDelete || dependencies.lossCount > 0;
+
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <section className="vehicle-card" aria-labelledby="loss-type-delete-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Validation / Operational</p>
+            <h1 id="loss-type-delete-title">Delete Loss Description</h1>
+            <p>Check linked loss records before deleting this loss description.</p>
+          </div>
+          <Link className="button button-secondary" href="/Validation/MNT_Loss_Type.aspx">
+            Loss Description Maintenance
+          </Link>
+        </header>
+        <section className="vehicle-status-card" role={blocked ? "alert" : "note"}>
+          <p className="eyebrow">Loss type {lossType.lossTypeCode}</p>
+          <h2>{lossType.description || `Loss type ${lossType.lossTypeCode}`}</h2>
+          {!dependencies.checkAvailable ? (
+            <p className="muted-copy">
+              Linked loss data could not be verified, so this loss description cannot be deleted
+              yet.
+            </p>
+          ) : dependencies.lossCount > 0 ? (
+            <>
+              <p className="muted-copy">
+                Delete or change the following loss records before deleting this loss description:
+              </p>
+              <ul>
+                {dependencies.losses.map((loss, index) => (
+                  <li key={`${loss.fleetNumber ?? "vehicle"}-${loss.lossDate ?? "date"}-${index}`}>
+                    <strong>{loss.fleetNumber || "Unknown vehicle"}</strong>
+                    {loss.lossDate ? ` — ${loss.lossDate.slice(0, 10)}` : ""}
+                    {loss.lossReference ? ` — ${loss.lossReference}` : ""}
+                  </li>
+                ))}
+              </ul>
+              <p className="muted-copy">
+                {dependencies.lossCount} linked loss record
+                {dependencies.lossCount === 1 ? "" : "s"} found.
+              </p>
+            </>
+          ) : (
+            <p className="muted-copy">
+              No loss records use this description. Deleting it cannot be undone.
+            </p>
+          )}
+          {blocked ? (
+            <Link className="button button-secondary" href="/Validation/MNT_Loss_Type.aspx">
+              Return to Loss Description Maintenance
+            </Link>
+          ) : (
+            <form action={deleteLossTypeAction} className="button-row">
+              <input name="lossTypeCode" type="hidden" value={lossType.lossTypeCode} readOnly />
+              <button className="button button-primary" type="submit">
+                Confirm Delete
+              </button>
+              <Link className="button button-secondary" href="/Validation/MNT_Loss_Type.aspx">
+                Cancel
+              </Link>
+            </form>
+          )}
+        </section>
+      </section>
+    </main>
+  );
+}
+
+async function renderLossTypeDeletePage({ searchParams }: LossTypeDeletePageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -90,74 +166,7 @@ async function LossTypeDeletePageContent({ searchParams }: LossTypeDeletePagePro
         </main>
       );
 
-    const blocked =
-      !dependencies.checkAvailable || !dependencies.canDelete || dependencies.lossCount > 0;
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-card" aria-labelledby="loss-type-delete-title">
-          <header className="vehicle-page-header">
-            <div>
-              <p className="eyebrow">Validation / Operational</p>
-              <h1 id="loss-type-delete-title">Delete Loss Description</h1>
-              <p>Check linked loss records before deleting this loss description.</p>
-            </div>
-            <Link className="button button-secondary" href="/Validation/MNT_Loss_Type.aspx">
-              Loss Description Maintenance
-            </Link>
-          </header>
-          <section className="vehicle-status-card" role={blocked ? "alert" : "note"}>
-            <p className="eyebrow">Loss type {lossType.lossTypeCode}</p>
-            <h2>{lossType.description || `Loss type ${lossType.lossTypeCode}`}</h2>
-            {!dependencies.checkAvailable ? (
-              <p className="muted-copy">
-                Linked loss data could not be verified, so this loss description cannot be deleted
-                yet.
-              </p>
-            ) : dependencies.lossCount > 0 ? (
-              <>
-                <p className="muted-copy">
-                  Delete or change the following loss records before deleting this loss description:
-                </p>
-                <ul>
-                  {dependencies.losses.map((loss, index) => (
-                    <li
-                      key={`${loss.fleetNumber ?? "vehicle"}-${loss.lossDate ?? "date"}-${index}`}
-                    >
-                      <strong>{loss.fleetNumber || "Unknown vehicle"}</strong>
-                      {loss.lossDate ? ` — ${loss.lossDate.slice(0, 10)}` : ""}
-                      {loss.lossReference ? ` — ${loss.lossReference}` : ""}
-                    </li>
-                  ))}
-                </ul>
-                <p className="muted-copy">
-                  {dependencies.lossCount} linked loss record
-                  {dependencies.lossCount === 1 ? "" : "s"} found.
-                </p>
-              </>
-            ) : (
-              <p className="muted-copy">
-                No loss records use this description. Deleting it cannot be undone.
-              </p>
-            )}
-            {blocked ? (
-              <Link className="button button-secondary" href="/Validation/MNT_Loss_Type.aspx">
-                Return to Loss Description Maintenance
-              </Link>
-            ) : (
-              <form action={deleteLossTypeAction} className="button-row">
-                <input name="lossTypeCode" type="hidden" value={lossType.lossTypeCode} readOnly />
-                <button className="button button-primary" type="submit">
-                  Confirm Delete
-                </button>
-                <Link className="button button-secondary" href="/Validation/MNT_Loss_Type.aspx">
-                  Cancel
-                </Link>
-              </form>
-            )}
-          </section>
-        </section>
-      </main>
-    );
+    return <LossTypeDeleteView lossType={lossType} dependencies={dependencies} />;
   } catch (caughtError) {
     if (caughtError instanceof LossTypeApiError && caughtError.reason === "unauthorized")
       return (
@@ -183,12 +192,6 @@ async function LossTypeDeletePageContent({ searchParams }: LossTypeDeletePagePro
   }
 }
 
-export default function LossTypeDeletePage(
-  props: NonNullable<Parameters<typeof LossTypeDeletePageContent>[0]>,
-) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <LossTypeDeletePageContent {...props} />
-    </Suspense>
-  );
+export default function LossTypeDeletePage(props: LossTypeDeletePageProps) {
+  return <Suspense fallback={<RouteLoading />}>{renderLossTypeDeletePage(props)}</Suspense>;
 }
