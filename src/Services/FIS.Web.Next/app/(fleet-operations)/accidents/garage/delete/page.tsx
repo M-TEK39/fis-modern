@@ -87,6 +87,7 @@ function AccessRestricted() {
 }
 
 async function GarageDeleteContent({ searchParams }: GarageDeletePageProps) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") {
     redirect("/login");
@@ -265,9 +266,7 @@ async function GarageDeleteContent({ searchParams }: GarageDeletePageProps) {
   );
 }
 
-export default async function GarageDeletePage({ searchParams }: GarageDeletePageProps) {
-  await connection();
-
+export default function GarageDeletePage({ searchParams }: GarageDeletePageProps) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="garage-delete-title">
@@ -285,7 +284,7 @@ export default async function GarageDeletePage({ searchParams }: GarageDeletePag
           fallback={
             <div className="loading-card" aria-busy="true">
               <span className="spinner" aria-hidden="true" />
-              <p>Loading garage accidents...</p>
+              <p>Loading page…</p>
             </div>
           }
         >

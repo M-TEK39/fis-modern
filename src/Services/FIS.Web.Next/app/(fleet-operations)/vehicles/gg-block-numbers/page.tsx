@@ -5,6 +5,7 @@ import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { createGgBlockAction } from "@/app/(fleet-operations)/vehicles/gg-block-numbers/actions";
 import GgBlockForm from "@/app/(fleet-operations)/vehicles/gg-block-numbers/gg-block-form";
 import {
@@ -173,7 +174,7 @@ async function GgBlockHistoryContent({
   );
 }
 
-export default async function GgBlockNumbersPage({
+async function GgBlockNumbersPageContent({
   searchParams,
   routePath = "/vehicles/gg-block-numbers",
 }: GgBlockNumbersPageProps) {
@@ -239,14 +240,7 @@ export default async function GgBlockNumbersPage({
 
         <GgBlockForm action={createGgBlockAction} returnPath={routePath} />
 
-        <Suspense
-          fallback={
-            <div className="loading-card" aria-busy="true">
-              <span className="spinner" aria-hidden="true" />
-              <p>Loading GG block history...</p>
-            </div>
-          }
-        >
+        <Suspense fallback={<RouteLoading />}>
           <GgBlockHistoryContent page={page} routePath={routePath} />
         </Suspense>
 
@@ -262,5 +256,13 @@ export default async function GgBlockNumbersPage({
         </div>
       </section>
     </main>
+  );
+}
+
+export default function GgBlockNumbersPage(props: GgBlockNumbersPageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <GgBlockNumbersPageContent {...props} />
+    </Suspense>
   );
 }

@@ -63,6 +63,7 @@ function AccidentNotFound() {
 }
 
 async function HqEditContent({ searchParams }: HqEditPageProps) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired") return <SessionRecovery returnPath="/accidents/hq/edit" />;
@@ -126,8 +127,7 @@ async function HqEditContent({ searchParams }: HqEditPageProps) {
   }
 }
 
-export default async function HqEditPage({ searchParams }: HqEditPageProps) {
-  await connection();
+export default function HqEditPage({ searchParams }: HqEditPageProps) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="hq-edit-title">
@@ -135,7 +135,7 @@ export default async function HqEditPage({ searchParams }: HqEditPageProps) {
           fallback={
             <div className="loading-card" aria-busy="true">
               <span className="spinner" aria-hidden="true" />
-              <p>Loading accident details...</p>
+              <p>Loading page…</p>
             </div>
           }
         >

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
 
@@ -11,7 +12,7 @@ function hasRole(roles: readonly string[]) {
   return roles.some((role) => role.localeCompare(ROLE, undefined, { sensitivity: "accent" }) === 0);
 }
 
-export default async function PrivateHireMaintenanceMenuPage() {
+async function PrivateHireMaintenanceMenuPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -114,5 +115,13 @@ export default async function PrivateHireMaintenanceMenuPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function PrivateHireMaintenanceMenuPage() {
+  return (
+    <StreamedRoute>
+      <PrivateHireMaintenanceMenuPageContent />
+    </StreamedRoute>
   );
 }

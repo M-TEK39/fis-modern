@@ -140,6 +140,75 @@ public sealed class TaxiRepository : ITaxiRepository
 
     public Task<IEnumerable<Taxi>> GetAllAsync() => QueryAsEnumerableAsync();
 
+    public async Task<TaxiPage> GetPageAsync(TaxiPageQuery query)
+    {
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var columns = await GetAvailableColumnsAsync(RequiredColumns);
+        var conditions = new List<string> { GetActiveFilter(columns, "t") };
+
+        if (query.PendingOnly)
+        {
+            if (columns.ContainsKey("cancelled"))
+            {
+                conditions.Add("NULLIF(LTRIM(RTRIM(t.[cancelled])), '') IS NULL");
+            }
+
+            if (query.JiaPickupOnly)
+            {
+                conditions.Add(
+                    columns.ContainsKey("JIA_pickup") ? "ISNULL(t.[JIA_pickup], 0) = 1" : "1 = 0"
+                );
+            }
+        }
+
+        var whereClause = string.Join(" AND ", conditions);
+
+        await using var scope = await OpenConnectionAsync();
+        await using var countCommand = scope.Connection.CreateCommand();
+        countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        countCommand.CommandText = $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{TableName}] t
+            LEFT JOIN [dbo].[department] d ON d.[department_code] = t.[department_code]
+            LEFT JOIN [dbo].[site] s ON s.[Site_code] = t.[site_code]
+            WHERE {whereClause}
+            """;
+        var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Min(requestedPage, totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        dataCommand.CommandText = $"""
+            SELECT {string.Join(
+                ", ",
+                BusinessColumns.Concat(AuditColumns).Select(column =>
+                    GetProjection(columns, column, "t")
+                )
+            )},
+                   d.[department_code] AS [__department_code], d.[description] AS [__department_description],
+                   s.[Site_code] AS [__site_code], s.[description] AS [__site_description]
+            FROM [dbo].[{TableName}] t
+            LEFT JOIN [dbo].[department] d ON d.[department_code] = t.[department_code]
+            LEFT JOIN [dbo].[site] s ON s.[Site_code] = t.[site_code]
+            WHERE {whereClause}
+            ORDER BY t.[request_id] DESC
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<Taxi>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            items.Add(MapTaxi(reader));
+
+        return new TaxiPage(items, page, pageSize, total);
+    }
+
     public Task<IEnumerable<Taxi>> GetBySiteAsync(short siteCode) =>
         QueryAsEnumerableAsync(
             "t.[site_code] = @siteCode",

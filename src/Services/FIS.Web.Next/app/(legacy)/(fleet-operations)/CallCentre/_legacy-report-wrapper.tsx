@@ -1,4 +1,4 @@
-import { CallCentreReportPage } from "@/app/(fleet-operations)/call-centre/reports/[mode]/page";
+import { CallCentreReportPage } from "@/app/(fleet-operations)/call-centre/reports/[mode]/_route";
 
 export type LegacyReportWrapperProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

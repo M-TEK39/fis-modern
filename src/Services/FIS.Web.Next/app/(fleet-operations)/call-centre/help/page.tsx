@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
@@ -13,7 +14,45 @@ function hasRole(roles: readonly string[], role: string) {
   );
 }
 
-export default async function CallCentreHelpPage() {
+function HelpFallback() {
+  return (
+    <div className="loading-card" aria-busy="true">
+      <span className="spinner" aria-hidden="true" />
+      <p>Checking access...</p>
+    </div>
+  );
+}
+
+function ApiUnavailable() {
+  return (
+    <section className="vehicle-status-card" role="alert">
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
+      <p className="eyebrow">API unavailable</p>
+      <h2>Call Centre help could not be opened.</h2>
+      <p className="muted-copy">Retry when the FIS API is available.</p>
+      <Link className="button button-primary" href="/call-centre/help">
+        Try again
+      </Link>
+    </section>
+  );
+}
+
+function AccessRestricted() {
+  return (
+    <section className="vehicle-status-card" role="alert">
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
+      <p className="eyebrow">Access restricted</p>
+      <h2>You do not have permission to access Call Centre help.</h2>
+      <p className="muted-copy">This page requires the Call Centre role.</p>
+    </section>
+  );
+}
+
+async function CallCentreHelpContent() {
   await connection();
   const session = await getSession();
 
@@ -22,49 +61,51 @@ export default async function CallCentreHelpPage() {
   }
 
   if (session.status === "expired") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <SessionRecovery returnPath="/call-centre/help" />
-      </main>
-    );
+    return <SessionRecovery returnPath="/call-centre/help" />;
   }
 
   if (session.status === "unavailable") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-status-card" role="alert">
-          <div className="status-icon status-icon-error" aria-hidden="true">
-            !
-          </div>
-          <p className="eyebrow">API unavailable</p>
-          <h2>Call Centre help could not be opened.</h2>
-          <p className="muted-copy">Retry when the FIS API is available.</p>
-          <Link className="button button-primary" href="/call-centre/help">
-            Try again
-          </Link>
-        </section>
-      </main>
-    );
+    return <ApiUnavailable />;
   }
 
   if (!hasRole(session.roles, CALL_CENTRE_ROLE)) {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-status-card" role="alert">
-          <div className="status-icon status-icon-error" aria-hidden="true">
-            !
-          </div>
-          <p className="eyebrow">Access restricted</p>
-          <h2>You do not have permission to access Call Centre help.</h2>
-          <p className="muted-copy">This page requires the Call Centre role.</p>
-        </section>
-      </main>
-    );
+    return <AccessRestricted />;
   }
 
   return (
+    <div className="module-help-content">
+      <details className="module-help-disclosure">
+        <summary>Incident Capture</summary>
+        <div className="module-help-section">
+          <p className="module-help-intro">
+            Record new service requests and incidents reported by departments.
+          </p>
+        </div>
+      </details>
+      <details className="module-help-disclosure">
+        <summary>Incident Editing</summary>
+        <div className="module-help-section">
+          <p className="module-help-intro">
+            Update existing incident records and track resolution details.
+          </p>
+        </div>
+      </details>
+      <details className="module-help-disclosure">
+        <summary>Notifications</summary>
+        <div className="module-help-section">
+          <p className="module-help-intro">
+            Maintain notification addresses for call centre communications.
+          </p>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+export default function CallCentreHelpPage() {
+  return (
     <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card" aria-labelledby="call-centre-help-title">
+      <article className="vehicle-card module-help-page" aria-labelledby="call-centre-help-title">
         <header className="vehicle-page-header">
           <div>
             <p className="eyebrow">Call Centre</p>
@@ -75,28 +116,10 @@ export default async function CallCentreHelpPage() {
             Back to menu
           </Link>
         </header>
-
-        <div className="vehicle-menu-tiles">
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Incident Capture</h2>
-            <div className="vehicle-menu-body">
-              <p>Record new service requests and incidents reported by departments.</p>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Incident Editing</h2>
-            <div className="vehicle-menu-body">
-              <p>Update existing incident records and track resolution details.</p>
-            </div>
-          </section>
-          <section className="vehicle-menu-tile">
-            <h2 className="vehicle-menu-header">Notifications</h2>
-            <div className="vehicle-menu-body">
-              <p>Maintain notification addresses for call centre communications.</p>
-            </div>
-          </section>
-        </div>
-      </section>
+        <Suspense fallback={<HelpFallback />}>
+          <CallCentreHelpContent />
+        </Suspense>
+      </article>
     </main>
   );
 }

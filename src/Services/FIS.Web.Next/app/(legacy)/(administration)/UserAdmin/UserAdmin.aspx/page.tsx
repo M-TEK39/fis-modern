@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
 import {
   UserAdminListPage,
   type UserAdminSearchParams,
@@ -6,5 +9,9 @@ import {
 export default function LegacyUserAdminListPage({
   searchParams,
 }: Readonly<{ searchParams: UserAdminSearchParams }>) {
-  return <UserAdminListPage searchParams={searchParams} />;
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <UserAdminListPage searchParams={searchParams} />
+    </Suspense>
+  );
 }

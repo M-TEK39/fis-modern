@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   ApiUnavailable,
@@ -22,7 +23,7 @@ function hasRole(roles: readonly string[]) {
   return roles.some((role) => role.localeCompare(ROLE, undefined, { sensitivity: "accent" }) === 0);
 }
 
-export default async function PrivateHireContractorReportPage({
+async function PrivateHireContractorReportPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -172,4 +173,14 @@ export default async function PrivateHireContractorReportPage({
       </main>
     );
   }
+}
+
+export default function PrivateHireContractorReportPage(
+  props: Parameters<typeof PrivateHireContractorReportPageContent>[0],
+) {
+  return (
+    <StreamedRoute>
+      <PrivateHireContractorReportPageContent {...props} />
+    </StreamedRoute>
+  );
 }

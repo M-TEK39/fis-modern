@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -22,7 +26,7 @@ function hasRole(roles: readonly string[]) {
   );
 }
 
-export default async function FuelCardVehiclePage({
+async function FuelCardVehiclePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -201,4 +205,14 @@ export default async function FuelCardVehiclePage({
       </main>
     );
   }
+}
+
+export default function FuelCardVehiclePage(
+  props: Parameters<typeof FuelCardVehiclePageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <FuelCardVehiclePageContent {...props} />
+    </Suspense>
+  );
 }

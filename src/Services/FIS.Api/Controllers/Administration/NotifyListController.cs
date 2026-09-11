@@ -38,6 +38,40 @@ public class NotifyListController : BaseApiController
         }
     }
 
+    [HttpGet("page")]
+    public async Task<IActionResult> GetPage(
+        [FromQuery] string? search = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24
+    )
+    {
+        try
+        {
+            var result = await _notifyListService.GetPageAsync(
+                search,
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, 100),
+                HttpContext.RequestAborted
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(ToDto),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged notify list records");
+            return StatusCode(500, "Error retrieving notify list records");
+        }
+    }
+
     [HttpGet("{id:int}")]
     public async Task<ActionResult<NotifyListDto>> GetById(int id)
     {

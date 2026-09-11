@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   accessRestricted,
   getJobCardSession,
+  JobCardPageBoundary,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/job-cards/_page";
@@ -13,7 +14,17 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_components";
 import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
 
-export default async function SelectJobCardVehiclePage({
+export default function SelectJobCardVehiclePage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
+  return (
+    <JobCardPageBoundary>
+      <SelectJobCardVehicleContent searchParams={searchParams} />
+    </JobCardPageBoundary>
+  );
+}
+
+async function SelectJobCardVehicleContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();

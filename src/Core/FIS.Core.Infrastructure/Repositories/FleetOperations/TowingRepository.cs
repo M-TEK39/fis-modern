@@ -66,6 +66,93 @@ public class TowingRepository : ITowingRepository
 
     public async Task<IEnumerable<Towing>> GetAllAsync() => await QueryAsync();
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The table, columns, ordering, and generated parameter names are fixed; VMF values, pagination values, and every filter value are database parameters."
+    )]
+    public async Task<TowingPage> GetPageAsync(TowingPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var vmfCodes = query.VmfCodes?.Where(code => code > 0).Distinct().ToArray() ?? [];
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            var availableColumns = await GetAvailableColumnsAsync();
+            var predicates = new List<string> { GetActiveFilter(availableColumns) };
+            if (vmfCodes.Length > 0)
+            {
+                predicates.Add(
+                    $"[vmf_code] IN ({string.Join(", ", vmfCodes.Select((_, index) => $"@vmfCode{index}"))})"
+                );
+            }
+
+            var whereClause = string.Join(" AND ", predicates);
+            await using var countCommand = connection.CreateCommand();
+            countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            countCommand.CommandText =
+                $"SELECT COUNT(1) FROM [dbo].[{TableName}] WHERE {whereClause}";
+            for (var index = 0; index < vmfCodes.Length; index++)
+            {
+                AddParameter(countCommand, $"@vmfCode{index}", DbType.Int32, vmfCodes[index]);
+            }
+
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+            var projection = LegacyColumns
+                .Select(column => GetColumnProjection(availableColumns, column))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
+                .ToArray();
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            dataCommand.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}]
+                WHERE {whereClause}
+                ORDER BY [Tow_request_date] DESC, [Towing_code] DESC
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            for (var index = 0; index < vmfCodes.Length; index++)
+            {
+                AddParameter(dataCommand, $"@vmfCode{index}", DbType.Int32, vmfCodes[index]);
+            }
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<Towing>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(MapTowing(reader, availableColumns));
+            }
+
+            return new TowingPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IEnumerable<Towing>> GetByVehicleAsync(int vmfCode) =>
         await QueryAsync(
             "WHERE [vmf_code] = @vmfCode",

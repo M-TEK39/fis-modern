@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
@@ -95,6 +96,36 @@ function hasRole(roles: readonly string[], role: string) {
   );
 }
 
+function HelpFallback() {
+  return (
+    <div className="loading-card" aria-busy="true">
+      <span className="spinner" aria-hidden="true" />
+      <p>Loading help…</p>
+    </div>
+  );
+}
+
+function ApiUnavailable() {
+  return (
+    <section className="vehicle-status-card" role="alert">
+      <div className="status-icon status-icon-error" aria-hidden="true">
+        !
+      </div>
+      <p className="eyebrow">API unavailable</p>
+      <h2>Auction help could not be opened.</h2>
+      <p className="muted-copy">Retry when the FIS API is available.</p>
+      <div className="button-row">
+        <Link className="button button-primary" href="/auction/help">
+          Try again
+        </Link>
+        <Link className="button button-secondary" href="/login">
+          Sign in
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 function AccessRestricted() {
   return (
     <section className="vehicle-status-card" role="alert">
@@ -108,7 +139,7 @@ function AccessRestricted() {
   );
 }
 
-export default async function AuctionHelpPage() {
+async function AuctionHelpContent() {
   await connection();
   const session = await getSession();
 
@@ -117,78 +148,40 @@ export default async function AuctionHelpPage() {
   }
 
   if (session.status === "expired") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <SessionRecovery returnPath="/auction/help" />
-      </main>
-    );
+    return <SessionRecovery returnPath="/auction/help" />;
   }
 
   if (session.status === "unavailable") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <section className="vehicle-status-card" role="alert">
-          <div className="status-icon status-icon-error" aria-hidden="true">
-            !
-          </div>
-          <p className="eyebrow">API unavailable</p>
-          <h2>Auction help could not be opened.</h2>
-          <p className="muted-copy">Retry when the FIS API is available.</p>
-          <div className="button-row">
-            <Link className="button button-primary" href="/auction/help">
-              Try again
-            </Link>
-            <Link className="button button-secondary" href="/login">
-              Sign in
-            </Link>
-          </div>
-        </section>
-      </main>
-    );
+    return <ApiUnavailable />;
   }
 
   if (!hasRole(session.roles, REPORTS_ROLE)) {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <AccessRestricted />
-      </main>
-    );
+    return <AccessRestricted />;
   }
 
   return (
-    <main className="page-shell vehicle-page-shell">
-      <article className="vehicle-card" aria-labelledby="auction-help-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Auction maintenance</p>
-            <h1 id="auction-help-title">Auction Maintenance Information / Help</h1>
-            <p>Definitions and guidance for the Auction fields.</p>
-          </div>
-          <Link className="button button-secondary" href="/auction">
-            Auction Menu
-          </Link>
-        </header>
-
-        <section aria-labelledby="auction-help-purpose-title">
+    <>
+      <div className="module-help-content">
+        <section className="module-help-section" aria-labelledby="auction-help-purpose-title">
           <h2 id="auction-help-purpose-title">Purpose of Program</h2>
-          <p>
+          <p className="module-help-intro">
             The Auctions program provides a uniform process for capturing auction information and
             analysing the outcome of vehicles proposed for disposal.
           </p>
-          <p>
+          <p className="module-help-note">
             Users of the GGMT administrative functions are expected to have received on-the-job
             training for the fields relevant to their division.
           </p>
         </section>
 
-        <section aria-labelledby="auction-help-fields-title">
+        <section className="module-help-section" aria-labelledby="auction-help-fields-title">
           <h2 id="auction-help-fields-title">Term / Field Analysis</h2>
           <p>
             The required data fields are mostly self-explanatory; the definitions below specify
             their intended meaning.
           </p>
           <div className="vehicle-table-wrapper">
-            <table className="vehicle-table">
+            <table className="vehicle-table module-help-table">
               <caption className="sr-only">Auction maintenance terms and field definitions</caption>
               <thead>
                 <tr>
@@ -207,6 +200,30 @@ export default async function AuctionHelpPage() {
             </table>
           </div>
         </section>
+      </div>
+      <div className="vehicle-footer-actions">
+        <Link className="button button-secondary" href="/auction">
+          Auction Menu
+        </Link>
+      </div>
+    </>
+  );
+}
+
+export default function AuctionHelpPage() {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <article className="vehicle-card module-help-page" aria-labelledby="auction-help-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Auction maintenance</p>
+            <h1 id="auction-help-title">Auction Maintenance Information / Help</h1>
+            <p>Definitions and guidance for the Auction fields.</p>
+          </div>
+        </header>
+        <Suspense fallback={<HelpFallback />}>
+          <AuctionHelpContent />
+        </Suspense>
       </article>
     </main>
   );

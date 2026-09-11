@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import { saveAuctionMaintenanceAction } from "@/app/(fleet-operations)/auction/actions";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   AuctionApiError,
@@ -343,7 +344,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function AuctionDetailPage({
+async function AuctionDetailPageContent({
   searchParams,
   routePath = "/auction/maintenance/detail",
 }: AuctionDetailPageProps) {
@@ -447,4 +448,12 @@ export default async function AuctionDetailPage({
       </main>
     );
   }
+}
+
+export default function AuctionDetailPage(props: AuctionDetailPageProps) {
+  return (
+    <StreamedRoute>
+      <AuctionDetailPageContent {...props} />
+    </StreamedRoute>
+  );
 }

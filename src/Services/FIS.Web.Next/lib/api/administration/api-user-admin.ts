@@ -29,6 +29,16 @@ export type UserAdminProfile = {
   lastLogOn: string | null;
 };
 
+export type UserAdminProfilePage = {
+  items: UserAdminProfile[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_USER_ADMIN_PAGE_SIZE = 24;
+
 export type UserAdminApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
 
 export type UserAdminMutationResult =
@@ -265,6 +275,43 @@ export async function getUserAdminProfiles(alphabet: string) {
       (left.firstName ?? "").localeCompare(right.firstName ?? "") ||
       left.userAccessCode - right.userAccessCode,
   );
+}
+
+export async function getUserAdminProfilesPage(
+  alphabet: string,
+  page = 1,
+  pageSize = DEFAULT_USER_ADMIN_PAGE_SIZE,
+): Promise<UserAdminProfilePage> {
+  const params = new URLSearchParams({
+    alphabet,
+    page: String(Math.max(1, page)),
+    pageSize: String(Math.max(1, pageSize)),
+  });
+  const response = await requestApi(`api/userprofile/administration/page?${params.toString()}`);
+  const payload = await readJson(response);
+  if (!isRecord(payload)) {
+    throw new UserAdminApiError(
+      "invalid-response",
+      "The FIS API returned an invalid User Administration page.",
+    );
+  }
+
+  const items = getCollection(payload)
+    .map(mapProfile)
+    .filter((profile): profile is UserAdminProfile => profile !== null);
+  const resolvedPageSize = asNumber(getValue(payload, "pageSize", "PageSize")) ?? pageSize;
+  const total = asNumber(getValue(payload, "total", "Total")) ?? items.length;
+  const totalPages =
+    asNumber(getValue(payload, "totalPages", "TotalPages")) ??
+    Math.max(1, Math.ceil(total / Math.max(1, resolvedPageSize)));
+
+  return {
+    items,
+    page: asNumber(getValue(payload, "page", "Page")) ?? page,
+    pageSize: resolvedPageSize,
+    total,
+    totalPages,
+  };
 }
 
 export async function getUserAdminUserChoices() {

@@ -3,11 +3,12 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   LossApiError,
-  getLossesByVehicleIdentifier,
-  getLossesByVmfCode,
-  type LossRecord,
+  DEFAULT_LOSS_PAGE_SIZE,
+  getLossesPage,
+  type LossPage,
 } from "@/lib/api/fleet-operations/api-losses";
 import { getSession } from "@/lib/auth/session";
 
@@ -21,11 +22,6 @@ function queryValue(value: string | string[] | undefined) {
 
 function valueOrDash(value: string | number | null | undefined) {
   return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
-}
-
-function parsePositiveInt(value: string) {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
@@ -43,8 +39,24 @@ function ApiUnavailable({ routePath }: Readonly<{ routePath: string }>) {
   );
 }
 
-function Results({ losses }: Readonly<{ losses: LossRecord[] }>) {
-  const vmfCode = losses[0]?.vmfCode;
+function resultsPageHref(routePath: string, identifier: string, mode: "GG" | "GP", page: number) {
+  const params = new URLSearchParams({ identifier, mode });
+  if (page > 1) params.set("page", String(page));
+  return `${routePath}?${params.toString()}`;
+}
+
+function Results({
+  lossPage,
+  routePath,
+  identifier,
+  mode,
+}: Readonly<{
+  lossPage: LossPage;
+  routePath: string;
+  identifier: string;
+  mode: "GG" | "GP";
+}>) {
+  const { items: losses, vmfCode } = lossPage;
   return (
     <section className="vehicle-status-maintenance-panel" aria-labelledby="loss-results-title">
       <div className="vehicle-form-section-header">
@@ -113,11 +125,48 @@ function Results({ losses }: Readonly<{ losses: LossRecord[] }>) {
           Add Losses
         </Link>
       ) : null}
+      {lossPage.totalPages > 1 ? (
+        <nav className="vehicle-pagination" aria-label="Vehicle loss pages">
+          {lossPage.page <= 1 ? (
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Previous
+            </span>
+          ) : (
+            <Link
+              className="vehicle-pagination-button"
+              href={resultsPageHref(routePath, identifier, mode, lossPage.page - 1)}
+            >
+              Previous
+            </Link>
+          )}
+          <span className="vehicle-pagination-meta" aria-live="polite">
+            Page {lossPage.page} of {lossPage.totalPages}
+          </span>
+          {lossPage.page >= lossPage.totalPages ? (
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Next
+            </span>
+          ) : (
+            <Link
+              className="vehicle-pagination-button"
+              href={resultsPageHref(routePath, identifier, mode, lossPage.page + 1)}
+            >
+              Next
+            </Link>
+          )}
+        </nav>
+      ) : null}
     </section>
   );
 }
 
-export default async function LossMaintenancePage({
+async function LossMaintenancePageContent({
   searchParams,
   routePath = "/losses/maintenance",
 }: LossMaintenancePageProps) {
@@ -157,17 +206,21 @@ export default async function LossMaintenancePage({
     (queryValue(query.mode) ?? queryValue(query.radio) ?? "GG").toUpperCase() === "GP"
       ? "GP"
       : "GG";
-  const vmfCode = parsePositiveInt((queryValue(query.vmfCode) ?? "").trim());
-  const submitted = Boolean(identifier || vmfCode);
+  const page = Number(queryValue(query.page));
+  const requestedPage = Number.isSafeInteger(page) && page > 0 ? page : 1;
+  const submitted = Boolean(identifier);
   const errorMessage = queryValue(query.error);
   const savedMessage = queryValue(query.saved);
-  let losses: LossRecord[] = [];
+  let lossPage: LossPage | null = null;
 
   if (submitted) {
     try {
-      losses = vmfCode
-        ? await getLossesByVmfCode(vmfCode)
-        : await getLossesByVehicleIdentifier(identifier, mode);
+      lossPage = await getLossesPage({
+        identifier,
+        mode,
+        page: requestedPage,
+        pageSize: DEFAULT_LOSS_PAGE_SIZE,
+      });
     } catch (error) {
       if (error instanceof LossApiError && error.reason === "unauthorized")
         return (
@@ -241,19 +294,6 @@ export default async function LossMaintenancePage({
                 maxLength={30}
               />
             </div>
-            <div className="form-field">
-              <label className="form-label" htmlFor="loss-vmf-code">
-                VMF Code (optional)
-              </label>
-              <input
-                className="form-input"
-                defaultValue={vmfCode ?? ""}
-                id="loss-vmf-code"
-                min="1"
-                name="vmfCode"
-                type="number"
-              />
-            </div>
           </div>
           <div className="button-row">
             <button className="button button-primary" type="submit">
@@ -264,8 +304,8 @@ export default async function LossMaintenancePage({
             </Link>
           </div>
         </form>
-        {submitted ? (
-          <Results losses={losses} />
+        {submitted && lossPage ? (
+          <Results lossPage={lossPage} routePath={routePath} identifier={identifier} mode={mode} />
         ) : (
           <section className="vehicle-status-card">
             <p className="eyebrow">Search required</p>
@@ -278,5 +318,13 @@ export default async function LossMaintenancePage({
         )}
       </section>
     </main>
+  );
+}
+
+export default function LossMaintenancePage(props: LossMaintenancePageProps) {
+  return (
+    <StreamedRoute>
+      <LossMaintenancePageContent {...props} />
+    </StreamedRoute>
   );
 }

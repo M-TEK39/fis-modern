@@ -1,11 +1,14 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
 import {
-  getTripsWithoutRoutes,
+  getTripsWithoutRoutesPage,
   TroubleshootApiError,
+  DEFAULT_TROUBLESHOOT_PAGE_SIZE,
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import {
   hasTroubleshootingRole,
@@ -22,7 +25,7 @@ type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
-export default async function RemoveTripsWithoutRoutesPage({
+async function RemoveTripsWithoutRoutesPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -55,17 +58,28 @@ export default async function RemoveTripsWithoutRoutesPage({
       </main>
     );
 
-  let trips = [] as Awaited<ReturnType<typeof getTripsWithoutRoutes>>;
+  const query = await searchParams;
+  const rawPage = Number(first(query.page));
+  const requestedPage = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1;
+  let trips = {
+    items: [],
+    page: requestedPage,
+    pageSize: DEFAULT_TROUBLESHOOT_PAGE_SIZE,
+    total: 0,
+    totalPages: 1,
+  } as Awaited<ReturnType<typeof getTripsWithoutRoutesPage>>;
   let loadError: string | null = null;
   try {
-    trips = await getTripsWithoutRoutes();
+    trips = await getTripsWithoutRoutesPage({
+      page: requestedPage,
+      pageSize: DEFAULT_TROUBLESHOOT_PAGE_SIZE,
+    });
   } catch (error) {
     loadError =
       error instanceof TroubleshootApiError
         ? error.message
         : "Trips without routes could not be loaded.";
   }
-  const query = await searchParams;
   const saved = first(query.saved);
 
   return (
@@ -78,7 +92,7 @@ export default async function RemoveTripsWithoutRoutesPage({
         <div className="vehicle-form-section-header">
           <div>
             <p className="eyebrow">
-              {trips.length} candidate{trips.length === 1 ? "" : "s"}
+              {trips.total} candidate{trips.total === 1 ? "" : "s"}
             </p>
             <h2 id="remove-trips-title">Trips without routes</h2>
           </div>
@@ -91,7 +105,7 @@ export default async function RemoveTripsWithoutRoutesPage({
           <div className="notice notice-error" role="alert">
             {loadError}
           </div>
-        ) : trips.length === 0 ? (
+        ) : trips.items.length === 0 ? (
           <div className="vehicle-empty-state">
             <p>No trips without routes were found.</p>
           </div>
@@ -110,7 +124,7 @@ export default async function RemoveTripsWithoutRoutesPage({
                 </tr>
               </thead>
               <tbody>
-                {trips.map((trip, index) => (
+                {trips.items.map((trip, index) => (
                   <tr key={`${trip.tripAuthorityCode ?? "trip"}-${index}`}>
                     <td>{valueOrDash(trip.tripAuthorityCode)}</td>
                     <td>{valueOrDash(trip.contractCode)}</td>
@@ -124,6 +138,37 @@ export default async function RemoveTripsWithoutRoutesPage({
             </table>
           </div>
         )}
+        {trips.totalPages > 1 ? (
+          <nav className="table-pagination" aria-label="Trips without routes pages">
+            {trips.page > 1 ? (
+              <Link
+                className="button button-secondary button-small"
+                href={`/troubleshoot/remove-trips-no-routes?${new URLSearchParams({ page: String(trips.page - 1) }).toString()}`}
+              >
+                Previous
+              </Link>
+            ) : (
+              <span className="button button-secondary button-small" aria-disabled="true">
+                Previous
+              </span>
+            )}
+            <span aria-live="polite">
+              Page {trips.page} of {trips.totalPages}
+            </span>
+            {trips.page < trips.totalPages ? (
+              <Link
+                className="button button-secondary button-small"
+                href={`/troubleshoot/remove-trips-no-routes?${new URLSearchParams({ page: String(trips.page + 1) }).toString()}`}
+              >
+                Next
+              </Link>
+            ) : (
+              <span className="button button-secondary button-small" aria-disabled="true">
+                Next
+              </span>
+            )}
+          </nav>
+        ) : null}
       </section>
       {saved ? (
         <div className="notice notice-success" role="status">
@@ -170,5 +215,15 @@ export default async function RemoveTripsWithoutRoutesPage({
         </form>
       </section>
     </TroubleshootShell>
+  );
+}
+
+export default function RemoveTripsWithoutRoutesPage(
+  props: Readonly<{ searchParams: SearchParams }>,
+) {
+  return (
+    <StreamedRoute>
+      <RemoveTripsWithoutRoutesPageContent {...props} />
+    </StreamedRoute>
   );
 }

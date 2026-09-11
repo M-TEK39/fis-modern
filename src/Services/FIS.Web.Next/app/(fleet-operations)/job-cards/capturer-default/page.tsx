@@ -8,14 +8,30 @@ import {
 import {
   accessRestricted,
   getJobCardSession,
+  JobCardPageBoundary,
+  jobCardPageHref,
+  queryPage,
   sessionMessage,
 } from "@/app/(fleet-operations)/job-cards/_page";
 import {
-  getPriorityUnassignedJobCards,
+  DEFAULT_JOB_CARD_PAGE_SIZE,
+  getPriorityUnassignedJobCardsPage,
   JobCardApiError,
 } from "@/lib/api/fleet-operations/api-job-cards";
 
-export default async function JobCardCapturerPage() {
+export default function JobCardCapturerPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
+  return (
+    <JobCardPageBoundary>
+      <JobCardCapturerContent searchParams={searchParams} />
+    </JobCardPageBoundary>
+  );
+}
+
+async function JobCardCapturerContent({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
   const problem = sessionMessage(session, "/job-cards/capturer-default");
   if (problem) return problem;
@@ -23,8 +39,14 @@ export default async function JobCardCapturerPage() {
     return accessRestricted("Your session could not be loaded.");
   if (!hasRole(session.roles, "capturer") && !hasJobCardAccess(session.accessLevel, session.roles))
     return accessRestricted("Your profile does not include Job Card capturer access.");
+  const query = await searchParams;
+  const page = queryPage(query.page);
   try {
-    const cards = await getPriorityUnassignedJobCards();
+    const pageData = await getPriorityUnassignedJobCardsPage({
+      page,
+      pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+    });
+    const tableReturnPath = jobCardPageHref("/job-cards/capturer-default", query, pageData.page);
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="job-card-capturer-title">
@@ -62,12 +84,21 @@ export default async function JobCardCapturerPage() {
             <div className="vehicle-form-section-header">
               <div>
                 <p className="eyebrow">
-                  {cards.length} record{cards.length === 1 ? "" : "s"}
+                  {pageData.totalRecords} record{pageData.totalRecords === 1 ? "" : "s"}
                 </p>
                 <h2 id="priority-job-cards-title">Priority Job Cards Ready for Capturing</h2>
               </div>
             </div>
-            <JobCardTable cards={cards} mode="priority" returnPath="/job-cards/capturer-default" />
+            <JobCardTable
+              cards={pageData.items}
+              mode="priority"
+              returnPath={tableReturnPath}
+              page={pageData.page}
+              totalPages={pageData.totalPages}
+              pageHref={(nextPage) =>
+                jobCardPageHref("/job-cards/capturer-default", query, nextPage)
+              }
+            />
           </section>
         </section>
       </main>

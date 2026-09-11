@@ -12,6 +12,9 @@ namespace FIS.Api.Controllers;
 [Authorize]
 public class ThirdPartyController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly IThirdPartyRentalRepository _rentalRepository;
     private readonly IDepartmentRepository _departmentRepository;
     private readonly ISiteRepository _siteRepository;
@@ -65,6 +68,40 @@ public class ThirdPartyController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving third-party suppliers");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("suppliers/page")]
+    public async Task<ActionResult> GetSuppliersPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        CancellationToken cancellationToken = default
+    )
+    {
+        try
+        {
+            var result = await _rentalRepository.GetSuppliersPageAsync(
+                new ThirdPartySupplierPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize)
+                ),
+                cancellationToken
+            );
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged third-party suppliers");
             return StatusCode(500);
         }
     }
@@ -178,6 +215,49 @@ public class ThirdPartyController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving third-party projects");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("projects/page")]
+    public async Task<ActionResult> GetProjectsPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] short? departmentCode = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (departmentCode is <= 0)
+            return BadRequest(new { message = "departmentCode must be greater than zero." });
+
+        try
+        {
+            var result = await _rentalRepository.GetProjectsPageAsync(
+                new ThirdPartyProjectPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize),
+                    departmentCode
+                ),
+                cancellationToken
+            );
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error retrieving paged third-party projects for department {DepartmentCode}",
+                departmentCode
+            );
             return StatusCode(500);
         }
     }
@@ -333,6 +413,49 @@ public class ThirdPartyController : BaseApiController
         }
     }
 
+    [HttpGet("allocations/page")]
+    public async Task<ActionResult> GetAllocationsByProjectPage(
+        [FromQuery] int? projectId = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (!projectId.HasValue || projectId.Value <= 0)
+            return BadRequest(new { message = "projectId is required." });
+
+        try
+        {
+            var result = await _rentalRepository.GetAllocationsByProjectPageAsync(
+                new ThirdPartyAllocationPageQuery(
+                    projectId.Value,
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize)
+                ),
+                cancellationToken
+            );
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error retrieving paged third-party allocations for project {ProjectId}",
+                projectId
+            );
+            return StatusCode(500);
+        }
+    }
+
     [HttpPost("allocations")]
     public async Task<ActionResult<ThirdPartyAllocationRecord>> CreateAllocation(
         [FromBody] ThirdPartyAllocationRequest request,
@@ -442,6 +565,49 @@ public class ThirdPartyController : BaseApiController
             _logger.LogError(
                 ex,
                 "Error retrieving vehicles for third-party supplier {SupplierId}",
+                supplierId
+            );
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("vehicles/page")]
+    public async Task<ActionResult> GetVehiclesBySupplierPage(
+        [FromQuery] int? supplierId = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (!supplierId.HasValue || supplierId.Value <= 0)
+            return BadRequest(new { message = "supplierId is required." });
+
+        try
+        {
+            var result = await _rentalRepository.GetVehiclesBySupplierPageAsync(
+                new ThirdPartyVehiclePageQuery(
+                    supplierId.Value,
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize)
+                ),
+                cancellationToken
+            );
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error retrieving paged vehicles for third-party supplier {SupplierId}",
                 supplierId
             );
             return StatusCode(500);

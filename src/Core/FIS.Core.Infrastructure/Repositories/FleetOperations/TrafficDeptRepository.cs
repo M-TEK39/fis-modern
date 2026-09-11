@@ -60,6 +60,87 @@ public class TrafficDeptRepository : ITrafficDeptRepository
         return await QueryAsync();
     }
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The paged query is composed only from fixed table/column allowlists and fixed predicates; request values are parameters."
+    )]
+    public async Task<TrafficDeptPage> GetPageAsync(TrafficDeptPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var searchQuery = query.SearchQuery?.Trim() ?? string.Empty;
+        var availableColumns = await GetAvailableColumnsAsync();
+        var conditions = new List<string>();
+
+        if (availableColumns.Contains("is_deleted"))
+        {
+            conditions.Add("ISNULL([d].[is_deleted], 0) = 0");
+        }
+
+        if (searchQuery.Length > 0)
+        {
+            conditions.Add(
+                "CHARINDEX(@searchQuery, LOWER(LTRIM(RTRIM(COALESCE([d].[Traf_name], N''))))) > 0"
+            );
+        }
+
+        var whereClause = conditions.Count == 0 ? "1 = 1" : string.Join(" AND ", conditions);
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var countCommand = connection.CreateCommand();
+            countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[Traffic_Dept] AS [d]
+                WHERE {whereClause}
+                """;
+            AddSearchParameter(countCommand, searchQuery, searchQuery.Length > 0);
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            dataCommand.CommandText = $"""
+                SELECT {BuildPageProjection(availableColumns)}
+                FROM [dbo].[Traffic_Dept] AS [d]
+                WHERE {whereClause}
+                ORDER BY COALESCE([d].[Traf_name], N''), [d].[Traffic_dept_code]
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddSearchParameter(dataCommand, searchQuery, searchQuery.Length > 0);
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<TrafficDept>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(MapTrafficDept(reader, availableColumns));
+            }
+
+            return new TrafficDeptPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<TrafficDept?> GetByNameAsync(string name)
     {
         return (
@@ -405,6 +486,24 @@ public class TrafficDeptRepository : ITrafficDeptRepository
             .Concat(OptionalColumns.Where(availableColumns.Contains))
             .Select(column => $"[{column}]");
         return $"SELECT {string.Join(", ", columns)} FROM [dbo].[Traffic_Dept] {predicate}";
+    }
+
+    private static string BuildPageProjection(IReadOnlySet<string> availableColumns)
+    {
+        return string.Join(
+            ", ",
+            CommonColumns
+                .Concat(OptionalColumns.Where(availableColumns.Contains))
+                .Select(column => $"[d].[{column}] AS [{column}]")
+        );
+    }
+
+    private static void AddSearchParameter(DbCommand command, string searchQuery, bool include)
+    {
+        if (include)
+        {
+            AddParameter(command, "@searchQuery", DbType.String, searchQuery.ToLowerInvariant());
+        }
     }
 
     private static TrafficDept MapTrafficDept(

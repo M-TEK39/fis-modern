@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import { updateContractHistoryAction } from "@/app/(fleet-operations)/contracts/actions";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   ContractApiError,
@@ -154,7 +155,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function BackdatingHistoryPage({
+async function BackdatingHistoryPageContent({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -415,5 +416,17 @@ export default async function BackdatingHistoryPage({
         </div>
       </section>
     </main>
+  );
+}
+
+export default function BackdatingHistoryPage(
+  props: Readonly<{
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+  }>,
+) {
+  return (
+    <StreamedRoute>
+      <BackdatingHistoryPageContent {...props} />
+    </StreamedRoute>
   );
 }

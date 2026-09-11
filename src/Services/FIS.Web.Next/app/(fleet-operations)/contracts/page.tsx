@@ -9,6 +9,7 @@ import {
   isContractAdministrator,
 } from "@/app/(fleet-operations)/contracts/access";
 import { MenuSection } from "@/components/ui/menu-section";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
 
@@ -22,7 +23,7 @@ function AccessRestricted() {
   );
 }
 
-export default async function ContractsPage() {
+async function ContractsPageContent() {
   await connection();
   const session = await getSession();
 
@@ -94,5 +95,13 @@ export default async function ContractsPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function ContractsPage() {
+  return (
+    <StreamedRoute>
+      <ContractsPageContent />
+    </StreamedRoute>
   );
 }

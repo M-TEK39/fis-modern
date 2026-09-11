@@ -61,6 +61,7 @@ function AccessRestricted() {
 }
 
 async function AccidentMenuContent() {
+  await connection();
   const session = await getSession();
 
   if (session.status === "anonymous") {
@@ -125,14 +126,12 @@ function AccidentMenuFallback() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Checking accident access...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
 
-export default async function AccidentsPage() {
-  await connection();
-
+export default function AccidentsPage() {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="accident-menu-title">

@@ -23,6 +23,7 @@
     "build:api": "dotnet build FIS.sln --no-restore",
     "check-types": "pnpm --filter @fis/web-next run typecheck",
     "typecheck": "pnpm run check-types",
+    "check:instant-navigation": "bash scripts/check-instant-navigation.sh",
     "lint": "bash scripts/lint.sh",
     "lint:web": "pnpm --filter @fis/web-next run format:check",
     "lint:dotnet": "dotnet build FIS.sln --no-restore",

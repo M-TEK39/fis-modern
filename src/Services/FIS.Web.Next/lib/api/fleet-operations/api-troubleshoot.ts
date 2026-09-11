@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_TROUBLESHOOT_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type TroubleshootUser = {
@@ -27,6 +28,14 @@ export type TroubleshootLogEntry = {
   status: string | null;
   loggedDate: string | null;
   loggedBy: string | null;
+};
+
+export type TroubleshootPage<T> = {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type TroubleshootOdometerResult = {
@@ -274,11 +283,81 @@ function mapVehicle(value: unknown): VehicleMasterLookup | null {
   };
 }
 
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+  return { page, pageSize, total, totalPages };
+}
+
+async function readTroubleshootPage<T>(
+  response: Response,
+  mapItem: (value: unknown) => T | null,
+  label: string,
+): Promise<TroubleshootPage<T>> {
+  const payload = await readJson(response);
+  if (!isRecord(payload) || !Array.isArray(payload.items))
+    throw new TroubleshootApiError("invalid-response", `The FIS API returned an invalid ${label}.`);
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata)
+    throw new TroubleshootApiError(
+      "invalid-response",
+      `The FIS API returned incomplete ${label} pagination metadata.`,
+    );
+
+  return {
+    items: payload.items.map(mapItem).filter((item): item is T => item !== null),
+    ...metadata,
+  };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isSafeInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isSafeInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_TROUBLESHOOT_PAGE_SIZE)
+      : DEFAULT_TROUBLESHOOT_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
 export async function getTroubleshootUsers() {
   const payload = await readJson(await requestApi("api/troubleshoot/users"));
   return getCollection(payload)
     .map(mapUser)
     .filter((value): value is TroubleshootUser => value !== null);
+}
+
+export async function getTroubleshootUsersPage(page?: number, pageSize?: number) {
+  const query = new URLSearchParams({
+    page: String(normalizePage(page)),
+    pageSize: String(normalizePageSize(pageSize)),
+  });
+  return readTroubleshootPage(
+    await requestApi(`api/troubleshoot/users/page?${query.toString()}`),
+    mapUser,
+    "Troubleshoot user page",
+  );
 }
 
 export async function getTroubleshootSiteUsers() {
@@ -298,6 +377,22 @@ export async function searchTroubleshootLogs(userAccessCode: number) {
   return getCollection(payload)
     .map(mapLog)
     .filter((value): value is TroubleshootLogEntry => value !== null);
+}
+
+export async function searchTroubleshootLogsPage(input: {
+  userAccessCode: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<TroubleshootPage<TroubleshootLogEntry>> {
+  const payload = await requestApi("api/troubleshoot/log/search/page", {
+    method: "POST",
+    body: JSON.stringify({
+      userAccessCode: input.userAccessCode,
+      page: normalizePage(input.page),
+      pageSize: normalizePageSize(input.pageSize),
+    }),
+  });
+  return readTroubleshootPage(payload, mapLog, "Troubleshoot log page");
 }
 
 export async function updateTroubleshootLogs() {
@@ -331,6 +426,30 @@ export async function getTroubleshootReports(input: {
     .filter((value): value is TroubleshootLogEntry => value !== null);
 }
 
+export async function getTroubleshootReportsPage(input: {
+  problemKeyword?: string;
+  userAccessCode?: number;
+  fromDate?: string;
+  toDate?: string;
+  openInExcel?: boolean;
+  page?: number;
+  pageSize?: number;
+}): Promise<TroubleshootPage<TroubleshootLogEntry>> {
+  const payload = await requestApi("api/troubleshoot/reports/general/page", {
+    method: "POST",
+    body: JSON.stringify({
+      problemKeyword: input.problemKeyword || null,
+      userAccessCode: input.userAccessCode ?? null,
+      fromDate: input.fromDate || null,
+      toDate: input.toDate || null,
+      openInExcel: input.openInExcel === true,
+      page: normalizePage(input.page),
+      pageSize: normalizePageSize(input.pageSize),
+    }),
+  });
+  return readTroubleshootPage(payload, mapLog, "Troubleshoot report page");
+}
+
 export async function searchTroubleshootOdometer(input: {
   searchMode: "GG" | "REG" | "TA";
   searchValue: string;
@@ -346,11 +465,40 @@ export async function searchTroubleshootOdometer(input: {
     .filter((value): value is TroubleshootOdometerResult => value !== null);
 }
 
+export async function searchTroubleshootOdometerPage(input: {
+  searchMode: "GG" | "REG" | "TA";
+  searchValue: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<TroubleshootPage<TroubleshootOdometerResult>> {
+  const payload = await requestApi("api/troubleshoot/odometer/search/page", {
+    method: "POST",
+    body: JSON.stringify({
+      searchMode: input.searchMode,
+      searchValue: input.searchValue,
+      page: normalizePage(input.page),
+      pageSize: normalizePageSize(input.pageSize),
+    }),
+  });
+  return readTroubleshootPage(payload, mapOdometer, "Troubleshoot odometer page");
+}
+
 export async function getTripsWithoutRoutes() {
   const payload = await readJson(await requestApi("api/troubleshoot/trips-without-routes"));
   return getCollection(payload)
     .map(mapTripWithoutRoutes)
     .filter((value): value is TripsWithoutRoutes => value !== null);
+}
+
+export async function getTripsWithoutRoutesPage(
+  options: { page?: number; pageSize?: number } = {},
+): Promise<TroubleshootPage<TripsWithoutRoutes>> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const payload = await requestApi(`api/troubleshoot/trips-without-routes/page?${params}`);
+  return readTroubleshootPage(payload, mapTripWithoutRoutes, "Trips without routes page");
 }
 
 export async function removeTripsWithoutRoutes(input: { fromDate?: string; toDate?: string }) {
@@ -371,6 +519,20 @@ export async function getApproverRanks() {
   return getCollection(payload)
     .map(mapRank)
     .filter((value): value is ApproverRank => value !== null);
+}
+
+export async function getApproverRanksPage(
+  options: { page?: number; pageSize?: number } = {},
+): Promise<TroubleshootPage<ApproverRank>> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.page)),
+  });
+  return readTroubleshootPage(
+    await requestApi(`api/authorisers/ranks/page?${params}`),
+    mapRank,
+    "Approver ranks page",
+  );
 }
 
 export async function saveApproverRanks(
@@ -403,4 +565,20 @@ export async function getVehicleMasterLookup(vehicleIdentifier: string) {
   return getCollection(payload)
     .map(mapVehicle)
     .filter((value): value is VehicleMasterLookup => value !== null);
+}
+
+export async function getVehicleMasterLookupPage(input: {
+  vehicleIdentifier?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<TroubleshootPage<VehicleMasterLookup>> {
+  const payload = await requestApi("api/troubleshoot/vehicle-master-edit/page", {
+    method: "POST",
+    body: JSON.stringify({
+      vehicleIdentifier: input.vehicleIdentifier || null,
+      page: normalizePage(input.page),
+      pageSize: normalizePageSize(input.pageSize),
+    }),
+  });
+  return readTroubleshootPage(payload, mapVehicle, "Vehicle master page");
 }

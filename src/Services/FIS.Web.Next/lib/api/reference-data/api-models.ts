@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_MODEL_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type ModelRecord = {
@@ -51,6 +52,14 @@ export type ModelReferenceData = {
 export type ModelDeleteCheck = {
   vehicleCount: number;
   canDelete: boolean;
+};
+
+export type ModelPage = {
+  items: ModelRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type ModelWriteInput = Omit<
@@ -122,6 +131,44 @@ function getCollection(payload: unknown) {
     return Array.isArray(collection) ? collection : [];
   }
   return [];
+}
+
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_MODEL_PAGE_SIZE)
+      : DEFAULT_MODEL_PAGE_SIZE;
+  return Math.min(100, pageSize);
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
@@ -254,6 +301,36 @@ export async function getModels() {
   if (!Array.isArray(payload))
     throw new ModelApiError("invalid-response", "The model response was not a list.");
   return payload.map(mapModel).filter((model): model is ModelRecord => model !== null);
+}
+
+export async function getModelsPage(
+  options: { page?: number; pageSize?: number; makeCode?: number } = {},
+): Promise<ModelPage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  if (Number.isInteger(options.makeCode) && (options.makeCode ?? 0) > 0) {
+    params.set("makeCode", String(options.makeCode));
+  }
+
+  const payload = await readJson(await requestApi(`api/model/page?${params.toString()}`));
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new ModelApiError("invalid-response", "The FIS API returned an invalid model page.");
+  }
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata) {
+    throw new ModelApiError(
+      "invalid-response",
+      "The FIS API returned incomplete model pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items.map(mapModel).filter((model): model is ModelRecord => model !== null),
+    ...metadata,
+  };
 }
 
 export async function getModel(modelCode: number) {

@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.ReferenceData;
+using FIS.Core.Domain.Entities.System;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,6 +22,8 @@ namespace FIS.Api.Controllers;
 public class TroubleshootController : BaseApiController
 {
     private const string TripsWithoutRoutesBackupTable = "TripsWithoutRoutes_Backup";
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
     private readonly FisDbContext _context;
     private readonly ILogger<TroubleshootController> _logger;
 
@@ -40,14 +43,20 @@ public class TroubleshootController : BaseApiController
                 endpoints = new[]
                 {
                     "users",
+                    "users/page",
                     "departmentsites",
                     "log/search",
+                    "log/search/page",
                     "log/update",
                     "reports/general",
+                    "reports/general/page",
                     "odometer/search",
+                    "odometer/search/page",
+                    "trips-without-routes/page",
                     "remove-trips-no-routes",
                     "approver-ranks",
                     "vehicle-master-edit",
+                    "vehicle-master-edit/page",
                 },
             }
         );
@@ -75,6 +84,48 @@ public class TroubleshootController : BaseApiController
             .ToListAsync();
 
         return Ok(users);
+    }
+
+    [HttpGet("users/page")]
+    public async Task<ActionResult> GetUsersPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        var (normalizedPage, normalizedPageSize) = NormalizePaging(page, pageSize);
+        var activeUsers = _context.UserAccessOlds.AsNoTracking().Where(x => x.user_active);
+        var total = await activeUsers.CountAsync();
+        var totalPages = CalculateTotalPages(total, normalizedPageSize);
+        normalizedPage = Math.Min(normalizedPage, totalPages);
+
+        var users = await activeUsers
+            .OrderBy(x => x.name)
+            .ThenBy(x => x.user_access_code)
+            .Skip((normalizedPage - 1) * normalizedPageSize)
+            .Take(normalizedPageSize)
+            .Select(x => new TroubleshootUserDto
+            {
+                UserAccessCode = x.user_access_code,
+                Name = x.name ?? string.Empty,
+                SiteDescription = _context
+                    .Sites.Where(s => s.Site_code == x.Site_code)
+                    .Select(s => s.description)
+                    .FirstOrDefault(),
+                FirstName = x.FirstName,
+                LastName = x.LastName,
+            })
+            .ToListAsync();
+
+        return Ok(
+            new
+            {
+                items = users,
+                page = normalizedPage,
+                pageSize = normalizedPageSize,
+                total,
+                totalPages,
+            }
+        );
     }
 
     [HttpGet("departmentsites")]
@@ -112,6 +163,32 @@ public class TroubleshootController : BaseApiController
         return Ok(rows);
     }
 
+    [HttpPost("log/search/page")]
+    public async Task<ActionResult> SearchLogsPaged([FromBody] TroubleshootLogSearchRequest request)
+    {
+        var (page, pageSize) = NormalizePaging(request.Page, request.PageSize);
+        var filtered = FilterLogs(request.UserAccessCode, null, null, null);
+        var total = await filtered.CountAsync();
+        var totalPages = CalculateTotalPages(total, pageSize);
+        page = Math.Min(page, totalPages);
+
+        var items = await ProjectLogs(
+                OrderPagedLogs(filtered).Skip(CalculateSkip(page, pageSize)).Take(pageSize)
+            )
+            .ToListAsync();
+
+        return Ok(
+            new
+            {
+                items,
+                page,
+                pageSize,
+                total,
+                totalPages,
+            }
+        );
+    }
+
     [HttpPost("log/update")]
     public async Task<ActionResult> UpdateLogs()
     {
@@ -142,6 +219,39 @@ public class TroubleshootController : BaseApiController
             )
             .ToListAsync();
         return Ok(rows);
+    }
+
+    [HttpPost("reports/general/page")]
+    public async Task<ActionResult> GetGeneralReportsPaged(
+        [FromBody] TroubleshootReportFilter filter
+    )
+    {
+        var (page, pageSize) = NormalizePaging(filter.Page, filter.PageSize);
+        var filtered = FilterLogs(
+            filter.UserAccessCode,
+            filter.ProblemKeyword,
+            filter.FromDate,
+            filter.ToDate
+        );
+        var total = await filtered.CountAsync();
+        var totalPages = CalculateTotalPages(total, pageSize);
+        page = Math.Min(page, totalPages);
+
+        var items = await ProjectLogs(
+                OrderPagedLogs(filtered).Skip(CalculateSkip(page, pageSize)).Take(pageSize)
+            )
+            .ToListAsync();
+
+        return Ok(
+            new
+            {
+                items,
+                page,
+                pageSize,
+                total,
+                totalPages,
+            }
+        );
     }
 
     [HttpPost("odometer/search")]
@@ -196,22 +306,7 @@ public class TroubleshootController : BaseApiController
             return Ok(taRows);
         }
 
-        IQueryable<Vehicle> vehicleQuery = _context
-            .Vehicles.AsNoTracking()
-            .Where(v => !v.is_deleted);
-        if (!string.IsNullOrWhiteSpace(searchValue))
-        {
-            vehicleQuery = mode switch
-            {
-                "VMF" => vehicleQuery.Where(v => v.vmf_code.ToString() == searchValue),
-                "REG" => vehicleQuery.Where(v =>
-                    v.registration_number != null && v.registration_number.Contains(searchValue)
-                ),
-                _ => vehicleQuery.Where(v =>
-                    v.fleet_number != null && v.fleet_number.Contains(searchValue)
-                ),
-            };
-        }
+        var vehicleQuery = FilterOdometerVehicles(mode, searchValue);
 
         var rows = await vehicleQuery
             .OrderBy(v => v.fleet_number)
@@ -230,27 +325,129 @@ public class TroubleshootController : BaseApiController
         return Ok(rows);
     }
 
+    [HttpPost("odometer/search/page")]
+    public async Task<ActionResult> SearchOdometerCorrectionsPaged(
+        [FromBody] OdometerCorrectionSearchRequest request
+    )
+    {
+        var mode = (request.SearchMode ?? string.Empty).Trim().ToUpperInvariant();
+        var searchValue = (request.SearchValue ?? string.Empty).Trim();
+        var (page, pageSize) = NormalizePaging(request.Page, request.PageSize);
+
+        if (mode == "TA")
+        {
+            var filtered = QueryOdometerTaRows(searchValue);
+            var total = await filtered.CountAsync();
+            var totalPages = CalculateTotalPages(total, pageSize);
+            page = Math.Min(page, totalPages);
+
+            var items = await filtered
+                .OrderByDescending(x => x.TripAuthorityNumber)
+                .ThenByDescending(x => x.TripAuthorityCode)
+                .Skip(CalculateSkip(page, pageSize))
+                .Take(pageSize)
+                .Select(x => new OdometerCorrectionResultDto
+                {
+                    VehicleIdentifier = x.VehicleIdentifier,
+                    TripAuthorityNumber = x.TripAuthorityNumber,
+                    CurrentOdometer = x.CurrentOdometer,
+                    LastOdometer = x.LastOdometer,
+                })
+                .ToListAsync();
+
+            return Ok(
+                new
+                {
+                    items,
+                    page,
+                    pageSize,
+                    total,
+                    totalPages,
+                }
+            );
+        }
+
+        var vehicleQuery = FilterOdometerVehicles(mode, searchValue);
+        var vehicleTotal = await vehicleQuery.CountAsync();
+        var vehicleTotalPages = CalculateTotalPages(vehicleTotal, pageSize);
+        page = Math.Min(page, vehicleTotalPages);
+
+        var vehicleItems = await vehicleQuery
+            .OrderBy(v => v.fleet_number)
+            .ThenBy(v => v.vmf_code)
+            .Skip(CalculateSkip(page, pageSize))
+            .Take(pageSize)
+            .Select(v => new OdometerCorrectionResultDto
+            {
+                VehicleIdentifier = string.IsNullOrWhiteSpace(v.fleet_number)
+                    ? v.registration_number
+                    : v.fleet_number,
+                TripAuthorityNumber = null,
+                CurrentOdometer = v.current_odo,
+                LastOdometer = v.highest_km.HasValue ? (int?)Math.Round(v.highest_km.Value) : null,
+            })
+            .ToListAsync();
+
+        return Ok(
+            new
+            {
+                items = vehicleItems,
+                page,
+                pageSize,
+                total = vehicleTotal,
+                totalPages = vehicleTotalPages,
+            }
+        );
+    }
+
     [HttpGet("trips-without-routes")]
     public async Task<ActionResult<IEnumerable<TripsWithoutRoutesDto>>> GetTripsWithoutRoutes()
     {
         try
         {
-            var rows = await WithConnectionAsync(async connection =>
-            {
-                var schema = await ReadTableSchemaAsync(connection, TripsWithoutRoutesBackupTable);
-                if (schema.Count > 0)
-                {
-                    return await ReadBackupTripsWithoutRoutesAsync(connection, schema);
-                }
-
-                return await ReadStoredProcedureTripsWithoutRoutesAsync(connection);
-            });
-
-            return Ok(rows);
+            return Ok(await GetTripsWithoutRoutesData());
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving trips without routes");
+            return StatusCode(500, new { message = "Unable to retrieve trips without routes." });
+        }
+    }
+
+    [HttpGet("trips-without-routes/page")]
+    public async Task<ActionResult> GetTripsWithoutRoutesPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        try
+        {
+            var (requestedPage, normalizedPageSize) = NormalizePaging(page, pageSize);
+            // Some legacy deployments only expose the stored procedure. Its
+            // result has no paging parameters, so it is materialized within
+            // the protected API process and only the requested page crosses
+            // the HTTP boundary.
+            var rows = await GetTripsWithoutRoutesData();
+            var total = rows.Count;
+            var totalPages = CalculateTotalPages(total, normalizedPageSize);
+            var resolvedPage = Math.Min(requestedPage, totalPages);
+            var items = rows.Skip(CalculateSkip(resolvedPage, normalizedPageSize))
+                .Take(normalizedPageSize)
+                .ToList();
+            return Ok(
+                new
+                {
+                    items,
+                    page = resolvedPage,
+                    pageSize = normalizedPageSize,
+                    total,
+                    totalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged trips without routes");
             return StatusCode(500, new { message = "Unable to retrieve trips without routes." });
         }
     }
@@ -334,16 +531,7 @@ public class TroubleshootController : BaseApiController
     )
     {
         var id = (request.VehicleIdentifier ?? string.Empty).Trim();
-        var rows = await _context
-            .Vehicles.AsNoTracking()
-            .Where(v =>
-                !v.is_deleted
-                && (
-                    v.vmf_code.ToString() == id
-                    || (v.fleet_number != null && v.fleet_number.Contains(id))
-                    || (v.registration_number != null && v.registration_number.Contains(id))
-                )
-            )
+        var rows = await FilterVehicleMasterEdit(id)
             .OrderBy(v => v.fleet_number)
             .Take(50)
             .Select(v => new VehicleLookupDto
@@ -359,7 +547,58 @@ public class TroubleshootController : BaseApiController
         return Ok(rows);
     }
 
+    [HttpPost("vehicle-master-edit/page")]
+    public async Task<ActionResult> GetVehicleMasterEditPaged(
+        [FromBody] VehicleMasterEditRequest request
+    )
+    {
+        var id = (request.VehicleIdentifier ?? string.Empty).Trim();
+        var (page, pageSize) = NormalizePaging(request.Page, request.PageSize);
+        var filtered = FilterVehicleMasterEdit(id);
+        var total = await filtered.CountAsync();
+        var totalPages = CalculateTotalPages(total, pageSize);
+        page = Math.Min(page, totalPages);
+
+        var items = await filtered
+            .OrderBy(v => v.fleet_number)
+            .ThenBy(v => v.vmf_code)
+            .Skip(CalculateSkip(page, pageSize))
+            .Take(pageSize)
+            .Select(v => new VehicleLookupDto
+            {
+                VmfCode = v.vmf_code,
+                FleetNumber = v.fleet_number,
+                RegistrationNumber = v.registration_number,
+                CurrentOdometer = v.current_odo,
+                RecoveredGg = v.derived_odo,
+            })
+            .ToListAsync();
+
+        return Ok(
+            new
+            {
+                items,
+                page,
+                pageSize,
+                total,
+                totalPages,
+            }
+        );
+    }
+
     private IQueryable<TroubleshootLogEntryDto> QueryLogs(
+        int? userAccessCode,
+        string? keyword,
+        DateTime? fromDate,
+        DateTime? toDate
+    )
+    {
+        return ProjectLogs(
+            OrderLogs(FilterLogs(userAccessCode, keyword, fromDate, toDate)).Take(1000)
+        );
+    }
+
+    private IQueryable<TSLog> FilterLogs(
         int? userAccessCode,
         string? keyword,
         DateTime? fromDate,
@@ -390,19 +629,122 @@ public class TroubleshootController : BaseApiController
             query = query.Where(x => x.TSDate.HasValue && x.TSDate.Value.Date <= toDate.Value.Date);
         }
 
-        return query
-            .OrderByDescending(x => x.TSDate)
-            .ThenByDescending(x => x.TSTime)
-            .Take(1000)
-            .Select(x => new TroubleshootLogEntryDto
-            {
-                Id = x.ErrorID,
-                VehicleIdentifier = x.ErrorCode,
-                ProblemDescription = x.ErrorCode,
-                Status = x.is_deleted ? "Deleted" : "Active",
-                LoggedDate = x.TSDate,
-                LoggedBy = x.user_access_code == null ? null : x.user_access_code.ToString(),
-            });
+        return query;
+    }
+
+    private static IOrderedQueryable<TSLog> OrderLogs(IQueryable<TSLog> query)
+    {
+        return query.OrderByDescending(x => x.TSDate).ThenByDescending(x => x.TSTime);
+    }
+
+    private static IOrderedQueryable<TSLog> OrderPagedLogs(IQueryable<TSLog> query)
+    {
+        return OrderLogs(query).ThenByDescending(x => x.ErrorID);
+    }
+
+    private static IQueryable<TroubleshootLogEntryDto> ProjectLogs(IQueryable<TSLog> query)
+    {
+        return query.Select(x => new TroubleshootLogEntryDto
+        {
+            Id = x.ErrorID,
+            VehicleIdentifier = x.ErrorCode,
+            ProblemDescription = x.ErrorCode,
+            Status = x.is_deleted ? "Deleted" : "Active",
+            LoggedDate = x.TSDate,
+            LoggedBy = x.user_access_code == null ? null : x.user_access_code.ToString(),
+        });
+    }
+
+    private IQueryable<OdometerCorrectionQueryRow> QueryOdometerTaRows(string searchValue)
+    {
+        IQueryable<Trip> tripQuery = _context.Trips.AsNoTracking().Where(t => !t.is_deleted);
+
+        if (int.TryParse(searchValue, out var taCode))
+        {
+            tripQuery = tripQuery.Where(t => t.trip_authority_code == taCode);
+        }
+        else
+        {
+            tripQuery = tripQuery.Where(t =>
+                t.trip_authority_code.ToString().Contains(searchValue)
+            );
+        }
+
+        return tripQuery
+            .Join(
+                _context.Contracts.AsNoTracking().Where(c => !c.is_deleted),
+                t => t.contract_code,
+                c => c.contract_code,
+                (t, c) => new { t, c }
+            )
+            .Join(
+                _context.Vehicles.AsNoTracking().Where(v => !v.is_deleted),
+                tc => tc.c.vmf_code,
+                v => v.vmf_code,
+                (tc, v) =>
+                    new OdometerCorrectionQueryRow
+                    {
+                        TripAuthorityCode = tc.t.trip_authority_code,
+                        VehicleIdentifier = string.IsNullOrWhiteSpace(v.fleet_number)
+                            ? v.registration_number
+                            : v.fleet_number,
+                        TripAuthorityNumber = tc.t.trip_authority_code.ToString(),
+                        CurrentOdometer = v.current_odo,
+                        LastOdometer = tc.t.end_odo_meter ?? tc.c.end_odometer,
+                    }
+            );
+    }
+
+    private IQueryable<Vehicle> FilterOdometerVehicles(string mode, string searchValue)
+    {
+        var vehicleQuery = _context.Vehicles.AsNoTracking().Where(v => !v.is_deleted);
+        if (string.IsNullOrWhiteSpace(searchValue))
+        {
+            return vehicleQuery;
+        }
+
+        return mode switch
+        {
+            "VMF" => vehicleQuery.Where(v => v.vmf_code.ToString() == searchValue),
+            "REG" => vehicleQuery.Where(v =>
+                v.registration_number != null && v.registration_number.Contains(searchValue)
+            ),
+            _ => vehicleQuery.Where(v =>
+                v.fleet_number != null && v.fleet_number.Contains(searchValue)
+            ),
+        };
+    }
+
+    private IQueryable<Vehicle> FilterVehicleMasterEdit(string id)
+    {
+        return _context
+            .Vehicles.AsNoTracking()
+            .Where(v =>
+                !v.is_deleted
+                && (
+                    v.vmf_code.ToString() == id
+                    || (v.fleet_number != null && v.fleet_number.Contains(id))
+                    || (v.registration_number != null && v.registration_number.Contains(id))
+                )
+            );
+    }
+
+    private static (int Page, int PageSize) NormalizePaging(int? page, int? pageSize)
+    {
+        return (
+            Math.Max(1, page ?? 1),
+            Math.Clamp(pageSize ?? DefaultPageSize, 1, MaximumPageSize)
+        );
+    }
+
+    private static int CalculateTotalPages(int total, int pageSize)
+    {
+        return Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+    }
+
+    private static int CalculateSkip(int page, int pageSize)
+    {
+        return checked((page - 1) * pageSize);
     }
 
     private async Task<List<ApproverRankDto>> GetApproverRanksData()
@@ -419,6 +761,15 @@ public class TroubleshootController : BaseApiController
             })
             .ToListAsync();
     }
+
+    private Task<List<TripsWithoutRoutesDto>> GetTripsWithoutRoutesData() =>
+        WithConnectionAsync(async connection =>
+        {
+            var schema = await ReadTableSchemaAsync(connection, TripsWithoutRoutesBackupTable);
+            return schema.Count > 0
+                ? await ReadBackupTripsWithoutRoutesAsync(connection, schema)
+                : await ReadStoredProcedureTripsWithoutRoutesAsync(connection);
+        });
 
     private async Task<T> WithConnectionAsync<T>(Func<DbConnection, Task<T>> operation)
     {
@@ -709,6 +1060,8 @@ public class TroubleshootController : BaseApiController
     public class TroubleshootLogSearchRequest
     {
         public int UserAccessCode { get; set; }
+        public int? Page { get; set; }
+        public int? PageSize { get; set; }
     }
 
     public class TroubleshootLogEntryDto
@@ -728,12 +1081,16 @@ public class TroubleshootController : BaseApiController
         public DateTime? FromDate { get; set; }
         public DateTime? ToDate { get; set; }
         public bool OpenInExcel { get; set; }
+        public int? Page { get; set; }
+        public int? PageSize { get; set; }
     }
 
     public class OdometerCorrectionSearchRequest
     {
         public string SearchMode { get; set; } = "GG";
         public string SearchValue { get; set; } = string.Empty;
+        public int? Page { get; set; }
+        public int? PageSize { get; set; }
     }
 
     public class OdometerCorrectionResultDto
@@ -770,6 +1127,8 @@ public class TroubleshootController : BaseApiController
     public class VehicleMasterEditRequest
     {
         public string? VehicleIdentifier { get; set; }
+        public int? Page { get; set; }
+        public int? PageSize { get; set; }
     }
 
     public class VehicleLookupDto
@@ -779,5 +1138,14 @@ public class TroubleshootController : BaseApiController
         public string? RegistrationNumber { get; set; }
         public int? CurrentOdometer { get; set; }
         public string? RecoveredGg { get; set; }
+    }
+
+    private sealed class OdometerCorrectionQueryRow
+    {
+        public int TripAuthorityCode { get; set; }
+        public string? VehicleIdentifier { get; set; }
+        public string? TripAuthorityNumber { get; set; }
+        public int? CurrentOdometer { get; set; }
+        public int? LastOdometer { get; set; }
     }
 }

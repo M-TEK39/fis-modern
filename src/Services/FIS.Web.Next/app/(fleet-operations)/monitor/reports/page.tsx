@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { MonitorNotice, MonitorShell } from "@/app/(fleet-operations)/monitor/_components";
 import {
   accessRestricted,
@@ -9,7 +10,7 @@ import {
   sessionMessage,
 } from "@/app/(fleet-operations)/monitor/_page";
 
-export default async function MonitorReportsPage({
+async function MonitorReportsPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getMonitorSession();
@@ -60,5 +61,13 @@ export default async function MonitorReportsPage({
         </section>
       </div>
     </MonitorShell>
+  );
+}
+
+export default function MonitorReportsPage(props: Parameters<typeof MonitorReportsPageContent>[0]) {
+  return (
+    <StreamedRoute>
+      <MonitorReportsPageContent {...props} />
+    </StreamedRoute>
   );
 }

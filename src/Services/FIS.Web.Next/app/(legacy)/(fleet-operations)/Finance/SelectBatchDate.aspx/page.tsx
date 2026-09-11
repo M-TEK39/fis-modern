@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 
 type Query = Record<string, string | string[] | undefined>;
 
@@ -10,12 +11,22 @@ function queryValue(query: Query, ...names: string[]) {
   return "";
 }
 
-export default async function LegacySelectBatchDatePage({
+async function LegacySelectBatchDatePageContent({
   searchParams,
-}: Readonly<{ searchParams: Promise<Query> }>) {
+}: Readonly<{ searchParams: Promise<Query> }>): Promise<never> {
   const query = await searchParams;
   const followPage = queryValue(query, "FollowPage", "followPage").toLowerCase();
   redirect(
     `/finance/interface/${followPage.includes("item=exportpastelcsvwithclient") ? "pastel-csv-customer" : "pastel-csv"}`,
+  );
+}
+
+export default function LegacySelectBatchDatePage(
+  props: Readonly<{ searchParams: Promise<Query> }>,
+) {
+  return (
+    <StreamedRoute>
+      <LegacySelectBatchDatePageContent {...props} />
+    </StreamedRoute>
   );
 }

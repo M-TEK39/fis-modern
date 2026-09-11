@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import { ReportsFrame } from "@/app/(fleet-operations)/reports/_components";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { getSession } from "@/lib/auth/session";
 
-export default async function TariffCalculatorPage() {
+async function TariffCalculatorContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -40,5 +42,13 @@ export default async function TariffCalculatorPage() {
         </div>
       </section>
     </ReportsFrame>
+  );
+}
+
+export default function TariffCalculatorPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TariffCalculatorContent />
+    </Suspense>
   );
 }

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { BadgeCheck } from "lucide-react";
 import { connection } from "next/server";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import ModulePageHeader from "@/components/app-shell/module-page-header";
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import RouteLoading from "@/components/app-shell/route-loading";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/auth/session";
@@ -33,7 +35,7 @@ function AccessRestricted() {
   );
 }
 
-export default async function ValidationDataPage() {
+async function ValidationDataPageContent() {
   await connection();
   const session = await getSession();
 
@@ -92,5 +94,13 @@ export default async function ValidationDataPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function ValidationDataPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <ValidationDataPageContent />
+    </Suspense>
   );
 }

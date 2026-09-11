@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import PrintButton from "@/app/(fleet-operations)/accidents/reports/print-button";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import {
   AccidentApiError,
   getAccidentOutstandingDocumentReport,
@@ -172,7 +174,7 @@ function Letter({ report }: { report: AccidentOutstandingDocumentReport }) {
   );
 }
 
-export default async function OutstandingDocumentsLetterPage({
+async function OutstandingDocumentsLetterContent({
   searchParams,
 }: {
   searchParams: Promise<Record<string, QueryValue>>;
@@ -257,4 +259,16 @@ export default async function OutstandingDocumentsLetterPage({
       </main>
     );
   }
+}
+
+export default function OutstandingDocumentsLetterPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, QueryValue>>;
+}) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <OutstandingDocumentsLetterContent searchParams={searchParams} />
+    </Suspense>
+  );
 }

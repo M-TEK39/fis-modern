@@ -45,7 +45,7 @@ From the repository root, use `pnpm dev` for the host-local API and Next servers
 
 Keep `package.json`, `pnpm-lock.yaml`, `tsconfig.json`, and `next.config.ts` consistent. Dependencies must be intentional, versioned, and approved by the task.
 
-When Cache Components are enabled, an authenticated route's request-time session, authorization, and protected data work must stream below a route-level `loading.tsx` or local `<Suspense>` boundary. A shared layout may stream its authenticated chrome, but must not put `{children}` inside the same session-loading boundary. Do not trade instant navigation for cached authorization, an `instant = false` escape hatch, or a global Cache Components disablement.
+When Cache Components are enabled, every authenticated canonical page with request-time session, authorization, `connection()`, `searchParams`, or protected-data work must keep its default export synchronous and stream that work in a local `<Suspense>` child. Do not rely only on a route-level `loading.tsx`, because compatibility aliases can re-export the page beyond that segment. A shared layout may stream its authenticated chrome, but must not put `{children}` inside the same session-loading boundary. Do not trade instant navigation for cached authorization, an `instant = false` escape hatch, or a global Cache Components disablement. A Next `page.tsx` must expose only its legal route default and supported Next exports: put reusable legacy route shells in a sibling non-route module (for example `_route.tsx`) and have aliases import that module, never a named page export. Audit all matching route pages before declaring the diagnostic fixed.
 
 ## Backend package
 

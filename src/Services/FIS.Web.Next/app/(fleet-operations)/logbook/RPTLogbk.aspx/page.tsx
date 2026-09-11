@@ -1,5 +1,5 @@
 import { type ReportQuery } from "@/app/(fleet-operations)/reports/_components";
-import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/page";
+import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/_route";
 
 export default function LegacyLogbookReportsPage({
   searchParams,

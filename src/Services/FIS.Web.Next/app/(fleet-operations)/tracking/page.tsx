@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -10,12 +14,23 @@ import {
   accessRestricted,
   getTrackingSession,
   hasTrackingAccess,
+  parsePositiveInteger,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/tracking/_page";
-import { getTrackings, TrackingApiError } from "@/lib/api/fleet-operations/api-tracking";
+import {
+  DEFAULT_TRACKING_PAGE_SIZE,
+  getTrackingPage,
+  TrackingApiError,
+} from "@/lib/api/fleet-operations/api-tracking";
 
-export default async function TrackingPage({
+function pageHref(search: string, page: number) {
+  const params = new URLSearchParams({ page: String(page) });
+  if (search) params.set("search", search);
+  return `/tracking?${params.toString()}`;
+}
+
+async function TrackingPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getTrackingSession();
@@ -26,26 +41,15 @@ export default async function TrackingPage({
   if (!hasTrackingAccess(session))
     return accessRestricted("Your profile does not include Vehicle Management access.");
   const query = await searchParams;
-  const search = queryValue(query.search).toLocaleLowerCase();
+  const search = queryValue(query.search).trim();
+  const requestedPage = parsePositiveInteger(queryValue(query.page)) ?? 1;
   try {
-    const records = (await getTrackings()).filter((record) => !record.isDeleted);
-    const filtered = records.filter(
-      (record) =>
-        !search ||
-        [
-          record.trackCode,
-          record.vmfCode,
-          record.trackNumber,
-          record.fleetNumber,
-          record.registrationNumber,
-          record.status,
-          record.type,
-        ].some((value) =>
-          String(value ?? "")
-            .toLocaleLowerCase()
-            .includes(search),
-        ),
-    );
+    const trackingPage = await getTrackingPage({
+      page: requestedPage,
+      pageSize: DEFAULT_TRACKING_PAGE_SIZE,
+      search,
+    });
+    const { items, page, pageSize, total, totalPages } = trackingPage;
     return (
       <TrackingShell
         title="Tracking Maintenance Menu"
@@ -59,13 +63,12 @@ export default async function TrackingPage({
         >
           <div className="vehicle-form-section-header">
             <div>
-              <p className="eyebrow">
-                {filtered.length} of {records.length} active records
-              </p>
+              <p className="eyebrow">{total} active records</p>
               <h2 id="tracking-preview-title">Tracking Preview</h2>
             </div>
           </div>
           <form className="vehicle-search-row" method="get">
+            <input name="page" type="hidden" value="1" />
             <label className="sr-only" htmlFor="tracking-preview-search">
               Search tracking records
             </label>
@@ -83,7 +86,41 @@ export default async function TrackingPage({
               Clear
             </Link>
           </form>
-          <TrackingReportTable records={filtered.slice(0, 100)} />
+          <TrackingReportTable records={items} />
+          {totalPages > 1 ? (
+            <nav className="vehicle-pagination" aria-label="Tracking preview pages">
+              {page > 1 ? (
+                <Link className="vehicle-pagination-button" href={pageHref(search, page - 1)}>
+                  Previous
+                </Link>
+              ) : (
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
+                  Previous
+                </span>
+              )}
+              <span className="vehicle-pagination-meta" aria-live="polite">
+                Page {page} of {totalPages}
+              </span>
+              {page < totalPages ? (
+                <Link className="vehicle-pagination-button" href={pageHref(search, page + 1)}>
+                  Next
+                </Link>
+              ) : (
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
+                  Next
+                </span>
+              )}
+            </nav>
+          ) : null}
+          <div className="pagination-meta">
+            Total records: {total} | Page size: {pageSize}
+          </div>
         </section>
       </TrackingShell>
     );
@@ -107,4 +144,12 @@ export default async function TrackingPage({
       </TrackingShell>
     );
   }
+}
+
+export default function TrackingPage(props: Parameters<typeof TrackingPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TrackingPageContent {...props} />
+    </Suspense>
+  );
 }

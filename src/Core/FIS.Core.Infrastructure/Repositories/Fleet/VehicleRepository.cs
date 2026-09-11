@@ -27,6 +27,9 @@ public sealed class VehicleRepository : IVehicleRepository
 {
     private const string VehicleTableName = "vehicle_master";
     private const string ModelTableName = "model";
+    private const string TypeTableName = "type";
+    private const string VehicleStatusTableName = "vehicle_status";
+    private const string VehicleSourceTableName = "vehicle_source";
 
     private static readonly string[] LegacyColumns =
     [
@@ -252,7 +255,8 @@ public sealed class VehicleRepository : IVehicleRepository
         pageSize = Math.Clamp(pageSize, 1, 100);
 
         var availableColumns = await GetAvailableColumnsAsync();
-        var activePredicate = $"[v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)}";
+        var activePredicate =
+            $"[v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)}";
         var totalRecords = await CountActiveVehiclesAsync(availableColumns);
         var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
         page = Math.Min(page, totalPages);
@@ -268,6 +272,256 @@ public sealed class VehicleRepository : IVehicleRepository
         );
 
         return new VehicleMasterSnapshotPage(data, page, pageSize, totalRecords);
+    }
+
+    public async Task<RenumberedVehicleReportPage> GetRenumberedVehicleReportPageAsync(
+        int page,
+        int pageSize
+    )
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            var vehicleColumns = await GetAvailableColumnsAsync();
+            if (!vehicleColumns.Contains("renumbered_to"))
+            {
+                return new RenumberedVehicleReportPage([], 1, pageSize, 0);
+            }
+
+            var statusColumns = await GetTableColumnsAsync(VehicleStatusTableName);
+            var hasStatusLookup =
+                statusColumns.Contains("vehicle_status_code")
+                && statusColumns.Contains("status_description");
+            var renumberedPredicate =
+                "[old].[renumbered_to] IS NOT NULL AND [old].[renumbered_to] <> ''";
+            var oldStatusJoin = hasStatusLookup
+                ? $"INNER JOIN [dbo].[{VehicleStatusTableName}] AS [old_status] ON [old_status].[vehicle_status_code] = [old].[vehicle_status_code]"
+                : string.Empty;
+
+            int total;
+            await using (var countCommand = connection.CreateCommand())
+            {
+                countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                countCommand.CommandText = $"""
+                    SELECT COUNT(1)
+                    FROM [dbo].[{VehicleTableName}] AS [old]
+                    {oldStatusJoin}
+                    WHERE {renumberedPredicate}
+                    """;
+                total = Convert.ToInt32(
+                    await countCommand.ExecuteScalarAsync(),
+                    CultureInfo.InvariantCulture
+                );
+            }
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            page = Math.Min(page, totalPages);
+            var skip = (long)(page - 1) * pageSize;
+            var oldStatusProjection = hasStatusLookup
+                ? "[old_status].[status_description]"
+                : "CAST(NULL AS varchar(255))";
+            var newStatusProjection = hasStatusLookup
+                ? "[new_status].[status_description]"
+                : "CAST(NULL AS varchar(255))";
+            var replacementJoin = $"""
+                OUTER APPLY (
+                    SELECT TOP (1) [new].[vehicle_status_code]
+                    FROM [dbo].[{VehicleTableName}] AS [new]
+                    WHERE [new].[fleet_number] = [old].[renumbered_to]
+                    ORDER BY [new].[vmf_code]
+                ) AS [new]
+                """;
+            var statusJoins = hasStatusLookup
+                ? $"""
+                    LEFT JOIN [dbo].[{VehicleStatusTableName}] AS [new_status]
+                        ON [new_status].[vehicle_status_code] = [new].[vehicle_status_code]
+                    """
+                : string.Empty;
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                SELECT
+                    [old].[vmf_code] AS [old_vmf_code],
+                    [old].[fleet_number] AS [old_fleet_number],
+                    {oldStatusProjection} AS [old_status_description],
+                    [old].[renumbered_to] AS [new_fleet_number],
+                    {newStatusProjection} AS [new_status_description]
+                FROM [dbo].[{VehicleTableName}] AS [old]
+                {oldStatusJoin}
+                {replacementJoin}
+                {statusJoins}
+                WHERE {renumberedPredicate}
+                ORDER BY [old].[fleet_number], [old].[vmf_code]
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddParameter(command, "@skip", DbType.Int64, skip);
+            AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<RenumberedVehicleReportRow>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(
+                    new RenumberedVehicleReportRow(
+                        ReadInt32(reader, "old_vmf_code") ?? 0,
+                        ReadString(reader, "old_fleet_number"),
+                        ReadString(reader, "old_status_description"),
+                        ReadString(reader, "new_fleet_number"),
+                        ReadString(reader, "new_status_description")
+                    )
+                );
+            }
+
+            return new RenumberedVehicleReportPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    public async Task<VehicleLookupPage> GetVehicleLookupPageAsync(
+        string? keyword,
+        string? searchMode,
+        int page,
+        int pageSize
+    )
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        keyword = keyword?.Trim();
+
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            return new VehicleLookupPage([], 1, pageSize, 0);
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            var vehicleColumns = await GetAvailableColumnsAsync();
+            var modelColumns = await GetTableColumnsAsync(ModelTableName);
+            var typeColumns = await GetTableColumnsAsync(TypeTableName);
+            var statusColumns = await GetTableColumnsAsync(VehicleStatusTableName);
+            var sourceColumns = await GetTableColumnsAsync(VehicleSourceTableName);
+
+            var whereClause = BuildVehicleLookupWhereClause(vehicleColumns, searchMode);
+            var total = await CountVehicleLookupRowsAsync(whereClause, keyword);
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            page = Math.Min(page, totalPages);
+            var skip = (long)(page - 1) * pageSize;
+
+            var hasModel =
+                modelColumns.Contains("model_code") && modelColumns.Contains("model_description");
+            var hasType =
+                typeColumns.Contains("type_code") && typeColumns.Contains("type_description");
+            var hasStatus =
+                statusColumns.Contains("vehicle_status_code")
+                && statusColumns.Contains("status_description");
+            var hasSource =
+                vehicleColumns.Contains("vs_code")
+                && sourceColumns.Contains("vs_code")
+                && sourceColumns.Contains("name");
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                SELECT
+                    [v].[vmf_code] AS [vmf_code],
+                    {GetColumnProjection("v", "fleet_number", vehicleColumns)},
+                    {GetColumnProjection("v", "registration_number", vehicleColumns)},
+                    {GetColumnProjection("v", "model_code", vehicleColumns)},
+                    {GetColumnProjection("v", "year_manufactured", vehicleColumns)},
+                    {GetColumnProjection("v", "colour", vehicleColumns)},
+                    {GetColumnProjection("v", "vehicle_status_date", vehicleColumns)},
+                    {(
+                    hasModel ? "[m].[model_description]" : "CAST(NULL AS varchar(100))"
+                )} AS [make_and_model],
+                    {(
+                    hasType ? "[t].[type_description]" : "CAST(NULL AS varchar(255))"
+                )} AS [hire_type],
+                    {(
+                    hasStatus ? "[s].[status_description]" : "CAST(NULL AS varchar(255))"
+                )} AS [status],
+                    {(hasSource ? "[vs].[name]" : "CAST(NULL AS varchar(255))")} AS [hired_from]
+                FROM [dbo].[{VehicleTableName}] AS [v]
+                {(
+                    hasModel
+                        ? $"LEFT JOIN [dbo].[{ModelTableName}] AS [m] ON [m].[model_code] = [v].[model_code] {GetLookupActiveFilter("m", modelColumns)}"
+                        : string.Empty
+                )}
+                {(
+                    hasType
+                        ? $"LEFT JOIN [dbo].[{TypeTableName}] AS [t] ON [t].[type_code] = [v].[type_code] {GetLookupActiveFilter("t", typeColumns)}"
+                        : string.Empty
+                )}
+                {(
+                    hasStatus
+                        ? $"LEFT JOIN [dbo].[{VehicleStatusTableName}] AS [s] ON [s].[vehicle_status_code] = [v].[vehicle_status_code] {GetLookupActiveFilter("s", statusColumns)}"
+                        : string.Empty
+                )}
+                {(
+                    hasSource
+                        ? $"LEFT JOIN [dbo].[{VehicleSourceTableName}] AS [vs] ON [vs].[vs_code] = [v].[vs_code] {GetLookupActiveFilter("vs", sourceColumns)}"
+                        : string.Empty
+                )}
+                WHERE {whereClause}
+                ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddParameter(command, "@keyword", DbType.String, BuildLikeParameter(keyword));
+            AddParameter(command, "@skip", DbType.Int64, skip);
+            AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<VehicleLookupPageItem>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(
+                    new VehicleLookupPageItem(
+                        ReadInt32(reader, "vmf_code") ?? 0,
+                        ReadString(reader, "fleet_number"),
+                        ReadString(reader, "registration_number"),
+                        ReadString(reader, "make_and_model"),
+                        ReadInt16(reader, "year_manufactured"),
+                        ReadString(reader, "colour"),
+                        ReadString(reader, "hire_type"),
+                        ReadString(reader, "status"),
+                        ReadString(reader, "hired_from"),
+                        ReadDateTime(reader, "vehicle_status_date"),
+                        ReadInt16(reader, "model_code") ?? 0
+                    )
+                );
+            }
+
+            return new VehicleLookupPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 
     public async Task<IEnumerable<Vehicle>> GetAvailableVehiclesAsync() =>
@@ -788,14 +1042,18 @@ public sealed class VehicleRepository : IVehicleRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            var activePredicate = $"[v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)}";
+            var activePredicate =
+                $"[v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)}";
             command.CommandText = $"""
                 SELECT COUNT(*)
                 FROM [dbo].[{VehicleTableName}] AS [v]
                 WHERE {activePredicate}
                 """;
 
-            return Convert.ToInt32(await command.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+            return Convert.ToInt32(
+                await command.ExecuteScalarAsync(),
+                CultureInfo.InvariantCulture
+            );
         }
         finally
         {
@@ -805,6 +1063,71 @@ public sealed class VehicleRepository : IVehicleRepository
             }
         }
     }
+
+    private async Task<int> CountVehicleLookupRowsAsync(string whereClause, string keyword)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                SELECT COUNT(*)
+                FROM [dbo].[{VehicleTableName}] AS [v]
+                WHERE {whereClause}
+                """;
+            AddParameter(command, "@keyword", DbType.String, BuildLikeParameter(keyword));
+
+            return Convert.ToInt32(
+                await command.ExecuteScalarAsync(),
+                CultureInfo.InvariantCulture
+            );
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static string BuildVehicleLookupWhereClause(
+        IReadOnlySet<string> availableColumns,
+        string? searchMode
+    )
+    {
+        var normalizedSearchMode = string.IsNullOrWhiteSpace(searchMode)
+            ? null
+            : searchMode.Trim().ToUpperInvariant();
+        var searchPredicate = normalizedSearchMode switch
+        {
+            null =>
+                "(LOWER(COALESCE([v].[fleet_number], '')) LIKE @keyword ESCAPE '\\' OR LOWER(COALESCE([v].[registration_number], '')) LIKE @keyword ESCAPE '\\')",
+            "GG" => "LOWER(COALESCE([v].[fleet_number], '')) LIKE @keyword ESCAPE '\\'",
+            "GP" => "LOWER(COALESCE([v].[registration_number], '')) LIKE @keyword ESCAPE '\\'",
+            _ => throw new ArgumentException("Search mode must be GG or GP.", nameof(searchMode)),
+        };
+
+        return $"{GetActiveFilter("v", availableColumns)} AND ({searchPredicate})";
+    }
+
+    private static string BuildLikeParameter(string keyword) =>
+        $"%{keyword.ToLowerInvariant().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_").Replace("[", "\\[")}%";
+
+    private static string GetLookupActiveFilter(
+        string alias,
+        IReadOnlySet<string> availableColumns
+    ) =>
+        availableColumns.Contains("is_deleted")
+            ? $"AND ISNULL([{alias}].[is_deleted], 0) = 0"
+            : string.Empty;
 
     private async Task<HashSet<string>> GetAvailableColumnsAsync()
     {
@@ -1130,6 +1453,14 @@ public sealed class VehicleRepository : IVehicleRepository
         return Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
     }
 
+    private static int? ReadInt32(DbDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToInt32(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
+    }
+
     private static short? ReadInt16(DbDataReader reader, string column)
     {
         var ordinal = reader.GetOrdinal(column);
@@ -1144,6 +1475,14 @@ public sealed class VehicleRepository : IVehicleRepository
         return reader.IsDBNull(ordinal)
             ? null
             : Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture)?.TrimEnd();
+    }
+
+    private static DateTime? ReadDateTime(DbDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal)
+            ? null
+            : Convert.ToDateTime(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
     }
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);

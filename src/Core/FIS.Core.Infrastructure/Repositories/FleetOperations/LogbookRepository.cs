@@ -24,8 +24,10 @@ public sealed class LogbookRepository : ILogbookRepository
     public Task<Logbook?> GetByIdAsync(short logbookCode) =>
         _compatibilityRepository.GetByIdAsync(logbookCode);
 
-    public Task<IEnumerable<Logbook>> GetAllAsync() =>
-        _compatibilityRepository.GetAllAsync();
+    public Task<IEnumerable<Logbook>> GetAllAsync() => _compatibilityRepository.GetAllAsync();
+
+    public Task<LogbookPage> GetPageAsync(LogbookPageQuery query) =>
+        _compatibilityRepository.GetPageAsync(query);
 
     public Task<IEnumerable<Logbook>> GetByVehicleAsync(int vmfCode) =>
         _compatibilityRepository.GetByVehicleAsync(vmfCode);

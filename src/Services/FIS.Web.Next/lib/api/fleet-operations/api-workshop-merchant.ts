@@ -20,6 +20,16 @@ export type WorkshopMerchantInput = {
   email: string | null;
 };
 
+export type WorkshopMerchantPage = {
+  items: WorkshopMerchantRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_WORKSHOP_MERCHANT_PAGE_SIZE = 24;
+
 export class WorkshopMerchantApiError extends Error {
   constructor(
     public readonly reason: "unauthorized" | "unavailable" | "invalid-response" | "not-found",
@@ -128,6 +138,47 @@ export async function getWorkshopMerchants() {
   return getCollection(await readJson(response))
     .map(mapMerchant)
     .filter((merchant): merchant is WorkshopMerchantRecord => merchant !== null);
+}
+
+export async function getWorkshopMerchantPage(
+  options: { search?: string; page?: number; pageSize?: number } = {},
+): Promise<WorkshopMerchantPage> {
+  const page = Number.isSafeInteger(options.page) && (options.page ?? 0) > 0 ? options.page! : 1;
+  const requestedPageSize =
+    Number.isSafeInteger(options.pageSize) && (options.pageSize ?? 0) > 0
+      ? options.pageSize!
+      : DEFAULT_WORKSHOP_MERCHANT_PAGE_SIZE;
+  const pageSize = Math.min(100, requestedPageSize);
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  const search = options.search?.trim();
+  if (search) params.set("search", search.slice(0, 40));
+  const payload = await readJson(
+    await requestApi(`api/workshop/merchants/page?${params.toString()}`),
+  );
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new WorkshopMerchantApiError(
+      "invalid-response",
+      "The FIS API returned an invalid workshop merchant page.",
+    );
+  }
+  const parsed = (value: unknown, fallback: number) => {
+    const number = typeof value === "number" ? value : Number(value);
+    return Number.isSafeInteger(number) && number > 0 ? number : fallback;
+  };
+  const total = Math.max(0, Number(getValue(payload, "total", "Total")) || 0);
+  const resolvedPageSize = parsed(getValue(payload, "pageSize", "PageSize"), pageSize);
+  return {
+    items: payload.items
+      .map(mapMerchant)
+      .filter((merchant): merchant is WorkshopMerchantRecord => merchant !== null),
+    page: parsed(getValue(payload, "page", "Page"), page),
+    pageSize: resolvedPageSize,
+    total,
+    totalPages: parsed(
+      getValue(payload, "totalPages", "TotalPages"),
+      Math.max(1, Math.ceil(total / resolvedPageSize)),
+    ),
+  };
 }
 
 export async function getWorkshopMerchant(merchantCode: number) {

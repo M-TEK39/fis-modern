@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_LOCATION_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type LocationRecord = {
@@ -32,6 +33,14 @@ export type LocationWriteInput = {
   address: string | null;
   latitude: number | null;
   longitude: number | null;
+};
+
+export type LocationPage = {
+  items: LocationRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type LocationApiErrorReason =
@@ -96,6 +105,44 @@ function getCollection(payload: unknown) {
     return Array.isArray(collection) ? collection : [];
   }
   return [];
+}
+
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_LOCATION_PAGE_SIZE)
+      : DEFAULT_LOCATION_PAGE_SIZE;
+  return Math.min(100, pageSize);
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
@@ -216,6 +263,39 @@ export async function getLocations() {
   return getCollection(payload)
     .map(mapLocation)
     .filter((location): location is LocationRecord => location !== null);
+}
+
+export async function getLocationsPage(
+  options: {
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<LocationPage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const payload = await readJson(await requestApi(`api/Location/page?${params.toString()}`));
+
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new LocationApiError(
+      "invalid-response",
+      "The FIS API returned an invalid location page.",
+    );
+  }
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata) {
+    throw new LocationApiError(
+      "invalid-response",
+      "The FIS API returned incomplete location pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items.map(mapLocation).filter((item): item is LocationRecord => item !== null),
+    ...metadata,
+  };
 }
 
 export async function createLocation(input: LocationWriteInput) {

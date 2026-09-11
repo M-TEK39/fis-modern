@@ -6,9 +6,7 @@ namespace FIS.Core.Application.Interfaces.SystemConfiguration;
 /// </summary>
 public interface ISystemConfigurationService
 {
-    Task<SystemConfigurationStatus> GetStatusAsync(
-        CancellationToken cancellationToken = default
-    );
+    Task<SystemConfigurationStatus> GetStatusAsync(CancellationToken cancellationToken = default);
 
     Task<SystemConfigurationUpdateResult> UpdateAsync(
         SystemConfigurationUpdate update,

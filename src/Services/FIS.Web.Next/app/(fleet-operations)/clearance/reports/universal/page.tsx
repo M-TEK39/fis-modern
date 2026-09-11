@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import {
   ClearanceApiError,
   getClearanceUniversalReport,
@@ -114,7 +116,7 @@ function ReportResults({ rows }: Readonly<{ rows: ClearanceReportRow[] }>) {
   );
 }
 
-export default async function ClearanceUniversalReportPage({
+async function ClearanceUniversalReportContent({
   searchParams,
   routePath = "/clearance/reports/universal",
 }: Readonly<{ searchParams: SearchParams; routePath?: string }>) {
@@ -122,24 +124,9 @@ export default async function ClearanceUniversalReportPage({
   const session = await getSession();
 
   if (session.status === "anonymous") redirect("/login");
-  if (session.status === "expired")
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <SessionRecovery returnPath={routePath} />
-      </main>
-    );
-  if (session.status === "unavailable")
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <ApiUnavailable />
-      </main>
-    );
-  if (!hasRole(session.roles, REPORTS_ROLE))
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <AccessRestricted />
-      </main>
-    );
+  if (session.status === "expired") return <SessionRecovery returnPath={routePath} />;
+  if (session.status === "unavailable") return <ApiUnavailable />;
+  if (!hasRole(session.roles, REPORTS_ROLE)) return <AccessRestricted />;
 
   const query = await searchParams;
   const startDate = validDate(
@@ -171,22 +158,83 @@ export default async function ClearanceUniversalReportPage({
     }
   } catch (error) {
     if (error instanceof ClearanceApiError && error.reason === "unauthorized")
-      return (
-        <main className="page-shell vehicle-page-shell">
-          <SessionRecovery returnPath={routePath} />
-        </main>
-      );
+      return <SessionRecovery returnPath={routePath} />;
     console.error(
       "FIS clearance universal report failed",
       error instanceof Error ? error.message : "unknown error",
     );
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <ApiUnavailable />
-      </main>
-    );
+    return <ApiUnavailable />;
   }
 
+  return (
+    <>
+      <form className="vehicle-status-maintenance-panel" method="get">
+        <div className="form-grid">
+          <div className="form-field">
+            <label className="form-label" htmlFor="clearance-report-start">
+              Start Date
+            </label>
+            <input
+              className="form-input"
+              id="clearance-report-start"
+              name="startDate"
+              type="date"
+              defaultValue={startDate}
+            />
+          </div>
+          <div className="form-field">
+            <label className="form-label" htmlFor="clearance-report-end">
+              End Date
+            </label>
+            <input
+              className="form-input"
+              id="clearance-report-end"
+              name="endDate"
+              type="date"
+              defaultValue={endDate}
+            />
+          </div>
+          <div className="form-field form-group-full">
+            <label className="form-label" htmlFor="clearance-report-merchant">
+              Merchant
+            </label>
+            <select
+              className="form-select"
+              id="clearance-report-merchant"
+              name="merchantCode"
+              defaultValue={merchantCode ?? "0"}
+            >
+              <option value="0">All merchants</option>
+              {merchants.map((merchant) => (
+                <option key={merchant.merchantCode} value={merchant.merchantCode}>
+                  {valueOrDash(merchant.merchantName)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="button-row">
+          <button className="button button-primary" type="submit">
+            Submit
+          </button>
+          <Link className="button button-secondary" href="/clearance/reports">
+            Report Menu
+          </Link>
+        </div>
+      </form>
+      {errorMessage ? (
+        <div className="notice notice-error" role="alert">
+          {errorMessage}
+        </div>
+      ) : null}
+      {submitted && !errorMessage ? <ReportResults rows={rows} /> : null}
+    </>
+  );
+}
+
+export default function ClearanceUniversalReportPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="clearance-universal-title">
@@ -200,66 +248,9 @@ export default async function ClearanceUniversalReportPage({
             Report Menu
           </Link>
         </header>
-        <form className="vehicle-status-maintenance-panel" method="get">
-          <div className="form-grid">
-            <div className="form-field">
-              <label className="form-label" htmlFor="clearance-report-start">
-                Start Date
-              </label>
-              <input
-                className="form-input"
-                id="clearance-report-start"
-                name="startDate"
-                type="date"
-                defaultValue={startDate}
-              />
-            </div>
-            <div className="form-field">
-              <label className="form-label" htmlFor="clearance-report-end">
-                End Date
-              </label>
-              <input
-                className="form-input"
-                id="clearance-report-end"
-                name="endDate"
-                type="date"
-                defaultValue={endDate}
-              />
-            </div>
-            <div className="form-field form-group-full">
-              <label className="form-label" htmlFor="clearance-report-merchant">
-                Merchant
-              </label>
-              <select
-                className="form-select"
-                id="clearance-report-merchant"
-                name="merchantCode"
-                defaultValue={merchantCode ?? "0"}
-              >
-                <option value="0">All merchants</option>
-                {merchants.map((merchant) => (
-                  <option key={merchant.merchantCode} value={merchant.merchantCode}>
-                    {valueOrDash(merchant.merchantName)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <div className="button-row">
-            <button className="button button-primary" type="submit">
-              Submit
-            </button>
-            <Link className="button button-secondary" href="/clearance/reports">
-              Report Menu
-            </Link>
-          </div>
-        </form>
-        {errorMessage ? (
-          <div className="notice notice-error" role="alert">
-            {errorMessage}
-          </div>
-        ) : null}
-        {submitted && !errorMessage ? <ReportResults rows={rows} /> : null}
+        <Suspense fallback={<RouteLoading />}>
+          <ClearanceUniversalReportContent searchParams={searchParams} />
+        </Suspense>
       </section>
     </main>
   );

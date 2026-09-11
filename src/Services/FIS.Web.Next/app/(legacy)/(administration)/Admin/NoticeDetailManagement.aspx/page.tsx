@@ -1,7 +1,3 @@
-import NoticeDetailPage from "@/app/(administration)/notice-management/detail/page";
+import { createLegacyNoticeDetailPage } from "@/app/(administration)/notice-management/detail/_route";
 
-export default function LegacyNoticeDetailManagementPage(
-  props: Parameters<typeof NoticeDetailPage>[0],
-) {
-  return <NoticeDetailPage {...props} routePath="/Admin/NoticeDetailManagement.aspx" />;
-}
+export default createLegacyNoticeDetailPage("/Admin/NoticeDetailManagement.aspx");

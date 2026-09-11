@@ -58,6 +58,85 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
 
     public async Task<IEnumerable<JournalDetail>> GetAllAsync() => await QueryAsync();
 
+    public async Task<JournalDetailPage> GetUninvoicedPageAsync(
+        int? departmentCode,
+        int page,
+        int pageSize
+    )
+    {
+        var normalizedPage = Math.Max(1, page);
+        var normalizedPageSize = Math.Clamp(pageSize, 1, 100);
+        var columns = await GetColumnsAsync();
+        var scope = await OpenConnectionAsync();
+
+        try
+        {
+            var conditions = new List<string> { NotDeletedExpression(columns) };
+            if (columns.ContainsKey("journal_detail_date_posted"))
+            {
+                conditions.Add("j.[journal_detail_date_posted] IS NULL");
+            }
+
+            if (departmentCode.HasValue)
+            {
+                conditions.Add("j.[department_code] = @departmentCode");
+            }
+
+            var whereClause = string.Join(" AND ", conditions);
+            var offset = checked((normalizedPage - 1) * normalizedPageSize);
+
+            await using var countCommand = scope.Connection.CreateCommand();
+            countCommand.Transaction = CurrentTransaction;
+            countCommand.CommandText =
+                $"SELECT COUNT_BIG(1) FROM [dbo].[{TableName}] j WHERE {whereClause}";
+            if (departmentCode.HasValue)
+            {
+                AddParameter(
+                    countCommand,
+                    "@departmentCode",
+                    DbType.Int16,
+                    checked((short)departmentCode.Value)
+                );
+            }
+
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync() ?? 0);
+
+            await using var pageCommand = scope.Connection.CreateCommand();
+            pageCommand.Transaction = CurrentTransaction;
+            pageCommand.CommandText =
+                $"SELECT {BuildProjection(columns)} FROM [dbo].[{TableName}] j WHERE {whereClause} ORDER BY {DateExpression(columns)} DESC, j.[journal_detail_id] DESC OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY";
+            if (departmentCode.HasValue)
+            {
+                AddParameter(
+                    pageCommand,
+                    "@departmentCode",
+                    DbType.Int16,
+                    checked((short)departmentCode.Value)
+                );
+            }
+            AddParameter(pageCommand, "@offset", DbType.Int32, offset);
+            AddParameter(pageCommand, "@pageSize", DbType.Int32, normalizedPageSize);
+
+            var items = new List<JournalDetail>();
+            await using var reader = await pageCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(Map(reader));
+            }
+
+            return new JournalDetailPage(items, normalizedPage, normalizedPageSize, total);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Error querying paged un-invoiced journal details");
+            throw;
+        }
+        finally
+        {
+            await CloseConnectionAsync(scope);
+        }
+    }
+
     public async Task<JournalDetail?> GetByIdAsync(int journalDetailId) =>
         (
             await QueryAsync(
@@ -70,12 +149,8 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
         (
             await QueryAsync(
                 "j.[journal_detail_code] = @journalDetailCode",
-                command => AddParameter(
-                    command,
-                    "@journalDetailCode",
-                    DbType.Guid,
-                    journalDetailCode
-                )
+                command =>
+                    AddParameter(command, "@journalDetailCode", DbType.Guid, journalDetailCode)
             )
         ).SingleOrDefault();
 
@@ -121,12 +196,7 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
     ) =>
         await QueryAsync(
             "j.[journal_detail_reversalof] = @journalDetailCode",
-            command => AddParameter(
-                command,
-                "@journalDetailCode",
-                DbType.Guid,
-                journalDetailCode
-            )
+            command => AddParameter(command, "@journalDetailCode", DbType.Guid, journalDetailCode)
         );
 
     public async Task<JournalDetail> CreateAsync(JournalDetail journalDetail, int currentUserId)
@@ -147,7 +217,8 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
         {
             await using var command = scope.Connection.CreateCommand();
             command.Transaction = CurrentTransaction;
-            command.CommandText = $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[journal_detail_id] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+            command.CommandText =
+                $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[journal_detail_id] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
             AddParameters(command, values);
             journalDetail.journal_detail_id = Convert.ToInt32(await command.ExecuteScalarAsync());
             return journalDetail;
@@ -164,15 +235,26 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
         var columns = await GetColumnsAsync();
         journalDetail.journal_detail_date_updated = DateTime.UtcNow;
 
-        var values = BuildValues(journalDetail, columns, currentUserId, includeCreatedValues: false);
+        var values = BuildValues(
+            journalDetail,
+            columns,
+            currentUserId,
+            includeCreatedValues: false
+        );
         var scope = await OpenConnectionAsync();
         try
         {
             await using var command = scope.Connection.CreateCommand();
             command.Transaction = CurrentTransaction;
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [journal_detail_id] = @journalDetailId";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [journal_detail_id] = @journalDetailId";
             AddParameters(command, values);
-            AddParameter(command, "@journalDetailId", DbType.Int32, journalDetail.journal_detail_id);
+            AddParameter(
+                command,
+                "@journalDetailId",
+                DbType.Int32,
+                journalDetail.journal_detail_id
+            );
             if (await command.ExecuteNonQueryAsync() == 0)
                 throw new KeyNotFoundException(
                     $"JournalDetail with journal_detail_id {journalDetail.journal_detail_id} not found"
@@ -190,7 +272,14 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
         var values = new List<WriteValue>();
         AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, true);
         AddValue(values, columns, "journal_detail_inactive", "@inactive", DbType.Boolean, true);
-        AddValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
+        AddValue(
+            values,
+            columns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
         AddValue(
             values,
             columns,
@@ -209,14 +298,17 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
         );
 
         if (values.Count == 0)
-            throw new InvalidOperationException("The journal_detail table has no supported delete column.");
+            throw new InvalidOperationException(
+                "The journal_detail table has no supported delete column."
+            );
 
         var scope = await OpenConnectionAsync();
         try
         {
             await using var command = scope.Connection.CreateCommand();
             command.Transaction = CurrentTransaction;
-            command.CommandText = $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [journal_detail_id] = @journalDetailId";
+            command.CommandText =
+                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [journal_detail_id] = @journalDetailId";
             AddParameters(command, values);
             AddParameter(command, "@journalDetailId", DbType.Int32, journalDetailId);
             await command.ExecuteNonQueryAsync();
@@ -242,7 +334,8 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
             if (!string.IsNullOrWhiteSpace(predicate))
                 conditions.Add($"({predicate})");
 
-            command.CommandText = $"SELECT {BuildProjection(columns)} FROM [dbo].[{TableName}] j WHERE {string.Join(" AND ", conditions)} ORDER BY {DateExpression(columns)} DESC, j.[journal_detail_id] DESC";
+            command.CommandText =
+                $"SELECT {BuildProjection(columns)} FROM [dbo].[{TableName}] j WHERE {string.Join(" AND ", conditions)} ORDER BY {DateExpression(columns)} DESC, j.[journal_detail_id] DESC";
             configure?.Invoke(command);
 
             var results = new List<JournalDetail>();
@@ -272,7 +365,8 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
         {
             await using var command = scope.Connection.CreateCommand();
             command.Transaction = CurrentTransaction;
-            command.CommandText = "SELECT [COLUMN_NAME], [DATA_TYPE] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table";
+            command.CommandText =
+                "SELECT [COLUMN_NAME], [DATA_TYPE] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table";
             AddParameter(command, "@schema", DbType.String, "dbo");
             AddParameter(command, "@table", DbType.String, TableName);
 
@@ -309,39 +403,237 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
     )
     {
         var values = new List<WriteValue>();
-        AddValue(values, columns, "journal_detail_code", "@detailCode", DbType.Guid, journalDetail.journal_detail_code);
-        AddValue(values, columns, "journal_code", "@journalCode", DbType.Int64, journalDetail.journal_code);
-        AddValue(values, columns, "department_code", "@departmentCode", DbType.Int16, journalDetail.department_code);
-        AddValue(values, columns, "site_code", "@siteCode", DbType.Int16, journalDetail.site_code == 0 ? null : journalDetail.site_code);
-        AddValue(values, columns, "vmf_code", "@vmfCode", DbType.Int32, journalDetail.vmf_code == 0 ? null : journalDetail.vmf_code);
-        AddValue(values, columns, "journal_detail_type_code", "@detailTypeCode", DbType.Byte, journalDetail.journal_detail_type_code);
-        AddValue(values, columns, "journal_detail_isdebit", "@isDebit", DbType.Boolean, journalDetail.journal_detail_isdebit);
-        AddValue(values, columns, "journal_detail_quantity", "@quantity", DbType.Decimal, journalDetail.journal_detail_quantity);
-        AddValue(values, columns, "journal_detail_tariff", "@tariff", DbType.Decimal, journalDetail.journal_detail_tariff);
-        AddValue(values, columns, "journal_detail_amount", "@amount", DbType.Decimal, journalDetail.journal_detail_amount);
-        AddValue(values, columns, "journal_detail_description", "@description", DbType.String, journalDetail.journal_detail_description ?? string.Empty);
-        AddValue(values, columns, "journal_detail_reversalof", "@reversalOf", DbType.Guid, journalDetail.journal_detail_reversalof);
-        AddValue(values, columns, "journal_detail_date_created", "@detailDateCreated", DbType.DateTime2, journalDetail.journal_detail_date_created);
-        AddValue(values, columns, "journal_detail_date_updated", "@detailDateUpdated", DbType.DateTime2, journalDetail.journal_detail_date_updated);
-        AddValue(values, columns, "journal_detail_date_posted", "@detailDatePosted", DbType.DateTime2, journalDetail.journal_detail_date_posted);
-        AddValue(values, columns, "journal_detail_isaccepted", "@isAccepted", DbType.Boolean, journalDetail.journal_detail_isaccepted);
-        AddValue(values, columns, "journal_detail_financial_year", "@financialYear", DbType.String, journalDetail.journal_detail_financial_year);
-        AddValue(values, columns, "journal_detail_date", "@detailDate", DbType.DateTime2, journalDetail.journal_detail_date);
-        AddValue(values, columns, "journal_detail_date_approved", "@dateApproved", DbType.DateTime2, journalDetail.journal_detail_date_approved);
-        AddValue(values, columns, "journal_detail_rebill_code", "@rebillCode", DbType.Guid, journalDetail.journal_detail_rebill_code);
-        AddValue(values, columns, "journal_detail_isreversaldenied", "@isReversalDenied", DbType.Boolean, journalDetail.journal_detail_isreversaldenied);
+        AddValue(
+            values,
+            columns,
+            "journal_detail_code",
+            "@detailCode",
+            DbType.Guid,
+            journalDetail.journal_detail_code
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_code",
+            "@journalCode",
+            DbType.Int64,
+            journalDetail.journal_code
+        );
+        AddValue(
+            values,
+            columns,
+            "department_code",
+            "@departmentCode",
+            DbType.Int16,
+            journalDetail.department_code
+        );
+        AddValue(
+            values,
+            columns,
+            "site_code",
+            "@siteCode",
+            DbType.Int16,
+            journalDetail.site_code == 0 ? null : journalDetail.site_code
+        );
+        AddValue(
+            values,
+            columns,
+            "vmf_code",
+            "@vmfCode",
+            DbType.Int32,
+            journalDetail.vmf_code == 0 ? null : journalDetail.vmf_code
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_type_code",
+            "@detailTypeCode",
+            DbType.Byte,
+            journalDetail.journal_detail_type_code
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_isdebit",
+            "@isDebit",
+            DbType.Boolean,
+            journalDetail.journal_detail_isdebit
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_quantity",
+            "@quantity",
+            DbType.Decimal,
+            journalDetail.journal_detail_quantity
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_tariff",
+            "@tariff",
+            DbType.Decimal,
+            journalDetail.journal_detail_tariff
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_amount",
+            "@amount",
+            DbType.Decimal,
+            journalDetail.journal_detail_amount
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_description",
+            "@description",
+            DbType.String,
+            journalDetail.journal_detail_description ?? string.Empty
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_reversalof",
+            "@reversalOf",
+            DbType.Guid,
+            journalDetail.journal_detail_reversalof
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_date_created",
+            "@detailDateCreated",
+            DbType.DateTime2,
+            journalDetail.journal_detail_date_created
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_date_updated",
+            "@detailDateUpdated",
+            DbType.DateTime2,
+            journalDetail.journal_detail_date_updated
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_date_posted",
+            "@detailDatePosted",
+            DbType.DateTime2,
+            journalDetail.journal_detail_date_posted
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_isaccepted",
+            "@isAccepted",
+            DbType.Boolean,
+            journalDetail.journal_detail_isaccepted
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_financial_year",
+            "@financialYear",
+            DbType.String,
+            journalDetail.journal_detail_financial_year
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_date",
+            "@detailDate",
+            DbType.DateTime2,
+            journalDetail.journal_detail_date
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_date_approved",
+            "@dateApproved",
+            DbType.DateTime2,
+            journalDetail.journal_detail_date_approved
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_rebill_code",
+            "@rebillCode",
+            DbType.Guid,
+            journalDetail.journal_detail_rebill_code
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_isreversaldenied",
+            "@isReversalDenied",
+            DbType.Boolean,
+            journalDetail.journal_detail_isreversaldenied
+        );
 
         if (includeCreatedValues)
         {
-            AddValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
-            AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, journalDetail.date_created == DateTime.MinValue ? journalDetail.journal_detail_date_created : journalDetail.date_created);
+            AddValue(
+                values,
+                columns,
+                "created_by_user_code",
+                "@createdByUserCode",
+                DbType.Int32,
+                currentUserId > 0 ? currentUserId : null
+            );
+            AddValue(
+                values,
+                columns,
+                "date_created",
+                "@dateCreated",
+                DbType.DateTime2,
+                journalDetail.date_created == DateTime.MinValue
+                    ? journalDetail.journal_detail_date_created
+                    : journalDetail.date_created
+            );
         }
 
-        AddValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, journalDetail.date_updated ?? journalDetail.journal_detail_date_updated);
-        AddValue(values, columns, "modified_by_user_code", "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : journalDetail.modified_by_user_code);
-        AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, journalDetail.is_deleted);
-        AddValue(values, columns, "journal_detail_inactive", "@inactive", DbType.Boolean, journalDetail.is_deleted);
-        AddValue(values, columns, "journal_detail_inactive_date", "@inactiveDate", DbType.DateTime2, journalDetail.is_deleted ? DateTime.UtcNow : null);
+        AddValue(
+            values,
+            columns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            journalDetail.date_updated ?? journalDetail.journal_detail_date_updated
+        );
+        AddValue(
+            values,
+            columns,
+            "modified_by_user_code",
+            "@modifiedByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : journalDetail.modified_by_user_code
+        );
+        AddValue(
+            values,
+            columns,
+            "is_deleted",
+            "@isDeleted",
+            DbType.Boolean,
+            journalDetail.is_deleted
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_inactive",
+            "@inactive",
+            DbType.Boolean,
+            journalDetail.is_deleted
+        );
+        AddValue(
+            values,
+            columns,
+            "journal_detail_inactive_date",
+            "@inactiveDate",
+            DbType.DateTime2,
+            journalDetail.is_deleted ? DateTime.UtcNow : null
+        );
         return values;
     }
 
@@ -374,21 +666,30 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
                 "TRY_CONVERT(decimal(19, 5), j.[journal_detail_tariff]) AS [journal_detail_tariff]",
                 "TRY_CONVERT(decimal(19, 5), j.[journal_detail_amount]) AS [journal_detail_amount]",
                 "CONVERT(varchar(max), j.[journal_detail_description]) AS [journal_detail_description]",
-                ValueExpression(columns, "journal_detail_reversalof", "uniqueidentifier") + " AS [journal_detail_reversalof]",
+                ValueExpression(columns, "journal_detail_reversalof", "uniqueidentifier")
+                    + " AS [journal_detail_reversalof]",
                 "TRY_CONVERT(datetime2, j.[journal_detail_date_created]) AS [journal_detail_date_created]",
-                ValueExpression(columns, "journal_detail_date_updated", "datetime2") + " AS [journal_detail_date_updated]",
-                ValueExpression(columns, "journal_detail_date_posted", "datetime2") + " AS [journal_detail_date_posted]",
+                ValueExpression(columns, "journal_detail_date_updated", "datetime2")
+                    + " AS [journal_detail_date_updated]",
+                ValueExpression(columns, "journal_detail_date_posted", "datetime2")
+                    + " AS [journal_detail_date_posted]",
                 "j.[journal_detail_isaccepted] AS [journal_detail_isaccepted]",
-                ValueExpression(columns, "journal_detail_financial_year", "varchar(10)") + " AS [journal_detail_financial_year]",
+                ValueExpression(columns, "journal_detail_financial_year", "varchar(10)")
+                    + " AS [journal_detail_financial_year]",
                 $"{date} AS [journal_detail_date]",
-                ValueExpression(columns, "journal_detail_date_approved", "datetime2") + " AS [journal_detail_date_approved]",
-                ValueExpression(columns, "journal_detail_rebill_code", "uniqueidentifier") + " AS [journal_detail_rebill_code]",
-                ValueExpression(columns, "journal_detail_isreversaldenied", "bit") + " AS [journal_detail_isreversaldenied]",
+                ValueExpression(columns, "journal_detail_date_approved", "datetime2")
+                    + " AS [journal_detail_date_approved]",
+                ValueExpression(columns, "journal_detail_rebill_code", "uniqueidentifier")
+                    + " AS [journal_detail_rebill_code]",
+                ValueExpression(columns, "journal_detail_isreversaldenied", "bit")
+                    + " AS [journal_detail_isreversaldenied]",
                 $"{debitAmount} AS [journal_detail_debitamount]",
                 $"{createdDate} AS [date_created]",
                 $"{updatedDate} AS [date_updated]",
-                ValueExpression(columns, "created_by_user_code", "int") + " AS [created_by_user_code]",
-                ValueExpression(columns, "modified_by_user_code", "int") + " AS [modified_by_user_code]",
+                ValueExpression(columns, "created_by_user_code", "int")
+                    + " AS [created_by_user_code]",
+                ValueExpression(columns, "modified_by_user_code", "int")
+                    + " AS [modified_by_user_code]",
                 $"{deleted} AS [is_deleted]",
             ]
         );
@@ -405,12 +706,13 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
     private static string NotDeletedExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         $"({NotDeletedValueExpression(columns)} = 0)";
 
-    private static string NotDeletedValueExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
-        columns.ContainsKey("is_deleted")
-            ? "ISNULL(CONVERT(bit, j.[is_deleted]), 0)"
-            : columns.ContainsKey("journal_detail_inactive")
-                ? "ISNULL(CONVERT(bit, j.[journal_detail_inactive]), 0)"
-                : "CONVERT(bit, 0)";
+    private static string NotDeletedValueExpression(
+        IReadOnlyDictionary<string, ColumnInfo> columns
+    ) =>
+        columns.ContainsKey("is_deleted") ? "ISNULL(CONVERT(bit, j.[is_deleted]), 0)"
+        : columns.ContainsKey("journal_detail_inactive")
+            ? "ISNULL(CONVERT(bit, j.[journal_detail_inactive]), 0)"
+        : "CONVERT(bit, 0)";
 
     private static string ValueExpression(
         IReadOnlyDictionary<string, ColumnInfo> columns,
@@ -434,15 +736,18 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
             journal_detail_amount = ReadDecimal(reader, "journal_detail_amount") ?? 0,
             journal_detail_description = ReadString(reader, "journal_detail_description"),
             journal_detail_reversalof = ReadGuidNullable(reader, "journal_detail_reversalof"),
-            journal_detail_date_created = ReadDateTime(reader, "journal_detail_date_created") ?? DateTime.MinValue,
+            journal_detail_date_created =
+                ReadDateTime(reader, "journal_detail_date_created") ?? DateTime.MinValue,
             journal_detail_date_updated = ReadDateTime(reader, "journal_detail_date_updated"),
             journal_detail_date_posted = ReadDateTime(reader, "journal_detail_date_posted"),
             journal_detail_isaccepted = ReadBoolean(reader, "journal_detail_isaccepted") ?? false,
-            journal_detail_financial_year = ReadString(reader, "journal_detail_financial_year")?.Trim(),
+            journal_detail_financial_year = ReadString(reader, "journal_detail_financial_year")
+                ?.Trim(),
             journal_detail_date = ReadDateTime(reader, "journal_detail_date") ?? DateTime.MinValue,
             journal_detail_date_approved = ReadDateTime(reader, "journal_detail_date_approved"),
             journal_detail_rebill_code = ReadGuidNullable(reader, "journal_detail_rebill_code"),
-            journal_detail_isreversaldenied = ReadBoolean(reader, "journal_detail_isreversaldenied") ?? false,
+            journal_detail_isreversaldenied =
+                ReadBoolean(reader, "journal_detail_isreversaldenied") ?? false,
             journal_detail_debitamount = ReadDecimal(reader, "journal_detail_debitamount"),
             date_created = ReadDateTime(reader, "date_created") ?? DateTime.MinValue,
             date_updated = ReadDateTime(reader, "date_updated"),
@@ -463,7 +768,9 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
         return (connection, shouldClose);
     }
 
-    private static async Task CloseConnectionAsync((DbConnection Connection, bool ShouldClose) scope)
+    private static async Task CloseConnectionAsync(
+        (DbConnection Connection, bool ShouldClose) scope
+    )
     {
         if (scope.ShouldClose)
             await scope.Connection.CloseAsync();

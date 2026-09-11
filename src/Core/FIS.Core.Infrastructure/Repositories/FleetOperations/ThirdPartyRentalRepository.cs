@@ -58,6 +58,56 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         return await QueryLegacySuppliersAsync(cancellationToken);
     }
 
+    public async Task<ThirdPartySupplierPage> GetSuppliersPageAsync(
+        ThirdPartySupplierPageQuery query,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var modern = await GetSchemaAsync(ModernSupplierTable, cancellationToken);
+        if (
+            modern is not null
+            && modern.Has("supplier_id")
+            && modern.First("supplier_name", "name") is not null
+        )
+        {
+            var total = await CountModernSuppliersAsync(modern, cancellationToken);
+            if (total > 0)
+            {
+                var page = ClampPage(requestedPage, total, pageSize);
+                var items = await QueryModernSuppliersAsync(
+                    modern,
+                    cancellationToken,
+                    skip: CalculateSkip(page, pageSize),
+                    pageSize: pageSize
+                );
+                return new ThirdPartySupplierPage(items, page, pageSize, total);
+            }
+        }
+
+        var legacyTotal = await CountLegacySuppliersAsync(cancellationToken);
+        if (legacyTotal == 0)
+        {
+            return new ThirdPartySupplierPage(
+                Array.Empty<ThirdPartySupplierRecord>(),
+                1,
+                pageSize,
+                0
+            );
+        }
+
+        var legacyPage = ClampPage(requestedPage, legacyTotal, pageSize);
+        var legacyItems = await QueryLegacySuppliersAsync(
+            cancellationToken,
+            skip: CalculateSkip(legacyPage, pageSize),
+            pageSize: pageSize
+        );
+        return new ThirdPartySupplierPage(legacyItems, legacyPage, pageSize, legacyTotal);
+    }
+
     public async Task<ThirdPartySupplierRecord?> GetSupplierAsync(
         int supplierId,
         CancellationToken cancellationToken = default
@@ -279,6 +329,57 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         CancellationToken cancellationToken = default
     ) => await QueryProjectsAsync(cancellationToken);
 
+    public async Task<ThirdPartyProjectPage> GetProjectsPageAsync(
+        ThirdPartyProjectPageQuery query,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var schema = await GetProjectSchemaOrNullAsync(cancellationToken);
+        if (schema is null)
+        {
+            return new ThirdPartyProjectPage(
+                Array.Empty<ThirdPartyProjectRecord>(),
+                1,
+                pageSize,
+                0
+            );
+        }
+
+        string? predicate = null;
+        Action<DbCommand>? configure = null;
+        if (query.DepartmentCode.HasValue)
+        {
+            predicate = $"{Column(schema, "department_code", "Department_Code")} = @departmentCode";
+            configure = command =>
+                AddParameter(command, "@departmentCode", DbType.Int16, query.DepartmentCode);
+        }
+
+        var total = await CountProjectsAsync(schema, cancellationToken, predicate, configure);
+        if (total == 0)
+        {
+            return new ThirdPartyProjectPage(
+                Array.Empty<ThirdPartyProjectRecord>(),
+                1,
+                pageSize,
+                0
+            );
+        }
+
+        var page = ClampPage(requestedPage, total, pageSize);
+        var items = await QueryProjectsAsync(
+            cancellationToken,
+            predicate,
+            configure,
+            CalculateSkip(page, pageSize),
+            pageSize
+        );
+        return new ThirdPartyProjectPage(items, page, pageSize, total);
+    }
+
     public async Task<IReadOnlyList<ThirdPartyProjectRecord>> GetProjectsByDepartmentAsync(
         short departmentCode,
         CancellationToken cancellationToken = default
@@ -426,6 +527,81 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         );
     }
 
+    public async Task<ThirdPartyAllocationPage> GetAllocationsByProjectPageAsync(
+        ThirdPartyAllocationPageQuery query,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var modern = await GetSchemaAsync(ModernAllocationTable, cancellationToken);
+        if (modern is not null && modern.Has("allocation_id") && modern.Has("project_id"))
+        {
+            var total = await CountModernAllocationsAsync(
+                modern,
+                query.ProjectId,
+                cancellationToken
+            );
+            if (total > 0)
+            {
+                var page = ClampPage(requestedPage, total, pageSize);
+                var items = await QueryModernAllocationsAsync(
+                    modern,
+                    cancellationToken,
+                    $"{Column(modern, "project_id")} = @projectId",
+                    command => AddParameter(command, "@projectId", DbType.Int32, query.ProjectId),
+                    CalculateSkip(page, pageSize),
+                    pageSize
+                );
+                return new ThirdPartyAllocationPage(items, page, pageSize, total);
+            }
+        }
+
+        var legacy = await GetSchemaAsync(LegacyAllocationTable, cancellationToken);
+        if (
+            legacy is null
+            || !legacy.Has("Third_Party_Vehicle_AllocationsID")
+            || !legacy.Has("Third_Party_ProjectID")
+        )
+        {
+            return new ThirdPartyAllocationPage(
+                Array.Empty<ThirdPartyAllocationRecord>(),
+                1,
+                pageSize,
+                0
+            );
+        }
+
+        var legacyTotal = await CountLegacyAllocationsAsync(
+            legacy,
+            query.ProjectId,
+            cancellationToken
+        );
+        if (legacyTotal == 0)
+        {
+            return new ThirdPartyAllocationPage(
+                Array.Empty<ThirdPartyAllocationRecord>(),
+                1,
+                pageSize,
+                0
+            );
+        }
+
+        var legacyPage = ClampPage(requestedPage, legacyTotal, pageSize);
+        var legacyItems = await QueryLegacyAllocationsAsync(
+            legacy,
+            query.ProjectId,
+            cancellationToken,
+            $"{Column(legacy, "Third_Party_ProjectID")} = @projectId",
+            command => AddParameter(command, "@projectId", DbType.Int32, query.ProjectId),
+            CalculateSkip(legacyPage, pageSize),
+            pageSize
+        );
+        return new ThirdPartyAllocationPage(legacyItems, legacyPage, pageSize, legacyTotal);
+    }
+
     public async Task<ThirdPartyAllocationRecord> CreateAllocationAsync(
         ThirdPartyAllocationWrite input,
         int currentUserId,
@@ -567,6 +743,87 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         );
     }
 
+    public async Task<ThirdPartyVehiclePage> GetVehiclesBySupplierPageAsync(
+        ThirdPartyVehiclePageQuery query,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var vehicleMaster = await GetSchemaAsync("vehicle_master", cancellationToken);
+        if (
+            vehicleMaster is not null
+            && vehicleMaster.Has("vmf_code")
+            && vehicleMaster.Has("supplier_id")
+        )
+        {
+            var total = await CountVehiclesAsync(
+                vehicleMaster,
+                $"{Column(vehicleMaster, "supplier_id")} = @supplierId",
+                command => AddParameter(command, "@supplierId", DbType.Int32, query.SupplierId),
+                cancellationToken
+            );
+            if (total > 0)
+            {
+                var page = ClampPage(requestedPage, total, pageSize);
+                var items = await QueryVehiclesAsync(
+                    vehicleMaster,
+                    cancellationToken,
+                    $"{Column(vehicleMaster, "supplier_id")} = @supplierId",
+                    command => AddParameter(command, "@supplierId", DbType.Int32, query.SupplierId),
+                    skip: CalculateSkip(page, pageSize),
+                    pageSize: pageSize
+                );
+                return new ThirdPartyVehiclePage(items, page, pageSize, total);
+            }
+        }
+
+        var legacy = await GetSchemaAsync(LegacyVehicleTable, cancellationToken);
+        if (
+            legacy is null
+            || !legacy.Has("Third_Party_Vehicle_ID")
+            || !legacy.Has("Third_Party_Supplier_ID")
+        )
+        {
+            return new ThirdPartyVehiclePage(
+                Array.Empty<ThirdPartyVehicleRecord>(),
+                1,
+                pageSize,
+                0
+            );
+        }
+
+        var legacyTotal = await CountVehiclesAsync(
+            legacy,
+            $"{Column(legacy, "Third_Party_Supplier_ID")} = @supplierId",
+            command => AddParameter(command, "@supplierId", DbType.Int32, query.SupplierId),
+            cancellationToken
+        );
+        if (legacyTotal == 0)
+        {
+            return new ThirdPartyVehiclePage(
+                Array.Empty<ThirdPartyVehicleRecord>(),
+                1,
+                pageSize,
+                0
+            );
+        }
+
+        var legacyPage = ClampPage(requestedPage, legacyTotal, pageSize);
+        var legacyItems = await QueryVehiclesAsync(
+            legacy,
+            cancellationToken,
+            $"{Column(legacy, "Third_Party_Supplier_ID")} = @supplierId",
+            command => AddParameter(command, "@supplierId", DbType.Int32, query.SupplierId),
+            skip: CalculateSkip(legacyPage, pageSize),
+            pageSize: pageSize,
+            legacyVehicle: true
+        );
+        return new ThirdPartyVehiclePage(legacyItems, legacyPage, pageSize, legacyTotal);
+    }
+
     public async Task<IReadOnlyList<ThirdPartyClassRequirementRecord>> GetClassRequirementsAsync(
         int projectId,
         CancellationToken cancellationToken = default
@@ -621,9 +878,17 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         Schema schema,
         CancellationToken cancellationToken,
         string? predicate = null,
-        Action<DbCommand>? configure = null
+        Action<DbCommand>? configure = null,
+        long? skip = null,
+        int? pageSize = null
     )
     {
+        var orderBy = Column(schema, "supplier_name", "name", "supplier_id");
+        if (skip.HasValue)
+        {
+            orderBy += $", {Column(schema, "supplier_id")}";
+        }
+
         await using var scope = await OpenConnectionAsync(cancellationToken);
         await using var command = scope.Connection.CreateCommand();
         command.CommandText = $"""
@@ -649,16 +914,20 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
             FROM [dbo].[{schema.Table}]
             WHERE {ActivePredicate(schema)}
             {(string.IsNullOrWhiteSpace(predicate) ? string.Empty : $"AND ({predicate})")}
-            ORDER BY {Column(schema, "supplier_name", "name", "supplier_id")}
+            ORDER BY {orderBy}
+            {PageClause(skip, pageSize)}
             """;
         configure?.Invoke(command);
+        AddPagingParameters(command, skip, pageSize);
         return await ReadSuppliersAsync(command, cancellationToken);
     }
 
     private async Task<List<ThirdPartySupplierRecord>> QueryLegacySuppliersAsync(
         CancellationToken cancellationToken,
         string? predicate = null,
-        Action<DbCommand>? configure = null
+        Action<DbCommand>? configure = null,
+        long? skip = null,
+        int? pageSize = null
     )
     {
         var rental = await GetSchemaAsync(LegacySupplierTable, cancellationToken);
@@ -672,6 +941,12 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         )
         {
             return new List<ThirdPartySupplierRecord>();
+        }
+
+        var orderBy = $"[vs].[{Column(source, "name")}]";
+        if (skip.HasValue)
+        {
+            orderBy += $", [tr].[{Column(rental, "third_party_id")}]";
         }
 
         var type = await GetSchemaAsync("type", cancellationToken);
@@ -758,16 +1033,20 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
             {joinType}
             WHERE ISNULL([tr].[{Column(rental, "active")}], 0) <> 0
             {(string.IsNullOrWhiteSpace(predicate) ? string.Empty : $"AND ({predicate})")}
-            ORDER BY [vs].[{Column(source, "name")}]
+            ORDER BY {orderBy}
+            {PageClause(skip, pageSize)}
             """;
         configure?.Invoke(command);
+        AddPagingParameters(command, skip, pageSize);
         return await ReadSuppliersAsync(command, cancellationToken);
     }
 
     private async Task<List<ThirdPartyProjectRecord>> QueryProjectsAsync(
         CancellationToken cancellationToken,
         string? predicate = null,
-        Action<DbCommand>? configure = null
+        Action<DbCommand>? configure = null,
+        long? skip = null,
+        int? pageSize = null
     )
     {
         var schema = await GetProjectSchemaOrNullAsync(cancellationToken);
@@ -841,8 +1120,10 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
             WHERE {ActivePredicate(schema)}
             {(string.IsNullOrWhiteSpace(predicate) ? string.Empty : $"AND ({predicate})")}
             ORDER BY {Column(schema, "project_id", "Project_id")} DESC
+            {PageClause(skip, pageSize)}
             """;
         configure?.Invoke(command);
+        AddPagingParameters(command, skip, pageSize);
 
         var projects = new List<ThirdPartyProjectRecord>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -877,7 +1158,9 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         Schema schema,
         CancellationToken cancellationToken,
         string? predicate = null,
-        Action<DbCommand>? configure = null
+        Action<DbCommand>? configure = null,
+        long? skip = null,
+        int? pageSize = null
     )
     {
         await using var scope = await OpenConnectionAsync(cancellationToken);
@@ -893,8 +1176,10 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
             WHERE {ActivePredicate(schema)}
             {(string.IsNullOrWhiteSpace(predicate) ? string.Empty : $"AND ({predicate})")}
             ORDER BY {Column(schema, "allocation_id")} DESC
+            {PageClause(skip, pageSize)}
             """;
         configure?.Invoke(command);
+        AddPagingParameters(command, skip, pageSize);
         return await ReadAllocationsAsync(command, cancellationToken);
     }
 
@@ -903,7 +1188,9 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         int projectId,
         CancellationToken cancellationToken,
         string? predicate = null,
-        Action<DbCommand>? configure = null
+        Action<DbCommand>? configure = null,
+        long? skip = null,
+        int? pageSize = null
     )
     {
         await using var scope = await OpenConnectionAsync(cancellationToken);
@@ -923,9 +1210,11 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
             FROM [dbo].[{schema.Table}]
             WHERE {(predicate ?? "1 = 1")}
             ORDER BY {Column(schema, "Third_Party_Vehicle_AllocationsID")} DESC
+            {PageClause(skip, pageSize)}
             """;
         _ = projectId;
         configure?.Invoke(command);
+        AddPagingParameters(command, skip, pageSize);
         return await ReadAllocationsAsync(command, cancellationToken);
     }
 
@@ -934,7 +1223,9 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         CancellationToken cancellationToken,
         string predicate,
         Action<DbCommand>? configure,
-        bool legacyVehicle = false
+        bool legacyVehicle = false,
+        long? skip = null,
+        int? pageSize = null
     )
     {
         var idCandidates = legacyVehicle
@@ -968,8 +1259,10 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
             WHERE {predicate}
             {(schema.Has("is_deleted") ? "AND ISNULL([is_deleted], 0) = 0" : string.Empty)}
             ORDER BY {Column(schema, idCandidates)}
+            {PageClause(skip, pageSize)}
             """;
         configure?.Invoke(command);
+        AddPagingParameters(command, skip, pageSize);
 
         var vehicles = new List<ThirdPartyVehicleRecord>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -1950,6 +2243,163 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
             $"SELECT TOP (1) 1 FROM [dbo].[{schema.Table}] WHERE {ActivePredicate(schema)} AND [{column}] = @value";
         AddParameter(command, "@value", DbType.Int32, value);
         return await command.ExecuteScalarAsync(cancellationToken) is not null;
+    }
+
+    private async Task<int> CountModernSuppliersAsync(
+        Schema schema,
+        CancellationToken cancellationToken
+    ) =>
+        await CountAsync(
+            $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{schema.Table}]
+            WHERE {ActivePredicate(schema)}
+            """,
+            null,
+            cancellationToken
+        );
+
+    private async Task<int> CountLegacySuppliersAsync(CancellationToken cancellationToken)
+    {
+        var rental = await GetSchemaAsync(LegacySupplierTable, cancellationToken);
+        var source = await GetSchemaAsync(VehicleSourceTable, cancellationToken);
+        if (
+            rental is null
+            || source is null
+            || !rental.HasAll("third_party_id", "vs_code", "active")
+            || !source.HasAll("vs_code", "name")
+        )
+        {
+            return 0;
+        }
+
+        var type = await GetSchemaAsync("type", cancellationToken);
+        var joinType = type is null
+            ? string.Empty
+            : $"LEFT JOIN [dbo].[{type.Table}] AS [t] ON [t].[{Column(type, "type_code")}] = [tr].[{Column(rental, "type_code")}]";
+
+        return await CountAsync(
+            $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{rental.Table}] AS [tr]
+            INNER JOIN [dbo].[{source.Table}] AS [vs]
+                ON [vs].[{Column(source, "vs_code")}] = [tr].[{Column(rental, "vs_code")}]
+            {joinType}
+            WHERE ISNULL([tr].[{Column(rental, "active")}], 0) <> 0
+            """,
+            null,
+            cancellationToken
+        );
+    }
+
+    private async Task<int> CountProjectsAsync(
+        Schema schema,
+        CancellationToken cancellationToken,
+        string? predicate = null,
+        Action<DbCommand>? configure = null
+    ) =>
+        await CountAsync(
+            $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{schema.Table}]
+            WHERE {ActivePredicate(schema)}
+            {(string.IsNullOrWhiteSpace(predicate) ? string.Empty : $"AND ({predicate})")}
+            """,
+            configure,
+            cancellationToken
+        );
+
+    private async Task<int> CountModernAllocationsAsync(
+        Schema schema,
+        int projectId,
+        CancellationToken cancellationToken
+    ) =>
+        await CountAsync(
+            $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{schema.Table}]
+            WHERE {ActivePredicate(schema)}
+              AND {Column(schema, "project_id")} = @projectId
+            """,
+            command => AddParameter(command, "@projectId", DbType.Int32, projectId),
+            cancellationToken
+        );
+
+    private async Task<int> CountLegacyAllocationsAsync(
+        Schema schema,
+        int projectId,
+        CancellationToken cancellationToken
+    )
+    {
+        if (!schema.Has("Third_Party_ProjectID"))
+        {
+            return 0;
+        }
+
+        return await CountAsync(
+            $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{schema.Table}]
+            WHERE [{schema.First("Third_Party_ProjectID")}] = @projectId
+            """,
+            command => AddParameter(command, "@projectId", DbType.Int32, projectId),
+            cancellationToken
+        );
+    }
+
+    private async Task<int> CountVehiclesAsync(
+        Schema schema,
+        string predicate,
+        Action<DbCommand>? configure,
+        CancellationToken cancellationToken
+    )
+    {
+        return await CountAsync(
+            $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{schema.Table}]
+            WHERE {predicate}
+            {(schema.Has("is_deleted") ? "AND ISNULL([is_deleted], 0) = 0" : string.Empty)}
+            """,
+            configure,
+            cancellationToken
+        );
+    }
+
+    private async Task<int> CountAsync(
+        string commandText,
+        Action<DbCommand>? configure,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var scope = await OpenConnectionAsync(cancellationToken);
+        await using var command = scope.Connection.CreateCommand();
+        command.CommandText = commandText;
+        configure?.Invoke(command);
+        return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
+    }
+
+    private static int ClampPage(int requestedPage, int total, int pageSize)
+    {
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        return Math.Min(requestedPage, totalPages);
+    }
+
+    private static long CalculateSkip(int page, int pageSize) =>
+        checked((long)(page - 1) * pageSize);
+
+    private static string PageClause(long? skip, int? pageSize) =>
+        skip.HasValue && pageSize.HasValue
+            ? "OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY"
+            : string.Empty;
+
+    private static void AddPagingParameters(DbCommand command, long? skip, int? pageSize)
+    {
+        if (skip.HasValue && pageSize.HasValue)
+        {
+            AddParameter(command, "@skip", DbType.Int64, skip.Value);
+            AddParameter(command, "@pageSize", DbType.Int32, pageSize.Value);
+        }
     }
 
     private async Task<int> ExecuteInsertAsync(

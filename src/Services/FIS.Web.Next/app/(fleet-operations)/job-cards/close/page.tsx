@@ -7,14 +7,31 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_components";
 import {
   accessRestricted,
-  filterByVehicle,
   getJobCardSession,
+  JobCardPageBoundary,
+  jobCardPageHref,
+  queryPage,
+  querySearchType,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/job-cards/_page";
-import { getJobCards, JobCardApiError } from "@/lib/api/fleet-operations/api-job-cards";
+import {
+  DEFAULT_JOB_CARD_PAGE_SIZE,
+  getJobCardsPage,
+  JobCardApiError,
+} from "@/lib/api/fleet-operations/api-job-cards";
 
-export default async function CloseJobCardsPage({
+export default function CloseJobCardsPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
+  return (
+    <JobCardPageBoundary>
+      <CloseJobCardsContent searchParams={searchParams} />
+    </JobCardPageBoundary>
+  );
+}
+
+async function CloseJobCardsContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
@@ -26,10 +43,21 @@ export default async function CloseJobCardsPage({
     return accessRestricted("Your profile does not include Job Card capturer access.");
   const query = await searchParams;
   const search = queryValue(query.search);
-  const mode = queryValue(query.mode) || "GG";
+  const mode = querySearchType(query.mode);
+  const page = queryPage(query.page);
   try {
-    const cards = (await getJobCards()).filter((card) => card.statusCode === 4);
-    const filtered = filterByVehicle(cards, search, mode);
+    const pageData = await getJobCardsPage({
+      page,
+      pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+      search,
+      searchType: mode,
+      statusCodes: [4],
+    });
+    const tableReturnPath = jobCardPageHref(
+      "/job-cards/close",
+      { ...query, id: undefined },
+      pageData.page,
+    );
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="close-job-cards-title">
@@ -45,6 +73,7 @@ export default async function CloseJobCardsPage({
           </header>
           <section className="vehicle-status-maintenance-panel">
             <form className="vehicle-search-row" method="get">
+              <input type="hidden" name="page" value="1" />
               <fieldset className="vehicle-search-options">
                 <legend>Find by</legend>
                 <label className="vehicle-checkbox-label">
@@ -73,9 +102,16 @@ export default async function CloseJobCardsPage({
             </form>
           </section>
           <section className="vehicle-status-maintenance-panel">
-            <p className="eyebrow">{filtered.length} ready</p>
+            <p className="eyebrow">{pageData.totalRecords} ready</p>
             <h2>Job Cards Ready for Closing</h2>
-            <JobCardTable cards={filtered} mode="close" returnPath="/job-cards/close" />
+            <JobCardTable
+              cards={pageData.items}
+              mode="close"
+              returnPath={tableReturnPath}
+              page={pageData.page}
+              totalPages={pageData.totalPages}
+              pageHref={(nextPage) => jobCardPageHref("/job-cards/close", query, nextPage)}
+            />
           </section>
         </section>
       </main>

@@ -94,7 +94,10 @@ public class AccidentController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving paged accident maintenance records");
-            return StatusCode(500, "An error occurred while retrieving accident maintenance records");
+            return StatusCode(
+                500,
+                "An error occurred while retrieving accident maintenance records"
+            );
         }
     }
 
@@ -121,11 +124,16 @@ public class AccidentController : BaseApiController
         }
 
         return User.Claims.Any(claim =>
-            (claim.Type == ClaimTypes.Role
+            (
+                claim.Type == ClaimTypes.Role
                 || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
-                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
-            && claim.Value
-                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            && claim
+                .Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
                 .Any(role => string.Equals(role, "Accidents", StringComparison.OrdinalIgnoreCase))
         );
     }

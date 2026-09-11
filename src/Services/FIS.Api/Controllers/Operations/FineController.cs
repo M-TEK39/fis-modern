@@ -11,6 +11,10 @@ namespace FIS.Api.Controllers;
 [Authorize]
 public class FineController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+    private const int MaximumSearchQueryLength = 8;
+
     private readonly IFineRepository _repository;
     private readonly ILogger<FineController> _logger;
 
@@ -32,6 +36,63 @@ public class FineController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] string? searchType = "GP",
+        [FromQuery] string? searchQuery = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasReportsRole())
+            return Forbid();
+
+        var normalizedSearchType = searchType?.Trim().ToUpperInvariant() switch
+        {
+            "GG" or "RADIOGG" => "GG",
+            "GP" or "RADIOGP" => "GP",
+            _ => string.Empty,
+        };
+        if (normalizedSearchType.Length == 0)
+        {
+            return BadRequest(new { error = "Search type must be GG or GP." });
+        }
+
+        var normalizedSearchQuery = searchQuery?.Trim() ?? string.Empty;
+        if (normalizedSearchQuery.Length > MaximumSearchQueryLength)
+        {
+            return BadRequest(new { error = "Search query cannot exceed 8 characters." });
+        }
+
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new FinePageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize),
+                    normalizedSearchType,
+                    normalizedSearchQuery
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged fine records");
             return StatusCode(500);
         }
     }

@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
+
+async function LegacyBasFundPageContent(): Promise<never> {
+  redirect("/finance/financial-allocation/allocate-fund-codes");
+}
 
 export default function LegacyBasFundPage() {
-  redirect("/finance/financial-allocation/allocate-fund-codes");
+  return (
+    <StreamedRoute>
+      <LegacyBasFundPageContent />
+    </StreamedRoute>
+  );
 }

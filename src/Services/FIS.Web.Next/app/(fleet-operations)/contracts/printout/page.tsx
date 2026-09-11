@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import PrintButton from "@/app/(fleet-operations)/contracts/print-button";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { ContractApiError, getContract } from "@/lib/api/finance/api-contracts";
 import { getSession } from "@/lib/auth/session";
@@ -28,7 +29,7 @@ function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
 }
 
-export default async function ContractPrintoutPage({ searchParams }: ContractPrintoutPageProps) {
+async function ContractPrintoutPageContent({ searchParams }: ContractPrintoutPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -145,4 +146,12 @@ export default async function ContractPrintoutPage({ searchParams }: ContractPri
       </main>
     );
   }
+}
+
+export default function ContractPrintoutPage(props: ContractPrintoutPageProps) {
+  return (
+    <StreamedRoute>
+      <ContractPrintoutPageContent {...props} />
+    </StreamedRoute>
+  );
 }

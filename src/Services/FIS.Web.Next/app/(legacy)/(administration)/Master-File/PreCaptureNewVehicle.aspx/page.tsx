@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
@@ -47,7 +49,7 @@ function EntryUnavailable() {
   );
 }
 
-export default async function PreCaptureNewVehicleEntry() {
+async function PreCaptureNewVehicleEntryContent() {
   await connection();
   const session = await getSession();
 
@@ -85,4 +87,12 @@ export default async function PreCaptureNewVehicleEntry() {
   }
 
   redirect("/vehicles");
+}
+
+export default function PreCaptureNewVehicleEntry() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <PreCaptureNewVehicleEntryContent />
+    </Suspense>
+  );
 }

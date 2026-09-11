@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -11,6 +12,7 @@ import {
   LossTypeApiError,
 } from "@/lib/api/fleet-operations/api-loss-types";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 type LossTypeDeletePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -37,7 +39,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function LossTypeDeletePage({ searchParams }: LossTypeDeletePageProps) {
+async function LossTypeDeletePageContent({ searchParams }: LossTypeDeletePageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -179,4 +181,14 @@ export default async function LossTypeDeletePage({ searchParams }: LossTypeDelet
       </main>
     );
   }
+}
+
+export default function LossTypeDeletePage(
+  props: NonNullable<Parameters<typeof LossTypeDeletePageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LossTypeDeletePageContent {...props} />
+    </Suspense>
+  );
 }

@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
+
+async function LegacyBasFixPageContent(): Promise<never> {
+  redirect("/finance/financial-allocation/fix-invalid-journals");
+}
 
 export default function LegacyBasFixPage() {
-  redirect("/finance/financial-allocation/fix-invalid-journals");
+  return (
+    <StreamedRoute>
+      <LegacyBasFixPageContent />
+    </StreamedRoute>
+  );
 }

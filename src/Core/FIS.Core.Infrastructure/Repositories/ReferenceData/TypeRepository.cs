@@ -69,6 +69,21 @@ namespace FIS.Core.Infrastructure.Repositories
                 .ToListAsync();
         }
 
+        public async Task<TypePage> GetPageAsync(int page, int pageSize)
+        {
+            var resolvedPage = Math.Max(1, page);
+            var resolvedPageSize = Math.Clamp(pageSize, 1, 100);
+            var query = _context.VehicleTypes.AsNoTracking().Where(type => !type.is_deleted);
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderBy(type => type.type_description)
+                .ThenBy(type => type.type_code)
+                .Skip((resolvedPage - 1) * resolvedPageSize)
+                .Take(resolvedPageSize)
+                .ToListAsync();
+            return new TypePage(items, resolvedPage, resolvedPageSize, total);
+        }
+
         /// <summary>
         /// Creates a new type
         /// </summary>

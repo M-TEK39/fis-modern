@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_DEPARTMENT_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type DepartmentRecord = {
@@ -55,6 +56,14 @@ export type DepartmentDeleteCheck = {
   canDelete: boolean;
 };
 
+export type DepartmentPage = {
+  items: DepartmentRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 export type DepartmentApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
 
 export class DepartmentApiError extends Error {
@@ -104,6 +113,44 @@ function asBoolean(value: unknown) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
   return ["true", "1", "yes", "y"].includes(String(value).trim().toLowerCase());
+}
+
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_DEPARTMENT_PAGE_SIZE)
+      : DEFAULT_DEPARTMENT_PAGE_SIZE;
+  return Math.min(100, pageSize);
 }
 
 function mapDepartment(value: unknown): DepartmentRecord | null {
@@ -263,6 +310,38 @@ export async function getDepartments() {
   return payload
     .map(mapDepartment)
     .filter((department): department is DepartmentRecord => department !== null);
+}
+
+export async function getDepartmentsPage(
+  options: { page?: number; pageSize?: number } = {},
+): Promise<DepartmentPage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const payload = await readJson(await requestApi(`api/department/page?${params.toString()}`));
+
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new DepartmentApiError(
+      "invalid-response",
+      "The FIS API returned an invalid department page.",
+    );
+  }
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata) {
+    throw new DepartmentApiError(
+      "invalid-response",
+      "The FIS API returned incomplete department pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items
+      .map(mapDepartment)
+      .filter((department): department is DepartmentRecord => department !== null),
+    ...metadata,
+  };
 }
 
 export async function getDepartment(departmentCode: number) {

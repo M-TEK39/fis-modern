@@ -49,6 +49,8 @@ public interface IUnitOfMeasureRepository
     /// <returns>List of matching unit of measure entities</returns>
     Task<IEnumerable<UnitOfMeasure>> SearchUnitsAsync(string searchTerm);
 
+    Task<UnitOfMeasurePage> GetPageAsync(int page, int pageSize);
+
     /// <summary>
     /// Create a new unit of measure
     /// </summary>
@@ -69,4 +71,14 @@ public interface IUnitOfMeasureRepository
     /// <param name="unitCode">The unit code to delete</param>
     /// <returns>True if deleted, false if not found</returns>
     Task<bool> DeleteAsync(short unitCode, int currentUserId);
+}
+
+public sealed record UnitOfMeasurePage(
+    IReadOnlyList<UnitOfMeasure> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }

@@ -25,6 +25,7 @@ namespace FIS.Core.Infrastructure.Repositories;
 public sealed class LossRepository : ILossRepository
 {
     private const string LossTableName = "losses";
+    private const string LossOrderBy = "[l].[loss_date] DESC, [l].[loss_code] DESC";
 
     private static readonly string[] LegacyColumns =
     [
@@ -116,9 +117,76 @@ public sealed class LossRepository : ILossRepository
     {
         var columns = await GetAvailableColumnsAsync();
         return await QueryAsync(
-            $"WHERE {GetActiveFilter("l", columns)} ORDER BY [l].[loss_date] DESC, [l].[loss_code] DESC",
+            $"WHERE {GetActiveFilter("l", columns)} ORDER BY {LossOrderBy}",
             knownColumns: columns
         );
+    }
+
+    public async Task<LossPage> GetPageAsync(LossPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var vmfCode = query.VmfCode is > 0 ? query.VmfCode : null;
+        var columns = await GetAvailableColumnsAsync();
+        var activeFilter = GetActiveFilter("l", columns);
+        var whereClause = vmfCode is null
+            ? activeFilter
+            : $"[l].[vmf_code] = @vmfCode AND {activeFilter}";
+        var orderBy = vmfCode is null ? LossOrderBy : "[l].[loss_date] ASC, [l].[loss_code] ASC";
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var countCommand = connection.CreateCommand();
+            countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{LossTableName}] AS [l]
+                WHERE {whereClause}
+                """;
+            if (vmfCode is not null)
+            {
+                AddParameter(countCommand, "@vmfCode", DbType.Int32, vmfCode.Value);
+            }
+            var total = Convert.ToInt32(
+                await countCommand.ExecuteScalarAsync(),
+                CultureInfo.InvariantCulture
+            );
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+            var items = await QueryAsync(
+                $"WHERE {whereClause} ORDER BY {orderBy} OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY",
+                command =>
+                {
+                    if (vmfCode is not null)
+                    {
+                        AddParameter(command, "@vmfCode", DbType.Int32, vmfCode.Value);
+                    }
+                    AddParameter(command, "@skip", DbType.Int64, skip);
+                    AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+                },
+                columns
+            );
+
+            return new LossPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 
     public async Task<IEnumerable<Loss>> GetByVehicleAsync(int vmfCode)

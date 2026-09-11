@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -21,7 +25,7 @@ function valueOrDash(value: string | null | undefined) {
   return value?.trim() || "-";
 }
 
-export default async function TowTruckReportPage() {
+async function TowTruckReportPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -123,4 +127,12 @@ export default async function TowTruckReportPage() {
       </main>
     );
   }
+}
+
+export default function TowTruckReportPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TowTruckReportPageContent />
+    </Suspense>
+  );
 }

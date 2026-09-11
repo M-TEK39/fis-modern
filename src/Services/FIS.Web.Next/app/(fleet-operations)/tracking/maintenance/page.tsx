@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -16,14 +20,81 @@ import {
   sessionMessage,
 } from "@/app/(fleet-operations)/tracking/_page";
 import {
+  DEFAULT_TRACKING_PAGE_SIZE,
   getTracking,
-  getTrackings,
+  getTrackingPage,
   TrackingApiError,
   type TrackingRecord,
 } from "@/lib/api/fleet-operations/api-tracking";
 import { getVehicleOptions } from "@/lib/api/vehicles/api-vehicles";
 
-export default async function TrackingMaintenancePage({
+const routePath = "/tracking/maintenance";
+
+function historyPath(search: string, mode: string, vmfCode: number | null, page: number) {
+  const params = new URLSearchParams({ mode });
+  if (search) params.set("search", search);
+  if (vmfCode) params.set("vmfCode", String(vmfCode));
+  if (page > 1) params.set("page", String(page));
+  return `${routePath}?${params.toString()}`;
+}
+
+function TrackingHistoryPagination({
+  search,
+  mode,
+  vmfCode,
+  page,
+  totalPages,
+}: Readonly<{
+  search: string;
+  mode: string;
+  vmfCode: number;
+  page: number;
+  totalPages: number;
+}>) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <nav className="vehicle-pagination" aria-label="Tracking history pages">
+      {page > 1 ? (
+        <Link
+          className="vehicle-pagination-button"
+          href={historyPath(search, mode, vmfCode, page - 1)}
+          aria-label={`Go to tracking history page ${page - 1}`}
+        >
+          Previous
+        </Link>
+      ) : (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Previous
+        </span>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {page} of {totalPages}
+      </span>
+      {page < totalPages ? (
+        <Link
+          className="vehicle-pagination-button"
+          href={historyPath(search, mode, vmfCode, page + 1)}
+          aria-label={`Go to tracking history page ${page + 1}`}
+        >
+          Next
+        </Link>
+      ) : (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Next
+        </span>
+      )}
+    </nav>
+  );
+}
+
+async function TrackingMaintenancePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getTrackingSession();
@@ -38,19 +109,25 @@ export default async function TrackingMaintenancePage({
   const mode = queryValue(query.mode) || "GG";
   const requestedVmf = parsePositiveInteger(queryValue(query.vmfCode));
   const trackCode = parsePositiveInteger(queryValue(query.trackCode));
+  const requestedPage = parsePositiveInteger(queryValue(query.page)) ?? 1;
   const add = queryValue(query.add) === "1";
+  const retryPath = historyPath(search, mode, requestedVmf, requestedPage);
   try {
-    const [vehicles, records, record] = await Promise.all([
+    const [vehicles, record] = await Promise.all([
       getVehicleOptions(),
-      getTrackings(),
       trackCode ? getTracking(trackCode) : Promise.resolve(null),
     ]);
     const selectedRecord = record && !record.isDeleted ? record : null;
     const selectedVmfCode = selectedRecord?.vmfCode ?? requestedVmf;
-    const visibleRecords = selectedVmfCode
-      ? records.filter((item) => !item.isDeleted && item.vmfCode === selectedVmfCode)
-      : [];
-    const returnPath = `/tracking/maintenance?mode=${encodeURIComponent(mode)}&search=${encodeURIComponent(search)}${selectedVmfCode ? `&vmfCode=${selectedVmfCode}` : ""}`;
+    const trackingPage = selectedVmfCode
+      ? await getTrackingPage({
+          page: requestedPage,
+          pageSize: DEFAULT_TRACKING_PAGE_SIZE,
+          vmfCode: selectedVmfCode,
+        })
+      : null;
+    const currentPage = trackingPage?.page ?? requestedPage;
+    const returnPath = historyPath(search, mode, selectedVmfCode, currentPage);
     return (
       <TrackingShell
         title="Tracking Maintenance"
@@ -89,12 +166,26 @@ export default async function TrackingMaintenancePage({
             <div className="vehicle-form-section-header">
               <div>
                 <p className="eyebrow">
-                  {visibleRecords.length} record{visibleRecords.length === 1 ? "" : "s"}
+                  {trackingPage?.total ?? 0} record{trackingPage?.total === 1 ? "" : "s"}
                 </p>
                 <h2 id="tracking-history-title">Tracking history</h2>
               </div>
             </div>
-            <TrackingTable records={visibleRecords} />
+            <TrackingTable records={trackingPage?.items ?? []} returnPath={returnPath} />
+            {trackingPage ? (
+              <>
+                <TrackingHistoryPagination
+                  search={search}
+                  mode={mode}
+                  vmfCode={selectedVmfCode}
+                  page={trackingPage.page}
+                  totalPages={trackingPage.totalPages}
+                />
+                <div className="pagination-meta">
+                  Total records: {trackingPage.total} | Page size: {trackingPage.pageSize}
+                </div>
+              </>
+            ) : null}
           </section>
         ) : (
           <section className="vehicle-status-card">
@@ -125,11 +216,21 @@ export default async function TrackingMaintenancePage({
       >
         <section className="vehicle-status-card" role="alert">
           <h2>{message}</h2>
-          <Link className="button button-primary" href="/tracking/maintenance">
+          <Link className="button button-primary" href={retryPath}>
             Try again
           </Link>
         </section>
       </TrackingShell>
     );
   }
+}
+
+export default function TrackingMaintenancePage(
+  props: Parameters<typeof TrackingMaintenancePageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TrackingMaintenancePageContent {...props} />
+    </Suspense>
+  );
 }

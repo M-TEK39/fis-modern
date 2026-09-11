@@ -2409,10 +2409,7 @@ public class Program
         "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "Seeder SQL is fixed internal data and schema setup text only."
     )]
-    private static async Task ExecuteSqlWithoutEfLoggingAsync(
-        FisDbContext dbContext,
-        string sql
-    )
+    private static async Task ExecuteSqlWithoutEfLoggingAsync(FisDbContext dbContext, string sql)
     {
         var connection = dbContext.Database.GetDbConnection();
         var openedHere = false;
@@ -3783,9 +3780,9 @@ public class Program
                     dbContext,
                     "SELECT COUNT(1) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0"
                 )
-                : await HasTableAsync(dbContext, "Jobcards")
-                    ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Jobcards")
-                    : Task.FromResult(0)
+            : await HasTableAsync(dbContext, "Jobcards")
+                ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Jobcards")
+            : Task.FromResult(0)
         );
         var workshopCount = await QueryCountAsync(
             dbContext,
@@ -3823,12 +3820,12 @@ public class Program
                     dbContext,
                     "SELECT COUNT(DISTINCT vmf_code) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0 AND vmf_code IS NOT NULL"
                 )
-                : await HasTableAsync(dbContext, "Jobcards")
-                    ? QueryCountAsync(
-                        dbContext,
-                        "SELECT COUNT(DISTINCT vmf_code) FROM Jobcards WHERE vmf_code IS NOT NULL"
-                    )
-                    : Task.FromResult(0)
+            : await HasTableAsync(dbContext, "Jobcards")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(DISTINCT vmf_code) FROM Jobcards WHERE vmf_code IS NOT NULL"
+                )
+            : Task.FromResult(0)
         );
         var vehiclesWithAssessments = await QueryCountAsync(
             dbContext,

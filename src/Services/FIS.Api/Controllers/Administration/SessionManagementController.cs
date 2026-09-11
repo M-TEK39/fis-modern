@@ -64,7 +64,9 @@ public sealed class SessionManagementController : ControllerBase
         var storeStatus = await _service.GetStatusAsync(cancellationToken);
         if (!storeStatus.Available)
         {
-            return Ok(CreateStatus(storeStatus.Description, false, Array.Empty<ActiveSessionDto>()));
+            return Ok(
+                CreateStatus(storeStatus.Description, false, Array.Empty<ActiveSessionDto>())
+            );
         }
 
         var result = await _service.ListActiveSessionsAsync(
@@ -165,7 +167,10 @@ public sealed class SessionManagementController : ControllerBase
 
         if (result.Status != SessionManagementStatus.Succeeded)
         {
-            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: result.Description);
+            return Problem(
+                statusCode: StatusCodes.Status503ServiceUnavailable,
+                title: result.Description
+            );
         }
 
         if (scope == RevokeScope.Current || scope == RevokeScope.All)

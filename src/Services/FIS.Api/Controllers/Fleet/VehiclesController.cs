@@ -15,6 +15,8 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 public class VehiclesController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
     private const long VehicleManagementPermission = 1;
 
     private readonly IVehicleRepository _vehicleRepository;
@@ -103,7 +105,62 @@ public class VehiclesController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving vehicle master snapshot");
-            return StatusCode(500, "An error occurred while retrieving the vehicle master snapshot");
+            return StatusCode(
+                500,
+                "An error occurred while retrieving the vehicle master snapshot"
+            );
+        }
+    }
+
+    /// <summary>
+    /// Get a server-paginated page of the legacy Report All Renumbered Vehicles
+    /// rows. Access remains restricted to the legacy Demo Vehicles role.
+    /// </summary>
+    [HttpGet("renumbered/page")]
+    public async Task<ActionResult> GetRenumberedVehicleReportPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasDemoVehicleRole())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var result = await _vehicleRepository.GetRenumberedVehicleReportPageAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumPageSize)
+            );
+
+            return Ok(
+                new
+                {
+                    items = result
+                        .Items.Select(item => new
+                        {
+                            oldVmfCode = item.OldVmfCode,
+                            oldFleetNumber = item.OldFleetNumber,
+                            oldStatusDescription = item.OldStatusDescription,
+                            newFleetNumber = item.NewFleetNumber,
+                            newStatusDescription = item.NewStatusDescription,
+                        })
+                        .ToList(),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving the paged renumbered vehicle report");
+            return StatusCode(
+                500,
+                "An error occurred while retrieving the renumbered vehicle report"
+            );
         }
     }
 

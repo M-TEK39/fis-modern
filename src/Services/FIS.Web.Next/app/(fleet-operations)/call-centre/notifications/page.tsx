@@ -7,20 +7,24 @@ import {
   saveNotifyListAction,
 } from "@/app/(fleet-operations)/call-centre/notifications/actions";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
+  DEFAULT_NOTIFY_LIST_PAGE_SIZE,
   getNotifyList,
-  getNotifyLists,
+  getNotifyListsPage,
   NotifyListApiError,
+  type NotifyListPage,
   type NotifyListRecord,
 } from "@/lib/api/administration/api-notify-list";
 import { getSession } from "@/lib/auth/session";
 
 const CALL_CENTRE_ROLE = "Call Centre";
-const PAGE_SIZE = 12;
 
 export type NotificationsPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+type NotificationQuery = Record<string, string | string[] | undefined>;
 
 function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -38,14 +42,20 @@ function hasRole(roles: readonly string[], role: string) {
 }
 
 function buildHref(
-  searchTerm: string,
+  query: NotificationQuery,
   page?: number,
-  mode?: "add" | "edit" | "delete",
+  mode?: "add" | "edit" | "delete" | null,
   code?: number,
 ) {
   const params = new URLSearchParams();
-  if (searchTerm) {
-    params.set("q", searchTerm);
+  for (const [key, value] of Object.entries(query)) {
+    if (
+      key === "page" ||
+      value === undefined ||
+      (mode !== undefined && (key === "action" || key === "edit" || key === "delete"))
+    )
+      continue;
+    for (const item of Array.isArray(value) ? value : [value]) params.append(key, item);
   }
   if (page && page > 1) {
     params.set("page", String(page));
@@ -60,8 +70,8 @@ function buildHref(
     params.set("delete", String(code));
   }
 
-  const query = params.toString();
-  return query ? `/call-centre/notifications?${query}` : "/call-centre/notifications";
+  const queryString = params.toString();
+  return queryString ? `/call-centre/notifications?${queryString}` : "/call-centre/notifications";
 }
 
 function AccessRestricted() {
@@ -103,7 +113,14 @@ function ApiUnavailable() {
 function NotifyListEditor({
   item,
   searchTerm,
-}: Readonly<{ item: NotifyListRecord | null; searchTerm: string }>) {
+  query,
+  page,
+}: Readonly<{
+  item: NotifyListRecord | null;
+  searchTerm: string;
+  query: NotificationQuery;
+  page: number;
+}>) {
   return (
     <section className="vehicle-form-section" aria-labelledby="notification-editor-title">
       <div className="vehicle-form-section-header">
@@ -143,7 +160,7 @@ function NotifyListEditor({
           <button className="button button-primary" type="submit">
             {item ? "Update" : "Add"}
           </button>
-          <Link className="button button-secondary" href={buildHref(searchTerm)}>
+          <Link className="button button-secondary" href={buildHref(query, page, null)}>
             Cancel
           </Link>
         </div>
@@ -155,7 +172,14 @@ function NotifyListEditor({
 function DeleteConfirmation({
   item,
   searchTerm,
-}: Readonly<{ item: NotifyListRecord; searchTerm: string }>) {
+  query,
+  page,
+}: Readonly<{
+  item: NotifyListRecord;
+  searchTerm: string;
+  query: NotificationQuery;
+  page: number;
+}>) {
   return (
     <section className="vehicle-form-section" aria-labelledby="notification-delete-title">
       <div className="vehicle-form-section-header">
@@ -174,7 +198,7 @@ function DeleteConfirmation({
           <button className="button button-danger" type="submit">
             Delete
           </button>
-          <Link className="button button-secondary" href={buildHref(searchTerm)}>
+          <Link className="button button-secondary" href={buildHref(query, page, null)}>
             Cancel
           </Link>
         </div>
@@ -187,14 +211,22 @@ function NotifyListTable({
   items,
   searchTerm,
   page,
-  pageCount,
+  total,
+  totalPages,
+  query,
+  actionMode,
+  actionCode,
 }: Readonly<{
   items: NotifyListRecord[];
   searchTerm: string;
   page: number;
-  pageCount: number;
+  total: number;
+  totalPages: number;
+  query: NotificationQuery;
+  actionMode?: "add" | "edit" | "delete";
+  actionCode?: number;
 }>) {
-  if (items.length === 0) {
+  if (total === 0) {
     return (
       <div className="vehicle-empty-state">
         <p id="notification-list-title" className="eyebrow">
@@ -214,9 +246,7 @@ function NotifyListTable({
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">Notification directory</p>
-          <h2 id="notification-list-title">
-            {items.length === 1 ? "1 record" : `${items.length} records`}
-          </h2>
+          <h2 id="notification-list-title">{total === 1 ? "1 record" : `${total} records`}</h2>
         </div>
       </div>
       <div className="vehicle-table-wrapper">
@@ -238,13 +268,13 @@ function NotifyListTable({
                   <div className="button-row">
                     <Link
                       className="button button-secondary button-small"
-                      href={buildHref(searchTerm, page, "edit", item.code)}
+                      href={buildHref(query, page, "edit", item.code)}
                     >
                       Edit
                     </Link>
                     <Link
                       className="button button-danger button-small"
-                      href={buildHref(searchTerm, page, "delete", item.code)}
+                      href={buildHref(query, page, "delete", item.code)}
                     >
                       Delete
                     </Link>
@@ -255,10 +285,13 @@ function NotifyListTable({
           </tbody>
         </table>
       </div>
-      {pageCount > 1 ? (
+      {totalPages > 1 ? (
         <nav className="vehicle-pagination" aria-label="Notification section pages">
           {page > 1 ? (
-            <Link className="vehicle-pagination-button" href={buildHref(searchTerm, page - 1)}>
+            <Link
+              className="vehicle-pagination-button"
+              href={buildHref(query, page - 1, actionMode, actionCode)}
+            >
               Previous
             </Link>
           ) : (
@@ -270,10 +303,13 @@ function NotifyListTable({
             </span>
           )}
           <span className="vehicle-pagination-meta">
-            Page {page} of {pageCount}
+            Page {page} of {totalPages}
           </span>
-          {page < pageCount ? (
-            <Link className="vehicle-pagination-button" href={buildHref(searchTerm, page + 1)}>
+          {page < totalPages ? (
+            <Link
+              className="vehicle-pagination-button"
+              href={buildHref(query, page + 1, actionMode, actionCode)}
+            >
               Next
             </Link>
           ) : (
@@ -290,7 +326,7 @@ function NotifyListTable({
   );
 }
 
-export default async function NotificationsPage({ searchParams }: NotificationsPageProps) {
+async function NotificationsPageContent({ searchParams }: NotificationsPageProps) {
   await connection();
   const session = await getSession();
 
@@ -329,14 +365,18 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
   const deleteCode = getPositiveInt(getQueryValue(query.delete));
   const isAdd = getQueryValue(query.action) === "add";
 
-  let items: NotifyListRecord[];
+  let listPage: NotifyListPage;
   let selectedItem: NotifyListRecord | null = null;
   try {
     const [loadedItems, loadedSelectedItem] = await Promise.all([
-      getNotifyLists(searchTerm),
+      getNotifyListsPage({
+        page: requestedPage,
+        pageSize: DEFAULT_NOTIFY_LIST_PAGE_SIZE,
+        search: searchTerm,
+      }),
       editCode || deleteCode ? getNotifyList(editCode ?? deleteCode ?? 0) : Promise.resolve(null),
     ]);
-    items = loadedItems;
+    listPage = loadedItems;
     selectedItem = loadedSelectedItem;
   } catch (error) {
     if (error instanceof NotifyListApiError && error.reason === "unauthorized") {
@@ -358,15 +398,15 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
     );
   }
 
-  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
-  const page = Math.min(requestedPage, pageCount);
-  const pageItems = items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const page = listPage.page;
   const saved = getQueryValue(query.saved) === "1";
   const updated = getQueryValue(query.updated) === "1";
   const deleted = getQueryValue(query.deleted) === "1";
   const errorMessage = getQueryValue(query.error);
   const modeIsEdit = editCode !== null;
   const modeIsDelete = deleteCode !== null;
+  const actionMode = isAdd ? "add" : modeIsEdit ? "edit" : modeIsDelete ? "delete" : undefined;
+  const actionCode = editCode ?? deleteCode ?? undefined;
   const selectedMissing = (modeIsEdit || modeIsDelete) && selectedItem === null;
 
   return (
@@ -382,7 +422,7 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
             <Link className="button button-secondary" href="/call-centre">
               Call Centre Menu
             </Link>
-            <Link className="button button-primary" href={buildHref(searchTerm, page, "add")}>
+            <Link className="button button-primary" href={buildHref(query, page, "add")}>
               Add Section
             </Link>
           </div>
@@ -426,12 +466,19 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
           </div>
         </form>
 
-        {isAdd ? <NotifyListEditor item={null} searchTerm={searchTerm} /> : null}
+        {isAdd ? (
+          <NotifyListEditor item={null} searchTerm={searchTerm} query={query} page={page} />
+        ) : null}
         {modeIsEdit && selectedItem ? (
-          <NotifyListEditor item={selectedItem} searchTerm={searchTerm} />
+          <NotifyListEditor item={selectedItem} searchTerm={searchTerm} query={query} page={page} />
         ) : null}
         {modeIsDelete && selectedItem ? (
-          <DeleteConfirmation item={selectedItem} searchTerm={searchTerm} />
+          <DeleteConfirmation
+            item={selectedItem}
+            searchTerm={searchTerm}
+            query={query}
+            page={page}
+          />
         ) : null}
         {selectedMissing ? (
           <div className="notice notice-error" role="alert">
@@ -441,13 +488,25 @@ export default async function NotificationsPage({ searchParams }: NotificationsP
 
         <section className="vehicle-form-section" aria-labelledby="notification-list-title">
           <NotifyListTable
-            items={pageItems}
+            items={listPage.items}
             searchTerm={searchTerm}
             page={page}
-            pageCount={pageCount}
+            total={listPage.total}
+            totalPages={listPage.totalPages}
+            query={query}
+            actionMode={actionMode}
+            actionCode={actionCode}
           />
         </section>
       </section>
     </main>
+  );
+}
+
+export default function NotificationsPage(props: NotificationsPageProps) {
+  return (
+    <StreamedRoute>
+      <NotificationsPageContent {...props} />
+    </StreamedRoute>
   );
 }

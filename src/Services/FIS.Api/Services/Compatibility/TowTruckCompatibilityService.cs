@@ -19,6 +19,7 @@ namespace FIS.Api.Services;
 public sealed class TowTruckCompatibilityService
 {
     private const string TableName = "Tow_Truck";
+    private static readonly string[] SearchColumns = ["Tow_area", "Tow_name", "Tow_tel", "Tow_fax"];
     private static readonly string[] LegacyColumns =
     [
         "Tow_code",
@@ -47,6 +48,44 @@ public sealed class TowTruckCompatibilityService
     )
     {
         return await QueryAsync(null, null, cancellationToken);
+    }
+
+    public async Task<TowTruckPage> GetPageAsync(
+        string? search,
+        int page = 1,
+        int pageSize = 24,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var columns = await GetAvailableColumnsAsync(cancellationToken);
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            return await ReadPageAsync(
+                connection,
+                columns,
+                search,
+                page,
+                pageSize,
+                cancellationToken
+            );
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 
     public async Task<TowTruckOption?> GetByIdAsync(
@@ -199,6 +238,96 @@ public sealed class TowTruckCompatibilityService
             }
         }
     }
+
+    private async Task<TowTruckPage> ReadPageAsync(
+        DbConnection connection,
+        IReadOnlySet<string> columns,
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken
+    )
+    {
+        var predicates = BuildReadPredicates(columns, search);
+        var whereClause = string.Join(" AND ", predicates);
+        var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+
+        await using (var countCommand = connection.CreateCommand())
+        {
+            countCommand.Transaction = transaction;
+            countCommand.CommandText = $"""
+                SELECT COUNT(*)
+                FROM [dbo].[{TableName}]
+                WHERE {whereClause}
+                """;
+            AddReadParameters(countCommand, search);
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync(cancellationToken));
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            page = Math.Min(page, totalPages);
+
+            var skip = checked((long)(page - 1) * pageSize);
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            var projection = LegacyColumns
+                .Select(column => GetProjection(columns, column))
+                .Concat(OptionalColumns.Select(column => GetOptionalProjection(columns, column)))
+                .ToArray();
+            command.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}]
+                WHERE {whereClause}
+                ORDER BY {GetOrderExpression(columns, "Tow_name")}, [Tow_code]
+                OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddReadParameters(command, search);
+            AddParameter(command, "@offset", DbType.Int64, skip);
+            AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<TowTruckOption>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                items.Add(MapTowTruck(reader));
+            }
+
+            return new TowTruckPage(items, page, pageSize, total);
+        }
+    }
+
+    private static List<string> BuildReadPredicates(IReadOnlySet<string> columns, string? search)
+    {
+        var predicates = new List<string> { GetActiveFilter(columns) };
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchPredicates = SearchColumns
+                .Where(columns.Contains)
+                .Select(column => $"[{column}] LIKE @search ESCAPE '\\'")
+                .ToArray();
+            predicates.Add(
+                searchPredicates.Length == 0
+                    ? "1 = 0"
+                    : $"({string.Join(" OR ", searchPredicates)})"
+            );
+        }
+
+        return predicates;
+    }
+
+    private static void AddReadParameters(DbCommand command, string? search)
+    {
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            AddParameter(
+                command,
+                "@search",
+                DbType.String,
+                $"%{EscapeLikePattern(search.Trim())}%"
+            );
+        }
+    }
+
+    private static string EscapeLikePattern(string value) =>
+        value.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_").Replace("[", "\\[");
 
     [SuppressMessage(
         "Security",
@@ -485,6 +614,16 @@ public sealed record TowTruckOption(
     string? TowTel,
     string? TowFax
 );
+
+public sealed record TowTruckPage(
+    IReadOnlyList<TowTruckOption> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}
 
 public sealed record TowTruckRequest(
     string? TowArea,

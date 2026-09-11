@@ -16,6 +16,9 @@ namespace FIS.Api.Controllers;
 [Route("api/licence-certificates")]
 public sealed class LicenseCertificatesController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private static readonly HashSet<string> AllowedMimeTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "image/jpeg",
@@ -52,6 +55,40 @@ public sealed class LicenseCertificatesController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error listing licence certificates");
+            return StatusCode(500, new { error = "Failed to retrieve licence certificates" });
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumPageSize)
+            );
+            return Ok(
+                new
+                {
+                    items = result
+                        .Items.Select(item =>
+                            MapDocument(item.Document, item.FleetNumber, item.RegistrationNumber)
+                        )
+                        .ToList(),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing a page of licence certificates");
             return StatusCode(500, new { error = "Failed to retrieve licence certificates" });
         }
     }
@@ -126,6 +163,66 @@ public sealed class LicenseCertificatesController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error listing vehicles without licence certificates");
+            return StatusCode(
+                500,
+                new { error = "Failed to retrieve vehicles without licence certificates" }
+            );
+        }
+    }
+
+    [HttpGet("missing/page")]
+    public async Task<ActionResult> GetMissingPage(
+        [FromQuery] string? location = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        try
+        {
+            var normalizedLocation = location?.Trim().ToLowerInvariant();
+            short? locationCode = normalizedLocation switch
+            {
+                null or "" or "all" => null,
+                "jhb" => (short)1,
+                "pta" => (short)2,
+                _ => null,
+            };
+            if (location is not null && locationCode is null)
+                return BadRequest(new { error = "Location must be jhb or pta." });
+
+            var result = await _repository.GetMissingPageAsync(
+                locationCode,
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumPageSize)
+            );
+            var numberOffset = checked((result.Page - 1) * result.PageSize);
+            return Ok(
+                new
+                {
+                    location = normalizedLocation is "jhb" or "pta" ? normalizedLocation : "all",
+                    vehicles = result
+                        .Items.Select(
+                            (vehicle, index) =>
+                                new
+                                {
+                                    number = numberOffset + index + 1,
+                                    vmf_code = vehicle.VmfCode,
+                                    fleet_number = vehicle.FleetNumber,
+                                    registration_number = vehicle.RegistrationNumber,
+                                    location_code = vehicle.LocationCode,
+                                }
+                        )
+                        .ToList(),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing a page of vehicles without licence certificates");
             return StatusCode(
                 500,
                 new { error = "Failed to retrieve vehicles without licence certificates" }
@@ -366,14 +463,20 @@ public sealed class LicenseCertificatesController : BaseApiController
     private object MapDocument(
         LicenseCertificateDocument document,
         FIS.Core.Domain.Entities.Vehicle? vehicle
+    ) => MapDocument(document, vehicle?.fleet_number, vehicle?.registration_number);
+
+    private object MapDocument(
+        LicenseCertificateDocument document,
+        string? fleetNumber,
+        string? registrationNumber
     ) =>
         new
         {
             source = document.Source,
             document_key = document.DocumentKey,
             vmf_code = document.vmf_code,
-            fleet_number = vehicle?.fleet_number,
-            registration_number = vehicle?.registration_number,
+            fleet_number = fleetNumber,
+            registration_number = registrationNumber,
             image = document.image,
             original_file_name = document.original_file_name ?? document.image,
             mime_type = document.mime_type,

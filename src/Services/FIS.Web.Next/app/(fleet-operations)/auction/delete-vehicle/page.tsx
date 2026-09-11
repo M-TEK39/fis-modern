@@ -2,10 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   AuctionApiError,
-  getAuctions,
+  getAuctionPage,
   type AuctionRecord,
   type AuctionSearchType,
 } from "@/lib/api/fleet-operations/api-auction";
@@ -26,6 +27,11 @@ function getSearchType(value: string | undefined): AuctionSearchType {
   return value === "GP" || value === "Radiogp" ? "GP" : "GG";
 }
 
+function getPositiveQueryInt(value: string | undefined) {
+  const parsed = Number(value);
+  return value && Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function hasReportsRole(roles: readonly string[]) {
   return roles.some(
     (role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0,
@@ -38,6 +44,59 @@ function valueOrDash(value: string | number | null | undefined) {
 
 function buildDetailHref(auctionCode: number) {
   return `/auction/delete-vehicle/detail?auctionId=${encodeURIComponent(auctionCode)}`;
+}
+
+function pageHref(
+  routePath: string,
+  searchType: AuctionSearchType,
+  searchQuery: string,
+  page: number,
+) {
+  return `${routePath}?${new URLSearchParams({ searchType, searchQuery, page: String(page) }).toString()}`;
+}
+
+function AuctionPagination({
+  routePath,
+  searchType,
+  searchQuery,
+  page,
+  totalPages,
+}: Readonly<{
+  routePath: string;
+  searchType: AuctionSearchType;
+  searchQuery: string;
+  page: number;
+  totalPages: number;
+}>) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <nav className="vehicle-pagination" aria-label="Auction deletion pages">
+      {page > 1 ? (
+        <Link
+          className="vehicle-pagination-button"
+          href={pageHref(routePath, searchType, searchQuery, page - 1)}
+        >
+          Previous
+        </Link>
+      ) : (
+        <span className="vehicle-pagination-button vehicle-pagination-disabled">Previous</span>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {page} of {totalPages}
+      </span>
+      {page < totalPages ? (
+        <Link
+          className="vehicle-pagination-button"
+          href={pageHref(routePath, searchType, searchQuery, page + 1)}
+        >
+          Next
+        </Link>
+      ) : (
+        <span className="vehicle-pagination-button vehicle-pagination-disabled">Next</span>
+      )}
+    </nav>
+  );
 }
 
 function SearchForm({
@@ -157,7 +216,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function AuctionDeletePage({
+async function AuctionDeletePageContent({
   searchParams,
   routePath = "/auction/delete-vehicle",
 }: AuctionDeletePageProps) {
@@ -196,18 +255,13 @@ export default async function AuctionDeletePage({
   const searchQuery = (getQueryValue(query.searchQuery) ?? getQueryValue(query.txtGGNum) ?? "")
     .trim()
     .slice(0, 8);
+  const requestedPage = getPositiveQueryInt(getQueryValue(query.page)) ?? 1;
   const error = getQueryValue(query.error);
   const deleted = getQueryValue(query.deleted) === "1";
 
   try {
-    const allAuctions = await getAuctions();
-    const normalizedSearch = searchQuery.toLocaleLowerCase();
-    const auctions = searchQuery
-      ? allAuctions.filter((auction) => {
-          const value = searchType === "GG" ? auction.fleetNumber : auction.registrationNumber;
-          return value?.toLocaleLowerCase().includes(normalizedSearch) === true;
-        })
-      : allAuctions;
+    const result = await getAuctionPage(searchType, searchQuery, requestedPage);
+    const auctions = result.items;
 
     return (
       <main className="page-shell vehicle-page-shell">
@@ -244,6 +298,13 @@ export default async function AuctionDeletePage({
               </div>
             </div>
             <AuctionRows auctions={auctions} searchType={searchType} searchQuery={searchQuery} />
+            <AuctionPagination
+              routePath={routePath}
+              searchType={searchType}
+              searchQuery={searchQuery}
+              page={result.page}
+              totalPages={result.totalPages}
+            />
           </section>
           <div className="vehicle-footer-actions">
             <Link className="button button-secondary" href="/home">
@@ -271,4 +332,12 @@ export default async function AuctionDeletePage({
       </main>
     );
   }
+}
+
+export default function AuctionDeletePage(props: AuctionDeletePageProps) {
+  return (
+    <StreamedRoute>
+      <AuctionDeletePageContent {...props} />
+    </StreamedRoute>
+  );
 }

@@ -81,6 +81,7 @@ function AccidentNotFound() {
 }
 
 async function GarageEditContent({ searchParams }: GarageEditPageProps) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") {
     redirect("/login");
@@ -158,9 +159,7 @@ async function GarageEditContent({ searchParams }: GarageEditPageProps) {
   }
 }
 
-export default async function GarageEditPage({ searchParams }: GarageEditPageProps) {
-  await connection();
-
+export default function GarageEditPage({ searchParams }: GarageEditPageProps) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="garage-edit-title">
@@ -168,7 +167,7 @@ export default async function GarageEditPage({ searchParams }: GarageEditPagePro
           fallback={
             <div className="loading-card" aria-busy="true">
               <span className="spinner" aria-hidden="true" />
-              <p>Loading accident details...</p>
+              <p>Loading page…</p>
             </div>
           }
         >

@@ -1,7 +1,9 @@
-import DemoEditPage, {
-  type DemoEditPageProps,
-} from "@/app/(fleet-operations)/vehicles/demo/edit/page";
+import DemoEditPage from "@/app/(fleet-operations)/vehicles/demo/edit/_route";
 
-export default function LegacyDemoEditFormPage({ searchParams }: DemoEditPageProps) {
+type PageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default function LegacyDemoEditFormPage({ searchParams }: Readonly<PageProps>) {
   return <DemoEditPage searchParams={searchParams} routePath="/demo_vehicles/Edit_demo.htm" />;
 }

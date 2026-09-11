@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import {
+  JobCardPagination,
   RepairCostTable,
   hasJobCardAccess,
   hasRole,
@@ -9,10 +10,17 @@ import {
 import {
   accessRestricted,
   getJobCardSession,
+  JobCardPageBoundary,
+  jobCardPageHref,
+  queryPage,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/job-cards/_page";
-import { getRepairCostReport, JobCardApiError } from "@/lib/api/fleet-operations/api-job-cards";
+import {
+  DEFAULT_JOB_CARD_PAGE_SIZE,
+  getRepairCostReportPage,
+  JobCardApiError,
+} from "@/lib/api/fleet-operations/api-job-cards";
 import { getSites } from "@/lib/api/reference-data/api-sites";
 
 function positiveNumber(value: string) {
@@ -24,7 +32,17 @@ function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
 }
 
-export default async function RepairCostReportPage({
+export default function RepairCostReportPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
+  return (
+    <JobCardPageBoundary>
+      <RepairCostReportContent searchParams={searchParams} />
+    </JobCardPageBoundary>
+  );
+}
+
+async function RepairCostReportContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
@@ -39,9 +57,17 @@ export default async function RepairCostReportPage({
   const siteCode = positiveNumber(queryValue(query.siteCode));
   const fromDate = validDate(queryValue(query.fromDate));
   const toDate = validDate(queryValue(query.toDate));
+  const page = queryPage(query.page);
   try {
     const [report, sites] = await Promise.all([
-      getRepairCostReport({ vmfCode, siteCode, fromDate, toDate }),
+      getRepairCostReportPage({
+        vmfCode,
+        siteCode,
+        fromDate,
+        toDate,
+        page,
+        pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+      }),
       getSites().catch(() => null),
     ]);
     return (
@@ -58,6 +84,7 @@ export default async function RepairCostReportPage({
             </Link>
           </header>
           <form className="vehicle-status-maintenance-panel" method="get">
+            <input type="hidden" name="page" value="1" />
             <div className="form-grid">
               <div className="form-field">
                 <label className="form-label" htmlFor="repair-report-vmf">
@@ -161,6 +188,13 @@ export default async function RepairCostReportPage({
               </p>
             </div>
             <RepairCostTable lines={report.lineItems} />
+            <JobCardPagination
+              page={report.page}
+              totalPages={report.totalPages}
+              pageHref={(nextPage) =>
+                jobCardPageHref("/job-cards/repair-cost-report", query, nextPage)
+              }
+            />
           </section>
         </section>
       </main>

@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_WORKSHOP_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type WorkshopRecord = {
@@ -38,6 +39,26 @@ export type WorkshopVehicle = {
   registrationNumber: string | null;
   locationCode: number | null;
   locationDescription: string | null;
+};
+
+export type WorkshopPageItem = {
+  wwCode: number;
+  vmfCode: number | null;
+  receiveDate: string | null;
+  completeTime: string | null;
+  completeDate: string | null;
+  fleetNumber: string | null;
+  registrationNumber: string | null;
+  locationCode: number | null;
+  status: string;
+};
+
+export type WorkshopPage = {
+  items: WorkshopPageItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type WorkshopApiErrorReason =
@@ -197,11 +218,106 @@ function mapVehicle(value: unknown): WorkshopVehicle | null {
   };
 }
 
+function mapWorkshopPageItem(value: unknown): WorkshopPageItem | null {
+  if (!isRecord(value)) return null;
+  const wwCode = asNumber(getValue(value, "ww_code", "wwCode"));
+  if (wwCode === null) return null;
+
+  return {
+    wwCode,
+    vmfCode: asNumber(getValue(value, "vmf_code", "vmfCode")),
+    receiveDate: asDate(getValue(value, "receive_date", "receiveDate")),
+    completeTime: asTime(getValue(value, "complete_time", "completeTime")),
+    completeDate: asDate(getValue(value, "complete_date", "completeDate")),
+    fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
+    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
+    locationCode: asNumber(getValue(value, "location_code", "locationCode")),
+    status: asString(getValue(value, "status", "Status")) ?? "Open",
+  };
+}
+
+function readWorkshopPage(payload: unknown): WorkshopPage {
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new WorkshopApiError(
+      "invalid-response",
+      "The FIS API returned an invalid workshop page.",
+    );
+  }
+
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    throw new WorkshopApiError(
+      "invalid-response",
+      "The FIS API returned incomplete workshop pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items
+      .map(mapWorkshopPageItem)
+      .filter((item): item is WorkshopPageItem => item !== null),
+    page,
+    pageSize,
+    total,
+    totalPages,
+  };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_WORKSHOP_PAGE_SIZE)
+      : DEFAULT_WORKSHOP_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
 export async function getWorkshops() {
   const response = await requestApi("api/workshop");
   return getCollection(await readJson(response))
     .map(mapWorkshop)
     .filter((record): record is WorkshopRecord => record !== null);
+}
+
+export async function getWorkshopPage(
+  options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: string;
+    searchField?: "fleet" | "registration";
+  } = {},
+): Promise<WorkshopPage> {
+  const params = new URLSearchParams({
+    search: options.search?.trim() ?? "",
+    status: options.status?.trim().toLowerCase() ?? "",
+    searchField: options.searchField ?? "",
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+
+  return readWorkshopPage(
+    await readJson(await requestApi(`api/workshop/page?${params.toString()}`)),
+  );
 }
 
 export async function getWorkshop(wwCode: number) {

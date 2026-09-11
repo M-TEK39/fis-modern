@@ -83,6 +83,9 @@ public class DepartmentDto
 [Authorize]
 public class DepartmentController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly IDepartmentRepository _departmentRepository;
     private readonly ILogger<DepartmentController> _logger;
 
@@ -147,6 +150,37 @@ public class DepartmentController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving departments");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        try
+        {
+            var result = await _departmentRepository.GetPageAsync(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumPageSize)
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(MapToDto),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged departments");
             return StatusCode(500, "Internal server error");
         }
     }
@@ -660,4 +694,43 @@ public class DepartmentController : BaseApiController
             return StatusCode(500, "Internal server error");
         }
     }
+
+    private static DepartmentDto MapToDto(Department department) =>
+        new()
+        {
+            DepartmentCode = department.department_code,
+            CompanyCode = department.company_code,
+            Description = department.description,
+            ResponsiblePerson = department.res_person,
+            Address1 = department.address1,
+            Address2 = department.address2,
+            Address3 = department.address3,
+            PostalCode = department.postal_code,
+            Telephone = department.telephone,
+            Fax = department.fax,
+            NetAddress = department.net_address,
+            DepartmentNumber = department.Department_number,
+            CellNumber = department.cell_number,
+            Notes = department.notes,
+            DepartmentAbbr = department.department_abbr,
+            BasInstallationCode = department.bas_installation_code,
+            DeptActive = department.dept_active,
+            CloEmail = department.clo_email,
+            Telephone2 = department.telephone2,
+            Fax2 = department.fax2,
+            FinancialSystemCode = department.financial_system_code,
+            FinancialSystemActive = department.financial_system_active,
+            FinancialSystemActivateDate = department.financial_system_activate_date,
+            DefaultSite = department.default_site,
+            ExportIsActive = department.export_is_active,
+            DateLastExported = department.date_last_exported,
+            ServiceKilometres = department.Service_Kilometres,
+            ServiceYears = department.Service_Years,
+            OverheadPercentage = department.Overhead_Percentage,
+            DateCreated = department.date_created,
+            DateUpdated = department.date_updated,
+            UserAccessCode = department.user_access_code,
+            ModifiedByUserCode = department.modified_by_user_code,
+            Comments = department.comments,
+        };
 }

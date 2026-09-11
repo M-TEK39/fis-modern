@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -8,6 +9,7 @@ import { updateClassAction } from "@/app/(administration)/validation-data/classe
 import ClassForm from "@/app/(administration)/validation-data/classes/class-form";
 import { ClassApiError, getClass } from "@/lib/api/reference-data/api-classes";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 type ClassEditPageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
@@ -32,7 +34,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function ClassEditPage({ searchParams }: ClassEditPageProps) {
+async function ClassEditPageContent({ searchParams }: ClassEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -117,4 +119,14 @@ export default async function ClassEditPage({ searchParams }: ClassEditPageProps
       </main>
     );
   }
+}
+
+export default function ClassEditPage(
+  props: NonNullable<Parameters<typeof ClassEditPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <ClassEditPageContent {...props} />
+    </Suspense>
+  );
 }

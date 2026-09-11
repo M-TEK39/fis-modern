@@ -11,6 +11,8 @@ namespace FIS.Api.Controllers;
 [Route("api/workshop/merchants")]
 public sealed class WorkshopMerchantController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
     private readonly IWorkshopMerchantRepository _repository;
     private readonly ILogger<WorkshopMerchantController> _logger;
 
@@ -35,6 +37,42 @@ public sealed class WorkshopMerchantController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving workshop merchants");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] string? search = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasWorkshopRole())
+            return Forbid();
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new WorkshopMerchantPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize),
+                    search
+                )
+            );
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(Map),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged workshop merchants");
             return StatusCode(500);
         }
     }

@@ -16,6 +16,16 @@ public interface IJournalDetailService
     Task<IEnumerable<JournalDetail>> GetAllJournalDetailsAsync();
 
     /// <summary>
+    /// Gets one database-backed page of un-invoiced journal details through the
+    /// same legacy/expanded schema compatibility projection.
+    /// </summary>
+    Task<JournalDetailPage> GetUninvoicedJournalDetailsPageAsync(
+        int? departmentCode,
+        int page,
+        int pageSize
+    );
+
+    /// <summary>
     /// Create a new journal detail entry
     /// Legacy: AddJournalDetail method
     /// </summary>

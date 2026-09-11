@@ -1,4 +1,5 @@
-import { AssetVerificationReportPage } from "@/app/(fleet-operations)/reports/asset-verification/[mode]/page";
+import { AssetVerificationReportPage } from "@/app/(fleet-operations)/reports/asset-verification/[mode]/_route";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -6,10 +7,12 @@ export default function LegacyAccidentAssetVerificationPerSiteResult({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   return (
-    <AssetVerificationReportPage
-      mode="per-site-province-date"
-      searchParams={searchParams}
-      routePath="/Accident/RPT_asset_verification_2a.aspx"
-    />
+    <StreamedRoute>
+      <AssetVerificationReportPage
+        mode="per-site-province-date"
+        searchParams={searchParams}
+        routePath="/Accident/RPT_asset_verification_2a.aspx"
+      />
+    </StreamedRoute>
   );
 }

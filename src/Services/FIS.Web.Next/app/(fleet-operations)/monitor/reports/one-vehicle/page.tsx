@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   MonitorNotice,
   MonitorShell,
@@ -27,7 +28,7 @@ function matches(options: readonly VehicleOption[], search: string, mode: string
     .sort((left, right) => left.vmfCode - right.vmfCode);
 }
 
-export default async function MonitorOneVehiclePage({
+async function MonitorOneVehiclePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getMonitorSession();
@@ -119,5 +120,15 @@ export default async function MonitorOneVehiclePage({
         Report menu
       </Link>
     </MonitorShell>
+  );
+}
+
+export default function MonitorOneVehiclePage(
+  props: Parameters<typeof MonitorOneVehiclePageContent>[0],
+) {
+  return (
+    <StreamedRoute>
+      <MonitorOneVehiclePageContent {...props} />
+    </StreamedRoute>
   );
 }

@@ -53,7 +53,10 @@ public static class DevelopmentDatabaseTargetGuard
             );
         }
 
-        if (requireDockerSqlServerHost && !string.Equals(serverName, "mssql", StringComparison.OrdinalIgnoreCase))
+        if (
+            requireDockerSqlServerHost
+            && !string.Equals(serverName, "mssql", StringComparison.OrdinalIgnoreCase)
+        )
         {
             throw new InvalidOperationException(
                 "Development seeding is restricted to the Docker SQL Server service named mssql."

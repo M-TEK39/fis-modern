@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   hasReportsRole,
@@ -530,7 +531,7 @@ function PasswordHistoryTable({ items }: Readonly<{ items: PasswordHistoryItem[]
   );
 }
 
-export default async function SystemAuditTrailPage({
+async function SystemAuditTrailPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Query> }>) {
   await connection();
@@ -642,5 +643,13 @@ export default async function SystemAuditTrailPage({
         </Link>
       </div>
     </ReportsFrame>
+  );
+}
+
+export default function SystemAuditTrailPage(props: Readonly<{ searchParams: Promise<Query> }>) {
+  return (
+    <StreamedRoute>
+      <SystemAuditTrailPageContent {...props} />
+    </StreamedRoute>
   );
 }

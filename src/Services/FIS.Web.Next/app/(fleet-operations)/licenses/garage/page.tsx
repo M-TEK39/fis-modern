@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -34,7 +38,7 @@ function buildPath(mode: "GG" | "GP", number: string) {
   return `/licenses/garage?${new URLSearchParams({ mode, number, lookup: "1" }).toString()}`;
 }
 
-export default async function LicenseGaragePage({
+async function LicenseGaragePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLicenseSession();
@@ -115,5 +119,13 @@ export default async function LicenseGaragePage({
         </Link>
       </div>
     </LicenseShell>
+  );
+}
+
+export default function LicenseGaragePage(props: Parameters<typeof LicenseGaragePageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LicenseGaragePageContent {...props} />
+    </Suspense>
   );
 }

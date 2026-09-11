@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import { getQueryValue } from "@/app/(administration)/drivers/access";
@@ -9,6 +10,7 @@ import { updateSiteAction } from "@/app/(administration)/validation-data/sites/a
 import SiteForm from "@/app/(administration)/validation-data/sites/site-form";
 import { getSite, getSiteReferenceData, SiteApiError } from "@/lib/api/reference-data/api-sites";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 type SiteEditPageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 function parseCode(value: string | undefined) {
@@ -27,7 +29,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function SiteEditPage({ searchParams }: SiteEditPageProps) {
+async function SiteEditPageContent({ searchParams }: SiteEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -113,4 +115,14 @@ export default async function SiteEditPage({ searchParams }: SiteEditPageProps) 
       </main>
     );
   }
+}
+
+export default function SiteEditPage(
+  props: NonNullable<Parameters<typeof SiteEditPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <SiteEditPageContent {...props} />
+    </Suspense>
+  );
 }

@@ -83,7 +83,7 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading duplicate accident report...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -197,6 +197,7 @@ async function DuplicateAccidentsReportContent({
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
@@ -293,12 +294,11 @@ async function DuplicateAccidentsReportContent({
   );
 }
 
-export default async function DuplicateAccidentsReportPage({
+export default function DuplicateAccidentsReportPage({
   searchParams,
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
-  await connection();
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="duplicate-accident-title">

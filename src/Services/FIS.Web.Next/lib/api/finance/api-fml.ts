@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_LEASE_TERMS_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type LeaseTermRecord = {
@@ -35,6 +36,14 @@ export type LeaseTermRecord = {
   createdByUserCode: number | null;
   modifiedByUserCode: number | null;
   isDeleted: boolean;
+};
+
+export type LeaseTermsPage = {
+  items: LeaseTermRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type LeaseTermWriteInput = {
@@ -220,6 +229,18 @@ function getCollection(payload: unknown) {
   return [];
 }
 
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_LEASE_TERMS_PAGE_SIZE)
+      : DEFAULT_LEASE_TERMS_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
   if (!cookieHeader) throw new FmlApiError("unauthorized", "No FIS access cookie is available.");
@@ -329,6 +350,69 @@ export async function getLeaseTerms() {
   return getCollection(payload)
     .map(mapTerm)
     .filter((value): value is LeaseTermRecord => value !== null);
+}
+
+export async function getLeaseTermsPage(
+  options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    mode?: string;
+    status?: "all" | "pending" | "approved" | "rejected";
+  } = {},
+): Promise<LeaseTermsPage> {
+  const params = new URLSearchParams({
+    search: options.search?.trim() ?? "",
+    mode: options.mode?.trim() ?? "",
+    status: options.status ?? "all",
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+
+  const payload = await requestApi(`api/LeaseContractTerms/page?${params.toString()}`);
+  if (!isRecord(payload))
+    throw new FmlApiError(
+      "invalid-response",
+      "The FIS API returned an unexpected paged lease terms response.",
+    );
+  const items = getValue(payload, "items", "Items");
+  if (!Array.isArray(items))
+    throw new FmlApiError(
+      "invalid-response",
+      "The FIS API returned an invalid paged lease terms collection.",
+    );
+
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    throw new FmlApiError(
+      "invalid-response",
+      "The FIS API returned incomplete lease terms pagination metadata.",
+    );
+  }
+
+  return {
+    items: items.map(mapTerm).filter((value): value is LeaseTermRecord => value !== null),
+    page,
+    pageSize,
+    total,
+    totalPages,
+  };
 }
 
 export async function getLeaseTerm(termId: number) {

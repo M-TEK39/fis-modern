@@ -3,9 +3,10 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AuctionApiError,
-  getAuctions,
+  getAuctionPage,
   type AuctionRecord,
   type AuctionSearchType,
 } from "@/lib/api/fleet-operations/api-auction";
@@ -48,6 +49,59 @@ function buildDetailHref(auctionCode: number, searchType: AuctionSearchType, sea
     params.set("searchQuery", searchQuery);
   }
   return `/auction/maintenance/detail?${params.toString()}`;
+}
+
+function pageHref(
+  routePath: string,
+  searchType: AuctionSearchType,
+  searchQuery: string,
+  page: number,
+) {
+  return `${routePath}?${new URLSearchParams({ searchType, searchQuery, page: String(page) }).toString()}`;
+}
+
+function AuctionPagination({
+  routePath,
+  searchType,
+  searchQuery,
+  page,
+  totalPages,
+}: Readonly<{
+  routePath: string;
+  searchType: AuctionSearchType;
+  searchQuery: string;
+  page: number;
+  totalPages: number;
+}>) {
+  if (totalPages <= 1) return null;
+
+  return (
+    <nav className="vehicle-pagination" aria-label="Auction maintenance pages">
+      {page > 1 ? (
+        <Link
+          className="vehicle-pagination-button"
+          href={pageHref(routePath, searchType, searchQuery, page - 1)}
+        >
+          Previous
+        </Link>
+      ) : (
+        <span className="vehicle-pagination-button vehicle-pagination-disabled">Previous</span>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {page} of {totalPages}
+      </span>
+      {page < totalPages ? (
+        <Link
+          className="vehicle-pagination-button"
+          href={pageHref(routePath, searchType, searchQuery, page + 1)}
+        >
+          Next
+        </Link>
+      ) : (
+        <span className="vehicle-pagination-button vehicle-pagination-disabled">Next</span>
+      )}
+    </nav>
+  );
 }
 
 function SearchForm({
@@ -172,7 +226,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function AuctionMaintenancePage({
+async function AuctionMaintenancePageContent({
   searchParams,
   routePath = "/auction/maintenance",
 }: AuctionMaintenancePageProps) {
@@ -211,20 +265,15 @@ export default async function AuctionMaintenancePage({
   const searchQuery = (getQueryValue(query.searchQuery) ?? getQueryValue(query.txtGGNum) ?? "")
     .trim()
     .slice(0, 8);
+  const requestedPage = getPositiveQueryInt(getQueryValue(query.page)) ?? 1;
   const notice =
     getQueryValue(query.updated) === "1"
       ? "Auction record updated successfully."
       : getQueryValue(query.error);
 
   try {
-    const allAuctions = await getAuctions();
-    const normalizedSearch = searchQuery.toLocaleLowerCase();
-    const auctions = searchQuery
-      ? allAuctions.filter((auction) => {
-          const value = searchType === "GG" ? auction.fleetNumber : auction.registrationNumber;
-          return value?.toLocaleLowerCase().includes(normalizedSearch) === true;
-        })
-      : allAuctions;
+    const result = await getAuctionPage(searchType, searchQuery, requestedPage);
+    const auctions = result.items;
 
     return (
       <main className="page-shell vehicle-page-shell">
@@ -261,6 +310,13 @@ export default async function AuctionMaintenancePage({
               </div>
             </div>
             <AuctionRows auctions={auctions} searchType={searchType} searchQuery={searchQuery} />
+            <AuctionPagination
+              routePath={routePath}
+              searchType={searchType}
+              searchQuery={searchQuery}
+              page={result.page}
+              totalPages={result.totalPages}
+            />
           </section>
           <div className="vehicle-footer-actions">
             <Link className="button button-secondary" href="/home">
@@ -288,4 +344,12 @@ export default async function AuctionMaintenancePage({
       </main>
     );
   }
+}
+
+export default function AuctionMaintenancePage(props: AuctionMaintenancePageProps) {
+  return (
+    <StreamedRoute>
+      <AuctionMaintenancePageContent {...props} />
+    </StreamedRoute>
+  );
 }

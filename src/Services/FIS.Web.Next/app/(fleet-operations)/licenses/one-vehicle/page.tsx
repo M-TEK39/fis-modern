@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -22,7 +26,7 @@ import {
 } from "@/lib/api/vehicles/api-licenses";
 import { getSites, SiteApiError } from "@/lib/api/reference-data/api-sites";
 
-export default async function LicenseOneVehiclePage({
+async function LicenseOneVehiclePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLicenseSession();
@@ -93,5 +97,15 @@ export default async function LicenseOneVehiclePage({
         </Link>
       </div>
     </LicenseShell>
+  );
+}
+
+export default function LicenseOneVehiclePage(
+  props: Parameters<typeof LicenseOneVehiclePageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LicenseOneVehiclePageContent {...props} />
+    </Suspense>
   );
 }

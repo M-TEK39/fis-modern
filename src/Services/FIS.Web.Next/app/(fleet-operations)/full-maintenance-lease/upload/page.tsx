@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { importLeaseTariffsAction } from "@/app/(fleet-operations)/full-maintenance-lease/actions";
 import {
   AccessRestricted,
@@ -19,9 +20,7 @@ function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function FmlUploadPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function FmlUploadPageContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -95,5 +94,13 @@ export default async function FmlUploadPage({
         </div>
       </section>
     </FmlFrame>
+  );
+}
+
+export default function FmlUploadPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <FmlUploadPageContent {...props} />
+    </StreamedRoute>
   );
 }

@@ -6,7 +6,8 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { MenuSection } from "@/components/ui/menu-section";
 import {
   UserAdminApiError,
-  getUserAdminProfiles,
+  DEFAULT_USER_ADMIN_PAGE_SIZE,
+  getUserAdminProfilesPage,
   type UserAdminProfile,
 } from "@/lib/api/administration/api-user-admin";
 import { getSession } from "@/lib/auth/session";
@@ -175,8 +176,19 @@ export async function UserAdminMenuPage({
   );
 }
 
-function alphabetHref(letter: string) {
-  return `/UserAdmin/UserAdmin.aspx?Alphabet=${letter}`;
+function alphabetHref(routePath: string, letter: string) {
+  return `${routePath}?${new URLSearchParams({ Alphabet: letter }).toString()}`;
+}
+
+function positivePage(value: string | undefined) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function pageHref(routePath: string, alphabet: string, page: number) {
+  const params = new URLSearchParams({ Alphabet: alphabet });
+  if (page > 1) params.set("page", String(page));
+  return `${routePath}?${params.toString()}`;
 }
 
 function userActionHref(path: string, user: UserAdminProfile, alphabet: string) {
@@ -299,9 +311,14 @@ export async function UserAdminListPage({
   const alphabet = normalizeAlphabet(
     getQueryValue(query.Alphabet) ?? getQueryValue(query.alphabet),
   );
+  const requestedPage = positivePage(getQueryValue(query.page));
 
   try {
-    const users = await getUserAdminProfiles(alphabet);
+    const userPage = await getUserAdminProfilesPage(
+      alphabet,
+      requestedPage,
+      DEFAULT_USER_ADMIN_PAGE_SIZE,
+    );
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="user-list-title">
@@ -335,7 +352,7 @@ export async function UserAdminListPage({
                         ? "button button-primary button-small"
                         : "button button-secondary button-small"
                     }
-                    href={alphabetHref(letter)}
+                    href={alphabetHref(routePath, letter)}
                     key={letter}
                     aria-current={letter === alphabet ? "page" : undefined}
                   >
@@ -345,7 +362,8 @@ export async function UserAdminListPage({
               </div>
             </nav>
             <p className="muted-copy">
-              View users by clicking on a character. Showing {users.length} active user(s).
+              View users by clicking on a character. {userPage.total} active user(s) match the
+              selected character.
             </p>
           </section>
 
@@ -356,7 +374,34 @@ export async function UserAdminListPage({
                 <h2 id="user-list-results-title">Users whose last name starts with {alphabet}</h2>
               </div>
             </div>
-            <UserRows users={users} alphabet={alphabet} />
+            <UserRows users={userPage.items} alphabet={alphabet} />
+            <nav className="vehicle-pagination" aria-label="User Administration pages">
+              {userPage.page > 1 ? (
+                <Link
+                  className="vehicle-pagination-button"
+                  href={pageHref(routePath, alphabet, userPage.page - 1)}
+                >
+                  Previous
+                </Link>
+              ) : (
+                <span className="vehicle-pagination-button vehicle-pagination-disabled">
+                  Previous
+                </span>
+              )}
+              <span className="vehicle-pagination-meta" aria-live="polite">
+                Page {userPage.page} of {userPage.totalPages} ({userPage.total} users)
+              </span>
+              {userPage.page < userPage.totalPages ? (
+                <Link
+                  className="vehicle-pagination-button"
+                  href={pageHref(routePath, alphabet, userPage.page + 1)}
+                >
+                  Next
+                </Link>
+              ) : (
+                <span className="vehicle-pagination-button vehicle-pagination-disabled">Next</span>
+              )}
+            </nav>
           </section>
 
           <div className="vehicle-footer-actions">

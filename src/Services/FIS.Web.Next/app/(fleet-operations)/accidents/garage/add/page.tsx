@@ -43,7 +43,7 @@ function AddFallback() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading accident capture...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -89,6 +89,7 @@ function NoVehicles({ searchTerm }: { searchTerm: string }) {
 }
 
 async function GarageAddContent({ searchParams }: GarageAddPageProps) {
+  await connection();
   const session = await getSession();
 
   if (session.status === "anonymous") {
@@ -173,9 +174,7 @@ async function GarageAddContent({ searchParams }: GarageAddPageProps) {
   }
 }
 
-export default async function GarageAddPage({ searchParams }: GarageAddPageProps) {
-  await connection();
-
+export default function GarageAddPage({ searchParams }: GarageAddPageProps) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="garage-add-title">

@@ -97,6 +97,22 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
             .ToListAsync();
     }
 
+    public async Task<UnitOfMeasurePage> GetPageAsync(int page, int pageSize)
+    {
+        var resolvedPage = Math.Max(1, page);
+        var resolvedPageSize = Math.Clamp(pageSize, 1, 100);
+        var query = _context.UnitsOfMeasure.AsNoTracking().Where(unit => !unit.is_deleted);
+        var total = await query.CountAsync();
+        var items = await query
+            .OrderBy(unit => unit.unit_category)
+            .ThenBy(unit => unit.unit_description)
+            .ThenBy(unit => unit.unit_of_measure_code)
+            .Skip((resolvedPage - 1) * resolvedPageSize)
+            .Take(resolvedPageSize)
+            .ToListAsync();
+        return new UnitOfMeasurePage(items, resolvedPage, resolvedPageSize, total);
+    }
+
     /// <summary>
     /// Create a new unit of measure
     /// </summary>

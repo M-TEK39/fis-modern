@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -12,9 +16,24 @@ import {
   hasLogsheetManagerAccess,
   sessionMessage,
 } from "@/app/(fleet-operations)/log-sheets/_page";
-import { getLogsheets, LogsheetApiError } from "@/lib/api/fleet-operations/api-logsheets";
+import {
+  DEFAULT_LOGSHEET_PAGE_SIZE,
+  getLogsheetsPage,
+  LogsheetApiError,
+} from "@/lib/api/fleet-operations/api-logsheets";
 
-export default async function LogsheetMenuPage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function pageValue(value: string | string[] | undefined) {
+  const candidate = Number(Array.isArray(value) ? value[0] : value);
+  return Number.isInteger(candidate) && candidate > 0 ? candidate : 1;
+}
+
+function pageHref(page: number) {
+  return page > 1 ? `/log-sheets?page=${page}` : "/log-sheets";
+}
+
+async function LogsheetMenuPageContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   const session = await getLogsheetSession();
   const problem = sessionMessage(session, "/log-sheets");
   if (problem) return problem;
@@ -24,7 +43,11 @@ export default async function LogsheetMenuPage() {
     return accessRestricted("Your profile does not include Reports access.");
 
   try {
-    const records = (await getLogsheets()).slice(0, 12);
+    const query = await searchParams;
+    const recordPage = await getLogsheetsPage({
+      page: pageValue(query.page),
+      pageSize: DEFAULT_LOGSHEET_PAGE_SIZE,
+    });
     return (
       <LogsheetShell
         title="Logsheet Maintenance"
@@ -45,8 +68,46 @@ export default async function LogsheetMenuPage() {
               <p className="eyebrow">Recent activity</p>
               <h2 id="recent-logsheets-title">Latest logsheets</h2>
             </div>
+            <span className="muted-copy">
+              {recordPage.total} record{recordPage.total === 1 ? "" : "s"}
+            </span>
           </div>
-          <LogsheetTable records={records} mode="preview" returnPath="/log-sheets" />
+          <LogsheetTable
+            records={recordPage.items}
+            mode="preview"
+            returnPath={pageHref(recordPage.page)}
+          />
+          {recordPage.totalPages > 1 ? (
+            <nav className="vehicle-pagination" aria-label="Logsheet pages">
+              {recordPage.page <= 1 ? (
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
+                  Previous
+                </span>
+              ) : (
+                <Link className="vehicle-pagination-button" href={pageHref(recordPage.page - 1)}>
+                  Previous
+                </Link>
+              )}
+              <span className="vehicle-pagination-meta" aria-live="polite">
+                Page {recordPage.page} of {recordPage.totalPages}
+              </span>
+              {recordPage.page >= recordPage.totalPages ? (
+                <span
+                  className="vehicle-pagination-button vehicle-pagination-disabled"
+                  aria-disabled="true"
+                >
+                  Next
+                </span>
+              ) : (
+                <Link className="vehicle-pagination-button" href={pageHref(recordPage.page + 1)}>
+                  Next
+                </Link>
+              )}
+            </nav>
+          ) : null}
         </section>
       </LogsheetShell>
     );
@@ -70,4 +131,14 @@ export default async function LogsheetMenuPage() {
       </LogsheetShell>
     );
   }
+}
+
+export default function LogsheetMenuPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LogsheetMenuPageContent searchParams={searchParams} />
+    </Suspense>
+  );
 }

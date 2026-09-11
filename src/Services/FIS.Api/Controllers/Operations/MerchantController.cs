@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.ReferenceData;
 using Microsoft.AspNetCore.Authorization;
@@ -12,11 +13,17 @@ namespace FIS.Api.Controllers;
 public class MerchantController : BaseApiController
 {
     private readonly IMerchantRepository _repository;
+    private readonly MerchantCompatibilityService _compatibilityService;
     private readonly ILogger<MerchantController> _logger;
 
-    public MerchantController(IMerchantRepository repository, ILogger<MerchantController> logger)
+    public MerchantController(
+        IMerchantRepository repository,
+        MerchantCompatibilityService compatibilityService,
+        ILogger<MerchantController> logger
+    )
     {
         _repository = repository;
+        _compatibilityService = compatibilityService;
         _logger = logger;
     }
 
@@ -33,6 +40,47 @@ public class MerchantController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving merchants");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<IActionResult> GetPage(
+        [FromQuery] string? search = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24
+    )
+    {
+        if (!HasMerchantReadRole())
+            return Forbid();
+
+        try
+        {
+            var result = await _compatibilityService.GetPageAsync(
+                search,
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, 100),
+                HttpContext.RequestAborted
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(item => new MerchantDto
+                    {
+                        Merchant_code = item.MerchantCode,
+                        Merchant_Name = item.MerchantName,
+                    }),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged merchants");
             return StatusCode(500);
         }
     }

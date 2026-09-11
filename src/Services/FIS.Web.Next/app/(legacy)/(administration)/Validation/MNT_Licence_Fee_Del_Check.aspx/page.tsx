@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { Suspense } from "react";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { redirect } from "next/navigation";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
@@ -34,9 +36,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function LicenseFeeDeleteCheckPage({
-  searchParams,
-}: LicenseFeeDeleteCheckPageProps) {
+async function LicenseFeeDeleteCheckPageContent({ searchParams }: LicenseFeeDeleteCheckPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -150,4 +150,14 @@ export default async function LicenseFeeDeleteCheckPage({
       </main>
     );
   }
+}
+
+export default function LicenseFeeDeleteCheckPage(
+  props: NonNullable<Parameters<typeof LicenseFeeDeleteCheckPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LicenseFeeDeleteCheckPageContent {...props} />
+    </Suspense>
+  );
 }

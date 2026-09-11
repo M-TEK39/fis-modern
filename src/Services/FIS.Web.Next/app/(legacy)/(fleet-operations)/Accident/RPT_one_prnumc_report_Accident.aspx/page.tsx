@@ -1,9 +1,14 @@
-import { PrivateVehicleReportPage } from "@/app/(fleet-operations)/accidents/reports/private-vehicle/page";
+import { PrivateVehicleReportPage } from "@/app/(fleet-operations)/accidents/reports/private-vehicle/_route";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 
-export default async function LegacyPrivateDescriptionReportPage({
+export default function LegacyPrivateDescriptionReportPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  return <PrivateVehicleReportPage searchParams={searchParams} defaultMode="description" />;
+  return (
+    <StreamedRoute>
+      <PrivateVehicleReportPage searchParams={searchParams} defaultMode="description" />
+    </StreamedRoute>
+  );
 }

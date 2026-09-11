@@ -14,6 +14,9 @@ namespace FIS.Api.Controllers;
 [Produces("application/json")]
 public class VehicleLookupController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly IVehicleRepository _vehicleRepository;
     private readonly ILogger<VehicleLookupController> _logger;
 
@@ -24,6 +27,81 @@ public class VehicleLookupController : BaseApiController
     {
         _vehicleRepository = vehicleRepository;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Search vehicle-photo candidates with database-side filtering and paging.
+    /// GG searches fleet_number and GP searches registration_number. If mode is
+    /// omitted, either existing legacy field may match the keyword.
+    /// </summary>
+    [HttpGet("page")]
+    [ProducesResponseType(typeof(VehicleLookupPageResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<VehicleLookupPageResponseDto>> GetPage(
+        [FromQuery] string? keyword = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] string? mode = null
+    )
+    {
+        var normalizedMode = string.IsNullOrWhiteSpace(mode)
+            ? null
+            : mode.Trim().ToUpperInvariant();
+        if (normalizedMode is not (null or "GG" or "GP"))
+        {
+            return BadRequest(new { error = "Search mode must be GG or GP." });
+        }
+
+        var normalizedKeyword = keyword?.Trim();
+        if (normalizedKeyword?.Length > 100)
+        {
+            return BadRequest(new { error = "Keyword cannot exceed 100 characters." });
+        }
+
+        try
+        {
+            var result = await _vehicleRepository.GetVehicleLookupPageAsync(
+                normalizedKeyword,
+                normalizedMode,
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumPageSize)
+            );
+
+            return Ok(
+                new VehicleLookupPageResponseDto
+                {
+                    Items = result
+                        .Items.Select(item => new VehiclePhotoSearchResultDto
+                        {
+                            VmfCode = item.VmfCode,
+                            GgNumber = item.GgNumber,
+                            RegistrationNumber = item.RegistrationNumber,
+                            MakeAndModel = item.MakeAndModel,
+                            ModelCode = item.ModelCode,
+                            YearManufactured = item.YearManufactured,
+                            Colour = item.Colour,
+                            HireType = item.HireType,
+                            Status = item.Status,
+                            HiredFrom = item.HiredFrom,
+                            StatusDate = item.StatusDate,
+                        })
+                        .ToList(),
+                    Page = result.Page,
+                    PageSize = result.PageSize,
+                    Total = result.Total,
+                    TotalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error retrieving paged vehicle lookup for mode {SearchMode}",
+                normalizedMode ?? "GG/GP"
+            );
+            return StatusCode(500, new { error = "Failed to search vehicles" });
+        }
     }
 
     /// <summary>
@@ -155,4 +233,34 @@ public class VehicleSearchResultDto
     public bool IsAvailable { get; set; }
     public string? InvoiceNumber { get; set; }
     public string DisplayText { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response contract for the vehicle-photo search table. MakeAndModel is the
+/// legacy model description only; the legacy lookup does not expose a combined
+/// make/model value. Lookup descriptions are null when their optional lookup
+/// table or legacy column is unavailable.
+/// </summary>
+public sealed class VehicleLookupPageResponseDto
+{
+    public IReadOnlyList<VehiclePhotoSearchResultDto> Items { get; set; } = [];
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int Total { get; set; }
+    public int TotalPages { get; set; }
+}
+
+public sealed class VehiclePhotoSearchResultDto
+{
+    public int VmfCode { get; set; }
+    public string? GgNumber { get; set; }
+    public string? RegistrationNumber { get; set; }
+    public string? MakeAndModel { get; set; }
+    public short ModelCode { get; set; }
+    public short? YearManufactured { get; set; }
+    public string? Colour { get; set; }
+    public string? HireType { get; set; }
+    public string? Status { get; set; }
+    public string? HiredFrom { get; set; }
+    public DateTime? StatusDate { get; set; }
 }

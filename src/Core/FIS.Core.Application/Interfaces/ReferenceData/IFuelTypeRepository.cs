@@ -35,6 +35,8 @@ namespace FIS.Core.Application.Interfaces
         /// <returns>Collection of matching fuel type entities</returns>
         Task<IEnumerable<FuelTypeEntity>> SearchFuelTypesAsync(string searchTerm);
 
+        Task<FuelTypePage> GetPageAsync(int page, int pageSize);
+
         /// <summary>
         /// Creates a new fuel type
         /// </summary>
@@ -54,5 +56,15 @@ namespace FIS.Core.Application.Interfaces
         /// </summary>
         /// <param name="fuelTypeCode">The fuel type code to delete</param>
         Task DeleteAsync(short fuelTypeCode, int currentUserId);
+    }
+
+    public sealed record FuelTypePage(
+        IReadOnlyList<FuelTypeEntity> Items,
+        int Page,
+        int PageSize,
+        int Total
+    )
+    {
+        public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
     }
 }

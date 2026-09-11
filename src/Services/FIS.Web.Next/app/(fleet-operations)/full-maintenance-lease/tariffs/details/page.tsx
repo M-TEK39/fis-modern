@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { saveLeaseTermAction } from "@/app/(fleet-operations)/full-maintenance-lease/actions";
 import {
   AccessRestricted,
@@ -30,7 +31,7 @@ function positiveInteger(value: string | undefined) {
   return value && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-export default async function FmlTariffDetailsPage({
+async function FmlTariffDetailsPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -288,5 +289,13 @@ export default async function FmlTariffDetailsPage({
         {formatCurrency(term.fixedMonthlyAmount)}
       </p>
     </FmlFrame>
+  );
+}
+
+export default function FmlTariffDetailsPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <FmlTariffDetailsPageContent {...props} />
+    </StreamedRoute>
   );
 }

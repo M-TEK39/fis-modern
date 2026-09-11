@@ -60,6 +60,87 @@ public sealed class DemoVehicleRepository : IDemoVehicleRepository
         return await QueryAsync(schema);
     }
 
+    public async Task<DemoVehiclePage> GetPageAsync(int page = 1, int pageSize = 24)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var schema = await GetSchemaAsync();
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            var notDeletedFilter = GetNotDeletedFilter("d", schema.Columns);
+            int total;
+            await using (var countCommand = connection.CreateCommand())
+            {
+                countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                countCommand.CommandText = $"""
+                    SELECT COUNT(1)
+                    FROM [dbo].[{TableName}] AS [d]
+                    WHERE {notDeletedFilter}
+                    """;
+                total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            }
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            page = Math.Min(page, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
+            var siteProjection = schema.HasSiteDescription
+                ? "s.[description] AS [site_description]"
+                : "CAST(NULL AS nvarchar(255)) AS [site_description]";
+            var siteJoin = schema.HasSiteDescription
+                ? $"LEFT JOIN [dbo].[{SiteTableName}] AS s ON d.[site_code] = s.[site_code] AND {GetNotDeletedFilter("s", schema.SiteColumns)}"
+                : string.Empty;
+            var projection = string.Join(
+                ", ",
+                RequiredColumns
+                    .Select(column => $"d.[{column}] AS [{column}]")
+                    .Append(siteProjection)
+                    .Concat(
+                        OptionalColumns.Select(column =>
+                            GetOptionalProjection("d", schema.Columns, column)
+                        )
+                    )
+            );
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                SELECT {projection}
+                FROM [dbo].[{TableName}] AS d
+                {siteJoin}
+                WHERE {notDeletedFilter}
+                ORDER BY COALESCE(d.[gg_number], ''), d.[demo_vehicle_code]
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddParameter(command, "@skip", DbType.Int64, skip);
+            AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<DemoVehicleRecord>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(MapRecord(reader));
+            }
+
+            return new DemoVehiclePage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IReadOnlyList<DemoVehicleRecord>> SearchAsync(
         string searchTerm,
         bool byRegistration

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   ApiUnavailable,
@@ -25,7 +26,7 @@ function reportTitle(report: string) {
       : "FML Report Filter";
 }
 
-export default async function FmlReportFilterPage({
+async function FmlReportFilterPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -126,5 +127,13 @@ export default async function FmlReportFilterPage({
         </form>
       )}
     </FmlFrame>
+  );
+}
+
+export default function FmlReportFilterPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <FmlReportFilterPageContent {...props} />
+    </StreamedRoute>
   );
 }

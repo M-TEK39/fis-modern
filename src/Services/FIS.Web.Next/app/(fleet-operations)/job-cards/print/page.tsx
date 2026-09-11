@@ -8,14 +8,32 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_components";
 import {
   accessRestricted,
-  filterByVehicle,
+  getJobCardForSelection,
   getJobCardSession,
+  JobCardPageBoundary,
+  jobCardPageHref,
+  queryPage,
+  querySearchType,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/job-cards/_page";
-import { getJobCards, JobCardApiError } from "@/lib/api/fleet-operations/api-job-cards";
+import {
+  DEFAULT_JOB_CARD_PAGE_SIZE,
+  getJobCardsPage,
+  JobCardApiError,
+} from "@/lib/api/fleet-operations/api-job-cards";
 
-export default async function PrintJobCardsPage({
+export default function PrintJobCardsPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
+  return (
+    <JobCardPageBoundary>
+      <PrintJobCardsContent searchParams={searchParams} />
+    </JobCardPageBoundary>
+  );
+}
+
+async function PrintJobCardsContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();
@@ -27,15 +45,27 @@ export default async function PrintJobCardsPage({
     return accessRestricted("Your profile does not include Job Card capturer access.");
   const query = await searchParams;
   const search = queryValue(query.search);
-  const mode = queryValue(query.mode) || "GG";
+  const mode = querySearchType(query.mode);
   const selectedId = Number(queryValue(query.id));
+  const page = queryPage(query.page);
   try {
-    const cards = (await getJobCards()).filter((card) => card.statusCode === 3);
-    const filtered = filterByVehicle(cards, search, mode);
-    const selected =
+    const pageData = await getJobCardsPage({
+      page,
+      pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+      search,
+      searchType: mode,
+      statusCodes: [3],
+    });
+    const selectedCandidate =
       Number.isInteger(selectedId) && selectedId > 0
-        ? (cards.find((card) => card.jobCardId === selectedId) ?? null)
+        ? await getJobCardForSelection(selectedId)
         : null;
+    const selected = selectedCandidate?.statusCode === 3 ? selectedCandidate : null;
+    const tableReturnPath = jobCardPageHref(
+      "/job-cards/print",
+      { ...query, id: undefined },
+      pageData.page,
+    );
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="print-job-cards-title">
@@ -50,6 +80,7 @@ export default async function PrintJobCardsPage({
             </Link>
           </header>
           <form className="vehicle-search-row" method="get">
+            <input type="hidden" name="page" value="1" />
             <fieldset className="vehicle-search-options">
               <legend>Find by</legend>
               <label className="vehicle-checkbox-label">
@@ -77,9 +108,16 @@ export default async function PrintJobCardsPage({
             </Link>
           </form>
           <section className="vehicle-status-maintenance-panel">
-            <p className="eyebrow">{filtered.length} authorized</p>
+            <p className="eyebrow">{pageData.totalRecords} authorized</p>
             <h2>Authorized Job Cards</h2>
-            <JobCardTable cards={filtered} mode="print" returnPath="/job-cards/print" />
+            <JobCardTable
+              cards={pageData.items}
+              mode="print"
+              returnPath={tableReturnPath}
+              page={pageData.page}
+              totalPages={pageData.totalPages}
+              pageHref={(nextPage) => jobCardPageHref("/job-cards/print", query, nextPage)}
+            />
           </section>
           {selected ? <JobCardPrintPreview card={selected} /> : null}
         </section>

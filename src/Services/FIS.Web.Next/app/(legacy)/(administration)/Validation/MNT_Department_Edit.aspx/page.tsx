@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { Suspense } from "react";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -35,7 +37,7 @@ function ErrorCard({ children }: Readonly<{ children: ReactNode }>) {
   );
 }
 
-export default async function DepartmentEditPage({ searchParams }: DepartmentEditPageProps) {
+async function DepartmentEditPageContent({ searchParams }: DepartmentEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -128,4 +130,14 @@ export default async function DepartmentEditPage({ searchParams }: DepartmentEdi
       </main>
     );
   }
+}
+
+export default function DepartmentEditPage(
+  props: NonNullable<Parameters<typeof DepartmentEditPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DepartmentEditPageContent {...props} />
+    </Suspense>
+  );
 }

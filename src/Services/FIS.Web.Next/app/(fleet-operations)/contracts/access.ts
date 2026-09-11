@@ -128,32 +128,21 @@ export function isContractOwner(contract: ContractRecord, userAccessCode: string
   return currentUserCode !== null && ownerCode !== null && ownerCode === currentUserCode;
 }
 
-export function canEditContract(
-  contract: ContractRecord,
-  session: ContractSession,
-) {
+export function canEditContract(contract: ContractRecord, session: ContractSession) {
   return (
     isContractAdministrator(session.roles) ||
-    (hasContractCapturerRole(session.roles) &&
-      isContractOwner(contract, session.userAccessCode))
+    (hasContractCapturerRole(session.roles) && isContractOwner(contract, session.userAccessCode))
   );
 }
 
-export function canSubmitContract(
-  contract: ContractRecord,
-  session: ContractSession,
-) {
+export function canSubmitContract(contract: ContractRecord, session: ContractSession) {
   return (
     isContractAdministrator(session.roles) ||
-    (hasContractCapturerRole(session.roles) &&
-      isContractOwner(contract, session.userAccessCode))
+    (hasContractCapturerRole(session.roles) && isContractOwner(contract, session.userAccessCode))
   );
 }
 
-export function canReviewContract(
-  contract: ContractRecord,
-  session: ContractSession,
-) {
+export function canReviewContract(contract: ContractRecord, session: ContractSession) {
   return (
     (isContractAdministrator(session.roles) || hasContractReviewerRole(session.roles)) &&
     !isContractOwner(contract, session.userAccessCode)

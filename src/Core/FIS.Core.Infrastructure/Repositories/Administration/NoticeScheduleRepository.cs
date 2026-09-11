@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.System;
@@ -95,6 +96,92 @@ public sealed class NoticeScheduleRepository : INoticeScheduleRepository
                         "DEV_SEL_ActiveNoticeSchedules"
                     )
         );
+
+    public async Task<NoticeSchedulePage> GetPageAsync(NoticeSchedulePageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var normalizedQuery = NormalizePageQuery(query);
+        return await WithSchemaAsync(
+            async (connection, transaction, schema) =>
+            {
+                if (!schema.IsModern)
+                {
+                    // The legacy management procedure is the compatibility access path and does
+                    // not accept filter or paging parameters. Keep its result shape intact, then
+                    // apply the shared predicates before constructing the response page.
+                    var schedules = (
+                        await ReadStoredSchedulesAsync(
+                            connection,
+                            transaction,
+                            "DEV_SEL_ActiveNoticeSchedules"
+                        )
+                    ).Where(schedule => MatchesPageFilters(schedule, normalizedQuery));
+
+                    return CreatePage(
+                        OrderSchedules(schedules).ToArray(),
+                        normalizedQuery.Page,
+                        normalizedQuery.PageSize
+                    );
+                }
+
+                var hasUser = await HasUserEmailAsync(
+                    connection,
+                    transaction,
+                    schema.ScheduleColumns
+                );
+                var whereClause = BuildPageWhereClause(
+                    schema.ScheduleColumns,
+                    hasUser,
+                    normalizedQuery
+                );
+                var total = await CountModernAsync(
+                    connection,
+                    transaction,
+                    hasUser,
+                    whereClause,
+                    normalizedQuery
+                );
+                var totalPages = Math.Max(
+                    1,
+                    (int)Math.Ceiling(total / (double)normalizedQuery.PageSize)
+                );
+                var normalizedPage = Math.Min(normalizedQuery.Page, totalPages);
+                var skip = checked((long)(normalizedPage - 1) * normalizedQuery.PageSize);
+                var items = await ReadModernAsync(
+                    connection,
+                    transaction,
+                    schema.ScheduleColumns,
+                    $"{whereClause} ORDER BY COALESCE([s].[sort_order], 2147483647), [s].[start_date], [s].[notice_schedule_id] OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY",
+                    command =>
+                    {
+                        AddPageFilterParameters(command, normalizedQuery);
+                        NoticeRepositorySupport.AddParameter(
+                            command,
+                            "@offset",
+                            DbType.Int64,
+                            skip
+                        );
+                        NoticeRepositorySupport.AddParameter(
+                            command,
+                            "@pageSize",
+                            DbType.Int32,
+                            normalizedQuery.PageSize
+                        );
+                    },
+                    single: false,
+                    hasUserOverride: hasUser
+                );
+
+                return new NoticeSchedulePage(
+                    items,
+                    normalizedPage,
+                    normalizedQuery.PageSize,
+                    total
+                );
+            }
+        );
+    }
 
     public async Task<IEnumerable<NoticeSchedule>> GetByNoticeIdAsync(int noticeId) =>
         await WithSchemaAsync(
@@ -450,18 +537,12 @@ public sealed class NoticeScheduleRepository : INoticeScheduleRepository
         IReadOnlySet<string> scheduleColumns,
         string whereClause,
         Action<DbCommand>? configure,
-        bool single
+        bool single,
+        bool? hasUserOverride = null
     )
     {
-        var userColumns = await NoticeRepositorySupport.GetColumnsAsync(
-            connection,
-            transaction,
-            "TS_Users"
-        );
         var hasUser =
-            scheduleColumns.Contains("created_by_user_code")
-            && userColumns.Contains("user_access_code")
-            && userColumns.Contains("email");
+            hasUserOverride ?? await HasUserEmailAsync(connection, transaction, scheduleColumns);
         var projection = ScheduleColumns
             .Select(column => $"[s].[{column}] AS [{column}]")
             .Concat(
@@ -475,9 +556,7 @@ public sealed class NoticeScheduleRepository : INoticeScheduleRepository
                     : "CAST(NULL AS varchar(255)) AS [created_by_email]"
             )
             .ToArray();
-        var userJoin = hasUser
-            ? "LEFT JOIN [dbo].[TS_Users] AS [u] ON [u].[user_access_code] = [s].[created_by_user_code]"
-            : string.Empty;
+        var userJoin = UserJoin(hasUser);
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
@@ -502,6 +581,190 @@ public sealed class NoticeScheduleRepository : INoticeScheduleRepository
 
         return results;
     }
+
+    private static async Task<int> CountModernAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        bool hasUser,
+        string whereClause,
+        NoticeSchedulePageQuery query
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"""
+            SELECT COUNT(*)
+            FROM [dbo].[{ScheduleTableName}] AS [s]
+            {UserJoin(hasUser)}
+            {whereClause}
+            """;
+        AddPageFilterParameters(command, query);
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
+    private static async Task<bool> HasUserEmailAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        IReadOnlySet<string> scheduleColumns
+    )
+    {
+        var userColumns = await NoticeRepositorySupport.GetColumnsAsync(
+            connection,
+            transaction,
+            "TS_Users"
+        );
+        return scheduleColumns.Contains("created_by_user_code")
+            && userColumns.Contains("user_access_code")
+            && userColumns.Contains("email");
+    }
+
+    private static string BuildPageWhereClause(
+        IReadOnlySet<string> scheduleColumns,
+        bool hasUser,
+        NoticeSchedulePageQuery query
+    )
+    {
+        var predicates = new List<string>
+        {
+            ActiveFilter("s", scheduleColumns.Contains("is_deleted")),
+        };
+
+        if (!string.IsNullOrEmpty(query.Search))
+        {
+            var searchFields = new List<string>
+            {
+                "COALESCE([s].[title_field], '')",
+                "COALESCE(CONVERT(varchar(10), [s].[start_date], 111), '-')",
+                "COALESCE(CONVERT(varchar(10), [s].[end_date], 111), '-')",
+                "COALESCE(CONVERT(varchar(11), [s].[sort_order]), '')",
+            };
+            if (hasUser)
+            {
+                searchFields.Insert(1, "COALESCE([u].[email], '')");
+            }
+
+            predicates.Add(
+                $"({string.Join(" OR ", searchFields.Select(field => $"LOWER({field}) LIKE '%' + @search + '%' ESCAPE '\\'"))})"
+            );
+        }
+
+        switch (query.Status)
+        {
+            case "active":
+                predicates.Add(
+                    "[s].[start_date] IS NOT NULL AND CAST([s].[start_date] AS date) <= CAST(@currentDate AS date) AND ([s].[end_date] IS NULL OR CAST([s].[end_date] AS date) >= CAST(@currentDate AS date))"
+                );
+                break;
+            case "upcoming":
+                predicates.Add(
+                    "[s].[start_date] IS NOT NULL AND CAST([s].[start_date] AS date) > CAST(@currentDate AS date)"
+                );
+                break;
+            case "expired":
+                predicates.Add(
+                    "[s].[end_date] IS NOT NULL AND CAST([s].[end_date] AS date) < CAST(@currentDate AS date)"
+                );
+                break;
+            case "sorted":
+                predicates.Add("[s].[sort_order] IS NOT NULL");
+                break;
+        }
+
+        return $"WHERE {string.Join(" AND ", predicates)}";
+    }
+
+    private static void AddPageFilterParameters(DbCommand command, NoticeSchedulePageQuery query)
+    {
+        if (!string.IsNullOrEmpty(query.Search))
+        {
+            NoticeRepositorySupport.AddStringParameter(
+                command,
+                "@search",
+                EscapeLikePattern(query.Search)
+            );
+        }
+
+        if (query.Status is "active" or "upcoming" or "expired")
+        {
+            NoticeRepositorySupport.AddParameter(
+                command,
+                "@currentDate",
+                DbType.DateTime2,
+                query.CurrentDate
+            );
+        }
+    }
+
+    private static string EscapeLikePattern(string value) =>
+        value
+            .Replace("\\", "\\\\")
+            .Replace("%", "\\%")
+            .Replace("_", "\\_")
+            .Replace("[", "\\[")
+            .Replace("]", "\\]");
+
+    private static string UserJoin(bool hasUser) =>
+        hasUser
+            ? "LEFT JOIN [dbo].[TS_Users] AS [u] ON [u].[user_access_code] = [s].[created_by_user_code]"
+            : string.Empty;
+
+    private static NoticeSchedulePageQuery NormalizePageQuery(NoticeSchedulePageQuery query) =>
+        query with
+        {
+            Page = Math.Max(1, query.Page),
+            PageSize = Math.Clamp(query.PageSize, 1, 100),
+            Search = string.IsNullOrWhiteSpace(query.Search)
+                ? null
+                : query.Search.Trim().ToLowerInvariant(),
+            Status = string.IsNullOrWhiteSpace(query.Status)
+                ? null
+                : query.Status.Trim().ToLowerInvariant(),
+            CurrentDate =
+                query.CurrentDate == default ? DateTime.UtcNow.Date : query.CurrentDate.Date,
+        };
+
+    private static bool MatchesPageFilters(NoticeSchedule schedule, NoticeSchedulePageQuery query)
+    {
+        if (!string.IsNullOrEmpty(query.Search))
+        {
+            var values = new[]
+            {
+                schedule.title_field,
+                schedule.CreatedByUser?.email,
+                FormatSearchDate(schedule.start_date),
+                FormatSearchDate(schedule.end_date),
+                schedule.sort_order?.ToString(CultureInfo.InvariantCulture),
+            };
+            if (
+                !values.Any(value =>
+                    value?.ToLowerInvariant().Contains(query.Search, StringComparison.Ordinal)
+                    == true
+                )
+            )
+            {
+                return false;
+            }
+        }
+
+        return query.Status switch
+        {
+            "active" => schedule.start_date.HasValue
+                && schedule.start_date.Value.Date <= query.CurrentDate.Date
+                && (
+                    !schedule.end_date.HasValue
+                    || schedule.end_date.Value.Date >= query.CurrentDate.Date
+                ),
+            "upcoming" => schedule.start_date.HasValue
+                && schedule.start_date.Value.Date > query.CurrentDate.Date,
+            "expired" => schedule.end_date.HasValue
+                && schedule.end_date.Value.Date < query.CurrentDate.Date,
+            "sorted" => schedule.sort_order.HasValue,
+            _ => true,
+        };
+    }
+
+    private static string FormatSearchDate(DateTime? value) =>
+        value?.ToString("yyyy/MM/dd", CultureInfo.InvariantCulture) ?? "-";
 
     private static async Task<NoticeSchedule?> ReadStoredScheduleAsync(
         DbConnection connection,
@@ -682,6 +945,29 @@ public sealed class NoticeScheduleRepository : INoticeScheduleRepository
                 ? null
                 : new User { email = createdBy },
         };
+    }
+
+    private static IEnumerable<NoticeSchedule> OrderSchedules(
+        IEnumerable<NoticeSchedule> schedules
+    ) =>
+        schedules
+            .OrderBy(schedule => schedule.sort_order ?? int.MaxValue)
+            .ThenBy(schedule => schedule.start_date)
+            .ThenBy(schedule => schedule.notice_schedule_id);
+
+    private static NoticeSchedulePage CreatePage(
+        IReadOnlyList<NoticeSchedule> schedules,
+        int page,
+        int pageSize
+    )
+    {
+        var total = schedules.Count;
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        page = Math.Min(page, totalPages);
+
+        var items = schedules.Skip(checked((page - 1) * pageSize)).Take(pageSize).ToArray();
+
+        return new NoticeSchedulePage(items, page, pageSize, total);
     }
 
     private static void AddOptionalValue(

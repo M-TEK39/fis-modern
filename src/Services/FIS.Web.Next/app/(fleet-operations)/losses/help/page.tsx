@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function LossesHelpPage() {
   return (
     <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card" aria-labelledby="loss-help-title">
+      <article className="vehicle-card module-help-page" aria-labelledby="loss-help-title">
         <header className="vehicle-page-header">
           <div>
             <p className="eyebrow">Losses</p>
@@ -17,21 +17,23 @@ export default function LossesHelpPage() {
             Losses Menu
           </Link>
         </header>
-        <section className="vehicle-status-maintenance-panel">
-          <h2>Legacy workflow</h2>
-          <ol>
-            <li>Open Vehicle Losses Maintenance from the Losses menu.</li>
-            <li>Search by GG number or GP registration number.</li>
-            <li>
-              Choose Edit or Delete for an existing loss, or Add Losses to capture a new record.
-            </li>
-          </ol>
-          <p className="muted-copy">
-            The workflow keeps the original losses table fields and works with both client-era and
-            expanded databases.
-          </p>
-        </section>
-      </section>
+        <div className="module-help-content">
+          <section className="module-help-section" aria-labelledby="loss-help-workflow-title">
+            <h2 id="loss-help-workflow-title">Legacy workflow</h2>
+            <ol className="module-help-steps">
+              <li>Open Vehicle Losses Maintenance from the Losses menu.</li>
+              <li>Search by GG number or GP registration number.</li>
+              <li>
+                Choose Edit or Delete for an existing loss, or Add Losses to capture a new record.
+              </li>
+            </ol>
+            <p className="module-help-note">
+              The workflow keeps the original losses table fields and works with both client-era and
+              expanded databases.
+            </p>
+          </section>
+        </div>
+      </article>
     </main>
   );
 }

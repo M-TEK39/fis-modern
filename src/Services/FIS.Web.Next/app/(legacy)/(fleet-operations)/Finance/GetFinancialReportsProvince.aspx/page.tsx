@@ -1,5 +1,14 @@
 import { redirect } from "next/navigation";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
+
+async function LegacyFinanceProvinceReportsPageContent(): Promise<never> {
+  redirect("/finance/reports/province");
+}
 
 export default function LegacyFinanceProvinceReportsPage() {
-  redirect("/finance/reports/province");
+  return (
+    <StreamedRoute>
+      <LegacyFinanceProvinceReportsPageContent />
+    </StreamedRoute>
+  );
 }

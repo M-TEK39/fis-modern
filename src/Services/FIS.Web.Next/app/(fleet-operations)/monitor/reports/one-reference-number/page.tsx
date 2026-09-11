@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   MonitorNotice,
   MonitorShell,
@@ -19,7 +20,7 @@ import {
   type MonitorReportRow,
 } from "@/lib/api/fleet-operations/api-monitor";
 
-export default async function MonitorOneReferencePage({
+async function MonitorOneReferencePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getMonitorSession();
@@ -81,5 +82,15 @@ export default async function MonitorOneReferencePage({
         Report menu
       </Link>
     </MonitorShell>
+  );
+}
+
+export default function MonitorOneReferencePage(
+  props: Parameters<typeof MonitorOneReferencePageContent>[0],
+) {
+  return (
+    <StreamedRoute>
+      <MonitorOneReferencePageContent {...props} />
+    </StreamedRoute>
   );
 }

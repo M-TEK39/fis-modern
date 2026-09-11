@@ -1,14 +1,16 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
-  getWorkshopVehicles,
-  getWorkshops,
+  getWorkshopPage,
   WorkshopApiError,
-  type WorkshopRecord,
-  type WorkshopVehicle,
+  type WorkshopPageItem,
 } from "@/lib/api/fleet-operations/api-workshop";
 import { getSession } from "@/lib/auth/session";
 
@@ -60,11 +62,7 @@ function VehicleSearch({ search, type }: Readonly<{ search: string; type: string
   );
 }
 
-function EntryTable({
-  workshops,
-  vehicles,
-}: Readonly<{ workshops: WorkshopRecord[]; vehicles: WorkshopVehicle[] }>) {
-  const vehicleByCode = new Map(vehicles.map((vehicle) => [vehicle.vmfCode, vehicle]));
+function EntryTable({ workshops }: Readonly<{ workshops: WorkshopPageItem[] }>) {
   return workshops.length === 0 ? (
     <p className="muted-copy">No previous workshop records found.</p>
   ) : (
@@ -84,16 +82,15 @@ function EntryTable({
         </thead>
         <tbody>
           {workshops.map((entry) => {
-            const vehicle = entry.vmfCode === null ? undefined : vehicleByCode.get(entry.vmfCode);
             const closed = entry.completeDate !== null || entry.completeTime !== null;
             return (
               <tr key={entry.wwCode}>
                 <td>
-                  {vehicle
-                    ? `${valueOrDash(vehicle.fleetNumber)} / ${valueOrDash(vehicle.registrationNumber)}`
+                  {entry.fleetNumber || entry.registrationNumber
+                    ? `${valueOrDash(entry.fleetNumber)} / ${valueOrDash(entry.registrationNumber)}`
                     : `VMF ${valueOrDash(entry.vmfCode)}`}
                 </td>
-                <td>{valueOrDash(vehicle?.locationDescription ?? vehicle?.locationCode)}</td>
+                <td>{valueOrDash(entry.locationCode)}</td>
                 <td>{formatDate(entry.receiveDate)}</td>
                 <td>{entry.wwCode}</td>
                 <td>Workshop</td>
@@ -123,7 +120,7 @@ function EntryTable({
   );
 }
 
-export default async function WorkshopEntryPage({
+async function WorkshopEntryPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -153,21 +150,21 @@ export default async function WorkshopEntryPage({
 
   const query = await searchParams;
   const search = Array.isArray(query.search) ? (query.search[0] ?? "") : (query.search ?? "");
-  const type = Array.isArray(query.type) ? (query.type[0] ?? "GG") : (query.type ?? "GG");
+  const requestedType = Array.isArray(query.type) ? (query.type[0] ?? "GG") : (query.type ?? "GG");
+  const type = requestedType === "GP" ? "GP" : "GG";
+  const requestedPage = Math.max(
+    1,
+    Number.parseInt(Array.isArray(query.page) ? (query.page[0] ?? "1") : (query.page ?? "1"), 10) ||
+      1,
+  );
   try {
-    const [allWorkshops, vehicles] = await Promise.all([getWorkshops(), getWorkshopVehicles()]);
-    const normalized = search.trim().toLocaleLowerCase();
-    const matchingVehicles = normalized
-      ? vehicles.filter((vehicle) =>
-          (type === "GP" ? vehicle.registrationNumber : vehicle.fleetNumber)
-            ?.toLocaleLowerCase()
-            .includes(normalized),
-        )
-      : vehicles;
-    const vmfCodes = new Set(matchingVehicles.map((vehicle) => vehicle.vmfCode));
-    const workshops = normalized
-      ? allWorkshops.filter((entry) => entry.vmfCode !== null && vmfCodes.has(entry.vmfCode))
-      : allWorkshops;
+    const result = await getWorkshopPage({
+      page: requestedPage,
+      search,
+      searchField: type === "GP" ? "registration" : "fleet",
+      status: "all",
+    });
+    const workshops = result.items;
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="workshop-entry-title">
@@ -189,7 +186,7 @@ export default async function WorkshopEntryPage({
             <div className="vehicle-form-section-header">
               <div>
                 <p className="eyebrow">
-                  {workshops.length} record{workshops.length === 1 ? "" : "s"}
+                  {result.total} record{result.total === 1 ? "" : "s"}
                 </p>
                 <h2 id="workshop-history-title">Previous Workshop Entries</h2>
               </div>
@@ -197,7 +194,46 @@ export default async function WorkshopEntryPage({
                 Add Entry
               </Link>
             </div>
-            <EntryTable workshops={workshops} vehicles={vehicles} />
+            <EntryTable workshops={workshops} />
+            {result.totalPages > 1 ? (
+              <nav className="vehicle-pagination" aria-label="Workshop entry pages">
+                {result.page > 1 ? (
+                  <Link
+                    className="vehicle-pagination-button"
+                    href={`/workshop/entry?${new URLSearchParams({
+                      search,
+                      type,
+                      page: String(result.page - 1),
+                    }).toString()}`}
+                  >
+                    Previous
+                  </Link>
+                ) : (
+                  <span className="vehicle-pagination-button vehicle-pagination-disabled">
+                    Previous
+                  </span>
+                )}
+                <span className="vehicle-pagination-meta" aria-live="polite">
+                  Page {result.page} of {result.totalPages}
+                </span>
+                {result.page < result.totalPages ? (
+                  <Link
+                    className="vehicle-pagination-button"
+                    href={`/workshop/entry?${new URLSearchParams({
+                      search,
+                      type,
+                      page: String(result.page + 1),
+                    }).toString()}`}
+                  >
+                    Next
+                  </Link>
+                ) : (
+                  <span className="vehicle-pagination-button vehicle-pagination-disabled">
+                    Next
+                  </span>
+                )}
+              </nav>
+            ) : null}
           </section>
         </section>
       </main>
@@ -224,4 +260,12 @@ export default async function WorkshopEntryPage({
       </main>
     );
   }
+}
+
+export default function WorkshopEntryPage(props: Parameters<typeof WorkshopEntryPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <WorkshopEntryPageContent {...props} />
+    </Suspense>
+  );
 }

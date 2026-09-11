@@ -26,7 +26,9 @@ public static class Program
             await using var dbContext = new FisDbContext(options);
             await EnsureSafeDatabaseStateAsync(dbContext);
 
-            var pendingMigrations = (await dbContext.Database.GetPendingMigrationsAsync()).ToArray();
+            var pendingMigrations = (
+                await dbContext.Database.GetPendingMigrationsAsync()
+            ).ToArray();
             if (pendingMigrations.Length == 0)
             {
                 Console.WriteLine("Local development database is already current.");
@@ -46,7 +48,9 @@ public static class Program
         }
         catch (Exception exception)
         {
-            Console.Error.WriteLine($"Development database bootstrap refused or failed: {exception.Message}");
+            Console.Error.WriteLine(
+                $"Development database bootstrap refused or failed: {exception.Message}"
+            );
             return 1;
         }
     }
@@ -107,7 +111,9 @@ public static class Program
 
         await using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync())
-            throw new InvalidOperationException("Could not inspect the local development database state.");
+            throw new InvalidOperationException(
+                "Could not inspect the local development database state."
+            );
 
         var hasMigrationHistory = reader.GetInt32(0) == 1;
         var userTableCount = reader.GetInt32(1);
@@ -119,6 +125,8 @@ public static class Program
         }
 
         if (dbContext.Database.GetDbConnection().State != ConnectionState.Open)
-            throw new InvalidOperationException("The local development database connection closed unexpectedly.");
+            throw new InvalidOperationException(
+                "The local development database connection closed unexpectedly."
+            );
     }
 }

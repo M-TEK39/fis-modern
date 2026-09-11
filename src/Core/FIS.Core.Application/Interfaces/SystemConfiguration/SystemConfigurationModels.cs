@@ -58,10 +58,7 @@ public sealed record SystemConfigurationUpdate(
 /// Metadata for one successful update operation. This is an operation id, not
 /// a configuration version or an optimistic-concurrency token.
 /// </summary>
-public sealed record SystemConfigurationUpdateMetadata(
-    Guid UpdateId,
-    DateTimeOffset UpdatedAtUtc
-);
+public sealed record SystemConfigurationUpdateMetadata(Guid UpdateId, DateTimeOffset UpdatedAtUtc);
 
 /// <summary>
 /// Result of a Key Vault-backed system configuration update.

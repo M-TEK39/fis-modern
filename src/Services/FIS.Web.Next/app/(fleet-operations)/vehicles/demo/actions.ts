@@ -8,10 +8,11 @@ import {
   deleteDemoVehicle,
   DemoVehicleApiError,
   getDemoVehicle,
-  getDemoVehicleReport,
+  getDemoVehicleReportPage,
   searchDemoVehicles,
   updateDemoVehicle,
   type DemoVehicleRecord,
+  type DemoVehicleReportPage,
   type DemoVehicleSearchMode,
   type DemoVehicleWriteInput,
 } from "@/lib/api/vehicles/api-demo-vehicles";
@@ -22,6 +23,7 @@ export type DemoVehicleActionState = {
   message?: string;
   vehicle?: DemoVehicleRecord;
   matches?: DemoVehicleRecord[];
+  report?: DemoVehicleReportPage;
 };
 
 async function authorizeDemoVehicles() {
@@ -252,12 +254,16 @@ export async function deleteDemoVehicleAction(formData: FormData): Promise<DemoV
   }
 }
 
-export async function loadDemoVehicleReportAction(): Promise<DemoVehicleActionState> {
+export async function loadDemoVehicleReportAction(page = 1): Promise<DemoVehicleActionState> {
   const access = await authorizeDemoVehicles();
   if (!access.ok) return { status: "error", message: access.message };
+  if (!Number.isSafeInteger(page) || page < 1) {
+    return { status: "error", message: "The requested report page is invalid." };
+  }
 
   try {
-    return { status: "success", matches: await getDemoVehicleReport() };
+    const report = await getDemoVehicleReportPage(page);
+    return { status: "success", report };
   } catch (error) {
     console.error(
       "FIS demo vehicle report failed",

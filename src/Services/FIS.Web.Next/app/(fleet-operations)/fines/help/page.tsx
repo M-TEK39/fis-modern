@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
@@ -60,6 +61,15 @@ function hasRole(roles: readonly string[], role: string) {
   );
 }
 
+function HelpFallback() {
+  return (
+    <div className="loading-card" aria-busy="true">
+      <span className="spinner" aria-hidden="true" />
+      <p>Loading help…</p>
+    </div>
+  );
+}
+
 function AccessRestricted() {
   return (
     <section className="vehicle-status-card" role="alert">
@@ -96,7 +106,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function FinesHelpPage() {
+async function FinesHelpContent() {
   await connection();
   const session = await getSession();
 
@@ -105,58 +115,35 @@ export default async function FinesHelpPage() {
   }
 
   if (session.status === "expired") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <SessionRecovery returnPath="/fines/help" />
-      </main>
-    );
+    return <SessionRecovery returnPath="/fines/help" />;
   }
 
   if (session.status === "unavailable") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <ApiUnavailable />
-      </main>
-    );
+    return <ApiUnavailable />;
   }
 
   if (!hasRole(session.roles, REPORTS_ROLE)) {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <AccessRestricted />
-      </main>
-    );
+    return <AccessRestricted />;
   }
 
   return (
-    <main className="page-shell vehicle-page-shell">
-      <article className="vehicle-card" aria-labelledby="fines-help-title">
-        <header className="vehicle-page-header">
-          <div>
-            <p className="eyebrow">Fines maintenance</p>
-            <h1 id="fines-help-title">Fines Maintenance Information / Help</h1>
-            <p>Definitions for the fields captured in the Fines section.</p>
-          </div>
-          <Link className="button button-secondary" href="/fines">
-            Fines Menu
-          </Link>
-        </header>
-
-        <section aria-labelledby="fines-help-purpose-title">
+    <>
+      <div className="module-help-content">
+        <section className="module-help-section" aria-labelledby="fines-help-purpose-title">
           <h2 id="fines-help-purpose-title">Purpose of Program</h2>
-          <p>
+          <p className="module-help-intro">
             The Fines program provides a uniform process for capturing traffic fines and analysing
             the outcome of those matters.
           </p>
         </section>
 
-        <section aria-labelledby="fines-help-fields-title">
+        <section className="module-help-section" aria-labelledby="fines-help-fields-title">
           <h2 id="fines-help-fields-title">Term / Field Analysis</h2>
           <p>
             The definitions below describe the fields used throughout the Fines maintenance screens.
           </p>
           <div className="vehicle-table-wrapper">
-            <table className="vehicle-table">
+            <table className="vehicle-table module-help-table">
               <caption className="sr-only">Fines maintenance terms and field definitions</caption>
               <thead>
                 <tr>
@@ -175,6 +162,30 @@ export default async function FinesHelpPage() {
             </table>
           </div>
         </section>
+      </div>
+      <div className="vehicle-footer-actions">
+        <Link className="button button-secondary" href="/fines">
+          Fines Menu
+        </Link>
+      </div>
+    </>
+  );
+}
+
+export default function FinesHelpPage() {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <article className="vehicle-card module-help-page" aria-labelledby="fines-help-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Fines maintenance</p>
+            <h1 id="fines-help-title">Fines Maintenance Information / Help</h1>
+            <p>Definitions for the fields captured in the Fines section.</p>
+          </div>
+        </header>
+        <Suspense fallback={<HelpFallback />}>
+          <FinesHelpContent />
+        </Suspense>
       </article>
     </main>
   );

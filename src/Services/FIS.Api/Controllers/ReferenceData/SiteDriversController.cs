@@ -26,6 +26,8 @@ namespace FIS.Api.Controllers;
 )]
 public sealed class SiteDriversController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
     private const string DriversTable = "site_drivers";
     private const string LicenceTypesTable = "driver_licence_types";
 
@@ -65,6 +67,70 @@ public sealed class SiteDriversController : BaseApiController
         catch (Exception ex)
         {
             return HandleFailure(ex, "retrieving site drivers");
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetDriversPage(
+        [FromQuery] int? siteCode,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (siteCode is null)
+        {
+            return BadRequest(new { message = "siteCode is required." });
+        }
+
+        var normalizedPage = Math.Max(1, page);
+        var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
+
+        try
+        {
+            var result = await WithConnectionAsync(async connection =>
+            {
+                var schema = await ReadTableSchemaAsync(connection, DriversTable);
+                EnsureDriverTable(schema);
+
+                var filter = $"{BuildDriverPredicate(schema)} AND [site_code] = @siteCode";
+                var total = await CountDriversAsync(connection, filter, siteCode.Value);
+                var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)normalizedPageSize));
+                var currentPage = Math.Min(normalizedPage, totalPages);
+                var offset = checked((long)(currentPage - 1) * normalizedPageSize);
+
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    $"{BuildDriverSelect(schema)} WHERE {filter} ORDER BY [driver_surname], [driver_firstname], [site_driver_code] OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY";
+                AddParameter(command, "@siteCode", siteCode.Value);
+                AddParameter(command, "@offset", offset);
+                AddParameter(command, "@pageSize", normalizedPageSize);
+
+                var items = await ReadDriversAsync(command);
+                return (
+                    Items: items,
+                    Page: currentPage,
+                    PageSize: normalizedPageSize,
+                    Total: total
+                );
+            });
+
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = Math.Max(
+                        1,
+                        (int)Math.Ceiling(result.Total / (double)result.PageSize)
+                    ),
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            return HandleFailure(ex, "retrieving paged site drivers");
         }
     }
 
@@ -654,6 +720,18 @@ public sealed class SiteDriversController : BaseApiController
             ? " AND COALESCE([is_deleted], 0) = 0"
             : string.Empty;
         return $"[driver_active] = 1{deletedPredicate}";
+    }
+
+    private static async Task<int> CountDriversAsync(
+        DbConnection connection,
+        string filter,
+        int siteCode
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM [dbo].[{DriversTable}] WHERE {filter}";
+        AddParameter(command, "@siteCode", siteCode);
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
     private static async Task<List<DriverDto>> ReadDriversAsync(DbCommand command)

@@ -4,6 +4,7 @@ import { connection } from "next/server";
 
 import { saveAccidentTowingAction } from "@/app/(fleet-operations)/call-centre/incident/capture/actions";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   CallCentreApiError,
   getCallCentreIncident,
@@ -150,7 +151,7 @@ function TowingForm({
   );
 }
 
-export default async function LegacyAccidentTowDetailPage({
+async function LegacyAccidentTowDetailPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -248,5 +249,15 @@ export default async function LegacyAccidentTowDetailPage({
         ) : null}
       </section>
     </main>
+  );
+}
+
+export default function LegacyAccidentTowDetailPage(
+  props: Readonly<{ searchParams: SearchParams }>,
+) {
+  return (
+    <StreamedRoute>
+      <LegacyAccidentTowDetailPageContent {...props} />
+    </StreamedRoute>
   );
 }

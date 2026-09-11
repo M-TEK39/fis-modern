@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
@@ -10,7 +11,7 @@ import {
 import { saveAssetVerificationAction } from "@/app/(fleet-operations)/vehicle-verification/actions";
 import {
   AssetVerificationApiError,
-  getAssetVerifications,
+  getAssetVerificationsForVehicle,
   type AssetVerificationRecord,
 } from "@/lib/api/fleet-operations/api-asset-verification";
 import { ContractApiError, getContractPage } from "@/lib/api/finance/api-contracts";
@@ -23,6 +24,7 @@ import {
   VehicleCreateApiError,
 } from "@/lib/api/vehicles/api-vehicle-create";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 type Mode = "add" | "edit";
@@ -86,7 +88,7 @@ function ErrorCard({
   );
 }
 
-export async function AssetVerificationDetailsPage({
+async function AssetVerificationDetailsContent({
   mode,
   searchParams,
   routePath,
@@ -147,7 +149,7 @@ export async function AssetVerificationDetailsPage({
       );
     const vehicle = await getVehicleForEdit(exactMatches[0].vmfCode);
     const [records, contracts] = await Promise.all([
-      getAssetVerifications(),
+      getAssetVerificationsForVehicle(vehicle.vmfCode),
       getContractPage({ vmfCode: vehicle.vmfCode, page: 1, pageSize: 100 }),
     ]);
     const existing = records.find((record) => recordMatches(record, exactMatches[0], gg));
@@ -563,4 +565,14 @@ export async function AssetVerificationDetailsPage({
       />
     );
   }
+}
+
+export function AssetVerificationDetailsPage(
+  props: Readonly<{ mode: Mode; searchParams: SearchParams; routePath: string }>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <AssetVerificationDetailsContent {...props} />
+    </Suspense>
+  );
 }

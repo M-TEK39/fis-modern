@@ -148,6 +148,74 @@ public sealed class PrivateHireRepository : IPrivateHireRepository
                 )
         );
 
+    public async Task<PrivateHirePage> GetPageAsync(PrivateHirePageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var searchTerm = query.SearchTerm?.Trim();
+        var columns = await GetAvailableColumnsAsync(
+            PrivateHireTableName,
+            PrivateHireBusinessColumns
+        );
+        var conditions = new List<string> { GetActiveFilter(columns) };
+        DateTime? recentReturnDate = null;
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            conditions.Add(
+                "([registration_number] LIKE @searchTerm OR [engine_number] LIKE @searchTerm OR [chassis_number] LIKE @searchTerm)"
+            );
+        }
+        else
+        {
+            recentReturnDate = DateTime.Now.AddDays(-30);
+            conditions.Add("([return_date] IS NULL OR [return_date] >= @recentReturnDate)");
+        }
+
+        var whereClause = string.Join(" AND ", conditions);
+        await using var scope = await OpenConnectionAsync();
+
+        await using var countCommand = scope.Connection.CreateCommand();
+        countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        countCommand.CommandText = $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{PrivateHireTableName}]
+            WHERE {whereClause}
+            """;
+        AddPrivateHirePageParameters(countCommand, searchTerm, recentReturnDate);
+        var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Min(requestedPage, totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        dataCommand.CommandText = $"""
+            SELECT {string.Join(
+                ", ",
+                PrivateHireBusinessColumns.Concat(OptionalAuditColumns).Select(column =>
+                    GetProjection(columns, column)
+                )
+            )}
+            FROM [dbo].[{PrivateHireTableName}]
+            WHERE {whereClause}
+            ORDER BY [PHV_code] DESC
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddPrivateHirePageParameters(dataCommand, searchTerm, recentReturnDate);
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<PrivateHire>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            items.Add(MapPrivateHire(reader, columns));
+
+        return new PrivateHirePage(items, page, pageSize, total);
+    }
+
     public async Task<PrivateHire> CreateAsync(PrivateHire privateHire, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(privateHire);
@@ -235,6 +303,59 @@ public sealed class PrivateHireRepository : IPrivateHireRepository
 
     public async Task<IEnumerable<PrivateHireContractorRecord>> GetContractorsAsync() =>
         await QueryContractorsAsync();
+
+    public async Task<PrivateHireContractorPage> GetContractorPageAsync(
+        PrivateHireContractorPageQuery query
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var columns = await GetAvailableColumnsAsync(
+            ContractorsTableName,
+            ContractorRequiredColumns
+        );
+        var whereClause = GetActiveFilter(columns);
+        await using var scope = await OpenConnectionAsync();
+
+        await using var countCommand = scope.Connection.CreateCommand();
+        countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        countCommand.CommandText = $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{ContractorsTableName}]
+            WHERE {whereClause}
+            """;
+        var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Min(requestedPage, totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        dataCommand.CommandText = $"""
+            SELECT {string.Join(
+                ", ",
+                ContractorBusinessColumns.Concat(OptionalAuditColumns).Select(column =>
+                    GetProjection(columns, column)
+                )
+            )}
+            FROM [dbo].[{ContractorsTableName}]
+            WHERE {whereClause}
+            ORDER BY [contractor_name], [contractor_id]
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<PrivateHireContractorRecord>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            items.Add(MapContractor(reader, columns));
+
+        return new PrivateHireContractorPage(items, page, pageSize, total);
+    }
 
     public async Task<PrivateHireContractorRecord?> GetContractorByIdAsync(int contractorId) =>
         (
@@ -401,6 +522,18 @@ public sealed class PrivateHireRepository : IPrivateHireRepository
         while (await reader.ReadAsync())
             results.Add(MapContractor(reader, columns));
         return results;
+    }
+
+    private static void AddPrivateHirePageParameters(
+        DbCommand command,
+        string? searchTerm,
+        DateTime? recentReturnDate
+    )
+    {
+        if (recentReturnDate.HasValue)
+            AddParameter(command, "@recentReturnDate", DbType.DateTime, recentReturnDate.Value);
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+            AddParameter(command, "@searchTerm", DbType.String, $"%{searchTerm}%");
     }
 
     private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync(

@@ -2,18 +2,21 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { MenuSection } from "@/components/ui/menu-section";
 import {
   ApiUnavailable,
+  PrivateHirePagination,
   PrivateHireNotice,
   valueOrDash,
   dateValue,
 } from "@/app/(fleet-operations)/private-hire/_components";
 import {
+  DEFAULT_PRIVATE_HIRE_PAGE_SIZE,
   PrivateHireApiError,
   getPrivateHireContractors,
-  getPrivateHireVehicles,
+  getPrivateHirePage,
 } from "@/lib/api/fleet-operations/api-private-hire";
 import { getSession } from "@/lib/auth/session";
 
@@ -25,7 +28,12 @@ function hasRole(roles: readonly string[]) {
   );
 }
 
-export default async function PrivateHirePage({
+function requestedPage(value: string | string[] | undefined) {
+  const candidate = Number(Array.isArray(value) ? value[0] : value);
+  return Number.isInteger(candidate) && candidate > 0 ? candidate : 1;
+}
+
+async function PrivateHirePageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -56,8 +64,11 @@ export default async function PrivateHirePage({
 
   const query = await searchParams;
   try {
-    const [vehicles, contractors] = await Promise.all([
-      getPrivateHireVehicles(),
+    const [vehiclePage, contractors] = await Promise.all([
+      getPrivateHirePage({
+        page: requestedPage(query.page),
+        pageSize: DEFAULT_PRIVATE_HIRE_PAGE_SIZE,
+      }),
       getPrivateHireContractors(),
     ]);
     const contractorNames = new Map(
@@ -115,9 +126,9 @@ export default async function PrivateHirePage({
                 <p className="eyebrow">Live records</p>
                 <h2 id="private-hire-preview-title">Private Hire vehicle preview</h2>
               </div>
-              <span className="muted-copy">{vehicles.length} active or recently returned</span>
+              <span className="muted-copy">{vehiclePage.total} active or recently returned</span>
             </div>
-            {vehicles.length === 0 ? (
+            {vehiclePage.total === 0 ? (
               <p className="muted-copy">No active Private Hire vehicles are available.</p>
             ) : (
               <div className="vehicle-table-wrapper">
@@ -134,7 +145,7 @@ export default async function PrivateHirePage({
                     </tr>
                   </thead>
                   <tbody>
-                    {vehicles.slice(0, 100).map((vehicle) => (
+                    {vehiclePage.items.map((vehicle) => (
                       <tr key={vehicle.phvCode}>
                         <td>{valueOrDash(vehicle.registrationNumber)}</td>
                         <td>{valueOrDash(vehicle.modelDescription)}</td>
@@ -152,6 +163,12 @@ export default async function PrivateHirePage({
                 </table>
               </div>
             )}
+            <PrivateHirePagination
+              path="/private-hire"
+              query={query}
+              page={vehiclePage.page}
+              totalPages={vehiclePage.totalPages}
+            />
           </section>
         </section>
       </main>
@@ -169,4 +186,12 @@ export default async function PrivateHirePage({
       </main>
     );
   }
+}
+
+export default function PrivateHirePage(props: Parameters<typeof PrivateHirePageContent>[0]) {
+  return (
+    <StreamedRoute>
+      <PrivateHirePageContent {...props} />
+    </StreamedRoute>
+  );
 }

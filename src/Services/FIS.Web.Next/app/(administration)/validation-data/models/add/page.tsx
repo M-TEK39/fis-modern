@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -12,6 +13,7 @@ import {
   type ModelRecord,
 } from "@/lib/api/reference-data/api-models";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 const emptyModel: ModelRecord = {
   modelCode: 0,
@@ -55,7 +57,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function ModelAddPage() {
+async function ModelAddPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -119,4 +121,12 @@ export default async function ModelAddPage() {
       </main>
     );
   }
+}
+
+export default function ModelAddPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <ModelAddPageContent />
+    </Suspense>
+  );
 }

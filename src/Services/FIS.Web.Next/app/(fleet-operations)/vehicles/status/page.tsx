@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import VehicleStatusReportClient from "@/app/(fleet-operations)/vehicles/status/vehicle-status-report-client";
 import {
   getVehicleStatusReport,
@@ -67,15 +68,6 @@ function StatusCard({
   );
 }
 
-function LoadingState() {
-  return (
-    <div className="loading-card" aria-busy="true">
-      <span className="spinner" aria-hidden="true" />
-      <p>Loading vehicle status report...</p>
-    </div>
-  );
-}
-
 async function VehicleStatusReportContent({ routePath }: Readonly<{ routePath: string }>) {
   try {
     const report = await getVehicleStatusReport();
@@ -107,7 +99,7 @@ async function VehicleStatusReportContent({ routePath }: Readonly<{ routePath: s
   }
 }
 
-export default async function VehicleStatusReportPage({
+async function VehicleStatusReportPageContent({
   routePath = "/vehicles/status",
 }: VehicleStatusReportPageProps) {
   await connection();
@@ -174,10 +166,18 @@ export default async function VehicleStatusReportPage({
             Vehicle Master
           </Link>
         </header>
-        <Suspense fallback={<LoadingState />}>
+        <Suspense fallback={<RouteLoading />}>
           <VehicleStatusReportContent routePath={routePath} />
         </Suspense>
       </section>
     </main>
+  );
+}
+
+export default function VehicleStatusReportPage(props: VehicleStatusReportPageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <VehicleStatusReportPageContent {...props} />
+    </Suspense>
   );
 }

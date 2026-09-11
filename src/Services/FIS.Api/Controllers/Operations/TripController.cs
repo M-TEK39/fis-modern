@@ -109,6 +109,20 @@ public class TripAuthorityVehicleDto
     public string? ContractType { get; set; }
 }
 
+public sealed class TripAuthorityVehiclePageItemDto
+{
+    public int VmfCode { get; set; }
+    public int ContractCode { get; set; }
+    public short SiteCode { get; set; }
+    public string? FleetNumber { get; set; }
+    public string? RegistrationNumber { get; set; }
+    public DateTime? LicenceDueDate { get; set; }
+    public string? MakeDescription { get; set; }
+    public string? ModelDescription { get; set; }
+    public string? ContractType { get; set; }
+    public int? TripAuthorityCode { get; set; }
+}
+
 public class TripAuthorityDetailsDto
 {
     public TripDto Trip { get; set; } = new();
@@ -178,12 +192,21 @@ public class CloseTripRouteDto
 [Route("api/[controller]")]
 public class TripController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+
     private readonly ITripService _tripService;
+    private readonly ITripRepository _tripRepository;
     private readonly ILogger<TripController> _logger;
 
-    public TripController(ITripService tripService, ILogger<TripController> logger)
+    public TripController(
+        ITripService tripService,
+        ITripRepository tripRepository,
+        ILogger<TripController> logger
+    )
     {
         _tripService = tripService;
+        _tripRepository = tripRepository;
         _logger = logger;
     }
 
@@ -226,6 +249,98 @@ public class TripController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving Trip Authority vehicles");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Get a server-paginated page of in-service vehicles that do not have an
+    /// open trip authority. Location and number filters are data filters; the
+    /// caller must retain the existing role-based access filtering.
+    /// </summary>
+    [HttpGet("vehicles/page")]
+    public async Task<ActionResult> GetTripAuthorityInServicePage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] string? searchMode = null,
+        [FromQuery] string? number = null,
+        [FromQuery] short? departmentCode = null,
+        [FromQuery] short? siteCode = null,
+        [FromQuery] int? authority = null
+    )
+    {
+        if (
+            !TryBuildVehiclePageQuery(
+                page,
+                pageSize,
+                searchMode,
+                number,
+                departmentCode,
+                siteCode,
+                authority,
+                out var query,
+                out var error
+            )
+        )
+        {
+            return BadRequest(new { message = error });
+        }
+
+        try
+        {
+            var result = await _tripRepository.GetTripAuthorityInServicePageAsync(query);
+            return Ok(MapTripAuthorityVehiclePage(result));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged in-service Trip Authority vehicles");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    /// <summary>
+    /// Get a server-paginated page of vehicles currently OUT on an open trip
+    /// authority. The authority filter is applied to the displayed latest open
+    /// authority for each vehicle, matching the legacy table behavior.
+    /// Location and number filters are data filters; the caller must retain the
+    /// existing role-based access filtering.
+    /// </summary>
+    [HttpGet("vehicles/out/page")]
+    public async Task<ActionResult> GetTripAuthorityOutPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize,
+        [FromQuery] string? searchMode = null,
+        [FromQuery] string? number = null,
+        [FromQuery] short? departmentCode = null,
+        [FromQuery] short? siteCode = null,
+        [FromQuery] int? authority = null
+    )
+    {
+        if (
+            !TryBuildVehiclePageQuery(
+                page,
+                pageSize,
+                searchMode,
+                number,
+                departmentCode,
+                siteCode,
+                authority,
+                out var query,
+                out var error
+            )
+        )
+        {
+            return BadRequest(new { message = error });
+        }
+
+        try
+        {
+            var result = await _tripRepository.GetTripAuthorityOutPageAsync(query);
+            return Ok(MapTripAuthorityVehiclePage(result));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged OUT Trip Authority vehicles");
             return StatusCode(500, "Internal server error");
         }
     }
@@ -768,6 +883,78 @@ public class TripController : BaseApiController
             return StatusCode(500, "Internal server error");
         }
     }
+
+    private static bool TryBuildVehiclePageQuery(
+        int page,
+        int pageSize,
+        string? searchMode,
+        string? number,
+        short? departmentCode,
+        short? siteCode,
+        int? authority,
+        out TripAuthorityVehiclePageQuery query,
+        out string? error
+    )
+    {
+        var normalizedSearchMode = string.IsNullOrWhiteSpace(searchMode)
+            ? "GG"
+            : searchMode.Trim().ToUpperInvariant();
+        if (normalizedSearchMode is not ("GG" or "GP"))
+        {
+            query = default!;
+            error = "Search mode must be GG or GP.";
+            return false;
+        }
+
+        var normalizedNumber = string.IsNullOrWhiteSpace(number) ? null : number.Trim();
+        if (normalizedNumber?.Length > 50)
+        {
+            query = default!;
+            error = "Number search cannot exceed 50 characters.";
+            return false;
+        }
+
+        if (departmentCode is <= 0 || siteCode is <= 0 || authority is <= 0)
+        {
+            query = default!;
+            error = "Department, site, and authority filters must be positive numbers.";
+            return false;
+        }
+
+        query = new TripAuthorityVehiclePageQuery(
+            Math.Max(1, page),
+            Math.Clamp(pageSize, 1, MaximumPageSize),
+            normalizedSearchMode,
+            normalizedNumber,
+            departmentCode,
+            siteCode,
+            authority
+        );
+        error = null;
+        return true;
+    }
+
+    private static object MapTripAuthorityVehiclePage(TripAuthorityVehiclePage result) =>
+        new
+        {
+            items = result.Items.Select(item => new TripAuthorityVehiclePageItemDto
+            {
+                VmfCode = item.VmfCode,
+                ContractCode = item.ContractCode,
+                SiteCode = item.SiteCode,
+                FleetNumber = item.FleetNumber,
+                RegistrationNumber = item.RegistrationNumber,
+                LicenceDueDate = item.LicenceDueDate,
+                MakeDescription = item.MakeDescription,
+                ModelDescription = item.ModelDescription,
+                ContractType = item.ContractType,
+                TripAuthorityCode = item.TripAuthorityCode,
+            }),
+            page = result.Page,
+            pageSize = result.PageSize,
+            total = result.Total,
+            totalPages = result.TotalPages,
+        };
 
     private static TripDto MapTrip(Trip trip) =>
         new()

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 
 type Query = Record<string, string | string[] | undefined>;
 
@@ -10,9 +11,9 @@ function queryValue(query: Query, ...names: string[]) {
   return "";
 }
 
-export default async function LegacyFinanceYearPage({
+async function LegacyFinanceYearPageContent({
   searchParams,
-}: Readonly<{ searchParams: Promise<Query> }>) {
+}: Readonly<{ searchParams: Promise<Query> }>): Promise<never> {
   const query = await searchParams;
   const item = queryValue(query, "Item", "item").toLowerCase();
   const actionParameter = queryValue(query, "action").toLowerCase();
@@ -32,4 +33,12 @@ export default async function LegacyFinanceYearPage({
           ? "income-split-detailed"
           : "department";
   redirect(`/finance/reports/${action}`);
+}
+
+export default function LegacyFinanceYearPage(props: Readonly<{ searchParams: Promise<Query> }>) {
+  return (
+    <StreamedRoute>
+      <LegacyFinanceYearPageContent {...props} />
+    </StreamedRoute>
+  );
 }

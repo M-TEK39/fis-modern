@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-
 import {
   FinanceFrame,
   FinanceMenuLink,
@@ -12,7 +15,7 @@ import {
 } from "@/app/(fleet-operations)/finance/_components";
 import { getSession } from "@/lib/auth/session";
 
-export default async function FinanceAuditTrailPage() {
+async function FinanceAuditTrailContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -47,5 +50,13 @@ export default async function FinanceAuditTrailPage() {
         </FinanceMenuSection>
       </div>
     </FinanceFrame>
+  );
+}
+
+export default function FinanceAuditTrailPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <FinanceAuditTrailContent />
+    </Suspense>
   );
 }

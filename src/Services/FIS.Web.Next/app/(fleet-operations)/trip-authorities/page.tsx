@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -11,9 +15,12 @@ import {
 import { getDepartments } from "@/lib/api/reference-data/api-departments";
 import { getSites } from "@/lib/api/reference-data/api-sites";
 import {
-  getTripAuthorities,
-  getTripAuthorityVehicles,
-  type TripAuthorityVehicle,
+  DEFAULT_TRIP_AUTHORITY_PAGE_SIZE,
+  emptyTripAuthorityVehiclePage,
+  getTripAuthorityInPage,
+  getTripAuthorityOutPage,
+  type TripAuthorityVehiclePage,
+  type TripAuthorityVehiclePageOptions,
 } from "@/lib/api/fleet-operations/api-trip-authorities";
 import { MenuSection } from "@/components/ui/menu-section";
 
@@ -21,9 +28,9 @@ type SearchParams = Record<string, string | string[] | undefined>;
 type Tab = "gg" | "department" | "authority";
 type SearchMode = "GG" | "GP";
 type AccessMode = "SITE" | "DEP" | "ALL";
-type DisplayRow = TripAuthorityVehicle & { tripId?: number; contractCode?: number };
+type DisplayRow = TripAuthorityVehiclePage["items"][number];
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = DEFAULT_TRIP_AUTHORITY_PAGE_SIZE;
 
 function selectedTab(value: string): Tab {
   return value === "department" || value === "authority" ? value : "gg";
@@ -71,41 +78,6 @@ function accessMode(
   }
 
   return "SITE";
-}
-
-function matchesMode(
-  rowSiteCode: number | null,
-  mode: AccessMode,
-  currentDepartment: number | null,
-  currentSite: number | null,
-  siteDepartments: Map<number, number | null>,
-) {
-  if (mode === "ALL") return true;
-  if (mode === "SITE") return currentSite !== null && rowSiteCode === currentSite;
-  return (
-    currentDepartment !== null &&
-    rowSiteCode !== null &&
-    siteDepartments.get(rowSiteCode) === currentDepartment
-  );
-}
-
-function matchesLocation(
-  rowSiteCode: number | null,
-  selectedDepartment: number | null,
-  selectedSite: number | null,
-  siteDepartments: Map<number, number | null>,
-) {
-  if (selectedSite !== null && rowSiteCode !== selectedSite) return false;
-  return (
-    selectedDepartment === null ||
-    (rowSiteCode !== null && siteDepartments.get(rowSiteCode) === selectedDepartment)
-  );
-}
-
-function matchesNumber(row: DisplayRow, number: string, mode: SearchMode) {
-  if (!number) return true;
-  const candidate = mode === "GG" ? row.fleetNumber : row.registrationNumber;
-  return candidate?.toLocaleLowerCase().includes(number.toLocaleLowerCase()) === true;
 }
 
 function hrefWithValues(path: string, values: Record<string, string | number | undefined>) {
@@ -350,23 +322,20 @@ function FilterForm({
 function VehicleTable({
   title,
   emptyText,
-  rows,
-  page,
+  result,
   pageParam,
   queryValues,
   action,
 }: Readonly<{
   title: string;
   emptyText: string;
-  rows: readonly DisplayRow[];
-  page: number;
+  result: TripAuthorityVehiclePage;
   pageParam: "pageIn" | "pageOut";
   queryValues: Record<string, string | number | undefined>;
   action: (row: DisplayRow) => string;
 }>) {
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const safePage = Math.min(Math.max(page, 1), pageCount);
-  const visibleRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pageCount = Math.max(1, result.totalPages);
+  const safePage = Math.min(Math.max(result.page, 1), pageCount);
   const previousHref = hrefWithValues("/trip-authorities", {
     ...queryValues,
     [pageParam]: safePage - 1,
@@ -383,12 +352,12 @@ function VehicleTable({
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">
-            {rows.length} record{rows.length === 1 ? "" : "s"}
+            {result.total} record{result.total === 1 ? "" : "s"}
           </p>
           <h2 id={`${title.toLowerCase().replaceAll(" ", "-")}-title`}>{title}</h2>
         </div>
       </div>
-      {rows.length === 0 ? (
+      {result.items.length === 0 ? (
         <div className="vehicle-empty-state">
           <p>{emptyText}</p>
         </div>
@@ -409,7 +378,7 @@ function VehicleTable({
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map((row) => (
+                {result.items.map((row) => (
                   <tr key={`${title}-${row.vmfCode}-${row.tripId ?? "in"}`}>
                     <td>{valueOrDash(row.fleetNumber)}</td>
                     <td>{valueOrDash(row.registrationNumber)}</td>
@@ -450,7 +419,7 @@ function VehicleTable({
   );
 }
 
-export default async function TripAuthoritiesPage({
+async function TripAuthoritiesPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<SearchParams> }>) {
   const session = await getTripSession();
@@ -477,53 +446,45 @@ export default async function TripAuthoritiesPage({
   const selectedSite = mode === "SITE" ? currentSite : requestedSite;
   const pageIn = parsePositiveInteger(queryValue(query.pageIn)) ?? 1;
   const pageOut = parsePositiveInteger(queryValue(query.pageOut)) ?? 1;
+  const authorityNumber = tab === "authority" ? parsePositiveInteger(authority) : null;
+  const hasValidLocationFilters =
+    (selectedDepartment === null || selectedDepartment > 0) &&
+    (selectedSite === null || selectedSite > 0);
+  const hasVehicleScope =
+    hasValidLocationFilters &&
+    (mode === "ALL" ||
+      (mode === "SITE"
+        ? currentSite !== null && currentSite > 0
+        : currentDepartment !== null && currentDepartment > 0));
+  const canQueryVehiclePages = hasVehicleScope && (tab !== "authority" || authorityNumber !== null);
+  const pageQuery: TripAuthorityVehiclePageOptions = {
+    searchMode: tab === "gg" ? searchMode : "GG",
+    number: tab === "gg" ? number : undefined,
+    departmentCode: selectedDepartment ?? undefined,
+    siteCode: selectedSite ?? undefined,
+    authority: authorityNumber ?? undefined,
+    pageSize: PAGE_SIZE,
+  };
 
-  const [vehiclesResult, tripsResult, departmentsResult, sitesResult] = await Promise.allSettled([
-    getTripAuthorityVehicles(),
-    getTripAuthorities(),
+  const [inPageResult, outPageResult, departmentsResult, sitesResult] = await Promise.allSettled([
+    canQueryVehiclePages
+      ? getTripAuthorityInPage({ ...pageQuery, page: pageIn })
+      : Promise.resolve(emptyTripAuthorityVehiclePage(pageIn)),
+    canQueryVehiclePages
+      ? getTripAuthorityOutPage({ ...pageQuery, page: pageOut })
+      : Promise.resolve(emptyTripAuthorityVehiclePage(pageOut)),
     getDepartments(),
     getSites(),
   ]);
-  const vehicles = vehiclesResult.status === "fulfilled" ? vehiclesResult.value : [];
-  const trips = tripsResult.status === "fulfilled" ? tripsResult.value : [];
+  const inPage =
+    inPageResult.status === "fulfilled" ? inPageResult.value : emptyTripAuthorityVehiclePage();
+  const outPage =
+    outPageResult.status === "fulfilled" ? outPageResult.value : emptyTripAuthorityVehiclePage();
   const departments = departmentsResult.status === "fulfilled" ? departmentsResult.value : [];
   const sites = sitesResult.status === "fulfilled" ? sitesResult.value : [];
-  const unavailable = [vehiclesResult, tripsResult, departmentsResult, sitesResult].some(
+  const unavailable = [inPageResult, outPageResult, departmentsResult, sitesResult].some(
     (result) => result.status === "rejected",
   );
-  const siteDepartments = new Map(sites.map((site) => [site.siteCode, site.departmentCode]));
-  const vehicleMap = new Map(vehicles.map((vehicle) => [vehicle.vmfCode, vehicle]));
-
-  const openTrips = trips
-    .filter((trip) => trip.endOdometer === null && trip.vmfCode !== null)
-    .sort((left, right) => (right.issueDate ?? "").localeCompare(left.issueDate ?? ""));
-  const outRows: DisplayRow[] = [];
-  const seenOutVehicles = new Set<number>();
-  for (const trip of openTrips) {
-    if (trip.vmfCode === null || seenOutVehicles.has(trip.vmfCode)) continue;
-    const vehicle = vehicleMap.get(trip.vmfCode);
-    if (!vehicle) continue;
-    seenOutVehicles.add(trip.vmfCode);
-    outRows.push({ ...vehicle, tripId: trip.tripId, contractCode: trip.contractCode });
-  }
-
-  const accessible = (row: DisplayRow) =>
-    matchesMode(row.siteCode, mode, currentDepartment, currentSite, siteDepartments) &&
-    matchesLocation(row.siteCode, selectedDepartment, selectedSite, siteDepartments);
-  let filteredOut = outRows.filter(accessible);
-  let filteredIn = vehicles
-    .filter((vehicle) => accessible(vehicle))
-    .filter((vehicle) => !seenOutVehicles.has(vehicle.vmfCode));
-
-  if (tab === "gg") {
-    filteredOut = filteredOut.filter((row) => matchesNumber(row, number, searchMode));
-    filteredIn = filteredIn.filter((row) => matchesNumber(row, number, searchMode));
-  } else if (tab === "authority") {
-    const authorityNumber = parsePositiveInteger(authority);
-    filteredOut =
-      authorityNumber === null ? [] : filteredOut.filter((row) => row.tripId === authorityNumber);
-    filteredIn = [];
-  }
 
   const hrefContext = {
     departmentCode: selectedDepartment ?? undefined,
@@ -535,6 +496,8 @@ export default async function TripAuthoritiesPage({
     number: tab === "gg" ? number : undefined,
     authority: tab === "authority" ? authority : undefined,
     ...hrefContext,
+    pageIn: inPage.page,
+    pageOut: outPage.page,
   };
   const apiProblem = unavailable
     ? "Some trip authority data could not be loaded. The available results are shown; retry when the API is available."
@@ -588,8 +551,7 @@ export default async function TripAuthoritiesPage({
         <VehicleTable
           title="(IN) Vehicles available for a trip."
           emptyText="No in-service vehicles available for trip assignment."
-          rows={filteredIn}
-          page={pageIn}
+          result={inPage}
           pageParam="pageIn"
           queryValues={queryValues}
           action={(row) =>
@@ -604,13 +566,12 @@ export default async function TripAuthoritiesPage({
         <VehicleTable
           title="(OUT) Vehicles allocated to a trip."
           emptyText="No vehicles were found that are currently OUT on a trip."
-          rows={filteredOut}
-          page={pageOut}
+          result={outPage}
           pageParam="pageOut"
           queryValues={queryValues}
           action={(row) =>
             hrefWithValues("/trips/show", {
-              tripId: row.tripId,
+              tripId: row.tripId ?? undefined,
               vmfCode: row.vmfCode,
               site: row.siteCode ?? undefined,
               department: selectedDepartment ?? undefined,
@@ -624,5 +585,15 @@ export default async function TripAuthoritiesPage({
         </div>
       </section>
     </main>
+  );
+}
+
+export default function TripAuthoritiesPage(
+  props: Parameters<typeof TripAuthoritiesPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TripAuthoritiesPageContent {...props} />
+    </Suspense>
   );
 }

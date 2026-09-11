@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { Suspense } from "react";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { redirect } from "next/navigation";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
@@ -37,7 +39,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function DriverLicenceDeleteCheckPage({
+async function DriverLicenceDeleteCheckPageContent({
   searchParams,
 }: DriverLicenceDeleteCheckPageProps) {
   await connection();
@@ -166,4 +168,14 @@ export default async function DriverLicenceDeleteCheckPage({
       </main>
     );
   }
+}
+
+export default function DriverLicenceDeleteCheckPage(
+  props: NonNullable<Parameters<typeof DriverLicenceDeleteCheckPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <DriverLicenceDeleteCheckPageContent {...props} />
+    </Suspense>
+  );
 }

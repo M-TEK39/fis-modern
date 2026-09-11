@@ -1,6 +1,6 @@
-import { PrivateVehicleReportPage } from "@/app/(fleet-operations)/accidents/reports/private-vehicle/page";
+import { PrivateVehicleReportPage } from "@/app/(fleet-operations)/accidents/reports/private-vehicle/_route";
 
-export default async function PrivateVehicleDescriptionReportPage({
+export default function PrivateVehicleDescriptionReportPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

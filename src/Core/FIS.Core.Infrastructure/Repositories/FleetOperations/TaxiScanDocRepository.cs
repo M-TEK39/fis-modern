@@ -22,6 +22,7 @@ namespace FIS.Core.Infrastructure.Repositories;
 public sealed class TaxiScanDocRepository : ITaxiScanDocRepository
 {
     private static readonly string[] TableCandidates = ["Taxi_ScanDocs", "TaxiScanDocs"];
+    private const string VehicleTableName = "vehicle_master";
     private static readonly string[] RequiredColumns =
     [
         "taxi_scandoc_code",
@@ -55,6 +56,111 @@ public sealed class TaxiScanDocRepository : ITaxiScanDocRepository
         ).SingleOrDefault();
 
     public async Task<IEnumerable<TaxiScanDoc>> GetAllAsync() => await QueryAsync();
+
+    public async Task<TaxiScanDocPage> GetPageAsync(TaxiScanDocPageQuery query)
+    {
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var schema = await GetSchemaAsync();
+        var searchTerm = query.SearchTerm?.Trim() ?? string.Empty;
+        var conditions = new List<string> { GetActiveFilter(schema.Columns, "scan") };
+        var hasSearch = searchTerm.Length > 0;
+        var vehicleColumns = await GetTableColumnsAsync(VehicleTableName);
+        var vehicleJoin = vehicleColumns.Contains("vmf_code")
+            ? $"LEFT JOIN [dbo].[{VehicleTableName}] vehicle ON vehicle.[vmf_code] = scan.[vmf_code]"
+            : string.Empty;
+        var fleetProjection = vehicleColumns.Contains("fleet_number")
+            ? "vehicle.[fleet_number] AS [__fleet_number]"
+            : "CAST(NULL AS varchar(1)) AS [__fleet_number]";
+        var registrationProjection = vehicleColumns.Contains("registration_number")
+            ? "vehicle.[registration_number] AS [__registration_number]"
+            : "CAST(NULL AS varchar(1)) AS [__registration_number]";
+
+        if (hasSearch)
+        {
+            var searchPredicates = new List<string>
+            {
+                "CHARINDEX(@searchTerm, LOWER(LTRIM(RTRIM(COALESCE(scan.[image], ''))))) > 0",
+                "CHARINDEX(@searchTerm, LOWER(LTRIM(RTRIM(CONVERT(varchar(50), scan.[vmf_code]))))) > 0",
+            };
+            var vehiclePredicates = new List<string>();
+            if (vehicleColumns.Contains("fleet_number"))
+            {
+                vehiclePredicates.Add(
+                    "CHARINDEX(@searchTerm, LOWER(LTRIM(RTRIM(COALESCE(vehicle.[fleet_number], ''))))) > 0"
+                );
+            }
+            if (vehicleColumns.Contains("registration_number"))
+            {
+                vehiclePredicates.Add(
+                    "CHARINDEX(@searchTerm, LOWER(LTRIM(RTRIM(COALESCE(vehicle.[registration_number], ''))))) > 0"
+                );
+            }
+            if (vehiclePredicates.Count > 0 && vehicleColumns.Contains("vmf_code"))
+            {
+                searchPredicates.Add(
+                    "EXISTS ("
+                        + $"SELECT 1 FROM [dbo].[{VehicleTableName}] vehicle "
+                        + "WHERE vehicle.[vmf_code] = scan.[vmf_code] "
+                        + $"AND ({string.Join(" OR ", vehiclePredicates)})"
+                        + ")"
+                );
+            }
+
+            conditions.Add($"({string.Join(" OR ", searchPredicates)})");
+        }
+
+        var whereClause = string.Join(" AND ", conditions);
+        await using var scope = await OpenConnectionAsync();
+        await using var countCommand = scope.Connection.CreateCommand();
+        countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        countCommand.CommandText = $"""
+            SELECT COUNT(1)
+            FROM [dbo].[{schema.TableName}] scan
+            WHERE {whereClause}
+            """;
+        AddSearchParameter(countCommand, searchTerm, hasSearch);
+        var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Min(requestedPage, totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        dataCommand.CommandText = $"""
+            SELECT {string.Join(
+                ", ",
+                RequiredColumns.Concat(AuditColumns).Select(column =>
+                    GetProjection(schema.Columns, column, "scan")
+                )
+            )}
+            , {fleetProjection}, {registrationProjection}
+            FROM [dbo].[{schema.TableName}] scan
+            {vehicleJoin}
+            WHERE {whereClause}
+            ORDER BY scan.[period_begin] DESC, scan.[taxi_scandoc_code] DESC
+            OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddSearchParameter(dataCommand, searchTerm, hasSearch);
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<TaxiScanDocPageItem>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            items.Add(
+                new TaxiScanDocPageItem(
+                    MapDocument(reader),
+                    ReadString(reader, "__fleet_number"),
+                    ReadString(reader, "__registration_number")
+                )
+            );
+        }
+
+        return new TaxiScanDocPage(items, page, pageSize, total);
+    }
 
     public async Task<IEnumerable<TaxiScanDoc>> GetByVehicleAsync(int vmfCode) =>
         await QueryAsync(
@@ -257,6 +363,26 @@ public sealed class TaxiScanDocRepository : ITaxiScanDocRepository
         return schema;
     }
 
+    private async Task<HashSet<string>> GetTableColumnsAsync(string tableName)
+    {
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = """
+            SELECT [COLUMN_NAME]
+            FROM [INFORMATION_SCHEMA].[COLUMNS]
+            WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table
+            """;
+        AddParameter(command, "@schema", DbType.String, "dbo");
+        AddParameter(command, "@table", DbType.String, tableName);
+
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            columns.Add(reader.GetString(0));
+        return columns;
+    }
+
     private static TaxiScanDoc MapDocument(DbDataReader reader) =>
         new()
         {
@@ -358,6 +484,12 @@ public sealed class TaxiScanDocRepository : ITaxiScanDocRepository
         parameter.DbType = type;
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
+    }
+
+    private static void AddSearchParameter(DbCommand command, string searchTerm, bool hasSearch)
+    {
+        if (hasSearch)
+            AddParameter(command, "@searchTerm", DbType.String, searchTerm.ToLowerInvariant());
     }
 
     private static string? ReadString(DbDataReader reader, string column)

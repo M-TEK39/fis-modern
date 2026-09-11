@@ -49,8 +49,10 @@ public sealed class SqlSessionManagementService : ISessionManagementService
         _context = context;
         _logger = logger;
         _standardRefreshLifetime =
-            int.TryParse(configuration["SystemSettings:SessionRefreshLifetimeMinutes"], out var minutes)
-            && minutes is >= 15 and <= 43_200
+            int.TryParse(
+                configuration["SystemSettings:SessionRefreshLifetimeMinutes"],
+                out var minutes
+            ) && minutes is >= 15 and <= 43_200
                 ? TimeSpan.FromMinutes(minutes)
                 : TimeSpan.FromHours(8);
     }
@@ -78,10 +80,7 @@ public sealed class SqlSessionManagementService : ISessionManagementService
         }
         catch (Exception exception)
         {
-            _logger.LogWarning(
-                exception,
-                "Durable session management capability probe failed."
-            );
+            _logger.LogWarning(exception, "Durable session management capability probe failed.");
             return new SessionStoreStatus(
                 false,
                 "Durable session management is unavailable.",
@@ -122,11 +121,8 @@ public sealed class SqlSessionManagementService : ISessionManagementService
                     "Active durable sessions retrieved."
                 );
             },
-            (status, description) => new SessionListResult(
-                status,
-                Array.Empty<ActiveSession>(),
-                description
-            ),
+            (status, description) =>
+                new SessionListResult(status, Array.Empty<ActiveSession>(), description),
             cancellationToken
         );
     }
@@ -151,30 +147,30 @@ public sealed class SqlSessionManagementService : ISessionManagementService
             {
                 await using var command = connection.CreateCommand();
                 command.CommandText = $"""
-                    DELETE [session_token]
-                    FROM [dbo].[{TableName}] AS [session_token]
-                    WHERE [session_token].[session_id] =
-                    (
-                        SELECT TOP (1) [candidate].[session_id]
-                        FROM [dbo].[{TableName}] AS [candidate]
-                        WHERE [candidate].[token_id] = @accessToken
-                          AND [candidate].[token_type] = @accessTokenType
-                          AND EXISTS
-                          (
-                              SELECT 1
-                              FROM OPENJSON(
-                                  CASE WHEN ISJSON([candidate].[claims_json]) = 1
-                                       THEN [candidate].[claims_json]
-                                       ELSE N'[]' END
-                              ) AS [claim]
-                              WHERE JSON_VALUE([claim].[value], '$.Type') = @claimType
-                                AND TRY_CONVERT(
-                                    int,
-                                    JSON_VALUE([claim].[value], '$.Value')
-                                ) = @userAccessCode
-                          )
-                    )
-                    """;
+                DELETE [session_token]
+                FROM [dbo].[{TableName}] AS [session_token]
+                WHERE [session_token].[session_id] =
+                (
+                    SELECT TOP (1) [candidate].[session_id]
+                    FROM [dbo].[{TableName}] AS [candidate]
+                    WHERE [candidate].[token_id] = @accessToken
+                      AND [candidate].[token_type] = @accessTokenType
+                      AND EXISTS
+                      (
+                          SELECT 1
+                          FROM OPENJSON(
+                              CASE WHEN ISJSON([candidate].[claims_json]) = 1
+                                   THEN [candidate].[claims_json]
+                                   ELSE N'[]' END
+                          ) AS [claim]
+                          WHERE JSON_VALUE([claim].[value], '$.Type') = @claimType
+                            AND TRY_CONVERT(
+                                int,
+                                JSON_VALUE([claim].[value], '$.Value')
+                            ) = @userAccessCode
+                      )
+                )
+                """;
                 AddParameter(command, "@accessToken", DbType.String, accessToken, 64);
                 AddParameter(command, "@accessTokenType", DbType.String, AccessTokenType, 16);
                 AddParameter(command, "@claimType", DbType.String, UserAccessCodeClaimType, 128);
@@ -213,30 +209,30 @@ public sealed class SqlSessionManagementService : ISessionManagementService
             {
                 await using var command = connection.CreateCommand();
                 command.CommandText = $"""
-                    DECLARE @deleted_sessions TABLE ([session_id] nvarchar(64) NOT NULL);
+                DECLARE @deleted_sessions TABLE ([session_id] nvarchar(64) NOT NULL);
 
-                    DELETE [session_token]
-                    OUTPUT DELETED.[session_id]
-                        INTO @deleted_sessions ([session_id])
-                    FROM [dbo].[{TableName}] AS [session_token]
-                    WHERE EXISTS
-                    (
-                        SELECT 1
-                        FROM OPENJSON(
-                            CASE WHEN ISJSON([session_token].[claims_json]) = 1
-                                 THEN [session_token].[claims_json]
-                                 ELSE N'[]' END
-                        ) AS [claim]
-                        WHERE JSON_VALUE([claim].[value], '$.Type') = @claimType
-                          AND TRY_CONVERT(
-                              int,
-                              JSON_VALUE([claim].[value], '$.Value')
-                          ) = @userAccessCode
-                    );
+                DELETE [session_token]
+                OUTPUT DELETED.[session_id]
+                    INTO @deleted_sessions ([session_id])
+                FROM [dbo].[{TableName}] AS [session_token]
+                WHERE EXISTS
+                (
+                    SELECT 1
+                    FROM OPENJSON(
+                        CASE WHEN ISJSON([session_token].[claims_json]) = 1
+                             THEN [session_token].[claims_json]
+                             ELSE N'[]' END
+                    ) AS [claim]
+                    WHERE JSON_VALUE([claim].[value], '$.Type') = @claimType
+                      AND TRY_CONVERT(
+                          int,
+                          JSON_VALUE([claim].[value], '$.Value')
+                      ) = @userAccessCode
+                );
 
-                    SELECT COUNT(DISTINCT [session_id])
-                    FROM @deleted_sessions;
-                    """;
+                SELECT COUNT(DISTINCT [session_id])
+                FROM @deleted_sessions;
+                """;
                 AddParameter(command, "@claimType", DbType.String, UserAccessCodeClaimType, 128);
                 AddParameter(command, "@userAccessCode", DbType.Int32, userAccessCode);
 
@@ -265,16 +261,16 @@ public sealed class SqlSessionManagementService : ISessionManagementService
             {
                 await using var command = connection.CreateCommand();
                 command.CommandText = $"""
-                    DECLARE @deleted_sessions TABLE ([session_id] nvarchar(64) NOT NULL);
+                DECLARE @deleted_sessions TABLE ([session_id] nvarchar(64) NOT NULL);
 
-                    DELETE [session_token]
-                    OUTPUT DELETED.[session_id]
-                        INTO @deleted_sessions ([session_id])
-                    FROM [dbo].[{TableName}] AS [session_token];
+                DELETE [session_token]
+                OUTPUT DELETED.[session_id]
+                    INTO @deleted_sessions ([session_id])
+                FROM [dbo].[{TableName}] AS [session_token];
 
-                    SELECT COUNT(DISTINCT [session_id])
-                    FROM @deleted_sessions;
-                    """;
+                SELECT COUNT(DISTINCT [session_id])
+                FROM @deleted_sessions;
+                """;
                 var affectedSessions = Convert.ToInt32(
                     await command.ExecuteScalarAsync(cancellationToken)
                 );
@@ -462,9 +458,7 @@ public sealed class SqlSessionManagementService : ISessionManagementService
         }
     }
 
-    private async Task<ConnectionScope> OpenConnectionAsync(
-        CancellationToken cancellationToken
-    )
+    private async Task<ConnectionScope> OpenConnectionAsync(CancellationToken cancellationToken)
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -524,8 +518,7 @@ public sealed class SqlSessionManagementService : ISessionManagementService
         command.Parameters.Add(parameter);
     }
 
-    private static bool IsMissingObject(SqlException exception) =>
-        exception.Number is 208 or 3701;
+    private static bool IsMissingObject(SqlException exception) => exception.Number is 208 or 3701;
 
     private sealed class ConnectionScope : IAsyncDisposable
     {

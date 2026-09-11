@@ -937,6 +937,57 @@ public class ReportController : BaseApiController
     }
 
     /// <summary>
+    /// Generate a filtered page of trip summary lines without changing the
+    /// legacy collection-shaped trip summary endpoint.
+    /// </summary>
+    [HttpGet("trip/summary/page")]
+    [ProducesResponseType(typeof(TripSummaryPage), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetTripSummaryPage(
+        [FromQuery] int? vmfCode,
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate,
+        [FromQuery] string? search = null,
+        [FromQuery] string? filter = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24
+    )
+    {
+        try
+        {
+            var result = await _reportingService.GenerateTripSummaryPageAsync(
+                new TripSummaryPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100),
+                    vmfCode,
+                    startDate,
+                    endDate,
+                    search,
+                    filter
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating paged trip summary");
+            return StatusCode(
+                500,
+                new { error = "Failed to generate paged trip summary", message = ex.Message }
+            );
+        }
+    }
+
+    /// <summary>
     /// Generate trip detail report
     /// </summary>
     [HttpGet("trip/detail/{tripId}")]

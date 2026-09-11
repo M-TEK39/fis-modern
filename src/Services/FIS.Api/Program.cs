@@ -200,8 +200,7 @@ var authenticationBuilder = builder
 
 if (
     builder.Configuration.GetValue<bool?>("SystemSettings:EntraEnabled") != false
-    &&
-    !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientId"])
+    && !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientId"])
     && !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:TenantId"])
     && !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientSecret"])
 )
@@ -251,6 +250,8 @@ builder.Services.AddScoped<LegacyUserProfileOptionalFieldsService>();
 builder.Services.AddScoped<MicrosoftIdentityCompatibilityService>();
 builder.Services.AddScoped<NotifyListCompatibilityService>();
 builder.Services.AddScoped<TowTruckCompatibilityService>();
+builder.Services.AddScoped<AuctionMaintenanceCompatibilityService>();
+builder.Services.AddScoped<MerchantCompatibilityService>();
 builder.Services.AddScoped<AccidentCompatibilityService>();
 builder.Services.AddScoped<LossCompatibilityService>();
 builder.Services.AddScoped<CallCentreEditCompatibilityService>();
@@ -357,6 +358,7 @@ builder.Services.AddScoped<ITrackingRepository, TrackingRepository>();
 builder.Services.AddScoped<IVehicleAssessmentRepository, VehicleAssessmentRepository>();
 builder.Services.AddScoped<IVehicleDamageRepository, VehicleDamageRepository>();
 builder.Services.AddScoped<ITrafficDeptRepository, TrafficDeptRepository>();
+builder.Services.AddScoped<UserMessageCompatibilityService>();
 
 // Batch 4 repositories (Asset verification, lease, bookings, suppliers)
 builder.Services.AddScoped<IAssetVerificationRepository, AssetVerificationRepository>();

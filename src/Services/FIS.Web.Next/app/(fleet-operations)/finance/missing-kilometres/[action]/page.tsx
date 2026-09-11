@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-
 import {
   FinanceFrame,
   FinanceRestricted,
@@ -89,7 +92,7 @@ function checked(query: Query, name: string) {
   return ["1", "true", "on", "yes"].includes(queryValue(query, name).toLowerCase());
 }
 
-export default async function MissingKilometresPage({ params, searchParams }: Props) {
+async function MissingKilometresContent({ params, searchParams }: Props) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -354,5 +357,13 @@ export default async function MissingKilometresPage({ params, searchParams }: Pr
         />
       ) : null}
     </FinanceFrame>
+  );
+}
+
+export default function MissingKilometresPage(props: Props) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <MissingKilometresContent {...props} />
+    </Suspense>
   );
 }

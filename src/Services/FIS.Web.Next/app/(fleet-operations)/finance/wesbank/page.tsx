@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-
 import {
   FinanceFrame,
   FinanceMenuLink,
@@ -12,7 +15,7 @@ import {
 } from "@/app/(fleet-operations)/finance/_components";
 import { getSession } from "@/lib/auth/session";
 
-export default async function WesbankMenuPage() {
+async function WesbankMenuContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -51,5 +54,13 @@ export default async function WesbankMenuPage() {
         </Link>
       </div>
     </FinanceFrame>
+  );
+}
+
+export default function WesbankMenuPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <WesbankMenuContent />
+    </Suspense>
   );
 }

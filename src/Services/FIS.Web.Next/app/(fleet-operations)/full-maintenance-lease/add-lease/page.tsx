@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { createLeaseTariffAction } from "@/app/(fleet-operations)/full-maintenance-lease/actions";
 import {
   AccessRestricted,
@@ -40,9 +41,7 @@ function addOneMonth(value: string) {
   return date.toISOString().slice(0, 10);
 }
 
-export default async function FmlAddLeasePage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function FmlAddLeasePageContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -283,5 +282,13 @@ export default async function FmlAddLeasePage({
         </Link>
       </div>
     </FmlFrame>
+  );
+}
+
+export default function FmlAddLeasePage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <FmlAddLeasePageContent {...props} />
+    </StreamedRoute>
   );
 }

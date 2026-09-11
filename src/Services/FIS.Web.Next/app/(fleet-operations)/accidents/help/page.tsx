@@ -133,7 +133,7 @@ function HelpFallback() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Checking accident access...</p>
+      <p>Loading help…</p>
     </div>
   );
 }
@@ -198,47 +198,48 @@ async function AccidentHelpContent() {
 
   return (
     <>
-      <div className="accident-help-content">
-        <section aria-labelledby="accident-help-purpose">
+      <div className="module-help-content">
+        <section className="module-help-section" aria-labelledby="accident-help-purpose">
           <h2 id="accident-help-purpose">Purpose of Program</h2>
-          <p>
+          <p className="module-help-intro">
             The purpose of the accidents program is to provide a uniform program for capturing data
             about vehicles involved in accidents and the subsequent outcome of those accidents.
           </p>
         </section>
 
-        <section aria-labelledby="accident-help-analysis">
+        <section className="module-help-section" aria-labelledby="accident-help-analysis">
           <h2 id="accident-help-analysis">Term / Field Analysis</h2>
           <p>
             The required data fields are mostly self-explanatory, but the definitions below specify
             their intended meaning.
           </p>
-          <p>
+          <p className="module-help-note">
             It is assumed that each user of the GGMT administrative functions on the Fleet
             Information System has received on-the-job training for the field relevant to their
             division.
           </p>
-        </section>
-
-        <div className="vehicle-table-wrapper">
-          <table className="vehicle-table accident-help-table">
-            <caption className="sr-only">Accident maintenance terms and field definitions</caption>
-            <thead>
-              <tr>
-                <th scope="col">Term / Field</th>
-                <th scope="col">Definition</th>
-              </tr>
-            </thead>
-            <tbody>
-              {HELP_ENTRIES.map((entry) => (
-                <tr key={entry.id ?? entry.term}>
-                  <th scope="row">{entry.term}</th>
-                  <td>{entry.description}</td>
+          <div className="vehicle-table-wrapper">
+            <table className="vehicle-table module-help-table">
+              <caption className="sr-only">
+                Accident maintenance terms and field definitions
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Term / Field</th>
+                  <th scope="col">Definition</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {HELP_ENTRIES.map((entry) => (
+                  <tr key={entry.id ?? entry.term}>
+                    <th scope="row">{entry.term}</th>
+                    <td>{entry.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
 
       <div className="vehicle-footer-actions">
@@ -261,7 +262,7 @@ async function AccidentHelpContent() {
 export default function AccidentHelpPage() {
   return (
     <main className="page-shell vehicle-page-shell">
-      <section className="vehicle-card" aria-labelledby="accident-help-title">
+      <article className="vehicle-card module-help-page" aria-labelledby="accident-help-title">
         <header className="vehicle-page-header">
           <div>
             <p className="eyebrow">Accident maintenance</p>
@@ -272,7 +273,7 @@ export default function AccidentHelpPage() {
         <Suspense fallback={<HelpFallback />}>
           <AccidentHelpContent />
         </Suspense>
-      </section>
+      </article>
     </main>
   );
 }

@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
 import {
   UserAdminMenuPage,
   type UserAdminSearchParams,
@@ -6,5 +9,9 @@ import {
 export default function UserAdminPage({
   searchParams,
 }: Readonly<{ searchParams: UserAdminSearchParams }>) {
-  return <UserAdminMenuPage searchParams={searchParams} />;
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <UserAdminMenuPage searchParams={searchParams} />
+    </Suspense>
+  );
 }

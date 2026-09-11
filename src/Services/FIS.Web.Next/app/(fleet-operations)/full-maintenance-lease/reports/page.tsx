@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   ApiUnavailable,
@@ -11,7 +12,7 @@ import {
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
 import { getSession } from "@/lib/auth/session";
 
-export default async function FmlReportsPage() {
+async function FmlReportsPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -79,5 +80,13 @@ export default async function FmlReportsPage() {
         </div>
       </section>
     </FmlFrame>
+  );
+}
+
+export default function FmlReportsPage() {
+  return (
+    <StreamedRoute>
+      <FmlReportsPageContent />
+    </StreamedRoute>
   );
 }

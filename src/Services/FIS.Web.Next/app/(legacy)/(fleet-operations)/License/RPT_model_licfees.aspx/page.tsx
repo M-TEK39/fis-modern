@@ -1,5 +1,3 @@
-import { LicenseReportPage } from "@/app/(fleet-operations)/licenses/reports/[mode]/page";
+import { createLegacyLicenseReportPage } from "@/app/(fleet-operations)/licenses/reports/[mode]/_route";
 
-export default function LegacyReport(props: Parameters<typeof LicenseReportPage>[0]) {
-  return <LicenseReportPage {...props} forcedMode="model-fees" />;
-}
+export default createLegacyLicenseReportPage("model-fees");

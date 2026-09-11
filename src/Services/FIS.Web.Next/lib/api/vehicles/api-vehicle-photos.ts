@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const VEHICLE_PHOTO_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type VehiclePhotoSearchRecord = {
@@ -16,6 +17,16 @@ export type VehiclePhotoSearchRecord = {
   status: string | null;
   hiredFrom: string | null;
   statusDate: string | null;
+};
+
+export type VehiclePhotoSearchMode = "GG" | "GP";
+
+export type VehiclePhotoSearchPage = {
+  items: VehiclePhotoSearchRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type VehiclePhotoRecord = {
@@ -75,6 +86,32 @@ function getCollection(payload: unknown) {
   if (!isRecord(payload)) return [];
   const collection = getValue(payload, "data", "items", "results");
   return Array.isArray(collection) ? collection : [];
+}
+
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
@@ -204,6 +241,55 @@ export async function searchVehiclePhotos(keyword: string) {
   return getCollection(await readJson(response))
     .map(mapVehicle)
     .filter((value): value is VehiclePhotoSearchRecord => value !== null);
+}
+
+export async function searchVehiclePhotosPage(
+  keyword: string,
+  mode: VehiclePhotoSearchMode,
+  page = 1,
+): Promise<VehiclePhotoSearchPage> {
+  const normalizedKeyword = keyword.trim();
+  const normalizedPage = Number.isInteger(page) && page > 0 ? page : 1;
+
+  if (!normalizedKeyword) {
+    return {
+      items: [],
+      page: 1,
+      pageSize: VEHICLE_PHOTO_PAGE_SIZE,
+      total: 0,
+      totalPages: 1,
+    };
+  }
+
+  const params = new URLSearchParams({
+    keyword: normalizedKeyword,
+    mode,
+    page: String(normalizedPage),
+    pageSize: String(VEHICLE_PHOTO_PAGE_SIZE),
+  });
+  const payload = await readJson(await requestApi(`api/VehicleLookup/page?${params.toString()}`));
+
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new VehiclePhotoApiError(
+      "invalid-response",
+      "The FIS API returned an invalid vehicle photo search page.",
+    );
+  }
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata) {
+    throw new VehiclePhotoApiError(
+      "invalid-response",
+      "The FIS API returned incomplete vehicle photo pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items
+      .map(mapVehicle)
+      .filter((value): value is VehiclePhotoSearchRecord => value !== null),
+    ...metadata,
+  };
 }
 
 export async function getVehiclePhotoVehicle(vmfCode: number) {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { MonitorNotice, MonitorShell } from "@/app/(fleet-operations)/monitor/_components";
 import {
   accessRestricted,
@@ -10,7 +11,7 @@ import {
 } from "@/app/(fleet-operations)/monitor/_page";
 import { getInquiryStatistics, MonitorApiError } from "@/lib/api/fleet-operations/api-monitor";
 
-export default async function MonitorStatisticsPage({
+async function MonitorStatisticsPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getMonitorSession();
@@ -115,5 +116,15 @@ export default async function MonitorStatisticsPage({
         Report menu
       </Link>
     </MonitorShell>
+  );
+}
+
+export default function MonitorStatisticsPage(
+  props: Parameters<typeof MonitorStatisticsPageContent>[0],
+) {
+  return (
+    <StreamedRoute>
+      <MonitorStatisticsPageContent {...props} />
+    </StreamedRoute>
   );
 }

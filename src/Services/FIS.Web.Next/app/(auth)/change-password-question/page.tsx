@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import {
   AuthBrand,
@@ -12,6 +13,7 @@ import {
 import ChangePasswordQuestionForm from "@/app/(auth)/change-password-question/change-password-question-form";
 import { changePasswordQuestionAction } from "@/app/(auth)/change-password-question/actions";
 import ChangePasswordQuestionSessionRecovery from "@/app/(auth)/change-password-question/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import {
   getUserAdminUserChoices,
   UserAdminApiError,
@@ -99,7 +101,7 @@ function StatusState({
   );
 }
 
-export default async function ChangePasswordQuestionPage({
+async function ChangePasswordQuestionContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -222,5 +224,15 @@ export default async function ChangePasswordQuestionPage({
         </Link>
       </AuthFooter>
     </AuthPage>
+  );
+}
+
+export default function ChangePasswordQuestionPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <ChangePasswordQuestionContent searchParams={searchParams} />
+    </Suspense>
   );
 }

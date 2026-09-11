@@ -269,20 +269,23 @@ public sealed class SmtpEmailDeliveryProvider : IEmailDeliveryProvider
         return !string.IsNullOrWhiteSpace(smtp.Host)
             && !string.IsNullOrWhiteSpace(smtp.FromAddress)
             && smtp.Port is 465 or 587
-            && (smtp.Authentication switch
-            {
-                EmailSmtpAuthentication.None => true,
-                EmailSmtpAuthentication.Password =>
-                    !string.IsNullOrWhiteSpace(smtp.Username)
-                    && !string.IsNullOrWhiteSpace(smtp.Password),
-                EmailSmtpAuthentication.GoogleOAuth2 =>
-                    smtp.Host.Equals("smtp.gmail.com", StringComparison.OrdinalIgnoreCase)
-                    && !string.IsNullOrWhiteSpace(smtp.Username)
-                    && !string.IsNullOrWhiteSpace(smtp.GoogleOAuthClientId)
-                    && !string.IsNullOrWhiteSpace(smtp.GoogleOAuthClientSecret)
-                    && !string.IsNullOrWhiteSpace(smtp.GoogleOAuthRefreshToken),
-                _ => false,
-            });
+            && (
+                smtp.Authentication switch
+                {
+                    EmailSmtpAuthentication.None => true,
+                    EmailSmtpAuthentication.Password => !string.IsNullOrWhiteSpace(smtp.Username)
+                        && !string.IsNullOrWhiteSpace(smtp.Password),
+                    EmailSmtpAuthentication.GoogleOAuth2 => smtp.Host.Equals(
+                        "smtp.gmail.com",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                        && !string.IsNullOrWhiteSpace(smtp.Username)
+                        && !string.IsNullOrWhiteSpace(smtp.GoogleOAuthClientId)
+                        && !string.IsNullOrWhiteSpace(smtp.GoogleOAuthClientSecret)
+                        && !string.IsNullOrWhiteSpace(smtp.GoogleOAuthRefreshToken),
+                    _ => false,
+                }
+            );
     }
 
     public bool Supports(
@@ -445,12 +448,17 @@ public sealed class SmtpEmailDeliveryProvider : IEmailDeliveryProvider
             throw new InvalidOperationException("Google OAuth token refresh was rejected.");
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var payload = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        using var payload = await JsonDocument.ParseAsync(
+            stream,
+            cancellationToken: cancellationToken
+        );
         if (
             !payload.RootElement.TryGetProperty("access_token", out var token)
             || string.IsNullOrWhiteSpace(token.GetString())
         )
-            throw new InvalidOperationException("Google OAuth token response did not contain an access token.");
+            throw new InvalidOperationException(
+                "Google OAuth token response did not contain an access token."
+            );
         return token.GetString()!;
     }
 }

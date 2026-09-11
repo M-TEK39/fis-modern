@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_MONITOR_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type MonitorRecord = {
@@ -18,6 +19,14 @@ export type MonitorRecord = {
   isDeleted: boolean;
   fleetNumber: string | null;
   registrationNumber: string | null;
+};
+
+export type MonitorPage = {
+  items: MonitorRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type MonitorWriteInput = {
@@ -107,6 +116,44 @@ function getCollection(payload: unknown) {
     return Array.isArray(data) ? data : [];
   }
   return [];
+}
+
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_MONITOR_PAGE_SIZE)
+      : DEFAULT_MONITOR_PAGE_SIZE;
+  return Math.min(100, pageSize);
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
@@ -207,6 +254,38 @@ export async function getMonitors() {
   return getCollection(payload)
     .map(mapMonitor)
     .filter((item): item is MonitorRecord => item !== null);
+}
+
+export async function getMonitorPage(
+  options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+  } = {},
+): Promise<MonitorPage> {
+  const params = new URLSearchParams({
+    search: options.search?.trim() ?? "",
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const payload = await readJson(await requestApi(`api/monitor/page?${params.toString()}`));
+
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new MonitorApiError("invalid-response", "The FIS API returned an invalid monitor page.");
+  }
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata) {
+    throw new MonitorApiError(
+      "invalid-response",
+      "The FIS API returned incomplete monitor pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items.map(mapMonitor).filter((item): item is MonitorRecord => item !== null),
+    ...metadata,
+  };
 }
 
 export async function getMonitor(monitorCode: number) {

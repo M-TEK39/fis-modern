@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { getSession } from "@/lib/auth/session";
 
 const REPORTS_ROLE = "Reports";
@@ -13,7 +14,7 @@ function hasRole(roles: readonly string[], role: string) {
   );
 }
 
-export default async function CallCentreReportsPage() {
+async function CallCentreReportsPageContent() {
   await connection();
   const session = await getSession();
 
@@ -104,5 +105,13 @@ export default async function CallCentreReportsPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function CallCentreReportsPage() {
+  return (
+    <StreamedRoute>
+      <CallCentreReportsPageContent />
+    </StreamedRoute>
   );
 }

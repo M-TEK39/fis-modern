@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -8,6 +9,7 @@ import { createLossTypeAction } from "@/app/(administration)/validation-data/los
 import LossTypeForm from "@/app/(administration)/validation-data/loss-types/loss-type-form";
 import { LossTypeApiError, type LossTypeRecord } from "@/lib/api/fleet-operations/api-loss-types";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 const emptyLossType: LossTypeRecord = {
   lossTypeCode: 0,
@@ -31,7 +33,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function LossTypeAddPage() {
+async function LossTypeAddPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -70,5 +72,13 @@ export default async function LossTypeAddPage() {
         <LossTypeForm action={createLossTypeAction} lossType={emptyLossType} mode="create" />
       </section>
     </main>
+  );
+}
+
+export default function LossTypeAddPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LossTypeAddPageContent />
+    </Suspense>
   );
 }

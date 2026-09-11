@@ -233,6 +233,31 @@ public class LicenseController : BaseApiController
         }
     }
 
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage([FromQuery] int page = 1, [FromQuery] int pageSize = 24)
+    {
+        try
+        {
+            _ = GetCurrentUserId();
+            var result = await _licenseRepository.GetPageAsync(page, pageSize);
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    result.Page,
+                    result.PageSize,
+                    result.Total,
+                    result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged licenses");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
     /// <summary>
     /// Get license by license code
     /// </summary>

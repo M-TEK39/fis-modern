@@ -1,4 +1,4 @@
-import AuctionDeleteDetailPage from "@/app/(fleet-operations)/auction/delete-vehicle/detail/page";
+import AuctionDeleteDetailPage from "@/app/(fleet-operations)/auction/delete-vehicle/detail/_route";
 
 type LegacyAuctionDeleteDetailProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

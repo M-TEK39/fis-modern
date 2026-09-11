@@ -154,175 +154,240 @@ export function JobCardTable({
   mode,
   returnPath,
   currentUserCode = null,
+  page,
+  totalPages,
+  pageHref,
 }: Readonly<{
   cards: JobCardRecord[];
   mode: "list" | "priority" | "review" | "cancel" | "close" | "print";
   returnPath: string;
   currentUserCode?: number | null;
+  page?: number;
+  totalPages?: number;
+  pageHref?: (page: number) => string;
 }>) {
-  if (cards.length === 0) return <p className="muted-copy">No job cards found.</p>;
-  return (
-    <div className="vehicle-table-wrapper">
-      <table className="vehicle-table">
-        <caption className="sr-only">Job cards</caption>
-        <thead>
-          <tr>
-            <th scope="col">Job card #</th>
-            <th scope="col">GG number</th>
-            <th scope="col">Registration</th>
-            <th scope="col">Description</th>
-            <th scope="col">Status</th>
-            {mode !== "priority" ? <th scope="col">Assigned to</th> : null}
-            {mode === "review" ? <th scope="col">Authorizer</th> : null}
-            {mode !== "priority" ? <th scope="col">Date</th> : null}
-            <th scope="col">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cards.map((card) => (
-            <tr key={card.jobCardId}>
-              <td>{card.jobCardId}</td>
-              <td>{valueOrDash(card.ggNumber)}</td>
-              <td>{valueOrDash(card.registrationNumber)}</td>
-              <td>{valueOrDash(card.extraDescription ?? card.extraCode)}</td>
-              <td>{statusLabel(card)}</td>
-              {mode !== "priority" ? (
-                <td>{valueOrDash(card.assignedToName ?? card.assignedTo)}</td>
-              ) : null}
-              {mode === "review" ? (
-                <td>{valueOrDash(card.authorizerName ?? card.authorizer)}</td>
-              ) : null}
-              {mode !== "priority" ? (
-                <td>{formatDate(card.assignedDate ?? card.dateCreated)}</td>
-              ) : null}
-              <td>
+  const table =
+    cards.length === 0 ? (
+      <p className="muted-copy">No job cards found.</p>
+    ) : (
+      <div className="vehicle-table-wrapper">
+        <table className="vehicle-table">
+          <caption className="sr-only">Job cards</caption>
+          <thead>
+            <tr>
+              <th scope="col">Job card #</th>
+              <th scope="col">GG number</th>
+              <th scope="col">Registration</th>
+              <th scope="col">Description</th>
+              <th scope="col">Status</th>
+              {mode !== "priority" ? <th scope="col">Assigned to</th> : null}
+              {mode === "review" ? <th scope="col">Authorizer</th> : null}
+              {mode !== "priority" ? <th scope="col">Date</th> : null}
+              <th scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cards.map((card) => (
+              <tr key={card.jobCardId}>
+                <td>{card.jobCardId}</td>
+                <td>{valueOrDash(card.ggNumber)}</td>
+                <td>{valueOrDash(card.registrationNumber)}</td>
+                <td>{valueOrDash(card.extraDescription ?? card.extraCode)}</td>
+                <td>{statusLabel(card)}</td>
+                {mode !== "priority" ? (
+                  <td>{valueOrDash(card.assignedToName ?? card.assignedTo)}</td>
+                ) : null}
                 {mode === "review" ? (
-                  <ReviewActions
-                    card={card}
-                    currentUserCode={currentUserCode}
-                    returnPath={returnPath}
-                  />
-                ) : mode === "cancel" ? (
-                  <form action={cancelJobCardAction} className="button-row">
-                    <input name="returnPath" type="hidden" value={returnPath} />
-                    <input name="jobCardId" type="hidden" value={card.jobCardId} />
-                    <label className="sr-only" htmlFor={`cancel-${card.jobCardId}`}>
-                      Cancellation reason for job card {card.jobCardId}
-                    </label>
-                    <input
-                      className="form-input"
-                      id={`cancel-${card.jobCardId}`}
-                      name="cancelReason"
-                      maxLength={2000}
-                      placeholder="Optional reason"
+                  <td>{valueOrDash(card.authorizerName ?? card.authorizer)}</td>
+                ) : null}
+                {mode !== "priority" ? (
+                  <td>{formatDate(card.assignedDate ?? card.dateCreated)}</td>
+                ) : null}
+                <td>
+                  {mode === "review" ? (
+                    <ReviewActions
+                      card={card}
+                      currentUserCode={currentUserCode}
+                      returnPath={returnPath}
                     />
-                    <button className="button button-danger button-small" type="submit">
-                      Cancel
-                    </button>
-                  </form>
-                ) : mode === "close" ? (
-                  <form action={closeJobCardAction} className="job-card-close-form">
-                    <input name="returnPath" type="hidden" value={returnPath} />
-                    <input name="jobCardId" type="hidden" value={card.jobCardId} />
-                    <label className="sr-only" htmlFor={`close-notes-${card.jobCardId}`}>
-                      Close notes for job card {card.jobCardId}
-                    </label>
-                    <input
-                      className="form-input"
-                      id={`close-notes-${card.jobCardId}`}
-                      name="closeNotes"
-                      maxLength={2000}
-                      placeholder="Close notes"
-                    />
-                    <div className="job-card-cost-grid">
-                      <input
-                        className="form-input"
-                        name="labourCost"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="Labour"
-                        defaultValue={card.labourCost ?? ""}
-                        aria-label={`Labour cost for job card ${card.jobCardId}`}
-                      />
-                      <input
-                        className="form-input"
-                        name="partsCost"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="Parts"
-                        defaultValue={card.partsCost ?? ""}
-                        aria-label={`Parts cost for job card ${card.jobCardId}`}
-                      />
-                      <input
-                        className="form-input"
-                        name="otherCost"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="Other"
-                        defaultValue={card.otherCost ?? ""}
-                        aria-label={`Other cost for job card ${card.jobCardId}`}
-                      />
-                      <input
-                        className="form-input"
-                        name="invoiceNumber"
-                        maxLength={50}
-                        placeholder="Invoice #"
-                        defaultValue={card.invoiceNumber ?? ""}
-                        aria-label={`Invoice number for job card ${card.jobCardId}`}
-                      />
-                      <input
-                        className="form-input"
-                        name="invoiceDate"
-                        type="date"
-                        defaultValue={formatDateTimeInput(card.invoiceDate)}
-                        aria-label={`Invoice date for job card ${card.jobCardId}`}
-                      />
-                      <input
-                        className="form-input"
-                        name="serviceProvider"
-                        maxLength={200}
-                        placeholder="Service provider"
-                        defaultValue={card.serviceProvider ?? ""}
-                        aria-label={`Service provider for job card ${card.jobCardId}`}
-                      />
-                    </div>
-                    <button className="button button-primary button-small" type="submit">
-                      Close
-                    </button>
-                  </form>
-                ) : mode === "print" ? (
-                  <Link
-                    className="button button-secondary button-small"
-                    href={`${returnPath}?id=${card.jobCardId}#job-card-print`}
-                  >
-                    Preview
-                  </Link>
-                ) : (
-                  <div className="button-row">
-                    <Link
-                      className="button button-secondary button-small"
-                      href={`${returnPath}?id=${card.jobCardId}`}
-                    >
-                      Review
-                    </Link>
-                    <form action={deleteJobCardAction}>
+                  ) : mode === "cancel" ? (
+                    <form action={cancelJobCardAction} className="button-row">
                       <input name="returnPath" type="hidden" value={returnPath} />
                       <input name="jobCardId" type="hidden" value={card.jobCardId} />
+                      <label className="sr-only" htmlFor={`cancel-${card.jobCardId}`}>
+                        Cancellation reason for job card {card.jobCardId}
+                      </label>
+                      <input
+                        className="form-input"
+                        id={`cancel-${card.jobCardId}`}
+                        name="cancelReason"
+                        maxLength={2000}
+                        placeholder="Optional reason"
+                      />
                       <button className="button button-danger button-small" type="submit">
-                        Delete
+                        Cancel
                       </button>
                     </form>
-                  </div>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+                  ) : mode === "close" ? (
+                    <form action={closeJobCardAction} className="job-card-close-form">
+                      <input name="returnPath" type="hidden" value={returnPath} />
+                      <input name="jobCardId" type="hidden" value={card.jobCardId} />
+                      <label className="sr-only" htmlFor={`close-notes-${card.jobCardId}`}>
+                        Close notes for job card {card.jobCardId}
+                      </label>
+                      <input
+                        className="form-input"
+                        id={`close-notes-${card.jobCardId}`}
+                        name="closeNotes"
+                        maxLength={2000}
+                        placeholder="Close notes"
+                      />
+                      <div className="job-card-cost-grid">
+                        <input
+                          className="form-input"
+                          name="labourCost"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Labour"
+                          defaultValue={card.labourCost ?? ""}
+                          aria-label={`Labour cost for job card ${card.jobCardId}`}
+                        />
+                        <input
+                          className="form-input"
+                          name="partsCost"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Parts"
+                          defaultValue={card.partsCost ?? ""}
+                          aria-label={`Parts cost for job card ${card.jobCardId}`}
+                        />
+                        <input
+                          className="form-input"
+                          name="otherCost"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Other"
+                          defaultValue={card.otherCost ?? ""}
+                          aria-label={`Other cost for job card ${card.jobCardId}`}
+                        />
+                        <input
+                          className="form-input"
+                          name="invoiceNumber"
+                          maxLength={50}
+                          placeholder="Invoice #"
+                          defaultValue={card.invoiceNumber ?? ""}
+                          aria-label={`Invoice number for job card ${card.jobCardId}`}
+                        />
+                        <input
+                          className="form-input"
+                          name="invoiceDate"
+                          type="date"
+                          defaultValue={formatDateTimeInput(card.invoiceDate)}
+                          aria-label={`Invoice date for job card ${card.jobCardId}`}
+                        />
+                        <input
+                          className="form-input"
+                          name="serviceProvider"
+                          maxLength={200}
+                          placeholder="Service provider"
+                          defaultValue={card.serviceProvider ?? ""}
+                          aria-label={`Service provider for job card ${card.jobCardId}`}
+                        />
+                      </div>
+                      <button className="button button-primary button-small" type="submit">
+                        Close
+                      </button>
+                    </form>
+                  ) : mode === "print" ? (
+                    <Link
+                      className="button button-secondary button-small"
+                      href={`${withJobCardId(returnPath, card.jobCardId)}#job-card-print`}
+                    >
+                      Preview
+                    </Link>
+                  ) : (
+                    <div className="button-row">
+                      <Link
+                        className="button button-secondary button-small"
+                        href={withJobCardId(returnPath, card.jobCardId)}
+                      >
+                        Review
+                      </Link>
+                      <form action={deleteJobCardAction}>
+                        <input name="returnPath" type="hidden" value={returnPath} />
+                        <input name="jobCardId" type="hidden" value={card.jobCardId} />
+                        <button className="button button-danger button-small" type="submit">
+                          Delete
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+
+  return (
+    <>
+      {table}
+      {page && totalPages && pageHref ? (
+        <JobCardPagination page={page} totalPages={totalPages} pageHref={pageHref} />
+      ) : null}
+    </>
+  );
+}
+
+function withJobCardId(path: string, jobCardId: number) {
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}id=${encodeURIComponent(jobCardId)}`;
+}
+
+export function JobCardPagination({
+  page,
+  totalPages,
+  pageHref,
+}: Readonly<{
+  page: number;
+  totalPages: number;
+  pageHref: (page: number) => string;
+}>) {
+  if (totalPages <= 1) return null;
+  return (
+    <nav className="vehicle-pagination" aria-label="Job card pages">
+      {page <= 1 ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Previous
+        </span>
+      ) : (
+        <Link className="vehicle-pagination-button" href={pageHref(page - 1)}>
+          Previous
+        </Link>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {page} of {totalPages}
+      </span>
+      {page >= totalPages ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Next
+        </span>
+      ) : (
+        <Link className="vehicle-pagination-button" href={pageHref(page + 1)}>
+          Next
+        </Link>
+      )}
+    </nav>
   );
 }
 

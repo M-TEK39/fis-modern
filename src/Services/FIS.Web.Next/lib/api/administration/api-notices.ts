@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_NOTICE_SCHEDULE_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type NoticeSchedule = {
@@ -33,6 +34,14 @@ export type NoticeScheduleInput = Omit<
   NoticeSchedule,
   "noticeScheduleId" | "createdBy" | "createdDate"
 >;
+
+export type NoticeSchedulePage = {
+  items: NoticeSchedule[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
 
 export type NoticeApiErrorReason =
   "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "conflict";
@@ -93,6 +102,44 @@ function collection(value: unknown) {
   }
 
   return [];
+}
+
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_NOTICE_SCHEDULE_PAGE_SIZE)
+      : DEFAULT_NOTICE_SCHEDULE_PAGE_SIZE;
+  return Math.min(100, pageSize);
 }
 
 function mapSchedule(value: unknown): NoticeSchedule | null {
@@ -215,6 +262,50 @@ export async function getNoticeSchedules() {
   return collection(payload)
     .map(mapSchedule)
     .filter((item): item is NoticeSchedule => item !== null);
+}
+
+export async function getNoticeSchedulesPage(
+  options: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: string;
+    today?: string;
+  } = {},
+): Promise<NoticeSchedulePage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const search = options.search?.trim();
+  if (search) params.set("search", search);
+  const status = options.status?.trim();
+  if (status) params.set("status", status);
+  const today = options.today?.trim();
+  if (today) params.set("today", today);
+
+  const payload = await readJson(
+    await requestApi(`api/notice-management/notice-schedules/page?${params.toString()}`),
+  );
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new NoticeApiError(
+      "invalid-response",
+      "The FIS API returned an invalid notice schedule page.",
+    );
+  }
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata) {
+    throw new NoticeApiError(
+      "invalid-response",
+      "The FIS API returned incomplete notice schedule pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items.map(mapSchedule).filter((item): item is NoticeSchedule => item !== null),
+    ...metadata,
+  };
 }
 
 export async function getActiveNotices() {

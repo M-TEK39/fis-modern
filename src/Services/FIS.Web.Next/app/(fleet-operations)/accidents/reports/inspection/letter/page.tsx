@@ -1,19 +1,17 @@
-import { connection } from "next/server";
 import { Suspense } from "react";
 
 import {
   InspectionLetterContent,
   InspectionLoadingState,
-} from "@/app/(fleet-operations)/accidents/reports/inspection/page";
+} from "@/app/(fleet-operations)/accidents/reports/inspection/_route";
 
 type QueryValue = string | string[] | undefined;
 
-export default async function InspectionLetterReportPage({
+export default function InspectionLetterReportPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, QueryValue>>;
 }) {
-  await connection();
   return (
     <main className="page-shell vehicle-page-shell">
       <Suspense fallback={<InspectionLoadingState />}>

@@ -281,7 +281,8 @@ public sealed class EmailDeliveryService : IEmailDeliveryService, IEmailConfigur
     {
         var state = _runtime.GetOrAdd(provider.Provider, _ => new ProviderRuntimeState());
         var configured = provider.IsConfigured(configuration);
-        var requiresActivation = configured && !configuration.IsProviderActivated(provider.Provider);
+        var requiresActivation =
+            configured && !configuration.IsProviderActivated(provider.Provider);
         var circuitOpen =
             state.CircuitOpenUntilUtc is { } openUntil && openUntil > DateTimeOffset.UtcNow;
         var enabled = configuration.ProviderOrder.Contains(provider.Provider);

@@ -1,15 +1,21 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { hasAssetVerificationAccess } from "@/app/(fleet-operations)/vehicle-verification/access";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { MenuSection } from "@/components/ui/menu-section";
 import {
   AssetVerificationApiError,
-  getAssetVerifications,
+  DEFAULT_ASSET_VERIFICATION_PAGE_SIZE,
+  getAssetVerificationsPage,
 } from "@/lib/api/fleet-operations/api-asset-verification";
 import { getSession } from "@/lib/auth/session";
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+type Query = Record<string, string | string[] | undefined>;
 
 function dateValue(value: string | null) {
   return value ? value.slice(0, 10) : "-";
@@ -19,7 +25,29 @@ function valueOrDash(value: string | number | null | undefined) {
   return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
 }
 
-export default async function VehicleVerificationPage() {
+function queryValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function requestedPage(value: string | undefined) {
+  const candidate = Number(value);
+  return Number.isSafeInteger(candidate) && candidate > 0 ? candidate : 1;
+}
+
+function pageHref(query: Query, page: number) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (key === "page" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) params.append(key, item);
+  }
+  if (page > 1) params.set("page", String(page));
+  const queryString = params.toString();
+  return queryString ? `/vehicle-verification?${queryString}` : "/vehicle-verification";
+}
+
+async function VehicleVerificationPageContent({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -52,8 +80,14 @@ export default async function VehicleVerificationPage() {
       </main>
     );
 
+  const query = await searchParams;
+  const page = requestedPage(queryValue(query.page));
+
   try {
-    const records = await getAssetVerifications();
+    const verificationPage = await getAssetVerificationsPage({
+      page,
+      pageSize: DEFAULT_ASSET_VERIFICATION_PAGE_SIZE,
+    });
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="asset-verification-title">
@@ -117,9 +151,9 @@ export default async function VehicleVerificationPage() {
                 <p className="eyebrow">Current records</p>
                 <h2 id="asset-verification-preview-title">Asset Verification Preview</h2>
               </div>
-              <span className="form-hint">{records.length} record(s)</span>
+              <span className="form-hint">{verificationPage.total} record(s)</span>
             </div>
-            {records.length === 0 ? (
+            {verificationPage.items.length === 0 ? (
               <p className="muted-copy">No asset verification records were found.</p>
             ) : (
               <div className="vehicle-table-wrapper">
@@ -138,7 +172,7 @@ export default async function VehicleVerificationPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {records.map((record) => (
+                    {verificationPage.items.map((record) => (
                       <tr key={record.assetVerificationCode}>
                         <td>{valueOrDash(record.vehicleRegNo)}</td>
                         <td>{valueOrDash(record.vmfCode)}</td>
@@ -161,6 +195,46 @@ export default async function VehicleVerificationPage() {
                 </table>
               </div>
             )}
+            {verificationPage.totalPages > 1 ? (
+              <nav className="vehicle-pagination" aria-label="Asset verification preview pages">
+                {verificationPage.page > 1 ? (
+                  <Link
+                    className="vehicle-pagination-button"
+                    href={pageHref(query, verificationPage.page - 1)}
+                  >
+                    Previous
+                  </Link>
+                ) : (
+                  <span
+                    className="vehicle-pagination-button vehicle-pagination-disabled"
+                    aria-disabled="true"
+                  >
+                    Previous
+                  </span>
+                )}
+                <span className="vehicle-pagination-meta" aria-live="polite">
+                  Page {verificationPage.page} of {verificationPage.totalPages}
+                </span>
+                {verificationPage.page < verificationPage.totalPages ? (
+                  <Link
+                    className="vehicle-pagination-button"
+                    href={pageHref(query, verificationPage.page + 1)}
+                  >
+                    Next
+                  </Link>
+                ) : (
+                  <span
+                    className="vehicle-pagination-button vehicle-pagination-disabled"
+                    aria-disabled="true"
+                  >
+                    Next
+                  </span>
+                )}
+              </nav>
+            ) : null}
+            <div className="pagination-meta">
+              Total records: {verificationPage.total} | Page size: {verificationPage.pageSize}
+            </div>
           </section>
         </section>
       </main>
@@ -188,4 +262,14 @@ export default async function VehicleVerificationPage() {
       </main>
     );
   }
+}
+
+export default function VehicleVerificationPage({
+  searchParams,
+}: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <VehicleVerificationPageContent searchParams={searchParams} />
+    </Suspense>
+  );
 }

@@ -182,6 +182,14 @@ export type BasSegment = {
 
 export type FinanceRow = Record<string, string | number | boolean | null>;
 
+export type FinancePage<T> = {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 function queryString(values: Record<string, string | number | undefined>) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
@@ -455,22 +463,104 @@ export async function getBasSegments(departmentCode?: number, segmentType?: stri
     .filter((item): item is BasSegment => item !== null);
 }
 
+function pageNumber(value: unknown, fallback: number) {
+  const parsed = asNumber(value);
+  return parsed !== null && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function financePage<T>(payload: unknown, map: (item: unknown) => T | null): FinancePage<T> {
+  if (!isRecord(payload))
+    throw new FinanceApiError(
+      "invalid-response",
+      "The FIS API returned an invalid paged response.",
+    );
+
+  const items = collection(payload)
+    .map(map)
+    .filter((item): item is T => item !== null);
+  const page = pageNumber(getValue(payload, "page", "Page"), 1);
+  const pageSize = pageNumber(getValue(payload, "pageSize", "PageSize"), 24);
+  const total = Math.max(0, asNumber(getValue(payload, "total", "Total")) ?? items.length);
+  const totalPages = pageNumber(
+    getValue(payload, "totalPages", "TotalPages"),
+    Math.max(1, Math.ceil(total / pageSize)),
+  );
+  return { items, page, pageSize, total, totalPages };
+}
+
+function mapFinanceRow(item: unknown): FinanceRow | null {
+  if (!isRecord(item)) return null;
+  const row: FinanceRow = {};
+  for (const [key, value] of Object.entries(item)) {
+    row[key] =
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      value === null
+        ? value
+        : JSON.stringify(value);
+  }
+  return row;
+}
+
+export async function getBasSegmentsPage(
+  departmentCode: number | undefined,
+  segmentType: string | undefined,
+  page = 1,
+  pageSize = 24,
+) {
+  return financePage(
+    await requestJson(
+      `api/finance/bas/segments/page${queryString({ departmentCode, segmentType, page, pageSize })}`,
+    ),
+    mapBasSegment,
+  );
+}
+
+async function getBasRowsPage(
+  path: string,
+  page: number,
+  pageSize: number,
+  departmentCode?: number,
+) {
+  return financePage(
+    await requestJson(`${path}${queryString({ departmentCode, page, pageSize })}`),
+    mapFinanceRow,
+  );
+}
+
+export function getInvalidBasJournalsPage(
+  departmentCode: number | undefined,
+  page = 1,
+  pageSize = 24,
+) {
+  return getBasRowsPage("api/finance/bas/journals/invalid/page", page, pageSize, departmentCode);
+}
+
+export function getUninvoicedBasJournalsPage(
+  departmentCode: number | undefined,
+  page = 1,
+  pageSize = 24,
+) {
+  return getBasRowsPage("api/finance/bas/journals/uninvoiced/page", page, pageSize, departmentCode);
+}
+
+export function getDepartmentsWithoutBasPage(page = 1, pageSize = 24) {
+  return getBasRowsPage("api/finance/bas/departments-without-bas/page", page, pageSize);
+}
+
+export function getDepartmentsMissingFinancialSystemPage(page = 1, pageSize = 24) {
+  return getBasRowsPage(
+    "api/finance/bas/departments-missing-financial-system/page",
+    page,
+    pageSize,
+  );
+}
+
 export async function getBasRows(path: string) {
   return collection(await requestJson(path))
-    .filter(isRecord)
-    .map((item) => {
-      const row: FinanceRow = {};
-      for (const [key, value] of Object.entries(item)) {
-        row[key] =
-          typeof value === "string" ||
-          typeof value === "number" ||
-          typeof value === "boolean" ||
-          value === null
-            ? value
-            : JSON.stringify(value);
-      }
-      return row;
-    });
+    .map(mapFinanceRow)
+    .filter((item): item is FinanceRow => item !== null);
 }
 
 export async function importBas(fileData: string, departmentCode?: number) {

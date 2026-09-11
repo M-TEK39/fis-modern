@@ -57,11 +57,7 @@ public sealed class SystemConfigurationController : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var result = await _service.UpdateAsync(
-            ToUpdate(request),
-            GetActor(),
-            cancellationToken
-        );
+        var result = await _service.UpdateAsync(ToUpdate(request), GetActor(), cancellationToken);
         var dto = ToDto(result);
 
         return result.Status switch
@@ -84,9 +80,7 @@ public sealed class SystemConfigurationController : ControllerBase
         ?? User.Identity?.Name
         ?? "authenticated-administrator";
 
-    private static SystemConfigurationUpdate ToUpdate(
-        SystemConfigurationUpdateRequest request
-    ) =>
+    private static SystemConfigurationUpdate ToUpdate(SystemConfigurationUpdateRequest request) =>
         new(
             request.Session?.StandardRefreshLifetimeMinutes is { } standardRefreshLifetimeMinutes
                 ? TimeSpan.FromMinutes(standardRefreshLifetimeMinutes)

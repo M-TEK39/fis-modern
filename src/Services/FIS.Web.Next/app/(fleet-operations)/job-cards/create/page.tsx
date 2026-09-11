@@ -4,6 +4,7 @@ import { createJobCardAction } from "@/app/(fleet-operations)/job-cards/actions"
 import {
   accessRestricted,
   getJobCardSession,
+  JobCardPageBoundary,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/job-cards/_page";
@@ -19,7 +20,17 @@ import {
   type VehicleOption,
 } from "@/lib/api/vehicles/api-vehicles";
 
-export default async function CreateJobCardPage({
+export default function CreateJobCardPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
+  return (
+    <JobCardPageBoundary>
+      <CreateJobCardContent searchParams={searchParams} />
+    </JobCardPageBoundary>
+  );
+}
+
+async function CreateJobCardContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getJobCardSession();

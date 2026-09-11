@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import { updateModelLicenceFeeAction } from "@/app/(fleet-operations)/licenses/model-fees/actions";
@@ -12,7 +16,7 @@ import { LicenseShell, valueOrDash } from "@/app/(fleet-operations)/licenses/_co
 import { getLicenseFees, LicenseFeeApiError } from "@/lib/api/reference-data/api-license-fees";
 import { getModels, ModelApiError } from "@/lib/api/reference-data/api-models";
 
-export default async function LicenseModelFeesPage({
+async function LicenseModelFeesPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLicenseSession();
@@ -178,4 +182,14 @@ export default async function LicenseModelFeesPage({
       </LicenseShell>
     );
   }
+}
+
+export default function LicenseModelFeesPage(
+  props: Parameters<typeof LicenseModelFeesPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LicenseModelFeesPageContent {...props} />
+    </Suspense>
+  );
 }

@@ -1,7 +1,3 @@
-import FineDeleteDetailPage, {
-  type FineDeleteDetailPageProps,
-} from "@/app/(fleet-operations)/fines/delete/detail/page";
+import { createLegacyFineDeleteDetailPage } from "@/app/(fleet-operations)/fines/delete/detail/_route";
 
-export default function LegacyFineHistoricalDeleteDetailPage(props: FineDeleteDetailPageProps) {
-  return <FineDeleteDetailPage {...props} routePath="/fines/MNT_findelj_getdetail.aspx" />;
-}
+export default createLegacyFineDeleteDetailPage("/fines/MNT_findelj_getdetail.aspx");

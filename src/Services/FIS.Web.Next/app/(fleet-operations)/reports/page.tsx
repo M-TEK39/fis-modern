@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   AccessRestricted,
   hasReportsRole,
@@ -47,7 +48,7 @@ const QUICK_LINKS = [
   ["13) Tariffs per vehicle", "/reports/tariffs-per-vehicle"],
 ] as const;
 
-export default async function ReportsPage() {
+async function ReportsPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -108,5 +109,13 @@ export default async function ReportsPage() {
         </div>
       </div>
     </ReportsFrame>
+  );
+}
+
+export default function ReportsPage() {
+  return (
+    <StreamedRoute>
+      <ReportsPageContent />
+    </StreamedRoute>
   );
 }

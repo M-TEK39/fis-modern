@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -12,15 +16,26 @@ import {
   queryValue,
   TaxiHeader,
   TaxiNotice,
+  TaxiPagination,
   TaxiRestricted,
   TaxiUnavailable,
+  taxiPageHref,
   valueOrDash,
 } from "@/app/(fleet-operations)/taxis/_components";
-import { TaxiApiError, getTaxiScanDocs } from "@/lib/api/fleet-operations/api-taxis";
+import {
+  DEFAULT_TAXI_PAGE_SIZE,
+  getTaxiScanDocsPage,
+  TaxiApiError,
+} from "@/lib/api/fleet-operations/api-taxis";
 import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
 import { getSession } from "@/lib/auth/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function requestedPage(value: string | string[] | undefined) {
+  const candidate = Number(queryValue(value));
+  return Number.isInteger(candidate) && candidate > 0 ? candidate : 1;
+}
 
 function vehicleLabel(vehicle: {
   fleetNumber: string | null;
@@ -33,7 +48,7 @@ function vehicleLabel(vehicle: {
   );
 }
 
-export default async function TaxiScanRequisitionPage({
+async function TaxiScanRequisitionPageContent({
   searchParams,
 }: Readonly<{ searchParams?: SearchParams }>) {
   await connection();
@@ -59,18 +74,16 @@ export default async function TaxiScanRequisitionPage({
 
   const query = searchParams ? await searchParams : {};
   try {
-    const [documents, vehicles] = await Promise.all([getTaxiScanDocs(), getVehicleOptions()]);
-    const search = queryValue(query.search).trim().toLowerCase();
-    const filteredDocuments = search
-      ? documents.filter((document) =>
-          [
-            document.fleetNumber,
-            document.registrationNumber,
-            String(document.vmfCode),
-            document.image ?? "",
-          ].some((value) => value?.toLowerCase().includes(search)),
-        )
-      : documents;
+    const search = queryValue(query.search).trim();
+    const [documentPage, vehicles] = await Promise.all([
+      getTaxiScanDocsPage({
+        page: requestedPage(query.page),
+        pageSize: DEFAULT_TAXI_PAGE_SIZE,
+        search,
+      }),
+      getVehicleOptions(),
+    ]);
+    const returnPath = taxiPageHref("/taxis/scan-requisition", query, documentPage.page);
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="taxi-scan-title">
@@ -94,7 +107,7 @@ export default async function TaxiScanRequisitionPage({
               encType="multipart/form-data"
               className="vehicle-form"
             >
-              <input type="hidden" name="returnPath" value="/taxis/scan-requisition" />
+              <input type="hidden" name="returnPath" value={returnPath} />
               <div className="vehicle-form-grid">
                 <label className="form-label" htmlFor="taxi-scan-vehicle">
                   GG or GP vehicle
@@ -167,10 +180,11 @@ export default async function TaxiScanRequisitionPage({
                 <h2 id="taxi-scan-list-title">Scanned requisition certificates</h2>
               </div>
               <span className="muted-copy">
-                {filteredDocuments.length} record{filteredDocuments.length === 1 ? "" : "s"}
+                {documentPage.total} record{documentPage.total === 1 ? "" : "s"}
               </span>
             </div>
             <form method="get" className="vehicle-search-row">
+              <input type="hidden" name="page" value="1" />
               <label className="sr-only" htmlFor="taxi-scan-search">
                 Search certificates
               </label>
@@ -178,14 +192,14 @@ export default async function TaxiScanRequisitionPage({
                 className="vehicle-search"
                 id="taxi-scan-search"
                 name="search"
-                defaultValue={queryValue(query.search)}
+                defaultValue={search}
                 placeholder="Search fleet, registration, or vehicle code"
               />
               <button className="button button-secondary" type="submit">
                 Search
               </button>
             </form>
-            {filteredDocuments.length === 0 ? (
+            {documentPage.total === 0 ? (
               <p className="muted-copy">No scanned requisition certificates found.</p>
             ) : (
               <div className="vehicle-table-wrapper">
@@ -205,7 +219,7 @@ export default async function TaxiScanRequisitionPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredDocuments.slice(0, 500).map((document) => (
+                    {documentPage.items.map((document) => (
                       <tr key={document.scanDocCode}>
                         <td>{valueOrDash(document.fleetNumber ?? document.vmfCode)}</td>
                         <td>{valueOrDash(document.registrationNumber)}</td>
@@ -219,11 +233,7 @@ export default async function TaxiScanRequisitionPage({
                         </td>
                         <td>
                           <form action={deleteTaxiScanDocAction}>
-                            <input
-                              type="hidden"
-                              name="returnPath"
-                              value="/taxis/scan-requisition"
-                            />
+                            <input type="hidden" name="returnPath" value={returnPath} />
                             <input type="hidden" name="scanDocCode" value={document.scanDocCode} />
                             <button className="button button-danger button-sm" type="submit">
                               Delete
@@ -236,6 +246,12 @@ export default async function TaxiScanRequisitionPage({
                 </table>
               </div>
             )}
+            <TaxiPagination
+              path="/taxis/scan-requisition"
+              query={query}
+              page={documentPage.page}
+              totalPages={documentPage.totalPages}
+            />
           </section>
           <div className="button-row">
             <Link className="button button-secondary" href="/taxis">
@@ -264,4 +280,14 @@ export default async function TaxiScanRequisitionPage({
       </main>
     );
   }
+}
+
+export default function TaxiScanRequisitionPage(
+  props: Parameters<typeof TaxiScanRequisitionPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TaxiScanRequisitionPageContent {...props} />
+    </Suspense>
+  );
 }

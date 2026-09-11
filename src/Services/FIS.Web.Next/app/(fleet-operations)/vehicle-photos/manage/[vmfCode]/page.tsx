@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import {
   getQueryValue,
   hasVehicleManagementPermission,
 } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import RouteLoading from "@/components/app-shell/route-loading";
 import VehiclePhotosManageClient from "@/app/(fleet-operations)/vehicle-photos/vehicle-photos-manage-client";
 import {
   getVehiclePhotoVehicle,
@@ -41,7 +43,7 @@ function StatusCard({ title, message }: Readonly<{ title: string; message: strin
   );
 }
 
-export default async function VehiclePhotosManagePage({ params, searchParams }: PageProps) {
+async function VehiclePhotosManagePageContent({ params, searchParams }: PageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -146,5 +148,13 @@ export default async function VehiclePhotosManagePage({ params, searchParams }: 
         />
       </section>
     </main>
+  );
+}
+
+export default function VehiclePhotosManagePage(props: PageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <VehiclePhotosManagePageContent {...props} />
+    </Suspense>
   );
 }

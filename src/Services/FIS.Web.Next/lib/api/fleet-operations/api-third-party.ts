@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_THIRD_PARTY_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type ThirdPartySupplier = {
@@ -64,6 +65,19 @@ export type ThirdPartyAllocation = {
   classId: number | null;
   quantity: number | null;
 };
+
+export type ThirdPartyPage<TItem> = {
+  items: TItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type ThirdPartySupplierPage = ThirdPartyPage<ThirdPartySupplier>;
+export type ThirdPartyProjectPage = ThirdPartyPage<ThirdPartyProject>;
+export type ThirdPartyVehiclePage = ThirdPartyPage<ThirdPartyVehicle>;
+export type ThirdPartyAllocationPage = ThirdPartyPage<ThirdPartyAllocation>;
 
 export type ThirdPartySupplierInput = {
   name: string;
@@ -165,6 +179,44 @@ function collection(value: unknown) {
     return Array.isArray(nested) ? nested : [];
   }
   return [];
+}
+
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isSafeInteger(page) ||
+    !Number.isSafeInteger(pageSize) ||
+    !Number.isSafeInteger(total) ||
+    !Number.isSafeInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isSafeInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isSafeInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_THIRD_PARTY_PAGE_SIZE)
+      : DEFAULT_THIRD_PARTY_PAGE_SIZE;
+  return Math.min(100, pageSize);
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
@@ -333,10 +385,46 @@ function mapAllocation(value: unknown): ThirdPartyAllocation | null {
   };
 }
 
+function readPage<TItem>(
+  payload: unknown,
+  mapItem: (value: unknown) => TItem | null,
+  label: string,
+): ThirdPartyPage<TItem> {
+  if (!isRecord(payload))
+    throw new ThirdPartyApiError("invalid-response", `The FIS API returned an invalid ${label}.`);
+
+  const items = getValue(payload, "items", "Items");
+  const metadata = readPageMetadata(payload);
+  if (!Array.isArray(items) || !metadata)
+    throw new ThirdPartyApiError(
+      "invalid-response",
+      `The FIS API returned incomplete ${label} pagination metadata.`,
+    );
+
+  return {
+    items: items.map(mapItem).filter((item): item is TItem => item !== null),
+    ...metadata,
+  };
+}
+
 export async function getThirdPartySuppliers() {
   return collection(await readJson(await requestApi("api/thirdparty/suppliers")))
     .map(mapSupplier)
     .filter((item): item is ThirdPartySupplier => item !== null);
+}
+
+export async function getThirdPartySuppliersPage(
+  options: { page?: number; pageSize?: number } = {},
+): Promise<ThirdPartySupplierPage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  return readPage(
+    await readJson(await requestApi(`api/thirdparty/suppliers/page?${params.toString()}`)),
+    mapSupplier,
+    "third-party supplier page",
+  );
 }
 
 export async function getThirdPartySupplier(supplierId: number) {
@@ -383,6 +471,22 @@ export async function getThirdPartyProjects(departmentCode?: number) {
   return collection(await readJson(await requestApi(path)))
     .map(mapProject)
     .filter((item): item is ThirdPartyProject => item !== null);
+}
+
+export async function getThirdPartyProjectsPage(
+  options: { departmentCode?: number; page?: number; pageSize?: number } = {},
+): Promise<ThirdPartyProjectPage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  if (options.departmentCode !== undefined)
+    params.set("departmentCode", String(options.departmentCode));
+  return readPage(
+    await readJson(await requestApi(`api/thirdparty/projects/page?${params.toString()}`)),
+    mapProject,
+    "third-party project page",
+  );
 }
 
 export async function getThirdPartyProject(projectId: number) {
@@ -447,6 +551,23 @@ export async function getThirdPartyVehicles(supplierId: number) {
     .filter((item): item is ThirdPartyVehicle => item !== null);
 }
 
+export async function getThirdPartyVehiclesPage(options: {
+  supplierId: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<ThirdPartyVehiclePage> {
+  const params = new URLSearchParams({
+    supplierId: String(options.supplierId),
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  return readPage(
+    await readJson(await requestApi(`api/thirdparty/vehicles/page?${params.toString()}`)),
+    mapVehicle,
+    "third-party vehicle page",
+  );
+}
+
 export async function getThirdPartyRequirements(projectId: number) {
   return collection(
     await readJson(
@@ -465,6 +586,23 @@ export async function getThirdPartyAllocations(projectId: number) {
   )
     .map(mapAllocation)
     .filter((item): item is ThirdPartyAllocation => item !== null);
+}
+
+export async function getThirdPartyAllocationsPage(options: {
+  projectId: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<ThirdPartyAllocationPage> {
+  const params = new URLSearchParams({
+    projectId: String(options.projectId),
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  return readPage(
+    await readJson(await requestApi(`api/thirdparty/allocations/page?${params.toString()}`)),
+    mapAllocation,
+    "third-party allocation page",
+  );
 }
 
 export async function createThirdPartyAllocation(input: ThirdPartyAllocationInput) {

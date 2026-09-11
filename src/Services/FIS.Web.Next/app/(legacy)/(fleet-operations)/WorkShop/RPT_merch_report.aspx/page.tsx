@@ -1,4 +1,4 @@
-import { WorkshopReportPage } from "@/app/(fleet-operations)/workshop/reports/[mode]/page";
+import { WorkshopReportPage } from "@/app/(fleet-operations)/workshop/reports/[mode]/_route";
 
 export default function LegacyWorkshopMerchantReport({
   searchParams,

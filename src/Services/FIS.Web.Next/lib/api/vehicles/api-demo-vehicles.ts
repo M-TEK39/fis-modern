@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+const DEMO_VEHICLE_REPORT_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type DemoVehicleRecord = {
@@ -22,6 +23,14 @@ export type DemoVehicleRecord = {
   dateUpdated: string | null;
   createdByUserCode: number | null;
   modifiedByUserCode: number | null;
+};
+
+export type DemoVehicleReportPage = {
+  items: DemoVehicleRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type DemoVehicleSearchMode = "GG" | "GP";
@@ -192,12 +201,73 @@ async function readCollection(response: Response) {
     .filter((vehicle): vehicle is DemoVehicleRecord => vehicle !== null);
 }
 
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    return null;
+  }
+
+  return { page, pageSize, total, totalPages };
+}
+
+async function readReportPage(response: Response): Promise<DemoVehicleReportPage> {
+  const payload = await readJson(response);
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new DemoVehicleApiError(
+      "invalid-response",
+      "The FIS API returned an invalid demo vehicle report page.",
+    );
+  }
+
+  const metadata = readPageMetadata(payload);
+  if (!metadata) {
+    throw new DemoVehicleApiError(
+      "invalid-response",
+      "The FIS API returned incomplete demo vehicle pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items
+      .map(mapDemoVehicle)
+      .filter((vehicle): vehicle is DemoVehicleRecord => vehicle !== null),
+    ...metadata,
+  };
+}
+
 export async function getDemoVehicles() {
   return readCollection(await requestApi("api/demo-vehicles"));
 }
 
 export async function getDemoVehicleReport() {
   return readCollection(await requestApi("api/demo-vehicles/reports/all"));
+}
+
+export async function getDemoVehicleReportPage(page = 1): Promise<DemoVehicleReportPage> {
+  const safePage = Math.max(1, Math.trunc(page) || 1);
+  const query = new URLSearchParams({
+    page: String(safePage),
+    pageSize: String(DEMO_VEHICLE_REPORT_PAGE_SIZE),
+  });
+
+  return readReportPage(await requestApi(`api/demo-vehicles/reports/all/page?${query.toString()}`));
 }
 
 export async function searchDemoVehicles(search: string, mode: DemoVehicleSearchMode) {

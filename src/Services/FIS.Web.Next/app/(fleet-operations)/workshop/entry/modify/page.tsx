@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -20,7 +24,7 @@ function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
 }
 
-export default async function WorkshopEntryModifyPage({
+async function WorkshopEntryModifyPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -158,4 +162,14 @@ export default async function WorkshopEntryModifyPage({
       </main>
     );
   }
+}
+
+export default function WorkshopEntryModifyPage(
+  props: Parameters<typeof WorkshopEntryModifyPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <WorkshopEntryModifyPageContent {...props} />
+    </Suspense>
+  );
 }

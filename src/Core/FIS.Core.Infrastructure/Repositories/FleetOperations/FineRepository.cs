@@ -17,6 +17,9 @@ namespace FIS.Core.Infrastructure.Repositories;
 /// </summary>
 public class FineRepository : IFineRepository
 {
+    private const string VehicleTableName = "vehicle_master";
+    private const string RegistrationTableName = "Registrations";
+
     private static readonly string[] CommonColumns =
     [
         "Fine_code",
@@ -69,6 +72,132 @@ public class FineRepository : IFineRepository
     public async Task<IEnumerable<Fine>> GetAllAsync()
     {
         return await QueryAsync();
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The paged query is composed only from fixed table/column allowlists and fixed predicates; request values are parameters."
+    )]
+    public async Task<FinePage> GetPageAsync(FinePageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var searchType = string.Equals(query.SearchType, "GG", StringComparison.OrdinalIgnoreCase)
+            ? "GG"
+            : "GP";
+        var searchQuery = query.SearchQuery?.Trim() ?? string.Empty;
+        var fineColumns = await GetAvailableColumnsAsync();
+        var vehicleColumns =
+            searchQuery.Length > 0
+                ? await GetAvailableColumnsAsync(VehicleTableName)
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var registrationColumns =
+            searchType == "GP" && searchQuery.Length > 0
+                ? await GetAvailableColumnsAsync(RegistrationTableName)
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var hasVehicleJoin = searchQuery.Length > 0 && vehicleColumns.Contains("vmf_code");
+        var hasHistoricalRegistration =
+            searchType == "GP"
+            && searchQuery.Length > 0
+            && hasVehicleJoin
+            && registrationColumns.Contains("vmf_code")
+            && registrationColumns.Contains("RegistrationNumber");
+        var vehicleJoin = hasVehicleJoin
+            ? $"LEFT JOIN [dbo].[{VehicleTableName}] AS [v] ON [v].[vmf_code] = [f].[vmf_code]"
+            : string.Empty;
+        var conditions = new List<string>();
+
+        if (fineColumns.Contains("is_deleted"))
+        {
+            conditions.Add("ISNULL([f].[is_deleted], 0) = 0");
+        }
+
+        if (searchQuery.Length > 0)
+        {
+            var vehicleActivePredicate = vehicleColumns.Contains("is_deleted")
+                ? "ISNULL([v].[is_deleted], 0) = 0"
+                : "1 = 1";
+            var vehicleSearchPredicate =
+                !hasVehicleJoin ? "1 = 0"
+                : searchType == "GG"
+                    ? vehicleColumns.Contains("fleet_number")
+                            ? $"{vehicleActivePredicate} AND LOWER(LTRIM(RTRIM(COALESCE([v].[fleet_number], N'')))) = @searchQuery"
+                        : "1 = 0"
+                : vehicleColumns.Contains("registration_number")
+                    ? $"{vehicleActivePredicate} AND LOWER(LTRIM(RTRIM(COALESCE([v].[registration_number], N'')))) = @searchQuery"
+                : "1 = 0";
+
+            var searchPredicates = new List<string> { vehicleSearchPredicate };
+            if (hasHistoricalRegistration)
+            {
+                var registrationActivePredicate = registrationColumns.Contains("is_deleted")
+                    ? "ISNULL([r].[is_deleted], 0) = 0"
+                    : "1 = 1";
+                searchPredicates.Add(
+                    $"EXISTS (SELECT 1 FROM [dbo].[{RegistrationTableName}] AS [r] WHERE [r].[vmf_code] = [f].[vmf_code] AND {vehicleActivePredicate} AND {registrationActivePredicate} AND LOWER(LTRIM(RTRIM(COALESCE([r].[RegistrationNumber], N'')))) = @searchQuery)"
+                );
+            }
+
+            conditions.Add($"({string.Join(" OR ", searchPredicates)})");
+        }
+
+        var whereClause = conditions.Count == 0 ? "1 = 1" : string.Join(" AND ", conditions);
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var countCommand = connection.CreateCommand();
+            countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[Fines] AS [f]
+                {vehicleJoin}
+                WHERE {whereClause}
+                """;
+            AddSearchParameter(countCommand, searchQuery, searchQuery.Length > 0);
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            dataCommand.CommandText = $"""
+                SELECT {BuildPageProjection(fineColumns)}
+                FROM [dbo].[Fines] AS [f]
+                {vehicleJoin}
+                WHERE {whereClause}
+                ORDER BY COALESCE([f].[Offence_date], [f].[Receive_gg_date]) DESC, [f].[Fine_code] DESC
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddSearchParameter(dataCommand, searchQuery, searchQuery.Length > 0);
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<Fine>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(MapFine(reader, fineColumns));
+            }
+
+            return new FinePage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 
     public async Task<IEnumerable<Fine>> GetByVehicleAsync(int vmfCode)
@@ -427,7 +556,7 @@ public class FineRepository : IFineRepository
         }
     }
 
-    private async Task<HashSet<string>> GetAvailableColumnsAsync()
+    private async Task<HashSet<string>> GetAvailableColumnsAsync(string tableName = "Fines")
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -447,7 +576,7 @@ public class FineRepository : IFineRepository
                   AND [TABLE_NAME] = @table
                 """;
             AddParameter(command, "@schema", DbType.String, "dbo");
-            AddParameter(command, "@table", DbType.String, "Fines");
+            AddParameter(command, "@table", DbType.String, tableName);
 
             var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             await using var reader = await command.ExecuteReaderAsync();
@@ -464,6 +593,24 @@ public class FineRepository : IFineRepository
             {
                 await connection.CloseAsync();
             }
+        }
+    }
+
+    private static string BuildPageProjection(IReadOnlySet<string> availableColumns)
+    {
+        return string.Join(
+            ", ",
+            CommonColumns
+                .Concat(OptionalColumns.Where(availableColumns.Contains))
+                .Select(column => $"[f].[{column}] AS [{column}]")
+        );
+    }
+
+    private static void AddSearchParameter(DbCommand command, string searchQuery, bool include)
+    {
+        if (include)
+        {
+            AddParameter(command, "@searchQuery", DbType.String, searchQuery.ToLowerInvariant());
         }
     }
 

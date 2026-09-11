@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -498,9 +502,7 @@ function unavailableMessage() {
   );
 }
 
-export default async function ShowTripPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function ShowTripPageContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getTripSession();
   const query = await searchParams;
@@ -640,5 +642,13 @@ export default async function ShowTripPage({
         </div>
       </article>
     </main>
+  );
+}
+
+export default function ShowTripPage(props: Parameters<typeof ShowTripPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <ShowTripPageContent {...props} />
+    </Suspense>
   );
 }

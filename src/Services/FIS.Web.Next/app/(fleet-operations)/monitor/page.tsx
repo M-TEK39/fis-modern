@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   MonitorMenu,
   MonitorNotice,
@@ -10,14 +11,32 @@ import {
   accessRestricted,
   getMonitorSession,
   hasCallCentreAccess,
+  parsePositiveInteger,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/monitor/_page";
-import { getMonitors, MonitorApiError } from "@/lib/api/fleet-operations/api-monitor";
+import {
+  DEFAULT_MONITOR_PAGE_SIZE,
+  getMonitorPage,
+  MonitorApiError,
+} from "@/lib/api/fleet-operations/api-monitor";
 
-export default async function MonitorPage({
+type MonitorSearchParams = Record<string, string | string[] | undefined>;
+
+function pageHref(query: MonitorSearchParams, page: number) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (key === "page" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) params.append(key, item);
+  }
+  if (page > 1) params.set("page", String(page));
+  const queryString = params.toString();
+  return queryString ? `/monitor?${queryString}` : "/monitor";
+}
+
+async function MonitorPageContent({
   searchParams,
-}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
+}: Readonly<{ searchParams: Promise<MonitorSearchParams> }>) {
   const session = await getMonitorSession();
   const problem = sessionMessage(session, "/monitor");
   if (problem) return problem;
@@ -27,28 +46,14 @@ export default async function MonitorPage({
     return accessRestricted("Your profile does not include Call Centre access.");
 
   const query = await searchParams;
-  const search = queryValue(query.search).toLocaleLowerCase();
+  const search = queryValue(query.search).trim();
+  const requestedPage = parsePositiveInteger(queryValue(query.page)) ?? 1;
   try {
-    const records = (await getMonitors()).filter((record) => !record.isDeleted);
-    const filtered = records.filter(
-      (record) =>
-        !search ||
-        [
-          record.monitorCode,
-          record.vmfCode,
-          record.fleetNumber,
-          record.registrationNumber,
-          record.inquiryType,
-          record.inquiryDescription,
-          record.driverName,
-          record.driverPersalNo,
-          record.driverSite,
-        ].some((value) =>
-          String(value ?? "")
-            .toLocaleLowerCase()
-            .includes(search),
-        ),
-    );
+    const monitorPage = await getMonitorPage({
+      page: requestedPage,
+      pageSize: DEFAULT_MONITOR_PAGE_SIZE,
+      search,
+    });
     return (
       <MonitorShell
         title="Monitor Maintenance Menu"
@@ -62,9 +67,7 @@ export default async function MonitorPage({
         >
           <div className="vehicle-form-section-header">
             <div>
-              <p className="eyebrow">
-                {filtered.length} of {records.length} active inquiries
-              </p>
+              <p className="eyebrow">{monitorPage.total} active inquiries</p>
               <h2 id="monitor-preview-title">Monitor Inquiry Preview</h2>
             </div>
           </div>
@@ -79,6 +82,7 @@ export default async function MonitorPage({
               defaultValue={queryValue(query.search)}
               placeholder="Search reference, vehicle, driver, type"
             />
+            <input type="hidden" name="page" value="1" />
             <button className="button button-primary" type="submit">
               Filter
             </button>
@@ -86,7 +90,36 @@ export default async function MonitorPage({
               Clear
             </Link>
           </form>
-          <MonitorTable records={filtered.slice(0, 100)} />
+          <MonitorTable records={monitorPage.items} />
+          {monitorPage.totalPages > 1 ? (
+            <nav className="vehicle-pagination" aria-label="Monitor inquiry pages">
+              {monitorPage.page > 1 ? (
+                <Link
+                  className="vehicle-pagination-button"
+                  href={pageHref(query, monitorPage.page - 1)}
+                >
+                  Previous
+                </Link>
+              ) : (
+                <span className="vehicle-pagination-button vehicle-pagination-disabled">
+                  Previous
+                </span>
+              )}
+              <span aria-live="polite">
+                Page {monitorPage.page} of {monitorPage.totalPages}
+              </span>
+              {monitorPage.page < monitorPage.totalPages ? (
+                <Link
+                  className="vehicle-pagination-button"
+                  href={pageHref(query, monitorPage.page + 1)}
+                >
+                  Next
+                </Link>
+              ) : (
+                <span className="vehicle-pagination-button vehicle-pagination-disabled">Next</span>
+              )}
+            </nav>
+          ) : null}
         </section>
       </MonitorShell>
     );
@@ -113,4 +146,12 @@ export default async function MonitorPage({
       </MonitorShell>
     );
   }
+}
+
+export default function MonitorPage(props: Parameters<typeof MonitorPageContent>[0]) {
+  return (
+    <StreamedRoute>
+      <MonitorPageContent {...props} />
+    </StreamedRoute>
+  );
 }

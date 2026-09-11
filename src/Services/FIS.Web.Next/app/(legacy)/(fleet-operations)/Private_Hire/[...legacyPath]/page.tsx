@@ -1,12 +1,13 @@
 import TaxiLogsPage from "@/app/(fleet-operations)/taxis/logs/page";
 import TaxiRequestsPage from "@/app/(fleet-operations)/taxis/requests/page";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 
 type LegacyPrivateHireTaxiRouteProps = Readonly<{
   params: Promise<{ legacyPath: string[] }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }>;
 
-export default async function LegacyPrivateHireTaxiRoute({
+async function LegacyPrivateHireTaxiRouteContent({
   params,
   searchParams,
 }: LegacyPrivateHireTaxiRouteProps) {
@@ -39,5 +40,13 @@ export default async function LegacyPrivateHireTaxiRoute({
               : "add"
       }
     />
+  );
+}
+
+export default function LegacyPrivateHireTaxiRoute(props: LegacyPrivateHireTaxiRouteProps) {
+  return (
+    <StreamedRoute>
+      <LegacyPrivateHireTaxiRouteContent {...props} />
+    </StreamedRoute>
   );
 }

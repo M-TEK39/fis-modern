@@ -54,6 +54,60 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
 
     public Task<IEnumerable<Logbook>> GetAllAsync() => QueryAsEnumerableAsync();
 
+    public async Task<LogbookPage> GetPageAsync(LogbookPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var searchTerm = query.SearchTerm?.ToLowerInvariant() ?? string.Empty;
+        var columns = await GetAvailableColumnsAsync();
+        var vmfCode =
+            query.VmfCode is > 0 && columns.ContainsKey("vmf_code") ? query.VmfCode : null;
+        var whereClause = BuildPageWhereClause(columns, searchTerm, vmfCode);
+
+        await using var scope = await OpenConnectionAsync();
+
+        await using var countCommand = scope.Connection.CreateCommand();
+        countCommand.Transaction = CurrentTransaction;
+        countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{TableName}] l
+                LEFT JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = l.[vmf_code]
+                LEFT JOIN [dbo].[site] s ON s.[Site_code] = l.[site_code]
+                WHERE {whereClause}
+            """;
+        AddPageParameters(countCommand, searchTerm, vmfCode);
+        var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Min(requestedPage, totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = CurrentTransaction;
+        dataCommand.CommandText = $"""
+                SELECT
+                    {BuildProjection(columns)}
+                FROM [dbo].[{TableName}] l
+                LEFT JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = l.[vmf_code]
+                LEFT JOIN [dbo].[site] s ON s.[Site_code] = l.[site_code]
+                WHERE {whereClause}
+                ORDER BY l.[handout_date] DESC, l.[logbookcode] DESC
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        AddPageParameters(dataCommand, searchTerm, vmfCode);
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<Logbook>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            items.Add(Map(reader));
+
+        return new LogbookPage(items, page, pageSize, total);
+    }
+
     public async Task<IEnumerable<Logbook>> GetByVehicleAsync(int vmfCode) =>
         await QueryAsync(
             _ => "l.[vmf_code] = @vmfCode",
@@ -272,6 +326,48 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
     }
 
     private async Task<IEnumerable<Logbook>> QueryAsEnumerableAsync() => await QueryAsync();
+
+    private static string BuildPageWhereClause(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string searchTerm,
+        int? vmfCode
+    )
+    {
+        var conditions = new List<string>();
+        if (columns.ContainsKey("is_deleted"))
+            conditions.Add("ISNULL(l.[is_deleted], 0) = 0");
+        if (vmfCode.HasValue)
+            conditions.Add("l.[vmf_code] = @vmfCode");
+
+        if (searchTerm.Length == 0)
+            return conditions.Count == 0 ? "1 = 1" : string.Join(" AND ", conditions);
+
+        var searchPredicates = new List<string>
+        {
+            ContainsSearch("l.[vmf_code]", "nvarchar(50)"),
+            ContainsSearch("v.[fleet_number]", "nvarchar(max)"),
+            ContainsSearch("v.[registration_number]", "nvarchar(max)"),
+            ContainsSearch("l.[begin_num]", "nvarchar(max)"),
+            ContainsSearch("l.[end_num]", "nvarchar(max)"),
+            ContainsSearch("l.[lb_receiver_name]", "nvarchar(max)"),
+            ContainsSearch("l.[lb_comment]", "nvarchar(max)"),
+            ContainsSearch("s.[description]", "nvarchar(max)"),
+        };
+
+        conditions.Add($"({string.Join(" OR ", searchPredicates)})");
+        return string.Join(" AND ", conditions);
+    }
+
+    private static void AddPageParameters(DbCommand command, string searchTerm, int? vmfCode)
+    {
+        if (searchTerm.Length > 0)
+            AddParameter(command, "@search", DbType.String, searchTerm);
+        if (vmfCode.HasValue)
+            AddParameter(command, "@vmfCode", DbType.Int32, vmfCode.Value);
+    }
+
+    private static string ContainsSearch(string expression, string sqlType) =>
+        $"CHARINDEX(@search, LOWER(LTRIM(RTRIM(COALESCE(CONVERT({sqlType}, {expression}), N''))))) > 0";
 
     private async Task<List<Logbook>> QueryAsync(
         Func<IReadOnlyDictionary<string, ColumnInfo>, string?>? predicateFactory = null,

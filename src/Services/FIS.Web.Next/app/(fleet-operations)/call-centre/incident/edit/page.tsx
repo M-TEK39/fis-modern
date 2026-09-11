@@ -4,6 +4,7 @@ import { connection } from "next/server";
 
 import { updateCallCentreIncidentAction } from "@/app/(fleet-operations)/call-centre/incident/edit/actions";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
   CallCentreApiError,
   getCallCentreEditDetails,
@@ -906,7 +907,7 @@ function IncidentEditor({
   );
 }
 
-export default async function IncidentEditPage({ searchParams }: IncidentEditPageProps) {
+async function IncidentEditPageContent({ searchParams }: IncidentEditPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -1041,5 +1042,13 @@ export default async function IncidentEditPage({ searchParams }: IncidentEditPag
         ) : null}
       </section>
     </main>
+  );
+}
+
+export default function IncidentEditPage(props: IncidentEditPageProps) {
+  return (
+    <StreamedRoute>
+      <IncidentEditPageContent {...props} />
+    </StreamedRoute>
   );
 }

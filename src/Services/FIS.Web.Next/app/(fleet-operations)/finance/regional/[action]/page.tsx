@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-
 import {
   FinanceFrame,
   FinanceRestricted,
@@ -125,7 +128,7 @@ function regionalSummaryType(action: string, reportAction: string) {
       : `SummaryReport${provincePrefix}ByCostType`;
 }
 
-export default async function RegionalFinanceActionPage({ params, searchParams }: PageProps) {
+async function RegionalFinanceActionContent({ params, searchParams }: PageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -437,5 +440,13 @@ export default async function RegionalFinanceActionPage({ params, searchParams }
         />
       ) : null}
     </FinanceFrame>
+  );
+}
+
+export default function RegionalFinanceActionPage(props: PageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <RegionalFinanceActionContent {...props} />
+    </Suspense>
   );
 }

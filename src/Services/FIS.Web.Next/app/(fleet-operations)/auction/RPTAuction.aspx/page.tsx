@@ -1,3 +1,5 @@
-import AuctionReportsPage from "@/app/(fleet-operations)/auction/reports/page";
+import AuctionReportsPage from "@/app/(fleet-operations)/auction/reports/_route";
 
-export default AuctionReportsPage;
+export default function LegacyAuctionReportsPage() {
+  return <AuctionReportsPage routePath="/auction/RPTAuction.aspx" />;
+}

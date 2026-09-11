@@ -1,4 +1,7 @@
-import VehicleMasterPage from "@/app/(fleet-operations)/vehicles/page";
+import { Suspense } from "react";
+
+import VehicleMasterPage from "@/app/(fleet-operations)/vehicles/_route";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 type LegacyVehicleMasterPageProps = {
   searchParams: Promise<{ page?: string | string[] }>;
@@ -6,6 +9,8 @@ type LegacyVehicleMasterPageProps = {
 
 export default function LegacyVehicleMasterPage({ searchParams }: LegacyVehicleMasterPageProps) {
   return (
-    <VehicleMasterPage routePath="/Master-File/Vehicle_Master.aspx" searchParams={searchParams} />
+    <Suspense fallback={<RouteLoading />}>
+      <VehicleMasterPage routePath="/Master-File/Vehicle_Master.aspx" searchParams={searchParams} />
+    </Suspense>
   );
 }

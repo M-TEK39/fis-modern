@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/auth/session";
 
@@ -50,7 +51,7 @@ function ApiUnavailable() {
   );
 }
 
-export default async function CallCentrePage() {
+async function CallCentrePageContent() {
   await connection();
   const session = await getSession();
 
@@ -129,5 +130,13 @@ export default async function CallCentrePage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function CallCentrePage() {
+  return (
+    <StreamedRoute>
+      <CallCentrePageContent />
+    </StreamedRoute>
   );
 }

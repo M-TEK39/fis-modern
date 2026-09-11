@@ -60,6 +60,7 @@ function ErrorState() {
 }
 
 async function HqDeleteContent({ searchParams }: HqDeletePageProps) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired") return <SessionRecovery returnPath="/accidents/hq/delete" />;
@@ -233,8 +234,7 @@ async function HqDeleteContent({ searchParams }: HqDeletePageProps) {
   );
 }
 
-export default async function HqDeletePage({ searchParams }: HqDeletePageProps) {
-  await connection();
+export default function HqDeletePage({ searchParams }: HqDeletePageProps) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="hq-delete-title">
@@ -252,7 +252,7 @@ export default async function HqDeletePage({ searchParams }: HqDeletePageProps) 
           fallback={
             <div className="loading-card" aria-busy="true">
               <span className="spinner" aria-hidden="true" />
-              <p>Loading HQ accidents...</p>
+              <p>Loading page…</p>
             </div>
           }
         >

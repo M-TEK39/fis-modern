@@ -38,6 +38,44 @@ public sealed class NotifyListCompatibilityService
         return await ReadAsync(columns, search, code: null, cancellationToken);
     }
 
+    public async Task<NotifyListPage> GetPageAsync(
+        string? search,
+        int page = 1,
+        int pageSize = 24,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var columns = await GetAvailableColumnsAsync(cancellationToken);
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            return await ReadPageAsync(
+                connection,
+                columns,
+                search,
+                page,
+                pageSize,
+                cancellationToken
+            );
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<NotifyListRecord?> GetByIdAsync(
         int code,
         CancellationToken cancellationToken = default
@@ -325,18 +363,7 @@ public sealed class NotifyListCompatibilityService
         await using var command = connection.CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
 
-        var predicates = new List<string> { GetActiveFilter(columns).Trim() };
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            predicates.Add(
-                "([Notify_list_desc] LIKE '%' + @search + '%' OR [Notify_email1] LIKE '%' + @search + '%')"
-            );
-        }
-
-        if (code.HasValue)
-        {
-            predicates.Add("[Notify_list_code] = @code");
-        }
+        var predicates = BuildReadPredicates(columns, search, code);
 
         command.CommandText = $"""
             SELECT
@@ -350,15 +377,7 @@ public sealed class NotifyListCompatibilityService
             ORDER BY [Notify_list_desc], [Notify_list_code]
             """;
 
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            AddParameter(command, "@search", DbType.String, search.Trim(), 255);
-        }
-
-        if (code.HasValue)
-        {
-            AddParameter(command, "@code", DbType.Int32, code.Value);
-        }
+        AddReadParameters(command, search, code);
 
         var records = new List<NotifyListRecord>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -376,6 +395,101 @@ public sealed class NotifyListCompatibilityService
         }
 
         return records;
+    }
+
+    private async Task<NotifyListPage> ReadPageAsync(
+        DbConnection connection,
+        IReadOnlySet<string> columns,
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken
+    )
+    {
+        var predicates = BuildReadPredicates(columns, search, code: null);
+        var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+
+        await using (var countCommand = connection.CreateCommand())
+        {
+            countCommand.Transaction = transaction;
+            countCommand.CommandText =
+                $"SELECT COUNT(*) FROM [dbo].[{TableName}] WHERE {string.Join(" AND ", predicates)}";
+            AddReadParameters(countCommand, search, code: null);
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync(cancellationToken));
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            page = Math.Min(page, totalPages);
+
+            var skip = checked((long)(page - 1) * pageSize);
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = $"""
+                SELECT
+                    [Notify_list_code],
+                    [Notify_list_desc],
+                    [Notify_email1],
+                    {GetOptionalProjection(columns, "date_created", "datetime2")},
+                    {GetOptionalProjection(columns, "date_updated", "datetime2")}
+                FROM [dbo].[{TableName}]
+                WHERE {string.Join(" AND ", predicates)}
+                ORDER BY [Notify_list_desc], [Notify_list_code]
+                OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddReadParameters(command, search, code: null);
+            AddParameter(command, "@offset", DbType.Int64, skip);
+            AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<NotifyListRecord>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                items.Add(
+                    new NotifyListRecord(
+                        reader.GetInt32(reader.GetOrdinal("Notify_list_code")),
+                        ReadString(reader, "Notify_list_desc"),
+                        ReadString(reader, "Notify_email1"),
+                        ReadDateTime(reader, "date_created") ?? DateTime.MinValue,
+                        ReadDateTime(reader, "date_updated")
+                    )
+                );
+            }
+
+            return new NotifyListPage(items, page, pageSize, total);
+        }
+    }
+
+    private static List<string> BuildReadPredicates(
+        IReadOnlySet<string> columns,
+        string? search,
+        int? code
+    )
+    {
+        var predicates = new List<string> { GetActiveFilter(columns).Trim() };
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            predicates.Add(
+                "([Notify_list_desc] LIKE '%' + @search + '%' OR [Notify_email1] LIKE '%' + @search + '%')"
+            );
+        }
+
+        if (code.HasValue)
+        {
+            predicates.Add("[Notify_list_code] = @code");
+        }
+
+        return predicates;
+    }
+
+    private static void AddReadParameters(DbCommand command, string? search, int? code)
+    {
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            AddParameter(command, "@search", DbType.String, search.Trim(), 255);
+        }
+
+        if (code.HasValue)
+        {
+            AddParameter(command, "@code", DbType.Int32, code.Value);
+        }
     }
 
     private async Task<HashSet<string>> GetAvailableColumnsAsync(
@@ -487,3 +601,13 @@ public sealed record NotifyListRecord(
     DateTime date_created,
     DateTime? date_updated
 );
+
+public sealed record NotifyListPage(
+    IReadOnlyList<NotifyListRecord> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+}

@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -24,7 +28,7 @@ function AccessRestricted() {
   );
 }
 
-export default async function TowingPage() {
+async function TowingPageContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -95,5 +99,13 @@ export default async function TowingPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function TowingPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TowingPageContent />
+    </Suspense>
   );
 }

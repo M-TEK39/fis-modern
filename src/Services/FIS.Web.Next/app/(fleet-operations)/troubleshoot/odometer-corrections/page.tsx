@@ -1,15 +1,18 @@
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
 import {
-  searchTroubleshootOdometer,
+  DEFAULT_TROUBLESHOOT_PAGE_SIZE,
+  searchTroubleshootOdometerPage,
   TroubleshootApiError,
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import {
   hasTroubleshootingRole,
   Pagination,
+  pageNumber,
   StatusCard,
   TroubleshootMenu,
   TroubleshootShell,
@@ -26,7 +29,7 @@ function modeValue(value: string | undefined): SearchMode {
   return value === "REG" || value === "TA" ? value : "GG";
 }
 
-export default async function OdometerCorrectionsPage({
+async function OdometerCorrectionsPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -63,8 +66,8 @@ export default async function OdometerCorrectionsPage({
   const mode = modeValue(first(query.mode));
   const searchValue = (first(query.value) ?? "").trim();
   const submitted = first(query.submitted) === "1";
-  const page = Number(first(query.page)) > 0 ? Number(first(query.page)) : 1;
-  let results = [] as Awaited<ReturnType<typeof searchTroubleshootOdometer>>;
+  const page = pageNumber(query.page);
+  let pageData: Awaited<ReturnType<typeof searchTroubleshootOdometerPage>> | null = null;
   let errorMessage: string | null = null;
   if (submitted) {
     if (!searchValue)
@@ -73,7 +76,12 @@ export default async function OdometerCorrectionsPage({
       errorMessage = "Please enter a valid Trip Authority Number.";
     else {
       try {
-        results = await searchTroubleshootOdometer({ searchMode: mode, searchValue });
+        pageData = await searchTroubleshootOdometerPage({
+          searchMode: mode,
+          searchValue,
+          page,
+          pageSize: DEFAULT_TROUBLESHOOT_PAGE_SIZE,
+        });
       } catch (error) {
         errorMessage =
           error instanceof TroubleshootApiError
@@ -82,11 +90,6 @@ export default async function OdometerCorrectionsPage({
       }
     }
   }
-  const pageSize = 12;
-  const totalPages = Math.max(1, Math.ceil(results.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const visibleResults = results.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-
   return (
     <TroubleshootShell
       title="ODOMeter Corrections"
@@ -102,6 +105,7 @@ export default async function OdometerCorrectionsPage({
         </div>
         <form className="vehicle-create-form" method="get">
           <input type="hidden" name="submitted" value="1" />
+          <input type="hidden" name="page" value="1" />
           <div className="form-grid">
             <div className="form-field">
               <label className="form-label" htmlFor="odometer-mode">
@@ -145,7 +149,7 @@ export default async function OdometerCorrectionsPage({
         <div className="vehicle-empty-state">
           <p>Provide search criteria to locate odometer corrections.</p>
         </div>
-      ) : errorMessage ? null : results.length === 0 ? (
+      ) : errorMessage ? null : pageData?.total === 0 ? (
         <div className="vehicle-empty-state">
           <p>No results found.</p>
         </div>
@@ -157,7 +161,7 @@ export default async function OdometerCorrectionsPage({
           <div className="vehicle-form-section-header">
             <div>
               <p className="eyebrow">
-                {results.length} result{results.length === 1 ? "" : "s"}
+                {pageData?.total ?? 0} result{pageData?.total === 1 ? "" : "s"}
               </p>
               <h2 id="odometer-results-title">Odometer results</h2>
             </div>
@@ -174,7 +178,7 @@ export default async function OdometerCorrectionsPage({
                 </tr>
               </thead>
               <tbody>
-                {visibleResults.map((row, index) => (
+                {pageData?.items.map((row, index) => (
                   <tr
                     key={`${row.vehicleIdentifier ?? "vehicle"}-${row.tripAuthorityNumber ?? index}`}
                   >
@@ -189,12 +193,20 @@ export default async function OdometerCorrectionsPage({
           </div>
           <Pagination
             path="/troubleshoot/odometer-corrections"
-            page={currentPage}
-            totalPages={totalPages}
+            page={pageData?.page ?? page}
+            totalPages={pageData?.totalPages ?? 1}
             query={{ submitted: 1, mode, value: searchValue }}
           />
         </section>
       )}
     </TroubleshootShell>
+  );
+}
+
+export default function OdometerCorrectionsPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <OdometerCorrectionsPageContent {...props} />
+    </StreamedRoute>
   );
 }

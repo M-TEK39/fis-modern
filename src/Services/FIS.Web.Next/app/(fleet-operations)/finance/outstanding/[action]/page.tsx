@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-
 import {
   FinanceFrame,
   FinanceRestricted,
@@ -69,7 +72,7 @@ function optionList(options: FinanceOption[], emptyLabel: string) {
   );
 }
 
-export default async function FinanceOutstandingActionPage({ params, searchParams }: PageProps) {
+async function FinanceOutstandingActionContent({ params, searchParams }: PageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -242,5 +245,13 @@ export default async function FinanceOutstandingActionPage({ params, searchParam
         />
       ) : null}
     </FinanceFrame>
+  );
+}
+
+export default function FinanceOutstandingActionPage(props: PageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <FinanceOutstandingActionContent {...props} />
+    </Suspense>
   );
 }

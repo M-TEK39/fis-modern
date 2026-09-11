@@ -51,6 +51,40 @@ public sealed class TaxiScanDocsController : BaseApiController
         }
     }
 
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24,
+        [FromQuery] string? search = null
+    )
+    {
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new TaxiScanDocPageQuery(Math.Max(1, page), Math.Clamp(pageSize, 1, 100), search)
+            );
+            return Ok(
+                new
+                {
+                    items = result
+                        .Items.Select(item =>
+                            MapDocument(item.Document, item.FleetNumber, item.RegistrationNumber)
+                        )
+                        .ToList(),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing a page of taxi requisition scans");
+            return StatusCode(500, new { error = "Failed to retrieve taxi requisition scans" });
+        }
+    }
+
     [HttpGet("vehicle/{vmfCode:int}")]
     public async Task<ActionResult> GetByVehicle(int vmfCode)
     {
@@ -215,6 +249,12 @@ public sealed class TaxiScanDocsController : BaseApiController
     private static object MapDocument(
         TaxiScanDoc document,
         FIS.Core.Domain.Entities.Vehicle? vehicle
+    ) => MapDocument(document, vehicle?.fleet_number, vehicle?.registration_number);
+
+    private static object MapDocument(
+        TaxiScanDoc document,
+        string? fleetNumber,
+        string? registrationNumber
     ) =>
         new
         {
@@ -227,8 +267,8 @@ public sealed class TaxiScanDocsController : BaseApiController
                 ? (DateTime?)null
                 : document.date_created,
             date_updated = document.date_updated,
-            fleet_number = vehicle?.fleet_number,
-            registration_number = vehicle?.registration_number,
+            fleet_number = fleetNumber,
+            registration_number = registrationNumber,
             file_url = $"/api/taxi-scan-docs/{document.taxi_scandoc_code}/file",
         };
 

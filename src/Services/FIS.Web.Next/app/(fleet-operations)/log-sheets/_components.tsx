@@ -87,6 +87,7 @@ export function VehicleSearchForm({
   vmfCode,
   options,
   requisition,
+  resetPage = false,
 }: Readonly<{
   action: string;
   search: string;
@@ -94,9 +95,11 @@ export function VehicleSearchForm({
   vmfCode: string;
   options: readonly VehicleOption[];
   requisition?: string;
+  resetPage?: boolean;
 }>) {
   return (
     <form className="vehicle-status-maintenance-panel" method="get" action={action}>
+      {resetPage ? <input name="page" type="hidden" value="1" /> : null}
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">Logsheet lookup</p>

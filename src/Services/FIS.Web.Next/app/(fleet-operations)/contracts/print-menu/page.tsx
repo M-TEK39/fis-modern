@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   ContractApiError,
@@ -62,7 +63,7 @@ function statusLabel(contract: ContractRecord) {
   );
 }
 
-export default async function ContractPrintMenuPage({
+async function ContractPrintMenuPageContent({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -252,5 +253,17 @@ export default async function ContractPrintMenuPage({
         </div>
       </section>
     </main>
+  );
+}
+
+export default function ContractPrintMenuPage(
+  props: Readonly<{
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+  }>,
+) {
+  return (
+    <StreamedRoute>
+      <ContractPrintMenuPageContent {...props} />
+    </StreamedRoute>
   );
 }

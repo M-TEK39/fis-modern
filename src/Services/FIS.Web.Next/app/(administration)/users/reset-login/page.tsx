@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import ResetLoginForm from "@/app/(administration)/users/reset-login/reset-login-form";
 import { resetUserLoginAction } from "@/app/(administration)/users/reset-login/actions";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 const USER_ADMIN_ROLE = "User Administration";
 const ALPHABET = /^[A-Z]$/;
@@ -55,9 +57,7 @@ function getMessage(result: string | undefined) {
   }
 }
 
-export default async function ResetLoginPage({
-  searchParams,
-}: Readonly<{ searchParams: SearchParams }>) {
+async function ResetLoginPageContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
   const session = await getSession();
 
@@ -128,5 +128,15 @@ export default async function ResetLoginPage({
         </section>
       </section>
     </main>
+  );
+}
+
+export default function ResetLoginPage(
+  props: NonNullable<Parameters<typeof ResetLoginPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <ResetLoginPageContent {...props} />
+    </Suspense>
   );
 }

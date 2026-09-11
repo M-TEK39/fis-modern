@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
@@ -8,7 +9,6 @@ import type { LocationActionState } from "@/app/(administration)/locations/actio
 import { deleteLocationAction, saveLocationAction } from "@/app/(administration)/locations/actions";
 import type { LocationRecord } from "@/lib/api/reference-data/api-locations";
 
-const PAGE_SIZE = 12;
 const initialState: LocationActionState = { status: "idle" };
 
 function valueOrDash(value: string | number | null | undefined) {
@@ -153,13 +153,25 @@ function DeleteDialog({
   );
 }
 
-export default function LocationClient({ locations }: Readonly<{ locations: LocationRecord[] }>) {
-  const [page, setPage] = useState(1);
+export default function LocationClient({
+  locations,
+  page,
+  pageSize,
+  total,
+  totalPages,
+  previousHref,
+  nextHref,
+}: Readonly<{
+  locations: LocationRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  previousHref: string | null;
+  nextHref: string | null;
+}>) {
   const [editing, setEditing] = useState<LocationRecord | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<LocationRecord | null>(null);
-  const totalPages = Math.max(1, Math.ceil(locations.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const visibleLocations = locations.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <>
@@ -181,7 +193,7 @@ export default function LocationClient({ locations }: Readonly<{ locations: Loca
         <div className="table-container">
           <div className="table-header">
             <span className="table-title">
-              {locations.length} location{locations.length === 1 ? "" : "s"}
+              {total} location{total === 1 ? "" : "s"}
             </span>
           </div>
           <div className="table-wrapper">
@@ -196,7 +208,7 @@ export default function LocationClient({ locations }: Readonly<{ locations: Loca
                 </tr>
               </thead>
               <tbody>
-                {visibleLocations.map((location) => (
+                {locations.map((location) => (
                   <tr key={location.locationId}>
                     <td>{location.locationName}</td>
                     <td>{valueOrDash(location.addressLine1)}</td>
@@ -230,29 +242,37 @@ export default function LocationClient({ locations }: Readonly<{ locations: Loca
           </div>
           {totalPages > 1 ? (
             <>
-              <div className="pagination">
-                <button
-                  className="pagination-btn"
-                  type="button"
-                  onClick={() => setPage((value) => Math.max(1, value - 1))}
-                  disabled={currentPage <= 1}
-                >
-                  Previous
-                </button>
-                <span className="pagination-info">
-                  Page {currentPage} of {totalPages}
+              <nav className="vehicle-pagination" aria-label="Location pages">
+                {previousHref ? (
+                  <Link className="vehicle-pagination-button" href={previousHref}>
+                    Previous
+                  </Link>
+                ) : (
+                  <span
+                    className="vehicle-pagination-button vehicle-pagination-disabled"
+                    aria-disabled="true"
+                  >
+                    Previous
+                  </span>
+                )}
+                <span className="vehicle-pagination-meta" aria-live="polite">
+                  Page {page} of {totalPages}
                 </span>
-                <button
-                  className="pagination-btn"
-                  type="button"
-                  onClick={() => setPage((value) => Math.min(totalPages, value + 1))}
-                  disabled={currentPage >= totalPages}
-                >
-                  Next
-                </button>
-              </div>
+                {nextHref ? (
+                  <Link className="vehicle-pagination-button" href={nextHref}>
+                    Next
+                  </Link>
+                ) : (
+                  <span
+                    className="vehicle-pagination-button vehicle-pagination-disabled"
+                    aria-disabled="true"
+                  >
+                    Next
+                  </span>
+                )}
+              </nav>
               <div className="pagination-meta">
-                Total records: {locations.length} | Page size: {PAGE_SIZE}
+                Total records: {total} | Page size: {pageSize}
               </div>
             </>
           ) : null}

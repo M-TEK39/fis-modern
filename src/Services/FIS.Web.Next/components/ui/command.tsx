@@ -47,12 +47,15 @@ function CommandInput({
   ref?: React.Ref<React.ElementRef<typeof CommandPrimitive.Input>>;
 }) {
   return (
-    <div className="flex items-center border-b px-3" data-cmdk-input-wrapper="">
+    <div
+      className="flex items-center border-b px-3 focus-within:border-ring focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring"
+      data-cmdk-input-wrapper=""
+    >
       <MagnifyingGlassIcon className="mr-2 h-4 w-4 shrink-0 opacity-50" />
       <CommandPrimitive.Input
         ref={ref}
         className={cn(
-          "flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50",
+          "flex h-10 w-full rounded-none bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
         {...props}

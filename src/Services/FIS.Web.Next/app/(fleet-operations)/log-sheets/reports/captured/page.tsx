@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -81,7 +85,7 @@ function filterReport(
   return { records: [], error: "Unknown report type." };
 }
 
-export default async function LogsheetCapturedReportPage({
+async function LogsheetCapturedReportPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   const session = await getLogsheetSession();
@@ -251,4 +255,14 @@ export default async function LogsheetCapturedReportPage({
       </LogsheetShell>
     );
   }
+}
+
+export default function LogsheetCapturedReportPage(
+  props: Parameters<typeof LogsheetCapturedReportPageContent>[0],
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LogsheetCapturedReportPageContent {...props} />
+    </Suspense>
+  );
 }

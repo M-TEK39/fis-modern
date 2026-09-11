@@ -11,6 +11,10 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 public class TrafficDeptController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
+    private const int MaximumSearchQueryLength = 50;
+
     private readonly ITrafficDeptRepository _repository;
     private readonly ILogger<TrafficDeptController> _logger;
 
@@ -35,6 +39,50 @@ public class TrafficDeptController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] string? searchQuery = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (!HasReportsRole())
+            return Forbid();
+
+        var normalizedSearchQuery = searchQuery?.Trim() ?? string.Empty;
+        if (normalizedSearchQuery.Length > MaximumSearchQueryLength)
+        {
+            return BadRequest(new { error = "Search query cannot exceed 50 characters." });
+        }
+
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new TrafficDeptPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize),
+                    normalizedSearchQuery
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged traffic department records");
             return StatusCode(500);
         }
     }

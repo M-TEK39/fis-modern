@@ -109,7 +109,7 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading department month report...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -211,6 +211,7 @@ async function DepartmentMonthReportContent({
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
@@ -402,12 +403,11 @@ async function DepartmentMonthReportContent({
   );
 }
 
-export default async function DepartmentMonthReportPage({
+export default function DepartmentMonthReportPage({
   searchParams,
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
-  await connection();
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="accident-department-month-title">

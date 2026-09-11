@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -15,6 +16,7 @@ import {
   type UserAdminProfile,
 } from "@/lib/api/administration/api-user-admin";
 import { getSession } from "@/lib/auth/session";
+import RouteLoading from "@/components/app-shell/route-loading";
 
 const USER_ADMIN_ROLE = "User Administration";
 
@@ -109,7 +111,7 @@ function findSelectedProfile(profiles: readonly UserAdminProfile[], username: st
   );
 }
 
-export default async function UserAdminEditPage({
+async function UserAdminEditPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -247,4 +249,14 @@ export default async function UserAdminEditPage({
       </main>
     );
   }
+}
+
+export default function UserAdminEditPage(
+  props: NonNullable<Parameters<typeof UserAdminEditPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <UserAdminEditPageContent {...props} />
+    </Suspense>
+  );
 }

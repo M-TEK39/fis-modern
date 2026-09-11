@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_LICENSE_CERTIFICATE_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type CertificateVehicle = {
@@ -26,9 +27,26 @@ export type LicenseCertificateRecord = {
   dateCreated: string | null;
 };
 
+export type LicenseCertificatePage = {
+  items: LicenseCertificateRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 export type MissingCertificateVehicle = CertificateVehicle & {
   number: number;
   locationCode: number;
+};
+
+export type MissingLicenseCertificatePage = {
+  location: string;
+  vehicles: MissingCertificateVehicle[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type LicenseCertificateApiErrorReason =
@@ -176,11 +194,111 @@ function listPayload(payload: unknown, ...keys: string[]) {
   return [];
 }
 
+function readPageMetadata(payload: JsonRecord) {
+  const page = asNumber(valueOf(payload, "page", "Page"));
+  const pageSize = asNumber(valueOf(payload, "pageSize", "PageSize", "page_size"));
+  const total = asNumber(valueOf(payload, "total", "Total"));
+  const totalPages = asNumber(valueOf(payload, "totalPages", "TotalPages", "total_pages"));
+
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  )
+    return null;
+
+  return { page, pageSize, total, totalPages };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_LICENSE_CERTIFICATE_PAGE_SIZE)
+      : DEFAULT_LICENSE_CERTIFICATE_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
+function mapMissingCertificateVehicle(value: unknown): MissingCertificateVehicle | null {
+  if (!isRecord(value)) return null;
+  const vehicle = mapVehicle(value);
+  const locationCode = asNumber(valueOf(value, "location_code", "locationCode"));
+  const number = asNumber(valueOf(value, "number"));
+  return vehicle && locationCode !== null && number !== null
+    ? { ...vehicle, locationCode, number }
+    : null;
+}
+
+function readLicenseCertificatePage(payload: unknown): LicenseCertificatePage {
+  if (!isRecord(payload) || !Array.isArray(payload.items))
+    throw new LicenseCertificateApiError(
+      "invalid-response",
+      "The FIS API returned an invalid licence certificate page.",
+    );
+  const metadata = readPageMetadata(payload);
+  if (!metadata)
+    throw new LicenseCertificateApiError(
+      "invalid-response",
+      "The FIS API returned incomplete licence certificate pagination metadata.",
+    );
+  return {
+    items: payload.items
+      .map(mapCertificate)
+      .filter((item): item is LicenseCertificateRecord => item !== null),
+    ...metadata,
+  };
+}
+
+function readMissingLicenseCertificatePage(payload: unknown): MissingLicenseCertificatePage {
+  if (!isRecord(payload) || !Array.isArray(payload.vehicles))
+    throw new LicenseCertificateApiError(
+      "invalid-response",
+      "The FIS API returned an invalid missing-certificate page.",
+    );
+  const metadata = readPageMetadata(payload);
+  if (!metadata)
+    throw new LicenseCertificateApiError(
+      "invalid-response",
+      "The FIS API returned incomplete missing-certificate pagination metadata.",
+    );
+  return {
+    location: asString(valueOf(payload, "location")) ?? "all",
+    vehicles: payload.vehicles
+      .map(mapMissingCertificateVehicle)
+      .filter((vehicle): vehicle is MissingCertificateVehicle => vehicle !== null),
+    ...metadata,
+  };
+}
+
 export async function getLicenseCertificates() {
   const payload = await readJson(await requestApi("api/licence-certificates"));
   return listPayload(payload, "documents", "data", "items")
     .map(mapCertificate)
     .filter((item): item is LicenseCertificateRecord => item !== null);
+}
+
+export async function getLicenseCertificatesPage(
+  options: { page?: number; pageSize?: number } = {},
+): Promise<LicenseCertificatePage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  return readLicenseCertificatePage(
+    await readJson(await requestApi(`api/licence-certificates/page?${params.toString()}`)),
+  );
 }
 
 export async function getLicenseCertificatesForVehicle(vmfCode: number) {
@@ -207,15 +325,22 @@ export async function getVehiclesMissingLicenseCertificates(location?: "jhb" | "
   return {
     location: isRecord(payload) ? (asString(valueOf(payload, "location")) ?? "all") : "all",
     vehicles: listPayload(payload, "vehicles", "data", "items").flatMap((value) => {
-      if (!isRecord(value)) return [];
-      const vehicle = mapVehicle(value);
-      const locationCode = asNumber(valueOf(value, "location_code", "locationCode"));
-      const number = asNumber(valueOf(value, "number"));
-      return vehicle && locationCode !== null && number !== null
-        ? [{ ...vehicle, locationCode, number }]
-        : [];
+      const vehicle = mapMissingCertificateVehicle(value);
+      return vehicle ? [vehicle] : [];
     }),
   };
+}
+
+export async function getVehiclesMissingLicenseCertificatesPage(
+  options: { location?: "jhb" | "pta"; page?: number; pageSize?: number } = {},
+): Promise<MissingLicenseCertificatePage> {
+  const params = new URLSearchParams();
+  if (options.location) params.set("location", options.location);
+  params.set("page", String(normalizePage(options.page)));
+  params.set("pageSize", String(normalizePageSize(options.pageSize)));
+  return readMissingLicenseCertificatePage(
+    await readJson(await requestApi(`api/licence-certificates/missing/page?${params.toString()}`)),
+  );
 }
 
 export async function uploadLicenseCertificate(vmfCode: number, formData: FormData) {

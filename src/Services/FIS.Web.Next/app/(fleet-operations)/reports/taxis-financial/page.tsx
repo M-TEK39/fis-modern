@@ -1,4 +1,4 @@
-import TaxiReportsPage from "@/app/(fleet-operations)/taxis/reports/page";
+import TaxiReportsPage from "@/app/(fleet-operations)/taxis/reports/_route";
 
 export default function TaxiFinancialReportsPage({
   searchParams,

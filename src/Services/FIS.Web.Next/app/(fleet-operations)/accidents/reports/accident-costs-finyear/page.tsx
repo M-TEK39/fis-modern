@@ -49,7 +49,7 @@ function LoadingState() {
   return (
     <div className="loading-card" aria-busy="true">
       <span className="spinner" aria-hidden="true" />
-      <p>Loading accident costs report...</p>
+      <p>Loading page…</p>
     </div>
   );
 }
@@ -148,6 +148,7 @@ async function AccidentCostsReportContent({
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
+  await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
@@ -253,12 +254,11 @@ async function AccidentCostsReportContent({
   );
 }
 
-export default async function AccidentCostsFinancialYearReportPage({
+export default function AccidentCostsFinancialYearReportPage({
   searchParams,
 }: {
   searchParams: Promise<ReportQuery>;
 }) {
-  await connection();
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="accident-costs-finyear-title">

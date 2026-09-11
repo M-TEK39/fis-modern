@@ -1,51 +1,42 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { Suspense } from "react";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   AccessRestricted,
   ApiUnavailable,
-  FmlFrame,
   hasFmlPermission,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
 import { getSession } from "@/lib/auth/session";
 
-export default async function FmlHelpPage() {
+function HelpFallback() {
+  return (
+    <div className="loading-card" aria-busy="true">
+      <span className="spinner" aria-hidden="true" />
+      <p>Checking access...</p>
+    </div>
+  );
+}
+
+async function FmlHelpContent() {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired")
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <SessionRecovery returnPath="/full-maintenance-lease/help" />
-      </main>
-    );
+    return <SessionRecovery returnPath="/full-maintenance-lease/help" />;
   if (session.status === "unavailable")
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <ApiUnavailable message="FML help could not be opened." />
-      </main>
-    );
-  if (!hasFmlPermission(session.accessLevel))
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <AccessRestricted />
-      </main>
-    );
+    return <ApiUnavailable message="FML help could not be opened." />;
+  if (!hasFmlPermission(session.accessLevel)) return <AccessRestricted />;
 
   return (
-    <FmlFrame
-      title="Full Maintenance Lease Information / Help"
-      description="The established FML workflow for lease vehicle tariff and contract administration."
-    >
-      <section className="form-card">
-        <div className="form-card-header">
-          <h2>Lease vehicle workflow</h2>
-          <p>Use the same order as the original FML menu.</p>
-        </div>
-        <div className="form-card-body">
-          <ol>
+    <>
+      <div className="module-help-content">
+        <section className="module-help-section" aria-labelledby="fml-help-workflow-title">
+          <h2 id="fml-help-workflow-title">Lease vehicle workflow</h2>
+          <p className="module-help-intro">Use the same order as the original FML menu.</p>
+          <ol className="module-help-steps">
             <li>
               Capture lease vehicle tariff periods and submit contract terms for authority review.
             </li>
@@ -59,13 +50,13 @@ export default async function FmlHelpPage() {
               kilometre-utilization checks.
             </li>
           </ol>
-          <p className="muted-copy">
+          <p className="module-help-note">
             The FIS API keeps the original table and field meanings. Expanded fields are used only
             when they exist; client-era fields remain the fallback.
           </p>
-        </div>
-      </section>
-      <div className="button-row">
+        </section>
+      </div>
+      <div className="vehicle-footer-actions">
         <Link className="button button-primary" href="/full-maintenance-lease">
           FML Menu
         </Link>
@@ -73,6 +64,30 @@ export default async function FmlHelpPage() {
           FML Reports
         </Link>
       </div>
-    </FmlFrame>
+    </>
+  );
+}
+
+export default function FmlHelpPage() {
+  return (
+    <main className="page-shell vehicle-page-shell">
+      <article className="vehicle-card module-help-page" aria-labelledby="fml-page-title">
+        <header className="vehicle-page-header">
+          <div>
+            <p className="eyebrow">Full Maintenance Lease</p>
+            <h1 id="fml-page-title">Full Maintenance Lease Information / Help</h1>
+            <p>
+              The established FML workflow for lease vehicle tariff and contract administration.
+            </p>
+          </div>
+          <Link className="button button-secondary" href="/full-maintenance-lease">
+            Back
+          </Link>
+        </header>
+        <Suspense fallback={<HelpFallback />}>
+          <FmlHelpContent />
+        </Suspense>
+      </article>
+    </main>
   );
 }

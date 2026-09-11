@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import {
@@ -9,24 +13,14 @@ import {
   tripSessionMessage,
 } from "@/app/(fleet-operations)/trips/_page";
 import { FinanceApiError } from "@/lib/api/finance/api-finance";
-import { getTripQueryRows, type TripQueryRow } from "@/lib/api/fleet-operations/api-trip-queries";
+import {
+  DEFAULT_TRIP_QUERY_PAGE_SIZE,
+  getTripQueryPage,
+  type TripQueryPage,
+} from "@/lib/api/fleet-operations/api-trip-queries";
 
 type SearchParams = Record<string, string | string[] | undefined>;
-const PAGE_SIZE = 12;
-
-function rowMatches(row: TripQueryRow, search: string) {
-  if (!search) return true;
-  return [row.key, row.vehicle, row.department, row.tripCount, row.kilometres].some((value) =>
-    String(value).toLowerCase().includes(search),
-  );
-}
-
-function filterMatches(row: TripQueryRow, filter: string) {
-  if (filter === "vehicle") return row.vehicle !== "Unknown";
-  if (filter === "department") return row.department !== "-";
-  if (filter === "multiple") return row.tripCount > 1;
-  return true;
-}
+type TripQueryPageProps = Readonly<{ searchParams: Promise<SearchParams> }>;
 
 function formatDate(value: string | null) {
   if (!value) return "-";
@@ -53,9 +47,7 @@ function pageHref(search: string, filter: string, page: number) {
   return `/trip-query?${params.toString()}`;
 }
 
-export default async function TripQueryPage({
-  searchParams,
-}: Readonly<{ searchParams: Promise<SearchParams> }>) {
+async function TripQueryPageContent({ searchParams }: TripQueryPageProps) {
   const session = await getTripSession();
   const sessionMessage = tripSessionMessage(session, "/trip-query");
   if (sessionMessage) return sessionMessage;
@@ -66,18 +58,25 @@ export default async function TripQueryPage({
   const query = await searchParams;
   const search = queryValue(query.search).trim().toLowerCase();
   const filter = queryValue(query.filter).trim().toLowerCase();
-  let rows: TripQueryRow[] = [];
+  const requestedPage = parsePositiveInteger(queryValue(query.page)) ?? 1;
+  let tripQueryPage: TripQueryPage | null = null;
   let error: string | null = null;
   try {
-    rows = await getTripQueryRows();
+    tripQueryPage = await getTripQueryPage({
+      page: requestedPage,
+      pageSize: DEFAULT_TRIP_QUERY_PAGE_SIZE,
+      search,
+      filter,
+    });
   } catch (caught) {
     error =
       caught instanceof FinanceApiError ? caught.message : "Trip queries could not be loaded.";
   }
-  const filteredRows = rows.filter((row) => rowMatches(row, search) && filterMatches(row, filter));
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
-  const page = Math.min(parsePositiveInteger(queryValue(query.page)) ?? 1, totalPages);
-  const visibleRows = filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const rows = tripQueryPage?.items ?? [];
+  const total = tripQueryPage?.total ?? 0;
+  const totalPages = tripQueryPage?.totalPages ?? 1;
+  const page = tripQueryPage?.page ?? requestedPage;
+  const pageSize = tripQueryPage?.pageSize ?? DEFAULT_TRIP_QUERY_PAGE_SIZE;
 
   return (
     <main className="page-shell vehicle-page-shell">
@@ -103,6 +102,7 @@ export default async function TripQueryPage({
           </div>
         ) : null}
         <form className="vehicle-status-maintenance-panel" method="get">
+          <input type="hidden" name="page" value="1" />
           <div className="form-grid">
             <div className="form-field">
               <label className="form-label" htmlFor="trip-query-search">
@@ -143,7 +143,7 @@ export default async function TripQueryPage({
             </Link>
           </div>
         </form>
-        {filteredRows.length === 0 ? (
+        {total === 0 ? (
           <section className="vehicle-status-card" role="status">
             <h2>No trip queries</h2>
             <p className="muted-copy">No trip summary records matched the current criteria.</p>
@@ -155,7 +155,7 @@ export default async function TripQueryPage({
           >
             <div className="vehicle-form-section-header">
               <div>
-                <p className="eyebrow">{filteredRows.length} record(s)</p>
+                <p className="eyebrow">{total} record(s)</p>
                 <h2 id="trip-query-results">Trip summary results</h2>
               </div>
             </div>
@@ -174,7 +174,7 @@ export default async function TripQueryPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRows.map((row, index) => (
+                  {rows.map((row, index) => (
                     <tr key={`${row.key}-${index}`}>
                       <td>{row.key}</td>
                       <td>{row.vehicle}</td>
@@ -219,6 +219,9 @@ export default async function TripQueryPage({
                 )}
               </nav>
             ) : null}
+            <div className="pagination-meta">
+              Total records: {total} | Page size: {pageSize}
+            </div>
           </section>
         )}
         <div className="vehicle-footer-actions">
@@ -231,5 +234,13 @@ export default async function TripQueryPage({
         </div>
       </section>
     </main>
+  );
+}
+
+export default function TripQueryPage(props: TripQueryPageProps) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TripQueryPageContent {...props} />
+    </Suspense>
   );
 }

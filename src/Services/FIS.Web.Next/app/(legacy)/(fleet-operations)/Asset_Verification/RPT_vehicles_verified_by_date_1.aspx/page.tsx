@@ -1,4 +1,5 @@
-import { AssetVerificationReportPage } from "@/app/(fleet-operations)/reports/asset-verification/[mode]/page";
+import { AssetVerificationReportPage } from "@/app/(fleet-operations)/reports/asset-verification/[mode]/_route";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -6,10 +7,12 @@ export default function LegacyAssetVerificationDateRangeReport({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   return (
-    <AssetVerificationReportPage
-      mode="verified-by-date-range"
-      searchParams={searchParams}
-      routePath="/Asset_Verification/RPT_vehicles_verified_by_date_1.aspx"
-    />
+    <StreamedRoute>
+      <AssetVerificationReportPage
+        mode="verified-by-date-range"
+        searchParams={searchParams}
+        routePath="/Asset_Verification/RPT_vehicles_verified_by_date_1.aspx"
+      />
+    </StreamedRoute>
   );
 }

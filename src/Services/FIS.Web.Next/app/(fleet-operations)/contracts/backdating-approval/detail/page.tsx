@@ -1,7 +1,14 @@
-import ContractDetailPage, {
+import {
+  ContractDetailRoute,
   type ContractDetailPageProps,
-} from "@/app/(fleet-operations)/contracts/detail/page";
+} from "@/app/(fleet-operations)/contracts/detail/_route";
 
-export default function BackdatingApprovalDetailPage(props: ContractDetailPageProps) {
-  return <ContractDetailPage {...props} routePath="/contracts/backdating-approval" />;
+type BackdatingApprovalDetailPageProps = Pick<ContractDetailPageProps, "searchParams">;
+
+export default function BackdatingApprovalDetailPage({
+  searchParams,
+}: BackdatingApprovalDetailPageProps) {
+  return (
+    <ContractDetailRoute routePath="/contracts/backdating-approval" searchParams={searchParams} />
+  );
 }

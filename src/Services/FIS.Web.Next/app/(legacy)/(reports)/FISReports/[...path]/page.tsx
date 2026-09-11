@@ -2,14 +2,15 @@ import { redirect } from "next/navigation";
 
 import ReportsPage from "@/app/(fleet-operations)/reports/page";
 import { queryValue, type ReportQuery } from "@/app/(fleet-operations)/reports/_components";
-import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/page";
+import { ReportsRoutePage } from "@/app/(fleet-operations)/reports/[slug]/_route";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 
 type Props = Readonly<{
   params: Promise<{ path: string[] }>;
   searchParams: Promise<ReportQuery>;
 }>;
 
-export default async function LegacyFisReportsPage({ params, searchParams }: Props) {
+async function LegacyFisReportsPageContent({ params, searchParams }: Props) {
   const { path } = await params;
   const route = path.join("/").toLowerCase();
   const query = await searchParams;
@@ -226,5 +227,13 @@ export default async function LegacyFisReportsPage({ params, searchParams }: Pro
                         : item === "exportpastelcsvwithclient"
                           ? "/finance/interface/pastel-csv-customer"
                           : "/reports",
+  );
+}
+
+export default function LegacyFisReportsPage(props: Props) {
+  return (
+    <StreamedRoute>
+      <LegacyFisReportsPageContent {...props} />
+    </StreamedRoute>
   );
 }

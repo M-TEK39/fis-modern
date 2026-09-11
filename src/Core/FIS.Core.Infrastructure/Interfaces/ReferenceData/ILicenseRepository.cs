@@ -35,6 +35,8 @@ public interface ILicenseRepository
     /// <returns>List of matching license entities</returns>
     Task<IEnumerable<License>> SearchLicensesAsync(string searchTerm);
 
+    Task<LicensePage> GetPageAsync(int page, int pageSize);
+
     /// <summary>
     /// Create a new license
     /// </summary>
@@ -55,4 +57,9 @@ public interface ILicenseRepository
     /// <param name="licenceCode">The license code to delete</param>
     /// <returns>True if deleted, false if not found</returns>
     Task<bool> DeleteAsync(short licenceCode, int currentUserId);
+}
+
+public sealed record LicensePage(IReadOnlyList<License> Items, int Page, int PageSize, int Total)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }

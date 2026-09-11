@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-
 import {
   deleteMerchantAction,
   saveMerchantAction,
@@ -9,9 +12,12 @@ import {
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   ClearanceApiError,
+  DEFAULT_MERCHANT_PAGE_SIZE,
+  getMerchant,
   getMerchantDeleteCheck,
-  getMerchants,
+  getMerchantsPage,
   type MerchantDeleteCheck,
+  type MerchantPage,
   type MerchantRecord,
 } from "@/lib/api/fleet-operations/api-clearance";
 import { getSession } from "@/lib/auth/session";
@@ -31,6 +37,15 @@ function getQueryValue(value: string | string[] | undefined) {
 function getQueryInt(value: string | undefined) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function getPositivePage(value: string | undefined) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function merchantPageHref(routePath: string, page: number) {
+  return page > 1 ? `${routePath}?page=${page}` : routePath;
 }
 
 function hasRole(roles: readonly string[], role: string) {
@@ -113,13 +128,20 @@ function MerchantForm({ merchant }: Readonly<{ merchant: MerchantRecord | null }
   );
 }
 
-function MerchantList({ merchants }: Readonly<{ merchants: MerchantRecord[] }>) {
+function MerchantList({
+  merchantPage,
+  routePath,
+}: Readonly<{
+  merchantPage: MerchantPage;
+  routePath: string;
+}>) {
+  const { items: merchants } = merchantPage;
   return (
     <section className="vehicle-status-maintenance-panel" aria-labelledby="merchant-list-title">
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">Merchant directory</p>
-          <h2 id="merchant-list-title">Existing Merchants</h2>
+          <h2 id="merchant-list-title">Existing Merchants ({merchantPage.total})</h2>
         </div>
       </div>
       {merchants.length === 0 ? (
@@ -162,11 +184,36 @@ function MerchantList({ merchants }: Readonly<{ merchants: MerchantRecord[] }>) 
           </table>
         </div>
       )}
+      <nav className="vehicle-pagination" aria-label="Merchant pages">
+        {merchantPage.page > 1 ? (
+          <Link
+            className="vehicle-pagination-button"
+            href={merchantPageHref(routePath, merchantPage.page - 1)}
+          >
+            Previous
+          </Link>
+        ) : (
+          <span className="vehicle-pagination-button vehicle-pagination-disabled">Previous</span>
+        )}
+        <span className="vehicle-pagination-meta" aria-live="polite">
+          Page {merchantPage.page} of {merchantPage.totalPages}
+        </span>
+        {merchantPage.page < merchantPage.totalPages ? (
+          <Link
+            className="vehicle-pagination-button"
+            href={merchantPageHref(routePath, merchantPage.page + 1)}
+          >
+            Next
+          </Link>
+        ) : (
+          <span className="vehicle-pagination-button vehicle-pagination-disabled">Next</span>
+        )}
+      </nav>
     </section>
   );
 }
 
-export default async function ClearanceMerchantPage({
+async function ClearanceMerchantContent({
   searchParams,
   deletionMode = false,
   routePath = "/clearance/merchant",
@@ -179,50 +226,15 @@ export default async function ClearanceMerchantPage({
   }
 
   if (session.status === "expired") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <SessionRecovery returnPath={routePath} />
-      </main>
-    );
+    return <SessionRecovery returnPath={routePath} />;
   }
 
   if (session.status === "unavailable") {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <ApiUnavailable />
-      </main>
-    );
+    return <ApiUnavailable />;
   }
 
   if (!hasRole(session.roles, CLEARANCE_ROLE)) {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <AccessRestricted />
-      </main>
-    );
-  }
-
-  let merchants: MerchantRecord[];
-  try {
-    merchants = await getMerchants();
-  } catch (error) {
-    if (error instanceof ClearanceApiError && error.reason === "unauthorized") {
-      return (
-        <main className="page-shell vehicle-page-shell">
-          <SessionRecovery returnPath={routePath} />
-        </main>
-      );
-    }
-
-    console.error(
-      "FIS merchant request failed",
-      error instanceof Error ? error.message : "unknown error",
-    );
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <ApiUnavailable />
-      </main>
-    );
+    return <AccessRestricted />;
   }
 
   const query = await searchParams;
@@ -231,9 +243,33 @@ export default async function ClearanceMerchantPage({
       getQueryValue(query.cmbMerchant) ??
       getQueryValue(query.code),
   );
-  const selectedMerchant = selectedCode
-    ? (merchants.find((merchant) => merchant.merchantCode === selectedCode) ?? null)
-    : null;
+  const requestedPage = getPositivePage(getQueryValue(query.page));
+  let merchantPage: MerchantPage;
+  let selectedMerchant: MerchantRecord | null = null;
+  try {
+    merchantPage = await getMerchantsPage({
+      page: requestedPage,
+      pageSize: DEFAULT_MERCHANT_PAGE_SIZE,
+    });
+    if (selectedCode) {
+      try {
+        selectedMerchant = await getMerchant(selectedCode);
+      } catch (error) {
+        if (!(error instanceof ClearanceApiError && error.reason === "not-found")) throw error;
+      }
+    }
+  } catch (error) {
+    if (error instanceof ClearanceApiError && error.reason === "unauthorized") {
+      return <SessionRecovery returnPath={routePath} />;
+    }
+
+    console.error(
+      "FIS merchant request failed",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return <ApiUnavailable />;
+  }
+
   let deleteCheck: MerchantDeleteCheck | null = null;
   let deleteCheckError: string | null = null;
   if (deletionMode && selectedCode) {
@@ -252,6 +288,46 @@ export default async function ClearanceMerchantPage({
   const errorMessage = getQueryValue(query.error);
 
   return (
+    <>
+      {saved ? (
+        <div className="notice notice-success" role="status">
+          Merchant saved successfully.
+        </div>
+      ) : null}
+      {updated ? (
+        <div className="notice notice-success" role="status">
+          Merchant updated successfully.
+        </div>
+      ) : null}
+      {deleted ? (
+        <div className="notice notice-success" role="status">
+          Merchant deleted successfully.
+        </div>
+      ) : null}
+      {errorMessage ? (
+        <div className="notice notice-error" role="alert">
+          {errorMessage}
+        </div>
+      ) : null}
+
+      {deletionMode ? (
+        <MerchantDeleteCheckView
+          check={deleteCheck}
+          error={deleteCheckError}
+          merchant={selectedMerchant}
+        />
+      ) : (
+        <>
+          <MerchantForm merchant={selectedMerchant} />
+          <MerchantList merchantPage={merchantPage} routePath={routePath} />
+        </>
+      )}
+    </>
+  );
+}
+
+export default function ClearanceMerchantPage(props: ClearanceMerchantPageProps) {
+  return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="merchant-title">
         <header className="vehicle-page-header">
@@ -264,40 +340,9 @@ export default async function ClearanceMerchantPage({
             Clearance Menu
           </Link>
         </header>
-
-        {saved ? (
-          <div className="notice notice-success" role="status">
-            Merchant saved successfully.
-          </div>
-        ) : null}
-        {updated ? (
-          <div className="notice notice-success" role="status">
-            Merchant updated successfully.
-          </div>
-        ) : null}
-        {deleted ? (
-          <div className="notice notice-success" role="status">
-            Merchant deleted successfully.
-          </div>
-        ) : null}
-        {errorMessage ? (
-          <div className="notice notice-error" role="alert">
-            {errorMessage}
-          </div>
-        ) : null}
-
-        {deletionMode ? (
-          <MerchantDeleteCheckView
-            check={deleteCheck}
-            error={deleteCheckError}
-            merchant={selectedMerchant}
-          />
-        ) : (
-          <>
-            <MerchantForm merchant={selectedMerchant} />
-            <MerchantList merchants={merchants} />
-          </>
-        )}
+        <Suspense fallback={<RouteLoading />}>
+          <ClearanceMerchantContent {...props} />
+        </Suspense>
       </section>
     </main>
   );

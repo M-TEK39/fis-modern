@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { Suspense } from "react";
+import RouteLoading from "@/components/app-shell/route-loading";
 import { redirect } from "next/navigation";
 
 import {
@@ -30,7 +32,7 @@ function ErrorCard({ message }: Readonly<{ message: string }>) {
   );
 }
 
-export default async function SiteDeleteCheckPage({ searchParams }: SiteDeleteCheckPageProps) {
+async function SiteDeleteCheckPageContent({ searchParams }: SiteDeleteCheckPageProps) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -152,4 +154,14 @@ export default async function SiteDeleteCheckPage({ searchParams }: SiteDeleteCh
       </main>
     );
   }
+}
+
+export default function SiteDeleteCheckPage(
+  props: NonNullable<Parameters<typeof SiteDeleteCheckPageContent>[0]>,
+) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <SiteDeleteCheckPageContent {...props} />
+    </Suspense>
+  );
 }

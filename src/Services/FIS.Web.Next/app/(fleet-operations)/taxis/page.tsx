@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -6,21 +10,31 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   dateValue,
   TaxiNotice,
+  TaxiPagination,
   TaxiRestricted,
   TaxiUnavailable,
   valueOrDash,
 } from "@/app/(fleet-operations)/taxis/_components";
 import { MenuSection } from "@/components/ui/menu-section";
-import { getTaxis, TaxiApiError } from "@/lib/api/fleet-operations/api-taxis";
+import {
+  DEFAULT_TAXI_PAGE_SIZE,
+  getTaxiPage,
+  TaxiApiError,
+} from "@/lib/api/fleet-operations/api-taxis";
 import { getSession } from "@/lib/auth/session";
 
 const ROLE = "Private Hire Vehicles";
+
+function requestedPage(value: string | string[] | undefined) {
+  const candidate = Number(Array.isArray(value) ? value[0] : value);
+  return Number.isInteger(candidate) && candidate > 0 ? candidate : 1;
+}
 
 function hasRole(roles: readonly string[]) {
   return roles.some((role) => role.localeCompare(ROLE, undefined, { sensitivity: "accent" }) === 0);
 }
 
-export default async function TaxisPage({
+async function TaxisPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -47,7 +61,10 @@ export default async function TaxisPage({
 
   const query = await searchParams;
   try {
-    const taxis = await getTaxis();
+    const taxiPage = await getTaxiPage({
+      page: requestedPage(query.page),
+      pageSize: DEFAULT_TAXI_PAGE_SIZE,
+    });
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="taxis-title">
@@ -151,48 +168,56 @@ export default async function TaxisPage({
                 <p className="eyebrow">Live records</p>
                 <h2 id="taxi-preview-title">Taxi records summary</h2>
               </div>
-              <span className="muted-copy">{taxis.length} active records</span>
+              <span className="muted-copy">{taxiPage.total} active records</span>
             </div>
-            {taxis.length === 0 ? (
+            {taxiPage.total === 0 ? (
               <p className="muted-copy">No taxi records are available.</p>
             ) : (
-              <div className="vehicle-table-wrapper">
-                <table className="vehicle-table">
-                  <caption className="sr-only">Taxi records summary</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Requisition</th>
-                      <th scope="col">Official</th>
-                      <th scope="col">Vehicle</th>
-                      <th scope="col">Department</th>
-                      <th scope="col">Date required</th>
-                      <th scope="col">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {taxis.slice(0, 100).map((taxi) => (
-                      <tr key={taxi.requestId}>
-                        <td>
-                          <Link href={`/taxis/requests?mode=edit&requestId=${taxi.requestId}`}>
-                            {valueOrDash(taxi.rekNum)}
-                          </Link>
-                        </td>
-                        <td>{valueOrDash(taxi.official)}</td>
-                        <td>{valueOrDash(taxi.vmfCode)}</td>
-                        <td>{valueOrDash(taxi.departmentName ?? taxi.departmentCode)}</td>
-                        <td>{dateValue(taxi.dateRequired)}</td>
-                        <td>
-                          {taxi.cancelled
-                            ? "Cancelled"
-                            : taxi.driver
-                              ? "Driver captured"
-                              : "Pending"}
-                        </td>
+              <>
+                <div className="vehicle-table-wrapper">
+                  <table className="vehicle-table">
+                    <caption className="sr-only">Taxi records summary</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Requisition</th>
+                        <th scope="col">Official</th>
+                        <th scope="col">Vehicle</th>
+                        <th scope="col">Department</th>
+                        <th scope="col">Date required</th>
+                        <th scope="col">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {taxiPage.items.map((taxi) => (
+                        <tr key={taxi.requestId}>
+                          <td>
+                            <Link href={`/taxis/requests?mode=edit&requestId=${taxi.requestId}`}>
+                              {valueOrDash(taxi.rekNum)}
+                            </Link>
+                          </td>
+                          <td>{valueOrDash(taxi.official)}</td>
+                          <td>{valueOrDash(taxi.vmfCode)}</td>
+                          <td>{valueOrDash(taxi.departmentName ?? taxi.departmentCode)}</td>
+                          <td>{dateValue(taxi.dateRequired)}</td>
+                          <td>
+                            {taxi.cancelled
+                              ? "Cancelled"
+                              : taxi.driver
+                                ? "Driver captured"
+                                : "Pending"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <TaxiPagination
+                  path="/taxis"
+                  query={query}
+                  page={taxiPage.page}
+                  totalPages={taxiPage.totalPages}
+                />
+              </>
             )}
           </section>
         </section>
@@ -211,4 +236,12 @@ export default async function TaxisPage({
       </main>
     );
   }
+}
+
+export default function TaxisPage(props: Parameters<typeof TaxisPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <TaxisPageContent {...props} />
+    </Suspense>
+  );
 }

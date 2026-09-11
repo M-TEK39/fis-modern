@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { FuelCardApiError, getFuelCardAllocation } from "@/lib/api/fleet-operations/api-fuel-cards";
 import { getSession } from "@/lib/auth/session";
@@ -27,7 +28,7 @@ function hasRole(roles: readonly string[]) {
   );
 }
 
-export default async function FuelCardReportsPage({
+async function FuelCardReportsPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -163,5 +164,15 @@ export default async function FuelCardReportsPage({
         ) : null}
       </section>
     </main>
+  );
+}
+
+export default function FuelCardReportsPage(
+  props: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>,
+) {
+  return (
+    <StreamedRoute>
+      <FuelCardReportsPageContent {...props} />
+    </StreamedRoute>
   );
 }

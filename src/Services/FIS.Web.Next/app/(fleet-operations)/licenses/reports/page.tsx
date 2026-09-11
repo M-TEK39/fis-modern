@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 
 import { LicenseShell } from "@/app/(fleet-operations)/licenses/_components";
@@ -39,7 +43,7 @@ const REPORT_GROUPS = [
   },
 ] as const;
 
-export default async function LicenseReportsPage() {
+async function LicenseReportsPageContent() {
   const session = await getLicenseSession();
   const problem = sessionMessage(session, "/licenses/reports");
   if (problem) return problem;
@@ -72,5 +76,13 @@ export default async function LicenseReportsPage() {
         </Link>
       </div>
     </LicenseShell>
+  );
+}
+
+export default function LicenseReportsPage() {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <LicenseReportsPageContent />
+    </Suspense>
   );
 }

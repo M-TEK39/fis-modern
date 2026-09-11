@@ -1,4 +1,4 @@
-import AddLossPage from "@/app/(fleet-operations)/losses/add/page";
+import AddLossPage from "@/app/(fleet-operations)/losses/add/_route";
 
 type LegacyAddLossProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

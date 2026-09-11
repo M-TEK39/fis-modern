@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -5,11 +9,10 @@ import { connection } from "next/server";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { MenuSection } from "@/components/ui/menu-section";
 import {
-  getWorkshopVehicles,
-  getWorkshops,
+  DEFAULT_WORKSHOP_PAGE_SIZE,
+  getWorkshopPage,
   WorkshopApiError,
-  type WorkshopRecord,
-  type WorkshopVehicle,
+  type WorkshopPage,
 } from "@/lib/api/fleet-operations/api-workshop";
 import { getSession } from "@/lib/auth/session";
 
@@ -27,6 +30,13 @@ function valueOrDash(value: string | number | null | undefined) {
 
 function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
+}
+
+function pageHref(search: string, status: string, page: number) {
+  const params = new URLSearchParams({ page: String(page) });
+  if (search) params.set("search", search);
+  if (status) params.set("status", status);
+  return `/workshop?${params.toString()}`;
 }
 
 function AccessRestricted() {
@@ -62,47 +72,26 @@ function ApiUnavailable() {
 }
 
 function WorkshopSnapshot({
-  workshops,
-  vehicles,
+  pageData,
   search,
   status,
 }: Readonly<{
-  workshops: WorkshopRecord[];
-  vehicles: WorkshopVehicle[];
+  pageData: WorkshopPage;
   search: string;
   status: string;
 }>) {
-  const vehicleByCode = new Map(vehicles.map((vehicle) => [vehicle.vmfCode, vehicle]));
-  const normalizedSearch = search.trim().toLocaleLowerCase();
-  const rows = workshops.filter((workshop) => {
-    const vehicle = workshop.vmfCode === null ? undefined : vehicleByCode.get(workshop.vmfCode);
-    const isClosed = workshop.completeDate !== null || workshop.completeTime !== null;
-    if (status === "open" && isClosed) return false;
-    if (status === "closed" && !isClosed) return false;
-    if (status === "vehicle" && workshop.vmfCode === null) return false;
-    if (!normalizedSearch) return true;
-    return [
-      workshop.wwCode,
-      workshop.vmfCode,
-      vehicle?.fleetNumber,
-      vehicle?.registrationNumber,
-      isClosed ? "closed" : "open",
-    ].some((value) =>
-      String(value ?? "")
-        .toLocaleLowerCase()
-        .includes(normalizedSearch),
-    );
-  });
+  const { items, page, pageSize, total, totalPages } = pageData;
 
   return (
     <section className="vehicle-status-maintenance-panel" aria-labelledby="workshop-snapshot-title">
       <div className="vehicle-form-section-header">
         <div>
-          <p className="eyebrow">Live records</p>
-          <h2 id="workshop-snapshot-title">All Workshop Entries Snapshot ({rows.length})</h2>
+          <p className="eyebrow">{total} matching entries</p>
+          <h2 id="workshop-snapshot-title">All Workshop Entries Snapshot</h2>
         </div>
       </div>
       <form className="vehicle-search-row" method="get">
+        <input name="page" type="hidden" value="1" />
         <label className="sr-only" htmlFor="workshop-search">
           Search workshop entries
         </label>
@@ -126,7 +115,7 @@ function WorkshopSnapshot({
           Filter
         </button>
       </form>
-      {rows.length === 0 ? (
+      {items.length === 0 ? (
         <p className="muted-copy">No workshop entries match the current filter.</p>
       ) : (
         <div className="vehicle-table-wrapper">
@@ -142,21 +131,20 @@ function WorkshopSnapshot({
               </tr>
             </thead>
             <tbody>
-              {rows.slice(0, 500).map((workshop) => {
-                const vehicle =
-                  workshop.vmfCode === null ? undefined : vehicleByCode.get(workshop.vmfCode);
-                const closed = workshop.completeDate !== null || workshop.completeTime !== null;
+              {items.map((workshop) => {
+                const hasVehicleLabel =
+                  workshop.fleetNumber !== null || workshop.registrationNumber !== null;
                 return (
                   <tr key={workshop.wwCode}>
                     <td>{workshop.wwCode}</td>
                     <td>
-                      {vehicle
-                        ? `${valueOrDash(vehicle.fleetNumber)} / ${valueOrDash(vehicle.registrationNumber)}`
+                      {hasVehicleLabel
+                        ? `${valueOrDash(workshop.fleetNumber)} / ${valueOrDash(workshop.registrationNumber)}`
                         : `VMF ${valueOrDash(workshop.vmfCode)}`}
                     </td>
                     <td>{formatDate(workshop.receiveDate)}</td>
                     <td>{formatDate(workshop.completeDate)}</td>
-                    <td>{closed ? "Closed" : "Open"}</td>
+                    <td>{workshop.status}</td>
                   </tr>
                 );
               })}
@@ -164,11 +152,45 @@ function WorkshopSnapshot({
           </table>
         </div>
       )}
+      {totalPages > 1 ? (
+        <nav className="vehicle-pagination" aria-label="Workshop snapshot pages">
+          {page > 1 ? (
+            <Link className="vehicle-pagination-button" href={pageHref(search, status, page - 1)}>
+              Previous
+            </Link>
+          ) : (
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Previous
+            </span>
+          )}
+          <span className="vehicle-pagination-meta" aria-live="polite">
+            Page {page} of {totalPages}
+          </span>
+          {page < totalPages ? (
+            <Link className="vehicle-pagination-button" href={pageHref(search, status, page + 1)}>
+              Next
+            </Link>
+          ) : (
+            <span
+              className="vehicle-pagination-button vehicle-pagination-disabled"
+              aria-disabled="true"
+            >
+              Next
+            </span>
+          )}
+        </nav>
+      ) : null}
+      <div className="pagination-meta">
+        Total records: {total} | Page size: {pageSize}
+      </div>
     </section>
   );
 }
 
-export default async function WorkshopPage({
+async function WorkshopPageContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
@@ -194,13 +216,29 @@ export default async function WorkshopPage({
     );
 
   const query = await searchParams;
-  const search = Array.isArray(query.search) ? (query.search[0] ?? "") : (query.search ?? "");
-  const status = Array.isArray(query.status) ? (query.status[0] ?? "") : (query.status ?? "");
-  let workshops: WorkshopRecord[] = [];
-  let vehicles: WorkshopVehicle[] = [];
+  const search = (
+    Array.isArray(query.search) ? (query.search[0] ?? "") : (query.search ?? "")
+  ).trim();
+  const requestedStatus = (
+    Array.isArray(query.status) ? (query.status[0] ?? "") : (query.status ?? "")
+  )
+    .trim()
+    .toLowerCase();
+  const status = ["open", "closed", "vehicle"].includes(requestedStatus) ? requestedStatus : "";
+  const requestedPage = Number.parseInt(
+    Array.isArray(query.page) ? (query.page[0] ?? "1") : (query.page ?? "1"),
+    10,
+  );
+  const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+  let pageData: WorkshopPage | null = null;
   let unavailable = false;
   try {
-    [workshops, vehicles] = await Promise.all([getWorkshops(), getWorkshopVehicles()]);
+    pageData = await getWorkshopPage({
+      page,
+      pageSize: DEFAULT_WORKSHOP_PAGE_SIZE,
+      search,
+      status,
+    });
   } catch (error) {
     unavailable = error instanceof WorkshopApiError && error.reason === "unavailable";
   }
@@ -242,13 +280,28 @@ export default async function WorkshopPage({
           <ApiUnavailable />
         ) : (
           <WorkshopSnapshot
-            workshops={workshops}
-            vehicles={vehicles}
+            pageData={
+              pageData ?? {
+                items: [],
+                page,
+                pageSize: DEFAULT_WORKSHOP_PAGE_SIZE,
+                total: 0,
+                totalPages: 1,
+              }
+            }
             search={search}
             status={status}
           />
         )}
       </section>
     </main>
+  );
+}
+
+export default function WorkshopPage(props: Parameters<typeof WorkshopPageContent>[0]) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <WorkshopPageContent {...props} />
+    </Suspense>
   );
 }

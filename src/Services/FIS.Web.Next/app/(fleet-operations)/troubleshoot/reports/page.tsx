@@ -1,16 +1,19 @@
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
 import {
-  getTroubleshootReports,
+  DEFAULT_TROUBLESHOOT_PAGE_SIZE,
+  getTroubleshootReportsPage,
   getTroubleshootUsers,
   TroubleshootApiError,
 } from "@/lib/api/fleet-operations/api-troubleshoot";
 import {
   hasTroubleshootingRole,
   Pagination,
+  pageNumber,
   StatusCard,
   TroubleshootMenu,
   TroubleshootShell,
@@ -36,7 +39,7 @@ function dateInput(value: string | undefined) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
 }
 
-export default async function TroubleshootReportsPage({
+async function TroubleshootReportsPageContent({
   searchParams,
 }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
@@ -76,7 +79,7 @@ export default async function TroubleshootReportsPage({
   const toDate = first(query.toDate);
   const submitted = first(query.submitted) === "1";
   const openInExcel = first(query.openInExcel) === "1";
-  const page = Number(first(query.page)) > 0 ? Number(first(query.page)) : 1;
+  const page = pageNumber(query.page);
   let users;
   try {
     users = await getTroubleshootUsers();
@@ -100,7 +103,7 @@ export default async function TroubleshootReportsPage({
     );
   }
 
-  let results = [] as Awaited<ReturnType<typeof getTroubleshootReports>>;
+  let pageData: Awaited<ReturnType<typeof getTroubleshootReportsPage>> | null = null;
   let errorMessage: string | null = null;
   if (submitted) {
     if ((fromDate && !dateInput(fromDate)) || (toDate && !dateInput(toDate))) {
@@ -109,12 +112,14 @@ export default async function TroubleshootReportsPage({
       errorMessage = "The To date must be on or after the From date.";
     } else {
       try {
-        results = await getTroubleshootReports({
+        pageData = await getTroubleshootReportsPage({
           problemKeyword,
           userAccessCode: userAccessCode ?? undefined,
           fromDate,
           toDate,
           openInExcel,
+          page,
+          pageSize: DEFAULT_TROUBLESHOOT_PAGE_SIZE,
         });
       } catch (error) {
         errorMessage =
@@ -124,11 +129,6 @@ export default async function TroubleshootReportsPage({
       }
     }
   }
-
-  const pageSize = 12;
-  const totalPages = Math.max(1, Math.ceil(results.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const visibleResults = results.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <TroubleshootShell
@@ -148,6 +148,7 @@ export default async function TroubleshootReportsPage({
         </div>
         <form className="vehicle-create-form" method="get">
           <input type="hidden" name="submitted" value="1" />
+          <input type="hidden" name="page" value="1" />
           <div className="form-grid">
             <div className="form-field">
               <label className="form-label" htmlFor="troubleshoot-report-keyword">
@@ -238,7 +239,7 @@ export default async function TroubleshootReportsPage({
         <div className="vehicle-empty-state">
           <p>Set report filters and submit to load troubleshoot records.</p>
         </div>
-      ) : errorMessage ? null : results.length === 0 ? (
+      ) : errorMessage ? null : pageData?.total === 0 ? (
         <div className="vehicle-empty-state">
           <p>No records found.</p>
         </div>
@@ -250,7 +251,7 @@ export default async function TroubleshootReportsPage({
           <div className="vehicle-form-section-header">
             <div>
               <p className="eyebrow">
-                {results.length} result{results.length === 1 ? "" : "s"}
+                {pageData?.total ?? 0} result{pageData?.total === 1 ? "" : "s"}
               </p>
               <h2 id="troubleshoot-report-results-title">Report results</h2>
             </div>
@@ -268,7 +269,7 @@ export default async function TroubleshootReportsPage({
                 </tr>
               </thead>
               <tbody>
-                {visibleResults.map((row) => (
+                {pageData?.items.map((row) => (
                   <tr key={row.id}>
                     <td>{valueOrDash(row.vehicleIdentifier)}</td>
                     <td>{valueOrDash(row.problemDescription)}</td>
@@ -282,8 +283,8 @@ export default async function TroubleshootReportsPage({
           </div>
           <Pagination
             path="/troubleshoot/reports"
-            page={currentPage}
-            totalPages={totalPages}
+            page={pageData?.page ?? page}
+            totalPages={pageData?.totalPages ?? 1}
             query={{
               submitted: 1,
               problemKeyword,
@@ -296,5 +297,13 @@ export default async function TroubleshootReportsPage({
         </section>
       )}
     </TroubleshootShell>
+  );
+}
+
+export default function TroubleshootReportsPage(props: Readonly<{ searchParams: SearchParams }>) {
+  return (
+    <StreamedRoute>
+      <TroubleshootReportsPageContent {...props} />
+    </StreamedRoute>
   );
 }

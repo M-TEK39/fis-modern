@@ -21,6 +21,16 @@ export type TrackingRecord = {
   registrationNumber: string | null;
 };
 
+export type TrackingPage = {
+  items: TrackingRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_TRACKING_PAGE_SIZE = 24;
+
 export type TrackingWriteInput = {
   vmf_code: number | null;
   track_num: string | null;
@@ -170,6 +180,62 @@ async function readTrackingList(path: string, init?: RequestInit) {
     .filter((item): item is TrackingRecord => item !== null);
 }
 
+function readTrackingPage(payload: unknown): TrackingPage {
+  if (!isRecord(payload) || !Array.isArray(payload.items))
+    throw new TrackingApiError(
+      "invalid-response",
+      "The FIS API returned an invalid tracking page.",
+    );
+
+  const page = asNumber(getValue(payload, "page"));
+  const pageSize = asNumber(getValue(payload, "pageSize"));
+  const total = asNumber(getValue(payload, "total"));
+  const totalPages = asNumber(getValue(payload, "totalPages"));
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    throw new TrackingApiError(
+      "invalid-response",
+      "The FIS API returned incomplete tracking pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items.map(mapTracking).filter((item): item is TrackingRecord => item !== null),
+    page,
+    pageSize,
+    total,
+    totalPages,
+  };
+}
+
+function normalizePage(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_TRACKING_PAGE_SIZE)
+      : DEFAULT_TRACKING_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
+function normalizePositiveInteger(value: number | undefined) {
+  return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : null;
+}
+
 async function postReport(path: string, body: unknown) {
   return readTrackingList(path, {
     method: "POST",
@@ -180,6 +246,23 @@ async function postReport(path: string, body: unknown) {
 
 export async function getTrackings() {
   return readTrackingList("api/tracking");
+}
+
+export async function getTrackingPage(
+  options: { page?: number; pageSize?: number; search?: string; vmfCode?: number } = {},
+): Promise<TrackingPage> {
+  const query = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const search = options.search?.trim();
+  if (search) query.set("search", search);
+  const vmfCode = normalizePositiveInteger(options.vmfCode);
+  if (vmfCode !== null) query.set("vmfCode", String(vmfCode));
+
+  return readTrackingPage(
+    await readJson(await requestApi(`api/tracking/page?${query.toString()}`)),
+  );
 }
 
 export async function getTracking(trackCode: number) {

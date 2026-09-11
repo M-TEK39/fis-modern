@@ -1,4 +1,4 @@
-import PrivateHireReportPage from "@/app/(fleet-operations)/private-hire/reports/page";
+import PrivateHireReportPage from "@/app/(fleet-operations)/private-hire/reports/_route";
 
 export default function PrivateHireVehiclesPerCompanyAlias({
   searchParams,

@@ -1,7 +1,8 @@
-import SiteListPage from "@/app/(administration)/validation-data/sites/page";
+import {
+  SiteListPageRoute,
+  type SiteListPageProps,
+} from "@/app/(administration)/validation-data/sites/_route";
 
-type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-
-export default function SitesPage({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
-  return <SiteListPage searchParams={searchParams} routePath="/sites" />;
+export default function SitesPage({ searchParams }: Pick<SiteListPageProps, "searchParams">) {
+  return <SiteListPageRoute searchParams={searchParams} routePath="/sites" />;
 }

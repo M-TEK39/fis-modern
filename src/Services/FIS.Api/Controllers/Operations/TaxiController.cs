@@ -40,6 +40,42 @@ public class TaxiController : BaseApiController
         }
     }
 
+    [HttpGet("page")]
+    public async Task<ActionResult> GetPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24,
+        [FromQuery] bool pendingOnly = false,
+        [FromQuery] bool jiaPickupOnly = false
+    )
+    {
+        try
+        {
+            var result = await _repository.GetPageAsync(
+                new TaxiPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100),
+                    pendingOnly,
+                    jiaPickupOnly
+                )
+            );
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving paged taxi requests");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<Taxi>> GetById(int id)
     {

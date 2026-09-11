@@ -22,6 +22,11 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<Class>> GetAllAsync();
 
         /// <summary>
+        /// Gets a bounded page of non-deleted class entities.
+        /// </summary>
+        Task<ClassPage> GetPageAsync(int page = 1, int pageSize = 24);
+
+        /// <summary>
         /// Searches classes by description containing the search term
         /// </summary>
         /// <param name="searchTerm">The search term to filter by</param>
@@ -60,5 +65,10 @@ namespace FIS.Core.Application.Interfaces
     public sealed record ClassDeleteCheck(int ModelCount, int VehicleCount)
     {
         public bool CanDelete => ModelCount == 0 && VehicleCount == 0;
+    }
+
+    public sealed record ClassPage(IReadOnlyList<Class> Items, int Page, int PageSize, int Total)
+    {
+        public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
     }
 }

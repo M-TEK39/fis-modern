@@ -1,9 +1,5 @@
-import HomePage from "@/app/(workspace)/home/page";
+import { HomePageRoute, type HomePageProps } from "@/app/(workspace)/home/_route";
 
-type LegacyHomePageProps = {
-  searchParams: Promise<{ page?: string | string[] }>;
-};
-
-export default function LegacyHomePage({ searchParams }: LegacyHomePageProps) {
-  return <HomePage routePath="/Home.aspx" searchParams={searchParams} />;
+export default function LegacyHomePage({ searchParams }: Pick<HomePageProps, "searchParams">) {
+  return <HomePageRoute routePath="/Home.aspx" searchParams={searchParams} />;
 }

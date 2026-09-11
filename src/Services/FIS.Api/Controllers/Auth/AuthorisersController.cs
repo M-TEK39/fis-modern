@@ -26,6 +26,8 @@ namespace FIS.Api.Controllers;
 )]
 public sealed class AuthorisersController : BaseApiController
 {
+    private const int DefaultPageSize = 24;
+    private const int MaximumPageSize = 100;
     private const string ApproversTable = "approvers";
     private const string RanksTable = "ranks";
 
@@ -67,6 +69,70 @@ public sealed class AuthorisersController : BaseApiController
         catch (Exception ex)
         {
             return HandleFailure(ex, "retrieving authorisers");
+        }
+    }
+
+    [HttpGet("page")]
+    public async Task<ActionResult> GetAuthorisersPage(
+        [FromQuery] short? siteCode,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        if (siteCode is null)
+        {
+            return BadRequest(new { message = "siteCode is required." });
+        }
+
+        var normalizedPage = Math.Max(1, page);
+        var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
+
+        try
+        {
+            var result = await WithConnectionAsync(async connection =>
+            {
+                var schema = await ReadTableSchemaAsync(connection, ApproversTable);
+                EnsureApproverTable(schema);
+
+                var filter = $"{BuildActivePredicate(schema)} AND [site_code] = @siteCode";
+                var total = await CountAuthorisersAsync(connection, filter, siteCode.Value);
+                var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)normalizedPageSize));
+                var currentPage = Math.Min(normalizedPage, totalPages);
+                var offset = checked((long)(currentPage - 1) * normalizedPageSize);
+
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    $"{BuildApproverSelect(schema)} WHERE {filter} ORDER BY [Surname], [Firstname], [approver_code] OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY";
+                AddParameter(command, "@siteCode", siteCode.Value);
+                AddParameter(command, "@offset", offset);
+                AddParameter(command, "@pageSize", normalizedPageSize);
+
+                var items = (await ReadAuthorisersAsync(command, schema)).Select(MapToDto).ToList();
+                return (
+                    Items: items,
+                    Page: currentPage,
+                    PageSize: normalizedPageSize,
+                    Total: total
+                );
+            });
+
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = Math.Max(
+                        1,
+                        (int)Math.Ceiling(result.Total / (double)result.PageSize)
+                    ),
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            return HandleFailure(ex, "retrieving paged authorisers");
         }
     }
 
@@ -148,6 +214,72 @@ public sealed class AuthorisersController : BaseApiController
                 "Unable to retrieve authoriser ranks; returning an empty lookup"
             );
             return Ok(Array.Empty<AuthoriserRankDto>());
+        }
+    }
+
+    [HttpGet("ranks/page")]
+    public async Task<ActionResult> GetRanksPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
+    {
+        var normalizedPage = Math.Max(1, page);
+        var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
+        try
+        {
+            var result = await WithConnectionAsync(async connection =>
+            {
+                var schema = await ReadTableSchemaAsync(connection, RanksTable);
+                if (!schema.Has("rank_code") || !schema.Has("description"))
+                {
+                    return (
+                        Items: new List<AuthoriserRankDto>(),
+                        Page: 1,
+                        PageSize: normalizedPageSize,
+                        Total: 0
+                    );
+                }
+
+                var activePredicate = schema.Has("is_deleted")
+                    ? "([is_deleted] = 0 OR [is_deleted] IS NULL)"
+                    : "1 = 1";
+                await using var countCommand = connection.CreateCommand();
+                countCommand.CommandText =
+                    $"SELECT COUNT(1) FROM [dbo].[{RanksTable}] WHERE {activePredicate}";
+                var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+                var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)normalizedPageSize));
+                var currentPage = Math.Min(normalizedPage, totalPages);
+                var offset = checked((long)(currentPage - 1) * normalizedPageSize);
+
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    $"SELECT [rank_code] AS [RankCode], [description] AS [Description] FROM [dbo].[{RanksTable}] WHERE {activePredicate} ORDER BY [description], [rank_code] OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY";
+                AddParameter(command, "@offset", offset);
+                AddParameter(command, "@pageSize", normalizedPageSize);
+                return (
+                    Items: await ReadRanksFromCommandAsync(command),
+                    Page: currentPage,
+                    PageSize: normalizedPageSize,
+                    Total: total
+                );
+            });
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = Math.Max(
+                        1,
+                        (int)Math.Ceiling(result.Total / (double)result.PageSize)
+                    ),
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            return HandleFailure(ex, "retrieving paged authoriser ranks");
         }
     }
 
@@ -569,6 +701,11 @@ public sealed class AuthorisersController : BaseApiController
         command.CommandText =
             $"SELECT [rank_code] AS [RankCode], [description] AS [Description] FROM [dbo].[{RanksTable}] WHERE {activePredicate} ORDER BY [description], [rank_code]";
 
+        return await ReadRanksFromCommandAsync(command);
+    }
+
+    private static async Task<List<AuthoriserRankDto>> ReadRanksFromCommandAsync(DbCommand command)
+    {
         var result = new List<AuthoriserRankDto>();
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
@@ -681,6 +818,18 @@ public sealed class AuthorisersController : BaseApiController
         }
 
         return schema.Has("is_deleted") ? "COALESCE([is_deleted], 0) = 0" : "1 = 1";
+    }
+
+    private static async Task<int> CountAuthorisersAsync(
+        DbConnection connection,
+        string filter,
+        short siteCode
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM [dbo].[{ApproversTable}] WHERE {filter}";
+        AddParameter(command, "@siteCode", siteCode);
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
     private static void ValidateAuthoriser(CreateAuthoriserDto dto, TableSchema schema)

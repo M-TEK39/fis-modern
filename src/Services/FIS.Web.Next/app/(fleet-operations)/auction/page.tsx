@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import ModulePageHeader from "@/components/app-shell/module-page-header";
+import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { MenuSection } from "@/components/ui/menu-section";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
@@ -16,7 +17,7 @@ function hasRole(roles: readonly string[], role: string) {
   );
 }
 
-export default async function AuctionPage() {
+async function AuctionPageContent() {
   await connection();
   const session = await getSession();
 
@@ -93,5 +94,13 @@ export default async function AuctionPage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function AuctionPage() {
+  return (
+    <StreamedRoute>
+      <AuctionPageContent />
+    </StreamedRoute>
   );
 }

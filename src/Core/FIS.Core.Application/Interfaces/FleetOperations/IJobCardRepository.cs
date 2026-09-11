@@ -11,6 +11,9 @@ public interface IJobCardRepository
     Task<JobCard?> GetByIdAsync(int jobCardId);
     Task<JobCard?> GetByVehicleAndExtraAsync(int vmfCode, short extraCode);
     Task<IEnumerable<JobCard>> GetAllAsync();
+    Task<JobCardPage> GetPageAsync(JobCardPageQuery query);
+    Task<JobCardPage> GetPriorityUnassignedPageAsync(PriorityUnassignedJobCardPageQuery query);
+    Task<RepairCostReportPage> GetRepairCostReportPageAsync(RepairCostReportPageQuery query);
     Task<IEnumerable<JobCard>> GetByGGNumberAsync(string ggNumber);
     Task<IEnumerable<JobCard>> GetPriorityUnassignedAsync();
     Task<IEnumerable<JobCard>> GetAssignedPriorityAsync();
@@ -53,4 +56,48 @@ public interface IJobCardRepository
         DateTime? invoiceDate,
         string? serviceProvider
     );
+}
+
+public sealed record JobCardPageQuery(
+    int Page = 1,
+    int PageSize = 24,
+    string? SearchTerm = null,
+    string SearchType = "GG",
+    IReadOnlyCollection<int>? StatusCodes = null,
+    int? JobCardId = null
+);
+
+public sealed record JobCardPage(
+    IReadOnlyList<JobCard> Items,
+    int Page,
+    int PageSize,
+    int TotalRecords
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
+}
+
+public sealed record PriorityUnassignedJobCardPageQuery(int Page = 1, int PageSize = 24);
+
+public sealed record RepairCostReportPageQuery(
+    int Page = 1,
+    int PageSize = 24,
+    int? VmfCode = null,
+    IReadOnlyCollection<int>? VmfCodes = null,
+    DateTime? FromDate = null,
+    DateTime? ToDate = null
+);
+
+public sealed record RepairCostReportPage(
+    IReadOnlyList<JobCard> Items,
+    int Page,
+    int PageSize,
+    int TotalRecords,
+    decimal GrandTotal,
+    decimal TotalLabour,
+    decimal TotalParts,
+    decimal TotalOther
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
 }

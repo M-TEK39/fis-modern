@@ -1,7 +1,10 @@
+import { Suspense } from "react";
+
+import RouteLoading from "@/components/app-shell/route-loading";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-
 import {
   FinanceFrame,
   FinanceRestricted,
@@ -19,7 +22,7 @@ function queryValue(query: Query, name: string) {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
-export default async function StandardBankImportPage({
+async function StandardBankImportContent({
   searchParams,
 }: Readonly<{ searchParams: Promise<Query> }>) {
   await connection();
@@ -98,5 +101,13 @@ export default async function StandardBankImportPage({
         </form>
       </section>
     </FinanceFrame>
+  );
+}
+
+export default function StandardBankImportPage(props: Readonly<{ searchParams: Promise<Query> }>) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <StandardBankImportContent {...props} />
+    </Suspense>
   );
 }
