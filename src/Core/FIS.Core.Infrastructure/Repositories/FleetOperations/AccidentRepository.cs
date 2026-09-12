@@ -614,6 +614,7 @@ public sealed class AccidentRepository : IAccidentRepository
                 GetProjection(accidentColumns, "gg_reference", "a"),
                 GetProjection(accidentColumns, "reported_date", "a"),
                 GetProjection(accidentColumns, "damage_description", "a"),
+                GetProjection(accidentColumns, "letterhead", "a"),
                 GetAliasedProjection(
                     vehicleColumns,
                     "registration_number",
@@ -677,6 +678,7 @@ public sealed class AccidentRepository : IAccidentRepository
                 fax = ReadString(reader, "fax") ?? string.Empty,
                 reported_date = ReadDateTime(reader, "reported_date"),
                 damage_description = ReadString(reader, "damage_description") ?? string.Empty,
+                letterhead = ReadString(reader, "letterhead") ?? string.Empty,
                 document_status_tracking_available = documentStatusTrackingAvailable,
                 outstanding_documents = OutstandingDocumentDefinitions
                     .Where(document => accidentColumns.Contains(document.Column))

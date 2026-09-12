@@ -1,4 +1,5 @@
 import DataTableHeader from "@/components/ui/data-table-header";
+import ReportPrintButton from "@/components/ui/report-print-button";
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -106,7 +107,7 @@ async function renderFuelCardReportsPageContent({
         </div>
         {report ? (
           <section
-            className="vehicle-status-maintenance-panel"
+            className="vehicle-status-maintenance-panel report-print-area"
             aria-labelledby="fuel-card-report-result-title"
           >
             <div className="vehicle-form-section-header">
@@ -115,6 +116,9 @@ async function renderFuelCardReportsPageContent({
                 <h2 id="fuel-card-report-result-title">
                   Fuelcard activity ({report.recentActivity.length} recent rows)
                 </h2>
+              </div>
+              <div className="report-print-hide">
+                <ReportPrintButton />
               </div>
             </div>
             <div className="vehicle-stat-grid">

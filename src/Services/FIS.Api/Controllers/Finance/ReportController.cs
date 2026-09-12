@@ -1,3 +1,6 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using System.Text.Json;
 using FIS.Api.Services;
@@ -21,6 +24,10 @@ namespace FIS.Api.Controllers;
 public class ReportController : BaseApiController
 {
     private const long VehicleManagementPermission = 1;
+    // The legacy all-access administrator level. This is deliberately distinct
+    // from the Financial bit: that single bit represents both own- and
+    // all-departments financial roles.
+    private const long FullLegacyAdministratorAccessLevel = 32767;
 
     private readonly IReportingService _reportingService;
     private readonly ILegacyReportResultService _legacyReportResultService;
@@ -82,7 +89,10 @@ public class ReportController : BaseApiController
         CancellationToken cancellationToken
     )
     {
-        if (IsFineReportKey(reportKey) && !HasReportsRole())
+        // Keep the existing permission boundary for dynamic reports and add
+        // the legacy Reports check for the Asset List route. Other dynamic
+        // report callers retain their pre-existing authorization behavior.
+        if ((IsFineReportKey(reportKey) || IsAssetListReportKey(reportKey)) && !HasReportsRole())
         {
             return Forbid();
         }
@@ -102,6 +112,19 @@ public class ReportController : BaseApiController
 
             ExpandLegacyParameterPairs(filters);
             NormalizeLegacyAliases(filters);
+
+            if (IsAssetListReportKey(reportKey))
+            {
+                var assetListScope = await ApplyAssetListProfileScopeAsync(
+                    reportKey,
+                    filters,
+                    cancellationToken
+                );
+                if (!assetListScope.Allowed)
+                {
+                    return Forbid();
+                }
+            }
 
             var report = await _legacyReportResultService.GetReportAsync(
                 reportKey,
@@ -123,6 +146,37 @@ public class ReportController : BaseApiController
                 new { error = "Failed to generate legacy report", message = ex.Message }
             );
         }
+    }
+
+    /// <summary>
+    /// Provides the request-fresh selector scope used by the legacy Asset List
+    /// Department and Site routes. The frontend uses this only to render the
+    /// matching selector; GetDynamicLegacyReport remains the resource boundary.
+    /// </summary>
+    [HttpGet("asset-list-scope")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult> GetAssetListScope(CancellationToken cancellationToken)
+    {
+        if (!HasReportsRole())
+        {
+            return Forbid();
+        }
+
+        var scope = await ResolveAssetListProfileScopeAsync(cancellationToken);
+        if (scope is null)
+        {
+            return Forbid();
+        }
+
+        return Ok(
+            new
+            {
+                allDepartments = scope.AllDepartments,
+                departmentCode = scope.DepartmentCode,
+                siteCode = scope.SiteCode,
+            }
+        );
     }
 
     private static void ExpandLegacyParameterPairs(IDictionary<string, string?> filters)
@@ -164,6 +218,11 @@ public class ReportController : BaseApiController
         CopyAliasIfMissing(filters, "to", "ToDate");
         CopyAliasIfMissing(filters, "dept", "DepartmentID");
         CopyAliasIfMissing(filters, "site", "SiteID");
+        CopyAliasIfMissing(filters, "province", "ProvinceID");
+        CopyAliasIfMissing(filters, "province", "lstProvinceID");
+        CopyAliasIfMissing(filters, "department", "lstDepartmentID");
+        CopyAliasIfMissing(filters, "site", "lstSites");
+        CopyAliasIfMissing(filters, "SearchType", "searchType");
         CopyAliasIfMissing(filters, "search", "txtNum");
         CopyAliasIfMissing(filters, "vmf", "v_code");
     }
@@ -183,6 +242,479 @@ public class ReportController : BaseApiController
         {
             filters[canonicalKey] = value;
         }
+    }
+
+    /// <summary>
+    /// The legacy Asset List selector permits all departments only to members
+    /// of Financial Data (All Departments). Other Reports users are bound to
+    /// the department recorded in their ASP.NET profile, while retaining the
+    /// legacy province selector and their department's site selector.
+    /// </summary>
+    private async Task<AssetListScopeResult> ApplyAssetListProfileScopeAsync(
+        string reportKey,
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    )
+    {
+        if (IsAssetListAllReportKey(reportKey) || IsAssetListProvinceReportKey(reportKey))
+        {
+            return AssetListScopeResult.Allow;
+        }
+
+        var profileScope = await ResolveAssetListProfileScopeAsync(cancellationToken);
+        if (profileScope is null || profileScope.AllDepartments)
+        {
+            return profileScope is { AllDepartments: true }
+                ? AssetListScopeResult.Allow
+                : AssetListScopeResult.Deny;
+        }
+
+        if (!profileScope.DepartmentCode.HasValue)
+        {
+            return AssetListScopeResult.Deny;
+        }
+
+        var profileDepartmentCode = profileScope.DepartmentCode.Value;
+
+        if (IsAssetListDepartmentReportKey(reportKey))
+        {
+            SetAssetListFilterId(filters, profileDepartmentCode);
+            return AssetListScopeResult.Allow;
+        }
+
+        if (!IsAssetListSiteReportKey(reportKey))
+        {
+            return AssetListScopeResult.Allow;
+        }
+
+        var requestedSiteCode = GetAssetListSiteFilterId(filters);
+        if (!requestedSiteCode.HasValue)
+        {
+            // GetVehicleInserviceReports.aspx defaults the site selector to
+            // the profile site before it constructs the report URL.
+            if (!profileScope.SiteCode.HasValue)
+            {
+                return AssetListScopeResult.Deny;
+            }
+
+            SetAssetListFilterId(filters, profileScope.SiteCode.Value);
+            return AssetListScopeResult.Allow;
+        }
+
+        if (requestedSiteCode.Value is <= 0 or > short.MaxValue)
+        {
+            return AssetListScopeResult.Deny;
+        }
+
+        var requestedSiteDepartmentCode = await _context
+            .Sites.AsNoTracking()
+            .Where(site => site.Site_code == requestedSiteCode.Value)
+            .Select(site => site.Depatrment_code)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (requestedSiteDepartmentCode != profileDepartmentCode)
+        {
+            return AssetListScopeResult.Deny;
+        }
+
+        SetAssetListFilterId(filters, requestedSiteCode.Value);
+        return AssetListScopeResult.Allow;
+    }
+
+    private async Task<LegacyAssetListProfileScope?> ResolveAssetListProfileScopeAsync(
+        CancellationToken cancellationToken
+    )
+    {
+        // A system administrator must retain the legacy all-departments
+        // selector. This covers both explicit modern/legacy administrator
+        // roles and the legacy all-access level. Do not infer this from the
+        // Financial bit alone: it represents both financial scope variants.
+        if (HasAssetListAdministratorAccess())
+        {
+            return LegacyAssetListProfileScope.All;
+        }
+
+        var currentUserId = GetCurrentUserId();
+        if (currentUserId is <= 0 or > short.MaxValue)
+        {
+            return null;
+        }
+
+        var profile = await _context
+            .UserAccessOlds.AsNoTracking()
+            .Where(user => user.user_access_code == currentUserId)
+            .Select(user => new { user.name, user.Site_code })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (profile is null)
+        {
+            return null;
+        }
+
+        // The compatibility access-level mapping intentionally produces a
+        // broad Financial claim, so it cannot distinguish the legacy own- and
+        // all-departments roles. Retain the original membership-role source
+        // where it exists.
+        if (
+            !string.IsNullOrWhiteSpace(profile.name)
+            && await HasLegacyNamedRoleAsync(
+                profile.name,
+                "Financial Data (All Departments)",
+                cancellationToken
+            )
+        )
+        {
+            return LegacyAssetListProfileScope.All;
+        }
+
+        if (!string.IsNullOrWhiteSpace(profile.name))
+        {
+            var legacyScope = await TryGetLegacyAssetListProfileScopeAsync(
+                profile.name,
+                cancellationToken
+            );
+            if (legacyScope is not null)
+            {
+                return legacyScope;
+            }
+        }
+
+        // Some supported modern-only databases deliberately omit the ASP.NET
+        // membership/profile tables. user_access_old1.Site_code is the
+        // established compatibility source in that shape; derive its matching
+        // department at runtime rather than denying the Department/Site route.
+        if (!profile.Site_code.HasValue)
+        {
+            return null;
+        }
+
+        var departmentCode = await _context
+            .Sites.AsNoTracking()
+            .Where(site => site.Site_code == profile.Site_code.Value)
+            .Select(site => (int?)site.Depatrment_code)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        return departmentCode.HasValue
+            ? new LegacyAssetListProfileScope(departmentCode.Value, profile.Site_code)
+            : null;
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review if the query string passed to 'string DbCommand.CommandText' accepts any user input",
+        Justification = "The interpolated membership identifiers come only from a fixed allow-list of inspected legacy schema column names; all request-derived values are parameters."
+    )]
+    private async Task<bool> HasLegacyNamedRoleAsync(
+        string username,
+        string expectedRole,
+        CancellationToken cancellationToken
+    )
+    {
+        var columns = await TryGetLegacyAspNetColumnsAsync(cancellationToken);
+        var membershipUserKey = GetSharedLegacyUserKey(
+            columns,
+            "aspnet_Users",
+            "aspnet_UsersInRoles"
+        );
+        if (membershipUserKey is null)
+        {
+            return false;
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            var applicationScope =
+                columns.TryGetValue("aspnet_Users", out var userColumns)
+                && columns.TryGetValue("aspnet_Roles", out var roleColumns)
+                && userColumns.Contains("ApplicationId")
+                && roleColumns.Contains("ApplicationId")
+                    ? " AND r.[ApplicationId] = u.[ApplicationId]"
+                    : string.Empty;
+            command.CommandText = $"""
+                SELECT TOP (1) 1
+                FROM [dbo].[aspnet_Users] AS u
+                INNER JOIN [dbo].[aspnet_UsersInRoles] AS ur
+                    ON ur.[{membershipUserKey}] = u.[{membershipUserKey}]
+                INNER JOIN [dbo].[aspnet_Roles] AS r ON r.[RoleId] = ur.[RoleId]
+                {applicationScope}
+                WHERE LOWER(u.[UserName]) = @username
+                  AND LOWER(r.[RoleName]) = @roleName
+                """;
+            AddStringParameter(command, "@username", username.Trim().ToLowerInvariant());
+            AddStringParameter(command, "@roleName", expectedRole.ToLowerInvariant());
+
+            return await command.ExecuteScalarAsync(cancellationToken) is not null;
+        }
+        catch (DbException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Could not read legacy named report role for {Username}; enforcing profile scope",
+                username
+            );
+            return false;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review if the query string passed to 'string DbCommand.CommandText' accepts any user input",
+        Justification = "The interpolated profile identifiers come only from a fixed allow-list of inspected legacy schema column names; the username remains parameterized."
+    )]
+    private async Task<LegacyAssetListProfileScope?> TryGetLegacyAssetListProfileScopeAsync(
+        string username,
+        CancellationToken cancellationToken
+    )
+    {
+        var columns = await TryGetLegacyAspNetColumnsAsync(cancellationToken);
+        var profileUserKey = GetSharedLegacyUserKey(
+            columns,
+            "aspnet_Profile",
+            "aspnet_Users"
+        );
+        if (profileUserKey is null)
+        {
+            return null;
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT TOP (1)
+                    CONVERT(nvarchar(max), p.[PropertyNames]),
+                    CONVERT(nvarchar(max), p.[PropertyValuesString])
+                FROM [dbo].[aspnet_Profile] AS p
+                INNER JOIN [dbo].[aspnet_Users] AS u
+                    ON p.[{profileUserKey}] = u.[{profileUserKey}]
+                WHERE LOWER(u.[UserName]) = @username
+                """;
+            AddStringParameter(command, "@username", username.Trim().ToLowerInvariant());
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+            {
+                return null;
+            }
+
+            var propertyNames = reader.IsDBNull(0) ? null : Convert.ToString(reader.GetValue(0));
+            var propertyValues = reader.IsDBNull(1) ? null : Convert.ToString(reader.GetValue(1));
+            var department = ParseLegacyProfileInteger(propertyNames, propertyValues, "DepartmentCode");
+            var site = ParseLegacyProfileInteger(propertyNames, propertyValues, "SiteCode");
+            return department.HasValue
+                ? new LegacyAssetListProfileScope(department.Value, site)
+                : null;
+        }
+        catch (DbException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Could not read legacy report profile scope for {Username}",
+                username
+            );
+            return null;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<IReadOnlyDictionary<string, HashSet<string>>> TryGetLegacyAspNetColumnsAsync(
+        CancellationToken cancellationToken
+    )
+    {
+        var columns = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["aspnet_Profile"] = new(StringComparer.OrdinalIgnoreCase),
+            ["aspnet_Users"] = new(StringComparer.OrdinalIgnoreCase),
+            ["aspnet_UsersInRoles"] = new(StringComparer.OrdinalIgnoreCase),
+            ["aspnet_Roles"] = new(StringComparer.OrdinalIgnoreCase),
+        };
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT [TABLE_NAME], [COLUMN_NAME]
+                FROM [INFORMATION_SCHEMA].[COLUMNS]
+                WHERE [TABLE_SCHEMA] = N'dbo'
+                  AND [TABLE_NAME] IN (
+                    N'aspnet_Profile',
+                    N'aspnet_Users',
+                    N'aspnet_UsersInRoles',
+                    N'aspnet_Roles'
+                  )
+                """;
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var table = reader.IsDBNull(0) ? null : reader.GetString(0);
+                var column = reader.IsDBNull(1) ? null : reader.GetString(1);
+                if (
+                    table is not null
+                    && column is not null
+                    && columns.TryGetValue(table, out var tableColumns)
+                )
+                {
+                    tableColumns.Add(column);
+                }
+            }
+        }
+        catch (DbException ex)
+        {
+            _logger.LogWarning(ex, "Could not inspect legacy ASP.NET report-profile structures");
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+
+        return columns;
+    }
+
+    private static string? GetSharedLegacyUserKey(
+        IReadOnlyDictionary<string, HashSet<string>> columns,
+        string firstTableName,
+        string secondTableName
+    )
+    {
+        if (
+            !columns.TryGetValue(firstTableName, out var firstTableColumns)
+            || !columns.TryGetValue(secondTableName, out var secondTableColumns)
+        )
+        {
+            return null;
+        }
+
+        return firstTableColumns.Contains("UserId") && secondTableColumns.Contains("UserId")
+            ? "UserId"
+            : firstTableColumns.Contains("user_access_code")
+                && secondTableColumns.Contains("user_access_code")
+                ? "user_access_code"
+                : null;
+    }
+
+    private static void AddStringParameter(DbCommand command, string name, string value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = DbType.String;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
+
+    private static int? ParseLegacyProfileInteger(
+        string? propertyNames,
+        string? propertyValues,
+        string propertyName
+    )
+    {
+        if (string.IsNullOrWhiteSpace(propertyNames) || propertyValues is null)
+        {
+            return null;
+        }
+
+        var tokens = propertyNames.Split(':');
+        for (var index = 0; index + 3 < tokens.Length; index++)
+        {
+            if (
+                !string.Equals(tokens[index], propertyName, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(tokens[index + 1], "S", StringComparison.OrdinalIgnoreCase)
+                || !int.TryParse(
+                    tokens[index + 2],
+                    System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var offset
+                )
+                || !int.TryParse(
+                    tokens[index + 3],
+                    System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var length
+                )
+                || offset < 0
+                || length <= 0
+                || offset > propertyValues.Length
+                || length > propertyValues.Length - offset
+            )
+            {
+                continue;
+            }
+
+            var value = propertyValues.Substring(offset, length).Trim();
+            if (
+                int.TryParse(
+                    value,
+                    System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var parsed
+                )
+                && parsed > 0
+            )
+            {
+                return parsed;
+            }
+        }
+
+        return null;
+    }
+
+    private static int? GetAssetListSiteFilterId(IDictionary<string, string?> filters)
+    {
+        foreach (var key in new[] { "id", "site", "site_code", "SiteID", "lstSites" })
+        {
+            if (
+                filters.TryGetValue(key, out var rawValue)
+                && int.TryParse(rawValue, out var value)
+            )
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static void SetAssetListFilterId(IDictionary<string, string?> filters, int value)
+    {
+        var text = value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // The legacy filtered procedure gives `id` precedence.
+        filters["id"] = text;
     }
 
     /// <summary>
@@ -2126,7 +2658,67 @@ public class ReportController : BaseApiController
         || reportKey.Equals("traffic-dept-detail", StringComparison.OrdinalIgnoreCase)
         || reportKey.Equals("dept-site-period", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsAssetListReportKey(string reportKey) =>
+        reportKey.Equals("asset-list", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("all-departments", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("asset-list-by-province", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("asset-list-by-department", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("asset-list-by-site", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("by-province", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("by-department", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("by-site", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAssetListAllReportKey(string reportKey) =>
+        reportKey.Equals("asset-list", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("all-departments", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAssetListProvinceReportKey(string reportKey) =>
+        reportKey.Equals("asset-list-by-province", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("by-province", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAssetListDepartmentReportKey(string reportKey) =>
+        reportKey.Equals("asset-list-by-department", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("by-department", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAssetListSiteReportKey(string reportKey) =>
+        reportKey.Equals("asset-list-by-site", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("by-site", StringComparison.OrdinalIgnoreCase);
+
+    private sealed record AssetListScopeResult(bool Allowed)
+    {
+        public static readonly AssetListScopeResult Allow = new(true);
+        public static readonly AssetListScopeResult Deny = new(false);
+    }
+
+    private sealed record LegacyAssetListProfileScope(
+        int? DepartmentCode,
+        int? SiteCode,
+        bool AllDepartments = false
+    )
+    {
+        public static readonly LegacyAssetListProfileScope All = new(null, null, true);
+    }
+
     private bool HasReportsRole() => HasAnyRole("Reports");
+
+    private bool HasAssetListAdministratorAccess()
+    {
+        if (
+            HasAnyRole(
+                "admin",
+                "administrator",
+                "system administrator",
+                "systemadministrator"
+            )
+        )
+        {
+            return true;
+        }
+
+        var accessLevelClaim = User.FindFirst("access_level")?.Value;
+        return long.TryParse(accessLevelClaim, out var accessLevel)
+            && accessLevel == FullLegacyAdministratorAccessLevel;
+    }
 
     private bool HasVehicleManagementPermission()
     {

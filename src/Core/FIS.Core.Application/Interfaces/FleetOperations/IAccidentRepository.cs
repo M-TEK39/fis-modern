@@ -198,6 +198,7 @@ public class AccidentOutstandingDocumentReport
     public string fax { get; set; } = "";
     public DateTime? reported_date { get; set; }
     public string damage_description { get; set; } = "";
+    public string letterhead { get; set; } = "";
     public bool document_status_tracking_available { get; set; }
     public IReadOnlyList<string> outstanding_documents { get; set; } = Array.Empty<string>();
 }

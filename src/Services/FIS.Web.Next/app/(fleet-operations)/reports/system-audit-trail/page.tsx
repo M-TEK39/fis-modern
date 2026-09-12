@@ -1,4 +1,5 @@
 import DataTableHeader from "@/components/ui/data-table-header";
+import ReportPrintButton from "@/components/ui/report-print-button";
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -114,7 +115,7 @@ function AuditPagination({
 }: Readonly<{ page: number; totalPages: number; href: (page: number) => string }>) {
   if (totalPages <= 1) return null;
   return (
-    <nav className="vehicle-pagination" aria-label="Audit results pages">
+    <nav className="vehicle-pagination report-print-hide" aria-label="Audit results pages">
       {page > 1 ? (
         <Link className="vehicle-pagination-button" href={href(page - 1)}>
           Previous
@@ -231,12 +232,16 @@ function ChangesTab({
           {error}
         </div>
       ) : null}
-      <section className="vehicle-status-maintenance-panel" aria-labelledby="audit-changes-title">
+      <section
+        className="vehicle-status-maintenance-panel report-print-area"
+        aria-labelledby="audit-changes-title"
+      >
         <div className="vehicle-form-section-header">
           <div>
             <p className="eyebrow">{result?.totalCount ?? 0} records</p>
             <h2 id="audit-changes-title">Entity Changes</h2>
           </div>
+          <ReportPrintButton />
         </div>
         {!submitted ? (
           <p className="muted-copy">No records loaded. Apply filters and click Search.</p>
@@ -357,12 +362,16 @@ function UserStatusTab({
           {error}
         </div>
       ) : null}
-      <section className="vehicle-status-maintenance-panel" aria-labelledby="user-status-title">
+      <section
+        className="vehicle-status-maintenance-panel report-print-area"
+        aria-labelledby="user-status-title"
+      >
         <div className="vehicle-form-section-header">
           <div>
             <p className="eyebrow">{result?.totalCount ?? 0} records</p>
             <h2 id="user-status-title">User Enable / Disable / Lock History</h2>
           </div>
+          <ReportPrintButton />
         </div>
         {!submitted ? (
           <p className="muted-copy">No records loaded. Apply filters and click Search.</p>
@@ -462,7 +471,7 @@ function PasswordTab({
         </div>
       ) : null}
       <section
-        className="vehicle-status-maintenance-panel"
+        className="vehicle-status-maintenance-panel report-print-area"
         aria-labelledby="password-history-title"
       >
         <div className="vehicle-form-section-header">
@@ -470,6 +479,7 @@ function PasswordTab({
             <p className="eyebrow">{result?.totalCount ?? 0} records</p>
             <h2 id="password-history-title">Password Change &amp; Expiry Status</h2>
           </div>
+          <ReportPrintButton />
         </div>
         {!submitted ? (
           <p className="muted-copy">No records loaded. Apply filters and click Search.</p>

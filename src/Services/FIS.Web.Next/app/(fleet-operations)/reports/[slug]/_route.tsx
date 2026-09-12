@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import {
@@ -21,8 +22,32 @@ import type {
   ReportMenuEntry,
   ReportQuery,
 } from "@/app/(fleet-operations)/reports/_utils";
-import { getLegacyReport, LegacyReportApiError } from "@/lib/api/reports/api-legacy-reports";
+import {
+  getAssetListScope,
+  getLegacyReport,
+  LegacyReportApiError,
+  type AssetListScope,
+} from "@/lib/api/reports/api-legacy-reports";
+import {
+  DepartmentApiError,
+  getDepartments,
+  type DepartmentRecord,
+} from "@/lib/api/reference-data/api-departments";
+import { getSites, SiteApiError, type SiteRecord } from "@/lib/api/reference-data/api-sites";
+import {
+  FinanceApiError,
+  getFinanceProvinces,
+  type FinanceOption,
+} from "@/lib/api/finance/api-finance";
 import { getSession } from "@/lib/auth/session";
+import {
+  ASSET_LIST_MODE_VALUES,
+  assetListCaption,
+  assetListNeedsSelection,
+  assetListReportKey,
+  AssetListSelector,
+  type AssetListMode,
+} from "../asset-list-flow";
 
 type ReportRouteProps = Readonly<{
   slug: string;
@@ -564,6 +589,227 @@ function filterQuery(query: ReportQuery) {
   return filters;
 }
 
+function assetListModeFromQuery(query: ReportQuery) {
+  const requestedMode = queryValue(query, "rtype").trim().toLowerCase();
+  if (ASSET_LIST_MODE_VALUES.includes(requestedMode as AssetListMode))
+    return requestedMode as AssetListMode;
+
+  const legacyMode = (queryValue(query, "Mode") || queryValue(query, "mode")).trim().toLowerCase();
+  if (legacyMode === "province") return "by-province";
+  if (legacyMode === "department") return "by-department";
+  if (legacyMode === "site") return "by-site";
+  return "all-departments";
+}
+
+function isAssetListModeQuery(query: ReportQuery) {
+  const requestedMode = queryValue(query, "rtype").trim().toLowerCase();
+  const legacyMode = (queryValue(query, "Mode") || queryValue(query, "mode")).trim().toLowerCase();
+  return (
+    ASSET_LIST_MODE_VALUES.includes(requestedMode as AssetListMode) ||
+    ["province", "department", "site"].includes(legacyMode)
+  );
+}
+
+function firstQueryValue(query: ReportQuery, names: readonly string[]) {
+  for (const name of names) {
+    const value = queryValue(query, name).trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+function assetListSelections(query: ReportQuery) {
+  return {
+    province: firstQueryValue(query, [
+      "province",
+      "province_code",
+      "provinceCode",
+      "lstProvinceID",
+    ]),
+    department: firstQueryValue(query, [
+      "department",
+      "department_code",
+      "departmentCode",
+      "lstDepartmentID",
+    ]),
+    site: firstQueryValue(query, ["site", "siteCode", "lstSites"]),
+  };
+}
+
+function positiveInteger(value: string) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0;
+}
+
+function assetListSelectionsForScope(
+  query: ReportQuery,
+  mode: AssetListMode,
+  scope: AssetListScope | null,
+) {
+  const requested = assetListSelections(query);
+  const departmentSelectionLocked =
+    scope !== null &&
+    !scope.allDepartments &&
+    (mode === "by-department" || mode === "by-site");
+  return {
+    province: requested.province,
+    department:
+      departmentSelectionLocked
+        ? scope.departmentCode ?? ""
+        : requested.department,
+    site: requested.site,
+    departmentSelectionLocked,
+  };
+}
+
+function assetListFilters(
+  mode: AssetListMode,
+  selections: ReturnType<typeof assetListSelectionsForScope>,
+) {
+  if (mode === "by-province") return { province: selections.province };
+  if (mode === "by-department") return { department: selections.department };
+  if (mode === "by-site") {
+    return { department: selections.department, site: selections.site };
+  }
+  return {};
+}
+
+function assetListReferenceError(error: unknown) {
+  if (
+    error instanceof DepartmentApiError ||
+    error instanceof SiteApiError ||
+    error instanceof FinanceApiError
+  ) {
+    return error.message;
+  }
+  return "The reference data needed for this report could not be loaded.";
+}
+
+function assetListResultError(error: unknown) {
+  return error instanceof LegacyReportApiError && error.reason === "invalid-response"
+    ? error.message
+    : undefined;
+}
+
+function assetListResultBackHref(mode: AssetListMode) {
+  return mode === "all-departments"
+    ? "/reports/asset-list"
+    : `/reports/asset-list?rtype=${encodeURIComponent(mode)}&view=filters`;
+}
+
+async function renderAssetListRoute(query: ReportQuery): Promise<ReactNode> {
+  const mode = assetListModeFromQuery(query);
+  let scope: AssetListScope | null = null;
+  if (mode === "by-department" || mode === "by-site") {
+    try {
+      scope = await getAssetListScope();
+    } catch (error) {
+      return (
+        <ReportsFrame
+          title={assetListCaption(mode)}
+          description="The Asset List access scope could not be verified."
+        >
+          <ReportsUnavailable message={assetListResultError(error)} />
+        </ReportsFrame>
+      );
+    }
+  }
+
+  const selections = assetListSelectionsForScope(query, mode, scope);
+  const reportSubmission = queryValue(query, "view").trim().toLowerCase() === "report";
+  const hasRequiredSelection =
+    mode === "all-departments" ||
+    (mode === "by-province" && reportSubmission && positiveInteger(selections.province)) ||
+    (mode === "by-department" &&
+      reportSubmission &&
+      positiveInteger(selections.department)) ||
+    (mode === "by-site" &&
+      reportSubmission &&
+      positiveInteger(selections.department) &&
+      positiveInteger(selections.site));
+
+  if (hasRequiredSelection) {
+    try {
+      const loadedReport = await getLegacyReport(
+        assetListReportKey(mode),
+        assetListFilters(mode, selections),
+      );
+      const report = {
+        ...loadedReport,
+        reportKey: assetListReportKey(mode),
+        title: assetListCaption(mode),
+      };
+      return (
+        <ReportsFrame title={assetListCaption(mode)} description="Legacy asset list report.">
+          <ReportResult report={report} backHref={assetListResultBackHref(mode)} />
+        </ReportsFrame>
+      );
+    } catch (error) {
+      return (
+        <ReportsFrame
+          title={assetListCaption(mode)}
+          description="Legacy asset list report."
+          backHref={assetListResultBackHref(mode)}
+          backLabel="Back to filters"
+        >
+          <ReportsUnavailable message={assetListResultError(error)} />
+        </ReportsFrame>
+      );
+    }
+  }
+
+  let departments: DepartmentRecord[] = [];
+  let provinces: FinanceOption[] = [];
+  let sites: SiteRecord[] = [];
+  let error: string | undefined;
+
+  try {
+    if (mode === "by-province") {
+      provinces = await getFinanceProvinces();
+    } else if (mode === "by-department") {
+      departments = selections.departmentSelectionLocked
+        ? (await getDepartments()).filter(
+            (department) => String(department.departmentCode) === selections.department,
+          )
+        : await getDepartments();
+    } else if (mode === "by-site") {
+      departments = selections.departmentSelectionLocked
+        ? (await getDepartments()).filter(
+            (department) => String(department.departmentCode) === selections.department,
+          )
+        : await getDepartments();
+      if (selections.department) {
+        const allSites = await getSites();
+        const departmentCode = Number(selections.department);
+        sites = allSites.filter((site) => site.departmentCode === departmentCode);
+      }
+    }
+  } catch (caughtError) {
+    error = assetListReferenceError(caughtError);
+  }
+
+  return (
+    <ReportsFrame
+      title={assetListCaption(mode)}
+      description="Choose the legacy grouping and filters before displaying the report."
+    >
+      {assetListNeedsSelection(mode) ? (
+        <AssetListSelector
+          mode={mode}
+          selectedProvince={selections.province}
+          selectedDepartment={selections.department}
+          selectedSite={selections.site}
+          departmentSelectionLocked={selections.departmentSelectionLocked}
+          departments={departments}
+          provinces={provinces}
+          sites={sites}
+          error={error}
+        />
+      ) : null}
+    </ReportsFrame>
+  );
+}
+
 const ReportsRoutePageContent = renderReportsRoutePageContent;
 
 async function renderReportsRoutePageContent({
@@ -598,6 +844,10 @@ async function renderReportsRoutePageContent({
         <ReportsUnavailable message="The requested report route is not mapped." />
       </ReportsFrame>
     );
+
+  if (slug === "asset-list" && isAssetListModeQuery(query)) {
+    return renderAssetListRoute(query);
+  }
 
   const reportKey =
     forcedReportKey ?? definition.resolveReportKey?.(query) ?? definition.reportKey ?? "";

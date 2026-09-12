@@ -29,6 +29,12 @@ export class LegacyReportApiError extends Error {
   }
 }
 
+export type AssetListScope = {
+  allDepartments: boolean;
+  departmentCode: string | null;
+  siteCode: string | null;
+};
+
 function getApiBaseUrl() {
   const value = process.env.API_BASE_URL?.trim() || "http://localhost:5010";
   return `${value.replace(/\/$/, "")}/`;
@@ -176,6 +182,32 @@ export async function getLegacyReport(
       "The FIS API returned an invalid legacy report.",
     );
   return report;
+}
+
+export async function getAssetListScope(): Promise<AssetListScope> {
+  const value = await requestApi("api/report/asset-list-scope");
+  if (!isRecord(value)) {
+    throw new LegacyReportApiError(
+      "invalid-response",
+      "The FIS API returned an invalid Asset List access scope.",
+    );
+  }
+
+  const allDepartments = asBoolean(getValue(value, "allDepartments", "AllDepartments"));
+  const departmentCode = asNumber(getValue(value, "departmentCode", "DepartmentCode"));
+  const siteCode = asNumber(getValue(value, "siteCode", "SiteCode"));
+  if (allDepartments === null || (!allDepartments && (!departmentCode || departmentCode < 1))) {
+    throw new LegacyReportApiError(
+      "invalid-response",
+      "The FIS API returned an invalid Asset List access scope.",
+    );
+  }
+
+  return {
+    allDepartments,
+    departmentCode: departmentCode && departmentCode > 0 ? String(departmentCode) : null,
+    siteCode: siteCode && siteCode > 0 ? String(siteCode) : null,
+  };
 }
 
 export type ReportHelp = {

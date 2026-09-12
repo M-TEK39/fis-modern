@@ -219,7 +219,10 @@ function ReportForm({
   );
 }
 
-function ReportResults({ report }: Readonly<{ report: LegacyReport }>) {
+function ReportResults({
+  report,
+  mode,
+}: Readonly<{ report: LegacyReport; mode: WorkshopReportMode }>) {
   if (report.rows.length === 0)
     return (
       <section className="vehicle-empty-state" aria-live="polite">
@@ -234,6 +237,7 @@ function ReportResults({ report }: Readonly<{ report: LegacyReport }>) {
       headingId="workshop-report-results-title"
       heading={`${report.totalCount} record(s) returned`}
       trailing={<span className="form-hint">Compatibility result</span>}
+      letterheadTitle={mode === "print-job-card" ? "WORKSHOP JOB CARD — RECEPTION" : undefined}
     >
       {report.approximationReason ? (
         <div className="notice notice-info" role="status">
@@ -379,7 +383,7 @@ async function renderWorkshopReportPageContent({
           </div>
         ) : null}
         {report ? (
-          <ReportResults report={report} />
+          <ReportResults mode={mode} report={report} />
         ) : mode === "in-workshop" || mode === "merchants" ? (
           <section className="vehicle-status-card">
             <p className="eyebrow">No records found</p>

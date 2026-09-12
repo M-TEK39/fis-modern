@@ -6,6 +6,7 @@ using System.Text.Json;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
@@ -82,8 +83,23 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 );
                 if (storedProcResult is not null)
                 {
+                    // Keep the key the caller requested.  The definition key is
+                    // canonical, but the legacy menu exposes separate keys for
+                    // the province/department/site variants.
+                    storedProcResult.ReportKey = reportKey;
                     return storedProcResult;
                 }
+            }
+            catch (SqlException ex) when (ex.Number == 2812)
+            {
+                // The client-era database does not necessarily include the
+                // reporting procedures. A missing optional procedure is the
+                // normal compatibility path, so use the legacy-table fallback
+                // without treating the request as a database failure.
+                _logger.LogInformation(
+                    "Stored procedure for legacy report {ReportKey} is unavailable; using the compatibility query.",
+                    resolvedKey
+                );
             }
             catch (Exception ex)
             {
@@ -180,10 +196,12 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "trip-authorities-by-dept-site-date" => "contract-trip-authority-dept-site-date",
             "lease-nom-split" => "lease-nom-contract-split",
 
-            // Asset list variants
-            "asset-list-by-province" => "asset-list",
-            "asset-list-by-department" => "asset-list",
-            "asset-list-by-site" => "asset-list",
+            // Asset list variants.  These are separate legacy report keys and
+            // must not collapse into the all-assets procedure: the legacy page
+            // sends SearchType 1/2/3 and id to its filtered procedure.
+            "asset-list-by-province" => "asset-list-by-province",
+            "asset-list-by-department" => "asset-list-by-department",
+            "asset-list-by-site" => "asset-list-by-site",
             "all-departments" => "asset-list",
             "by-province" => "asset-list-by-province",
             "by-department" => "asset-list-by-department",
@@ -578,9 +596,40 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 "asset-list",
                 "Asset List: New & In-Service Vehicles",
                 "Finance/AssetVehicleReports.aspx",
-                null,
+                "AllNewAndInServiceVehicles",
                 BuildAssetListAsync,
-                "Rendered from legacy-compatible vehicle/status/site data because the legacy asset list menu fans into multiple report modes."
+                "Rendered from the legacy all-assets procedure; the filtered menu entries use the companion procedure below.",
+                BuildStoredProcedureParameters: _ => Array.Empty<LegacyStoredProcedureParameter>()
+            ),
+
+            ["asset-list-by-province"] = new(
+                "asset-list-by-province",
+                "Asset List: New & In-Service Vehicles By Province",
+                "FISReports/GetVehicleInserviceReports.aspx?Mode=Province",
+                "FilterNewAndInServiceVehicles",
+                BuildAssetListByProvinceAsync,
+                "Rendered from the legacy filtered asset-list procedure (SearchType=1).",
+                BuildAssetListProvinceParameters
+            ),
+
+            ["asset-list-by-department"] = new(
+                "asset-list-by-department",
+                "Asset List: New & In-Service Vehicles By Department",
+                "FISReports/GetVehicleInserviceReports.aspx?Mode=Department",
+                "FilterNewAndInServiceVehicles",
+                BuildAssetListByDepartmentAsync,
+                "Rendered from the legacy filtered asset-list procedure (SearchType=2).",
+                BuildAssetListDepartmentParameters
+            ),
+
+            ["asset-list-by-site"] = new(
+                "asset-list-by-site",
+                "Asset List: New & In-Service Vehicles By Site",
+                "FISReports/GetVehicleInserviceReports.aspx?Mode=Site",
+                "FilterNewAndInServiceVehicles",
+                BuildAssetListBySiteAsync,
+                "Rendered from the legacy filtered asset-list procedure (SearchType=3).",
+                BuildAssetListSiteParameters
             ),
 
             ["audit-trail"] = new(
@@ -991,17 +1040,71 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         };
     }
 
+    private enum AssetListSearchType
+    {
+        Province = 1,
+        Department = 2,
+        Site = 3,
+        All = 4,
+    }
+
+    private Task<LegacyReportResultDto> BuildAssetListByProvinceAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    ) => BuildAssetListAsync(filters, cancellationToken, AssetListSearchType.Province);
+
+    private Task<LegacyReportResultDto> BuildAssetListByDepartmentAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    ) => BuildAssetListAsync(filters, cancellationToken, AssetListSearchType.Department);
+
+    private Task<LegacyReportResultDto> BuildAssetListBySiteAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    ) => BuildAssetListAsync(filters, cancellationToken, AssetListSearchType.Site);
+
+    private static IReadOnlyList<LegacyStoredProcedureParameter> BuildAssetListProvinceParameters(
+        IDictionary<string, string?> filters
+    ) => BuildAssetListFilterParameters(filters, AssetListSearchType.Province);
+
+    private static IReadOnlyList<LegacyStoredProcedureParameter> BuildAssetListDepartmentParameters(
+        IDictionary<string, string?> filters
+    ) => BuildAssetListFilterParameters(filters, AssetListSearchType.Department);
+
+    private static IReadOnlyList<LegacyStoredProcedureParameter> BuildAssetListSiteParameters(
+        IDictionary<string, string?> filters
+    ) => BuildAssetListFilterParameters(filters, AssetListSearchType.Site);
+
+    private static IReadOnlyList<LegacyStoredProcedureParameter> BuildAssetListFilterParameters(
+        IDictionary<string, string?> filters,
+        AssetListSearchType searchType
+    )
+    {
+        var id = GetAssetListFilterId(filters, searchType);
+        return new[]
+        {
+            new LegacyStoredProcedureParameter("@SearchType", (int)searchType, DbType.Int32),
+            // Passing DBNull is intentional.  The legacy procedure returns no
+            // rows when a filtered route is called without its required id.
+            new LegacyStoredProcedureParameter("@id", id.HasValue ? id.Value : DBNull.Value, DbType.Int32),
+        };
+    }
+
     private async Task<LegacyReportResultDto> BuildAssetListAsync(
         IDictionary<string, string?> filters,
         CancellationToken cancellationToken
+    ) => await BuildAssetListAsync(filters, cancellationToken, null);
+
+    private async Task<LegacyReportResultDto> BuildAssetListAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken,
+        AssetListSearchType? forcedSearchType
     )
     {
-        var search = GetString(filters, "search");
+        var search = GetString(filters, "search") ?? GetString(filters, "txtNum");
         var mode = GetString(filters, "mode") ?? "GG";
-        var siteCode = GetShort(filters, "site");
-        var departmentCode =
-            GetShort(filters, "department") ?? GetShort(filters, "department_code");
-        var provinceCode = GetShort(filters, "province") ?? GetShort(filters, "province_code");
+        var searchType = forcedSearchType ?? ResolveAssetListSearchType(filters);
+        var filterId = GetAssetListFilterId(filters, searchType);
 
         var query =
             from vehicle in _context.Vehicles.AsNoTracking()
@@ -1009,100 +1112,292 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 on vehicle.model_code equals model.model_code
                 into vehicleModels
             from model in vehicleModels.DefaultIfEmpty()
-            join make in _context.Makes.AsNoTracking()
-                on model.make_code equals make.make_code
-                into vehicleMakes
-            from make in vehicleMakes.DefaultIfEmpty()
-            join site in _context.Sites.AsNoTracking()
-                on vehicle.location_code equals site.Site_code
-                into vehicleSites
-            from site in vehicleSites.DefaultIfEmpty()
+            join vehicleClass in _context.Classes.AsNoTracking()
+                on model.class_code equals vehicleClass.class_code
+                into vehicleClasses
+            from vehicleClass in vehicleClasses.DefaultIfEmpty()
             join status in _context.VehicleStatuses.AsNoTracking()
                 on vehicle.vehicle_status_code equals status.vehicle_status_code
                 into vehicleStatuses
             from status in vehicleStatuses.DefaultIfEmpty()
+            join source in _context.VehicleSources.AsNoTracking()
+                on vehicle.vs_code equals (byte?)source.vs_code
+                into vehicleSources
+            from source in vehicleSources.DefaultIfEmpty()
+            join type in _context.VehicleTypes.AsNoTracking()
+                on vehicle.type_code equals type.type_code
+                into vehicleTypes
+            from type in vehicleTypes.DefaultIfEmpty()
+            join site in _context.Sites.AsNoTracking()
+                on vehicle.location_code equals site.Site_code
+                into vehicleSites
+            from site in vehicleSites.DefaultIfEmpty()
+            join department in _context.Departments.AsNoTracking()
+                on site.Depatrment_code equals department.department_code
+                into vehicleDepartments
+            from department in vehicleDepartments.DefaultIfEmpty()
+            join province in _context.Provinces.AsNoTracking()
+                on site.province_code equals (byte?)province.province_code
+                into vehicleProvinces
+            from province in vehicleProvinces.DefaultIfEmpty()
             where
                 !vehicle.is_deleted
-                && (vehicle.vehicle_status_code == 1 || vehicle.vehicle_status_code == 2)
+                // Legacy report status contract: 0 = New, 1 = In-Service.
+                && vehicle.vehicle_status_code >= 0
+                && vehicle.vehicle_status_code <= 1
             select new
             {
                 vehicle.vmf_code,
-                vehicle.fleet_number,
                 vehicle.registration_number,
-                Vehicle = JoinVehicleLabel(
-                    vehicle.fleet_number,
-                    vehicle.registration_number,
-                    vehicle.vmf_code
-                ),
-                Site = site != null ? site.description : null,
-                vehicle.current_odo,
-                vehicle.highest_km,
-                Status = status != null ? status.status_description : null,
-                Make = make != null ? make.make_description : null,
-                Model = model != null ? model.model_description : null,
-                DepartmentCode = site != null ? site.Depatrment_code : null,
-                ProvinceCode = site != null ? (short?)site.province_code : null,
+                vehicle.fleet_number,
+                vehicle.colour,
+                vehicle.engine_number_1,
+                vehicle.chassis_number,
+                vehicle.barcode,
                 vehicle.year_manufactured,
-                vehicle.take_on_date,
+                vehicle.purchase_date,
+                vehicle.purchase_amount,
+                Status = status != null ? status.status_description : null,
+                ModelDescription = model != null ? model.model_description : null,
+                // class_number was introduced after the client-era schema.
+                // class_code is the required legacy key and gives the same
+                // identifying prefix when a newer class_number is absent.
+                ClassCode = vehicleClass != null ? (short?)vehicleClass.class_code : null,
+                ClassDescription = vehicleClass != null ? vehicleClass.description : null,
+                SourceName = source != null ? source.name : null,
+                HireType = type != null ? type.type_description : null,
+                SiteCode = site != null ? (short?)site.Site_code : null,
+                SiteName = site != null ? site.description : null,
+                SiteDepartmentNumber = site != null ? site.Department_number : null,
+                SiteResponsiblePerson = site != null ? site.res_person : null,
+                SiteTelephone = site != null ? site.telephone : null,
+                SiteNetAddress = site != null ? site.net_address : null,
+                DepartmentCode = site != null ? site.Depatrment_code : null,
+                DepartmentNumber = department != null ? department.Department_number : null,
+                DepartmentDescription = department != null ? department.description : null,
+                ProvinceCode = site != null ? (byte?)site.province_code : null,
+                ProvinceName = province != null ? province.province_name : null,
             };
 
-        if (siteCode.HasValue)
+        List<AssetListFallbackVehicle> vehicles;
+        if (searchType != AssetListSearchType.All && !filterId.HasValue)
         {
-            query = query
-                .Where(row => row.Site != null && row.vmf_code > 0)
-                .Where(row =>
-                    _context.Vehicles.Any(v =>
-                        v.vmf_code == row.vmf_code && v.location_code == siteCode.Value
+            vehicles = new List<AssetListFallbackVehicle>();
+        }
+        else
+        {
+            if (searchType == AssetListSearchType.Province)
+            {
+                query = query.Where(row => row.ProvinceCode == (byte?)filterId!.Value);
+            }
+            else if (searchType == AssetListSearchType.Department)
+            {
+                query = query.Where(row => row.DepartmentCode == (short?)filterId!.Value);
+            }
+            else if (searchType == AssetListSearchType.Site)
+            {
+                query = query.Where(row => row.SiteCode == (short?)filterId!.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var matchingVmfCodes = await ResolveVehicleVmfCodesAsync(
+                    search,
+                    mode,
+                    cancellationToken
+                );
+                query = query.Where(row => matchingVmfCodes.Contains(row.vmf_code));
+            }
+
+            var projectedVehicles = await query
+                .OrderBy(row => row.ProvinceName)
+                .ThenBy(row => row.SiteName)
+                .ThenBy(row => row.registration_number)
+                .ThenBy(row => row.vmf_code)
+                .ToListAsync(cancellationToken);
+
+            vehicles = projectedVehicles
+                .Select(row =>
+                    new AssetListFallbackVehicle(
+                        row.registration_number,
+                        row.fleet_number,
+                        row.Status
+                            ?? (row.vmf_code > 0 ? "Unknown" : null),
+                        row.ModelDescription,
+                        row.colour,
+                        JoinLegacyClassName(
+                            row.ClassCode?.ToString(CultureInfo.InvariantCulture),
+                            row.ClassDescription
+                        ),
+                        row.engine_number_1,
+                        row.chassis_number,
+                        row.barcode,
+                        row.year_manufactured,
+                        row.purchase_date,
+                        row.purchase_amount,
+                        row.SourceName,
+                        string.IsNullOrWhiteSpace(row.HireType) ? "Empty" : row.HireType,
+                        row.vmf_code,
+                        row.SiteCode,
+                        row.SiteName,
+                        row.SiteDepartmentNumber,
+                        row.SiteResponsiblePerson,
+                        row.SiteTelephone,
+                        row.SiteNetAddress,
+                        row.DepartmentNumber,
+                        row.DepartmentDescription,
+                        row.ProvinceName
+                    )
+                )
+                .ToList();
+        }
+
+        var contracts = new List<AssetListFallbackContract>();
+        if (vehicles.Count > 0)
+        {
+            // Keep the compatibility query bounded to the assets in this
+            // report.  Chunking avoids SQL Server's 2,100-parameter limit
+            // while ensuring a print/export never scans unrelated contracts.
+            foreach (var vmfCodeChunk in vehicles
+                .Select(vehicle => vehicle.VmfCode)
+                .Distinct()
+                .Chunk(1000))
+            {
+                var chunkContracts = await _context.Contracts
+                    .AsNoTracking()
+                    .Where(contract =>
+                        !contract.is_deleted
+                        && (contract.still_current == "y" || contract.still_current == "n")
+                        && vmfCodeChunk.Contains(contract.vmf_code)
+                    )
+                    .Select(contract =>
+                        new AssetListFallbackContract(
+                            contract.vmf_code,
+                            contract.still_current,
+                            contract.contract_code,
+                            contract.contract_type,
+                            contract.start_date,
+                            contract.end_date,
+                            contract.target_return_date,
+                            contract.Charged_Until,
+                            contract.site_code,
+                            contract.user_code
+                        )
+                    )
+                    .ToListAsync(cancellationToken);
+
+                contracts.AddRange(chunkContracts);
+            }
+        }
+
+        var contractTypeDescriptions = contracts.Count == 0
+            ? new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            : await _context.ContractTypes
+                .AsNoTracking()
+                .ToDictionaryAsync(
+                    contractType => contractType.type_name,
+                    contractType => contractType.CT_description,
+                    StringComparer.OrdinalIgnoreCase,
+                    cancellationToken
+                );
+
+        var rows = new List<AssetListFallbackRow>();
+        foreach (var vehicle in vehicles)
+        {
+            var vehicleContracts = contracts
+                .Where(contract => contract.VmfCode == vehicle.VmfCode)
+                .ToList();
+            var openContracts = vehicleContracts
+                .Where(contract => IsCurrentContract(contract.StillCurrent))
+                .ToList();
+            var selectedContracts = openContracts.Count > 0
+                ? openContracts
+                : vehicleContracts
+                    .Where(contract => !IsCurrentContract(contract.StillCurrent))
+                    .OrderByDescending(contract => contract.ContractCode)
+                    .Take(1)
+                    .ToList();
+
+            if (selectedContracts.Count == 0)
+            {
+                rows.Add(CreateAssetListFallbackRow(vehicle, null, contractTypeDescriptions));
+            }
+            else
+            {
+                rows.AddRange(
+                    selectedContracts.Select(contract =>
+                        CreateAssetListFallbackRow(vehicle, contract, contractTypeDescriptions)
                     )
                 );
+            }
         }
-
-        if (departmentCode.HasValue)
-        {
-            query = query.Where(row => row.DepartmentCode == departmentCode.Value);
-        }
-
-        if (provinceCode.HasValue)
-        {
-            query = query.Where(row => row.ProvinceCode == provinceCode.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var matchingVmfCodes = await ResolveVehicleVmfCodesAsync(
-                search,
-                mode,
-                cancellationToken
-            );
-            query = query.Where(row => matchingVmfCodes.Contains(row.vmf_code));
-        }
-
-        var rows = await query
-            .OrderBy(row => row.fleet_number)
-            .ThenBy(row => row.registration_number)
-            .Take(5000)
-            .ToListAsync(cancellationToken);
 
         return CreateDynamicResult(
-            "Asset List: New & In-Service Vehicles",
-            "Finance/AssetVehicleReports.aspx",
-            false,
-            null,
-            rows,
-            Column("VMF Code", row => row.vmf_code),
-            Column("GG Number", row => row.fleet_number),
-            Column("GP Number", row => row.registration_number),
-            Column("Vehicle", row => row.Vehicle),
-            Column("Make", row => row.Make),
-            Column("Model", row => row.Model),
-            Column("Year", row => row.year_manufactured),
-            Column("Status", row => row.Status),
-            Column("Site", row => row.Site),
-            Column("Current ODO", row => row.current_odo),
-            Column("Highest KM", row => row.highest_km),
-            Column("Take On Date", row => row.take_on_date)
+            GetAssetListFallbackTitle(searchType),
+            GetAssetListFallbackTarget(searchType),
+            true,
+            "The legacy asset-list stored procedure was unavailable; the compatibility query preserves its status, source, location, contract selection, columns, and order.",
+            rows
+                .OrderBy(row => row.Province)
+                .ThenBy(row => row.SiteName)
+                .ThenBy(row => row.Registration)
+                .ThenBy(row => row.VmfCode),
+            Column("registration", row => row.Registration),
+            Column("ggnumber", row => row.GgNumber),
+            Column("vehicle status", row => row.VehicleStatus),
+            Column("model description", row => row.ModelDescription),
+            Column("colour", row => row.Colour),
+            Column("class description", row => row.ClassDescription),
+            Column("engine number", row => row.EngineNumber),
+            Column("chassis number", row => row.ChassisNumber),
+            Column("bar code", row => row.BarCode),
+            Column("year manufactured", row => row.YearManufactured),
+            Column("datepurchased", row => row.DatePurchased),
+            Column("purchaseamount", row => row.PurchaseAmount),
+            Column("Sourced Via", row => row.SourcedVia),
+            Column("Hire Type", row => row.HireType),
+            Column("vmf_code", row => row.VmfCode),
+            Column("contract stillcurrent", row => row.ContractStillCurrent),
+            Column("contract_code", row => row.ContractCode),
+            Column("contract_type", row => row.ContractType),
+            Column("contract startdate", row => row.ContractStartDate),
+            Column("contract enddate", row => row.ContractEndDate),
+            Column("expected return date", row => row.ExpectedReturnDate),
+            Column("contract chargeduntil", row => row.ContractChargedUntil),
+            Column("contract period/months", row => row.ContractPeriodMonths),
+            Column("months used", row => row.MonthsUsed),
+            Column("months -remaining / +Exceeded", row => row.MonthsRemainingOrExceeded),
+            Column("contract lastmodifiedby", row => row.ContractLastModifiedBy),
+            Column("departmentname", row => row.DepartmentName),
+            Column("sitename", row => row.SiteName),
+            Column("site responsible person", row => row.SiteResponsiblePerson),
+            Column("province", row => row.Province),
+            Column("Tariff:(dailypool / permanent / monthlyLease)", row => row.FixedTariff),
+            Column("kilo tariff", row => row.KiloTariff)
         );
     }
+
+    private static string GetAssetListFallbackTitle(AssetListSearchType searchType) =>
+        searchType switch
+        {
+            AssetListSearchType.Province =>
+                "Asset List: New & In-Service Vehicles By Province",
+            AssetListSearchType.Department =>
+                "Asset List: New & In-Service Vehicles By Department",
+            AssetListSearchType.Site => "Asset List: New & In-Service Vehicles By Site",
+            _ => "Asset List: New & In-Service Vehicles",
+        };
+
+    private static string GetAssetListFallbackTarget(AssetListSearchType searchType) =>
+        searchType switch
+        {
+            AssetListSearchType.Province =>
+                "FISReports/GetVehicleInserviceReports.aspx?Mode=Province",
+            AssetListSearchType.Department =>
+                "FISReports/GetVehicleInserviceReports.aspx?Mode=Department",
+            AssetListSearchType.Site => "FISReports/GetVehicleInserviceReports.aspx?Mode=Site",
+            _ => "Finance/AssetVehicleReports.aspx",
+        };
 
     private async Task<LegacyReportResultDto> BuildAssetVerificationPerSiteProvinceDateAsync(
         IDictionary<string, string?> filters,
@@ -5938,8 +6233,177 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         return (startDate, endDate);
     }
 
-    private static string? GetString(IDictionary<string, string?> filters, string key) =>
-        filters.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+    private static string? GetString(IDictionary<string, string?> filters, string key)
+    {
+        if (filters.TryGetValue(key, out var value))
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+
+        // Most request dictionaries are ordinal-ignore-case, but callers of
+        // the service can provide a regular dictionary.  Legacy parameter
+        // names vary in casing (SearchType/searchType), so preserve that
+        // compatibility at the service boundary too.
+        var matchingPair = filters.FirstOrDefault(pair =>
+            string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase)
+        );
+        return string.IsNullOrWhiteSpace(matchingPair.Value) ? null : matchingPair.Value;
+    }
+
+    private static AssetListSearchType ResolveAssetListSearchType(
+        IDictionary<string, string?> filters
+    )
+    {
+        var explicitSearchType =
+            GetInt(filters, "SearchType") ?? GetInt(filters, "search_type");
+        if (explicitSearchType is >= 1 and <= 4)
+        {
+            return (AssetListSearchType)explicitSearchType.Value;
+        }
+
+        return GetString(filters, "rtype")?.Trim().ToLowerInvariant() switch
+        {
+            "province" or "by-province" or "asset-list-by-province" => AssetListSearchType
+                .Province,
+            "department" or "by-department" or "asset-list-by-department" => AssetListSearchType
+                .Department,
+            "site" or "by-site" or "asset-list-by-site" => AssetListSearchType.Site,
+            _ => AssetListSearchType.All,
+        };
+    }
+
+    private static int? GetAssetListFilterId(
+        IDictionary<string, string?> filters,
+        AssetListSearchType searchType
+    )
+    {
+        var explicitId = GetInt(filters, "id") ?? GetInt(filters, "Id");
+        if (explicitId.HasValue)
+        {
+            return explicitId;
+        }
+
+        return searchType switch
+        {
+            AssetListSearchType.Province =>
+                GetInt(filters, "province")
+                ?? GetInt(filters, "province_code")
+                ?? GetInt(filters, "lstProvinceID"),
+            AssetListSearchType.Department =>
+                GetInt(filters, "department")
+                ?? GetInt(filters, "department_code")
+                ?? GetInt(filters, "dept")
+                ?? GetInt(filters, "DepartmentID")
+                ?? GetInt(filters, "lstDepartmentID"),
+            AssetListSearchType.Site =>
+                GetInt(filters, "site")
+                ?? GetInt(filters, "site_code")
+                ?? GetInt(filters, "SiteID")
+                ?? GetInt(filters, "lstSites"),
+            _ => null,
+        };
+    }
+
+    private static string? JoinLegacyClassName(string? classNumber, string? description)
+    {
+        if (string.IsNullOrWhiteSpace(classNumber))
+        {
+            return description;
+        }
+
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return classNumber;
+        }
+
+        return $"{classNumber} {description}";
+    }
+
+    private static bool IsCurrentContract(string? stillCurrent) =>
+        string.Equals(stillCurrent, "y", StringComparison.OrdinalIgnoreCase);
+
+    private static int? DifferenceInLegacyMonths(DateTime? start, DateTime? end)
+    {
+        if (!start.HasValue || !end.HasValue)
+        {
+            return null;
+        }
+
+        return ((end.Value.Year - start.Value.Year) * 12)
+            + end.Value.Month
+            - start.Value.Month
+            + 1;
+    }
+
+    private static AssetListFallbackRow CreateAssetListFallbackRow(
+        AssetListFallbackVehicle vehicle,
+        AssetListFallbackContract? contract,
+        IReadOnlyDictionary<string, string?> contractTypeDescriptions
+    )
+    {
+        var contractType = contract?.ContractTypeCode;
+        var contractTypeDescription =
+            contractType is not null
+            && contractTypeDescriptions.TryGetValue(contractType, out var description)
+                ? description?.Trim()
+                : contractType;
+        var contractPeriodMonths = DifferenceInLegacyMonths(
+            contract?.StartDate,
+            contract?.ExpectedReturnDate
+        );
+        var monthsUsed = DifferenceInLegacyMonths(contract?.StartDate, contract?.ChargedUntil);
+
+        return new AssetListFallbackRow(
+            vehicle.Registration,
+            vehicle.GgNumber,
+            vehicle.VehicleStatus,
+            vehicle.ModelDescription,
+            vehicle.Colour,
+            vehicle.ClassDescription,
+            vehicle.EngineNumber,
+            vehicle.ChassisNumber,
+            vehicle.BarCode,
+            vehicle.YearManufactured,
+            vehicle.DatePurchased,
+            vehicle.PurchaseAmount,
+            vehicle.SourcedVia,
+            vehicle.HireType,
+            vehicle.VmfCode,
+            contract?.StillCurrent,
+            contract?.ContractCode,
+            contractTypeDescription,
+            contract?.StartDate,
+            contract?.EndDate,
+            contract?.ExpectedReturnDate,
+            contract?.ChargedUntil,
+            contractPeriodMonths,
+            monthsUsed,
+            monthsUsed.HasValue && contractPeriodMonths.HasValue
+                ? monthsUsed.Value - contractPeriodMonths.Value
+                : null,
+            contract is null ? null : "empty",
+            vehicle.DepartmentName,
+            vehicle.SiteNameWithDepartment,
+            JoinSiteResponsiblePerson(vehicle),
+            vehicle.ProvinceName ?? "un-assigned",
+            null,
+            null
+        );
+    }
+
+    private static string? JoinSiteResponsiblePerson(AssetListFallbackVehicle vehicle)
+    {
+        if (
+            vehicle.SiteResponsiblePerson is null
+            && vehicle.SiteTelephone is null
+            && vehicle.SiteNetAddress is null
+        )
+        {
+            return null;
+        }
+
+        return $"{vehicle.SiteResponsiblePerson} | {vehicle.SiteTelephone} | {vehicle.SiteNetAddress}";
+    }
 
     private async Task<int?> ResolveLegacyVehicleVmfCodeAsync(
         string? search,
@@ -6164,6 +6628,102 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     );
 
     private sealed record LegacyStoredProcedureParameter(string Name, object? Value, DbType DbType);
+
+    private sealed record AssetListFallbackVehicle(
+        string? Registration,
+        string? GgNumber,
+        string? VehicleStatus,
+        string? ModelDescription,
+        string? Colour,
+        string? ClassDescription,
+        string? EngineNumber,
+        string? ChassisNumber,
+        string? BarCode,
+        short? YearManufactured,
+        DateTime? DatePurchased,
+        decimal? PurchaseAmount,
+        string? SourcedVia,
+        string? HireType,
+        int VmfCode,
+        short? SiteCode,
+        string? SiteName,
+        string? SiteDepartmentNumber,
+        string? SiteResponsiblePerson,
+        string? SiteTelephone,
+        string? SiteNetAddress,
+        string? DepartmentNumber,
+        string? DepartmentDescription,
+        string? ProvinceName
+    )
+    {
+        public string? DepartmentName =>
+            JoinLegacyQuotedName(DepartmentNumber, DepartmentDescription);
+
+        public string? SiteNameWithDepartment =>
+            JoinLegacyQuotedName(SiteDepartmentNumber, SiteName);
+
+        private static string? JoinLegacyQuotedName(string? number, string? description)
+        {
+            if (string.IsNullOrWhiteSpace(number) && string.IsNullOrWhiteSpace(description))
+            {
+                return null;
+            }
+
+            var value = string.Join(
+                " ",
+                new[] { number?.Trim(), description?.Trim() }.Where(part => !string.IsNullOrWhiteSpace(part))
+            );
+            return $"'{value}'";
+        }
+    }
+
+    private sealed record AssetListFallbackContract(
+        int VmfCode,
+        string? StillCurrent,
+        int ContractCode,
+        string? ContractTypeCode,
+        DateTime StartDate,
+        DateTime? EndDate,
+        DateTime? ExpectedReturnDate,
+        DateTime? ChargedUntil,
+        short SiteCode,
+        short? UserCode
+    );
+
+    private sealed record AssetListFallbackRow(
+        string? Registration,
+        string? GgNumber,
+        string? VehicleStatus,
+        string? ModelDescription,
+        string? Colour,
+        string? ClassDescription,
+        string? EngineNumber,
+        string? ChassisNumber,
+        string? BarCode,
+        short? YearManufactured,
+        DateTime? DatePurchased,
+        decimal? PurchaseAmount,
+        string? SourcedVia,
+        string? HireType,
+        int VmfCode,
+        string? ContractStillCurrent,
+        int? ContractCode,
+        string? ContractType,
+        DateTime? ContractStartDate,
+        DateTime? ContractEndDate,
+        DateTime? ExpectedReturnDate,
+        DateTime? ContractChargedUntil,
+        int? ContractPeriodMonths,
+        int? MonthsUsed,
+        int? MonthsRemainingOrExceeded,
+        string? ContractLastModifiedBy,
+        string? DepartmentName,
+        string? SiteName,
+        string? SiteResponsiblePerson,
+        string? Province,
+        string? FixedTariff,
+        string? KiloTariff
+    );
 
     private sealed record TripDriverReportTable(string Name, IReadOnlySet<string> Columns);
 

@@ -4,6 +4,8 @@ import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import GovernmentReportLetterhead from "@/components/ui/government-report-letterhead";
+import ReportPrintButton from "@/components/ui/report-print-button";
 import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 import {
   FineApiError,
@@ -358,7 +360,13 @@ function ReportResults({
   report,
   detail,
   previewPath,
-}: Readonly<{ report: FineReport; detail: boolean; previewPath?: string }>) {
+  officialLetter,
+}: Readonly<{
+  report: FineReport;
+  detail: boolean;
+  previewPath?: string;
+  officialLetter: boolean;
+}>) {
   if (report.rows.length === 0)
     return (
       <section className="vehicle-empty-state" aria-live="polite">
@@ -371,17 +379,31 @@ function ReportResults({
   if (detail) {
     return (
       <section
-        className="vehicle-status-maintenance-panel"
+        className={`vehicle-status-maintenance-panel report-print-area${officialLetter ? " fine-reissue-letter" : ""}`}
         aria-labelledby="fine-detail-results-title"
       >
+        {officialLetter ? (
+          <GovernmentReportLetterhead
+            governmentMotorTransport
+            title="SUBMISSION TO RE-ISSUE THE TRAFFIC FINE/SUMMONS"
+          />
+        ) : null}
         <div className="vehicle-form-section-header">
           <div>
             <p className="eyebrow">Report results</p>
             <h2 id="fine-detail-results-title">{report.title}</h2>
           </div>
+          <ReportPrintButton />
         </div>
         {report.rows.map((row) => (
           <article className="vehicle-status-maintenance-panel" key={reportRowKey(row, "fine")}>
+            {officialLetter ? (
+              <p className="fine-reissue-letter-introduction">
+                With due respect, please replace the named person on the traffic fine or summons
+                record with the transport officer allocated to the vehicle at the time of the
+                offence.
+              </p>
+            ) : null}
             <h3>Fine {valueOrDash(row["Fine Code"])}</h3>
             <div className="vehicle-table-wrapper">
               <table className="vehicle-table">
@@ -404,7 +426,7 @@ function ReportResults({
 
   return (
     <section
-      className="vehicle-status-maintenance-panel"
+      className="vehicle-status-maintenance-panel report-print-area"
       aria-labelledby="fine-report-results-title"
     >
       <div className="vehicle-form-section-header">
@@ -412,7 +434,10 @@ function ReportResults({
           <p className="eyebrow">Report results</p>
           <h2 id="fine-report-results-title">{report.title}</h2>
         </div>
-        <span className="form-hint">{report.totalCount} record(s)</span>
+        <div className="button-row">
+          <span className="form-hint">{report.totalCount} record(s)</span>
+          <ReportPrintButton />
+        </div>
       </div>
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
@@ -424,7 +449,11 @@ function ReportResults({
                   {column.header}
                 </th>
               ))}
-              {previewPath ? <th scope="col">Action</th> : null}
+              {previewPath ? (
+                <th className="report-print-hide" scope="col">
+                  Action
+                </th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -434,7 +463,7 @@ function ReportResults({
                   <td key={column.key}>{valueOrDash(row[column.key])}</td>
                 ))}
                 {previewPath ? (
-                  <td>
+                  <td className="report-print-hide">
                     <Link
                       className="button button-secondary button-small"
                       href={`${previewPath}?run=1&fineCode=${encodeURIComponent(row["Fine Code"] ?? "")}`}
@@ -658,6 +687,7 @@ async function renderFineReportPageContent({
             report={report}
             detail={detail}
             previewPath={mode === "reissue-submission" ? routePath : undefined}
+            officialLetter={legacyResult || (mode === "reissue-submission" && fineCode !== null)}
           />
         ) : null}
         <div className="vehicle-footer-actions">

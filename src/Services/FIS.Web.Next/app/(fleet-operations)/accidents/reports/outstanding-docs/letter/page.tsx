@@ -69,6 +69,11 @@ function OutstandingDocuments({ report }: { report: AccidentOutstandingDocumentR
   return (
     <section className="vehicle-status-maintenance-panel" aria-labelledby="outstanding-list-title">
       <h2 id="outstanding-list-title">The following documents are still outstanding:</h2>
+      {report.letterhead?.toUpperCase() !== "Y" ? (
+        <p>
+          <strong>Departmental Letterhead</strong>
+        </p>
+      ) : null}
       {report.documentStatusTrackingAvailable ? null : (
         <div className="notice notice-warning" role="status">
           Some legacy document-status fields are not available in this database. The letter includes
@@ -91,7 +96,10 @@ function OutstandingDocuments({ report }: { report: AccidentOutstandingDocumentR
 function Letter({ report }: { report: AccidentOutstandingDocumentReport }) {
   const reference = `${valueOrDash(report.fleetNumber)}-${valueOrDash(report.ggReference)}`;
   return (
-    <article className="vehicle-card accident-letter" aria-labelledby="outstanding-letter-title">
+    <article
+      className="vehicle-card accident-letter report-print-area"
+      aria-labelledby="outstanding-letter-title"
+    >
       <header className="vehicle-page-header">
         <div>
           <p className="eyebrow">Accident report letter</p>

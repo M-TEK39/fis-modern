@@ -566,6 +566,10 @@ input:focus-visible {
   gap: 0.7rem;
 }
 
+.asset-list-selector-actions {
+  margin-top: 1.25rem;
+}
+
 .auth-actions {
   margin-top: 1.4rem;
 }
@@ -2799,14 +2803,251 @@ input:focus-visible {
   }
 }
 
+.government-report-letterhead {
+  display: grid;
+  grid-template-columns: minmax(8rem, 11rem) minmax(0, 1fr);
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0 0 0.7rem;
+  border-bottom: 1px solid #2a3f8a;
+  padding: 0 0 0.45rem;
+  color: #2a3f8a;
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.government-report-letterhead-print-only {
+  display: none;
+}
+
+.government-report-letterhead-logo {
+  display: block;
+  width: 100%;
+  max-width: 11rem;
+  height: auto;
+}
+
+.government-report-letterhead-copy p {
+  margin: 0.08rem 0;
+}
+
+.government-report-letterhead-title {
+  font-weight: 700;
+}
+
+.government-report-letterhead-document-title {
+  grid-column: 1 / -1;
+  margin: 0.2rem 0 0;
+  color: #2a3f8a;
+  font-size: 1rem;
+  text-align: center;
+}
+
+.report-print-document-header,
+.report-print-table-groups {
+  display: none;
+}
+
 @media print {
+  @page {
+    size: landscape;
+    margin: 8mm;
+  }
+
+  @page official-letter {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
   body {
     background: white;
   }
 
+  body.report-printing-document * {
+    visibility: hidden;
+  }
+
+  body.report-printing-document .report-print-area,
+  body.report-printing-document .report-print-area * {
+    visibility: visible;
+  }
+
+  .report-print-area {
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    background: white;
+    padding: 0;
+  }
+
+  body.report-printing-document .report-print-area:not(.report-printing) {
+    display: none !important;
+  }
+
+  body.report-printing-document .report-print-area.report-printing {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  .report-print-hide {
+    display: none !important;
+  }
+
+  .report-print-area .vehicle-table-wrapper {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .report-print-area .vehicle-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+    font-size: 6.5pt;
+  }
+
+  .report-print-area .vehicle-table th,
+  .report-print-area .vehicle-table td {
+    overflow-wrap: anywhere;
+    padding: 2pt;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .report-print-area .vehicle-table thead {
+    display: table-header-group;
+  }
+
+  .report-print-area .vehicle-table tr {
+    break-inside: avoid;
+  }
+
+  .report-print-area .vehicle-table th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .report-print-area--wide .vehicle-table-wrapper,
+  .report-print-screen-header {
+    display: none;
+  }
+
+  .report-print-document-header {
+    display: block;
+    border-bottom: 1px solid #1e3a8a;
+    margin: 0 0 4mm;
+    padding: 0 0 3mm;
+    color: #172554;
+  }
+
+  .report-print-document-header p {
+    margin: 0;
+    font-size: 8pt;
+  }
+
+  .report-print-document-header h1 {
+    margin: 1mm 0;
+    font-size: 14pt;
+    line-height: 1.2;
+  }
+
+  .report-print-table-groups {
+    display: block;
+  }
+
+  .report-print-table-group {
+    break-before: page;
+  }
+
+  .report-print-table-group:first-child {
+    break-before: auto;
+  }
+
+  .report-print-table-group h2 {
+    border-bottom: 1px solid #cbd5e1;
+    margin: 0 0 3mm;
+    padding: 0 0 2mm;
+    color: #0f172a;
+    font-size: 11pt;
+    line-height: 1.2;
+  }
+
+  .report-print-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 7.5pt;
+  }
+
+  .report-print-table th,
+  .report-print-table td {
+    border: 1px solid #94a3b8;
+    padding: 1.7mm;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .report-print-table th {
+    background: #dbeafe;
+    color: #172554;
+    font-size: 7pt;
+    font-weight: 700;
+    line-height: 1.15;
+    text-transform: uppercase;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .report-print-table thead {
+    display: table-header-group;
+  }
+
+  .report-print-table tr {
+    break-inside: avoid;
+  }
+
+  .government-report-letterhead-print-only {
+    display: grid;
+  }
+
+  .government-report-letterhead {
+    font-size: 8pt;
+    line-height: 1.2;
+  }
+
+  .government-report-letterhead-logo {
+    width: 10.5rem;
+  }
+
+  .government-report-letterhead-document-title {
+    font-size: 12pt;
+  }
+
   .accident-letter {
+    page: official-letter;
     box-shadow: none;
     max-width: none;
+  }
+
+  .fine-reissue-letter {
+    page: official-letter;
+  }
+
+  .accident-letter,
+  .accident-letter * {
+    visibility: visible;
+  }
+
+  .accident-letter .government-report-letterhead {
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .accident-letter .government-report-letterhead-logo {
+    justify-self: center;
   }
 
   .accident-letter .vehicle-page-header .button-row,

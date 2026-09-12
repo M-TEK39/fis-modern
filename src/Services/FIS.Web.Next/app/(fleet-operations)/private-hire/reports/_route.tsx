@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
+import ReportPrintButton from "@/components/ui/report-print-button";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   ApiUnavailable,
@@ -295,7 +296,7 @@ async function renderPrivateHireReportPageContent({
           <PrivateHireNotice query={query} />
           <ReportFilter kind={kind} query={query} contractors={contractors} sites={sites} />
           <section
-            className="vehicle-status-maintenance-panel"
+            className="vehicle-status-maintenance-panel report-print-area"
             aria-labelledby="private-hire-report-results-title"
           >
             <div className="vehicle-form-section-header">
@@ -305,6 +306,7 @@ async function renderPrivateHireReportPageContent({
                   {filtered.length} record{filtered.length === 1 ? "" : "s"}
                 </h2>
               </div>
+              <ReportPrintButton />
             </div>
             <ReportTable vehicles={filtered} contractors={contractors} />
           </section>

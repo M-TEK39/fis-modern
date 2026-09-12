@@ -1,4 +1,5 @@
 import DataTableHeader from "@/components/ui/data-table-header";
+import ReportPrintButton from "@/components/ui/report-print-button";
 
 import { Suspense } from "react";
 
@@ -120,6 +121,7 @@ function LegacyReportGrid({ report }: Readonly<{ report: LegacyReport }>) {
             {report.totalCount} record{report.totalCount === 1 ? "" : "s"}
           </h2>
         </div>
+        <ReportPrintButton />
       </div>
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
@@ -226,13 +228,16 @@ async function renderTaxiReportsPageContent({
             />
             <TaxiNotice query={query} />
             <ReportSearch kind={kind} query={query} />
-            <section className="vehicle-status-maintenance-panel">
+            <section className="vehicle-status-maintenance-panel report-print-area">
               <div className="vehicle-form-section-header">
                 <div>
                   <p className="eyebrow">Report results</p>
                   <h2>
                     {filtered.length} record{filtered.length === 1 ? "" : "s"}
                   </h2>
+                </div>
+                <div className="report-print-hide">
+                  <ReportPrintButton />
                 </div>
               </div>
               <TaxiRows rows={filtered} />
@@ -252,7 +257,7 @@ async function renderTaxiReportsPageContent({
           />
           <TaxiNotice query={query} />
           <ReportSearch kind={kind} query={query} />
-          <section className="vehicle-status-maintenance-panel">
+          <section className="vehicle-status-maintenance-panel report-print-area">
             <LegacyReportGrid report={report} />
           </section>
         </section>
