@@ -248,6 +248,7 @@ export type AccidentOutstandingDocumentReport = {
   fax: string | null;
   reportedDate: string | null;
   damageDescription: string | null;
+  letterhead: string | null;
   documentStatusTrackingAvailable: boolean;
   outstandingDocuments: string[];
 };
@@ -738,6 +739,7 @@ function mapAccidentOutstandingDocumentReport(value: unknown): AccidentOutstandi
     fax: asString(getValue(value, "fax")),
     reportedDate: asString(getValue(value, "reported_date", "reportedDate")),
     damageDescription: asString(getValue(value, "damage_description", "damageDescription")),
+    letterhead: asString(getValue(value, "letterhead")),
     documentStatusTrackingAvailable:
       getValue(value, "document_status_tracking_available", "documentStatusTrackingAvailable") ===
       true,

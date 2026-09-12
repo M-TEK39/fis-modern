@@ -38,7 +38,10 @@ export default function InspectionLetter({
   const ggReference = report.ggReference?.trim() || "";
   const reference = fleetNumber || ggReference ? `${fleetNumber}-${ggReference}` : "-";
   return (
-    <article className="vehicle-card accident-letter" aria-labelledby="inspection-letter-title">
+    <article
+      className="vehicle-card accident-letter report-print-area"
+      aria-labelledby="inspection-letter-title"
+    >
       <header className="vehicle-page-header">
         <div>
           <p className="eyebrow">Accident report letter</p>

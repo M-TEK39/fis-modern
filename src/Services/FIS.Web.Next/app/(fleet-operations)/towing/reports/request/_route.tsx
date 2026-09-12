@@ -9,6 +9,8 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import GovernmentReportLetterhead from "@/components/ui/government-report-letterhead";
+import ReportPrintButton from "@/components/ui/report-print-button";
 import { getSession } from "@/lib/auth/session";
 import {
   getTowings,
@@ -233,14 +235,23 @@ async function renderTowingRequestReportPageContent({
         <SearchForm callReference={callReference} startDate={startDate} endDate={endDate} />
         {hasCriteria ? (
           <section
-            className="vehicle-status-maintenance-panel"
+            className="vehicle-status-maintenance-panel report-print-area"
             aria-labelledby="towing-request-report-results"
           >
+            <GovernmentReportLetterhead
+              printOnly
+              title={
+                callReference
+                  ? `TOWING REQUEST REF NO : GMT ${callReference}`
+                  : "ROAD SIDE ASSISTANCE REQUEST REPORT"
+              }
+            />
             <div className="vehicle-form-section-header">
               <div>
                 <p className="eyebrow">Report results</p>
                 <h2 id="towing-request-report-results">Requests found</h2>
               </div>
+              <ReportPrintButton />
             </div>
             <Rows records={records} />
           </section>

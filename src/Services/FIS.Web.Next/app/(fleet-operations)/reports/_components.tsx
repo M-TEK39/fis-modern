@@ -2,7 +2,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import type { LegacyReport } from "@/lib/api/reports/api-legacy-reports";
+import GovernmentReportLetterhead from "@/components/ui/government-report-letterhead";
 import { legacyReportHref, queryValue } from "./_utils";
+import { ReportOutputActions } from "./report-output-actions";
 import type { ReportField, ReportMenuEntry, ReportQuery } from "./_utils";
 
 export function ReportsFrame({
@@ -165,16 +167,40 @@ export function ReportResult({
   report: LegacyReport;
   backHref: string;
 }>) {
+  // Legacy report output is tabular. When a report is wider than a sheet, the
+  // print preview repeats its rows in manageable column groups instead of
+  // shrinking every column until the text is unreadable.
+  const usesWidePrintLayout = report.columns.length > 10;
+  const printColumnGroups = usesWidePrintLayout
+    ? Array.from({ length: Math.ceil(report.columns.length / 8) }, (_, index) =>
+        report.columns.slice(index * 8, (index + 1) * 8),
+      )
+    : [];
+
   return (
-    <section className="vehicle-status-maintenance-panel" aria-labelledby="report-result-title">
-      <div className="vehicle-page-header">
+    <section
+      className={`vehicle-status-maintenance-panel report-print-area${
+        usesWidePrintLayout ? " report-print-area--wide" : ""
+      }`}
+      aria-labelledby="report-result-title"
+    >
+      <GovernmentReportLetterhead printOnly />
+      <header className="report-print-document-header" aria-hidden="true">
+        <p>Fleet Information System</p>
+        <h1>{report.title}</h1>
+        <p>
+          {report.totalCount} record{report.totalCount === 1 ? "" : "s"}
+        </p>
+      </header>
+      <div className="vehicle-page-header report-print-screen-header">
         <div>
           <p className="eyebrow">
             {report.totalCount} record{report.totalCount === 1 ? "" : "s"}
           </p>
           <h2 id="report-result-title">{report.title}</h2>
         </div>
-        <div className="button-row">
+        <div className="button-row report-print-hide">
+          <ReportOutputActions reportKey={report.reportKey} hasRows={report.rows.length > 0} />
           <Link className="button button-secondary" href={backHref}>
             Back to report menu
           </Link>
@@ -184,7 +210,7 @@ export function ReportResult({
         </div>
       </div>
       {report.isApproximate && report.approximationReason ? (
-        <div className="notice notice-info" role="status">
+        <div className="notice notice-info report-print-hide" role="status">
           {report.approximationReason}
         </div>
       ) : null}
@@ -193,29 +219,66 @@ export function ReportResult({
           <p>No report rows found for the selected filters.</p>
         </div>
       ) : (
-        <div className="vehicle-table-wrapper">
-          <table className="vehicle-table">
-            <caption className="sr-only">{report.title}</caption>
-            <thead>
-              <tr>
-                {report.columns.map((column) => (
-                  <th key={column.key} scope="col">
-                    {column.header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {report.rows.map((row, index) => (
-                <tr key={`${report.reportKey}-${index}`}>
+        <>
+          <div className="vehicle-table-wrapper">
+            <table className="vehicle-table">
+              <caption className="sr-only">{report.title}</caption>
+              <thead>
+                <tr>
                   {report.columns.map((column) => (
-                    <td key={column.key}>{row[column.key] ?? "-"}</td>
+                    <th key={column.key} scope="col">
+                      {column.header}
+                    </th>
                   ))}
                 </tr>
+              </thead>
+              <tbody>
+                {report.rows.map((row, index) => (
+                  <tr key={`${report.reportKey}-${index}`}>
+                    {report.columns.map((column) => (
+                      <td key={column.key}>{row[column.key] ?? "-"}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {usesWidePrintLayout ? (
+            <div className="report-print-table-groups">
+              {printColumnGroups.map((columns, groupIndex) => (
+                <section className="report-print-table-group" key={`print-group-${groupIndex}`}>
+                  <h2>
+                    {report.title} — fields {groupIndex * 8 + 1}–
+                    {groupIndex * 8 + columns.length} of {report.columns.length}
+                  </h2>
+                  <table className="report-print-table">
+                    <caption className="sr-only">
+                      {report.title}, fields {groupIndex * 8 + 1} to {groupIndex * 8 + columns.length}
+                    </caption>
+                    <thead>
+                      <tr>
+                        {columns.map((column) => (
+                          <th key={column.key} scope="col">
+                            {column.header}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.rows.map((row, rowIndex) => (
+                        <tr key={`${report.reportKey}-print-${groupIndex}-${rowIndex}`}>
+                          {columns.map((column) => (
+                            <td key={column.key}>{row[column.key] ?? "-"}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </section>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          ) : null}
+        </>
       )}
     </section>
   );

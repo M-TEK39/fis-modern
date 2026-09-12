@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+
+import GovernmentReportLetterhead from "@/components/ui/government-report-letterhead";
 import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
@@ -146,15 +148,7 @@ export function AccidentReportFooter({
 export function AccidentLetterHeader({ reference }: Readonly<{ reference: string }>) {
   return (
     <section className="vehicle-status-maintenance-panel accident-letter-header">
-      <p className="accident-letter-government">
-        <strong>GOVERNMENT GARAGE - STAATSGARAGE : JOHANNESBURG</strong>
-      </p>
-      <p>
-        16 BOEINGSTR. EAST, BEDFORDVIEW, PRIVATE BAG X1 BEDFORDVIEW 2008, TEL : 3729048 / 67 / 00
-      </p>
-      <p>
-        <strong>ENQUIRIES:</strong> M. Abbott <strong>Ref Number:</strong> {reference}
-      </p>
+      <GovernmentReportLetterhead reference={reference} variant="garage" />
     </section>
   );
 }
