@@ -13,16 +13,23 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   TaxiHeader,
   TaxiNotice,
+  TaxiPagination,
   TaxiRestricted,
   TaxiUnavailable,
 } from "@/app/(fleet-operations)/taxis/_components";
-import { dateValue, queryValue, valueOrDash } from "@/app/(fleet-operations)/taxis/_utils";
+import {
+  dateValue,
+  queryValue,
+  taxiPageHref,
+  valueOrDash,
+} from "@/app/(fleet-operations)/taxis/_utils";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 import {
   getLegacyReport,
   LegacyReportApiError,
   type LegacyReport,
 } from "@/lib/api/reports/api-legacy-reports";
-import { getTaxis, TaxiApiError, type TaxiRecord } from "@/lib/api/fleet-operations/api-taxis";
+import { getTaxiPage, TaxiApiError, type TaxiRecord } from "@/lib/api/fleet-operations/api-taxis";
 import { getSession } from "@/lib/auth/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -39,6 +46,7 @@ export type TaxiReportKind =
 export type TaxiReportPageProps = {
   searchParams: SearchParams;
   kind?: TaxiReportKind;
+  routePath?: string;
 };
 
 function ReportSearch({
@@ -89,7 +97,7 @@ function TaxiRows({ rows }: Readonly<{ rows: TaxiRecord[] }>) {
               <td colSpan={7}>No records found.</td>
             </tr>
           ) : (
-            rows.slice(0, 500).map((taxi) => (
+            rows.map((taxi) => (
               <tr key={taxi.requestId}>
                 <td>
                   <Link href={`/taxis/requests?mode=edit&requestId=${taxi.requestId}`}>
@@ -111,7 +119,10 @@ function TaxiRows({ rows }: Readonly<{ rows: TaxiRecord[] }>) {
   );
 }
 
-function LegacyReportGrid({ report }: Readonly<{ report: LegacyReport }>) {
+function LegacyReportGrid({
+  report,
+  pageHref,
+}: Readonly<{ report: LegacyReport; pageHref: (page: number) => string }>) {
   return (
     <>
       <div className="vehicle-form-section-header">
@@ -141,7 +152,7 @@ function LegacyReportGrid({ report }: Readonly<{ report: LegacyReport }>) {
                 <td colSpan={Math.max(1, report.columns.length)}>No records found.</td>
               </tr>
             ) : (
-              report.rows.slice(0, 500).map((row, index) => (
+              report.rows.map((row, index) => (
                 <tr key={`${report.reportKey}-${index}`}>
                   {report.columns.map((column) => (
                     <td key={column.key}>{valueOrDash(row[column.key])}</td>
@@ -155,6 +166,7 @@ function LegacyReportGrid({ report }: Readonly<{ report: LegacyReport }>) {
       {report.isApproximate && report.approximationReason ? (
         <p className="muted-copy">Report note: {report.approximationReason}</p>
       ) : null}
+      <ReportPagination report={report} pageHref={pageHref} label="Taxi report pages" />
     </>
   );
 }
@@ -183,10 +195,12 @@ const TaxiReportsPageContent = renderTaxiReportsPageContent;
 async function renderTaxiReportsPageContent({
   searchParams,
   kind: forcedKind,
+  routePath: requestedRoutePath,
 }: TaxiReportPageProps) {
   await connection();
   const session = await getSession();
-  const routePath = "/taxis/reports";
+  const routePath =
+    requestedRoutePath ?? (forcedKind ? `/taxis/reports/${forcedKind}` : "/taxis/reports");
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired" || session.status === "unavailable")
     return (
@@ -208,17 +222,13 @@ async function renderTaxiReportsPageContent({
 
   const query = await searchParams;
   const kind = forcedKind ?? ((queryValue(query.mode) as TaxiReportKind) || "one-taxi-number");
-  const search = queryValue(query.search).trim().toLowerCase();
+  const search = queryValue(query.search).trim();
+  const parsedPage = Number(queryValue(query.page));
+  const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
   try {
     if (kind === "one-taxi-number") {
-      const taxis = await getTaxis();
-      const filtered = search
-        ? taxis.filter((taxi) =>
-            [taxi.rekNum, taxi.vmfCode ?? "", taxi.regNum ?? "", taxi.official ?? ""].some(
-              (value) => value.toLowerCase().includes(search),
-            ),
-          )
-        : [];
+      const taxiPage = search ? await getTaxiPage({ page, search }) : null;
+      const rows = taxiPage?.items ?? [];
       return (
         <main className="page-shell vehicle-page-shell">
           <section className="vehicle-card">
@@ -233,21 +243,29 @@ async function renderTaxiReportsPageContent({
                 <div>
                   <p className="eyebrow">Report results</p>
                   <h2>
-                    {filtered.length} record{filtered.length === 1 ? "" : "s"}
+                    {taxiPage?.total ?? 0} record{(taxiPage?.total ?? 0) === 1 ? "" : "s"}
                   </h2>
                 </div>
                 <div className="report-print-hide">
                   <ReportPrintButton />
                 </div>
               </div>
-              <TaxiRows rows={filtered} />
+              <TaxiRows rows={rows} />
+              {taxiPage ? (
+                <TaxiPagination
+                  path={routePath}
+                  query={query}
+                  page={taxiPage.page}
+                  totalPages={taxiPage.totalPages}
+                />
+              ) : null}
             </section>
           </section>
         </main>
       );
     }
 
-    const report = await getLegacyReport(reportKey(kind), search ? { search } : {});
+    const report = await getLegacyReport(reportKey(kind), search ? { search } : {}, { page });
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card">
@@ -258,7 +276,10 @@ async function renderTaxiReportsPageContent({
           <TaxiNotice query={query} />
           <ReportSearch kind={kind} query={query} />
           <section className="vehicle-status-maintenance-panel report-print-area">
-            <LegacyReportGrid report={report} />
+            <LegacyReportGrid
+              report={report}
+              pageHref={(requestedPage) => taxiPageHref(routePath, query, requestedPage)}
+            />
           </section>
         </section>
       </main>
@@ -270,12 +291,12 @@ async function renderTaxiReportsPageContent({
     )
       return (
         <main className="page-shell vehicle-page-shell">
-          <SessionRecovery returnPath={`${routePath}/${kind}`} />
+          <SessionRecovery returnPath={routePath} />
         </main>
       );
     return (
       <main className="page-shell vehicle-page-shell">
-        <TaxiUnavailable path={`${routePath}/${kind}`} subject="Taxi reports" />
+        <TaxiUnavailable path={routePath} subject="Taxi reports" />
       </main>
     );
   }

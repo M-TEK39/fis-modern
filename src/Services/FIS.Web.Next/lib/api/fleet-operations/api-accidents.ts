@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_ACCIDENT_REPORT_PAGE_SIZE = 24;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -343,6 +344,14 @@ export type AccidentPeriodReportRow = {
   fileCloseDate: string | null;
 };
 
+export type AccidentReportPage<T> = {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
 export class AccidentApiError extends Error {
   constructor(
     public readonly reason: AccidentApiErrorReason,
@@ -410,6 +419,19 @@ function getCollection(payload: unknown) {
   return [];
 }
 
+function getAccidentReportPageQuery(page: number, pageSize: number) {
+  const normalizedPage = Number.isInteger(page) && page > 0 ? page : 1;
+  const normalizedPageSize =
+    Number.isInteger(pageSize) && pageSize > 0
+      ? Math.min(100, pageSize)
+      : DEFAULT_ACCIDENT_REPORT_PAGE_SIZE;
+
+  return new URLSearchParams({
+    page: String(normalizedPage),
+    pageSize: String(normalizedPageSize),
+  });
+}
+
 function mapPresent<T, U>(values: readonly T[], mapper: (value: T) => U | null) {
   const result: U[] = [];
   for (const value of values) {
@@ -419,6 +441,51 @@ function mapPresent<T, U>(values: readonly T[], mapper: (value: T) => U | null) 
     }
   }
   return result;
+}
+
+function mapAccidentReportPage<T>(
+  payload: unknown,
+  mapper: (value: unknown) => T | null,
+  reportName: string,
+): AccidentReportPage<T> {
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new AccidentApiError(
+      "invalid-response",
+      `The FIS API returned an invalid ${reportName} page.`,
+    );
+  }
+
+  const page = asNumber(getValue(payload, "page"));
+  const pageSize = asNumber(getValue(payload, "pageSize"));
+  const total = asNumber(getValue(payload, "total"));
+  const totalPages = asNumber(getValue(payload, "totalPages"));
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    throw new AccidentApiError(
+      "invalid-response",
+      `The FIS API returned incomplete ${reportName} pagination metadata.`,
+    );
+  }
+
+  return {
+    items: mapPresent(payload.items, mapper),
+    page,
+    pageSize,
+    total,
+    totalPages,
+  };
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
@@ -767,14 +834,22 @@ function mapAccidentLastGgReferenceRow(value: unknown): AccidentLastGgReferenceR
   };
 }
 
-export async function getAccidentDriverReport(searchTerm: string, mode: AccidentDriverReportMode) {
+export async function getAccidentDriverReport(
+  searchTerm: string,
+  mode: AccidentDriverReportMode,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
+) {
   const query = new URLSearchParams({
     searchTerm: searchTerm.trim(),
     mode,
   });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/driver?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/driver?${query.toString()}`),
     mapAccidentDriverReportRow,
+    "accident driver report",
   );
 }
 
@@ -862,30 +937,38 @@ function mapAccidentVehicleReportRow(value: unknown): AccidentVehicleReportRow |
 export async function getAccidentVehicleReport(
   searchTerm: string,
   mode: AccidentVehicleReportMode,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
 ) {
   const query = new URLSearchParams({
     searchTerm: searchTerm.trim(),
     mode,
   });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/vehicle?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/vehicle?${query.toString()}`),
     mapAccidentVehicleReportRow,
+    "accident vehicle report",
   );
 }
 
 export async function getAccidentOutstandingDocumentLookup(
   searchTerm: string,
   mode: AccidentVehicleReportMode,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
 ) {
   const query = new URLSearchParams({
     searchTerm: searchTerm.trim(),
     mode,
   });
-  return mapPresent(
-    getCollection(
-      await requestApi(`api/accidents/reports/outstanding-documents?${query.toString()}`),
-    ),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/outstanding-documents?${query.toString()}`),
     mapAccidentOutstandingDocumentLookupRow,
+    "outstanding accident document lookup",
   );
 }
 
@@ -897,24 +980,34 @@ export async function getAccidentOutstandingDocumentReport(accidentCode: number)
   );
 }
 
-export async function getAccidentLastGgReferenceReport() {
-  return mapPresent(
-    getCollection(await requestApi("api/accidents/reports/last-gg-reference")),
+export async function getAccidentLastGgReferenceReport(
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
+) {
+  const query = getAccidentReportPageQuery(page, pageSize);
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/last-gg-reference?${query.toString()}`),
     mapAccidentLastGgReferenceRow,
+    "last GG reference report",
   );
 }
 
 export async function getAccidentInspectionLetterLookup(
   searchTerm: string,
   mode: AccidentVehicleReportMode,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
 ) {
   const query = new URLSearchParams({
     searchTerm: searchTerm.trim(),
     mode,
   });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/inspection-letter?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/inspection-letter?${query.toString()}`),
     mapAccidentOutstandingDocumentLookupRow,
+    "inspection letter lookup",
   );
 }
 
@@ -927,46 +1020,79 @@ export async function getAccidentInspectionLetterReport(accidentCode: number) {
 export async function getAccidentPrivateVehicleReport(
   searchTerm: string,
   mode: AccidentPrivateVehicleReportMode,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
 ) {
   const query = new URLSearchParams({
     searchTerm: searchTerm.trim(),
     mode,
   });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/private-vehicle?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/private-vehicle?${query.toString()}`),
     mapAccidentVehicleReportRow,
+    "private vehicle accident report",
   );
 }
 
-export async function getAccidentNewAccidentsReport(mode: AccidentNewAccidentReportMode) {
+export async function getAccidentNewAccidentsReport(
+  mode: AccidentNewAccidentReportMode,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
+) {
   const query = new URLSearchParams({ mode });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/new-accidents?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/new-accidents?${query.toString()}`),
     mapAccidentVehicleReportRow,
+    "new accident report",
   );
 }
 
-export async function getAccidentAllReport(mode: AccidentAllReportDateMode) {
+export async function getAccidentAllReport(
+  mode: AccidentAllReportDateMode,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
+) {
   const query = new URLSearchParams({ mode });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/all?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/all?${query.toString()}`),
     mapAccidentVehicleReportRow,
+    "all accident report",
   );
 }
 
-export async function getAccidentGarageReport(mode: AccidentGarageReportMode) {
+export async function getAccidentGarageReport(
+  mode: AccidentGarageReportMode,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
+) {
   const query = new URLSearchParams({ mode });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/garage-detail?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/garage-detail?${query.toString()}`),
     mapAccidentVehicleReportRow,
+    "garage accident report",
   );
 }
 
-export async function getAccidentDuplicateReport(mode: AccidentGarageReportMode) {
+export async function getAccidentDuplicateReport(
+  mode: AccidentGarageReportMode,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
+) {
   const query = new URLSearchParams({ garage: mode });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/duplicates?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/duplicates?${query.toString()}`),
     mapAccidentVehicleReportRow,
+    "duplicate accident report",
   );
 }
 
@@ -974,15 +1100,20 @@ export async function getAccidentDepartmentPeriodReport(
   departmentNumber: string,
   startDate: string,
   endDate: string,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
 ) {
   const query = new URLSearchParams({
     departmentNumber: departmentNumber.trim(),
     startDate,
     endDate,
   });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/department-period?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/department-period?${query.toString()}`),
     mapAccidentVehicleReportRow,
+    "department period accident report",
   );
 }
 
@@ -991,6 +1122,8 @@ export async function getAccidentDepartmentPeriodVipReport(
   startDate: string,
   endDate: string,
   mode: AccidentDepartmentPeriodVipMode,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
 ) {
   const query = new URLSearchParams({
     departmentNumber: departmentNumber.trim(),
@@ -998,11 +1131,12 @@ export async function getAccidentDepartmentPeriodVipReport(
     endDate,
     mode,
   });
-  return mapPresent(
-    getCollection(
-      await requestApi(`api/accidents/reports/department-period-vip?${query.toString()}`),
-    ),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/department-period-vip?${query.toString()}`),
     mapAccidentVehicleReportRow,
+    "department period hire-type accident report",
   );
 }
 
@@ -1012,6 +1146,8 @@ export async function getAccidentDepartmentMonthReport(
   period: AccidentDepartmentMonthPeriodMode,
   year: number | null,
   month: number | null,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
 ) {
   const query = new URLSearchParams({
     departmentNumber: departmentNumber.trim(),
@@ -1020,9 +1156,12 @@ export async function getAccidentDepartmentMonthReport(
     ...(year === null ? {} : { year: String(year) }),
     ...(month === null ? {} : { month: String(month) }),
   });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/department-month?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/department-month?${query.toString()}`),
     mapAccidentVehicleReportRow,
+    "department month accident report",
   );
 }
 
@@ -1030,25 +1169,35 @@ export async function getAccidentDepartmentFinancialYearReport(
   departmentNumber: string,
   garage: AccidentDepartmentFinancialYearGarageMode,
   financialYear: string,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
 ) {
   const query = new URLSearchParams({
     departmentNumber: departmentNumber.trim(),
     garage,
     financialYear: financialYear.trim(),
   });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/department-finyear?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/department-finyear?${query.toString()}`),
     mapAccidentVehicleReportRow,
+    "department financial year accident report",
   );
 }
 
-export async function getAccidentCostsFinancialYearReport(financialYear: string) {
+export async function getAccidentCostsFinancialYearReport(
+  financialYear: string,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
+) {
   const query = new URLSearchParams({ financialYear: financialYear.trim() });
-  return mapPresent(
-    getCollection(
-      await requestApi(`api/accidents/reports/accident-costs-finyear?${query.toString()}`),
-    ),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/accident-costs-finyear?${query.toString()}`),
     mapAccidentVehicleReportRow,
+    "accident costs financial year report",
   );
 }
 
@@ -1080,6 +1229,8 @@ export async function getAccidentPeriodReport(
   startDate: string,
   endDate: string,
   status: AccidentPeriodReportStatus,
+  page = 1,
+  pageSize = DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
 ) {
   const query = new URLSearchParams({
     departmentNumber: departmentNumber.trim(),
@@ -1087,9 +1238,12 @@ export async function getAccidentPeriodReport(
     endDate,
     status,
   });
-  return mapPresent(
-    getCollection(await requestApi(`api/accidents/reports/period?${query.toString()}`)),
+  const pageQuery = getAccidentReportPageQuery(page, pageSize);
+  pageQuery.forEach((value, key) => query.set(key, value));
+  return mapAccidentReportPage(
+    await requestApi(`api/accidents/reports/period?${query.toString()}`),
     mapAccidentPeriodReportRow,
+    "accident period report",
   );
 }
 

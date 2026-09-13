@@ -6,13 +6,16 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import PrintButton from "@/app/(fleet-operations)/accidents/reports/print-button";
+import { AccidentReportPagination } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   AccidentApiError,
   getAccidentLastGgReferenceReport,
+  type AccidentReportPage,
   type AccidentLastGgReferenceRow,
 } from "@/lib/api/fleet-operations/api-accidents";
+import { getAccidentReportPageState } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import { getSession } from "@/lib/auth/session";
 
 const ACCIDENTS_ROLE = "Accidents";
@@ -49,7 +52,14 @@ function ErrorState() {
   );
 }
 
-function ReferenceTable({ rows }: { rows: AccidentLastGgReferenceRow[] }) {
+function ReferenceTable({
+  query,
+  report,
+}: {
+  query: Record<string, string | string[] | undefined>;
+  report: AccidentReportPage<AccidentLastGgReferenceRow>;
+}) {
+  const rows = report.items;
   if (rows.length === 0) {
     return (
       <section className="vehicle-empty-state" aria-live="polite">
@@ -69,8 +79,16 @@ function ReferenceTable({ rows }: { rows: AccidentLastGgReferenceRow[] }) {
           <p className="eyebrow">Report results</p>
           <h2 id="last-gg-reference-results-title">Last GG Reference Numbers Used</h2>
         </div>
-        <span className="form-hint">{rows.length} record(s)</span>
+        <span className="form-hint">{report.total} record(s)</span>
       </div>
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/last-gg-reference"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
           <caption className="sr-only">Last GG reference numbers used</caption>
@@ -98,7 +116,11 @@ function ReferenceTable({ rows }: { rows: AccidentLastGgReferenceRow[] }) {
   );
 }
 
-async function LastGgReferenceContent() {
+async function LastGgReferenceContent({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -115,7 +137,14 @@ async function LastGgReferenceContent() {
   }
 
   try {
-    return <ReferenceTable rows={await getAccidentLastGgReferenceReport()} />;
+    const query = await searchParams;
+    const { page, pageSize } = getAccidentReportPageState(query);
+    return (
+      <ReferenceTable
+        query={query}
+        report={await getAccidentLastGgReferenceReport(page, pageSize)}
+      />
+    );
   } catch (error) {
     if (error instanceof AccidentApiError && error.reason === "unauthorized")
       return <SessionRecovery returnPath="/accidents/reports/last-gg-reference" />;
@@ -133,7 +162,11 @@ async function PrintedAt() {
   return <time dateTime={printedAt.toISOString()}>{printedAt.toLocaleString("en-ZA")}</time>;
 }
 
-export default function LastGgReferencePage() {
+export default function LastGgReferencePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   return (
     <main className="page-shell vehicle-page-shell">
       <article className="vehicle-card" aria-labelledby="last-gg-reference-title">
@@ -156,7 +189,7 @@ export default function LastGgReferencePage() {
           </div>
         </header>
         <Suspense fallback={<LoadingState />}>
-          <LastGgReferenceContent />
+          <LastGgReferenceContent searchParams={searchParams} />
         </Suspense>
         <div className="vehicle-footer-actions">
           <Link className="button button-secondary" href="/accidents">

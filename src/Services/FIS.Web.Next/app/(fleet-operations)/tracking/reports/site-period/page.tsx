@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
   DateRangeFields,
   TrackingNotice,
+  TrackingReportPagination,
   TrackingReportTable,
   TrackingShell,
 } from "@/app/(fleet-operations)/tracking/_components";
@@ -42,9 +43,10 @@ async function renderTrackingSitePeriodReportPageContent({
   const scope = queryValue(query.scope) || "one";
   const siteCode = parsePositiveInteger(queryValue(query.siteCode));
   const range = reportDateRange(queryValue(query.startDate), queryValue(query.endDate));
+  const page = parsePositiveInteger(queryValue(query.page)) ?? 1;
   const run = queryValue(query.run) === "1";
   try {
-    const [sites, rows] = await Promise.all([
+    const [sites, report] = await Promise.all([
       getSites(),
       run && (scope === "all" || siteCode)
         ? getTrackingSitePeriodReport(
@@ -52,8 +54,9 @@ async function renderTrackingSitePeriodReportPageContent({
             scope === "all",
             range.startDate,
             range.endDate,
+            { page },
           )
-        : Promise.resolve([]),
+        : Promise.resolve(null),
     ]);
     return (
       <TrackingShell
@@ -96,8 +99,16 @@ async function renderTrackingSitePeriodReportPageContent({
             </Link>
           </div>
         </form>
-        {run && (scope === "all" || siteCode) ? (
-          <TrackingReportTable records={rows} title="Tracking report for site period" />
+        {report ? (
+          <>
+            <TrackingReportTable records={report.items} title="Tracking report for site period" />
+            <TrackingReportPagination
+              page={report}
+              query={query}
+              routePath="/tracking/reports/site-period"
+              label="Tracking report for site period"
+            />
+          </>
         ) : (
           <p className="muted-copy">
             Choose a scope, date range, and site when required, then submit the report.

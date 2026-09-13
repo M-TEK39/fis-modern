@@ -581,12 +581,28 @@ function definitionFor(slug: string): ReportDefinition | null {
 function filterQuery(query: ReportQuery) {
   const filters: Record<string, string> = {};
   for (const [key, value] of Object.entries(query)) {
-    if (key !== "view" && value !== undefined) {
+    if (!["view", "page", "pageSize", "includeAll"].includes(key) && value !== undefined) {
       const text = Array.isArray(value) ? value[0] : value;
       if (text?.trim()) filters[key] = text;
     }
   }
   return filters;
+}
+
+function reportPage(query: ReportQuery) {
+  const parsed = Number(queryValue(query, "page"));
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function reportPageHref(path: string, query: ReportQuery, page: number) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (["page", "pageSize", "includeAll"].includes(key)) continue;
+    const text = Array.isArray(value) ? value[0] : value;
+    if (text?.trim()) params.set(key, text);
+  }
+  params.set("page", String(page));
+  return `${path}?${params.toString()}`;
 }
 
 function assetListModeFromQuery(query: ReportQuery) {
@@ -699,6 +715,7 @@ function assetListResultBackHref(mode: AssetListMode) {
 
 async function renderAssetListRoute(query: ReportQuery): Promise<ReactNode> {
   const mode = assetListModeFromQuery(query);
+  const page = reportPage(query);
   let scope: AssetListScope | null = null;
   if (mode === "by-department" || mode === "by-site") {
     try {
@@ -733,6 +750,7 @@ async function renderAssetListRoute(query: ReportQuery): Promise<ReactNode> {
       const loadedReport = await getLegacyReport(
         assetListReportKey(mode),
         assetListFilters(mode, selections),
+        { page },
       );
       const report = {
         ...loadedReport,
@@ -741,7 +759,11 @@ async function renderAssetListRoute(query: ReportQuery): Promise<ReactNode> {
       };
       return (
         <ReportsFrame title={assetListCaption(mode)} description="Legacy asset list report.">
-          <ReportResult report={report} backHref={assetListResultBackHref(mode)} />
+          <ReportResult
+            report={report}
+            backHref={assetListResultBackHref(mode)}
+            pageHref={(requestedPage) => reportPageHref("/reports/asset-list", query, requestedPage)}
+          />
         </ReportsFrame>
       );
     } catch (error) {
@@ -851,6 +873,7 @@ async function renderReportsRoutePageContent({
 
   const reportKey =
     forcedReportKey ?? definition.resolveReportKey?.(query) ?? definition.reportKey ?? "";
+  const page = reportPage(query);
   const showingResult =
     forcedReportKey !== undefined || queryValue(query, "view").toLowerCase() === "report";
   const showFilter = !showingResult && definition.fields;
@@ -883,7 +906,7 @@ async function renderReportsRoutePageContent({
 
   let report;
   try {
-    report = await getLegacyReport(reportKey, filterQuery(query));
+    report = await getLegacyReport(reportKey, filterQuery(query), { page });
   } catch (error) {
     const message =
       error instanceof LegacyReportApiError && error.reason === "invalid-response"
@@ -898,7 +921,11 @@ async function renderReportsRoutePageContent({
 
   return (
     <ReportsFrame title={definition.title} description={definition.description}>
-      <ReportResult report={report} backHref={definition.menu ? `/reports/${slug}` : "/reports"} />
+      <ReportResult
+        report={report}
+        backHref={definition.menu ? `/reports/${slug}` : "/reports"}
+        pageHref={(requestedPage) => reportPageHref(`/reports/${slug}`, query, requestedPage)}
+      />
     </ReportsFrame>
   );
 }

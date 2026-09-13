@@ -11,6 +11,7 @@ namespace FIS.Core.Application.Interfaces
         Task<Towing?> GetByIdAsync(short towingCode);
         Task<IEnumerable<Towing>> GetAllAsync();
         Task<TowingPage> GetPageAsync(TowingPageQuery query);
+        Task<TowingReportPage> GetReportPageAsync(TowingReportPageQuery query);
         Task<IEnumerable<Towing>> GetByVehicleAsync(int vmfCode);
         Task<IEnumerable<Towing>> GetBySiteAsync(short siteCode);
         Task<Towing> CreateAsync(Towing towing, int currentUserId);
@@ -25,6 +26,33 @@ namespace FIS.Core.Application.Interfaces
     );
 
     public sealed record TowingPage(IReadOnlyList<Towing> Items, int Page, int PageSize, int Total)
+    {
+        public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+    }
+
+    public enum TowingReportKind
+    {
+        Request,
+        AllTowtrucks,
+        FirmDate,
+    }
+
+    public sealed record TowingReportPageQuery(
+        TowingReportKind ReportKind,
+        DateTime StartDate = default,
+        DateTime EndDate = default,
+        string? FirmName = null,
+        decimal? CallReference = null,
+        int Page = 1,
+        int PageSize = 24
+    );
+
+    public sealed record TowingReportPage(
+        IReadOnlyList<Towing> Items,
+        int Page,
+        int PageSize,
+        int Total
+    )
     {
         public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
     }

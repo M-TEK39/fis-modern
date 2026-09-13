@@ -5,12 +5,15 @@ import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { AccidentReportPagination } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   AccidentApiError,
   getAccidentPrivateVehicleReport,
+  type AccidentReportPage,
   type AccidentPrivateVehicleReportMode,
   type AccidentVehicleReportRow,
 } from "@/lib/api/fleet-operations/api-accidents";
+import { getAccidentReportPageState } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import { getSession } from "@/lib/auth/session";
 import VehicleReportResult from "@/app/(fleet-operations)/accidents/reports/vehicle-report-result";
 
@@ -97,40 +100,59 @@ function PrivateVehicleReportForm({
 }
 
 function PrivateVehicleReportResults({
+  pathname,
   rows,
+  query,
   title,
 }: {
-  rows: AccidentVehicleReportRow[] | null;
+  query: Record<string, string | string[] | undefined>;
+  pathname: string;
+  rows: AccidentReportPage<AccidentVehicleReportRow> | null;
   title: string;
 }) {
-  return rows !== null ? (
-    rows.length === 0 ? (
+  if (rows === null) {
+    return null;
+  }
+
+  const items = rows.items;
+  if (items.length === 0) {
+    return (
       <div className="vehicle-empty-state">
         <p className="eyebrow">No vehicles found</p>
         <h2>No accidents matched this private vehicle search.</h2>
         <p className="muted-copy">Try another private vehicle number.</p>
       </div>
-    ) : (
-      <section aria-live="polite" aria-labelledby="private-vehicle-report-results-title">
-        <div className="vehicle-form-section-header">
-          <div>
-            <p className="eyebrow">Report results</p>
-            <h2 id="private-vehicle-report-results-title">
-              {title}: {rows.length}
-            </h2>
-          </div>
+    );
+  }
+
+  return (
+    <section aria-live="polite" aria-labelledby="private-vehicle-report-results-title">
+      <div className="vehicle-form-section-header">
+        <div>
+          <p className="eyebrow">Report results</p>
+          <h2 id="private-vehicle-report-results-title">
+            {title}: {rows.total}
+          </h2>
         </div>
-        {rows.map((row, index) => (
-          <VehicleReportResult
-            key={row.accidentCode}
-            row={row}
-            index={index}
-            includeAccidentCategory={false}
-          />
-        ))}
-      </section>
-    )
-  ) : null;
+      </div>
+      {items.map((row, index) => (
+        <VehicleReportResult
+          key={row.accidentCode}
+          row={row}
+          index={index}
+          includeAccidentCategory={false}
+        />
+      ))}
+      <AccidentReportPagination
+        page={rows.page}
+        pageSize={rows.pageSize}
+        pathname={pathname}
+        query={query}
+        total={rows.total}
+        totalPages={rows.totalPages}
+      />
+    </section>
+  );
 }
 
 const PrivateVehicleReportContent = renderPrivateVehicleReportContent;
@@ -158,10 +180,11 @@ async function renderPrivateVehicleReportContent({
   const mode = getMode(getQueryValue(query.mode), defaultMode);
   const searchTerm = (getQueryValue(query.searchTerm) ?? getQueryValue(query.xnumber) ?? "").trim();
   const shouldRun = getQueryValue(query.run) === "1" || searchTerm.length > 0;
-  let rows: AccidentVehicleReportRow[] | null = null;
+  const { page, pageSize } = getAccidentReportPageState(query);
+  let rows: AccidentReportPage<AccidentVehicleReportRow> | null = null;
   if (shouldRun && searchTerm) {
     try {
-      rows = await getAccidentPrivateVehicleReport(searchTerm, mode);
+      rows = await getAccidentPrivateVehicleReport(searchTerm, mode, page, pageSize);
     } catch (error) {
       if (error instanceof AccidentApiError && error.reason === "unauthorized")
         return <SessionRecovery returnPath="/accidents/reports/private-vehicle" />;
@@ -184,7 +207,7 @@ async function renderPrivateVehicleReportContent({
   return (
     <>
       <PrivateVehicleReportForm descriptionMode={descriptionMode} searchTerm={searchTerm} />
-      <PrivateVehicleReportResults rows={rows} title={title} />
+      <PrivateVehicleReportResults pathname={resultPath} query={query} rows={rows} title={title} />
 
       <div className="vehicle-footer-actions">
         <Link className="button button-secondary" href="/accidents">

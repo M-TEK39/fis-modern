@@ -10,6 +10,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 import {
   getLegacyReport,
   LegacyReportApiError,
@@ -222,13 +223,19 @@ function ReportForm({
 function ReportResults({
   report,
   mode,
-}: Readonly<{ report: LegacyReport; mode: WorkshopReportMode }>) {
+  pageHref,
+}: Readonly<{
+  report: LegacyReport;
+  mode: WorkshopReportMode;
+  pageHref: (page: number) => string;
+}>) {
   if (report.rows.length === 0)
     return (
       <section className="vehicle-empty-state" aria-live="polite">
         <p className="eyebrow">No records found</p>
         <h2>No Workshop records matched the selected filters.</h2>
         <p className="muted-copy">Adjust the report parameters and try again.</p>
+        <ReportPagination report={report} pageHref={pageHref} label="Workshop report pages" />
       </section>
     );
 
@@ -245,6 +252,7 @@ function ReportResults({
         </div>
       ) : null}
       <ReportRowsTable columns={report.columns} rows={report.rows} caption={report.title} />
+      <ReportPagination report={report} pageHref={pageHref} label="Workshop report pages" />
     </ReportResultsPanel>
   );
 }
@@ -310,6 +318,7 @@ async function renderWorkshopReportPageContent({
   const to = validDate(query.to || query.EDAT);
   const garage = query.garage || query.Radio1 || "Radioall";
   const category = query.category || query.Radio2 || "Radioall";
+  const page = parsePositiveInt(query.page) ?? 1;
   const run = query.run === "1" || mode === "in-workshop" || mode === "merchants";
   let report: LegacyReport | null = null;
   let errorMessage: string | null = null;
@@ -323,15 +332,19 @@ async function renderWorkshopReportPageContent({
       else if (mode === "period" && from > to)
         errorMessage = "The begin date must be before the end date.";
       else
-        report = await getLegacyReport(reportKey(mode), {
-          searchMode,
-          vehicleNumber: vehicleNumber || undefined,
-          workshopCode: workshopCode ?? undefined,
-          from: from || undefined,
-          to: to || undefined,
-          garage,
-          category,
-        });
+        report = await getLegacyReport(
+          reportKey(mode),
+          {
+            searchMode,
+            vehicleNumber: vehicleNumber || undefined,
+            workshopCode: workshopCode ?? undefined,
+            from: from || undefined,
+            to: to || undefined,
+            garage,
+            category,
+          },
+          { page },
+        );
     }
   } catch (error) {
     if (error instanceof LegacyReportApiError && error.reason === "unauthorized")
@@ -383,7 +396,20 @@ async function renderWorkshopReportPageContent({
           </div>
         ) : null}
         {report ? (
-          <ReportResults mode={mode} report={report} />
+          <ReportResults
+            mode={mode}
+            report={report}
+            pageHref={(requestedPage) => {
+              const params = new URLSearchParams();
+              for (const [key, value] of Object.entries(query)) {
+                if (key === "page" || !value.trim()) continue;
+                params.set(key, value);
+              }
+              if (requestedPage > 1) params.set("page", String(requestedPage));
+              const search = params.toString();
+              return search ? `${routePath}?${search}` : routePath;
+            }}
+          />
         ) : mode === "in-workshop" || mode === "merchants" ? (
           <section className="vehicle-status-card">
             <p className="eyebrow">No records found</p>

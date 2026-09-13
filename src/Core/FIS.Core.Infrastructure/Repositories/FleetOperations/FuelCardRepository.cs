@@ -101,6 +101,88 @@ public sealed class FuelCardRepository : IFuelCardRepository
             command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
         );
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "SQL identifiers come only from fixed compatibility allowlists; filter and pagination values are parameters."
+    )]
+    public async Task<FuelCardActivityPage> GetRecentActivityPageAsync(
+        int? siteCode = null,
+        int page = 1,
+        int pageSize = 24,
+        CancellationToken cancellationToken = default
+    )
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var columns = await GetAvailableColumnsAsync(cancellationToken);
+        await using var scope = await OpenConnectionAsync(cancellationToken);
+        var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        var conditions = new List<string>
+        {
+            GetActiveFilter(columns),
+            "[Status_date] IS NOT NULL",
+        };
+        if (siteCode.HasValue)
+        {
+            conditions.Add("[Petrecsite] = @siteCode");
+        }
+
+        var whereClause = string.Join(" AND ", conditions);
+        int total;
+        await using (var countCommand = scope.Connection.CreateCommand())
+        {
+            countCommand.Transaction = transaction;
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{TableName}]
+                WHERE {whereClause}
+                """;
+            if (siteCode.HasValue)
+            {
+                AddParameter(countCommand, "@siteCode", DbType.Int32, siteCode.Value);
+            }
+
+            total = Convert.ToInt32(
+                await countCommand.ExecuteScalarAsync(cancellationToken)
+            );
+        }
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var offset = checked((long)(page - 1) * pageSize);
+        var projection = BusinessColumns
+            .Concat(OptionalAuditColumns)
+            .Select(column => GetProjection(columns, column));
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = transaction;
+        dataCommand.CommandText = $"""
+            SELECT {string.Join(", ", projection)}
+            FROM [dbo].[{TableName}]
+            WHERE {whereClause}
+            ORDER BY [Status_date] DESC, [Fuel_card_code] DESC
+            OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        if (siteCode.HasValue)
+        {
+            AddParameter(dataCommand, "@siteCode", DbType.Int32, siteCode.Value);
+        }
+
+        AddParameter(dataCommand, "@offset", DbType.Int64, offset);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<FuelCard>();
+        await using var reader = await dataCommand.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(MapFuelCard(reader, columns));
+        }
+
+        return new FuelCardActivityPage(items, page, pageSize, total);
+    }
+
     public async Task<FuelCard> CreateAsync(FuelCard fuelCard, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(fuelCard);
@@ -376,9 +458,11 @@ public sealed class FuelCardRepository : IFuelCardRepository
         await command.ExecuteNonQueryAsync();
     }
 
-    private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync()
+    private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync(
+        CancellationToken cancellationToken = default
+    )
     {
-        await using var scope = await OpenConnectionAsync();
+        await using var scope = await OpenConnectionAsync(cancellationToken);
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
         command.CommandText = """
@@ -390,8 +474,8 @@ public sealed class FuelCardRepository : IFuelCardRepository
         AddParameter(command, "@table", DbType.String, TableName);
 
         var columns = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
         {
             var name = reader.GetString(0);
             columns[name] = new ColumnInfo(name, reader.GetString(1));
@@ -561,12 +645,14 @@ public sealed class FuelCardRepository : IFuelCardRepository
         return reader.IsDBNull(ordinal) ? null : Convert.ToBoolean(reader.GetValue(ordinal));
     }
 
-    private async Task<ConnectionScope> OpenConnectionAsync()
+    private async Task<ConnectionScope> OpenConnectionAsync(
+        CancellationToken cancellationToken = default
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)
-            await connection.OpenAsync();
+            await connection.OpenAsync(cancellationToken);
         return new ConnectionScope(connection, shouldClose);
     }
 

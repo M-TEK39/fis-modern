@@ -8,10 +8,12 @@ import {
   AccidentReportFormActions,
   AccidentReportFormError,
   AccidentReportLoadingState,
+  AccidentReportPagination,
   AccidentReportPageShell,
 } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   authorizeAccidentReport,
+  getAccidentReportPageState,
   loadAccidentReport,
 } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import VehicleTable, {
@@ -20,6 +22,7 @@ import VehicleTable, {
 import {
   getAccidentDuplicateReport,
   type AccidentGarageReportMode,
+  type AccidentReportPage,
   type AccidentVehicleReportRow,
 } from "@/lib/api/fleet-operations/api-accidents";
 type QueryValue = string | string[] | undefined;
@@ -171,12 +174,15 @@ const duplicateAccidentsColumns: readonly VehicleTableColumn<AccidentVehicleRepo
 ];
 
 function DuplicateAccidentsReportTable({
-  rows,
+  query,
+  report,
   mode,
 }: {
-  rows: AccidentVehicleReportRow[];
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentVehicleReportRow>;
   mode: AccidentGarageReportMode;
 }) {
+  const rows = report.items;
   return (
     <section
       className="vehicle-status-maintenance-panel"
@@ -187,7 +193,7 @@ function DuplicateAccidentsReportTable({
           <p className="eyebrow">Report results</p>
           <h2 id="duplicate-accident-results-title">{reportTitle(mode)}</h2>
         </div>
-        <span className="form-hint">{rows.length} record(s)</span>
+        <span className="form-hint">{report.total} record(s)</span>
       </div>
       <div className="vehicle-table-wrapper">
         <VehicleTable
@@ -197,7 +203,15 @@ function DuplicateAccidentsReportTable({
           rowKey={(row) => row.accidentCode}
         />
       </div>
-      <p className="vehicle-pagination-meta">Total Number: {rows.length}</p>
+      <p className="vehicle-pagination-meta">Total Number: {report.total}</p>
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/duplicate-accidents"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
     </section>
   );
 }
@@ -221,23 +235,28 @@ function DuplicateAccidentsReportForm({
 }
 
 function DuplicateAccidentsReportResults({
-  rows,
+  query,
+  report,
   mode,
 }: {
-  rows: AccidentVehicleReportRow[] | null;
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentVehicleReportRow> | null;
   mode: AccidentGarageReportMode;
 }) {
-  return rows ? (
-    rows.length > 0 ? (
-      <DuplicateAccidentsReportTable rows={rows} mode={mode} />
-    ) : (
-      <section className="vehicle-empty-state" aria-live="polite">
-        <p className="eyebrow">No vehicles found</p>
-        <h2>No duplicate accidents matched this garage selection.</h2>
-        <p className="muted-copy">Choose another garage and submit again.</p>
-      </section>
-    )
-  ) : null;
+  if (report === null) {
+    return null;
+  }
+
+  const rows = report.items;
+  return rows.length > 0 ? (
+    <DuplicateAccidentsReportTable query={query} report={report} mode={mode} />
+  ) : (
+    <section className="vehicle-empty-state" aria-live="polite">
+      <p className="eyebrow">No vehicles found</p>
+      <h2>No duplicate accidents matched this garage selection.</h2>
+      <p className="muted-copy">Choose another garage and submit again.</p>
+    </section>
+  );
 }
 
 async function DuplicateAccidentsReportContent({
@@ -266,10 +285,11 @@ async function DuplicateAccidentsReportContent({
     getQueryValue(query, "run") === "1" ||
     getQueryValue(query, "garage", "mode", "Radio1") !== undefined;
   const errorMessage = invalid ? "Choose a valid garage for the duplicate report." : null;
+  const { page, pageSize } = getAccidentReportPageState(query);
   const report = await loadAccidentReport({
     shouldRun,
     errorMessage,
-    load: () => getAccidentDuplicateReport(mode),
+    load: () => getAccidentDuplicateReport(mode, page, pageSize),
     context: "FIS duplicate accident report failed",
   });
   if (report.status === "unauthorized") {
@@ -283,12 +303,10 @@ async function DuplicateAccidentsReportContent({
       />
     );
   }
-  const rows = report.data;
-
   return (
     <>
       <DuplicateAccidentsReportForm errorMessage={errorMessage} mode={mode} />
-      <DuplicateAccidentsReportResults rows={rows} mode={mode} />
+      <DuplicateAccidentsReportResults query={query} report={report.data} mode={mode} />
       <AccidentReportFooter clearHref="/accidents/reports/duplicate-accidents" />
     </>
   );

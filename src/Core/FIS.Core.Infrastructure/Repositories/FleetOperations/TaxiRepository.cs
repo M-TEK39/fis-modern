@@ -22,6 +22,10 @@ namespace FIS.Core.Infrastructure.Repositories;
 public sealed class TaxiRepository : ITaxiRepository
 {
     private const string TableName = "Taxis";
+    private const string DepartmentTableName = "department";
+    private const string SiteTableName = "site";
+    private const string VehicleTableName = "vehicle_master";
+    private const int MaximumReportPageSize = 100;
 
     private static readonly string[] BusinessColumns =
     [
@@ -87,6 +91,8 @@ public sealed class TaxiRepository : ITaxiRepository
         "official",
     ];
 
+    private static readonly string[] SearchColumns = ["rek_num", "vmf_code", "reg_num", "official"];
+
     private static readonly string[] AuditColumns =
     [
         "date_created",
@@ -145,7 +151,21 @@ public sealed class TaxiRepository : ITaxiRepository
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var requestedPage = Math.Max(1, query.Page);
         var columns = await GetAvailableColumnsAsync(RequiredColumns);
+        var searchTerm = query.Search?.Trim() ?? string.Empty;
         var conditions = new List<string> { GetActiveFilter(columns, "t") };
+
+        if (searchTerm.Length > 0)
+        {
+            var searchPredicates = SearchColumns
+                .Where(column => columns.ContainsKey(column))
+                .Select(column =>
+                    $"CHARINDEX(@search, LOWER(LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(max), t.[{column}]), N''))))) > 0"
+                )
+                .ToArray();
+
+            if (searchPredicates.Length > 0)
+                conditions.Add($"({string.Join(" OR ", searchPredicates)})");
+        }
 
         if (query.PendingOnly)
         {
@@ -174,6 +194,8 @@ public sealed class TaxiRepository : ITaxiRepository
             LEFT JOIN [dbo].[site] s ON s.[Site_code] = t.[site_code]
             WHERE {whereClause}
             """;
+        if (searchTerm.Length > 0)
+            AddParameter(countCommand, "@search", DbType.String, searchTerm.ToLowerInvariant());
         var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
 
         var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
@@ -198,6 +220,8 @@ public sealed class TaxiRepository : ITaxiRepository
             ORDER BY t.[request_id] DESC
             OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
             """;
+        if (searchTerm.Length > 0)
+            AddParameter(dataCommand, "@search", DbType.String, searchTerm.ToLowerInvariant());
         AddParameter(dataCommand, "@skip", DbType.Int64, skip);
         AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
 
@@ -207,6 +231,89 @@ public sealed class TaxiRepository : ITaxiRepository
             items.Add(MapTaxi(reader));
 
         return new TaxiPage(items, page, pageSize, total);
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The report query uses fixed compatibility table/column allowlists; report values and pagination values are parameters."
+    )]
+    public async Task<TaxiReportPage> GetReportPageAsync(TaxiReportPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, MaximumReportPageSize);
+        var requestedPage = Math.Max(1, query.Page);
+        var connectionScope = await OpenConnectionAsync();
+
+        await using (connectionScope)
+        {
+            var taxiColumns = await GetAvailableColumnsAsync(RequiredColumns);
+            var departmentColumns = await GetAvailableColumnsAsync(
+                DepartmentTableName,
+                ["department_code", "description"]
+            );
+            var siteColumns = await GetAvailableColumnsAsync(
+                SiteTableName,
+                ["Site_code", "description"]
+            );
+            var vehicleColumns =
+                query.ReportKind == TaxiReportKind.ListInServicePerDepartment
+                    ? await GetAvailableColumnsAsync(
+                        VehicleTableName,
+                        ["vmf_code", "vehicle_status_code"]
+                    )
+                    : null;
+            var reportSql = BuildReportSql(query, taxiColumns, departmentColumns, vehicleColumns);
+            var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var lookupJoins = BuildReportLookupJoins(departmentColumns, siteColumns);
+
+            await using var countCommand = connectionScope.Connection.CreateCommand();
+            countCommand.Transaction = transaction;
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{TableName}] AS t
+                {lookupJoins}
+                WHERE {reportSql.WhereClause}
+                """;
+            AddReportParameters(countCommand, reportSql.Parameters);
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+            var projection = string.Join(
+                ", ",
+                BusinessColumns
+                    .Concat(AuditColumns)
+                    .Select(column => GetProjection(taxiColumns, column, "t"))
+            );
+
+            await using var dataCommand = connectionScope.Connection.CreateCommand();
+            dataCommand.Transaction = transaction;
+            dataCommand.CommandText = $"""
+                SELECT {projection},
+                       d.[department_code] AS [__department_code],
+                       d.[description] AS [__department_description],
+                       s.[Site_code] AS [__site_code],
+                       s.[description] AS [__site_description]
+                FROM [dbo].[{TableName}] AS t
+                {lookupJoins}
+                WHERE {reportSql.WhereClause}
+                ORDER BY {reportSql.OrderBy}
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddReportParameters(dataCommand, reportSql.Parameters);
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<Taxi>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                items.Add(MapTaxi(reader));
+
+            return new TaxiReportPage(items, page, pageSize, total);
+        }
     }
 
     public Task<IEnumerable<Taxi>> GetBySiteAsync(short siteCode) =>
@@ -377,7 +484,196 @@ public sealed class TaxiRepository : ITaxiRepository
         return results;
     }
 
+    private static TaxiReportSql BuildReportSql(
+        TaxiReportPageQuery query,
+        IReadOnlyDictionary<string, ColumnInfo> taxiColumns,
+        IReadOnlyDictionary<string, ColumnInfo> departmentColumns,
+        IReadOnlyDictionary<string, ColumnInfo>? vehicleColumns
+    )
+    {
+        var conditions = new List<string> { GetActiveFilter(taxiColumns, "t") };
+        var parameters = new List<ReportParameter>();
+        var search = query.Search?.Trim() ?? string.Empty;
+
+        switch (query.ReportKind)
+        {
+            case TaxiReportKind.PreviousFinYearVipTaxi:
+                var reportDate = (query.AsOfDate ?? DateTime.Today).Date;
+                var currentFinancialYearStart = GetFinancialYearStart(reportDate);
+                var nextFinancialYearStart = currentFinancialYearStart.AddYears(1);
+                var capturedDate = GetCapturedDateExpression(taxiColumns);
+                conditions.Add($"{capturedDate} >= @currentFinancialYearStart");
+                conditions.Add($"{capturedDate} < @nextFinancialYearStart");
+                conditions.Add("t.[date_required] < @currentFinancialYearStart");
+                parameters.Add(
+                    new ReportParameter(
+                        "@currentFinancialYearStart",
+                        DbType.DateTime,
+                        currentFinancialYearStart
+                    )
+                );
+                parameters.Add(
+                    new ReportParameter(
+                        "@nextFinancialYearStart",
+                        DbType.DateTime,
+                        nextFinancialYearStart
+                    )
+                );
+                return new TaxiReportSql(
+                    string.Join(" AND ", conditions),
+                    $"{capturedDate} DESC, t.[request_id] DESC",
+                    parameters
+                );
+
+            case TaxiReportKind.ListPerDepartment:
+                AddSearchCondition(
+                    conditions,
+                    parameters,
+                    search,
+                    [
+                        taxiColumns.ContainsKey("rek_num") ? "t.[rek_num]" : null,
+                        departmentColumns.ContainsKey("description") ? "d.[description]" : null,
+                        taxiColumns.ContainsKey("vmf_code") ? "t.[vmf_code]" : null,
+                        taxiColumns.ContainsKey("request_id") ? "t.[request_id]" : null,
+                    ]
+                );
+                return new TaxiReportSql(
+                    string.Join(" AND ", conditions),
+                    "d.[description] ASC, t.[rek_num] ASC, t.[request_id] DESC",
+                    parameters
+                );
+
+            case TaxiReportKind.ListInServicePerDepartment:
+                if (vehicleColumns is null)
+                {
+                    throw new InvalidOperationException(
+                        "Vehicle compatibility columns are required for the in-service taxi report."
+                    );
+                }
+
+                conditions.Add(
+                    $"EXISTS (SELECT 1 FROM [dbo].[{VehicleTableName}] AS v "
+                        + "WHERE LTRIM(RTRIM(CONVERT(nvarchar(50), v.[vmf_code]))) "
+                        + "= LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(50), t.[vmf_code]), N''))) "
+                        + $"AND {GetActiveFilter(vehicleColumns, "v")} "
+                        + "AND v.[vehicle_status_code] = @inServiceStatus)"
+                );
+                parameters.Add(new ReportParameter("@inServiceStatus", DbType.Int16, 1));
+                AddSearchCondition(
+                    conditions,
+                    parameters,
+                    search,
+                    [
+                        taxiColumns.ContainsKey("rek_num") ? "t.[rek_num]" : null,
+                        departmentColumns.ContainsKey("description") ? "d.[description]" : null,
+                        taxiColumns.ContainsKey("vmf_code") ? "t.[vmf_code]" : null,
+                        taxiColumns.ContainsKey("request_id") ? "t.[request_id]" : null,
+                    ]
+                );
+                return new TaxiReportSql(
+                    string.Join(" AND ", conditions),
+                    "d.[description] ASC, t.[rek_num] ASC, t.[request_id] DESC",
+                    parameters
+                );
+
+            case TaxiReportKind.Financial:
+                AddSearchCondition(
+                    conditions,
+                    parameters,
+                    search,
+                    [
+                        taxiColumns.ContainsKey("request_id") ? "t.[request_id]" : null,
+                        taxiColumns.ContainsKey("rek_num") ? "t.[rek_num]" : null,
+                        taxiColumns.ContainsKey("official") ? "t.[official]" : null,
+                        taxiColumns.ContainsKey("vmf_code") ? "t.[vmf_code]" : null,
+                        taxiColumns.ContainsKey("address_1") ? "t.[address_1]" : null,
+                    ]
+                );
+                return new TaxiReportSql(
+                    string.Join(" AND ", conditions),
+                    "t.[date_required] DESC, t.[request_id] DESC",
+                    parameters
+                );
+
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(query.ReportKind),
+                    query.ReportKind,
+                    "Unsupported taxi report type."
+                );
+        }
+    }
+
+    private static string BuildReportLookupJoins(
+        IReadOnlyDictionary<string, ColumnInfo> departmentColumns,
+        IReadOnlyDictionary<string, ColumnInfo> siteColumns
+    ) =>
+        $"""
+            LEFT JOIN [dbo].[{DepartmentTableName}] AS d
+                ON d.[department_code] = t.[department_code]
+               AND {GetActiveFilter(departmentColumns, "d")}
+            LEFT JOIN [dbo].[{SiteTableName}] AS s
+                ON s.[Site_code] = t.[site_code]
+               AND {GetActiveFilter(siteColumns, "s")}
+            """;
+
+    private static void AddSearchCondition(
+        ICollection<string> conditions,
+        ICollection<ReportParameter> parameters,
+        string search,
+        IEnumerable<string?> expressions
+    )
+    {
+        if (search.Length == 0)
+            return;
+
+        var predicates = expressions
+            .Where(expression => !string.IsNullOrWhiteSpace(expression))
+            .Select(expression =>
+                expression!.EndsWith("]", StringComparison.Ordinal)
+                && expression.EndsWith("[request_id]", StringComparison.Ordinal)
+                    ? $"CHARINDEX(@search, CONVERT(nvarchar(20), {expression})) > 0"
+                    : $"CHARINDEX(@search, LOWER(LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(max), {expression}), N''))))) > 0"
+            )
+            .ToArray();
+
+        if (predicates.Length == 0)
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        conditions.Add($"({string.Join(" OR ", predicates)})");
+        parameters.Add(new ReportParameter("@search", DbType.String, search.ToLowerInvariant()));
+    }
+
+    private static string GetCapturedDateExpression(
+        IReadOnlyDictionary<string, ColumnInfo> taxiColumns
+    )
+    {
+        var expressions = new List<string>();
+        if (taxiColumns.ContainsKey("date_created"))
+            expressions.Add("t.[date_created]");
+        if (taxiColumns.ContainsKey("request_date"))
+            expressions.Add("t.[request_date]");
+        expressions.Add("t.[date_required]");
+        return expressions.Count == 1
+            ? expressions[0]
+            : $"COALESCE({string.Join(", ", expressions)})";
+    }
+
+    private static DateTime GetFinancialYearStart(DateTime date)
+    {
+        var year = date.Month >= 4 ? date.Year : date.Year - 1;
+        return new DateTime(year, 4, 1);
+    }
+
+    private Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync(
+        IReadOnlyCollection<string> requiredColumns
+    ) => GetAvailableColumnsAsync(TableName, requiredColumns);
+
     private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync(
+        string tableName,
         IReadOnlyCollection<string> requiredColumns
     )
     {
@@ -390,7 +686,7 @@ public sealed class TaxiRepository : ITaxiRepository
             WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table
             """;
         AddParameter(command, "@schema", DbType.String, "dbo");
-        AddParameter(command, "@table", DbType.String, TableName);
+        AddParameter(command, "@table", DbType.String, tableName);
 
         var columns = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
         await using var reader = await command.ExecuteReaderAsync();
@@ -399,7 +695,7 @@ public sealed class TaxiRepository : ITaxiRepository
 
         foreach (var required in requiredColumns.Where(column => !columns.ContainsKey(column)))
             throw new InvalidOperationException(
-                $"The required {TableName} compatibility column {required} is not available."
+                $"The required {tableName} compatibility column {required} is not available."
             );
         return columns;
     }
@@ -954,6 +1250,15 @@ public sealed class TaxiRepository : ITaxiRepository
             AddParameter(command, value.Parameter, value.Type, value.Value);
     }
 
+    private static void AddReportParameters(
+        DbCommand command,
+        IEnumerable<ReportParameter> parameters
+    )
+    {
+        foreach (var parameter in parameters)
+            AddParameter(command, parameter.Name, parameter.Type, parameter.Value);
+    }
+
     private static void AddParameter(DbCommand command, string name, DbType type, object? value)
     {
         var parameter = command.CreateParameter();
@@ -1026,6 +1331,14 @@ public sealed class TaxiRepository : ITaxiRepository
     }
 
     private static int? UserIdOrNull(int currentUserId) => currentUserId > 0 ? currentUserId : null;
+
+    private sealed record ReportParameter(string Name, DbType Type, object? Value);
+
+    private sealed record TaxiReportSql(
+        string WhereClause,
+        string OrderBy,
+        IReadOnlyList<ReportParameter> Parameters
+    );
 
     private sealed record ColumnInfo(string Name, string DataType);
 

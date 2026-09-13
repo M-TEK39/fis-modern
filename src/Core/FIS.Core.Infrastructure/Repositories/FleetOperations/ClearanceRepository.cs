@@ -128,12 +128,17 @@ public class ClearanceRepository : IClearanceRepository
         "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The report query is composed only from fixed legacy columns, fixed table names, and allowlisted optional filters; values are parameters."
     )]
-    public async Task<IReadOnlyList<ClearanceReportRow>> GetUniversalReportAsync(
+    public async Task<ClearanceUniversalReportPage> GetUniversalReportAsync(
         DateTime? startDate,
         DateTime? endDate,
-        int? merchantCode
+        int? merchantCode,
+        int page = 1,
+        int pageSize = 24
     )
     {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -144,33 +149,39 @@ public class ClearanceRepository : IClearanceRepository
 
         try
         {
+            var conditions = BuildUniversalReportConditions(
+                startDate,
+                endDate,
+                merchantCode,
+                availableColumns
+            );
+            var whereClause = string.Join(" AND ", conditions);
+            var reportFrom = $"""
+                FROM [dbo].[{TableName}] AS c
+                INNER JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = c.[vmf_code]
+                INNER JOIN [dbo].[Merchant] AS m ON m.[Merchant_code] = c.[Merchant_code]
+                """;
+            var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+
+            int total;
+            await using (var countCommand = connection.CreateCommand())
+            {
+                countCommand.Transaction = transaction;
+                countCommand.CommandText = $"""
+                    SELECT COUNT(1)
+                    {reportFrom}
+                    WHERE {whereClause}
+                    """;
+                AddUniversalReportParameters(countCommand, startDate, endDate, merchantCode);
+                total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            }
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            page = Math.Min(page, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
             await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-
-            var conditions = new List<string>
-            {
-                "c.[vmf_code] > 1",
-                GetActiveFilter("c", availableColumns),
-            };
-
-            if (startDate.HasValue)
-            {
-                conditions.Add("c.[Clearance_date] > @startDate");
-                AddParameter(command, "@startDate", DbType.DateTime2, startDate.Value);
-            }
-
-            if (endDate.HasValue)
-            {
-                conditions.Add("c.[Clearance_date] < @endDate");
-                AddParameter(command, "@endDate", DbType.DateTime2, endDate.Value);
-            }
-
-            if (merchantCode.HasValue && merchantCode.Value > 0)
-            {
-                conditions.Add("c.[Merchant_code] = @merchantCode");
-                AddParameter(command, "@merchantCode", DbType.Int32, merchantCode.Value);
-            }
-
+            command.Transaction = transaction;
             command.CommandText = $"""
                 SELECT c.[clearance_code],
                        v.[fleet_number],
@@ -178,12 +189,14 @@ public class ClearanceRepository : IClearanceRepository
                        m.[Merchant_Name],
                        c.[clearance_number],
                        c.[Clearance_date]
-                FROM [dbo].[{TableName}] AS c
-                INNER JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = c.[vmf_code]
-                INNER JOIN [dbo].[Merchant] AS m ON m.[Merchant_code] = c.[Merchant_code]
-                WHERE {string.Join(" AND ", conditions)}
-                ORDER BY c.[vmf_code]
+                {reportFrom}
+                WHERE {whereClause}
+                ORDER BY c.[vmf_code], c.[clearance_code]
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
                 """;
+            AddUniversalReportParameters(command, startDate, endDate, merchantCode);
+            AddParameter(command, "@skip", DbType.Int64, skip);
+            AddParameter(command, "@pageSize", DbType.Int32, pageSize);
 
             var results = new List<ClearanceReportRow>();
             await using var reader = await command.ExecuteReaderAsync();
@@ -202,7 +215,7 @@ public class ClearanceRepository : IClearanceRepository
                 );
             }
 
-            return results;
+            return new ClearanceUniversalReportPage(results, page, pageSize, total);
         }
         finally
         {
@@ -210,6 +223,60 @@ public class ClearanceRepository : IClearanceRepository
             {
                 await connection.CloseAsync();
             }
+        }
+    }
+
+    private static List<string> BuildUniversalReportConditions(
+        DateTime? startDate,
+        DateTime? endDate,
+        int? merchantCode,
+        IReadOnlySet<string> availableColumns
+    )
+    {
+        var conditions = new List<string>
+        {
+            "c.[vmf_code] > 1",
+            GetActiveFilter("c", availableColumns),
+        };
+
+        if (startDate.HasValue)
+        {
+            conditions.Add("c.[Clearance_date] > @startDate");
+        }
+
+        if (endDate.HasValue)
+        {
+            conditions.Add("c.[Clearance_date] < @endDate");
+        }
+
+        if (merchantCode.HasValue && merchantCode.Value > 0)
+        {
+            conditions.Add("c.[Merchant_code] = @merchantCode");
+        }
+
+        return conditions;
+    }
+
+    private static void AddUniversalReportParameters(
+        DbCommand command,
+        DateTime? startDate,
+        DateTime? endDate,
+        int? merchantCode
+    )
+    {
+        if (startDate.HasValue)
+        {
+            AddParameter(command, "@startDate", DbType.DateTime2, startDate.Value);
+        }
+
+        if (endDate.HasValue)
+        {
+            AddParameter(command, "@endDate", DbType.DateTime2, endDate.Value);
+        }
+
+        if (merchantCode.HasValue && merchantCode.Value > 0)
+        {
+            AddParameter(command, "@merchantCode", DbType.Int32, merchantCode.Value);
         }
     }
 

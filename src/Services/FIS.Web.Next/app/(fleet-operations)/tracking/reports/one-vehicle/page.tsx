@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
   DateRangeFields,
   TrackingNotice,
+  TrackingReportPagination,
   TrackingReportTable,
   TrackingShell,
   VehicleLookup,
@@ -41,12 +42,13 @@ async function TrackingOneVehicleReportPageContent({
   const mode = queryValue(query.mode) || "GG";
   const vmfCode = parsePositiveInteger(queryValue(query.vmfCode));
   const range = reportDateRange(queryValue(query.startDate), queryValue(query.endDate));
+  const page = parsePositiveInteger(queryValue(query.page)) ?? 1;
   try {
-    const [vehicles, rows] = await Promise.all([
+    const [vehicles, report] = await Promise.all([
       getVehicleOptions(),
       vmfCode
-        ? getTrackingOneVehicleReport(vmfCode, range.startDate, range.endDate)
-        : Promise.resolve([]),
+        ? getTrackingOneVehicleReport(vmfCode, range.startDate, range.endDate, { page })
+        : Promise.resolve(null),
     ]);
     return (
       <TrackingShell
@@ -66,8 +68,16 @@ async function TrackingOneVehicleReportPageContent({
             </Link>
           </div>
         </form>
-        {vmfCode ? (
-          <TrackingReportTable records={rows} title="Tracking report for one vehicle" />
+        {report ? (
+          <>
+            <TrackingReportTable records={report.items} title="Tracking report for one vehicle" />
+            <TrackingReportPagination
+              page={report}
+              query={query}
+              routePath="/tracking/reports/one-vehicle"
+              label="Tracking report for one vehicle"
+            />
+          </>
         ) : (
           <p className="muted-copy">
             Search by GG or registration number, select a vehicle match, and submit.

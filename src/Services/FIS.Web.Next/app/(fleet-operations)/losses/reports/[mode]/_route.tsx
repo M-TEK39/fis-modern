@@ -3,15 +3,18 @@ import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import ReportResultsPanel from "@/components/ui/report-results-panel";
 import ReportRowsTable from "@/components/ui/report-rows-table";
 import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 import { getDepartments } from "@/lib/api/reference-data/api-departments";
 import {
+  DEFAULT_LOSS_REPORT_PAGE_SIZE,
   LossReportApiError,
   getLossReport,
   type LossReportFilters,
+  type LossReport,
   type LossReportMode,
 } from "@/lib/api/fleet-operations/api-loss-reports";
 import { getLossTypes } from "@/lib/api/fleet-operations/api-loss-types";
@@ -37,6 +40,26 @@ function queryValue(value: string | string[] | undefined) {
 function parsePositiveInt(value: string | undefined) {
   const parsed = Number(value);
   return value && Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function reportPageHref(
+  routePath: string,
+  mode: LossReportMode,
+  query: Record<string, string | string[] | undefined>,
+  page: number,
+) {
+  const reportPath =
+    routePath === "/losses/reports" || routePath === "/reports/losses"
+      ? `${routePath}/${mode}`
+      : routePath;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (["page", "pageSize", "includeAll"].includes(key)) continue;
+    const text = Array.isArray(value) ? value[0] : value;
+    if (text?.trim()) params.set(key, text);
+  }
+  params.set("page", String(page));
+  return `${reportPath}?${params.toString()}`;
 }
 
 function validDate(value: string | undefined) {
@@ -350,25 +373,24 @@ function ReportForm({
 
 function ReportResults({
   report,
-}: Readonly<{ report: { columns: string[]; rows: Array<Record<string, string | null>> } }>) {
+  pageHref,
+}: Readonly<{ report: LossReport; pageHref: (page: number) => string }>) {
   if (report.rows.length === 0)
     return (
       <section className="vehicle-empty-state" aria-live="polite">
         <p className="eyebrow">No records found</p>
         <h2>No losses matched the selected filters.</h2>
         <p className="muted-copy">Adjust the report parameters and try again.</p>
+        <ReportPagination report={report} pageHref={pageHref} label="Losses report pages" />
       </section>
     );
   return (
     <ReportResultsPanel
       headingId="loss-report-results-title"
-      heading={`${report.rows.length} record(s) returned`}
+      heading={`${report.totalCount} record(s) returned`}
     >
-      <ReportRowsTable
-        columns={report.columns.map((column) => ({ key: column, header: column }))}
-        rows={report.rows}
-        caption="Loss report results"
-      />
+      <ReportRowsTable columns={report.columns} rows={report.rows} caption="Loss report results" />
+      <ReportPagination report={report} pageHref={pageHref} label="Losses report pages" />
     </ReportResultsPanel>
   );
 }
@@ -434,6 +456,7 @@ async function renderLossReportPageContent({
   const vmfCode = parsePositiveInt(query.vmfCode || query.vmf);
   const beginDate = validDate(query.beginDate || query.BDAT || query.from);
   const endDate = validDate(query.endDate || query.EDAT || query.to);
+  const page = parsePositiveInt(query.page) ?? 1;
   const run = query.run === "1";
 
   let vehicles: LossVehicleMatch[] = [];
@@ -478,7 +501,10 @@ async function renderLossReportPageContent({
           hireType:
             query.hireType === "GG" || query.hireType === "Permanent" ? query.hireType : "VIP",
         };
-        report = await getLossReport(mode, filters);
+        report = await getLossReport(mode, filters, {
+          page,
+          pageSize: DEFAULT_LOSS_REPORT_PAGE_SIZE,
+        });
       }
     }
   } catch (error) {
@@ -532,7 +558,10 @@ async function renderLossReportPageContent({
           </div>
         ) : null}
         {report ? (
-          <ReportResults report={report} />
+          <ReportResults
+            report={report}
+            pageHref={(requestedPage) => reportPageHref(routePath, mode, rawQuery, requestedPage)}
+          />
         ) : (
           <section className="vehicle-status-card">
             <p className="eyebrow">Parameters required</p>

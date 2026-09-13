@@ -14,6 +14,7 @@ public class TowingController : BaseApiController
 {
     private const int DefaultPageSize = 24;
     private const int MaximumPageSize = 100;
+    private const int MaximumReportPageSize = 100;
 
     private readonly ITowingRepository _repository;
     private readonly TowTruckCompatibilityService _towTruckService;
@@ -437,37 +438,37 @@ public class TowingController : BaseApiController
     {
         if (!HasReportsRole())
             return Forbid();
-        var data = (await GetLiveItemsAsync())
-            .Where(item =>
-                IsWithinInclusiveDateRange(
-                    item.Tow_request_date,
-                    request.StartDate,
-                    request.EndDate
-                )
+        var result = await _repository.GetReportPageAsync(
+            new TowingReportPageQuery(
+                TowingReportKind.Request,
+                request.StartDate,
+                request.EndDate,
+                CallReference: request.CallReference,
+                Page: Math.Max(1, request.Page),
+                PageSize: Math.Clamp(request.PageSize, 1, MaximumReportPageSize)
             )
-            .OrderByDescending(item => item.Tow_request_date)
-            .Cast<object>()
-            .ToList();
+        );
 
-        return Ok(new TowingReportDto { ReportType = "Request", Data = data });
+        return Ok(CreateReportDto("Request", result));
     }
 
     [HttpGet("reports/towtruck/all")]
-    public async Task<ActionResult<TowingReportDto>> GetReportAllTowtrucks()
+    public async Task<ActionResult<TowingReportDto>> GetReportAllTowtrucks(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultPageSize
+    )
     {
         if (!HasReportsRole())
             return Forbid();
-        var data = (await GetLiveItemsAsync())
-            .Where(item =>
-                !string.IsNullOrWhiteSpace(item.Tow_location_start)
-                || !string.IsNullOrWhiteSpace(item.Keys)
-                || !string.IsNullOrWhiteSpace(item.Vehicle_problem)
+        var result = await _repository.GetReportPageAsync(
+            new TowingReportPageQuery(
+                TowingReportKind.AllTowtrucks,
+                Page: Math.Max(1, page),
+                PageSize: Math.Clamp(pageSize, 1, MaximumReportPageSize)
             )
-            .OrderByDescending(item => item.Tow_request_date)
-            .Cast<object>()
-            .ToList();
+        );
 
-        return Ok(new TowingReportDto { ReportType = "AllTowtrucks", Data = data });
+        return Ok(CreateReportDto("AllTowtrucks", result));
     }
 
     [HttpPost("reports/firm-date")]
@@ -477,44 +478,32 @@ public class TowingController : BaseApiController
     {
         if (!HasReportsRole())
             return Forbid();
-        var firm = request.FirmName?.Trim();
-        var query = (await GetLiveItemsAsync()).Where(item =>
-            IsWithinInclusiveDateRange(item.Tow_request_date, request.StartDate, request.EndDate)
-        );
-
-        if (!string.IsNullOrWhiteSpace(firm))
-        {
-            var matchingTowTruckCodes = (
-                await _towTruckService.GetAllAsync(HttpContext.RequestAborted)
+        var result = await _repository.GetReportPageAsync(
+            new TowingReportPageQuery(
+                TowingReportKind.FirmDate,
+                request.StartDate,
+                request.EndDate,
+                request.FirmName,
+                Page: Math.Max(1, request.Page),
+                PageSize: Math.Clamp(request.PageSize, 1, MaximumReportPageSize)
             )
-                .Where(towTruck =>
-                    !string.IsNullOrWhiteSpace(towTruck.TowName)
-                    && towTruck.TowName.Contains(firm, StringComparison.OrdinalIgnoreCase)
-                )
-                .Select(towTruck => towTruck.TowCode)
-                .ToHashSet();
-            query = query.Where(item =>
-                item.Tow_Truck_code.HasValue
-                && matchingTowTruckCodes.Contains(item.Tow_Truck_code.Value)
-            );
-        }
-
-        return Ok(
-            new TowingReportDto
-            {
-                ReportType = "FirmDate",
-                Data = query
-                    .OrderByDescending(item => item.Tow_request_date)
-                    .Cast<object>()
-                    .ToList(),
-            }
         );
+
+        return Ok(CreateReportDto("FirmDate", result));
     }
 
     #endregion
 
-    private async Task<List<Towing>> GetLiveItemsAsync() =>
-        (await _repository.GetAllAsync()).Where(item => !item.is_deleted).ToList();
+    private static TowingReportDto CreateReportDto(string reportType, TowingReportPage result) =>
+        new()
+        {
+            ReportType = reportType,
+            Data = result.Items.Cast<object>().ToList(),
+            Page = result.Page,
+            PageSize = result.PageSize,
+            Total = result.Total,
+            TotalPages = result.TotalPages,
+        };
 
     private bool HasTowingRole() => HasAnyRole("Towing");
 
@@ -547,27 +536,6 @@ public class TowingController : BaseApiController
         );
     }
 
-    private static bool IsWithinInclusiveDateRange(
-        DateTime? candidate,
-        DateTime startDate,
-        DateTime endDate
-    )
-    {
-        if (!candidate.HasValue)
-        {
-            return false;
-        }
-
-        var start = startDate.Date;
-        var end = endDate.Date;
-        if (end < start)
-        {
-            (start, end) = (end, start);
-        }
-
-        var value = candidate.Value.Date;
-        return value >= start && value <= end;
-    }
 }
 
 #region Towing DTOs
@@ -612,13 +580,20 @@ public class TowingReportMenuDto
     public List<string> Reports { get; set; } = new();
 }
 
-public class TowingRequestReportDto
+public class TowingReportPageRequestDto
 {
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 24;
+}
+
+public class TowingRequestReportDto : TowingReportPageRequestDto
+{
+    public decimal? CallReference { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
 }
 
-public class TowingFirmDateReportDto
+public class TowingFirmDateReportDto : TowingReportPageRequestDto
 {
     public string FirmName { get; set; } = "";
     public DateTime StartDate { get; set; }
@@ -629,6 +604,10 @@ public class TowingReportDto
 {
     public string ReportType { get; set; } = "";
     public List<object> Data { get; set; } = new();
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int Total { get; set; }
+    public int TotalPages { get; set; }
 }
 
 public class TowTruckRequestDto

@@ -8,10 +8,12 @@ import {
   AccidentReportFormActions,
   AccidentReportFormError,
   AccidentReportLoadingState,
+  AccidentReportPagination,
   AccidentReportPageShell,
 } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   authorizeAccidentReport,
+  getAccidentReportPageState,
   loadAccidentReport,
 } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import VehicleTable, {
@@ -21,6 +23,7 @@ import {
   getAccidentDepartmentMonthReport,
   type AccidentDepartmentMonthGarageMode,
   type AccidentDepartmentMonthPeriodMode,
+  type AccidentReportPage,
   type AccidentVehicleReportRow,
 } from "@/lib/api/fleet-operations/api-accidents";
 type QueryValue = string | string[] | undefined;
@@ -159,9 +162,11 @@ function reportTitle(mode: AccidentDepartmentMonthPeriodMode) {
 
 function DepartmentMonthReportTable({
   rows,
+  total,
   mode,
 }: {
   rows: AccidentVehicleReportRow[];
+  total: number;
   mode: AccidentDepartmentMonthPeriodMode;
 }) {
   return (
@@ -174,7 +179,7 @@ function DepartmentMonthReportTable({
           <p className="eyebrow">Report results</p>
           <h2 id="department-month-results-title">{reportTitle(mode)}</h2>
         </div>
-        <span className="form-hint">{rows.length} record(s)</span>
+        <span className="form-hint">{total} record(s)</span>
       </div>
       <div className="vehicle-table-wrapper">
         <VehicleTable
@@ -184,7 +189,7 @@ function DepartmentMonthReportTable({
           rowKey={(row) => row.accidentCode}
         />
       </div>
-      <p className="vehicle-pagination-meta">Total Number: {rows.length}</p>
+      <p className="vehicle-pagination-meta">Total Number: {total}</p>
     </section>
   );
 }
@@ -272,25 +277,40 @@ function DepartmentMonthReportForm({
 }
 
 function DepartmentMonthReportResults({
-  rows,
+  query,
+  report,
   period,
 }: {
-  rows: AccidentVehicleReportRow[] | null;
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentVehicleReportRow> | null;
   period: AccidentDepartmentMonthPeriodMode;
 }) {
-  return rows ? (
-    rows.length > 0 ? (
-      <DepartmentMonthReportTable rows={rows} mode={period} />
-    ) : (
-      <section className="vehicle-empty-state" aria-live="polite">
-        <p className="eyebrow">No accidents found</p>
-        <h2>No accidents matched the selected filters.</h2>
-        <p className="muted-copy">
-          Update the garage, period, year, month, or department and submit again.
-        </p>
-      </section>
-    )
-  ) : null;
+  if (report === null) {
+    return null;
+  }
+
+  const rows = report.items;
+  return rows.length > 0 ? (
+    <>
+      <DepartmentMonthReportTable rows={rows} total={report.total} mode={period} />
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/department-month"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
+    </>
+  ) : (
+    <section className="vehicle-empty-state" aria-live="polite">
+      <p className="eyebrow">No accidents found</p>
+      <h2>No accidents matched the selected filters.</h2>
+      <p className="muted-copy">
+        Update the garage, period, year, month, or department and submit again.
+      </p>
+    </section>
+  );
 }
 
 const DepartmentMonthReportContent = renderDepartmentMonthReportContent;
@@ -358,10 +378,21 @@ async function renderDepartmentMonthReportContent({
     errorMessage = "Enter a month between 1 and 12 for a monthly report.";
   }
 
+  const { page, pageSize } = getAccidentReportPageState(query);
+
   const report = await loadAccidentReport({
     shouldRun,
     errorMessage,
-    load: () => getAccidentDepartmentMonthReport(departmentNumber, garage, period, year, month),
+    load: () =>
+      getAccidentDepartmentMonthReport(
+        departmentNumber,
+        garage,
+        period,
+        year,
+        month,
+        page,
+        pageSize,
+      ),
     context: "FIS accident department month report failed",
   });
   if (report.status === "unauthorized") {
@@ -375,8 +406,6 @@ async function renderDepartmentMonthReportContent({
       />
     );
   }
-  const rows = report.data;
-
   return (
     <>
       <DepartmentMonthReportForm
@@ -387,7 +416,7 @@ async function renderDepartmentMonthReportContent({
         rawMonth={rawMonth}
         departmentNumber={departmentNumber}
       />
-      <DepartmentMonthReportResults rows={rows} period={period} />
+      <DepartmentMonthReportResults query={query} report={report.data} period={period} />
       <AccidentReportFooter clearHref="/accidents/reports/department-month" />
     </>
   );

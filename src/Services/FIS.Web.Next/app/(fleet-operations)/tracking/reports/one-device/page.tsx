@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import {
   TrackingNotice,
+  TrackingReportPagination,
   TrackingReportTable,
   TrackingShell,
 } from "@/app/(fleet-operations)/tracking/_components";
@@ -13,6 +14,7 @@ import {
   accessRestricted,
   getTrackingSession,
   hasTrackingAccess,
+  parsePositiveInteger,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/tracking/_page";
@@ -33,8 +35,9 @@ async function TrackingOneDeviceReportPageContent({
     return accessRestricted("Your profile does not include Vehicle Management access.");
   const query = await searchParams;
   const device = queryValue(query.device);
+  const page = parsePositiveInteger(queryValue(query.page)) ?? 1;
   try {
-    const rows = device.trim() ? await getTrackingOneDeviceReport(device.trim()) : [];
+    const report = device.trim() ? await getTrackingOneDeviceReport(device.trim(), { page }) : null;
     return (
       <TrackingShell
         title="Tracking Report for ONE Tracking Device"
@@ -63,8 +66,16 @@ async function TrackingOneDeviceReportPageContent({
             </Link>
           </div>
         </form>
-        {device.trim() ? (
-          <TrackingReportTable records={rows} title="Tracking report for one device" />
+        {report ? (
+          <>
+            <TrackingReportTable records={report.items} title="Tracking report for one device" />
+            <TrackingReportPagination
+              page={report}
+              query={query}
+              routePath="/tracking/reports/one-device"
+              label="Tracking report for one device"
+            />
+          </>
         ) : (
           <p className="muted-copy">Enter a tracker number to view its history.</p>
         )}

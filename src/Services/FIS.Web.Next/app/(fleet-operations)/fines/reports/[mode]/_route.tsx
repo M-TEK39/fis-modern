@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import GovernmentReportLetterhead from "@/components/ui/government-report-letterhead";
 import ReportPrintButton from "@/components/ui/report-print-button";
@@ -37,6 +38,21 @@ function queryValue(value: string | string[] | undefined) {
 function positiveInt(value: string | undefined) {
   const parsed = Number(value);
   return value && Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function reportPageHref(
+  routePath: string,
+  query: Record<string, string | string[] | undefined>,
+  page: number,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (["page", "pageSize", "includeAll"].includes(key)) continue;
+    const text = Array.isArray(value) ? value[0] : value;
+    if (text?.trim()) params.set(key, text);
+  }
+  params.set("page", String(page));
+  return `${routePath}?${params.toString()}`;
 }
 
 function validDate(value: string) {
@@ -361,11 +377,13 @@ function ReportResults({
   detail,
   previewPath,
   officialLetter,
+  pageHref,
 }: Readonly<{
   report: FineReport;
   detail: boolean;
   previewPath?: string;
   officialLetter: boolean;
+  pageHref: (page: number) => string;
 }>) {
   if (report.rows.length === 0)
     return (
@@ -373,6 +391,7 @@ function ReportResults({
         <p className="eyebrow">No records found</p>
         <h2>No fines matched the selected filters.</h2>
         <p className="muted-copy">Try a different vehicle, date range, department, or issuer.</p>
+        <ReportPagination report={report} pageHref={pageHref} label="Fines report pages" />
       </section>
     );
 
@@ -420,6 +439,7 @@ function ReportResults({
             </div>
           </article>
         ))}
+        <ReportPagination report={report} pageHref={pageHref} label="Fines report pages" />
       </section>
     );
   }
@@ -477,6 +497,7 @@ function ReportResults({
           </tbody>
         </table>
       </div>
+      <ReportPagination report={report} pageHref={pageHref} label="Fines report pages" />
     </section>
   );
 }
@@ -559,6 +580,7 @@ async function renderFineReportPageContent({
   )
     .trim()
     .slice(0, 100);
+  const page = positiveInt(queryValue(query.page)) ?? 1;
   const shouldRun = queryValue(query.run) === "1" || legacyResult;
 
   let vehicles: FineVehicleOption[] = [];
@@ -598,19 +620,23 @@ async function renderFineReportPageContent({
         errorMessage = "Select a vehicle before running this report.";
       else {
         const reportMode = fineCode && mode === "reissue-submission" ? "fine-detail" : mode;
-        report = await getFineReport(reportMode, {
-          vmf: resolvedVmfCode ?? undefined,
-          fineCode: fineCode ?? undefined,
-          appearDate: startDate || undefined,
-          from: startDate || undefined,
-          to: endDate || undefined,
-          site: siteCode ?? undefined,
-          issuer: issuer || undefined,
-          department: queryValue(query.department)?.trim() || undefined,
-        });
+        report = await getFineReport(
+          reportMode,
+          {
+            vmf: resolvedVmfCode ?? undefined,
+            fineCode: fineCode ?? undefined,
+            appearDate: startDate || undefined,
+            from: startDate || undefined,
+            to: endDate || undefined,
+            site: siteCode ?? undefined,
+            issuer: issuer || undefined,
+            department: queryValue(query.department)?.trim() || undefined,
+          },
+          { page },
+        );
       }
     } else if (mode === "traffic-dept-detail") {
-      report = await getFineReport("traffic-dept-detail");
+      report = await getFineReport("traffic-dept-detail", {}, { page });
     }
   } catch (error) {
     if (error instanceof FineApiError && error.reason === "unauthorized")
@@ -688,6 +714,7 @@ async function renderFineReportPageContent({
             detail={detail}
             previewPath={mode === "reissue-submission" ? routePath : undefined}
             officialLetter={legacyResult || (mode === "reissue-submission" && fineCode !== null)}
+            pageHref={(requestedPage) => reportPageHref(routePath, query, requestedPage)}
           />
         ) : null}
         <div className="vehicle-footer-actions">

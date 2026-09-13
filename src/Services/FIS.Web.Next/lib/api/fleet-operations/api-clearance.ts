@@ -81,6 +81,16 @@ export type ClearanceReportRow = {
   clearanceDate: string | null;
 };
 
+export type ClearanceReportPage = {
+  items: ClearanceReportRow[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_CLEARANCE_REPORT_PAGE_SIZE = 24;
+
 function getApiBaseUrl() {
   const value = process.env.API_BASE_URL?.trim() || "http://localhost:5010";
   return `${value.replace(/\/$/, "")}/`;
@@ -289,6 +299,59 @@ function mapReportRow(value: unknown): ClearanceReportRow | null {
   };
 }
 
+function normalizePage(value: number | undefined) {
+  return Number.isSafeInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : 1;
+}
+
+function normalizePageSize(value: number | undefined) {
+  const pageSize =
+    Number.isSafeInteger(value) && (value ?? 0) > 0
+      ? (value ?? DEFAULT_CLEARANCE_REPORT_PAGE_SIZE)
+      : DEFAULT_CLEARANCE_REPORT_PAGE_SIZE;
+  return Math.min(100, pageSize);
+}
+
+function readClearanceReportPage(payload: unknown): ClearanceReportPage {
+  if (!isRecord(payload) || !Array.isArray(payload.items)) {
+    throw new ClearanceApiError(
+      "invalid-response",
+      "The FIS API returned an invalid clearance report page.",
+    );
+  }
+
+  const page = asNumber(getValue(payload, "page"));
+  const pageSize = asNumber(getValue(payload, "pageSize"));
+  const total = asNumber(getValue(payload, "total"));
+  const totalPages = asNumber(getValue(payload, "totalPages"));
+  if (
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isSafeInteger(page) ||
+    !Number.isSafeInteger(pageSize) ||
+    !Number.isSafeInteger(total) ||
+    !Number.isSafeInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    throw new ClearanceApiError(
+      "invalid-response",
+      "The FIS API returned incomplete clearance report pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items.map(mapReportRow).filter((row): row is ClearanceReportRow => row !== null),
+    page,
+    pageSize,
+    total,
+    totalPages,
+  };
+}
+
 export async function lookupClearanceVehicle(identifier: string) {
   const response = await requestApi(`api/clearance/lookup/${encodeURIComponent(identifier)}`);
   return mapVehicle(await readJson(response));
@@ -449,17 +512,21 @@ export async function getClearanceUniversalReport(request: {
   startDate?: string;
   endDate?: string;
   merchantCode?: number;
-}) {
+  page?: number;
+  pageSize?: number;
+}): Promise<ClearanceReportPage> {
+  const page = normalizePage(request.page);
+  const pageSize = normalizePageSize(request.pageSize);
   const response = await requestApi("api/clearance/reports/universal", {
     method: "POST",
     body: JSON.stringify({
       StartDate: request.startDate ? `${request.startDate}T00:00:00.000Z` : null,
       EndDate: request.endDate ? `${request.endDate}T00:00:00.000Z` : null,
       MerchantCode: request.merchantCode && request.merchantCode > 0 ? request.merchantCode : null,
+      Page: page,
+      PageSize: pageSize,
     }),
   });
 
-  return getCollection(await readJson(response))
-    .map(mapReportRow)
-    .filter((row): row is ClearanceReportRow => row !== null);
+  return readClearanceReportPage(await readJson(response));
 }

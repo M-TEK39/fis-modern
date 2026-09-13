@@ -5,6 +5,7 @@ import GovernmentReportLetterhead from "@/components/ui/government-report-letter
 import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
+import type { AccidentReportSearchParams } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 
 type AccidentReportPageShellProps = {
   titleId: string;
@@ -87,6 +88,91 @@ export function AccidentReportFormError({ message }: Readonly<{ message: string 
       {message}
     </div>
   ) : null;
+}
+
+function accidentReportPageHref(
+  pathname: string,
+  query: AccidentReportSearchParams,
+  page: number,
+  pageSize: number,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    const firstValue = Array.isArray(value) ? value[0] : value;
+    if (firstValue !== undefined) {
+      params.set(key, firstValue);
+    }
+  }
+
+  if (page <= 1) {
+    params.delete("page");
+  } else {
+    params.set("page", String(page));
+  }
+  params.set("pageSize", String(pageSize));
+
+  return `${pathname}?${params.toString()}`;
+}
+
+export function AccidentReportPagination({
+  page,
+  pageSize,
+  pathname,
+  query,
+  total,
+  totalPages,
+}: Readonly<{
+  page: number;
+  pageSize: number;
+  pathname: string;
+  query: AccidentReportSearchParams;
+  total: number;
+  totalPages: number;
+}>) {
+  if (totalPages <= 1) {
+    return null;
+  }
+
+  const previousDisabled = page <= 1;
+  const nextDisabled = page >= totalPages;
+
+  return (
+    <nav className="vehicle-pagination" aria-label="Accident report pages">
+      {previousDisabled ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Previous
+        </span>
+      ) : (
+        <Link
+          className="vehicle-pagination-button"
+          href={accidentReportPageHref(pathname, query, page - 1, pageSize)}
+        >
+          Previous
+        </Link>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {page} of {totalPages} ({total} records; {pageSize} per page)
+      </span>
+      {nextDisabled ? (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Next
+        </span>
+      ) : (
+        <Link
+          className="vehicle-pagination-button"
+          href={accidentReportPageHref(pathname, query, page + 1, pageSize)}
+        >
+          Next
+        </Link>
+      )}
+    </nav>
+  );
 }
 
 export function AccidentReportFormActions({

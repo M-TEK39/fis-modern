@@ -60,6 +60,24 @@ export type CallCentreIncidentRecord = {
   dateUpdated: string | null;
 };
 
+export type CallCentreReportMode =
+  "one-vehicle" | "all-reference" | "dept-site-period" | "clo-report" | "open-calls";
+
+export type CallCentreReportPage = {
+  items: CallCentreIncidentRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type CallCentreCaptureStatistics = {
+  totalCalls: number;
+  items: Array<{ captureName: string; count: number }>;
+};
+
+export const DEFAULT_CALL_CENTRE_REPORT_PAGE_SIZE = 24;
+
 export type CallCentreChildRecord = Record<string, unknown>;
 
 export type CallCentreEditDetails = {
@@ -531,6 +549,51 @@ function mapCallCentreIncident(value: unknown): CallCentreIncidentRecord | null 
   };
 }
 
+function mapCallCentreReportPage(payload: unknown): CallCentreReportPage {
+  if (!isRecord(payload)) {
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned an invalid report page.",
+    );
+  }
+
+  const rawItems = getValue(payload, "items", "Items");
+  const page = asNumber(getValue(payload, "page", "Page"));
+  const pageSize = asNumber(getValue(payload, "pageSize", "PageSize"));
+  const total = asNumber(getValue(payload, "total", "Total"));
+  const totalPages = asNumber(getValue(payload, "totalPages", "TotalPages"));
+  if (
+    !Array.isArray(rawItems) ||
+    page === null ||
+    pageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(page) ||
+    !Number.isInteger(pageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages) ||
+    page < 1 ||
+    pageSize < 1 ||
+    total < 0 ||
+    totalPages < 1
+  ) {
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned incomplete report paging.",
+    );
+  }
+
+  return {
+    items: rawItems
+      .map(mapCallCentreIncident)
+      .filter((incident): incident is CallCentreIncidentRecord => incident !== null),
+    page,
+    pageSize,
+    total,
+    totalPages,
+  };
+}
+
 function mapDataAccessEntry(value: unknown): CallCentreDataAccessEntry | null {
   if (!isRecord(value)) return null;
   return {
@@ -611,6 +674,96 @@ export async function getCallCentreIncidents() {
     .filter((incident): incident is CallCentreIncidentRecord => incident !== null);
 }
 
+export async function getCallCentreReportPage({
+  mode,
+  page = 1,
+  pageSize = DEFAULT_CALL_CENTRE_REPORT_PAGE_SIZE,
+  vmfCode,
+  incident,
+  startDate,
+  endDate,
+  siteCode,
+  department,
+}: Readonly<{
+  mode: CallCentreReportMode;
+  page?: number;
+  pageSize?: number;
+  vmfCode?: number;
+  incident?: string;
+  startDate?: string;
+  endDate?: string;
+  siteCode?: number;
+  department?: string;
+}>): Promise<CallCentreReportPage> {
+  const normalizedPage = Number.isSafeInteger(page) && page > 0 ? page : 1;
+  const normalizedPageSize =
+    Number.isSafeInteger(pageSize) && pageSize > 0
+      ? Math.min(pageSize, 100)
+      : DEFAULT_CALL_CENTRE_REPORT_PAGE_SIZE;
+  const query = new URLSearchParams({
+    mode,
+    page: String(normalizedPage),
+    pageSize: String(normalizedPageSize),
+  });
+  if (vmfCode !== undefined) query.set("vmfCode", String(vmfCode));
+  if (incident?.trim()) query.set("incident", incident.trim());
+  if (startDate?.trim()) query.set("startDate", startDate.trim());
+  if (endDate?.trim()) query.set("endDate", endDate.trim());
+  if (siteCode !== undefined) query.set("siteCode", String(siteCode));
+  if (department?.trim()) query.set("department", department.trim());
+
+  const response = await requestApi(`api/CallCentre/reports/page?${query.toString()}`);
+  return mapCallCentreReportPage(await readJson(response));
+}
+
+export async function getCallCentreCaptureStatistics({
+  startDate,
+  endDate,
+  captureName,
+}: Readonly<{
+  startDate?: string;
+  endDate?: string;
+  captureName?: string;
+}>): Promise<CallCentreCaptureStatistics> {
+  const query = new URLSearchParams();
+  if (startDate?.trim()) query.set("startDate", startDate.trim());
+  if (endDate?.trim()) query.set("endDate", endDate.trim());
+  if (captureName?.trim()) query.set("captureName", captureName.trim());
+
+  const response = await requestApi(
+    `api/CallCentre/reports/statistics-capture?${query.toString()}`,
+  );
+  const payload = await readJson(response);
+  if (!isRecord(payload)) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned invalid statistics.");
+  }
+
+  const totalCalls = asNumber(getValue(payload, "totalCalls", "TotalCalls"));
+  const rawItems = getValue(payload, "items", "Items");
+  if (
+    totalCalls === null ||
+    totalCalls < 0 ||
+    !Number.isInteger(totalCalls) ||
+    !Array.isArray(rawItems)
+  ) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned incomplete statistics.");
+  }
+
+  return {
+    totalCalls,
+    items: rawItems
+      .map((item) => {
+        if (!isRecord(item)) return null;
+        const name = asString(getValue(item, "captureName", "CaptureName"));
+        const count = asNumber(getValue(item, "count", "Count"));
+        return name !== null && count !== null && count >= 0 && Number.isInteger(count)
+          ? { captureName: name, count }
+          : null;
+      })
+      .filter((item): item is { captureName: string; count: number } => item !== null),
+  };
+}
+
 export async function updateCallCentreIncident(
   callCentreCode: number,
   request: UpdateCallCentreRequest,
@@ -654,9 +807,22 @@ export async function updateCallCentreEditDetails(
   return updated;
 }
 
-export async function getCallCentreDataAccess(callCentreCode: number) {
+export async function getCallCentreDataAccess(
+  callCentreCode: number,
+  page = 1,
+  pageSize = DEFAULT_CALL_CENTRE_REPORT_PAGE_SIZE,
+) {
   const response = await requestApi(
-    `api/CallCentre/reports/data-access/${encodeURIComponent(callCentreCode)}`,
+    `api/CallCentre/reports/data-access/${encodeURIComponent(callCentreCode)}?${new URLSearchParams(
+      {
+        page: String(Number.isSafeInteger(page) && page > 0 ? page : 1),
+        pageSize: String(
+          Number.isSafeInteger(pageSize) && pageSize > 0
+            ? Math.min(pageSize, 100)
+            : DEFAULT_CALL_CENTRE_REPORT_PAGE_SIZE,
+        ),
+      },
+    ).toString()}`,
   );
   const payload = await readJson(response);
   if (!isRecord(payload)) {
@@ -669,11 +835,34 @@ export async function getCallCentreDataAccess(callCentreCode: number) {
   const entries = getCollection(getValue(payload, "Entries", "entries"))
     .map(mapDataAccessEntry)
     .filter((entry): entry is CallCentreDataAccessEntry => entry !== null);
+  const resultPage = asNumber(getValue(payload, "Page", "page"));
+  const resultPageSize = asNumber(getValue(payload, "PageSize", "pageSize"));
+  const total = asNumber(getValue(payload, "Total", "total"));
+  const totalPages = asNumber(getValue(payload, "TotalPages", "totalPages"));
+  if (
+    resultPage === null ||
+    resultPageSize === null ||
+    total === null ||
+    totalPages === null ||
+    !Number.isInteger(resultPage) ||
+    !Number.isInteger(resultPageSize) ||
+    !Number.isInteger(total) ||
+    !Number.isInteger(totalPages)
+  ) {
+    throw new CallCentreApiError(
+      "invalid-response",
+      "The FIS API returned incomplete data access paging.",
+    );
+  }
   return {
     accessTableAvailable: Boolean(
       getValue(payload, "AccessTableAvailable", "accessTableAvailable"),
     ),
     entries,
+    page: resultPage,
+    pageSize: resultPageSize,
+    total,
+    totalPages,
   };
 }
 

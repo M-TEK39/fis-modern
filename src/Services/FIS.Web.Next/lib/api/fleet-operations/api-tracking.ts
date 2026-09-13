@@ -29,7 +29,16 @@ export type TrackingPage = {
   totalPages: number;
 };
 
+export type TrackingReportPage = TrackingPage & {
+  reportType: string;
+};
+
 export const DEFAULT_TRACKING_PAGE_SIZE = 24;
+
+export type TrackingReportPageOptions = {
+  page?: number;
+  pageSize?: number;
+};
 
 export type TrackingWriteInput = {
   vmf_code: number | null;
@@ -181,7 +190,8 @@ async function readTrackingList(path: string, init?: RequestInit) {
 }
 
 function readTrackingPage(payload: unknown): TrackingPage {
-  if (!isRecord(payload) || !Array.isArray(payload.items))
+  const items = isRecord(payload) ? getValue(payload, "items", "Items") : undefined;
+  if (!isRecord(payload) || !Array.isArray(items))
     throw new TrackingApiError(
       "invalid-response",
       "The FIS API returned an invalid tracking page.",
@@ -212,12 +222,29 @@ function readTrackingPage(payload: unknown): TrackingPage {
   }
 
   return {
-    items: payload.items.map(mapTracking).filter((item): item is TrackingRecord => item !== null),
+    items: items.map(mapTracking).filter((item): item is TrackingRecord => item !== null),
     page,
     pageSize,
     total,
     totalPages,
   };
+}
+
+function readTrackingReportPage(payload: unknown): TrackingReportPage {
+  if (!isRecord(payload))
+    throw new TrackingApiError(
+      "invalid-response",
+      "The FIS API returned an invalid tracking report.",
+    );
+
+  const reportType = asString(getValue(payload, "reportType", "ReportType"));
+  if (!reportType)
+    throw new TrackingApiError(
+      "invalid-response",
+      "The FIS API returned an invalid tracking report type.",
+    );
+
+  return { ...readTrackingPage(payload), reportType };
 }
 
 function normalizePage(value: number | undefined) {
@@ -236,12 +263,21 @@ function normalizePositiveInteger(value: number | undefined) {
   return Number.isInteger(value) && (value ?? 0) > 0 ? (value ?? 1) : null;
 }
 
-async function postReport(path: string, body: unknown) {
-  return readTrackingList(path, {
+async function postReport(
+  path: string,
+  body: JsonRecord,
+  options: TrackingReportPageOptions = {},
+): Promise<TrackingReportPage> {
+  const page = normalizePage(options.page);
+  const pageSize = normalizePageSize(options.pageSize);
+  const payload = await readJson(
+    await requestApi(path, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
+      body: JSON.stringify({ ...body, page, pageSize }),
+    }),
+  );
+  return readTrackingReportPage(payload);
 }
 
 export async function getTrackings() {
@@ -294,34 +330,48 @@ export async function updateTracking(trackCode: number, input: TrackingWriteInpu
 
 const reportRange = (startDate: string, endDate: string) => ({ startDate, endDate });
 
-export function getTrackingOneVehicleReport(vmfCode: number, startDate: string, endDate: string) {
+export function getTrackingOneVehicleReport(
+  vmfCode: number,
+  startDate: string,
+  endDate: string,
+  options?: TrackingReportPageOptions,
+) {
   return postReport("api/tracking/reports/one-vehicle", {
     vmfCode,
     ...reportRange(startDate, endDate),
-  });
+  }, options);
 }
 
-export function getTrackingOneDeviceReport(deviceId: string) {
-  return postReport("api/tracking/reports/one-device", { deviceId });
+export function getTrackingOneDeviceReport(deviceId: string, options?: TrackingReportPageOptions) {
+  return postReport("api/tracking/reports/one-device", { deviceId }, options);
 }
 
 export function getTrackingAllVehiclesReport(
   trackerType: string,
   startDate: string,
   endDate: string,
+  options?: TrackingReportPageOptions,
 ) {
   return postReport("api/tracking/reports/all-vehicles", {
     trackerType,
     ...reportRange(startDate, endDate),
-  });
+  }, options);
 }
 
-export function getTrackingAllDevicesReport(startDate: string, endDate: string) {
-  return postReport("api/tracking/reports/all-devices", reportRange(startDate, endDate));
+export function getTrackingAllDevicesReport(
+  startDate: string,
+  endDate: string,
+  options?: TrackingReportPageOptions,
+) {
+  return postReport("api/tracking/reports/all-devices", reportRange(startDate, endDate), options);
 }
 
-export function getTrackingInstallPeriodReport(startDate: string, endDate: string) {
-  return postReport("api/tracking/reports/install-period", reportRange(startDate, endDate));
+export function getTrackingInstallPeriodReport(
+  startDate: string,
+  endDate: string,
+  options?: TrackingReportPageOptions,
+) {
+  return postReport("api/tracking/reports/install-period", reportRange(startDate, endDate), options);
 }
 
 export function getTrackingSitePeriodReport(
@@ -329,12 +379,13 @@ export function getTrackingSitePeriodReport(
   allSites: boolean,
   startDate: string,
   endDate: string,
+  options?: TrackingReportPageOptions,
 ) {
   return postReport("api/tracking/reports/site-period", {
     siteCode,
     allSites,
     ...reportRange(startDate, endDate),
-  });
+  }, options);
 }
 
 export function getTrackingDeptPeriodReport(
@@ -342,10 +393,11 @@ export function getTrackingDeptPeriodReport(
   allDepartments: boolean,
   startDate: string,
   endDate: string,
+  options?: TrackingReportPageOptions,
 ) {
   return postReport("api/tracking/reports/dept-period", {
     departmentCode,
     allDepartments,
     ...reportRange(startDate, endDate),
-  });
+  }, options);
 }

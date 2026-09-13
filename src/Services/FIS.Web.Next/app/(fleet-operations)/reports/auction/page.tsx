@@ -49,6 +49,7 @@ async function ReportsAuctionPageContent({ searchParams }: LegacyAuctionReportsP
     copyQueryValue(query, target, "garage", "garage");
     copyQueryValue(query, target, "auctionNumber", "auctionNumber", "xaucnumber");
     copyQueryValue(query, target, "buyerName", "buyerName", "xbname");
+    copyQueryValue(query, target, "page", "page");
     redirect(`/auction/reports/${mode}?${target.toString()}`);
   }
 

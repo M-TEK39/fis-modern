@@ -6,10 +6,12 @@ import {
   AccidentReportFooter,
   AccidentReportFormActions,
   AccidentReportLoadingState,
+  AccidentReportPagination,
   AccidentReportPageShell,
 } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   authorizeAccidentReport,
+  getAccidentReportPageState,
   loadAccidentReport,
 } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import VehicleTable, {
@@ -17,6 +19,7 @@ import VehicleTable, {
 } from "@/app/(fleet-operations)/accidents/vehicle-table";
 import {
   getAccidentDriverReport,
+  type AccidentReportPage,
   type AccidentDriverReportMode,
   type AccidentDriverReportRow,
 } from "@/lib/api/fleet-operations/api-accidents";
@@ -103,36 +106,57 @@ function DriverReportForm({
   );
 }
 
-function DriverReportResults({ rows }: { rows: AccidentDriverReportRow[] | null }) {
-  return rows !== null ? (
-    rows.length === 0 ? (
+function DriverReportResults({
+  query,
+  report,
+}: {
+  query: Record<string, string | string[] | undefined>;
+  report: AccidentReportPage<AccidentDriverReportRow> | null;
+}) {
+  if (report === null) {
+    return null;
+  }
+
+  const rows = report.items;
+  if (rows.length === 0) {
+    return (
       <div className="vehicle-empty-state">
         <p className="eyebrow">No accidents found</p>
         <h2>No accidents matched this driver search.</h2>
         <p className="muted-copy">Try a different driver name or ID number.</p>
       </div>
-    ) : (
-      <>
-        <div className="vehicle-table-wrapper" aria-live="polite">
-          <VehicleTable
-            caption="Accident report by driver name or ID number"
-            columns={driverReportColumns}
-            rows={rows}
-            rowKey={(row) =>
-              [
-                row.registrationNumber,
-                row.fleetNumber,
-                row.driverEmployNumber,
-                row.accidentDate,
-                row.departmentNumber,
-              ].join("|")
-            }
-          />
-        </div>
-        <p className="vehicle-pagination-meta">Total Number: {rows.length}</p>
-      </>
-    )
-  ) : null;
+    );
+  }
+
+  return (
+    <>
+      <div className="vehicle-table-wrapper" aria-live="polite">
+        <VehicleTable
+          caption="Accident report by driver name or ID number"
+          columns={driverReportColumns}
+          rows={rows}
+          rowKey={(row) =>
+            [
+              row.registrationNumber,
+              row.fleetNumber,
+              row.driverEmployNumber,
+              row.accidentDate,
+              row.departmentNumber,
+            ].join("|")
+          }
+        />
+      </div>
+      <p className="vehicle-pagination-meta">Total Number: {report.total}</p>
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/driver"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
+    </>
+  );
 }
 
 async function DriverReportContent({ searchParams }: DriverReportPageProps) {
@@ -159,10 +183,11 @@ async function DriverReportContent({ searchParams }: DriverReportPageProps) {
     ""
   ).trim();
   const shouldRun = getQueryValue(query.run) === "1";
+  const { page, pageSize } = getAccidentReportPageState(query);
   const report = await loadAccidentReport({
     shouldRun: shouldRun && Boolean(searchTerm),
     errorMessage: null,
-    load: () => getAccidentDriverReport(searchTerm, mode),
+    load: () => getAccidentDriverReport(searchTerm, mode, page, pageSize),
     context: "FIS accident driver report failed",
   });
   if (report.status === "unauthorized") {
@@ -176,12 +201,10 @@ async function DriverReportContent({ searchParams }: DriverReportPageProps) {
       />
     );
   }
-  const rows = report.data;
-
   return (
     <>
       <DriverReportForm mode={mode} searchTerm={searchTerm} />
-      <DriverReportResults rows={rows} />
+      <DriverReportResults query={query} report={report.data} />
 
       <AccidentReportFooter />
     </>

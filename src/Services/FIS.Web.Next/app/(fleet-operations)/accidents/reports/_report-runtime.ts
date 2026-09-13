@@ -3,10 +3,38 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
-import { AccidentApiError } from "@/lib/api/fleet-operations/api-accidents";
+import {
+  AccidentApiError,
+  DEFAULT_ACCIDENT_REPORT_PAGE_SIZE,
+} from "@/lib/api/fleet-operations/api-accidents";
 import { getSession } from "@/lib/auth/session";
 
 const ACCIDENTS_ROLE = "Accidents";
+
+export type AccidentReportSearchParams = Record<string, string | string[] | undefined>;
+
+function getFirstQueryValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function getPositiveQueryInteger(value: string | undefined) {
+  if (!value || !/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function getAccidentReportPageState(query: AccidentReportSearchParams) {
+  const page = getPositiveQueryInteger(getFirstQueryValue(query.page)) ?? 1;
+  const requestedPageSize = getPositiveQueryInteger(getFirstQueryValue(query.pageSize));
+
+  return {
+    page,
+    pageSize: Math.min(100, requestedPageSize ?? DEFAULT_ACCIDENT_REPORT_PAGE_SIZE),
+  };
+}
 
 export type AccidentReportAuthorization = "authorized" | "expired" | "unavailable" | "forbidden";
 

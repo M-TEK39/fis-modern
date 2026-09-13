@@ -7,10 +7,12 @@ import {
   AccidentReportFormActions,
   AccidentReportFormError,
   AccidentReportLoadingState,
+  AccidentReportPagination,
   AccidentReportPageShell,
 } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   authorizeAccidentReport,
+  getAccidentReportPageState,
   loadAccidentReport,
 } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import VehicleTable, {
@@ -19,6 +21,7 @@ import VehicleTable, {
 import {
   getAccidentAllReport,
   type AccidentAllReportDateMode,
+  type AccidentReportPage,
   type AccidentVehicleReportRow,
 } from "@/lib/api/fleet-operations/api-accidents";
 type QueryValue = string | string[] | undefined;
@@ -137,12 +140,15 @@ const allAccidentsColumns: readonly VehicleTableColumn<AccidentVehicleReportRow>
 ];
 
 function AllAccidentsReportTable({
-  rows,
+  query,
+  report,
   mode,
 }: {
-  rows: AccidentVehicleReportRow[];
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentVehicleReportRow>;
   mode: AccidentAllReportDateMode;
 }) {
+  const rows = report.items;
   return (
     <section
       className="vehicle-status-maintenance-panel"
@@ -153,7 +159,7 @@ function AllAccidentsReportTable({
           <p className="eyebrow">Report results</p>
           <h2 id="all-accident-results-title">{reportTitle(mode)}</h2>
         </div>
-        <span className="form-hint">{rows.length} record(s)</span>
+        <span className="form-hint">{report.total} record(s)</span>
       </div>
       <div className="vehicle-table-wrapper">
         <VehicleTable
@@ -163,7 +169,15 @@ function AllAccidentsReportTable({
           rowKey={(row) => row.accidentCode}
         />
       </div>
-      <p className="vehicle-pagination-meta">Total Number: {rows.length}</p>
+      <p className="vehicle-pagination-meta">Total Number: {report.total}</p>
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/all"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
     </section>
   );
 }
@@ -216,24 +230,30 @@ function AllAccidentsReportForm({
 }
 
 function AllAccidentsReportResults({
-  rows,
+  query,
+  report,
   mode,
 }: {
-  rows: AccidentVehicleReportRow[] | null;
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentVehicleReportRow> | null;
   mode: AccidentAllReportDateMode;
 }) {
+  if (report === null) {
+    return null;
+  }
+
+  const rows = report.items;
   return (
     <>
-      {rows ? (
-        rows.length > 0 ? (
-          <AllAccidentsReportTable rows={rows} mode={mode} />
-        ) : (
-          <section className="vehicle-empty-state" aria-live="polite">
-            <p className="eyebrow">No accidents found</p>
-            <h2>No accidents matched the selected date range.</h2>
-            <p className="muted-copy">Choose another date range and submit again.</p>
-          </section>
-        )
+      {rows.length > 0 ? (
+        <AllAccidentsReportTable query={query} report={report} mode={mode} />
+      ) : null}
+      {rows.length === 0 ? (
+        <section className="vehicle-empty-state" aria-live="polite">
+          <p className="eyebrow">No accidents found</p>
+          <h2>No accidents matched the selected date range.</h2>
+          <p className="muted-copy">Choose another date range and submit again.</p>
+        </section>
       ) : null}
     </>
   );
@@ -259,10 +279,11 @@ async function AllAccidentsReportContent({ searchParams }: { searchParams: Promi
   const shouldRun =
     getQueryValue(query, "run") === "1" || getQueryValue(query, "mode", "Radio1") !== undefined;
   const errorMessage = invalid ? "Choose a valid accident date range." : null;
+  const { page, pageSize } = getAccidentReportPageState(query);
   const report = await loadAccidentReport({
     shouldRun,
     errorMessage,
-    load: () => getAccidentAllReport(mode),
+    load: () => getAccidentAllReport(mode, page, pageSize),
     context: "FIS all accident report failed",
   });
   if (report.status === "unauthorized") {
@@ -276,12 +297,10 @@ async function AllAccidentsReportContent({ searchParams }: { searchParams: Promi
       />
     );
   }
-  const rows = report.data;
-
   return (
     <>
       <AllAccidentsReportForm mode={mode} errorMessage={errorMessage} />
-      <AllAccidentsReportResults rows={rows} mode={mode} />
+      <AllAccidentsReportResults query={query} report={report.data} mode={mode} />
       <AccidentReportFooter clearHref="/accidents/reports/all" />
     </>
   );

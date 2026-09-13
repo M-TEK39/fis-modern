@@ -14,15 +14,32 @@ import {
   tripSessionMessage,
 } from "@/app/(fleet-operations)/trips/_page";
 import {
+  DEFAULT_REPORT_PAGE_SIZE,
   getLegacyReport,
   LegacyReportApiError,
   type LegacyReport,
 } from "@/lib/api/reports/api-legacy-reports";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 function queryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function positiveInteger(value: string | undefined) {
+  const parsed = Number(value);
+  return value && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function reportPageHref(financialYear: string, page: number, pageSize: number) {
+  const params = new URLSearchParams({
+    financialYear,
+    run: "1",
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  return `/trips/driver-info?${params.toString()}`;
 }
 
 function financialYearOptions() {
@@ -40,7 +57,13 @@ function valueForRow(row: Record<string, string | null>, key: string) {
   return matchingKey ? row[matchingKey] || "-" : "-";
 }
 
-function ReportResults({ report }: Readonly<{ report: LegacyReport }>) {
+function ReportResults({
+  report,
+  pageHref,
+}: Readonly<{
+  report: LegacyReport;
+  pageHref: (page: number) => string;
+}>) {
   return (
     <section
       className="vehicle-status-maintenance-panel"
@@ -88,6 +111,11 @@ function ReportResults({ report }: Readonly<{ report: LegacyReport }>) {
           </table>
         </div>
       )}
+      <ReportPagination
+        report={report}
+        pageHref={pageHref}
+        label="Driver information report pages"
+      />
     </section>
   );
 }
@@ -120,13 +148,19 @@ async function renderDriverInfoPageContent({
 
   const query = await searchParams;
   const selectedYear = (queryValue(query.financialYear) ?? queryValue(query.FinYear) ?? "").trim();
+  const page = positiveInteger(queryValue(query.page)) ?? 1;
+  const pageSize = positiveInteger(queryValue(query.pageSize)) ?? DEFAULT_REPORT_PAGE_SIZE;
   const shouldRun = queryValue(query.run) === "1" || selectedYear.length > 0;
   const errorMessage =
     shouldRun && !/^\d{4}$/.test(selectedYear) ? "Select a valid financial year." : null;
   let report: LegacyReport | null = null;
   if (shouldRun && !errorMessage) {
     try {
-      report = await getLegacyReport("driver-information-finyear", { FinYear: selectedYear });
+      report = await getLegacyReport(
+        "driver-information-finyear",
+        { FinYear: selectedYear },
+        { page, pageSize },
+      );
     } catch (error) {
       if (error instanceof LegacyReportApiError && error.reason === "unauthorized")
         return (
@@ -195,7 +229,12 @@ async function renderDriverInfoPageContent({
             </Link>
           </div>
         </form>
-        {report ? <ReportResults report={report} /> : null}
+        {report ? (
+          <ReportResults
+            report={report}
+            pageHref={(targetPage) => reportPageHref(selectedYear, targetPage, report.pageSize)}
+          />
+        ) : null}
         <div className="vehicle-footer-actions">
           <Link className="button button-secondary" href="/trip-authorities">
             Back to Trips

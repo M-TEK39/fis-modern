@@ -44,6 +44,10 @@ export type FuelCardAllocationReport = {
   statusBreakdown: Record<string, number>;
   cardsByGarage: Record<string, number>;
   recentActivity: FuelCardActivity[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
 };
 
 export type FuelCardApiErrorReason =
@@ -276,10 +280,21 @@ export async function deletePrivateHireFuelCard(fuelCardCode: number) {
   });
 }
 
-export async function getFuelCardAllocation(siteCode?: number) {
-  const query = siteCode === undefined ? "" : `?siteCode=${encodeURIComponent(siteCode)}`;
+export async function getFuelCardAllocation(
+  siteCode?: number,
+  options: { page?: number; pageSize?: number } = {},
+) {
+  const params = new URLSearchParams({
+    page: String(Number.isInteger(options.page) && (options.page ?? 0) > 0 ? options.page : 1),
+    pageSize: String(
+      Number.isInteger(options.pageSize) && (options.pageSize ?? 0) > 0
+        ? Math.min(options.pageSize ?? 24, 100)
+        : 24,
+    ),
+  });
+  if (siteCode !== undefined) params.set("siteCode", String(siteCode));
   const payload = await readJson(
-    await requestApi(`api/FleetManagement/reports/fuelcard-allocation${query}`),
+    await requestApi(`api/FleetManagement/reports/fuelcard-allocation?${params.toString()}`),
   );
   if (!isRecord(payload))
     throw new FuelCardApiError(
@@ -314,5 +329,9 @@ export async function getFuelCardAllocation(siteCode?: number) {
         ];
       },
     ),
+    page: asNumber(getValue(report, "page", "Page")) ?? 1,
+    pageSize: asNumber(getValue(report, "pageSize", "PageSize")) ?? 24,
+    totalCount: asNumber(getValue(report, "totalCount", "TotalCount")) ?? 0,
+    totalPages: asNumber(getValue(report, "totalPages", "TotalPages")) ?? 1,
   } satisfies FuelCardAllocationReport;
 }

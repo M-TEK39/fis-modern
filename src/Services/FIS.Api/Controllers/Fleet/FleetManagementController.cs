@@ -21,6 +21,9 @@ namespace FIS.Api.Controllers;
 [Authorize]
 public class FleetManagementController : BaseApiController
 {
+    private const int DefaultReportPageSize = 24;
+    private const int MaximumReportPageSize = 100;
+
     private readonly FuelCardManagementService _fuelCardService;
     private readonly ILogger<FleetManagementController> _logger;
 
@@ -164,12 +167,20 @@ public class FleetManagementController : BaseApiController
     /// </summary>
     [HttpGet("reports/fuelcard-allocation")]
     public async Task<ActionResult<FuelCardReportResponse>> GetFuelCardReport(
-        [FromQuery] int? siteCode = null
+        [FromQuery] int? siteCode = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize,
+        CancellationToken cancellationToken = default
     )
     {
         try
         {
-            var report = await _fuelCardService.GetAllocationReportAsync(siteCode);
+            var report = await _fuelCardService.GetAllocationReportAsync(
+                siteCode,
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumReportPageSize),
+                cancellationToken
+            );
 
             return Ok(
                 new FuelCardReportResponse

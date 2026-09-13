@@ -34,6 +34,16 @@ export type TowingPage = {
   totalPages: number;
 };
 
+export type TowingReportPage = {
+  data: TowingRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export const DEFAULT_TOWING_REPORT_PAGE_SIZE = 24;
+
 export type TowTruckRecord = {
   towCode: number;
   area: string | null;
@@ -355,6 +365,30 @@ function pageNumber(value: unknown, fallback: number) {
   return parsed !== null && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function mapTowingReportPage(payload: unknown, fallbackPage: number): TowingReportPage {
+  if (!isRecord(payload)) {
+    throw new TowingApiError("invalid-response", "The FIS API returned an invalid towing report.");
+  }
+
+  const data = mapTowingCollection(payload);
+  const page = pageNumber(getValue(payload, "page", "Page"), fallbackPage);
+  const pageSize = pageNumber(
+    getValue(payload, "pageSize", "PageSize"),
+    DEFAULT_TOWING_REPORT_PAGE_SIZE,
+  );
+  const total = Math.max(0, asNumber(getValue(payload, "total", "Total")) ?? data.length);
+  return {
+    data,
+    page,
+    pageSize,
+    total,
+    totalPages: pageNumber(
+      getValue(payload, "totalPages", "TotalPages"),
+      Math.max(1, Math.ceil(total / pageSize)),
+    ),
+  };
+}
+
 export async function getTowTruckPage(
   search: string,
   page = 1,
@@ -429,33 +463,55 @@ export async function deleteTowTruckAgainstApi(towCode: number) {
   await requestApi(`api/towing/tow-trucks/${encodeURIComponent(towCode)}`, { method: "DELETE" });
 }
 
-export async function getTowingRequestReport(startDate: string, endDate: string) {
-  return mapTowingCollection(
-    (await readJson(
-      await requestApi("api/towing/reports/request", {
-        method: "POST",
-        body: JSON.stringify({ StartDate: startDate, EndDate: endDate }),
+export async function getTowingRequestReport(options: {
+  startDate: string;
+  endDate: string;
+  callReference?: number;
+  page?: number;
+}): Promise<TowingReportPage> {
+  const page = Math.max(1, Math.trunc(options.page ?? 1));
+  const payload = await readJson(
+    await requestApi("api/towing/reports/request", {
+      method: "POST",
+      body: JSON.stringify({
+        StartDate: options.startDate,
+        EndDate: options.endDate,
+        CallReference: options.callReference,
+        Page: page,
+        PageSize: DEFAULT_TOWING_REPORT_PAGE_SIZE,
       }),
-    )) as JsonRecord,
-  ).filter((item) => item !== null);
+    }),
+  );
+  return mapTowingReportPage(payload, page);
 }
 
-export async function getAllTowtruckReport() {
-  const payload = await readJson(await requestApi("api/towing/reports/towtruck/all"));
-  return mapTowingCollection(payload);
+export async function getAllTowtruckReport(page = 1): Promise<TowingReportPage> {
+  const params = new URLSearchParams({
+    page: String(Math.max(1, Math.trunc(page))),
+    pageSize: String(DEFAULT_TOWING_REPORT_PAGE_SIZE),
+  });
+  const payload = await readJson(await requestApi(`api/towing/reports/towtruck/all?${params}`));
+  return mapTowingReportPage(payload, page);
 }
 
 export async function getFirmDateTowingReport(
   firmName: string,
   startDate: string,
   endDate: string,
-) {
-  return mapTowingCollection(
-    await readJson(
-      await requestApi("api/towing/reports/firm-date", {
-        method: "POST",
-        body: JSON.stringify({ FirmName: firmName, StartDate: startDate, EndDate: endDate }),
+  page = 1,
+): Promise<TowingReportPage> {
+  const requestedPage = Math.max(1, Math.trunc(page));
+  const payload = await readJson(
+    await requestApi("api/towing/reports/firm-date", {
+      method: "POST",
+      body: JSON.stringify({
+        FirmName: firmName,
+        StartDate: startDate,
+        EndDate: endDate,
+        Page: requestedPage,
+        PageSize: DEFAULT_TOWING_REPORT_PAGE_SIZE,
       }),
-    ),
+    }),
   );
+  return mapTowingReportPage(payload, requestedPage);
 }

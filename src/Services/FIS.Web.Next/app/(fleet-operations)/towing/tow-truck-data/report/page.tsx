@@ -9,8 +9,9 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 import { getSession } from "@/lib/auth/session";
-import { getTowTrucks, TowingApiError } from "@/lib/api/fleet-operations/api-towing";
+import { getTowTruckPage, TowingApiError } from "@/lib/api/fleet-operations/api-towing";
 
 const TOWING_ROLE = "Towing";
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-ZA", {
@@ -27,7 +28,15 @@ function valueOrDash(value: string | null | undefined) {
   return value?.trim() || "-";
 }
 
-async function TowTruckReportPageContent() {
+function pageValue(value: string | string[] | undefined) {
+  const first = Array.isArray(value) ? value[0] : value;
+  const page = Number(first);
+  return Number.isSafeInteger(page) && page > 0 ? page : 1;
+}
+
+async function TowTruckReportPageContent({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
@@ -56,7 +65,9 @@ async function TowTruckReportPageContent() {
       </main>
     );
   try {
-    const trucks = await getTowTrucks();
+    const query = await searchParams;
+    const page = pageValue(query.page);
+    const report = await getTowTruckPage("", page, 24);
     const printedAt = DATE_TIME_FORMATTER.format(new Date());
     return (
       <main className="page-shell vehicle-page-shell">
@@ -84,7 +95,7 @@ async function TowTruckReportPageContent() {
                 ]}
               />
               <tbody>
-                {trucks.map((truck) => (
+                {report.items.map((truck) => (
                   <tr key={truck.towCode}>
                     <td>{valueOrDash(truck.name)}</td>
                     <td>{valueOrDash(truck.telephone)}</td>
@@ -95,6 +106,11 @@ async function TowTruckReportPageContent() {
               </tbody>
             </table>
           </div>
+          <ReportPagination
+            report={report}
+            pageHref={(requestedPage) => `/towing/tow-truck-data/report?page=${requestedPage}`}
+            label="Tow truck report pages"
+          />
           <div className="vehicle-footer-actions">
             <Link className="button button-secondary" href="/towing/tow-truck-data">
               Maintenance
@@ -131,10 +147,12 @@ async function TowTruckReportPageContent() {
   }
 }
 
-export default function TowTruckReportPage() {
+export default function TowTruckReportPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<Record<string, string | string[] | undefined>> }>) {
   return (
     <Suspense fallback={<RouteLoading />}>
-      <TowTruckReportPageContent />
+      <TowTruckReportPageContent searchParams={searchParams} />
     </Suspense>
   );
 }

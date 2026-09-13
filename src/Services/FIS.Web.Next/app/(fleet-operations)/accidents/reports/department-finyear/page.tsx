@@ -8,10 +8,12 @@ import {
   AccidentReportFormActions,
   AccidentReportFormError,
   AccidentReportLoadingState,
+  AccidentReportPagination,
   AccidentReportPageShell,
 } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   authorizeAccidentReport,
+  getAccidentReportPageState,
   loadAccidentReport,
 } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import VehicleTable, {
@@ -20,6 +22,7 @@ import VehicleTable, {
 import {
   getAccidentDepartmentFinancialYearReport,
   type AccidentDepartmentFinancialYearGarageMode,
+  type AccidentReportPage,
   type AccidentVehicleReportRow,
 } from "@/lib/api/fleet-operations/api-accidents";
 type QueryValue = string | string[] | undefined;
@@ -126,9 +129,11 @@ const departmentFinancialYearColumns: readonly VehicleTableColumn<AccidentVehicl
 
 function DepartmentFinancialYearReportTable({
   rows,
+  total,
   financialYear,
 }: {
   rows: AccidentVehicleReportRow[];
+  total: number;
   financialYear: string;
 }) {
   const totalRepairCost = rows.reduce((total, row) => total + (row.costOfRepair ?? 0), 0);
@@ -145,7 +150,7 @@ function DepartmentFinancialYearReportTable({
             Department/Site Accident Report for {financialYear}
           </h2>
         </div>
-        <span className="form-hint">{rows.length} record(s)</span>
+        <span className="form-hint">{total} record(s)</span>
       </div>
       <div className="vehicle-table-wrapper">
         <VehicleTable
@@ -156,7 +161,7 @@ function DepartmentFinancialYearReportTable({
         />
       </div>
       <div className="vehicle-pagination-meta">
-        <span>Total Number: {rows.length}</span>
+        <span>Total Number: {total}</span>
         <span>Total Cost of Repairs: R {formatAmount(totalRepairCost)}</span>
       </div>
     </section>
@@ -211,25 +216,44 @@ function DepartmentFinancialYearReportForm({
 }
 
 function DepartmentFinancialYearReportResults({
-  rows,
+  query,
+  report,
   financialYear,
 }: {
-  rows: AccidentVehicleReportRow[] | null;
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentVehicleReportRow> | null;
   financialYear: string;
 }) {
-  return rows ? (
-    rows.length > 0 ? (
-      <DepartmentFinancialYearReportTable rows={rows} financialYear={financialYear} />
-    ) : (
-      <section className="vehicle-empty-state" aria-live="polite">
-        <p className="eyebrow">No accidents found</p>
-        <h2>No accidents matched the selected filters.</h2>
-        <p className="muted-copy">
-          Update the garage, book / financial year, or department/site and submit again.
-        </p>
-      </section>
-    )
-  ) : null;
+  if (report === null) {
+    return null;
+  }
+
+  const rows = report.items;
+  return rows.length > 0 ? (
+    <>
+      <DepartmentFinancialYearReportTable
+        rows={rows}
+        total={report.total}
+        financialYear={financialYear}
+      />
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/department-finyear"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
+    </>
+  ) : (
+    <section className="vehicle-empty-state" aria-live="polite">
+      <p className="eyebrow">No accidents found</p>
+      <h2>No accidents matched the selected filters.</h2>
+      <p className="muted-copy">
+        Update the garage, book / financial year, or department/site and submit again.
+      </p>
+    </section>
+  );
 }
 
 async function DepartmentFinancialYearReportContent({
@@ -267,11 +291,19 @@ async function DepartmentFinancialYearReportContent({
     : shouldRun && (financialYear.length === 0 || financialYear.length > 5)
       ? "Enter a book / financial year between 1 and 5 characters, for example 02/03."
       : null;
+  const { page, pageSize } = getAccidentReportPageState(query);
 
   const report = await loadAccidentReport({
     shouldRun,
     errorMessage,
-    load: () => getAccidentDepartmentFinancialYearReport(departmentNumber, garage, financialYear),
+    load: () =>
+      getAccidentDepartmentFinancialYearReport(
+        departmentNumber,
+        garage,
+        financialYear,
+        page,
+        pageSize,
+      ),
     context: "FIS accident department financial year report failed",
   });
   if (report.status === "unauthorized") {
@@ -285,8 +317,6 @@ async function DepartmentFinancialYearReportContent({
       />
     );
   }
-  const rows = report.data;
-
   return (
     <>
       <DepartmentFinancialYearReportForm
@@ -295,7 +325,11 @@ async function DepartmentFinancialYearReportContent({
         departmentNumber={departmentNumber}
         errorMessage={errorMessage}
       />
-      <DepartmentFinancialYearReportResults rows={rows} financialYear={financialYear} />
+      <DepartmentFinancialYearReportResults
+        query={query}
+        report={report.data}
+        financialYear={financialYear}
+      />
       <AccidentReportFooter clearHref="/accidents/reports/department-finyear" />
     </>
   );

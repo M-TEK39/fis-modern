@@ -45,7 +45,8 @@ public class TaxiController : BaseApiController
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 24,
         [FromQuery] bool pendingOnly = false,
-        [FromQuery] bool jiaPickupOnly = false
+        [FromQuery] bool jiaPickupOnly = false,
+        [FromQuery] string? search = null
     )
     {
         try
@@ -55,7 +56,8 @@ public class TaxiController : BaseApiController
                     Math.Max(1, page),
                     Math.Clamp(pageSize, 1, 100),
                     pendingOnly,
-                    jiaPickupOnly
+                    jiaPickupOnly,
+                    string.IsNullOrWhiteSpace(search) ? null : search.Trim()
                 )
             );
             return Ok(

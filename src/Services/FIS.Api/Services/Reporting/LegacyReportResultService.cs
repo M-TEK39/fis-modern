@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
@@ -19,10 +20,23 @@ public interface ILegacyReportResultService
         IDictionary<string, string?> filters,
         CancellationToken cancellationToken = default
     );
+
+    Task<LegacyReportResultDto> GetPagedReportAsync(
+        string reportKey,
+        IDictionary<string, string?> filters,
+        int page = 1,
+        int pageSize = 24,
+        bool includeAll = false,
+        CancellationToken cancellationToken = default
+    );
 }
 
 public sealed class LegacyReportResultService : ILegacyReportResultService
 {
+    private const string InternalPageFilter = "__legacyReportPage";
+    private const string InternalPageSizeFilter = "__legacyReportPageSize";
+    private const string InternalIncludeAllFilter = "__legacyReportIncludeAll";
+
     private readonly FisDbContext _context;
     private readonly IAssetVerificationRepository _assetVerificationRepository;
     private readonly IWorkshopRepository _workshopRepository;
@@ -64,6 +78,50 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         CancellationToken cancellationToken = default
     )
     {
+        // Keep the legacy entry point safe for any future caller: table-shaped
+        // reports default to the same 24-row database page as the HTTP route.
+        // Full result sets must opt into GetPagedReportAsync(includeAll: true),
+        // which is reserved for the explicit export path.
+        return await GetReportCoreAsync(
+            reportKey,
+            filters,
+            new LegacyReportPagination(1, 24, false),
+            cancellationToken
+        );
+    }
+
+    public async Task<LegacyReportResultDto> GetPagedReportAsync(
+        string reportKey,
+        IDictionary<string, string?> filters,
+        int page = 1,
+        int pageSize = 24,
+        bool includeAll = false,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var compatibilityFilters = new Dictionary<string, string?>(
+            filters,
+            StringComparer.OrdinalIgnoreCase
+        );
+        compatibilityFilters.Remove("page");
+        compatibilityFilters.Remove("pageSize");
+        compatibilityFilters.Remove("includeAll");
+
+        return await GetReportCoreAsync(
+            reportKey,
+            compatibilityFilters,
+            new LegacyReportPagination(page, pageSize, includeAll),
+            cancellationToken
+        );
+    }
+
+    private async Task<LegacyReportResultDto> GetReportCoreAsync(
+        string reportKey,
+        IDictionary<string, string?> filters,
+        LegacyReportPagination? pagination,
+        CancellationToken cancellationToken
+    )
+    {
         var resolvedKey = ResolveReportKeyAlias(reportKey);
 
         if (!_definitions.TryGetValue(resolvedKey, out var definition))
@@ -72,7 +130,14 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             throw new KeyNotFoundException($"Legacy report key '{reportKey}' is not mapped.");
         }
 
-        if (definition.StoredProcedureItem is not null)
+        // The legacy procedures return a complete reader and do not expose a
+        // compatible count/page contract. A normal table request must therefore
+        // use the guarded table fallback, where the count and page both execute
+        // in SQL. Full exports retain the historical procedure path.
+        if (
+            definition.StoredProcedureItem is not null
+            && (pagination is null || pagination.IncludeAll)
+        )
         {
             try
             {
@@ -87,7 +152,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                     // canonical, but the legacy menu exposes separate keys for
                     // the province/department/site variants.
                     storedProcResult.ReportKey = reportKey;
-                    return storedProcResult;
+                    return ApplyPagination(storedProcResult, pagination);
                 }
             }
             catch (SqlException ex) when (ex.Number == 2812)
@@ -111,7 +176,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             }
         }
 
-        var fallback = await definition.Fallback(filters, cancellationToken);
+        var fallbackFilters = AddInternalPaginationFilters(filters, pagination);
+        var fallback = await definition.Fallback(fallbackFilters, cancellationToken);
         fallback.ReportKey = reportKey;
         fallback.Title = string.IsNullOrWhiteSpace(fallback.Title)
             ? definition.Title
@@ -127,8 +193,152 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         {
             fallback.ApproximationReason = null;
         }
-        fallback.TotalCount = fallback.Rows.Count;
-        return fallback;
+        return ApplyPagination(fallback, pagination);
+    }
+
+    private static LegacyReportResultDto ApplyPagination(
+        LegacyReportResultDto result,
+        LegacyReportPagination? pagination
+    )
+    {
+        if (result.IsDatabasePaged)
+        {
+            return result;
+        }
+
+        result.TotalCount = result.Rows.Count;
+
+        if (pagination is null)
+        {
+            result.Page = 1;
+            result.PageSize = Math.Max(1, result.TotalCount);
+            return result;
+        }
+
+        var requestedPage = Math.Max(1, pagination.Page);
+        var pageSize = Math.Clamp(pagination.PageSize, 1, 100);
+        if (pagination.IncludeAll)
+        {
+            result.Page = 1;
+            result.PageSize = Math.Max(1, result.TotalCount);
+            return result;
+        }
+
+        result.PageSize = pageSize;
+        result.Page = Math.Min(requestedPage, result.TotalPages);
+        var skip = checked((result.Page - 1) * pageSize);
+        result.Rows = result.Rows.Skip(skip).Take(pageSize).ToList();
+        return result;
+    }
+
+    private static IDictionary<string, string?> AddInternalPaginationFilters(
+        IDictionary<string, string?> filters,
+        LegacyReportPagination? pagination
+    )
+    {
+        var result = new Dictionary<string, string?>(filters, StringComparer.OrdinalIgnoreCase);
+        if (pagination is null)
+        {
+            return result;
+        }
+
+        result[InternalPageFilter] = pagination.Page.ToString(CultureInfo.InvariantCulture);
+        result[InternalPageSizeFilter] = pagination.PageSize.ToString(CultureInfo.InvariantCulture);
+        result[InternalIncludeAllFilter] = pagination.IncludeAll
+            ? bool.TrueString
+            : bool.FalseString;
+        return result;
+    }
+
+    private static LegacyReportPagination? GetFallbackPagination(
+        IDictionary<string, string?> filters
+    )
+    {
+        if (!GetInt(filters, InternalPageFilter).HasValue)
+        {
+            return null;
+        }
+
+        return new LegacyReportPagination(
+            GetInt(filters, InternalPageFilter) ?? 1,
+            GetInt(filters, InternalPageSizeFilter) ?? 24,
+            bool.TryParse(GetString(filters, InternalIncludeAllFilter), out var includeAll)
+                && includeAll
+        );
+    }
+
+    private static LegacyReportPageWindow GetPageWindow(
+        LegacyReportPagination? pagination,
+        int totalCount
+    )
+    {
+        if (pagination is null || pagination.IncludeAll)
+        {
+            return new LegacyReportPageWindow(1, Math.Max(1, totalCount), 0, false);
+        }
+
+        var pageSize = Math.Clamp(pagination.PageSize, 1, 100);
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+        var page = Math.Min(Math.Max(1, pagination.Page), totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+        return new LegacyReportPageWindow(page, pageSize, skip, true);
+    }
+
+    private static LegacyReportResultDto CreateDatabasePagedResult<T>(
+        string title,
+        string legacyTarget,
+        bool isApproximate,
+        string? approximationReason,
+        IEnumerable<T> rows,
+        int totalCount,
+        LegacyReportPageWindow pageWindow,
+        params LegacyProjectionColumn[] columns
+    )
+    {
+        var result = CreateDynamicResult(
+            title,
+            legacyTarget,
+            isApproximate,
+            approximationReason,
+            rows,
+            columns
+        );
+        result.TotalCount = totalCount;
+        result.Page = pageWindow.Page;
+        result.PageSize = pageWindow.PageSize;
+        result.IsDatabasePaged = pageWindow.IsPaged;
+        return result;
+    }
+
+    private async Task<LegacyReportDatabasePage<T>> MaterializeDatabasePageAsync<T>(
+        IQueryable<T> query,
+        Func<IQueryable<T>, IOrderedQueryable<T>> order,
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken,
+        int? legacyUnpagedLimit = null
+    )
+    {
+        var pagination = GetFallbackPagination(filters);
+        if (pagination is null || pagination.IncludeAll)
+        {
+            var orderedQuery = order(query);
+            var rows = legacyUnpagedLimit.HasValue
+                ? await orderedQuery.Take(legacyUnpagedLimit.Value).ToListAsync(cancellationToken)
+                : await orderedQuery.ToListAsync(cancellationToken);
+            return new LegacyReportDatabasePage<T>(
+                rows,
+                rows.Count,
+                new LegacyReportPageWindow(1, Math.Max(1, rows.Count), 0, false)
+            );
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var pageWindow = GetPageWindow(pagination, totalCount);
+        var pagedRows = await order(query)
+            .Skip((int)pageWindow.Skip)
+            .Take(pageWindow.PageSize)
+            .ToListAsync(cancellationToken);
+        return new LegacyReportDatabasePage<T>(pagedRows, totalCount, pageWindow);
     }
 
     private static string ResolveReportKeyAlias(string reportKey)
@@ -1086,7 +1296,11 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             new LegacyStoredProcedureParameter("@SearchType", (int)searchType, DbType.Int32),
             // Passing DBNull is intentional.  The legacy procedure returns no
             // rows when a filtered route is called without its required id.
-            new LegacyStoredProcedureParameter("@id", id.HasValue ? id.Value : DBNull.Value, DbType.Int32),
+            new LegacyStoredProcedureParameter(
+                "@id",
+                id.HasValue ? id.Value : DBNull.Value,
+                DbType.Int32
+            ),
         };
     }
 
@@ -1101,6 +1315,11 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         AssetListSearchType? forcedSearchType
     )
     {
+        if (GetFallbackPagination(filters) is { IncludeAll: false })
+        {
+            return await BuildPagedAssetListAsync(filters, forcedSearchType, cancellationToken);
+        }
+
         var search = GetString(filters, "search") ?? GetString(filters, "txtNum");
         var mode = GetString(filters, "mode") ?? "GG";
         var searchType = forcedSearchType ?? ResolveAssetListSearchType(filters);
@@ -1217,38 +1436,35 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 .ToListAsync(cancellationToken);
 
             vehicles = projectedVehicles
-                .Select(row =>
-                    new AssetListFallbackVehicle(
-                        row.registration_number,
-                        row.fleet_number,
-                        row.Status
-                            ?? (row.vmf_code > 0 ? "Unknown" : null),
-                        row.ModelDescription,
-                        row.colour,
-                        JoinLegacyClassName(
-                            row.ClassCode?.ToString(CultureInfo.InvariantCulture),
-                            row.ClassDescription
-                        ),
-                        row.engine_number_1,
-                        row.chassis_number,
-                        row.barcode,
-                        row.year_manufactured,
-                        row.purchase_date,
-                        row.purchase_amount,
-                        row.SourceName,
-                        string.IsNullOrWhiteSpace(row.HireType) ? "Empty" : row.HireType,
-                        row.vmf_code,
-                        row.SiteCode,
-                        row.SiteName,
-                        row.SiteDepartmentNumber,
-                        row.SiteResponsiblePerson,
-                        row.SiteTelephone,
-                        row.SiteNetAddress,
-                        row.DepartmentNumber,
-                        row.DepartmentDescription,
-                        row.ProvinceName
-                    )
-                )
+                .Select(row => new AssetListFallbackVehicle(
+                    row.registration_number,
+                    row.fleet_number,
+                    row.Status ?? (row.vmf_code > 0 ? "Unknown" : null),
+                    row.ModelDescription,
+                    row.colour,
+                    JoinLegacyClassName(
+                        row.ClassCode?.ToString(CultureInfo.InvariantCulture),
+                        row.ClassDescription
+                    ),
+                    row.engine_number_1,
+                    row.chassis_number,
+                    row.barcode,
+                    row.year_manufactured,
+                    row.purchase_date,
+                    row.purchase_amount,
+                    row.SourceName,
+                    string.IsNullOrWhiteSpace(row.HireType) ? "Empty" : row.HireType,
+                    row.vmf_code,
+                    row.SiteCode,
+                    row.SiteName,
+                    row.SiteDepartmentNumber,
+                    row.SiteResponsiblePerson,
+                    row.SiteTelephone,
+                    row.SiteNetAddress,
+                    row.DepartmentNumber,
+                    row.DepartmentDescription,
+                    row.ProvinceName
+                ))
                 .ToList();
         }
 
@@ -1258,48 +1474,49 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             // Keep the compatibility query bounded to the assets in this
             // report.  Chunking avoids SQL Server's 2,100-parameter limit
             // while ensuring a print/export never scans unrelated contracts.
-            foreach (var vmfCodeChunk in vehicles
-                .Select(vehicle => vehicle.VmfCode)
-                .Distinct()
-                .Chunk(1000))
+            foreach (
+                var vmfCodeChunk in vehicles
+                    .Select(vehicle => vehicle.VmfCode)
+                    .Distinct()
+                    .Chunk(1000)
+            )
             {
-                var chunkContracts = await _context.Contracts
-                    .AsNoTracking()
+                var chunkContracts = await _context
+                    .Contracts.AsNoTracking()
                     .Where(contract =>
                         !contract.is_deleted
                         && (contract.still_current == "y" || contract.still_current == "n")
                         && vmfCodeChunk.Contains(contract.vmf_code)
                     )
-                    .Select(contract =>
-                        new AssetListFallbackContract(
-                            contract.vmf_code,
-                            contract.still_current,
-                            contract.contract_code,
-                            contract.contract_type,
-                            contract.start_date,
-                            contract.end_date,
-                            contract.target_return_date,
-                            contract.Charged_Until,
-                            contract.site_code,
-                            contract.user_code
-                        )
-                    )
+                    .Select(contract => new AssetListFallbackContract(
+                        contract.vmf_code,
+                        contract.still_current,
+                        contract.contract_code,
+                        contract.contract_type,
+                        contract.start_date,
+                        contract.end_date,
+                        contract.target_return_date,
+                        contract.Charged_Until,
+                        contract.site_code,
+                        contract.user_code
+                    ))
                     .ToListAsync(cancellationToken);
 
                 contracts.AddRange(chunkContracts);
             }
         }
 
-        var contractTypeDescriptions = contracts.Count == 0
-            ? new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
-            : await _context.ContractTypes
-                .AsNoTracking()
-                .ToDictionaryAsync(
-                    contractType => contractType.type_name,
-                    contractType => contractType.CT_description,
-                    StringComparer.OrdinalIgnoreCase,
-                    cancellationToken
-                );
+        var contractTypeDescriptions =
+            contracts.Count == 0
+                ? new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                : await _context
+                    .ContractTypes.AsNoTracking()
+                    .ToDictionaryAsync(
+                        contractType => contractType.type_name,
+                        contractType => contractType.CT_description,
+                        StringComparer.OrdinalIgnoreCase,
+                        cancellationToken
+                    );
 
         var rows = new List<AssetListFallbackRow>();
         foreach (var vehicle in vehicles)
@@ -1310,13 +1527,14 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             var openContracts = vehicleContracts
                 .Where(contract => IsCurrentContract(contract.StillCurrent))
                 .ToList();
-            var selectedContracts = openContracts.Count > 0
-                ? openContracts
-                : vehicleContracts
-                    .Where(contract => !IsCurrentContract(contract.StillCurrent))
-                    .OrderByDescending(contract => contract.ContractCode)
-                    .Take(1)
-                    .ToList();
+            var selectedContracts =
+                openContracts.Count > 0
+                    ? openContracts
+                    : vehicleContracts
+                        .Where(contract => !IsCurrentContract(contract.StillCurrent))
+                        .OrderByDescending(contract => contract.ContractCode)
+                        .Take(1)
+                        .ToList();
 
             if (selectedContracts.Count == 0)
             {
@@ -1337,8 +1555,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             GetAssetListFallbackTarget(searchType),
             true,
             "The legacy asset-list stored procedure was unavailable; the compatibility query preserves its status, source, location, contract selection, columns, and order.",
-            rows
-                .OrderBy(row => row.Province)
+            rows.OrderBy(row => row.Province)
                 .ThenBy(row => row.SiteName)
                 .ThenBy(row => row.Registration)
                 .ThenBy(row => row.VmfCode),
@@ -1377,13 +1594,298 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         );
     }
 
+    private async Task<LegacyReportResultDto> BuildPagedAssetListAsync(
+        IDictionary<string, string?> filters,
+        AssetListSearchType? forcedSearchType,
+        CancellationToken cancellationToken
+    )
+    {
+        var search = GetString(filters, "search") ?? GetString(filters, "txtNum");
+        var mode = GetString(filters, "mode") ?? "GG";
+        var searchType = forcedSearchType ?? ResolveAssetListSearchType(filters);
+        var filterId = GetAssetListFilterId(filters, searchType);
+        if (searchType != AssetListSearchType.All && !filterId.HasValue)
+        {
+            return CreateDatabasePagedResult(
+                GetAssetListFallbackTitle(searchType),
+                GetAssetListFallbackTarget(searchType),
+                true,
+                "The filtered asset-list report needs its legacy scope identifier.",
+                Array.Empty<AssetListFallbackRow>(),
+                0,
+                GetPageWindow(GetFallbackPagination(filters), 0),
+                AssetListColumns
+            );
+        }
+
+        var contracts = _context
+            .Contracts.AsNoTracking()
+            .Where(contract =>
+                !contract.is_deleted
+                && (contract.still_current == "y" || contract.still_current == "n")
+            );
+        var currentContracts = contracts.Where(contract => contract.still_current == "y");
+        var historicContracts = contracts.Where(contract => contract.still_current == "n");
+
+        var query =
+            from vehicle in _context.Vehicles.AsNoTracking()
+            join model in _context.Models.AsNoTracking()
+                on vehicle.model_code equals model.model_code
+                into vehicleModels
+            from model in vehicleModels.DefaultIfEmpty()
+            join vehicleClass in _context.Classes.AsNoTracking()
+                on model.class_code equals vehicleClass.class_code
+                into vehicleClasses
+            from vehicleClass in vehicleClasses.DefaultIfEmpty()
+            join status in _context.VehicleStatuses.AsNoTracking()
+                on vehicle.vehicle_status_code equals status.vehicle_status_code
+                into vehicleStatuses
+            from status in vehicleStatuses.DefaultIfEmpty()
+            join source in _context.VehicleSources.AsNoTracking()
+                on vehicle.vs_code equals (byte?)source.vs_code
+                into vehicleSources
+            from source in vehicleSources.DefaultIfEmpty()
+            join type in _context.VehicleTypes.AsNoTracking()
+                on vehicle.type_code equals type.type_code
+                into vehicleTypes
+            from type in vehicleTypes.DefaultIfEmpty()
+            join site in _context.Sites.AsNoTracking()
+                on vehicle.location_code equals site.Site_code
+                into vehicleSites
+            from site in vehicleSites.DefaultIfEmpty()
+            join department in _context.Departments.AsNoTracking()
+                on site.Depatrment_code equals department.department_code
+                into vehicleDepartments
+            from department in vehicleDepartments.DefaultIfEmpty()
+            join province in _context.Provinces.AsNoTracking()
+                on site.province_code equals (byte?)province.province_code
+                into vehicleProvinces
+            from province in vehicleProvinces.DefaultIfEmpty()
+            join currentContract in currentContracts
+                on vehicle.vmf_code equals currentContract.vmf_code
+                into vehicleCurrentContracts
+            from currentContract in vehicleCurrentContracts.DefaultIfEmpty()
+            from historicContract in historicContracts
+                .Where(contract => contract.vmf_code == vehicle.vmf_code && currentContract == null)
+                .OrderByDescending(contract => contract.contract_code)
+                .Take(1)
+                .DefaultIfEmpty()
+            where
+                !vehicle.is_deleted
+                && vehicle.vehicle_status_code >= 0
+                && vehicle.vehicle_status_code <= 1
+            select new
+            {
+                vehicle.vmf_code,
+                vehicle.registration_number,
+                vehicle.fleet_number,
+                vehicle.colour,
+                vehicle.engine_number_1,
+                vehicle.chassis_number,
+                vehicle.barcode,
+                vehicle.year_manufactured,
+                vehicle.purchase_date,
+                vehicle.purchase_amount,
+                Status = status != null ? status.status_description : null,
+                ModelDescription = model != null ? model.model_description : null,
+                ClassCode = vehicleClass != null ? (short?)vehicleClass.class_code : null,
+                ClassDescription = vehicleClass != null ? vehicleClass.description : null,
+                SourceName = source != null ? source.name : null,
+                HireType = type != null ? type.type_description : null,
+                SiteCode = site != null ? (short?)site.Site_code : null,
+                SiteName = site != null ? site.description : null,
+                SiteDepartmentNumber = site != null ? site.Department_number : null,
+                SiteResponsiblePerson = site != null ? site.res_person : null,
+                SiteTelephone = site != null ? site.telephone : null,
+                SiteNetAddress = site != null ? site.net_address : null,
+                DepartmentNumber = department != null ? department.Department_number : null,
+                DepartmentDescription = department != null ? department.description : null,
+                ProvinceCode = site != null ? (byte?)site.province_code : null,
+                ProvinceName = province != null ? province.province_name : null,
+                ContractStillCurrent = currentContract != null ? currentContract.still_current
+                : historicContract != null ? historicContract.still_current
+                : null,
+                ContractCode = currentContract != null ? (int?)currentContract.contract_code
+                : historicContract != null ? historicContract.contract_code
+                : null,
+                ContractTypeCode = currentContract != null ? currentContract.contract_type
+                : historicContract != null ? historicContract.contract_type
+                : null,
+                ContractStartDate = currentContract != null ? (DateTime?)currentContract.start_date
+                : historicContract != null ? historicContract.start_date
+                : null,
+                ContractEndDate = currentContract != null ? currentContract.end_date
+                : historicContract != null ? historicContract.end_date
+                : null,
+                ContractExpectedReturnDate = currentContract != null
+                    ? currentContract.target_return_date
+                : historicContract != null ? historicContract.target_return_date
+                : null,
+                ContractChargedUntil = currentContract != null ? currentContract.Charged_Until
+                : historicContract != null ? historicContract.Charged_Until
+                : null,
+            };
+
+        if (searchType == AssetListSearchType.Province)
+        {
+            query = query.Where(row => row.ProvinceCode == (byte?)filterId!.Value);
+        }
+        else if (searchType == AssetListSearchType.Department)
+        {
+            query = query.Where(row =>
+                row.SiteCode.HasValue
+                && _context.Sites.Any(site =>
+                    site.Site_code == row.SiteCode.Value
+                    && site.Depatrment_code == (short?)filterId!.Value
+                )
+            );
+        }
+        else if (searchType == AssetListSearchType.Site)
+        {
+            query = query.Where(row => row.SiteCode == (short?)filterId!.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var matchingVmfCodes = await ResolveVehicleVmfCodesAsync(
+                search,
+                mode,
+                cancellationToken
+            );
+            query = query.Where(row => matchingVmfCodes.Contains(row.vmf_code));
+        }
+
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.ProvinceName)
+                    .ThenBy(row => row.SiteName)
+                    .ThenBy(row => row.registration_number)
+                    .ThenBy(row => row.ContractCode)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken
+        );
+        var contractTypeCodes = page
+            .Rows.Select(row => row.ContractTypeCode)
+            .Where(typeCode => !string.IsNullOrWhiteSpace(typeCode))
+            .Cast<string>()
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var contractTypes =
+            contractTypeCodes.Length == 0
+                ? new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                : await _context
+                    .ContractTypes.AsNoTracking()
+                    .Where(type => contractTypeCodes.Contains(type.type_name))
+                    .ToDictionaryAsync(
+                        type => type.type_name,
+                        type => type.CT_description,
+                        StringComparer.OrdinalIgnoreCase,
+                        cancellationToken
+                    );
+        var rows = page.Rows.Select(row =>
+            CreateAssetListFallbackRow(
+                new AssetListFallbackVehicle(
+                    row.registration_number,
+                    row.fleet_number,
+                    row.Status ?? (row.vmf_code > 0 ? "Unknown" : null),
+                    row.ModelDescription,
+                    row.colour,
+                    JoinLegacyClassName(
+                        row.ClassCode?.ToString(CultureInfo.InvariantCulture),
+                        row.ClassDescription
+                    ),
+                    row.engine_number_1,
+                    row.chassis_number,
+                    row.barcode,
+                    row.year_manufactured,
+                    row.purchase_date,
+                    row.purchase_amount,
+                    row.SourceName,
+                    string.IsNullOrWhiteSpace(row.HireType) ? "Empty" : row.HireType,
+                    row.vmf_code,
+                    row.SiteCode,
+                    row.SiteName,
+                    row.SiteDepartmentNumber,
+                    row.SiteResponsiblePerson,
+                    row.SiteTelephone,
+                    row.SiteNetAddress,
+                    row.DepartmentNumber,
+                    row.DepartmentDescription,
+                    row.ProvinceName
+                ),
+                row.ContractCode.HasValue
+                    ? new AssetListFallbackContract(
+                        row.vmf_code,
+                        row.ContractStillCurrent,
+                        row.ContractCode.Value,
+                        row.ContractTypeCode,
+                        row.ContractStartDate ?? default,
+                        row.ContractEndDate,
+                        row.ContractExpectedReturnDate,
+                        row.ContractChargedUntil,
+                        row.SiteCode ?? default,
+                        null
+                    )
+                    : null,
+                contractTypes
+            )
+        );
+
+        return CreateDatabasePagedResult(
+            GetAssetListFallbackTitle(searchType),
+            GetAssetListFallbackTarget(searchType),
+            true,
+            "The legacy asset-list stored procedure was unavailable; the compatibility query preserves its status, source, location, contract selection, columns, and order.",
+            rows,
+            page.TotalCount,
+            page.PageWindow,
+            AssetListColumns
+        );
+    }
+
+    private static readonly LegacyProjectionColumn[] AssetListColumns =
+    [
+        Column("registration", row => row.Registration),
+        Column("ggnumber", row => row.GgNumber),
+        Column("vehicle status", row => row.VehicleStatus),
+        Column("model description", row => row.ModelDescription),
+        Column("colour", row => row.Colour),
+        Column("class description", row => row.ClassDescription),
+        Column("engine number", row => row.EngineNumber),
+        Column("chassis number", row => row.ChassisNumber),
+        Column("bar code", row => row.BarCode),
+        Column("year manufactured", row => row.YearManufactured),
+        Column("datepurchased", row => row.DatePurchased),
+        Column("purchaseamount", row => row.PurchaseAmount),
+        Column("Sourced Via", row => row.SourcedVia),
+        Column("Hire Type", row => row.HireType),
+        Column("vmf_code", row => row.VmfCode),
+        Column("contract stillcurrent", row => row.ContractStillCurrent),
+        Column("contract_code", row => row.ContractCode),
+        Column("contract_type", row => row.ContractType),
+        Column("contract startdate", row => row.ContractStartDate),
+        Column("contract enddate", row => row.ContractEndDate),
+        Column("expected return date", row => row.ExpectedReturnDate),
+        Column("contract chargeduntil", row => row.ContractChargedUntil),
+        Column("contract period/months", row => row.ContractPeriodMonths),
+        Column("months used", row => row.MonthsUsed),
+        Column("months -remaining / +Exceeded", row => row.MonthsRemainingOrExceeded),
+        Column("contract lastmodifiedby", row => row.ContractLastModifiedBy),
+        Column("departmentname", row => row.DepartmentName),
+        Column("sitename", row => row.SiteName),
+        Column("site responsible person", row => row.SiteResponsiblePerson),
+        Column("province", row => row.Province),
+        Column("Tariff:(dailypool / permanent / monthlyLease)", row => row.FixedTariff),
+        Column("kilo tariff", row => row.KiloTariff),
+    ];
+
     private static string GetAssetListFallbackTitle(AssetListSearchType searchType) =>
         searchType switch
         {
-            AssetListSearchType.Province =>
-                "Asset List: New & In-Service Vehicles By Province",
-            AssetListSearchType.Department =>
-                "Asset List: New & In-Service Vehicles By Department",
+            AssetListSearchType.Province => "Asset List: New & In-Service Vehicles By Province",
+            AssetListSearchType.Department => "Asset List: New & In-Service Vehicles By Department",
             AssetListSearchType.Site => "Asset List: New & In-Service Vehicles By Site",
             _ => "Asset List: New & In-Service Vehicles",
         };
@@ -1408,6 +1910,42 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var province = GetString(filters, "province") ?? GetString(filters, "cmbDeptName");
         var from = GetDate(filters, "from") ?? GetDate(filters, "sverdate");
         var to = GetDate(filters, "to") ?? GetDate(filters, "everdate");
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            var page = await _assetVerificationRepository.GetReportPageAsync(
+                new AssetVerificationReportPageQuery(
+                    AssetVerificationReportMode.PerSiteProvinceDate,
+                    siteCode,
+                    province,
+                    from,
+                    to,
+                    pagination.Page,
+                    pagination.PageSize
+                ),
+                cancellationToken
+            );
+            return CreateDatabasePagedResult(
+                "Report Per Site / Province / Verification Date",
+                "Asset_Verification/RPT_asset_verification_2a.aspx",
+                true,
+                null,
+                page.Items,
+                page.Total,
+                new LegacyReportPageWindow(page.Page, page.PageSize, 0, true),
+                Column("Asset Verification Code", row => row.AssetVerificationCode),
+                Column("Vehicle Reg No", row => row.VehicleRegNo),
+                Column("Department", row => row.DepartmentName),
+                Column("Site", row => row.SiteName),
+                Column("Province", row => row.Province),
+                Column("Vehicle Make", row => row.VehicleMake),
+                Column("Vehicle Model", row => row.VehicleModel),
+                Column("Licence Expiry Date", row => row.LicenceExpiryDate),
+                Column("Last Verified", row => row.DateLastVerified),
+                Column("Status", row => row.Status),
+                Column("Responsible Manager", row => row.ResponsibleManager),
+                Column("Current KM", row => row.CurrentKm)
+            );
+        }
         var rows = await GetAssetVerificationReportRowsAsync(cancellationToken);
 
         var filteredRows = rows.Where(row => !siteCode.HasValue || row.SiteCode == siteCode)
@@ -1453,6 +1991,32 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         CancellationToken cancellationToken
     )
     {
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            var page = await _assetVerificationRepository.GetReportPageAsync(
+                new AssetVerificationReportPageQuery(
+                    AssetVerificationReportMode.NotVerified,
+                    Page: pagination.Page,
+                    PageSize: pagination.PageSize
+                ),
+                cancellationToken
+            );
+            return CreateDatabasePagedResult(
+                "Vehicles Not Verified",
+                "Asset_Verification/RPT_Not_Verified.aspx",
+                true,
+                null,
+                page.Items,
+                page.Total,
+                new LegacyReportPageWindow(page.Page, page.PageSize, 0, true),
+                Column("VMF Code", row => row.VmfCode),
+                Column("GG Number", row => row.FleetNumber),
+                Column("GP Number", row => row.RegistrationNumber),
+                Column("Department", row => row.DepartmentName),
+                Column("Site", row => row.SiteName),
+                Column("Site Code", row => row.SiteCode)
+            );
+        }
         var records = (await _assetVerificationRepository.GetAllAsync()).ToList();
         var verifiedVmfCodes = records
             .Where(record => record.vmf_code.HasValue && record.vmf_code.Value > 0)
@@ -1540,6 +2104,38 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     {
         var from = GetDate(filters, "from") ?? GetDate(filters, "startDate");
         var to = GetDate(filters, "to") ?? GetDate(filters, "endDate");
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            var page = await _assetVerificationRepository.GetReportPageAsync(
+                new AssetVerificationReportPageQuery(
+                    AssetVerificationReportMode.VerifiedByDateRange,
+                    FromDate: from,
+                    ToDate: to,
+                    Page: pagination.Page,
+                    PageSize: pagination.PageSize
+                ),
+                cancellationToken
+            );
+            return CreateDatabasePagedResult(
+                "Vehicles Verified By Date Range - Excel Report",
+                "Asset_Verification/RPT_vehicles_verified_by_date_2.aspx",
+                true,
+                null,
+                page.Items,
+                page.Total,
+                new LegacyReportPageWindow(page.Page, page.PageSize, 0, true),
+                Column("Vehicle Reg No", row => row.VehicleRegNo),
+                Column("Department", row => row.DepartmentName),
+                Column("Site", row => row.SiteName),
+                Column("Province", row => row.Province),
+                Column("Vehicle Make", row => row.VehicleMake),
+                Column("Vehicle Model", row => row.VehicleModel),
+                Column("Licence Expiry Date", row => row.LicenceExpiryDate),
+                Column("Barcode", row => row.Barcode),
+                Column("Last Verified", row => row.DateLastVerified),
+                Column("Status", row => row.Status)
+            );
+        }
         var rows = await GetAssetVerificationReportRowsAsync(cancellationToken);
 
         var filteredRows = rows.Where(row => row.DateLastVerified.HasValue)
@@ -1677,6 +2273,9 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     private static string? NormalizeAssetIdentifier(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private static string ToSqlContainsPattern(string value) =>
+        $"%{value.Replace("~", "~~", StringComparison.Ordinal).Replace("%", "~%", StringComparison.Ordinal).Replace("_", "~_", StringComparison.Ordinal).Replace("[", "~[", StringComparison.Ordinal)}%";
+
     private async Task<LegacyReportResultDto> BuildAuditTrailAsync(
         IDictionary<string, string?> filters,
         CancellationToken cancellationToken
@@ -1723,17 +2322,22 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             );
         }
 
-        var rows = await query
-            .OrderByDescending(row => row.performed_at)
-            .Take(5000)
-            .ToListAsync(cancellationToken);
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows => rows.OrderByDescending(row => row.performed_at).ThenByDescending(row => row.id),
+            filters,
+            cancellationToken,
+            5000
+        );
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             "Audit Trail Reports",
             "Finance/GetFinancialAditTrailReportsDateRange.aspx",
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("Audit ID", row => row.id),
             Column("Report Type", row => row.ReportType),
             Column("Action", row => row.action),
@@ -1764,155 +2368,174 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var vehicle = GetString(filters, "vehicle");
         var capturedBy = GetString(filters, "capturedby");
 
-        var contractRows = await (
-            from contract in _context.Contracts.AsNoTracking()
-            join vehicleMaster in _context.Vehicles.AsNoTracking()
-                on contract.vmf_code equals vehicleMaster.vmf_code
-                into contractVehicles
-            from vehicleMaster in contractVehicles.DefaultIfEmpty()
-            where
-                !contract.is_deleted
-                && contract.date_created.Date >= startDate
-                && contract.date_created.Date <= endDate
-            select new CaptureActivityRow(
-                "Contracts",
-                contract.contract_code.ToString(),
-                vehicleMaster != null ? vehicleMaster.fleet_number : null,
-                vehicleMaster != null ? vehicleMaster.registration_number : null,
-                contract.site_code,
-                contract.created_by_user_code,
-                contract.date_created,
-                $"Contract {contract.contract_code} ({contract.still_current})"
-            )
-        ).ToListAsync(cancellationToken);
+        var logsheetColumns = await GetReportTableColumnsAsync("Logsheets", cancellationToken);
+        var logbookColumns = await GetReportTableColumnsAsync("logbook", cancellationToken);
+        var sources = new List<string>
+        {
+            """
+                SELECT
+                    N'Contracts' AS [Module],
+                    CONVERT(nvarchar(32), c.[contract_code]) AS [Record ID],
+                    v.[fleet_number] AS [GG Number],
+                    v.[registration_number] AS [GP Number],
+                    c.[site_code] AS [Site Code],
+                    c.[created_by_user_code] AS [Captured By],
+                    c.[date_created] AS [Date Captured],
+                    CONCAT(N'Contract ', c.[contract_code], N' (', c.[still_current], N')') AS [Description],
+                    CONCAT(N'C-', c.[contract_code]) AS [__RowKey]
+                FROM [dbo].[contract] AS c
+                LEFT JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = c.[vmf_code]
+                WHERE c.[is_deleted] = 0
+                """,
+            """
+                SELECT
+                    N'Trip Authority' AS [Module],
+                    CONVERT(nvarchar(32), t.[trip_authority_code]) AS [Record ID],
+                    v.[fleet_number] AS [GG Number],
+                    v.[registration_number] AS [GP Number],
+                    c.[site_code] AS [Site Code],
+                    t.[created_by_user_code] AS [Captured By],
+                    t.[date_created] AS [Date Captured],
+                    t.[trip_reason] AS [Description],
+                    CONCAT(N'T-', t.[trip_authority_code]) AS [__RowKey]
+                FROM [dbo].[trip_authorities] AS t
+                LEFT JOIN [dbo].[contract] AS c ON c.[contract_code] = t.[contract_code]
+                LEFT JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = c.[vmf_code]
+                WHERE t.[is_deleted] = 0
+                """,
+        };
 
-        var tripRows = await (
-            from trip in _context.Trips.AsNoTracking()
-            join contract in _context.Contracts.AsNoTracking()
-                on trip.contract_code equals contract.contract_code
-                into tripContracts
-            from contract in tripContracts.DefaultIfEmpty()
-            join vehicleMaster in _context.Vehicles.AsNoTracking()
-                on contract.vmf_code equals vehicleMaster.vmf_code
-                into tripVehicles
-            from vehicleMaster in tripVehicles.DefaultIfEmpty()
-            where
-                !trip.is_deleted
-                && trip.date_created.Date >= startDate
-                && trip.date_created.Date <= endDate
-            select new CaptureActivityRow(
-                "Trip Authority",
-                trip.trip_authority_code.ToString(),
-                vehicleMaster != null ? vehicleMaster.fleet_number : null,
-                vehicleMaster != null ? vehicleMaster.registration_number : null,
-                contract != null ? contract.site_code : (short?)null,
-                trip.created_by_user_code,
-                trip.date_created,
-                trip.trip_reason
-            )
-        ).ToListAsync(cancellationToken);
+        if (logsheetColumns.Contains("date_created"))
+        {
+            sources.Add(
+                $"""
+                SELECT
+                    N'ELS Logsheet' AS [Module],
+                    CONVERT(nvarchar(32), l.[log_code]) AS [Record ID],
+                    v.[fleet_number] AS [GG Number],
+                    v.[registration_number] AS [GP Number],
+                    l.[site_code] AS [Site Code],
+                    {OptionalReportColumn(
+                    logsheetColumns,
+                    "l",
+                    "created_by_user_code",
+                    "Captured By",
+                    "int"
+                )},
+                    l.[date_created] AS [Date Captured],
+                    CONCAT(N'Month ', CONVERT(char(7), l.[month], 120)) AS [Description],
+                    CONCAT(N'E-', l.[log_code]) AS [__RowKey]
+                FROM [dbo].[Logsheets] AS l
+                LEFT JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = l.[vmf_code]
+                WHERE {(
+                    logsheetColumns.Contains("is_deleted")
+                        ? "COALESCE(l.[is_deleted], 0) = 0"
+                        : "1 = 1"
+                )}
+                """
+            );
+        }
 
-        var vehicles = (await _vehicleRepository.GetAllAsync()).ToDictionary(vehicle =>
-            vehicle.vmf_code
-        );
-        var logsheetRows = (await _logsheetRepository.GetAllAsync())
-            .Where(logsheet =>
-                !logsheet.is_deleted
-                && logsheet.date_created.Date >= startDate
-                && logsheet.date_created.Date <= endDate
-            )
-            .Select(logsheet =>
-            {
-                vehicles.TryGetValue(logsheet.vmf_code, out var vehicle);
-                return new CaptureActivityRow(
-                    "ELS Logsheet",
-                    logsheet.log_code.ToString(),
-                    vehicle?.fleet_number,
-                    vehicle?.registration_number,
-                    logsheet.site_code,
-                    logsheet.created_by_user_code,
-                    logsheet.date_created,
-                    $"Month {logsheet.month:yyyy-MM}"
-                );
-            })
-            .ToList();
+        if (logbookColumns.Contains("date_created"))
+        {
+            sources.Add(
+                $"""
+                SELECT
+                    N'Logbook' AS [Module],
+                    CONVERT(nvarchar(32), l.[logbookcode]) AS [Record ID],
+                    v.[fleet_number] AS [GG Number],
+                    v.[registration_number] AS [GP Number],
+                    l.[site_code] AS [Site Code],
+                    {OptionalReportColumn(
+                    logbookColumns,
+                    "l",
+                    "created_by_user_code",
+                    "Captured By",
+                    "int"
+                )},
+                    l.[date_created] AS [Date Captured],
+                    l.[lb_comment] AS [Description],
+                    CONCAT(N'L-', l.[logbookcode]) AS [__RowKey]
+                FROM [dbo].[logbook] AS l
+                LEFT JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = l.[vmf_code]
+                WHERE {(
+                    logbookColumns.Contains("is_deleted")
+                        ? "COALESCE(l.[is_deleted], 0) = 0"
+                        : "1 = 1"
+                )}
+                """
+            );
+        }
 
-        var logbookRows = (await _logbookRepository.GetAllAsync())
-            .Where(logbook =>
-                !logbook.is_deleted
-                && logbook.date_created.Date >= startDate
-                && logbook.date_created.Date <= endDate
-            )
-            .Select(logbook =>
-            {
-                vehicles.TryGetValue(logbook.vmf_code ?? 0, out var vehicle);
-                return new CaptureActivityRow(
-                    "Logbook",
-                    logbook.logbookcode.ToString(),
-                    vehicle?.fleet_number,
-                    vehicle?.registration_number,
-                    logbook.site_code,
-                    logbook.created_by_user_code,
-                    logbook.date_created,
-                    logbook.lb_comment
-                );
-            })
-            .ToList();
-
-        IEnumerable<CaptureActivityRow> rows = contractRows
-            .Concat(tripRows)
-            .Concat(logsheetRows)
-            .Concat(logbookRows);
-
+        var predicates = new List<string>
+        {
+            "activity.[Date Captured] >= @captureStart",
+            "activity.[Date Captured] < @captureEndExclusive",
+        };
+        var parameters = new List<ReportParameter>
+        {
+            new("@captureStart", DbType.DateTime, startDate),
+            new("@captureEndExclusive", DbType.DateTime, endDate.AddDays(1)),
+        };
         if (!string.Equals(module, "all", StringComparison.OrdinalIgnoreCase))
         {
-            rows = rows.Where(row =>
-                string.Equals(row.Module, module, StringComparison.OrdinalIgnoreCase)
-            );
+            predicates.Add("activity.[Module] = @captureModule");
+            parameters.Add(new("@captureModule", DbType.String, module));
         }
-
         if (site.HasValue)
         {
-            rows = rows.Where(row => row.SiteCode == site.Value);
+            predicates.Add("activity.[Site Code] = @captureSite");
+            parameters.Add(new("@captureSite", DbType.Int16, site.Value));
         }
-
         if (!string.IsNullOrWhiteSpace(vehicle))
         {
-            var term = vehicle.Trim();
-            rows = rows.Where(row => Contains(row.GgNumber, term) || Contains(row.GpNumber, term));
+            predicates.Add(
+                "(activity.[GG Number] LIKE @captureVehicle ESCAPE '~' OR activity.[GP Number] LIKE @captureVehicle ESCAPE '~')"
+            );
+            parameters.Add(
+                new("@captureVehicle", DbType.String, ToSqlContainsPattern(vehicle.Trim()))
+            );
         }
-
         if (!string.IsNullOrWhiteSpace(capturedBy))
         {
-            var term = capturedBy.Trim();
-            rows = rows.Where(row =>
-                (row.CapturedByUserCode?.ToString() ?? string.Empty).Contains(
-                    term,
-                    StringComparison.OrdinalIgnoreCase
-                )
+            predicates.Add(
+                "CONVERT(nvarchar(32), activity.[Captured By]) LIKE @capturedBy ESCAPE '~'"
+            );
+            parameters.Add(
+                new("@capturedBy", DbType.String, ToSqlContainsPattern(capturedBy.Trim()))
             );
         }
 
-        var orderedRows = rows.OrderByDescending(row => row.DateCaptured)
-            .ThenBy(row => row.Module)
-            .Take(5000)
-            .ToList();
-
-        return CreateDynamicResult(
+        var sql = $"""
+            SELECT
+                activity.[Module],
+                activity.[Record ID],
+                activity.[GG Number],
+                activity.[GP Number],
+                activity.[Site Code],
+                activity.[Captured By],
+                activity.[Date Captured],
+                activity.[Description],
+                activity.[__RowKey]
+            FROM (
+                {string.Join("\nUNION ALL\n", sources)}
+            ) AS activity
+            WHERE {string.Join(" AND ", predicates)}
+            ORDER BY activity.[Date Captured] DESC, activity.[Module], activity.[__RowKey]
+            """;
+        var result = await ExecutePagedRawReportQueryAsync(
+            "capture-activity",
             "Capture Activity",
             "Modern report (no direct legacy equivalent)",
-            true,
-            "No direct legacy equivalent exists; this dynamic result stays modern but no longer uses hard-coded typed table columns.",
-            orderedRows,
-            Column("Module", row => row.Module),
-            Column("Record ID", row => row.RecordId),
-            Column("GG Number", row => row.GgNumber),
-            Column("GP Number", row => row.GpNumber),
-            Column("Site Code", row => row.SiteCode),
-            Column("Captured By", row => row.CapturedByUserCode),
-            Column("Date Captured", row => row.DateCaptured),
-            Column("Description", row => row.Description)
+            sql,
+            parameters,
+            filters,
+            cancellationToken
         );
+        result.IsApproximate = true;
+        result.ApproximationReason =
+            "No direct legacy equivalent exists; this dynamic result merges compatible capture timestamps across legacy-backed tables.";
+        return result;
     }
 
     private async Task<LegacyReportResultDto> BuildContractHistoryAsync(
@@ -1966,18 +2589,24 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             query = query.Where(row => matchingVmfCodes.Contains(row.vmf_code));
         }
 
-        var rows = await query
-            .OrderByDescending(row => row.start_date)
-            .ThenByDescending(row => row.contract_code)
-            .Take(5000)
-            .ToListAsync(cancellationToken);
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderByDescending(row => row.start_date)
+                    .ThenByDescending(row => row.contract_code),
+            filters,
+            cancellationToken,
+            5000
+        );
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             "Contract History",
             "Logs/RPT_Contracts_per_vehicle.aspx",
             true,
             "Legacy contract history is a composite page. This dynamic grid flattens the same legacy-backed contract data.",
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("Contract Code", row => row.contract_code),
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
@@ -2059,18 +2688,25 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             query = query.Where(row => row.start_date.Date <= to.Value);
         }
 
-        var rows = await query
-            .OrderByDescending(row => row.start_date)
-            .ThenBy(row => row.fleet_number)
-            .Take(5000)
-            .ToListAsync(cancellationToken);
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderByDescending(row => row.start_date)
+                    .ThenBy(row => row.fleet_number)
+                    .ThenBy(row => row.contract_code),
+            filters,
+            cancellationToken,
+            5000
+        );
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             "Contracts Report",
             "/FISReports/Contracts/Contracts.aspx",
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("Contract Code", row => row.contract_code),
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
@@ -2196,7 +2832,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 cancellationToken
             ),
             "reissue-submission" => BuildFineReissueReportAsync(filters, cancellationToken),
-            "traffic-dept-detail" => BuildTrafficDeptReportAsync(cancellationToken),
+            "traffic-dept-detail" => BuildTrafficDeptReportAsync(filters, cancellationToken),
             "dept-site-period" => BuildFineSummaryReportAsync(
                 filters,
                 "Fines Report for a Department (or Site)",
@@ -2334,12 +2970,13 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         }
 
         var sql =
-            $"{BuildFineDetailSelect(fineColumns, trafficDeptColumns)} WHERE {string.Join(" AND ", predicates)} ORDER BY f.[Offence_date], f.[Receive_gg_date] DESC";
+            $"{BuildFineDetailSelect(fineColumns, trafficDeptColumns)} WHERE {string.Join(" AND ", predicates)} ORDER BY f.[Offence_date], f.[Receive_gg_date] DESC, f.[Fine_code]";
         return await ExecuteFineReportQueryAsync(
             title,
             legacyTarget,
             sql,
             parameters,
+            filters,
             cancellationToken
         );
     }
@@ -2360,17 +2997,19 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         }
 
         var sql =
-            $"{BuildFineReissueSelect(fineColumns)} WHERE {string.Join(" AND ", predicates)} ORDER BY f.[Offence_date], f.[Receive_gg_date] DESC";
+            $"{BuildFineReissueSelect(fineColumns)} WHERE {string.Join(" AND ", predicates)} ORDER BY f.[Offence_date], f.[Receive_gg_date] DESC, f.[Fine_code]";
         return await ExecuteFineReportQueryAsync(
             "Submission to Re-Issue a Traffic Fine",
             "fines/RPT_letter_main_Fines.aspx",
             sql,
             parameters,
+            filters,
             cancellationToken
         );
     }
 
     private async Task<LegacyReportResultDto> BuildTrafficDeptReportAsync(
+        IDictionary<string, string?> filters,
         CancellationToken cancellationToken
     )
     {
@@ -2381,12 +3020,14 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var predicates = trafficDeptColumns.Contains("is_deleted")
             ? "WHERE [is_deleted] = 0"
             : string.Empty;
-        var sql = $"{BuildTrafficDeptSelect(trafficDeptColumns)} {predicates} ORDER BY [Traf_name]";
+        var sql =
+            $"{BuildTrafficDeptSelect(trafficDeptColumns)} {predicates} ORDER BY [Traf_name], [Traffic_dept_code]";
         return await ExecuteFineReportQueryAsync(
             "Traffic Dept Information",
             "fines/RPT_traffic_all_report.aspx",
             sql,
             Array.Empty<ReportParameter>(),
+            filters,
             cancellationToken
         );
     }
@@ -2454,12 +3095,13 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         }
 
         var sql =
-            $"{BuildFineSummarySelect()} WHERE {string.Join(" AND ", predicates)} ORDER BY s.[Department_number], v.[fleet_number], f.[Offence_date] DESC";
+            $"{BuildFineSummarySelect()} WHERE {string.Join(" AND ", predicates)} ORDER BY s.[Department_number], v.[fleet_number], f.[Offence_date] DESC, f.[Fine_code]";
         return await ExecuteFineReportQueryAsync(
             title,
             legacyTarget,
             sql,
             parameters,
+            filters,
             cancellationToken
         );
     }
@@ -2601,14 +3243,41 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The SQL is assembled only from fixed report templates and allowlisted runtime column projections; all report values are parameters."
     )]
-    private async Task<LegacyReportResultDto> ExecuteFineReportQueryAsync(
+    private Task<LegacyReportResultDto> ExecuteFineReportQueryAsync(
         string title,
         string legacyTarget,
         string sql,
         IReadOnlyList<ReportParameter> parameters,
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    ) =>
+        ExecutePagedRawReportQueryAsync(
+            "fines",
+            title,
+            legacyTarget,
+            sql,
+            parameters,
+            filters,
+            cancellationToken
+        );
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Each query is composed from a fixed legacy report template and allowlisted compatibility projections; values, count, and page controls are parameters."
+    )]
+    private async Task<LegacyReportResultDto> ExecutePagedRawReportQueryAsync(
+        string reportKey,
+        string title,
+        string legacyTarget,
+        string sql,
+        IReadOnlyList<ReportParameter> parameters,
+        IDictionary<string, string?> filters,
         CancellationToken cancellationToken
     )
     {
+        var pagination = GetFallbackPagination(filters);
+        var (selectSql, orderBySql) = SplitRawReportOrderBy(sql);
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)
@@ -2618,54 +3287,57 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
         try
         {
-            await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = sql;
-            foreach (var parameter in parameters)
+            var totalCount = 0;
+            LegacyReportPageWindow pageWindow;
+            if (pagination is not null && !pagination.IncludeAll)
             {
-                AddReportParameter(command, parameter.Name, parameter.Type, parameter.Value);
+                await using var countCommand = connection.CreateCommand();
+                countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                countCommand.CommandText =
+                    $"SELECT COUNT(1) FROM ({selectSql}) AS [legacy_report_count]";
+                AddReportParameters(countCommand, parameters);
+                totalCount = Convert.ToInt32(
+                    await countCommand.ExecuteScalarAsync(cancellationToken),
+                    CultureInfo.InvariantCulture
+                );
+                pageWindow = GetPageWindow(pagination, totalCount);
+            }
+            else
+            {
+                pageWindow = new LegacyReportPageWindow(1, 1, 0, false);
             }
 
-            var columns = new List<LegacyReportColumnDto>();
-            var rows = new List<Dictionary<string, string?>>(capacity: 128);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            var rowKeyOrdinal = -1;
-            for (var index = 0; index < reader.FieldCount; index++)
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            dataCommand.CommandText = pageWindow.IsPaged
+                ? $"{selectSql}\n{orderBySql}\nOFFSET @pageSkip ROWS FETCH NEXT @pageSize ROWS ONLY"
+                : sql;
+            AddReportParameters(dataCommand, parameters);
+            if (pageWindow.IsPaged)
             {
-                var header = reader.GetName(index);
-                if (string.Equals(header, "__RowKey", StringComparison.Ordinal))
-                {
-                    rowKeyOrdinal = index;
-                }
-                else
-                {
-                    columns.Add(new LegacyReportColumnDto { Key = header, Header = header });
-                }
+                AddReportParameter(dataCommand, "@pageSkip", DbType.Int64, pageWindow.Skip);
+                AddReportParameter(dataCommand, "@pageSize", DbType.Int32, pageWindow.PageSize);
             }
 
-            while (await reader.ReadAsync(cancellationToken))
+            var (columns, rows) = await ReadRawReportRowsAsync(dataCommand, cancellationToken);
+            if (!pageWindow.IsPaged)
             {
-                var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-                if (rowKeyOrdinal >= 0)
-                {
-                    row["__rowKey"] = FormatValue(reader[rowKeyOrdinal]);
-                }
-                foreach (var column in columns)
-                {
-                    row[column.Key] = FormatValue(reader[column.Key]);
-                }
-                rows.Add(row);
+                totalCount = rows.Count;
+                pageWindow = new LegacyReportPageWindow(1, Math.Max(1, totalCount), 0, false);
             }
 
             return new LegacyReportResultDto
             {
-                ReportKey = "fines",
+                ReportKey = reportKey,
                 Title = title,
                 LegacyTarget = legacyTarget,
                 IsApproximate = false,
                 Columns = columns,
                 Rows = rows,
-                TotalCount = rows.Count,
+                TotalCount = totalCount,
+                Page = pageWindow.Page,
+                PageSize = pageWindow.PageSize,
+                IsDatabasePaged = pageWindow.IsPaged,
             };
         }
         finally
@@ -2675,6 +3347,73 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 await connection.CloseAsync();
             }
         }
+    }
+
+    private static (string SelectSql, string OrderBySql) SplitRawReportOrderBy(string sql)
+    {
+        var normalizedSql = sql.Trim().TrimEnd(';');
+        var orderByIndex = normalizedSql.LastIndexOf(
+            "ORDER BY",
+            StringComparison.OrdinalIgnoreCase
+        );
+        if (orderByIndex < 0)
+        {
+            throw new InvalidOperationException(
+                "A paged legacy report query must provide a deterministic ORDER BY clause."
+            );
+        }
+
+        return (normalizedSql[..orderByIndex].TrimEnd(), normalizedSql[orderByIndex..].TrimEnd());
+    }
+
+    private static void AddReportParameters(
+        DbCommand command,
+        IReadOnlyList<ReportParameter> parameters
+    )
+    {
+        foreach (var parameter in parameters)
+        {
+            AddReportParameter(command, parameter.Name, parameter.Type, parameter.Value);
+        }
+    }
+
+    private static async Task<(
+        List<LegacyReportColumnDto> Columns,
+        List<Dictionary<string, string?>> Rows
+    )> ReadRawReportRowsAsync(DbCommand command, CancellationToken cancellationToken)
+    {
+        var columns = new List<LegacyReportColumnDto>();
+        var rows = new List<Dictionary<string, string?>>(capacity: 128);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var rowKeyOrdinal = -1;
+        for (var index = 0; index < reader.FieldCount; index++)
+        {
+            var header = reader.GetName(index);
+            if (string.Equals(header, "__RowKey", StringComparison.Ordinal))
+            {
+                rowKeyOrdinal = index;
+            }
+            else
+            {
+                columns.Add(new LegacyReportColumnDto { Key = header, Header = header });
+            }
+        }
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (rowKeyOrdinal >= 0)
+            {
+                row["__rowKey"] = FormatValue(reader[rowKeyOrdinal]);
+            }
+            foreach (var column in columns)
+            {
+                row[column.Key] = FormatValue(reader[column.Key]);
+            }
+            rows.Add(row);
+        }
+
+        return (columns, rows);
     }
 
     private async Task<HashSet<string>> GetReportTableColumnsAsync(
@@ -2895,6 +3634,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "losses/RPT_loss_per_vehicle.htm",
             sql,
             parameters,
+            filters,
             cancellationToken
         );
     }
@@ -2928,7 +3668,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             LEFT JOIN [dbo].[department] AS d ON d.[department_code] = s.[Depatrment_code]
             LEFT JOIN [dbo].[Loss_type] AS lt ON lt.[loss_type_code] = l.[loss_type_code]
             WHERE {string.Join(" AND ", predicates)}
-            ORDER BY lt.[loss_description], l.[loss_date], v.[fleet_number]
+            ORDER BY lt.[loss_description], l.[loss_date], v.[fleet_number], l.[loss_code]
             """;
 
         return await ExecuteLossReportQueryAsync(
@@ -2937,6 +3677,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "losses/RPT_All_Losses_menu.aspx",
             sql,
             parameters,
+            filters,
             cancellationToken
         );
     }
@@ -2974,7 +3715,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             LEFT JOIN [dbo].[site] AS s ON s.[Site_code] = l.[site_code]
             LEFT JOIN [dbo].[Loss_type] AS lt ON lt.[loss_type_code] = l.[loss_type_code]
             WHERE {string.Join(" AND ", predicates)}
-            ORDER BY v.[fleet_number], l.[loss_date]
+            ORDER BY v.[fleet_number], l.[loss_date], l.[loss_code]
             """;
 
         return await ExecuteLossReportQueryAsync(
@@ -2983,6 +3724,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             outstanding ? "losses/RPT_NoReport.aspx" : "losses/RPT_WithReport.aspx",
             sql,
             parameters,
+            filters,
             cancellationToken
         );
     }
@@ -3046,7 +3788,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             LEFT JOIN [dbo].[type] AS vt ON vt.[type_code] = v.[type_code]
             LEFT JOIN [dbo].[Loss_type] AS lt ON lt.[loss_type_code] = l.[loss_type_code]
             WHERE {string.Join(" AND ", predicates)}
-            ORDER BY s.[Department_number], v.[fleet_number], l.[loss_date]
+            ORDER BY s.[Department_number], v.[fleet_number], l.[loss_date], l.[loss_code]
             """;
 
         return await ExecuteLossReportQueryAsync(
@@ -3055,6 +3797,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "losses/RPT_dept_periodVIP_main_losses.aspx",
             sql,
             parameters,
+            filters,
             cancellationToken
         );
     }
@@ -3119,70 +3862,24 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The SQL is assembled only from fixed loss report templates; all filter values are parameters."
     )]
-    private async Task<LegacyReportResultDto> ExecuteLossReportQueryAsync(
+    private Task<LegacyReportResultDto> ExecuteLossReportQueryAsync(
         string reportKey,
         string title,
         string legacyTarget,
         string sql,
         IReadOnlyList<ReportParameter> parameters,
+        IDictionary<string, string?> filters,
         CancellationToken cancellationToken
-    )
-    {
-        var connection = _context.Database.GetDbConnection();
-        var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose)
-        {
-            await connection.OpenAsync(cancellationToken);
-        }
-
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = sql;
-            foreach (var parameter in parameters)
-            {
-                AddReportParameter(command, parameter.Name, parameter.Type, parameter.Value);
-            }
-
-            var columns = new List<LegacyReportColumnDto>();
-            var rows = new List<Dictionary<string, string?>>(capacity: 128);
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            for (var index = 0; index < reader.FieldCount; index++)
-            {
-                var header = reader.GetName(index);
-                columns.Add(new LegacyReportColumnDto { Key = header, Header = header });
-            }
-
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-                foreach (var column in columns)
-                {
-                    row[column.Key] = FormatValue(reader[column.Key]);
-                }
-                rows.Add(row);
-            }
-
-            return new LegacyReportResultDto
-            {
-                ReportKey = reportKey,
-                Title = title,
-                LegacyTarget = legacyTarget,
-                IsApproximate = false,
-                Columns = columns,
-                Rows = rows,
-                TotalCount = rows.Count,
-            };
-        }
-        finally
-        {
-            if (shouldClose)
-            {
-                await connection.CloseAsync();
-            }
-        }
-    }
+    ) =>
+        ExecutePagedRawReportQueryAsync(
+            reportKey,
+            title,
+            legacyTarget,
+            sql,
+            parameters,
+            filters,
+            cancellationToken
+        );
 
     private async Task<LegacyReportResultDto> BuildHighDistanceAllAsync(
         IDictionary<string, string?> filters,
@@ -3261,18 +3958,25 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             query = query.Where(row => row.DepartmentCode == departmentCode.Value);
         }
 
-        var rows = await query
-            .OrderByDescending(row => row.HighestKm ?? row.CurrentOdo)
-            .ThenBy(row => row.fleet_number)
-            .Take(5000)
-            .ToListAsync(cancellationToken);
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderByDescending(row => row.HighestKm ?? row.CurrentOdo)
+                    .ThenBy(row => row.fleet_number)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken,
+            5000
+        );
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             title,
             legacyTarget,
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
             Column("GP Number", row => row.registration_number),
@@ -3290,7 +3994,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         CancellationToken cancellationToken
     )
     {
-        var rows = await _context
+        var query = _context
             .Vehicles.AsNoTracking()
             .Where(vehicle =>
                 !vehicle.is_deleted
@@ -3306,9 +4010,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                     || (vehicle.km_3month_average.HasValue && vehicle.km_3month_average.Value < 0)
                 )
             )
-            .OrderBy(vehicle => vehicle.fleet_number)
-            .ThenBy(vehicle => vehicle.registration_number)
-            .Take(5000)
             .Select(vehicle => new
             {
                 vehicle.vmf_code,
@@ -3330,15 +4031,27 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 : (vehicle.km_3month_average.HasValue && vehicle.km_3month_average.Value < 0)
                     ? "3-month KM average is negative."
                 : "Quantity anomaly detected.",
-            })
-            .ToListAsync(cancellationToken);
+            });
 
-        return CreateDynamicResult(
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.fleet_number)
+                    .ThenBy(row => row.registration_number)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken,
+            5000
+        );
+
+        return CreateDatabasePagedResult(
             "Report to show incorrect calculated quantities",
             "Finance/GeneratedReports.aspx?key=9.3%20Report%20to%20show%20incorrect%20calculated%20quantities",
             true,
             "Legacy generated report output is approximated from vehicle odometer and quantity-related fields in vehicle_master.",
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
             Column("GP Number", row => row.registration_number),
@@ -3502,18 +4215,25 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             };
         }
 
-        var rows = await query
-            .OrderBy(row => row.fleet_number)
-            .ThenBy(row => row.registration_number)
-            .Take(5000)
-            .ToListAsync(cancellationToken);
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.fleet_number)
+                    .ThenBy(row => row.registration_number)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken,
+            5000
+        );
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             "Licence Reports",
             "License/RPTLicence.aspx",
             true,
             "Legacy licence module includes many report branches (GG/GP/register/engine/chassis/site/date). This approximation keeps the core licence record fields and lookup modes in one modern dynamic grid.",
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("GG Number", row => row.fleet_number),
             Column("GP Number", row => row.registration_number),
             Column("Vehicle Register Number", row => row.lic_register_number),
@@ -3825,56 +4545,62 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     )
     {
         var currentFinancialYear = GetFinancialYearKey(DateTime.Today);
+        var columns = await GetReportTableColumnsAsync("Logsheets", cancellationToken);
+        if (!columns.Contains("date_created"))
+        {
+            return CreateDatabasePagedResult(
+                "Previous Fin Year Manual Logsheet Kilos Captured in Current Fin Year",
+                "ShowReport.aspx?Item=PreviousFinYearManualLogsCapturedInCurrentFinYear",
+                true,
+                "The client-era Logsheets table does not provide a capture timestamp.",
+                Array.Empty<object>(),
+                0,
+                GetPageWindow(GetFallbackPagination(filters), 0),
+                Column("Log Code", row => row)
+            );
+        }
 
-        var vehicles = (await _vehicleRepository.GetAllAsync()).ToDictionary(vehicle =>
-            vehicle.vmf_code
-        );
-        var rows = (await _logsheetRepository.GetAllAsync())
-            .Where(logsheet =>
-                !logsheet.is_deleted
-                && GetFinancialYearKey(logsheet.date_created) == currentFinancialYear
-                && GetFinancialYearKey(logsheet.month) < currentFinancialYear
-            )
-            .OrderByDescending(logsheet => logsheet.date_created)
-            .ThenByDescending(logsheet => logsheet.log_code)
-            .Take(5000)
-            .Select(logsheet =>
-            {
-                vehicles.TryGetValue(logsheet.vmf_code, out var vehicle);
-                return new
-                {
-                    logsheet.log_code,
-                    logsheet.vmf_code,
-                    fleet_number = vehicle?.fleet_number,
-                    registration_number = vehicle?.registration_number,
-                    logsheet.month,
-                    logsheet.date_created,
-                    logsheet.rek_num,
-                    logsheet.start_odo,
-                    logsheet.end_odo,
-                    SiteCode = logsheet.Site?.Site_code ?? logsheet.site_code,
-                    Site = logsheet.Site?.description,
-                };
-            })
-            .ToList();
-
-        return CreateDynamicResult(
+        var activePredicate = columns.Contains("is_deleted")
+            ? "COALESCE(l.[is_deleted], 0) = 0"
+            : "1 = 1";
+        var financialYearSql = "CASE WHEN MONTH({0}) >= 4 THEN YEAR({0}) ELSE YEAR({0}) - 1 END";
+        var sql = $"""
+            SELECT
+                l.[log_code] AS [Log Code],
+                l.[vmf_code] AS [VMF Code],
+                v.[fleet_number] AS [GG Number],
+                v.[registration_number] AS [GP Number],
+                l.[month] AS [Logsheet Month],
+                l.[date_created] AS [Captured Date],
+                l.[rek_num] AS [Requisition Number],
+                l.[start_odo] AS [Start ODO],
+                l.[end_odo] AS [End ODO],
+                l.[site_code] AS [Site Code],
+                s.[description] AS [Site]
+            FROM [dbo].[Logsheets] AS l
+            LEFT JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = l.[vmf_code]
+            LEFT JOIN [dbo].[site] AS s ON s.[Site_code] = l.[site_code]
+            WHERE {activePredicate}
+              AND {string.Format(
+                CultureInfo.InvariantCulture,
+                financialYearSql,
+                "l.[date_created]"
+            )} = @currentFinancialYear
+              AND {string.Format(
+                CultureInfo.InvariantCulture,
+                financialYearSql,
+                "l.[month]"
+            )} < @currentFinancialYear
+            ORDER BY l.[date_created] DESC, l.[log_code] DESC
+            """;
+        return await ExecutePagedRawReportQueryAsync(
+            "previous-fin-year-manual-logs",
             "Previous Fin Year Manual Logsheet Kilos Captured in Current Fin Year",
             "ShowReport.aspx?Item=PreviousFinYearManualLogsCapturedInCurrentFinYear",
-            false,
-            null,
-            rows,
-            Column("Log Code", row => row.log_code),
-            Column("VMF Code", row => row.vmf_code),
-            Column("GG Number", row => row.fleet_number),
-            Column("GP Number", row => row.registration_number),
-            Column("Logsheet Month", row => row.month),
-            Column("Captured Date", row => row.date_created),
-            Column("Requisition Number", row => row.rek_num),
-            Column("Start ODO", row => row.start_odo),
-            Column("End ODO", row => row.end_odo),
-            Column("Site Code", row => row.SiteCode),
-            Column("Site", row => row.Site)
+            sql,
+            [new ReportParameter("@currentFinancialYear", DbType.Int32, currentFinancialYear)],
+            filters,
+            cancellationToken
         );
     }
 
@@ -3883,6 +4609,55 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         CancellationToken cancellationToken
     )
     {
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            var page = await _taxiRepository.GetReportPageAsync(
+                new TaxiReportPageQuery(
+                    TaxiReportKind.PreviousFinYearVipTaxi,
+                    pagination.Page,
+                    pagination.PageSize
+                )
+            );
+            var pagedRows = page.Items.Select(taxi => new
+            {
+                taxi.request_id,
+                taxi.rek_num,
+                taxi.official,
+                taxi.rank,
+                taxi.vmf_code,
+                taxi.date_required,
+                CapturedDate = taxi.date_created == default
+                    ? taxi.request_date ?? taxi.date_required
+                    : taxi.date_created,
+                taxi.contractor_id,
+                DepartmentCode = taxi.Department?.department_code,
+                Department = taxi.Department?.description,
+                SiteCode = taxi.Site?.Site_code,
+                Site = taxi.Site?.description,
+            });
+            return CreateDatabasePagedResult(
+                "Previous Fin Year VIP & Taxi Requisitions Captured in Current Fin Year",
+                "ShowReport.aspx?Item=PreviousFinYearKiloLogsCapturedInCurrentFinYear",
+                false,
+                null,
+                pagedRows,
+                page.Total,
+                new LegacyReportPageWindow(page.Page, page.PageSize, 0, true),
+                Column("Request ID", row => row.request_id),
+                Column("Requisition Number", row => row.rek_num),
+                Column("Official", row => row.official),
+                Column("Rank", row => row.rank),
+                Column("Vehicle", row => row.vmf_code),
+                Column("Date Required", row => row.date_required),
+                Column("Captured Date", row => row.CapturedDate),
+                Column("Contractor ID", row => row.contractor_id),
+                Column("Department Code", row => row.DepartmentCode),
+                Column("Department", row => row.Department),
+                Column("Site Code", row => row.SiteCode),
+                Column("Site", row => row.Site)
+            );
+        }
+
         var currentFinancialYear = GetFinancialYearKey(DateTime.Today);
 
         var taxis = await _taxiRepository.GetAllAsync();
@@ -3956,8 +4731,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 vehicle.registration_number,
                 scanDoc.period_begin,
                 scanDoc.period_end,
-                scanDoc.image,
                 DateUploaded = scanDoc.date_updated ?? scanDoc.date_created,
+                scanDoc.image,
             };
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -3970,43 +4745,53 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             query = query.Where(row => matchingVmfCodes.Contains(row.vmf_code));
         }
 
-        var rows = await query
-            .OrderBy(row => row.fleet_number)
-            .ThenBy(row => row.period_begin)
-            .ThenBy(row => row.registration_number)
-            .Take(5000)
-            .Select(row => new
-            {
-                row.vmf_code,
-                row.fleet_number,
-                row.registration_number,
-                row.period_begin,
-                row.period_end,
-                row.DateUploaded,
-                row.image,
-            })
-            .ToListAsync(cancellationToken);
+        query = query.Select(row => new
+        {
+            row.vmf_code,
+            row.fleet_number,
+            row.registration_number,
+            row.period_begin,
+            row.period_end,
+            row.DateUploaded,
+            row.image,
+        });
+
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.fleet_number)
+                    .ThenBy(row => row.period_begin)
+                    .ThenBy(row => row.registration_number)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken,
+            5000
+        );
 
         if (showSingleVehicle)
         {
-            return CreateDynamicResult(
+            return CreateDatabasePagedResult(
                 $"Registration Certificate for {search!.Trim().ToUpperInvariant()}",
                 "ScanDocs/ListOne2.aspx",
                 false,
                 null,
-                rows,
+                page.Rows,
+                page.TotalCount,
+                page.PageWindow,
                 Column("From", row => row.period_begin),
                 Column("To", row => row.period_end),
                 Column("Registration Certificate", row => row.image)
             );
         }
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             "Registration Certificates for All Vehicles",
             "ScanDocs/RPT_ListAll2.aspx",
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("Fleet Number", row => row.fleet_number),
             Column("Registration Number", row => row.registration_number),
             Column("From", row => row.period_begin),
@@ -4021,21 +4806,29 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         CancellationToken cancellationToken
     )
     {
-        var max = Math.Clamp(GetInt(filters, "max") ?? 300, 1, 5000);
-        var rows = await _context
+        var query = _context
             .Tariffs.AsNoTracking()
             .Where(tariff => !tariff.is_deleted && (tariff.year_manufactured ?? 0) <= 2007)
-            .OrderBy(tariff => tariff.class_code)
-            .ThenBy(tariff => tariff.year_manufactured)
-            .Take(max)
-            .ToListAsync(cancellationToken);
+            .AsQueryable();
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.class_code)
+                    .ThenBy(row => row.year_manufactured)
+                    .ThenBy(row => row.tariff_code),
+            filters,
+            cancellationToken,
+            Math.Clamp(GetInt(filters, "max") ?? 300, 1, 5000)
+        );
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             "Published Tariffs (2007 and Earlier)",
             "SelectFinancialYear.aspx + ShowReport.aspx?Item=Tariffs",
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("Tariff Code", row => row.tariff_code),
             Column("Class Code", row => row.class_code),
             Column("Year Manufactured", row => row.year_manufactured),
@@ -4056,8 +4849,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     {
         var from = GetDate(filters, "from")?.Date;
         var to = GetDate(filters, "to")?.Date;
-        var max = Math.Clamp(GetInt(filters, "max") ?? 300, 1, 5000);
-
         var query = _context.Tariffs.AsNoTracking().Where(tariff => !tariff.is_deleted);
         if (from.HasValue)
         {
@@ -4068,18 +4859,25 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             query = query.Where(tariff => tariff.effective_start_date.Date <= to.Value);
         }
 
-        var rows = await query
-            .OrderByDescending(tariff => tariff.effective_start_date)
-            .ThenBy(tariff => tariff.class_code)
-            .Take(max)
-            .ToListAsync(cancellationToken);
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderByDescending(row => row.effective_start_date)
+                    .ThenBy(row => row.class_code)
+                    .ThenBy(row => row.tariff_code),
+            filters,
+            cancellationToken,
+            Math.Clamp(GetInt(filters, "max") ?? 300, 1, 5000)
+        );
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             "Published Tariffs by Financial Year",
             "SelectFinancialYear.aspx + ShowReport.aspx?Item=Tariffs",
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("Tariff Code", row => row.tariff_code),
             Column("Class Code", row => row.class_code),
             Column("Year Manufactured", row => row.year_manufactured),
@@ -4097,9 +4895,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         CancellationToken cancellationToken
     )
     {
-        var max = Math.Clamp(GetInt(filters, "max") ?? 300, 1, 5000);
-
-        var rows = await (
+        var query =
             from tariff in _context.VehicleTariffs.AsNoTracking()
             join vehicle in _context.Vehicles.AsNoTracking()
                 on tariff.vmf_code equals vehicle.vmf_code
@@ -4123,17 +4919,28 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 tariff.fuel_kilo_tariff,
                 tariff.maintenance_kilometer_amount,
                 tariff.comment,
-            }
-        )
-            .Take(max)
-            .ToListAsync(cancellationToken);
+            };
 
-        return CreateDynamicResult(
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.fleet_number)
+                    .ThenBy(row => row.registration_number)
+                    .ThenByDescending(row => row.start_date)
+                    .ThenBy(row => row.vehicle_tariff_code),
+            filters,
+            cancellationToken,
+            Math.Clamp(GetInt(filters, "max") ?? 300, 1, 5000)
+        );
+
+        return CreateDatabasePagedResult(
             "Tariffs per Vehicle",
             "ShowReport.aspx?Item=TariffsPerVehicle",
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("Vehicle Tariff Code", row => row.vehicle_tariff_code),
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
@@ -4237,6 +5044,45 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     )
     {
         var search = GetString(filters, "search");
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            var page = await _taxiRepository.GetReportPageAsync(
+                new TaxiReportPageQuery(
+                    TaxiReportKind.ListPerDepartment,
+                    pagination.Page,
+                    pagination.PageSize,
+                    search
+                )
+            );
+            var pagedRows = page.Items.Select(
+                (taxi, index) =>
+                    new
+                    {
+                        Number = ((page.Page - 1) * page.PageSize) + index + 1,
+                        taxi.rek_num,
+                        taxi.department_code,
+                        Department = taxi.Department?.description,
+                        taxi.vmf_code,
+                        taxi.request_id,
+                    }
+            );
+            return CreateDatabasePagedResult(
+                "Report On All Taxis in various Departments",
+                "Taxis/RPT_list_of_taxis_per_department.aspx",
+                true,
+                "Legacy report joins taxis via vehicle/logsheet to derive department text. This approximation uses taxis + department mappings and preserves requisition + department output.",
+                pagedRows,
+                page.Total,
+                new LegacyReportPageWindow(page.Page, page.PageSize, 0, true),
+                Column("No.", row => row.Number),
+                Column("Requisition Number", row => row.rek_num),
+                Column("Department Code", row => row.department_code),
+                Column("Department", row => row.Department),
+                Column("VMF Code", row => row.vmf_code),
+                Column("Request ID", row => row.request_id)
+            );
+        }
+
         var taxis = await _taxiRepository.GetAllAsync();
         cancellationToken.ThrowIfCancellationRequested();
         var query = taxis.Select(taxi => new
@@ -4319,6 +5165,45 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     )
     {
         var search = GetString(filters, "search");
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            var page = await _taxiRepository.GetReportPageAsync(
+                new TaxiReportPageQuery(
+                    TaxiReportKind.ListInServicePerDepartment,
+                    pagination.Page,
+                    pagination.PageSize,
+                    search
+                )
+            );
+            var pagedRows = page.Items.Select(
+                (taxi, index) =>
+                    new
+                    {
+                        Number = ((page.Page - 1) * page.PageSize) + index + 1,
+                        taxi.rek_num,
+                        taxi.department_code,
+                        Department = taxi.Department?.description,
+                        taxi.vmf_code,
+                        taxi.request_id,
+                    }
+            );
+            return CreateDatabasePagedResult(
+                "Report On All Taxis in service in various Departments",
+                "Taxis/RPT_list_of_taxis_inservice_per_department.aspx",
+                true,
+                "Legacy report filters on vehicle_status_code = 1. This approximation applies the same in-service status constraint.",
+                pagedRows,
+                page.Total,
+                new LegacyReportPageWindow(page.Page, page.PageSize, 0, true),
+                Column("No.", row => row.Number),
+                Column("Requisition Number", row => row.rek_num),
+                Column("Department Code", row => row.department_code),
+                Column("Department", row => row.Department),
+                Column("VMF Code", row => row.vmf_code),
+                Column("Request ID", row => row.request_id)
+            );
+        }
+
         var taxis = await _taxiRepository.GetAllAsync();
         var vehicles = await _vehicleRepository.GetAllAsync();
         cancellationToken.ThrowIfCancellationRequested();
@@ -4402,6 +5287,56 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     )
     {
         var search = GetString(filters, "search");
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            var page = await _taxiRepository.GetReportPageAsync(
+                new TaxiReportPageQuery(
+                    TaxiReportKind.Financial,
+                    pagination.Page,
+                    pagination.PageSize,
+                    search
+                )
+            );
+            var pagedRows = page.Items.Select(taxi => new
+            {
+                taxi.request_id,
+                taxi.rek_num,
+                taxi.official,
+                taxi.rank,
+                taxi.vmf_code,
+                Company = taxi.address_1,
+                taxi.date_required,
+                Department = taxi.Department?.description,
+                Site = taxi.Site?.description,
+                taxi.contractor_id,
+                taxi.flight,
+                taxi.address_2,
+                taxi.address_3,
+            });
+            return CreateDatabasePagedResult(
+                "Financial Reports: Taxis",
+                "Taxis/Taxi_Fin_reports.aspx",
+                true,
+                "Legacy taxi financial report pages are custom. This dynamic approximation uses the underlying legacy taxi request data.",
+                pagedRows,
+                page.Total,
+                new LegacyReportPageWindow(page.Page, page.PageSize, 0, true),
+                Column("Request ID", row => row.request_id),
+                Column("Requisition Number", row => row.rek_num),
+                Column("Official", row => row.official),
+                Column("Rank", row => row.rank),
+                Column("Vehicle", row => row.vmf_code),
+                Column("Company", row => row.Company),
+                Column("Date Required", row => row.date_required),
+                Column("Department", row => row.Department),
+                Column("Site", row => row.Site),
+                Column("Contractor ID", row => row.contractor_id),
+                Column("Flight", row => row.flight),
+                Column("Address 2", row => row.address_2),
+                Column("Address 3", row => row.address_3)
+            );
+        }
+
         var taxis = await _taxiRepository.GetAllAsync();
         cancellationToken.ThrowIfCancellationRequested();
         var query = taxis.Select(taxi => new
@@ -4753,61 +5688,22 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             ORDER BY t.[issue_date], t.[trip_authority_code], [Driver Primary] DESC
             """;
 
-        var connection = _context.Database.GetDbConnection();
-        var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose)
-        {
-            await connection.OpenAsync(cancellationToken);
-        }
-
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = sql;
-            AddReportParameter(command, "@fromDate", DbType.DateTime, fromDate);
-            AddReportParameter(command, "@toDate", DbType.DateTime, toDate);
-
-            var rows = new List<DriverInformationFallbackRow>();
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                rows.Add(
-                    new DriverInformationFallbackRow(
-                        ReadNullableInt(reader, "Trip Authority Code"),
-                        ReadNullableString(reader, "Driver Name"),
-                        ReadNullableString(reader, "Driver ID"),
-                        ReadNullableDateTime(reader, "Trip Date"),
-                        ReadNullableInt(reader, "Contract Code"),
-                        ReadNullableString(reader, "GG Number"),
-                        ReadNullableString(reader, "GP Number"),
-                        ReadNullableInt(reader, "Site Code")
-                    )
-                );
-            }
-
-            return CreateDynamicResult(
-                "Driver Information over a Financial Year",
-                "ShowReport.aspx?Item=gFleetVehicleUsers",
-                true,
-                "The legacy report procedure was unavailable; results use the compatible trip, contract, vehicle, and trip-driver tables.",
-                rows,
-                Column("Trip Authority Code", row => row.TripAuthorityCode),
-                Column("Driver Name", row => row.DriverName),
-                Column("Driver ID", row => row.DriverId),
-                Column("Trip Date", row => row.TripDate),
-                Column("Contract Code", row => row.ContractCode),
-                Column("GG Number", row => row.FleetNumber),
-                Column("GP Number", row => row.RegistrationNumber),
-                Column("Site Code", row => row.SiteCode)
-            );
-        }
-        finally
-        {
-            if (shouldClose)
-            {
-                await connection.CloseAsync();
-            }
-        }
+        var result = await ExecutePagedRawReportQueryAsync(
+            "driver-information-finyear",
+            "Driver Information over a Financial Year",
+            "ShowReport.aspx?Item=gFleetVehicleUsers",
+            sql,
+            [
+                new ReportParameter("@fromDate", DbType.DateTime, fromDate),
+                new ReportParameter("@toDate", DbType.DateTime, toDate),
+            ],
+            filters,
+            cancellationToken
+        );
+        result.IsApproximate = true;
+        result.ApproximationReason =
+            "The legacy report procedure was unavailable; results use the compatible trip, contract, vehicle, and trip-driver tables.";
+        return result;
     }
 
     private async Task<TripDriverReportTable?> ResolveTripDriverReportTableAsync(
@@ -4826,24 +5722,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         return null;
     }
 
-    private static int? ReadNullableInt(DbDataReader reader, string column)
-    {
-        var value = reader[column];
-        return value is DBNull ? null : Convert.ToInt32(value, CultureInfo.InvariantCulture);
-    }
-
-    private static DateTime? ReadNullableDateTime(DbDataReader reader, string column)
-    {
-        var value = reader[column];
-        return value is DBNull ? null : Convert.ToDateTime(value, CultureInfo.InvariantCulture);
-    }
-
-    private static string? ReadNullableString(DbDataReader reader, string column)
-    {
-        var value = reader[column];
-        return value is DBNull ? null : value.ToString()?.Trim();
-    }
-
     private async Task<LegacyReportResultDto> BuildTripsOpen31Async(
         IDictionary<string, string?> filters,
         CancellationToken cancellationToken
@@ -4852,7 +5730,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var days = Math.Max(1, GetInt(filters, "days") ?? 31);
         var cutoffDate = DateTime.Today.AddDays(-days);
 
-        var rows = await (
+        var query =
             from trip in _context.Trips.AsNoTracking()
             join contract in _context.Contracts.AsNoTracking()
                 on trip.contract_code equals contract.contract_code
@@ -4884,17 +5762,24 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 vehicle.vmf_code,
                 vehicle.fleet_number,
                 vehicle.registration_number,
-            }
-        )
-            .Take(5000)
-            .ToListAsync(cancellationToken);
+            };
 
-        return CreateDynamicResult(
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows => rows.OrderBy(row => row.issue_date).ThenBy(row => row.trip_authority_code),
+            filters,
+            cancellationToken,
+            5000
+        );
+
+        return CreateDatabasePagedResult(
             "Trips Open for Over 31 Days",
             "ShowReport.aspx?Item=TripsOpenForOver31Days",
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("Trip Authority Code", row => row.trip_authority_code),
             Column("Contract Code", row => row.contract_code),
             Column("Issue Date", row => row.issue_date),
@@ -4967,18 +5852,25 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 : query.Where(row => row.fleet_number != null && row.fleet_number.Contains(term));
         }
 
-        var rows = await query
-            .OrderBy(row => row.fleet_number)
-            .ThenBy(row => row.registration_number)
-            .Take(5000)
-            .ToListAsync(cancellationToken);
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.fleet_number)
+                    .ThenBy(row => row.registration_number)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken,
+            5000
+        );
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             "Unallocated Vehicles",
             "Finance/OpenReport.aspx?Report=VehiclesNoCurrentContractAndFuelTransactions",
             true,
             "Approximated from vehicles that currently have no active contract. Fuel transaction parity still requires the original finance report pipeline.",
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
             Column("GP Number", row => row.registration_number),
@@ -4995,7 +5887,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     )
     {
         var (from, to) = NormalizeDateRange(filters);
-        var rows = await _context
+        var query = _context
             .Vehicles.AsNoTracking()
             .Where(vehicle =>
                 !vehicle.is_deleted
@@ -5003,9 +5895,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 && vehicle.purchase_date.Value.Date >= from
                 && vehicle.purchase_date.Value.Date <= to
             )
-            .OrderBy(vehicle => vehicle.purchase_date)
-            .ThenBy(vehicle => vehicle.fleet_number)
-            .Take(5000)
             .Select(vehicle => new
             {
                 vehicle.vmf_code,
@@ -5017,15 +5906,27 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 vehicle.invoice_number,
                 vehicle.take_on_date,
                 vehicle.current_odo,
-            })
-            .ToListAsync(cancellationToken);
+            });
 
-        return CreateDynamicResult(
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.purchase_date)
+                    .ThenBy(row => row.fleet_number)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken,
+            5000
+        );
+
+        return CreateDatabasePagedResult(
             "Vehicle Additions",
             "SelectStartAndEndDate.aspx?Item=AllVehiclesPurchasedInADateRange",
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
             Column("GP Number", row => row.registration_number),
@@ -5044,7 +5945,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     )
     {
         var (from, to) = NormalizeDateRange(filters);
-        var rows = await _context
+        var query = _context
             .Vehicles.AsNoTracking()
             .Where(vehicle =>
                 !vehicle.is_deleted
@@ -5052,9 +5953,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 && vehicle.sold_date.Value.Date >= from
                 && vehicle.sold_date.Value.Date <= to
             )
-            .OrderBy(vehicle => vehicle.sold_date)
-            .ThenBy(vehicle => vehicle.fleet_number)
-            .Take(5000)
             .Select(vehicle => new
             {
                 vehicle.vmf_code,
@@ -5065,15 +5963,27 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 vehicle.sold_to,
                 vehicle.current_odo,
                 vehicle.purchase_amount,
-            })
-            .ToListAsync(cancellationToken);
+            });
 
-        return CreateDynamicResult(
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.sold_date)
+                    .ThenBy(row => row.fleet_number)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken,
+            5000
+        );
+
+        return CreateDatabasePagedResult(
             "Vehicle Disposals",
             "SelectStartAndEndDate.aspx?Item=AllVehiclesDisposedInADateRange",
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
             Column("GP Number", row => row.registration_number),
@@ -5276,18 +6186,25 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             query = query.Where(row => row.StatusCode == statusCode);
         }
 
-        var rows = await query
-            .OrderBy(row => row.take_on_date)
-            .ThenBy(row => row.fleet_number)
-            .Take(5000)
-            .ToListAsync(cancellationToken);
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.take_on_date)
+                    .ThenBy(row => row.fleet_number)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken,
+            5000
+        );
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             "Vehicle List in Date Range",
             "SelectStartAndEndDate.aspx?Item=FilterAllVehiclesInADateRange",
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
             Column("GP Number", row => row.registration_number),
@@ -5306,7 +6223,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         CancellationToken cancellationToken
     )
     {
-        var rows = await (
+        var query =
             from vehicle in _context.Vehicles.AsNoTracking()
             join status in _context.VehicleStatuses.AsNoTracking()
                 on vehicle.vehicle_status_code equals status.vehicle_status_code
@@ -5332,17 +6249,28 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 vehicle.current_odo,
                 vehicle.take_on_date,
                 vehicle.sold_date,
-            }
-        )
-            .Take(5000)
-            .ToListAsync(cancellationToken);
+            };
 
-        return CreateDynamicResult(
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.Status)
+                    .ThenBy(row => row.fleet_number)
+                    .ThenBy(row => row.registration_number)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken,
+            5000
+        );
+
+        return CreateDatabasePagedResult(
             "All Vehicle Status",
             "Finance/GeneratedReports.aspx?key=9.2%20All%20Vehicle%20Statuses",
             true,
             "Legacy report is generated from a separate report pipeline. This approximation projects the same core vehicle status fields from legacy tables.",
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
             Column("GP Number", row => row.registration_number),
@@ -5486,18 +6414,25 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             query = query.Where(row => row.vehicle_status_code == statusCode.Value);
         }
 
-        var rows = await query
-            .OrderByDescending(row => row.status_start_date)
-            .ThenBy(row => row.fleet_number)
-            .Take(5000)
-            .ToListAsync(cancellationToken);
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderByDescending(row => row.status_start_date)
+                    .ThenBy(row => row.fleet_number)
+                    .ThenBy(row => row.vehicle_status_history_code),
+            filters,
+            cancellationToken,
+            5000
+        );
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             "Vehicle Status Range Report",
             "Vehicles/VehicleStatus.aspx",
             true,
             "Legacy vehicle status pages are custom. This dynamic approximation uses vehicle_status_history rows.",
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("Status History Code", row => row.vehicle_status_history_code),
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
@@ -5575,18 +6510,25 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             query = query.Where(row => matchingVmfCodes.Contains(row.vmf_code));
         }
 
-        var rows = await query
-            .OrderBy(row => row.fleet_number)
-            .ThenBy(row => row.registration_number)
-            .Take(5000)
-            .ToListAsync(cancellationToken);
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.fleet_number)
+                    .ThenBy(row => row.registration_number)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken,
+            5000
+        );
 
-        return CreateDynamicResult(
+        return CreateDatabasePagedResult(
             "Vehicle Master List",
             "Vehicles/Vehicles.aspx",
             true,
             "Legacy vehicle list reports are menu-driven and highly parameterized. This approximation now uses human-readable make, model, type, site, and status descriptions instead of raw codes.",
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("GG Number", row => row.fleet_number),
             Column("GP Number", row => row.registration_number),
             Column("Make", row => row.Make),
@@ -5619,7 +6561,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        var rows = await (
+        var query =
             from vehicle in _context.Vehicles.AsNoTracking()
             join status in _context.VehicleStatuses.AsNoTracking()
                 on vehicle.vehicle_status_code equals status.vehicle_status_code
@@ -5640,17 +6582,27 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 vehicle.location_code,
                 Status = status != null ? status.status_description : null,
                 vehicle.take_on_date,
-            }
-        )
-            .Take(max)
-            .ToListAsync(cancellationToken);
+            };
 
-        return CreateDynamicResult(
+        var page = await MaterializeDatabasePageAsync(
+            query,
+            rows =>
+                rows.OrderBy(row => row.fleet_number)
+                    .ThenBy(row => row.registration_number)
+                    .ThenBy(row => row.vmf_code),
+            filters,
+            cancellationToken,
+            Math.Clamp(GetInt(filters, "max") ?? 300, 1, 5000)
+        );
+
+        return CreateDatabasePagedResult(
             "Vehicles with Expired or No Tariffs",
             "ShowReport.aspx?Item=GetAllVehicleWithNoTariffs",
             false,
             null,
-            rows,
+            page.Rows,
+            page.TotalCount,
+            page.PageWindow,
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
             Column("GP Number", row => row.registration_number),
@@ -5734,6 +6686,27 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     )
     {
         var (startDate, endDate) = NormalizeWorkshopDateRange(filters);
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            var page = await _workshopRepository.GetReportPageAsync(
+                new WorkshopReportPageQuery(
+                    WorkshopReportKind.Period,
+                    startDate,
+                    endDate,
+                    Garage: GetString(filters, "garage") ?? GetString(filters, "Radio1"),
+                    Category: GetString(filters, "category") ?? GetString(filters, "Radio2"),
+                    Page: pagination.Page,
+                    PageSize: pagination.PageSize
+                )
+            );
+            return CreatePagedWorkshopReportResult(
+                "Workshop Report for a Period",
+                "WorkShop/RPT_ww_date_report.aspx",
+                "The legacy period report filters receive dates by garage and accident/mechanical category. This result applies the same filters through the compatible Workshop repository.",
+                page
+            );
+        }
+
         var rows = (await LoadWorkshopReportRowsAsync(cancellationToken))
             .Where(row => IsWithinWorkshopDateRange(row, startDate, endDate))
             .Where(row =>
@@ -5774,6 +6747,37 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var isGp =
             string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase)
             || string.Equals(searchMode, "Radiogp", StringComparison.OrdinalIgnoreCase);
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            if (string.IsNullOrWhiteSpace(search))
+            {
+                return CreateEmptyPagedWorkshopReport(
+                    "Workshop Report on One Vehicle",
+                    "WorkShop/RPT_ww_one_num_report.aspx",
+                    "The legacy report requires a GG or GP number.",
+                    pagination
+                );
+            }
+
+            var page = await _workshopRepository.GetReportPageAsync(
+                new WorkshopReportPageQuery(
+                    WorkshopReportKind.OneVehicle,
+                    VehicleSearch: search,
+                    VehicleSearchField: isGp
+                        ? WorkshopReportVehicleField.RegistrationNumber
+                        : WorkshopReportVehicleField.FleetNumber,
+                    Page: pagination.Page,
+                    PageSize: pagination.PageSize
+                )
+            );
+            return CreatePagedWorkshopReportResult(
+                "Workshop Report on One Vehicle",
+                "WorkShop/RPT_ww_one_num_report.aspx",
+                "The legacy report uses a wildcard GG or GP number search. This result preserves that search against compatible vehicle and Workshop data.",
+                page
+            );
+        }
+
         var rows = await LoadWorkshopReportRowsAsync(cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -5833,6 +6837,48 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             GetShort(filters, "workshopCode")
             ?? GetShort(filters, "wwCode")
             ?? GetShort(filters, "wwcod");
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            if (!workshopCode.HasValue && string.IsNullOrWhiteSpace(search))
+            {
+                return CreateEmptyPagedWorkshopPrintResult(pagination);
+            }
+
+            var page = await _workshopRepository.GetReportPageAsync(
+                new WorkshopReportPageQuery(
+                    WorkshopReportKind.PrintJobCard,
+                    VehicleSearch: search,
+                    VehicleSearchField: isGp
+                        ? WorkshopReportVehicleField.RegistrationNumber
+                        : WorkshopReportVehicleField.FleetNumber,
+                    WorkshopCode: workshopCode,
+                    Page: pagination.Page,
+                    PageSize: pagination.PageSize
+                )
+            );
+            var pagedMerchants = await Task.WhenAll(
+                page.Items.Where(item => item.MerchantCode.HasValue)
+                    .Select(item => item.MerchantCode!.Value)
+                    .Distinct()
+                    .Select(async merchantCode => new KeyValuePair<int, string?>(
+                        merchantCode,
+                        (await _workshopMerchantRepository.GetByIdAsync(merchantCode))?.wwmerch_name
+                    ))
+            );
+            var merchantNames = pagedMerchants.ToDictionary(pair => pair.Key, pair => pair.Value);
+            var pagedRows = page.Items.Select(ToWorkshopReportRow);
+            return CreateDatabasePagedResult(
+                "Print a Workshop Job Card",
+                "WorkShop/RPT_ww_printjob_report.aspx",
+                true,
+                "The legacy job-card report joins optional vehicle, site, towing, merchant, and Workshop fields. This result preserves the fields available in either supported schema.",
+                pagedRows,
+                page.Total,
+                new LegacyReportPageWindow(page.Page, page.PageSize, 0, true),
+                WorkshopPrintColumns(merchantNames)
+            );
+        }
+
         var rows = await LoadWorkshopReportRowsAsync(cancellationToken);
 
         if (workshopCode.HasValue)
@@ -5903,6 +6949,39 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     )
     {
         var now = DateTime.Now;
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            var page = await _workshopRepository.GetReportPageAsync(
+                new WorkshopReportPageQuery(
+                    WorkshopReportKind.InShop,
+                    OpenOnly: true,
+                    Page: pagination.Page,
+                    PageSize: pagination.PageSize
+                )
+            );
+            var pagedRows = page.Items.Select(ToWorkshopReportRow);
+            return CreateDatabasePagedResult(
+                "List of Vehicles Still in Workshop",
+                "WorkShop/RPT_ww_inshop_report.aspx",
+                true,
+                "The legacy report identifies open job cards with job_close = N. When that legacy flag is absent, the compatibility path uses the incomplete date state.",
+                pagedRows,
+                page.Total,
+                new LegacyReportPageWindow(page.Page, page.PageSize, 0, true),
+                Column("GG Number", row => row.FleetNumber),
+                Column("GP Number", row => row.RegistrationNumber),
+                Column("Accident/Mech", row => WorkshopCategoryLabel(row.AccidMech)),
+                Column("Garage", row => WorkshopGarageLabel(row.Garage)),
+                Column("Date Received", row => row.ReceiveDate),
+                Column("Time Received", row => row.ReceiveTime),
+                Column("Contact Name", row => row.ContactName),
+                Column("Contact Tel", row => row.ContactTel),
+                Column("Days in Workshop", row => ElapsedDays(row, now)),
+                Column("Hours in Workshop", row => ElapsedHours(row, now)),
+                Column("Date from Workshop", row => row.DateFromWorkshop)
+            );
+        }
+
         var rows = (await LoadWorkshopReportRowsAsync(cancellationToken))
             .Where(IsWorkshopOpen)
             .OrderBy(row => row.ReceiveDate)
@@ -5935,6 +7014,31 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         CancellationToken cancellationToken
     )
     {
+        if (GetFallbackPagination(filters) is { IncludeAll: false } pagination)
+        {
+            var page = await _workshopMerchantRepository.GetReportPageAsync(
+                new WorkshopMerchantReportPageQuery(
+                    pagination.Page,
+                    pagination.PageSize,
+                    GetString(filters, "search")
+                )
+            );
+            return CreateDatabasePagedResult(
+                "List of All Merchants",
+                "WorkShop/RPT_merch_report.aspx",
+                true,
+                "The result reads the Workshop-specific wwmerchant table through its guarded legacy-schema repository.",
+                page.Items,
+                page.Total,
+                new LegacyReportPageWindow(page.Page, page.PageSize, 0, true),
+                Column("Merchant Code", merchant => merchant.wwmerch_code),
+                Column("Merchant Name", merchant => merchant.wwmerch_name),
+                Column("Tel", merchant => merchant.wwmerch_tel),
+                Column("Fax", merchant => merchant.wwmerch_fax),
+                Column("eMAIL", merchant => merchant.wwmerch_email)
+            );
+        }
+
         var merchants = (await _workshopMerchantRepository.GetAllAsync())
             .Where(merchant =>
                 string.IsNullOrWhiteSpace(GetString(filters, "search"))
@@ -6034,6 +7138,132 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Days to Complete", row => CompletedDays(row)),
             Column("Time to Complete", row => CompletedHours(row))
         );
+
+    private static LegacyReportResultDto CreatePagedWorkshopReportResult(
+        string title,
+        string legacyTarget,
+        string approximationReason,
+        WorkshopReportPage page
+    ) =>
+        CreateDatabasePagedResult(
+            title,
+            legacyTarget,
+            true,
+            approximationReason,
+            page.Items.Select(ToWorkshopReportRow),
+            page.Total,
+            new LegacyReportPageWindow(page.Page, page.PageSize, 0, true),
+            WorkshopSummaryColumns
+        );
+
+    private static LegacyReportResultDto CreateEmptyPagedWorkshopReport(
+        string title,
+        string legacyTarget,
+        string approximationReason,
+        LegacyReportPagination pagination
+    ) =>
+        CreateDatabasePagedResult(
+            title,
+            legacyTarget,
+            true,
+            approximationReason,
+            Array.Empty<WorkshopReportRow>(),
+            0,
+            GetPageWindow(pagination, 0),
+            WorkshopSummaryColumns
+        );
+
+    private static LegacyReportResultDto CreateEmptyPagedWorkshopPrintResult(
+        LegacyReportPagination pagination
+    ) =>
+        CreateDatabasePagedResult(
+            "Print a Workshop Job Card",
+            "WorkShop/RPT_ww_printjob_report.aspx",
+            true,
+            "Enter a job-card number or a GG/GP number to load a print preview.",
+            Array.Empty<WorkshopReportRow>(),
+            0,
+            GetPageWindow(pagination, 0),
+            WorkshopPrintColumns(new Dictionary<int, string?>())
+        );
+
+    private static WorkshopReportRow ToWorkshopReportRow(WorkshopReportPageItem row) =>
+        new(
+            row.WorkshopCode,
+            row.VmfCode,
+            row.FleetNumber,
+            row.RegistrationNumber,
+            row.ModelDescription,
+            row.CurrentOdo,
+            row.ReceiveDate,
+            row.ReceiveTime,
+            row.CompleteDate,
+            row.CompleteTime,
+            row.ContactName,
+            row.ContactTel,
+            row.ContactFax,
+            row.ContactEmail,
+            row.AccidMech,
+            row.Garage,
+            row.DriverName,
+            row.CallRefer,
+            row.WorkshopKm,
+            row.WorkshopRemarks,
+            row.WorkshopReason,
+            row.MerchantCode,
+            row.RepairCost,
+            row.DateFromWorkshop,
+            row.JobClose
+        );
+
+    private static readonly LegacyProjectionColumn[] WorkshopSummaryColumns =
+    [
+        Column("GG Number", row => row.FleetNumber),
+        Column("GP Number", row => row.RegistrationNumber),
+        Column("Mech/Accid", row => WorkshopCategoryLabel(row.AccidMech)),
+        Column("Garage", row => WorkshopGarageLabel(row.Garage)),
+        Column("Date Received", row => row.ReceiveDate),
+        Column("Time Received", row => row.ReceiveTime),
+        Column("Date Completed", row => row.CompleteDate),
+        Column("Time Completed", row => row.CompleteTime),
+        Column("Contact Name", row => row.ContactName),
+        Column("Contact Tel", row => row.ContactTel),
+        Column("Days to Complete", row => CompletedDays(row)),
+        Column("Time to Complete", row => CompletedHours(row)),
+    ];
+
+    private static LegacyProjectionColumn[] WorkshopPrintColumns(
+        IReadOnlyDictionary<int, string?> merchantNames
+    ) =>
+        [
+            Column("Job Card", row => row.WorkshopCode),
+            Column("GG Number", row => row.FleetNumber),
+            Column("GP Number", row => row.RegistrationNumber),
+            Column("Model", row => row.ModelDescription),
+            Column("Garage", row => WorkshopGarageLabel(row.Garage)),
+            Column("Date Received", row => row.ReceiveDate),
+            Column("Time Received", row => row.ReceiveTime),
+            Column("Call Refer", row => row.CallRefer),
+            Column("Driver Name", row => row.DriverName),
+            Column("KM", row => row.WorkshopKm),
+            Column("Contact Name", row => row.ContactName),
+            Column("Contact Tel", row => row.ContactTel),
+            Column("Contact Fax", row => row.ContactFax),
+            Column("Contact Email", row => row.ContactEmail),
+            Column("Accid/Mech", row => WorkshopCategoryLabel(row.AccidMech)),
+            Column("Remarks", row => row.WorkshopRemarks),
+            Column("Reason", row => row.WorkshopReason),
+            Column(
+                "Merchant",
+                row =>
+                    row.MerchantCode is int merchantCode
+                        ? merchantNames.GetValueOrDefault(merchantCode)
+                        : null
+            ),
+            Column("Repair Cost", row => row.RepairCost),
+            Column("Date Completed", row => row.CompleteDate),
+            Column("Time Completed", row => row.CompleteTime),
+        ];
 
     private static bool IsWithinWorkshopDateRange(
         WorkshopReportRow row,
@@ -6254,8 +7484,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         IDictionary<string, string?> filters
     )
     {
-        var explicitSearchType =
-            GetInt(filters, "SearchType") ?? GetInt(filters, "search_type");
+        var explicitSearchType = GetInt(filters, "SearchType") ?? GetInt(filters, "search_type");
         if (explicitSearchType is >= 1 and <= 4)
         {
             return (AssetListSearchType)explicitSearchType.Value;
@@ -6263,10 +7492,9 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
         return GetString(filters, "rtype")?.Trim().ToLowerInvariant() switch
         {
-            "province" or "by-province" or "asset-list-by-province" => AssetListSearchType
-                .Province,
-            "department" or "by-department" or "asset-list-by-department" => AssetListSearchType
-                .Department,
+            "province" or "by-province" or "asset-list-by-province" => AssetListSearchType.Province,
+            "department" or "by-department" or "asset-list-by-department" =>
+                AssetListSearchType.Department,
             "site" or "by-site" or "asset-list-by-site" => AssetListSearchType.Site,
             _ => AssetListSearchType.All,
         };
@@ -6285,18 +7513,15 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
         return searchType switch
         {
-            AssetListSearchType.Province =>
-                GetInt(filters, "province")
+            AssetListSearchType.Province => GetInt(filters, "province")
                 ?? GetInt(filters, "province_code")
                 ?? GetInt(filters, "lstProvinceID"),
-            AssetListSearchType.Department =>
-                GetInt(filters, "department")
+            AssetListSearchType.Department => GetInt(filters, "department")
                 ?? GetInt(filters, "department_code")
                 ?? GetInt(filters, "dept")
                 ?? GetInt(filters, "DepartmentID")
                 ?? GetInt(filters, "lstDepartmentID"),
-            AssetListSearchType.Site =>
-                GetInt(filters, "site")
+            AssetListSearchType.Site => GetInt(filters, "site")
                 ?? GetInt(filters, "site_code")
                 ?? GetInt(filters, "SiteID")
                 ?? GetInt(filters, "lstSites"),
@@ -6329,10 +7554,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             return null;
         }
 
-        return ((end.Value.Year - start.Value.Year) * 12)
-            + end.Value.Month
-            - start.Value.Month
-            + 1;
+        return ((end.Value.Year - start.Value.Year) * 12) + end.Value.Month - start.Value.Month + 1;
     }
 
     private static AssetListFallbackRow CreateAssetListFallbackRow(
@@ -6627,6 +7849,16 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         >? BuildStoredProcedureParameters = null
     );
 
+    private sealed record LegacyReportPagination(int Page, int PageSize, bool IncludeAll);
+
+    private sealed record LegacyReportPageWindow(int Page, int PageSize, long Skip, bool IsPaged);
+
+    private sealed record LegacyReportDatabasePage<T>(
+        IReadOnlyList<T> Rows,
+        int TotalCount,
+        LegacyReportPageWindow PageWindow
+    );
+
     private sealed record LegacyStoredProcedureParameter(string Name, object? Value, DbType DbType);
 
     private sealed record AssetListFallbackVehicle(
@@ -6671,7 +7903,9 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
             var value = string.Join(
                 " ",
-                new[] { number?.Trim(), description?.Trim() }.Where(part => !string.IsNullOrWhiteSpace(part))
+                new[] { number?.Trim(), description?.Trim() }.Where(part =>
+                    !string.IsNullOrWhiteSpace(part)
+                )
             );
             return $"'{value}'";
         }
@@ -6811,17 +8045,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         short SiteCode
     );
 
-    private sealed record CaptureActivityRow(
-        string Module,
-        string RecordId,
-        string? GgNumber,
-        string? GpNumber,
-        short? SiteCode,
-        int? CapturedByUserCode,
-        DateTime DateCaptured,
-        string? Description
-    );
-
     private sealed record VehicleLogCompositeRow(
         string Section,
         string RecordCode,
@@ -6850,6 +8073,12 @@ public sealed class LegacyReportResultDto
     public List<LegacyReportColumnDto> Columns { get; set; } = new();
     public List<Dictionary<string, string?>> Rows { get; set; } = new();
     public int TotalCount { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 24;
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalCount / (double)PageSize));
+
+    [JsonIgnore]
+    public bool IsDatabasePaged { get; set; }
 }
 
 public sealed class LegacyReportColumnDto
