@@ -735,9 +735,25 @@ public interface IFuelCardRepository
     Task<FuelCard?> GetByCardNumberAsync(string cardNumber);
     Task<IEnumerable<FuelCard>> GetActiveFuelCardsAsync();
     Task<IEnumerable<FuelCard>> GetFuelCardsByVehicleAsync(int vmfCode);
+    Task<FuelCardActivityPage> GetRecentActivityPageAsync(
+        int? siteCode = null,
+        int page = 1,
+        int pageSize = 24,
+        CancellationToken cancellationToken = default
+    );
     Task<FuelCard> CreateAsync(FuelCard fuelCard, int currentUserId);
     Task UpdateAsync(FuelCard fuelCard, int currentUserId);
     Task DeleteAsync(int fuelCardId, int currentUserId);
+}
+
+public sealed record FuelCardActivityPage(
+    IReadOnlyList<FuelCard> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 /// <summary>

@@ -9,13 +9,14 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 import GovernmentReportLetterhead from "@/components/ui/government-report-letterhead";
 import ReportPrintButton from "@/components/ui/report-print-button";
 import { getSession } from "@/lib/auth/session";
 import {
-  getTowings,
+  getTowingRequestReport,
   TowingApiError,
-  type TowingRecord,
+  type TowingReportPage,
 } from "@/lib/api/fleet-operations/api-towing";
 
 const REPORTS_ROLE = "Reports";
@@ -36,6 +37,25 @@ function valueOrDash(value: string | number | null | undefined) {
 }
 function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
+}
+
+function reportPage(value: string | string[] | undefined) {
+  const parsed = Number(getQueryValue(value));
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function reportPageHref(
+  routePath: string,
+  query: Record<string, string | string[] | undefined>,
+  page: number,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (key === "page" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) params.append(key, item);
+  }
+  params.set("page", String(page));
+  return `${routePath}?${params.toString()}`;
 }
 function SearchForm({
   callReference,
@@ -97,7 +117,8 @@ function SearchForm({
     </form>
   );
 }
-function Rows({ records }: Readonly<{ records: TowingRecord[] }>) {
+function Rows({ report }: Readonly<{ report: TowingReportPage }>) {
+  const records = report.data;
   if (records.length === 0)
     return (
       <div className="vehicle-empty-state">
@@ -179,21 +200,19 @@ async function renderTowingRequestReportPageContent({
   const startDate = (getQueryValue(query.startDate) ?? "").trim();
   const endDate = (getQueryValue(query.endDate) ?? "").trim();
   const hasCriteria = Boolean(callReference || startDate || endDate);
-  let records: TowingRecord[] = [];
+  let report: TowingReportPage | null = null;
+  const page = reportPage(query.page);
+  const callReferenceNumber = Number(callReference);
   try {
     if (hasCriteria) {
-      const all = await getTowings();
-      const normalizedReference = callReference.toLocaleLowerCase();
-      records = all.filter((item) => {
-        if (
-          normalizedReference &&
-          String(item.callReference ?? "").toLocaleLowerCase() !== normalizedReference
-        )
-          return false;
-        const date = item.requestDate?.slice(0, 10);
-        if (startDate && (!date || date < startDate)) return false;
-        if (endDate && (!date || date > endDate)) return false;
-        return true;
+      report = await getTowingRequestReport({
+        startDate: startDate || "1900-01-01",
+        endDate: endDate || "2999-12-31",
+        callReference:
+          Number.isFinite(callReferenceNumber) && callReferenceNumber > 0
+            ? callReferenceNumber
+            : undefined,
+        page,
       });
     }
   } catch (error) {
@@ -253,7 +272,19 @@ async function renderTowingRequestReportPageContent({
               </div>
               <ReportPrintButton />
             </div>
-            <Rows records={records} />
+            {report ? (
+              <>
+                <p className="muted-copy">
+                  {report.total} request{report.total === 1 ? "" : "s"} matched the criteria.
+                </p>
+                <Rows report={report} />
+                <ReportPagination
+                  report={report}
+                  pageHref={(requestedPage) => reportPageHref(routePath, query, requestedPage)}
+                  label="Towing request report pages"
+                />
+              </>
+            ) : null}
           </section>
         ) : null}
       </section>

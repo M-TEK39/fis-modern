@@ -9,11 +9,12 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 import { getSession } from "@/lib/auth/session";
 import {
   getFirmDateTowingReport,
   TowingApiError,
-  type TowingRecord,
+  type TowingReportPage,
 } from "@/lib/api/fleet-operations/api-towing";
 
 const REPORTS_ROLE = "Reports";
@@ -34,6 +35,25 @@ function valueOrDash(value: string | number | null | undefined) {
 }
 function formatDate(value: string | null) {
   return value?.slice(0, 10) || "-";
+}
+
+function reportPage(value: string | string[] | undefined) {
+  const parsed = Number(getQueryValue(value));
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function reportPageHref(
+  routePath: string,
+  query: Record<string, string | string[] | undefined>,
+  page: number,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (key === "page" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) params.append(key, item);
+  }
+  params.set("page", String(page));
+  return `${routePath}?${params.toString()}`;
 }
 
 const TowingFirmDatePageContent = renderTowingFirmDatePageContent;
@@ -76,13 +96,15 @@ async function renderTowingFirmDatePageContent({
   const startDate = (getQueryValue(query.startDate) ?? getQueryValue(query.BDAT) ?? "").trim();
   const endDate = (getQueryValue(query.endDate) ?? getQueryValue(query.EDAT) ?? "").trim();
   const submitted = Boolean(firmName || startDate || endDate);
-  let records: TowingRecord[] = [];
+  const page = reportPage(query.page);
+  let report: TowingReportPage | null = null;
   try {
     if (submitted)
-      records = await getFirmDateTowingReport(
+      report = await getFirmDateTowingReport(
         firmName,
         startDate || "1900-01-01",
         endDate || "2999-12-31",
+        page,
       );
   } catch (error) {
     if (error instanceof TowingApiError && error.reason === "unauthorized")
@@ -181,12 +203,12 @@ async function renderTowingFirmDatePageContent({
                 <h2 id="towing-firm-results">Calls found</h2>
               </div>
             </div>
-            {records.length === 0 ? (
+            {report?.data.length === 0 ? (
               <div className="vehicle-empty-state">
                 <p className="eyebrow">No requests found</p>
                 <h2>No calls matched the selected firm and dates.</h2>
               </div>
-            ) : (
+            ) : report ? (
               <div className="vehicle-table-wrapper">
                 <table className="vehicle-table">
                   <caption className="sr-only">Firm towing calls</caption>
@@ -200,7 +222,7 @@ async function renderTowingFirmDatePageContent({
                     ]}
                   />
                   <tbody>
-                    {records.map((item) => (
+                    {report.data.map((item) => (
                       <tr key={item.towingCode}>
                         <td>{valueOrDash(item.callReference)}</td>
                         <td>{item.vmfCode}</td>
@@ -212,7 +234,19 @@ async function renderTowingFirmDatePageContent({
                   </tbody>
                 </table>
               </div>
-            )}
+            ) : null}
+            {report ? (
+              <>
+                <p className="muted-copy">
+                  {report.total} request{report.total === 1 ? "" : "s"} matched the criteria.
+                </p>
+                <ReportPagination
+                  report={report}
+                  pageHref={(requestedPage) => reportPageHref(routePath, query, requestedPage)}
+                  label="Firm towing report pages"
+                />
+              </>
+            ) : null}
           </section>
         ) : null}
       </section>

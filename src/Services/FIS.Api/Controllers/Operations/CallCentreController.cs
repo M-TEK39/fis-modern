@@ -1,5 +1,6 @@
 using System.Data;
 using System.Data.Common;
+using System.Security.Claims;
 using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
@@ -15,6 +16,8 @@ namespace FIS.Api.Controllers;
 [Authorize]
 public class CallCentreController : BaseApiController
 {
+    private const int DefaultReportPageSize = 24;
+    private const int MaximumReportPageSize = 100;
     private readonly ICallCentreRepository _repository;
     private readonly ITowingRepository _towingRepository;
     private readonly AccidentCompatibilityService _accidentService;
@@ -800,6 +803,100 @@ public class CallCentreController : BaseApiController
     }
 
     /// <summary>
+    /// Paged result source for the tabular Call Centre reports. Statistics and
+    /// single-reference detail retain their separate aggregate/detail contracts.
+    /// </summary>
+    [HttpGet("reports/page")]
+    public async Task<ActionResult> GetReportPage(
+        [FromQuery] string mode,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize,
+        [FromQuery] int? vmfCode = null,
+        [FromQuery] string? incident = null,
+        [FromQuery] DateTime? startDate = null,
+        [FromQuery] DateTime? endDate = null,
+        [FromQuery] int? siteCode = null,
+        [FromQuery] string? department = null
+    )
+    {
+        if (!HasReportsRole())
+        {
+            return Forbid();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        if (!TryParseReportMode(mode, out var reportMode))
+        {
+            return BadRequest(new { error = "A supported Call Centre report mode is required." });
+        }
+
+        if (!TryParseIncidentType(incident, out var incidentType))
+        {
+            return BadRequest(new { error = "The Call Centre incident type is invalid." });
+        }
+
+        if (vmfCode is <= 0)
+        {
+            return BadRequest(new { error = "The vehicle identifier must be positive." });
+        }
+
+        if (siteCode is < 1 or > short.MaxValue)
+        {
+            return BadRequest(new { error = "The site identifier is invalid." });
+        }
+
+        if (startDate.HasValue && endDate.HasValue && startDate.Value.Date > endDate.Value.Date)
+        {
+            return BadRequest(new { error = "The start date must be on or before the end date." });
+        }
+
+        if (reportMode == CallCentreReportMode.OneVehicle && vmfCode is null)
+        {
+            return BadRequest(new { error = "A vehicle is required for this report." });
+        }
+
+        try
+        {
+            var result = await _repository.GetReportPageAsync(
+                new CallCentreReportPageQuery(
+                    reportMode,
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumReportPageSize),
+                    vmfCode,
+                    incidentType,
+                    startDate?.Date,
+                    endDate?.Date,
+                    siteCode is null ? null : (short)siteCode.Value,
+                    department?.Trim()
+                )
+            );
+            return Ok(
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error generating paged Call Centre report {ReportMode}",
+                reportMode
+            );
+            return StatusCode(500, new { error = "Error generating Call Centre report." });
+        }
+    }
+
+    /// <summary>
     /// Generate call centre report by department and site for a period
     /// </summary>
     [HttpPost("reports/dept-site-period")]
@@ -852,6 +949,11 @@ public class CallCentreController : BaseApiController
         [FromQuery] DateTime? endDate
     )
     {
+        if (!HasReportsRole())
+        {
+            return Forbid();
+        }
+
         try
         {
             _logger.LogInformation(
@@ -908,6 +1010,45 @@ public class CallCentreController : BaseApiController
         {
             _logger.LogError(ex, "Error generating statistics report");
             return StatusCode(500, "Error generating report");
+        }
+    }
+
+    /// <summary>
+    /// Server-side capture-person aggregate used by the migrated statistics
+    /// view. It deliberately returns summary data, not an unpaged incident set.
+    /// </summary>
+    [HttpGet("reports/statistics-capture")]
+    public async Task<ActionResult> GetCaptureStatistics(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate,
+        [FromQuery] string? captureName
+    )
+    {
+        if (!HasReportsRole())
+        {
+            return Forbid();
+        }
+
+        var start = startDate ?? DateTime.UtcNow.AddMonths(-1);
+        var end = endDate ?? DateTime.UtcNow;
+        if (start.Date > end.Date)
+        {
+            return BadRequest(new { error = "The start date must be on or before the end date." });
+        }
+
+        try
+        {
+            var result = await _repository.GetCaptureStatisticsAsync(
+                start,
+                end,
+                captureName?.Trim()
+            );
+            return Ok(new { totalCalls = result.TotalCalls, items = result.Items });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating Call Centre capture statistics");
+            return StatusCode(500, new { error = "Error generating Call Centre statistics." });
         }
     }
 
@@ -1017,9 +1158,16 @@ public class CallCentreController : BaseApiController
     /// </summary>
     [HttpGet("reports/data-access/{callCentreCode:int}")]
     public async Task<ActionResult<CallCentreDataAccessReportDto>> GetReportDataAccessDetail(
-        int callCentreCode
+        int callCentreCode,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
+        if (!HasReportsRole())
+        {
+            return Forbid();
+        }
+
         if (callCentreCode <= 0 || callCentreCode > short.MaxValue)
         {
             return BadRequest(new { error = "A valid Call Centre reference is required." });
@@ -1033,13 +1181,20 @@ public class CallCentreController : BaseApiController
                 return NotFound(new { error = "Call centre record not found." });
             }
 
-            var access = await ReadLegacyAccessRowsAsync((short)callCentreCode);
+            var access = await ReadLegacyAccessRowsAsync(
+                (short)callCentreCode,
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, MaximumReportPageSize)
+            );
             return Ok(
                 new CallCentreDataAccessReportDto
                 {
                     CallCentreCode = (short)callCentreCode,
                     AccessTableAvailable = access.Available,
                     Entries = access.Entries,
+                    Page = access.Page,
+                    PageSize = access.PageSize,
+                    Total = access.Total,
                 }
             );
         }
@@ -1056,8 +1211,11 @@ public class CallCentreController : BaseApiController
 
     private async Task<(
         bool Available,
-        List<CallCentreDataAccessEntryDto> Entries
-    )> ReadLegacyAccessRowsAsync(short callCentreCode)
+        List<CallCentreDataAccessEntryDto> Entries,
+        int Page,
+        int PageSize,
+        int Total
+    )> ReadLegacyAccessRowsAsync(short callCentreCode, int requestedPage, int pageSize)
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -1091,7 +1249,7 @@ public class CallCentreController : BaseApiController
 
             if (!columns.Contains("Call_Center_code"))
             {
-                return (false, new List<CallCentreDataAccessEntryDto>());
+                return (false, new List<CallCentreDataAccessEntryDto>(), 1, pageSize, 0);
             }
 
             var counterProjection = columns.Contains("CounterCC")
@@ -1110,19 +1268,40 @@ public class CallCentreController : BaseApiController
                 ? "[DataCapture_time] AS [DataCapture_time]"
                 : "CAST(NULL AS datetime2) AS [DataCapture_time]";
             var orderBy =
-                columns.Contains("Call_Centre_Counter_code") ? "ORDER BY [Call_Centre_Counter_code]"
+                columns.Contains("Call_Centre_Counter_code") ? "[Call_Centre_Counter_code]"
                 : columns.Contains("DataCapture_date")
-                    ? $"ORDER BY [DataCapture_date]{(columns.Contains("DataCapture_time") ? ", [DataCapture_time]" : string.Empty)}"
-                : "ORDER BY (SELECT 1)";
+                    ? $"[DataCapture_date]{(columns.Contains("DataCapture_time") ? ", [DataCapture_time]" : string.Empty)}"
+                : "(SELECT 1)";
+
+            int total;
+            await using (var countCommand = connection.CreateCommand())
+            {
+                countCommand.CommandText = """
+                    SELECT COUNT(1)
+                    FROM [dbo].[Call_Centre_Counter]
+                    WHERE [Call_Center_code] = @callCentreCode
+                    """;
+                AddDbParameter(countCommand, "@callCentreCode", DbType.Int16, callCentreCode);
+                total = Convert.ToInt32(
+                    await countCommand.ExecuteScalarAsync(HttpContext.RequestAborted)
+                );
+            }
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = total == 0 ? 1 : Math.Min(requestedPage, totalPages);
+            var offset = checked((page - 1) * pageSize);
 
             await using var command = connection.CreateCommand();
             command.CommandText = $"""
                 SELECT {counterCodeProjection}, {counterProjection}, {dataCaptureProjection}, {dateProjection}, {timeProjection}
                 FROM [dbo].[Call_Centre_Counter]
                 WHERE [Call_Center_code] = @callCentreCode
-                {orderBy}
+                ORDER BY {orderBy}
+                OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
                 """;
             AddDbParameter(command, "@callCentreCode", DbType.Int16, callCentreCode);
+            AddDbParameter(command, "@offset", DbType.Int32, offset);
+            AddDbParameter(command, "@pageSize", DbType.Int32, pageSize);
 
             var entries = new List<CallCentreDataAccessEntryDto>();
             await using var dataReader = await command.ExecuteReaderAsync(
@@ -1145,7 +1324,7 @@ public class CallCentreController : BaseApiController
                 );
             }
 
-            return (true, entries);
+            return (true, entries, page, pageSize, total);
         }
         finally
         {
@@ -1215,6 +1394,98 @@ public class CallCentreController : BaseApiController
     }
 
     #endregion
+
+    private bool HasReportsRole() => HasAnyRole("Reports");
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Length == 0)
+        {
+            return false;
+        }
+
+        if (expectedRoles.Any(User.IsInRole))
+        {
+            return true;
+        }
+
+        return User.Claims.Any(claim =>
+            (
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            && claim
+                .Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+                .Any(value =>
+                    expectedRoles.Any(role =>
+                        string.Equals(value, role, StringComparison.OrdinalIgnoreCase)
+                    )
+                )
+        );
+    }
+
+    private static bool TryParseReportMode(string? value, out CallCentreReportMode reportMode)
+    {
+        reportMode = value?.Trim().ToLowerInvariant() switch
+        {
+            "one-vehicle" or "one_vehicle" => CallCentreReportMode.OneVehicle,
+            "all-reference" or "all_reference" => CallCentreReportMode.AllReference,
+            "dept-site-period" or "dept_site_period" or "dept-period" =>
+                CallCentreReportMode.DeptSitePeriod,
+            "clo-report" or "clo_report" or "clo" => CallCentreReportMode.CloReport,
+            "open-calls" or "open_calls" or "open" => CallCentreReportMode.OpenCalls,
+            _ => default,
+        };
+
+        return value?.Trim().ToLowerInvariant()
+            is "one-vehicle"
+                or "one_vehicle"
+                or "all-reference"
+                or "all_reference"
+                or "dept-site-period"
+                or "dept_site_period"
+                or "dept-period"
+                or "clo-report"
+                or "clo_report"
+                or "clo"
+                or "open-calls"
+                or "open_calls"
+                or "open";
+    }
+
+    private static bool TryParseIncidentType(
+        string? value,
+        out CallCentreIncidentType? incidentType
+    )
+    {
+        incidentType = value?.Trim().ToLowerInvariant() switch
+        {
+            null or "" or "all" => null,
+            "accident" => CallCentreIncidentType.Accident,
+            "hijack" or "hi-jack" or "highjack" => CallCentreIncidentType.Hijack,
+            "loss" or "loss_theft" => CallCentreIncidentType.Loss,
+            "road" or "road-assistance" or "road_assistance" => CallCentreIncidentType.Road,
+            _ => null,
+        };
+
+        return value?.Trim().ToLowerInvariant()
+            is null
+                or ""
+                or "all"
+                or "accident"
+                or "hijack"
+                or "hi-jack"
+                or "highjack"
+                or "loss"
+                or "loss_theft"
+                or "road"
+                or "road-assistance"
+                or "road_assistance";
+    }
 
     private short? GetLegacyUserAccessCode()
     {
@@ -1326,6 +1597,10 @@ public class CallCentreDataAccessReportDto
     public short CallCentreCode { get; set; }
     public bool AccessTableAvailable { get; set; }
     public List<CallCentreDataAccessEntryDto> Entries { get; set; } = new();
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 24;
+    public int Total { get; set; }
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 public class CallCentreDataAccessEntryDto

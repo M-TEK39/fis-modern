@@ -19,6 +19,7 @@ import {
   type FinanceOption,
 } from "@/lib/api/finance/api-finance";
 import {
+  DEFAULT_REPORT_PAGE_SIZE,
   getLegacyReport,
   LegacyReportApiError,
   type LegacyReport,
@@ -77,6 +78,11 @@ function queryValue(query: Query, name: string) {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
+function positiveInteger(value: string) {
+  const parsed = Number(value);
+  return value && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 function titleFor(action: string) {
   return (
     (
@@ -101,10 +107,6 @@ function outputHref(action: string, reportAction: string, query: Query, format: 
   return `/finance/reports/output?${params.toString()}`;
 }
 
-function legacyToFinanceReport(report: LegacyReport): FinanceReport {
-  return { title: report.title, rows: report.rows, supportsDateFilter: null };
-}
-
 function regionalSummaryType(action: string, reportAction: string) {
   const provincePrefix = action === "summary-per-province" ? "PerProvince" : "";
   return reportAction.replace(/-download$/, "") === "summary"
@@ -112,6 +114,16 @@ function regionalSummaryType(action: string, reportAction: string) {
     : reportAction.replace(/-download$/, "") === "department-cost-type"
       ? `SummaryReport${provincePrefix}DeptCostType`
       : `SummaryReport${provincePrefix}ByCostType`;
+}
+
+function assetReportKey(action: string) {
+  return action === "assets-province"
+    ? "asset-list-by-province"
+    : action === "assets-department"
+      ? "asset-list-by-department"
+      : action === "assets-site"
+        ? "asset-list-by-site"
+        : "asset-list";
 }
 
 const RegionalFinanceActionContent = renderRegionalFinanceActionContent;
@@ -176,6 +188,7 @@ async function renderRegionalFinanceActionContent({ params, searchParams }: Page
   }
 
   let report: FinanceReport | null = null;
+  let legacyAssetReport: LegacyReport | null = null;
   let output: { href: string; label: string } | null = null;
   if (queryValue(query, "run") === "1") {
     if (assetReport) {
@@ -190,12 +203,18 @@ async function renderRegionalFinanceActionContent({ params, searchParams }: Page
         error = "Select a department and site before viewing the report.";
       else {
         try {
-          const legacy = await getLegacyReport("asset-list", {
-            province: provinceCode || undefined,
-            department: departmentCode || undefined,
-            site: siteCode || undefined,
-          });
-          report = legacyToFinanceReport(legacy);
+          legacyAssetReport = await getLegacyReport(
+            assetReportKey(action),
+            {
+              province: provinceCode || undefined,
+              department: departmentCode || undefined,
+              site: siteCode || undefined,
+            },
+            {
+              page: positiveInteger(queryValue(query, "page")) ?? 1,
+              pageSize: positiveInteger(queryValue(query, "pageSize")) ?? DEFAULT_REPORT_PAGE_SIZE,
+            },
+          );
         } catch (caught) {
           if (caught instanceof LegacyReportApiError) error = caught.message;
           else throw caught;
@@ -256,6 +275,7 @@ async function renderRegionalFinanceActionContent({ params, searchParams }: Page
       error={error}
       output={output}
       report={report}
+      legacyAssetReport={legacyAssetReport}
     />
   );
 }

@@ -11,6 +11,8 @@ namespace FIS.Api.Controllers;
 [Authorize]
 public class ClearanceController : BaseApiController
 {
+    private const int MaximumReportPageSize = 100;
+
     private readonly IClearanceRepository _repository;
     private readonly ILogger<ClearanceController> _logger;
 
@@ -139,7 +141,7 @@ public class ClearanceController : BaseApiController
     }
 
     [HttpPost("reports/universal")]
-    public async Task<ActionResult<IEnumerable<ClearanceReportRow>>> GetUniversalReport(
+    public async Task<ActionResult> GetUniversalReport(
         [FromBody] ClearanceUniversalReportRequest request
     )
     {
@@ -157,12 +159,23 @@ public class ClearanceController : BaseApiController
 
         try
         {
+            var result = await _repository.GetUniversalReportAsync(
+                request.StartDate,
+                request.EndDate,
+                request.MerchantCode,
+                Math.Max(1, request.Page),
+                Math.Clamp(request.PageSize, 1, MaximumReportPageSize)
+            );
+
             return Ok(
-                await _repository.GetUniversalReportAsync(
-                    request.StartDate,
-                    request.EndDate,
-                    request.MerchantCode
-                )
+                new
+                {
+                    items = result.Items,
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.Total,
+                    totalPages = result.TotalPages,
+                }
             );
         }
         catch (Exception ex)
@@ -209,4 +222,6 @@ public class ClearanceUniversalReportRequest
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
     public int? MerchantCode { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 24;
 }

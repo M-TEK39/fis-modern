@@ -17,6 +17,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 public class TowingRepository : ITowingRepository
 {
     private const string TableName = "Towing";
+    private const string TowTruckTableName = "Tow_Truck";
+    private const int MaximumReportPageSize = 24;
 
     private static readonly string[] LegacyColumns =
     [
@@ -143,6 +145,113 @@ public class TowingRepository : ITowingRepository
             }
 
             return new TowingPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The report query uses fixed table, column, and ordering identifiers; report filters and pagination values are database parameters."
+    )]
+    public async Task<TowingReportPage> GetReportPageAsync(TowingReportPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, MaximumReportPageSize);
+        var requestedPage = Math.Max(1, query.Page);
+        var (startDate, endDate) = NormalizeDateRange(query.StartDate, query.EndDate);
+        var firmName = query.FirmName?.Trim();
+        var callReference = query.CallReference;
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            var availableColumns = await GetAvailableColumnsAsync();
+            var towTruckColumns =
+                query.ReportKind == TowingReportKind.FirmDate
+                && !string.IsNullOrWhiteSpace(firmName)
+                    ? await GetAvailableColumnsAsync(TowTruckTableName)
+                    : null;
+
+            var predicates = BuildReportPredicates(
+                query.ReportKind,
+                availableColumns,
+                towTruckColumns,
+                !string.IsNullOrWhiteSpace(firmName),
+                callReference.HasValue
+            );
+            var whereClause = string.Join(" AND ", predicates);
+            var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+
+            await using var countCommand = connection.CreateCommand();
+            countCommand.Transaction = transaction;
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{TableName}] AS t
+                WHERE {whereClause}
+                """;
+            AddReportParameters(
+                countCommand,
+                query.ReportKind,
+                startDate,
+                endDate,
+                firmName,
+                callReference
+            );
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+            var projection = LegacyColumns
+                .Select(column => GetColumnProjection(availableColumns, column))
+                .Concat(
+                    OptionalColumns.Select(column =>
+                        GetOptionalProjection(availableColumns, column)
+                    )
+                )
+                .ToArray();
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = transaction;
+            dataCommand.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}] AS t
+                WHERE {whereClause}
+                ORDER BY {GetReportOrderExpression(availableColumns)}
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddReportParameters(
+                dataCommand,
+                query.ReportKind,
+                startDate,
+                endDate,
+                firmName,
+                callReference
+            );
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<Towing>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(MapTowing(reader, availableColumns));
+            }
+
+            return new TowingReportPage(items, page, pageSize, total);
         }
         finally
         {
@@ -324,6 +433,131 @@ public class TowingRepository : ITowingRepository
         }
     }
 
+    private static List<string> BuildReportPredicates(
+        TowingReportKind reportKind,
+        IReadOnlySet<string> availableColumns,
+        IReadOnlySet<string>? towTruckColumns,
+        bool hasFirmName,
+        bool hasCallReference
+    )
+    {
+        var predicates = new List<string> { GetActiveFilter(availableColumns, "t") };
+
+        switch (reportKind)
+        {
+            case TowingReportKind.Request:
+                predicates.Add(
+                    availableColumns.Contains("Tow_request_date")
+                        ? "CAST(t.[Tow_request_date] AS date) BETWEEN @startDate AND @endDate"
+                        : "1 = 0"
+                );
+                if (hasCallReference)
+                {
+                    predicates.Add(
+                        availableColumns.Contains("Call_refer")
+                            ? "t.[Call_refer] = @callReference"
+                            : "1 = 0"
+                    );
+                }
+                break;
+
+            case TowingReportKind.AllTowtrucks:
+                var populatedFields = new[]
+                {
+                    "Tow_location_start",
+                    "Keys",
+                    "Vehicle_problem",
+                }
+                    .Where(availableColumns.Contains)
+                    .Select(column =>
+                        $"NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(max), t.[{column}]))), N'') IS NOT NULL"
+                    )
+                    .ToArray();
+                predicates.Add(
+                    populatedFields.Length == 0
+                        ? "1 = 0"
+                        : $"({string.Join(" OR ", populatedFields)})"
+                );
+                break;
+
+            case TowingReportKind.FirmDate:
+                predicates.Add(
+                    availableColumns.Contains("Tow_request_date")
+                        ? "CAST(t.[Tow_request_date] AS date) BETWEEN @startDate AND @endDate"
+                        : "1 = 0"
+                );
+                if (hasFirmName)
+                {
+                    predicates.Add(
+                        towTruckColumns is not null
+                        && availableColumns.Contains("Tow_Truck_code")
+                        && towTruckColumns.Contains("Tow_code")
+                        && towTruckColumns.Contains("Tow_name")
+                            ? $"""
+                                EXISTS (
+                                    SELECT 1
+                                    FROM [dbo].[{TowTruckTableName}] AS tt
+                                    WHERE tt.[Tow_code] = t.[Tow_Truck_code]
+                                      AND {GetActiveFilter(towTruckColumns, "tt")}
+                                      AND CHARINDEX(
+                                          @firmName,
+                                          LOWER(COALESCE(CONVERT(nvarchar(max), tt.[Tow_name]), N''))
+                                      ) > 0
+                                )
+                                """
+                            : "1 = 0"
+                    );
+                }
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(reportKind), reportKind, null);
+        }
+
+        return predicates;
+    }
+
+    private static void AddReportParameters(
+        DbCommand command,
+        TowingReportKind reportKind,
+        DateTime startDate,
+        DateTime endDate,
+        string? firmName,
+        decimal? callReference
+    )
+    {
+        if (reportKind is TowingReportKind.Request or TowingReportKind.FirmDate)
+        {
+            AddParameter(command, "@startDate", DbType.Date, startDate);
+            AddParameter(command, "@endDate", DbType.Date, endDate);
+        }
+
+        if (reportKind == TowingReportKind.FirmDate && !string.IsNullOrWhiteSpace(firmName))
+        {
+            AddParameter(command, "@firmName", DbType.String, firmName.ToLowerInvariant());
+        }
+
+        if (reportKind == TowingReportKind.Request && callReference.HasValue)
+        {
+            AddParameter(command, "@callReference", DbType.Decimal, callReference.Value);
+        }
+    }
+
+    private static (DateTime StartDate, DateTime EndDate) NormalizeDateRange(
+        DateTime startDate,
+        DateTime endDate
+    )
+    {
+        var start = startDate.Date;
+        var end = endDate.Date;
+        return end < start ? (end, start) : (start, end);
+    }
+
+    private static string GetReportOrderExpression(IReadOnlySet<string> availableColumns) =>
+        availableColumns.Contains("Tow_request_date")
+            ? "t.[Tow_request_date] DESC, t.[Towing_code] DESC"
+            : "CAST(NULL AS date) DESC, t.[Towing_code] DESC";
+
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
@@ -466,7 +700,10 @@ public class TowingRepository : ITowingRepository
         }
     }
 
-    private async Task<HashSet<string>> GetAvailableColumnsAsync()
+    private Task<HashSet<string>> GetAvailableColumnsAsync() =>
+        GetAvailableColumnsAsync(TableName);
+
+    private async Task<HashSet<string>> GetAvailableColumnsAsync(string tableName)
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -486,7 +723,7 @@ public class TowingRepository : ITowingRepository
                   AND [TABLE_NAME] = @table
                 """;
             AddParameter(command, "@schema", DbType.String, "dbo");
-            AddParameter(command, "@table", DbType.String, TableName);
+            AddParameter(command, "@table", DbType.String, tableName);
 
             var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             await using var reader = await command.ExecuteReaderAsync();
@@ -495,13 +732,16 @@ public class TowingRepository : ITowingRepository
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns
+            var requiredColumns = tableName == TableName
+                ? RequiredColumns
+                : ["Tow_code"];
+            var missingColumns = requiredColumns
                 .Where(column => !columns.Contains(column))
                 .ToArray();
             if (missingColumns.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"The required Towing compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                    $"The required {tableName} compatibility columns are not available: {string.Join(", ", missingColumns)}"
                 );
             }
 
@@ -632,8 +872,16 @@ public class TowingRepository : ITowingRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string GetActiveFilter(IReadOnlySet<string> availableColumns) =>
-        availableColumns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+    private static string GetActiveFilter(
+        IReadOnlySet<string> availableColumns,
+        string? tableAlias = null
+    )
+    {
+        var prefix = string.IsNullOrWhiteSpace(tableAlias) ? "" : $"{tableAlias}.";
+        return availableColumns.Contains("is_deleted")
+            ? $"ISNULL({prefix}[is_deleted], 0) = 0"
+            : "1 = 1";
+    }
 
     private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
     {

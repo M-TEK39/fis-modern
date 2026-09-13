@@ -6,15 +6,18 @@ import {
   AccidentReportFooter,
   AccidentReportFormActions,
   AccidentReportLoadingState,
+  AccidentReportPagination,
   AccidentReportPageShell,
   AccidentVehicleSearchFieldsWithMode,
 } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   authorizeAccidentReport,
+  getAccidentReportPageState,
   loadAccidentReport,
 } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import {
   getAccidentVehicleReport,
+  type AccidentReportPage,
   type AccidentVehicleReportMode,
   type AccidentVehicleReportRow,
 } from "@/lib/api/fleet-operations/api-accidents";
@@ -51,28 +54,49 @@ function OneVehicleReportForm({
   );
 }
 
-function OneVehicleReportResults({ rows }: { rows: AccidentVehicleReportRow[] | null }) {
-  return rows !== null ? (
-    rows.length === 0 ? (
+function OneVehicleReportResults({
+  query,
+  report,
+}: {
+  query: Record<string, string | string[] | undefined>;
+  report: AccidentReportPage<AccidentVehicleReportRow> | null;
+}) {
+  if (report === null) {
+    return null;
+  }
+
+  const rows = report.items;
+  if (rows.length === 0) {
+    return (
       <div className="vehicle-empty-state">
         <p className="eyebrow">No vehicles found</p>
         <h2>No accidents matched this vehicle number.</h2>
         <p className="muted-copy">Try another GP or GG number.</p>
       </div>
-    ) : (
-      <section aria-live="polite" aria-labelledby="vehicle-report-results-title">
-        <div className="vehicle-form-section-header">
-          <div>
-            <p className="eyebrow">Report results</p>
-            <h2 id="vehicle-report-results-title">Accidents found: {rows.length}</h2>
-          </div>
+    );
+  }
+
+  return (
+    <section aria-live="polite" aria-labelledby="vehicle-report-results-title">
+      <div className="vehicle-form-section-header">
+        <div>
+          <p className="eyebrow">Report results</p>
+          <h2 id="vehicle-report-results-title">Accidents found: {report.total}</h2>
         </div>
-        {rows.map((row, index) => (
-          <VehicleReportResult key={row.accidentCode} row={row} index={index} />
-        ))}
-      </section>
-    )
-  ) : null;
+      </div>
+      {rows.map((row, index) => (
+        <VehicleReportResult key={row.accidentCode} row={row} index={index} />
+      ))}
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/one-vehicle"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
+    </section>
+  );
 }
 
 async function OneVehicleReportContent({ searchParams }: OneVehicleReportPageProps) {
@@ -95,10 +119,11 @@ async function OneVehicleReportContent({ searchParams }: OneVehicleReportPagePro
   const mode = getMode(getQueryValue(query.mode) ?? getQueryValue(query.Radio1));
   const searchTerm = (getQueryValue(query.searchTerm) ?? getQueryValue(query.xnumber) ?? "").trim();
   const shouldRun = getQueryValue(query.run) === "1" || searchTerm.length > 0;
+  const { page, pageSize } = getAccidentReportPageState(query);
   const report = await loadAccidentReport({
     shouldRun: shouldRun && Boolean(searchTerm),
     errorMessage: null,
-    load: () => getAccidentVehicleReport(searchTerm, mode),
+    load: () => getAccidentVehicleReport(searchTerm, mode, page, pageSize),
     context: "FIS accident vehicle report failed",
   });
   if (report.status === "unauthorized") {
@@ -112,12 +137,10 @@ async function OneVehicleReportContent({ searchParams }: OneVehicleReportPagePro
       />
     );
   }
-  const rows = report.data;
-
   return (
     <>
       <OneVehicleReportForm mode={mode} searchTerm={searchTerm} />
-      <OneVehicleReportResults rows={rows} />
+      <OneVehicleReportResults query={query} report={report.data} />
 
       <AccidentReportFooter />
     </>

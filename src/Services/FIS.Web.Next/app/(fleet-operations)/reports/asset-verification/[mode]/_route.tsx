@@ -6,6 +6,7 @@ import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import ReportResultsPanel from "@/components/ui/report-results-panel";
 import ReportRowsTable from "@/components/ui/report-rows-table";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 import {
   getLegacyReport,
   LegacyReportApiError,
@@ -34,6 +35,21 @@ function parseSiteCode(value: string | undefined) {
 
 function validDate(value: string | undefined) {
   return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
+}
+
+function reportPage(value: string | undefined) {
+  const parsed = Number(value);
+  return value && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function reportPageHref(routePath: string, query: Record<string, string>, page: number) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (["page", "pageSize", "includeAll"].includes(key) || !value.trim()) continue;
+    params.set(key, value);
+  }
+  params.set("page", String(page));
+  return `${routePath}?${params.toString()}`;
 }
 
 function hasReportsRole(roles: readonly string[]) {
@@ -191,7 +207,10 @@ function ReportForm({
   );
 }
 
-function ReportResults({ report }: Readonly<{ report: LegacyReport }>) {
+function ReportResults({
+  report,
+  pageHref,
+}: Readonly<{ report: LegacyReport; pageHref: (page: number) => string }>) {
   if (report.rows.length === 0) {
     return (
       <section className="vehicle-empty-state" aria-live="polite">
@@ -218,6 +237,7 @@ function ReportResults({ report }: Readonly<{ report: LegacyReport }>) {
         </div>
       ) : null}
       <ReportRowsTable columns={report.columns} rows={report.rows} caption={report.title} />
+      <ReportPagination report={report} pageHref={pageHref} label="Asset verification report pages" />
     </ReportResultsPanel>
   );
 }
@@ -278,6 +298,7 @@ async function renderAssetVerificationReportPageContent({
   const province = (query.province || query.cmbDeptName).trim();
   const from = validDate(query.from || query.sverdate);
   const to = validDate(query.to || query.everdate);
+  const page = reportPage(query.page);
   const run = query.run === "1";
   let sites: SiteRecord[] = [];
   let report: LegacyReport | null = null;
@@ -308,7 +329,7 @@ async function renderAssetVerificationReportPageContent({
           province: province || undefined,
           from: from || undefined,
           to: to || undefined,
-        });
+        }, { page });
       }
     }
   } catch (error) {
@@ -353,7 +374,10 @@ async function renderAssetVerificationReportPageContent({
           </div>
         ) : null}
         {report ? (
-          <ReportResults report={report} />
+          <ReportResults
+            report={report}
+            pageHref={(requestedPage) => reportPageHref(routePath, query, requestedPage)}
+          />
         ) : (
           <section className="vehicle-status-card">
             <p className="eyebrow">Parameters required</p>

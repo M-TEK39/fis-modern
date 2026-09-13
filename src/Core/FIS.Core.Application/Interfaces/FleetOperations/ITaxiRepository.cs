@@ -12,6 +12,7 @@ namespace FIS.Core.Application.Interfaces
         Task<Taxi?> GetLatestByRequisitionAsync(string rekNum);
         Task<IEnumerable<Taxi>> GetAllAsync();
         Task<TaxiPage> GetPageAsync(TaxiPageQuery query);
+        Task<TaxiReportPage> GetReportPageAsync(TaxiReportPageQuery query);
         Task<IEnumerable<Taxi>> GetBySiteAsync(short siteCode);
         Task<IEnumerable<Taxi>> GetByDepartmentAsync(short departmentCode);
         Task<IEnumerable<Taxi>> GetByDateAsync(DateTime date);
@@ -24,10 +25,37 @@ namespace FIS.Core.Application.Interfaces
         int Page = 1,
         int PageSize = 24,
         bool PendingOnly = false,
-        bool JiaPickupOnly = false
+        bool JiaPickupOnly = false,
+        string? Search = null
     );
 
     public sealed record TaxiPage(IReadOnlyList<Taxi> Items, int Page, int PageSize, int Total)
+    {
+        public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
+    }
+
+    public enum TaxiReportKind
+    {
+        PreviousFinYearVipTaxi,
+        ListPerDepartment,
+        ListInServicePerDepartment,
+        Financial,
+    }
+
+    public sealed record TaxiReportPageQuery(
+        TaxiReportKind ReportKind,
+        int Page = 1,
+        int PageSize = 24,
+        string? Search = null,
+        DateTime? AsOfDate = null
+    );
+
+    public sealed record TaxiReportPage(
+        IReadOnlyList<Taxi> Items,
+        int Page,
+        int PageSize,
+        int Total
+    )
     {
         public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
     }

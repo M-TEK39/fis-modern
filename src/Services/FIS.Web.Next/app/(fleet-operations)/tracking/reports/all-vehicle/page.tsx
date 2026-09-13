@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
   DateRangeFields,
   TrackingNotice,
+  TrackingReportPagination,
   TrackingReportTable,
   TrackingShell,
 } from "@/app/(fleet-operations)/tracking/_components";
@@ -14,6 +15,7 @@ import {
   accessRestricted,
   getTrackingSession,
   hasTrackingAccess,
+  parsePositiveInteger,
   queryValue,
   reportDateRange,
   sessionMessage,
@@ -36,11 +38,12 @@ async function TrackingAllVehicleReportPageContent({
   const query = await searchParams;
   const trackerType = queryValue(query.trackerType) || "All";
   const range = reportDateRange(queryValue(query.startDate), queryValue(query.endDate));
+  const page = parsePositiveInteger(queryValue(query.page)) ?? 1;
   const run = queryValue(query.run) === "1";
   try {
-    const rows = run
-      ? await getTrackingAllVehiclesReport(trackerType, range.startDate, range.endDate)
-      : [];
+    const report = run
+      ? await getTrackingAllVehiclesReport(trackerType, range.startDate, range.endDate, { page })
+      : null;
     return (
       <TrackingShell
         title="Tracking Report for ALL Vehicle"
@@ -92,7 +95,20 @@ async function TrackingAllVehicleReportPageContent({
           </div>
         </form>
         {run ? (
-          <TrackingReportTable records={rows} title="Tracking report for all vehicles" />
+          <>
+            <TrackingReportTable
+              records={report?.items ?? []}
+              title="Tracking report for all vehicles"
+            />
+            {report ? (
+              <TrackingReportPagination
+                page={report}
+                query={query}
+                routePath="/tracking/reports/all-vehicle"
+                label="Tracking report for all vehicles"
+              />
+            ) : null}
+          </>
         ) : (
           <p className="muted-copy">
             Choose a tracker type and date range, then submit the report.

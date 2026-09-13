@@ -9,10 +9,12 @@ import {
   AccidentReportFormActions,
   AccidentReportFormError,
   AccidentReportLoadingState,
+  AccidentReportPagination,
   AccidentReportPageShell,
 } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   authorizeAccidentReport,
+  getAccidentReportPageState,
   loadAccidentReport,
 } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import VehicleTable, {
@@ -20,6 +22,7 @@ import VehicleTable, {
 } from "@/app/(fleet-operations)/accidents/vehicle-table";
 import {
   getAccidentPeriodReport,
+  type AccidentReportPage,
   type AccidentPeriodReportRow,
   type AccidentPeriodReportStatus,
 } from "@/lib/api/fleet-operations/api-accidents";
@@ -159,9 +162,11 @@ function periodReportRowKey(row: AccidentPeriodReportRow) {
 
 function ReportTable({
   rows,
+  total,
   status,
 }: {
   rows: AccidentPeriodReportRow[];
+  total: number;
   status: AccidentPeriodReportStatus;
 }) {
   const title = status === "closed" ? "Closed Accidents" : "Open Accidents";
@@ -175,7 +180,7 @@ function ReportTable({
           <p className="eyebrow">Report results</p>
           <h2 id="accident-period-results-title">{title}</h2>
         </div>
-        <span className="form-hint">{rows.length} record(s)</span>
+        <span className="form-hint">{total} record(s)</span>
       </div>
       <div className="vehicle-table-wrapper">
         <VehicleTable
@@ -185,7 +190,7 @@ function ReportTable({
           rowKey={periodReportRowKey}
         />
       </div>
-      <p className="form-hint">Total Number: {rows.length}</p>
+      <p className="form-hint">Total Number: {total}</p>
     </section>
   );
 }
@@ -245,25 +250,40 @@ function PeriodReportForm({
 }
 
 function PeriodReportResults({
-  rows,
+  query,
+  report,
   status,
 }: {
-  rows: AccidentPeriodReportRow[] | null;
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentPeriodReportRow> | null;
   status: AccidentPeriodReportStatus;
 }) {
-  return rows ? (
-    rows.length > 0 ? (
-      <ReportTable rows={rows} status={status} />
-    ) : (
-      <section className="vehicle-empty-state" aria-live="polite">
-        <p className="eyebrow">No accidents found</p>
-        <h2>No accidents matched the selected filters.</h2>
-        <p className="muted-copy">
-          Update the department, dates, or open/closed selection and submit again.
-        </p>
-      </section>
-    )
-  ) : null;
+  if (report === null) {
+    return null;
+  }
+
+  const rows = report.items;
+  return rows.length > 0 ? (
+    <>
+      <ReportTable rows={rows} total={report.total} status={status} />
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/period"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
+    </>
+  ) : (
+    <section className="vehicle-empty-state" aria-live="polite">
+      <p className="eyebrow">No accidents found</p>
+      <h2>No accidents matched the selected filters.</h2>
+      <p className="muted-copy">
+        Update the department, dates, or open/closed selection and submit again.
+      </p>
+    </section>
+  );
 }
 
 const PeriodReportContent = renderPeriodReportContent;
@@ -332,10 +352,13 @@ async function renderPeriodReportContent({ searchParams }: { searchParams: Promi
     errorMessage = "The begin date must be on or before the end date.";
   }
 
+  const { page, pageSize } = getAccidentReportPageState(query);
+
   const report = await loadAccidentReport({
     shouldRun,
     errorMessage,
-    load: () => getAccidentPeriodReport(departmentNumber, startDate, endDate, status),
+    load: () =>
+      getAccidentPeriodReport(departmentNumber, startDate, endDate, status, page, pageSize),
     context: "FIS accident period report failed",
   });
   if (report.status === "unauthorized") {
@@ -349,8 +372,6 @@ async function renderPeriodReportContent({ searchParams }: { searchParams: Promi
       />
     );
   }
-  const rows = report.data;
-
   return (
     <>
       <PeriodReportForm
@@ -361,7 +382,7 @@ async function renderPeriodReportContent({ searchParams }: { searchParams: Promi
         endDate={endDate}
         status={status}
       />
-      <PeriodReportResults rows={rows} status={status} />
+      <PeriodReportResults query={query} report={report.data} status={status} />
       <AccidentReportFooter clearHref="/accidents/reports/period" />
     </>
   );

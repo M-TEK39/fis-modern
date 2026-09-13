@@ -112,6 +112,102 @@ public sealed class AssetVerificationRepository : IAssetVerificationRepository
         }
     }
 
+    public async Task<AssetVerificationReportPage> GetReportPageAsync(
+        AssetVerificationReportPageQuery query,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var requestedPage = Math.Max(1, query.Page);
+        var requestedPageSize = Math.Clamp(query.PageSize, 1, 100);
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            var assetVerificationColumns = await GetTableColumnsAsync(
+                connection,
+                "Asset_Verification",
+                cancellationToken
+            );
+            EnsureRequiredColumns(
+                assetVerificationColumns,
+                "Asset_Verification",
+                "asset_verification_code"
+            );
+
+            var reportSql = query.ReportMode switch
+            {
+                AssetVerificationReportMode.PerSiteProvinceDate
+                or AssetVerificationReportMode.VerifiedByDateRange =>
+                    await BuildVerificationReportSqlAsync(
+                        connection,
+                        assetVerificationColumns,
+                        query,
+                        cancellationToken
+                    ),
+                AssetVerificationReportMode.NotVerified => await BuildNotVerifiedReportSqlAsync(
+                    connection,
+                    assetVerificationColumns,
+                    cancellationToken
+                ),
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(query.ReportMode),
+                    query.ReportMode,
+                    "Unsupported asset verification report mode."
+                ),
+            };
+
+            await using var countCommand = connection.CreateCommand();
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                {reportSql.FromClause}
+                WHERE {reportSql.WhereClause};
+                """;
+            AddParameters(countCommand, reportSql.Parameters);
+            var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync(cancellationToken));
+
+            var pageSize = query.IncludeAll ? Math.Max(1, total) : requestedPageSize;
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = query.IncludeAll ? 1 : Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.CommandText = $"""
+                SELECT
+                    {reportSql.SelectList}
+                {reportSql.FromClause}
+                WHERE {reportSql.WhereClause}
+                ORDER BY {reportSql.OrderBy}
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY;
+                """;
+            AddParameters(dataCommand, reportSql.Parameters);
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var rows = new List<AssetVerificationReportRow>();
+            await using var reader = await dataCommand.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(MapReportRow(reader));
+            }
+
+            return new AssetVerificationReportPage(rows, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IEnumerable<AssetVerification>> GetByVehicleAsync(int vmfCode)
     {
         var records = await QueryAsync(
@@ -307,6 +403,610 @@ public sealed class AssetVerificationRepository : IAssetVerificationRepository
             {
                 await connection.CloseAsync();
             }
+        }
+    }
+
+    private async Task<AssetVerificationReportSql> BuildVerificationReportSqlAsync(
+        DbConnection connection,
+        IReadOnlySet<string> assetVerificationColumns,
+        AssetVerificationReportPageQuery query,
+        CancellationToken cancellationToken
+    )
+    {
+        var vehicleColumns = await GetTableColumnsAsync(
+            connection,
+            "vehicle_master",
+            cancellationToken
+        );
+        var predicates = new List<string> { BuildActivePredicate(assetVerificationColumns) };
+        var parameters = new List<ParameterValue>();
+        var verificationDate = BuildReportVerificationDateExpression(assetVerificationColumns);
+        var vehicleRegNo = BuildReportVehicleRegNoExpression(
+            assetVerificationColumns,
+            vehicleColumns
+        );
+
+        if (query.ReportMode == AssetVerificationReportMode.PerSiteProvinceDate)
+        {
+            if (query.SiteCode.HasValue)
+            {
+                if (assetVerificationColumns.Contains("site_code"))
+                {
+                    predicates.Add("av.[site_code] = @siteCode");
+                    parameters.Add(
+                        new ParameterValue("@siteCode", DbType.Int16, query.SiteCode.Value)
+                    );
+                }
+                else
+                {
+                    predicates.Add("1 = 0");
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.Province))
+            {
+                if (assetVerificationColumns.Contains("province"))
+                {
+                    predicates.Add(
+                        "LOWER(LTRIM(RTRIM(CONVERT(nvarchar(200), av.[province])))) "
+                            + "= LOWER(LTRIM(RTRIM(@province)))"
+                    );
+                    parameters.Add(
+                        new ParameterValue("@province", DbType.String, query.Province.Trim())
+                    );
+                }
+                else
+                {
+                    predicates.Add("1 = 0");
+                }
+            }
+
+            AddDateRangePredicates(
+                predicates,
+                parameters,
+                verificationDate,
+                query.FromDate,
+                query.ToDate
+            );
+
+            return new AssetVerificationReportSql(
+                BuildVerificationFromClause(assetVerificationColumns, vehicleColumns),
+                string.Join(" AND ", predicates),
+                BuildVerificationReportSelectList(assetVerificationColumns, vehicleColumns),
+                string.Join(
+                    ", ",
+                    [
+                        OptionalExpression(
+                            assetVerificationColumns,
+                            "av",
+                            "department_name",
+                            "nvarchar(max)"
+                        ),
+                        OptionalExpression(
+                            assetVerificationColumns,
+                            "av",
+                            "site_name",
+                            "nvarchar(max)"
+                        ),
+                        vehicleRegNo,
+                        "av.[asset_verification_code]",
+                    ]
+                ),
+                parameters
+            );
+        }
+
+        predicates.Add($"{verificationDate} IS NOT NULL");
+        AddDateRangePredicates(
+            predicates,
+            parameters,
+            verificationDate,
+            query.FromDate,
+            query.ToDate
+        );
+
+        return new AssetVerificationReportSql(
+            BuildVerificationFromClause(assetVerificationColumns, vehicleColumns),
+            string.Join(" AND ", predicates),
+            BuildVerificationReportSelectList(assetVerificationColumns, vehicleColumns),
+            string.Join(
+                ", ",
+                [
+                    OptionalExpression(
+                        assetVerificationColumns,
+                        "av",
+                        "department_name",
+                        "nvarchar(max)"
+                    ),
+                    verificationDate,
+                    vehicleRegNo,
+                    "av.[asset_verification_code]",
+                ]
+            ),
+            parameters
+        );
+    }
+
+    private async Task<AssetVerificationReportSql> BuildNotVerifiedReportSqlAsync(
+        DbConnection connection,
+        IReadOnlySet<string> assetVerificationColumns,
+        CancellationToken cancellationToken
+    )
+    {
+        var vehicleColumns = await GetTableColumnsAsync(
+            connection,
+            "vehicle_master",
+            cancellationToken
+        );
+        var contractColumns = await GetTableColumnsAsync(connection, "contract", cancellationToken);
+        var siteColumns = await GetTableColumnsAsync(connection, "site", cancellationToken);
+        var departmentColumns = await GetTableColumnsAsync(
+            connection,
+            "department",
+            cancellationToken
+        );
+
+        EnsureRequiredColumns(
+            vehicleColumns,
+            "vehicle_master",
+            "vmf_code",
+            "vehicle_status_code",
+            "fleet_number"
+        );
+        EnsureRequiredColumns(
+            contractColumns,
+            "contract",
+            "vmf_code",
+            "site_code",
+            "still_current"
+        );
+        EnsureRequiredColumns(siteColumns, "site", "Site_code", "Depatrment_code", "description");
+        EnsureRequiredColumns(departmentColumns, "department", "department_code", "description");
+
+        var verifiedMatches = new List<string>();
+        if (assetVerificationColumns.Contains("vmf_code"))
+        {
+            verifiedMatches.Add("avv.[vmf_code] > 0 AND avv.[vmf_code] = v.[vmf_code]");
+        }
+
+        var verifiedIdentifier = BuildTrimmedIdentifierExpression(
+            assetVerificationColumns,
+            "avv",
+            "vehicle_reg_no"
+        );
+        var vehicleIdentifiers = new[]
+        {
+            BuildTrimmedIdentifierExpression(vehicleColumns, "v", "fleet_number"),
+            BuildTrimmedIdentifierExpression(vehicleColumns, "v", "registration_number"),
+        }
+            .Where(expression => expression is not null)
+            .Cast<string>()
+            .ToArray();
+        if (verifiedIdentifier is not null && vehicleIdentifiers.Length > 0)
+        {
+            var identifierMatches = vehicleIdentifiers.Select(vehicleIdentifier =>
+                $"LOWER({verifiedIdentifier}) = LOWER({vehicleIdentifier})"
+            );
+            verifiedMatches.Add(
+                $"{verifiedIdentifier} IS NOT NULL AND ({string.Join(" OR ", identifierMatches)})"
+            );
+        }
+
+        var exclusionPredicate =
+            verifiedMatches.Count == 0 ? "1 = 0" : $"({string.Join(" OR ", verifiedMatches)})";
+        var activeVerificationPredicate = BuildActivePredicate(assetVerificationColumns, "avv");
+        var currentContractApply = BuildCurrentContractApply(
+            contractColumns,
+            siteColumns,
+            departmentColumns
+        );
+
+        return new AssetVerificationReportSql(
+            $"""
+            FROM [dbo].[vehicle_master] AS v
+            {currentContractApply}
+            """,
+            $"""
+            v.[vehicle_status_code] = 1
+            AND NOT EXISTS (
+                SELECT 1
+                FROM [dbo].[Asset_Verification] AS avv
+                WHERE {activeVerificationPredicate}
+                  AND {exclusionPredicate}
+            )
+            """,
+            BuildNotVerifiedReportSelectList(vehicleColumns),
+            string.Join(
+                ", ",
+                [
+                    "current_contract.[department_name]",
+                    OptionalExpression(vehicleColumns, "v", "fleet_number", "nvarchar(max)"),
+                    OptionalExpression(vehicleColumns, "v", "registration_number", "nvarchar(max)"),
+                    "v.[vmf_code]",
+                ]
+            ),
+            []
+        );
+    }
+
+    private static string BuildVerificationFromClause(
+        IReadOnlySet<string> assetVerificationColumns,
+        IReadOnlySet<string> vehicleColumns
+    ) =>
+        $"""
+            FROM [dbo].[Asset_Verification] AS av
+            {BuildVehicleLookupApply(assetVerificationColumns, vehicleColumns)}
+            """;
+
+    private static string BuildVehicleLookupApply(
+        IReadOnlySet<string> assetVerificationColumns,
+        IReadOnlySet<string> vehicleColumns
+    )
+    {
+        if (
+            !vehicleColumns.Contains("vmf_code")
+            && !vehicleColumns.Contains("fleet_number")
+            && !vehicleColumns.Contains("registration_number")
+        )
+        {
+            return "OUTER APPLY (SELECT CAST(NULL AS int) AS [vmf_code], CAST(NULL AS nvarchar(max)) AS [fleet_number], CAST(NULL AS nvarchar(max)) AS [registration_number], CAST(NULL AS datetime2) AS [licence_due_date], CAST(NULL AS nvarchar(max)) AS [barcode], CAST(NULL AS int) AS [current_odo]) AS v";
+        }
+
+        var matches = new List<string>();
+        if (assetVerificationColumns.Contains("vmf_code") && vehicleColumns.Contains("vmf_code"))
+        {
+            matches.Add("(av.[vmf_code] IS NOT NULL AND v.[vmf_code] = av.[vmf_code])");
+        }
+
+        var verificationIdentifier = BuildTrimmedIdentifierExpression(
+            assetVerificationColumns,
+            "av",
+            "vehicle_reg_no"
+        );
+        var vehicleFleetIdentifier = BuildTrimmedIdentifierExpression(
+            vehicleColumns,
+            "v",
+            "fleet_number"
+        );
+        var vehicleRegistrationIdentifier = BuildTrimmedIdentifierExpression(
+            vehicleColumns,
+            "v",
+            "registration_number"
+        );
+        var vehicleIdentifiers = new[] { vehicleFleetIdentifier, vehicleRegistrationIdentifier }
+            .Where(expression => expression is not null)
+            .Cast<string>()
+            .ToArray();
+        if (verificationIdentifier is not null && vehicleIdentifiers.Length > 0)
+        {
+            var identifierMatches = string.Join(
+                " OR ",
+                vehicleIdentifiers.Select(identifier =>
+                    $"LOWER({verificationIdentifier}) = LOWER({identifier})"
+                )
+            );
+            matches.Add($"({verificationIdentifier} IS NOT NULL AND ({identifierMatches}))");
+        }
+
+        var matchPredicate = matches.Count == 0 ? "1 = 0" : string.Join(" OR ", matches);
+        var matchOrder = BuildVehicleMatchOrder(
+            assetVerificationColumns,
+            vehicleColumns.Contains("vmf_code"),
+            verificationIdentifier,
+            vehicleFleetIdentifier,
+            vehicleRegistrationIdentifier
+        );
+        var vehicleVmfCode = OptionalExpression(vehicleColumns, "v", "vmf_code", "int");
+        var vehicleOrder = vehicleColumns.Contains("vmf_code") ? "v.[vmf_code]" : "1";
+
+        return $"""
+            OUTER APPLY (
+                SELECT TOP (1)
+                    {vehicleVmfCode} AS [vmf_code],
+                    {OptionalExpression(
+                vehicleColumns,
+                "v",
+                "fleet_number",
+                "nvarchar(max)"
+            )} AS [fleet_number],
+                    {OptionalExpression(
+                vehicleColumns,
+                "v",
+                "registration_number",
+                "nvarchar(max)"
+            )} AS [registration_number],
+                    {OptionalExpression(
+                vehicleColumns,
+                "v",
+                "licence_due_date",
+                "datetime2"
+            )} AS [licence_due_date],
+                    {OptionalExpression(
+                vehicleColumns,
+                "v",
+                "barcode",
+                "nvarchar(max)"
+            )} AS [barcode],
+                    {OptionalExpression(vehicleColumns, "v", "current_odo", "int")} AS [current_odo]
+                FROM [dbo].[vehicle_master] AS v
+                WHERE {matchPredicate}
+                ORDER BY {matchOrder}, {vehicleOrder}
+            ) AS v
+            """;
+    }
+
+    private static string BuildVehicleMatchOrder(
+        IReadOnlySet<string> assetVerificationColumns,
+        bool vehicleHasVmfCode,
+        string? verificationIdentifier,
+        string? vehicleFleetIdentifier,
+        string? vehicleRegistrationIdentifier
+    )
+    {
+        var priorities = new List<string>();
+        if (assetVerificationColumns.Contains("vmf_code") && vehicleHasVmfCode)
+        {
+            priorities.Add(
+                "WHEN av.[vmf_code] IS NOT NULL AND v.[vmf_code] = av.[vmf_code] THEN 0"
+            );
+        }
+
+        if (verificationIdentifier is not null && vehicleFleetIdentifier is not null)
+        {
+            priorities.Add(
+                $"WHEN LOWER({verificationIdentifier}) = LOWER({vehicleFleetIdentifier}) THEN 1"
+            );
+        }
+
+        if (verificationIdentifier is not null && vehicleRegistrationIdentifier is not null)
+        {
+            priorities.Add(
+                $"WHEN LOWER({verificationIdentifier}) = LOWER({vehicleRegistrationIdentifier}) THEN 2"
+            );
+        }
+
+        return priorities.Count == 0 ? "3" : $"CASE {string.Join(" ", priorities)} ELSE 3 END";
+    }
+
+    private static string BuildCurrentContractApply(
+        IReadOnlySet<string> contractColumns,
+        IReadOnlySet<string> siteColumns,
+        IReadOnlySet<string> departmentColumns
+    )
+    {
+        var contractOrder = contractColumns.Contains("contract_code")
+            ? "c.[contract_code]"
+            : "c.[site_code]";
+        var siteResponsiblePerson = OptionalExpression(
+            siteColumns,
+            "s",
+            "res_person",
+            "nvarchar(max)"
+        );
+
+        return $"""
+            CROSS APPLY (
+                SELECT TOP (1)
+                    c.[site_code] AS [site_code],
+                    s.[description] AS [site_name],
+                    d.[description] AS [department_name],
+                    {siteResponsiblePerson} AS [responsible_manager]
+                FROM [dbo].[contract] AS c
+                INNER JOIN [dbo].[site] AS s ON s.[Site_code] = c.[site_code]
+                INNER JOIN [dbo].[department] AS d ON d.[department_code] = s.[Depatrment_code]
+                WHERE c.[vmf_code] = v.[vmf_code]
+                  AND c.[still_current] = 'Y'
+                ORDER BY {contractOrder}, c.[site_code]
+            ) AS current_contract
+            """;
+    }
+
+    private static string BuildVerificationReportSelectList(
+        IReadOnlySet<string> assetVerificationColumns,
+        IReadOnlySet<string> vehicleColumns
+    )
+    {
+        var verificationDate = BuildReportVerificationDateExpression(assetVerificationColumns);
+        var vehicleRegNo = BuildReportVehicleRegNoExpression(
+            assetVerificationColumns,
+            vehicleColumns
+        );
+        var vmfCode = BuildReportVmfCodeExpression(assetVerificationColumns, vehicleColumns);
+        var status = BuildReportStatusExpression(assetVerificationColumns, verificationDate);
+
+        return string.Join(
+            ",\n                    ",
+            [
+                "av.[asset_verification_code] AS [asset_verification_code]",
+                $"{vehicleRegNo} AS [vehicle_reg_no]",
+                $"{vmfCode} AS [vmf_code]",
+                OptionalExpression(vehicleColumns, "v", "fleet_number", "nvarchar(max)")
+                    + " AS [fleet_number]",
+                OptionalExpression(vehicleColumns, "v", "registration_number", "nvarchar(max)")
+                    + " AS [registration_number]",
+                OptionalExpression(
+                    assetVerificationColumns,
+                    "av",
+                    "department_name",
+                    "nvarchar(max)"
+                ) + " AS [department_name]",
+                OptionalExpression(assetVerificationColumns, "av", "site_name", "nvarchar(max)")
+                    + " AS [site_name]",
+                OptionalExpression(assetVerificationColumns, "av", "site_code", "smallint")
+                    + " AS [site_code]",
+                OptionalExpression(assetVerificationColumns, "av", "province", "nvarchar(max)")
+                    + " AS [province]",
+                OptionalExpression(assetVerificationColumns, "av", "vehicle_make", "nvarchar(max)")
+                    + " AS [vehicle_make]",
+                OptionalExpression(assetVerificationColumns, "av", "vehicle_model", "nvarchar(max)")
+                    + " AS [vehicle_model]",
+                $"COALESCE({OptionalExpression(assetVerificationColumns, "av", "licence_expiry_date", "datetime2")}, {OptionalExpression(vehicleColumns, "v", "licence_due_date", "datetime2")}) AS [licence_expiry_date]",
+                $"{verificationDate} AS [date_last_verified]",
+                $"{status} AS [status]",
+                OptionalExpression(
+                    assetVerificationColumns,
+                    "av",
+                    "responsible_manager",
+                    "nvarchar(max)"
+                ) + " AS [responsible_manager]",
+                OptionalExpression(assetVerificationColumns, "av", "current_km", "int")
+                    + " AS [current_km]",
+                OptionalExpression(assetVerificationColumns, "av", "barcode", "nvarchar(max)")
+                    + " AS [barcode]",
+            ]
+        );
+    }
+
+    private static string BuildNotVerifiedReportSelectList(IReadOnlySet<string> vehicleColumns) =>
+        string.Join(
+            ",\n                    ",
+            [
+                "CAST(NULL AS int) AS [asset_verification_code]",
+                OptionalExpression(vehicleColumns, "v", "registration_number", "nvarchar(max)")
+                    + " AS [vehicle_reg_no]",
+                "v.[vmf_code] AS [vmf_code]",
+                OptionalExpression(vehicleColumns, "v", "fleet_number", "nvarchar(max)")
+                    + " AS [fleet_number]",
+                OptionalExpression(vehicleColumns, "v", "registration_number", "nvarchar(max)")
+                    + " AS [registration_number]",
+                "current_contract.[department_name] AS [department_name]",
+                "current_contract.[site_name] AS [site_name]",
+                "current_contract.[site_code] AS [site_code]",
+                "CAST(NULL AS nvarchar(max)) AS [province]",
+                "CAST(NULL AS nvarchar(max)) AS [vehicle_make]",
+                "CAST(NULL AS nvarchar(max)) AS [vehicle_model]",
+                OptionalExpression(vehicleColumns, "v", "licence_due_date", "datetime2")
+                    + " AS [licence_expiry_date]",
+                "CAST(NULL AS datetime2) AS [date_last_verified]",
+                "CAST(NULL AS nvarchar(max)) AS [status]",
+                "current_contract.[responsible_manager] AS [responsible_manager]",
+                OptionalExpression(vehicleColumns, "v", "current_odo", "int") + " AS [current_km]",
+                OptionalExpression(vehicleColumns, "v", "barcode", "nvarchar(max)")
+                    + " AS [barcode]",
+            ]
+        );
+
+    private static string BuildReportVmfCodeExpression(
+        IReadOnlySet<string> assetVerificationColumns,
+        IReadOnlySet<string> vehicleColumns
+    ) =>
+        $"COALESCE({OptionalExpression(assetVerificationColumns, "av", "vmf_code", "int")}, {OptionalExpression(vehicleColumns, "v", "vmf_code", "int")})";
+
+    private static string BuildReportVehicleRegNoExpression(
+        IReadOnlySet<string> assetVerificationColumns,
+        IReadOnlySet<string> vehicleColumns
+    )
+    {
+        var verificationRegNo = OptionalExpression(
+            assetVerificationColumns,
+            "av",
+            "vehicle_reg_no",
+            "nvarchar(max)"
+        );
+        var vehicleRegNo = BuildAliasedCoalesceExpression(
+            vehicleColumns,
+            "v",
+            ["registration_number", "fleet_number"],
+            "nvarchar(max)"
+        );
+        return $"CASE WHEN {verificationRegNo} IS NULL THEN {vehicleRegNo} ELSE {verificationRegNo} END";
+    }
+
+    private static string BuildReportVerificationDateExpression(
+        IReadOnlySet<string> assetVerificationColumns
+    ) =>
+        BuildAliasedCoalesceExpression(
+            assetVerificationColumns,
+            "av",
+            ["date_last_verified", "verification_date"],
+            "datetime2"
+        );
+
+    private static string BuildReportStatusExpression(
+        IReadOnlySet<string> assetVerificationColumns,
+        string verificationDate
+    )
+    {
+        var status = OptionalExpression(
+            assetVerificationColumns,
+            "av",
+            "verification_status",
+            "nvarchar(max)"
+        );
+        return $"COALESCE(NULLIF({status}, N''), CASE WHEN {verificationDate} IS NULL THEN N'Pending' ELSE N'Verified' END)";
+    }
+
+    private static void AddDateRangePredicates(
+        ICollection<string> predicates,
+        ICollection<ParameterValue> parameters,
+        string dateExpression,
+        DateTime? fromDate,
+        DateTime? toDate
+    )
+    {
+        if (fromDate.HasValue)
+        {
+            predicates.Add($"{dateExpression} >= @fromDate");
+            parameters.Add(new ParameterValue("@fromDate", DbType.DateTime2, fromDate.Value.Date));
+        }
+
+        if (toDate.HasValue)
+        {
+            predicates.Add($"{dateExpression} < DATEADD(day, 1, @toDate)");
+            parameters.Add(new ParameterValue("@toDate", DbType.DateTime2, toDate.Value.Date));
+        }
+    }
+
+    private static string? BuildTrimmedIdentifierExpression(
+        IReadOnlySet<string> columns,
+        string alias,
+        string column
+    ) =>
+        columns.Contains(column)
+            ? $"NULLIF(LTRIM(RTRIM(CONVERT(nvarchar(4000), [{alias}].[{column}]))), N'')"
+            : null;
+
+    private static string BuildAliasedCoalesceExpression(
+        IReadOnlySet<string> columns,
+        string alias,
+        IReadOnlyList<string> candidates,
+        string sqlType
+    )
+    {
+        var expressions = candidates
+            .Where(columns.Contains)
+            .Select(column => $"[{alias}].[{column}]")
+            .ToArray();
+        return expressions.Length switch
+        {
+            0 => $"CAST(NULL AS {sqlType})",
+            1 => expressions[0],
+            _ => $"COALESCE({string.Join(", ", expressions)})",
+        };
+    }
+
+    private static string OptionalExpression(
+        IReadOnlySet<string> columns,
+        string alias,
+        string column,
+        string sqlType
+    ) => columns.Contains(column) ? $"[{alias}].[{column}]" : $"CAST(NULL AS {sqlType})";
+
+    private static string BuildActivePredicate(IReadOnlySet<string> columns, string alias) =>
+        columns.Contains("is_deleted") ? $"{alias}.[is_deleted] = 0" : "1 = 1";
+
+    private static void EnsureRequiredColumns(
+        IReadOnlySet<string> columns,
+        string tableName,
+        params string[] requiredColumns
+    )
+    {
+        var missingColumns = requiredColumns.Where(column => !columns.Contains(column)).ToArray();
+        if (missingColumns.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"The required asset verification report columns are not available on {tableName}: {string.Join(", ", missingColumns)}"
+            );
         }
     }
 
@@ -683,7 +1383,14 @@ public sealed class AssetVerificationRepository : IAssetVerificationRepository
         values.Add(new WriteValue(column, parameter, type, value));
     }
 
-    private static async Task<HashSet<string>> GetTableColumnsAsync(DbConnection connection)
+    private static Task<HashSet<string>> GetTableColumnsAsync(DbConnection connection) =>
+        GetTableColumnsAsync(connection, "Asset_Verification", CancellationToken.None);
+
+    private static async Task<HashSet<string>> GetTableColumnsAsync(
+        DbConnection connection,
+        string tableName,
+        CancellationToken cancellationToken
+    )
     {
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -692,17 +1399,38 @@ public sealed class AssetVerificationRepository : IAssetVerificationRepository
             WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table;
             """;
         AddParameter(command, "@schema", DbType.String, "dbo");
-        AddParameter(command, "@table", DbType.String, "Asset_Verification");
+        AddParameter(command, "@table", DbType.String, tableName);
 
         var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
         {
             columns.Add(reader.GetString(0));
         }
 
         return columns;
     }
+
+    private static AssetVerificationReportRow MapReportRow(DbDataReader reader) =>
+        new(
+            ReadInt(reader, "asset_verification_code"),
+            ReadString(reader, "vehicle_reg_no"),
+            ReadInt(reader, "vmf_code"),
+            ReadString(reader, "fleet_number"),
+            ReadString(reader, "registration_number"),
+            ReadString(reader, "department_name"),
+            ReadString(reader, "site_name"),
+            ReadShort(reader, "site_code"),
+            ReadString(reader, "province"),
+            ReadString(reader, "vehicle_make"),
+            ReadString(reader, "vehicle_model"),
+            ReadDate(reader, "licence_expiry_date"),
+            ReadDate(reader, "date_last_verified"),
+            ReadString(reader, "status"),
+            ReadString(reader, "responsible_manager"),
+            ReadInt(reader, "current_km"),
+            ReadString(reader, "barcode")
+        );
 
     private static AssetVerification Map(DbDataReader reader) =>
         new()
@@ -781,6 +1509,14 @@ public sealed class AssetVerificationRepository : IAssetVerificationRepository
         }
     }
 
+    private static void AddParameters(DbCommand command, IEnumerable<ParameterValue> values)
+    {
+        foreach (var value in values)
+        {
+            AddParameter(command, value.Name, value.Type, value.Value);
+        }
+    }
+
     private static void AddParameter(
         DbCommand command,
         string name,
@@ -802,6 +1538,14 @@ public sealed class AssetVerificationRepository : IAssetVerificationRepository
     }
 
     private readonly record struct ParameterValue(string Name, DbType Type, object? Value);
+
+    private sealed record AssetVerificationReportSql(
+        string FromClause,
+        string WhereClause,
+        string SelectList,
+        string OrderBy,
+        IReadOnlyList<ParameterValue> Parameters
+    );
 
     private readonly record struct WriteValue(
         string Column,

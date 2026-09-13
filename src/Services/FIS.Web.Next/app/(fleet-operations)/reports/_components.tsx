@@ -160,12 +160,52 @@ export function ReportFilterForm({
   );
 }
 
+export function ReportPagination({
+  report,
+  pageHref,
+  label = "Report result pages",
+}: Readonly<{
+  report: Pick<LegacyReport, "page" | "totalPages">;
+  pageHref: (page: number) => string;
+  label?: string;
+}>) {
+  if (report.totalPages <= 1) return null;
+
+  return (
+    <nav className="vehicle-pagination report-print-hide" aria-label={label}>
+      {report.page > 1 ? (
+        <Link className="vehicle-pagination-button" href={pageHref(report.page - 1)}>
+          Previous
+        </Link>
+      ) : (
+        <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">
+          Previous
+        </span>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {report.page} of {report.totalPages}
+      </span>
+      {report.page < report.totalPages ? (
+        <Link className="vehicle-pagination-button" href={pageHref(report.page + 1)}>
+          Next
+        </Link>
+      ) : (
+        <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">
+          Next
+        </span>
+      )}
+    </nav>
+  );
+}
+
 export function ReportResult({
   report,
   backHref,
+  pageHref,
 }: Readonly<{
   report: LegacyReport;
   backHref: string;
+  pageHref: (page: number) => string;
 }>) {
   // Legacy report output is tabular. When a report is wider than a sheet, the
   // print preview repeats its rows in manageable column groups instead of
@@ -280,6 +320,7 @@ export function ReportResult({
           ) : null}
         </>
       )}
+      <ReportPagination report={report} pageHref={pageHref} />
     </section>
   );
 }

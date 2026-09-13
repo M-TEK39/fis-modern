@@ -23,7 +23,10 @@ namespace FIS.Api.Controllers;
 [Produces("application/json")]
 public class ReportController : BaseApiController
 {
+    private const int DefaultReportPageSize = 24;
+    private const int MaximumReportPageSize = 100;
     private const long VehicleManagementPermission = 1;
+
     // The legacy all-access administrator level. This is deliberately distinct
     // from the Financial bit: that single bit represents both own- and
     // all-departments financial roles.
@@ -86,13 +89,13 @@ public class ReportController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<LegacyReportResultDto>> GetDynamicLegacyReport(
         string reportKey,
-        CancellationToken cancellationToken
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize,
+        [FromQuery] bool includeAll = false,
+        CancellationToken cancellationToken = default
     )
     {
-        // Keep the existing permission boundary for dynamic reports and add
-        // the legacy Reports check for the Asset List route. Other dynamic
-        // report callers retain their pre-existing authorization behavior.
-        if ((IsFineReportKey(reportKey) || IsAssetListReportKey(reportKey)) && !HasReportsRole())
+        if (!HasDynamicReportAccess(reportKey))
         {
             return Forbid();
         }
@@ -110,8 +113,10 @@ public class ReportController : BaseApiController
                 filters.Remove("view");
             }
 
+            RemoveDynamicReportPagingControls(filters);
             ExpandLegacyParameterPairs(filters);
             NormalizeLegacyAliases(filters);
+            RemoveDynamicReportPagingControls(filters);
 
             if (IsAssetListReportKey(reportKey))
             {
@@ -126,9 +131,12 @@ public class ReportController : BaseApiController
                 }
             }
 
-            var report = await _legacyReportResultService.GetReportAsync(
+            var report = await _legacyReportResultService.GetPagedReportAsync(
                 reportKey,
                 filters,
+                page,
+                Math.Clamp(pageSize, 1, MaximumReportPageSize),
+                includeAll,
                 cancellationToken
             );
             return Ok(report);
@@ -146,6 +154,13 @@ public class ReportController : BaseApiController
                 new { error = "Failed to generate legacy report", message = ex.Message }
             );
         }
+    }
+
+    private static void RemoveDynamicReportPagingControls(IDictionary<string, string?> filters)
+    {
+        filters.Remove("page");
+        filters.Remove("pageSize");
+        filters.Remove("includeAll");
     }
 
     /// <summary>
@@ -480,11 +495,7 @@ public class ReportController : BaseApiController
     )
     {
         var columns = await TryGetLegacyAspNetColumnsAsync(cancellationToken);
-        var profileUserKey = GetSharedLegacyUserKey(
-            columns,
-            "aspnet_Profile",
-            "aspnet_Users"
-        );
+        var profileUserKey = GetSharedLegacyUserKey(columns, "aspnet_Profile", "aspnet_Users");
         if (profileUserKey is null)
         {
             return null;
@@ -519,7 +530,11 @@ public class ReportController : BaseApiController
 
             var propertyNames = reader.IsDBNull(0) ? null : Convert.ToString(reader.GetValue(0));
             var propertyValues = reader.IsDBNull(1) ? null : Convert.ToString(reader.GetValue(1));
-            var department = ParseLegacyProfileInteger(propertyNames, propertyValues, "DepartmentCode");
+            var department = ParseLegacyProfileInteger(
+                propertyNames,
+                propertyValues,
+                "DepartmentCode"
+            );
             var site = ParseLegacyProfileInteger(propertyNames, propertyValues, "SiteCode");
             return department.HasValue
                 ? new LegacyAssetListProfileScope(department.Value, site)
@@ -622,11 +637,11 @@ public class ReportController : BaseApiController
         }
 
         return firstTableColumns.Contains("UserId") && secondTableColumns.Contains("UserId")
-            ? "UserId"
+                ? "UserId"
             : firstTableColumns.Contains("user_access_code")
-                && secondTableColumns.Contains("user_access_code")
+            && secondTableColumns.Contains("user_access_code")
                 ? "user_access_code"
-                : null;
+            : null;
     }
 
     private static void AddStringParameter(DbCommand command, string name, string value)
@@ -698,10 +713,7 @@ public class ReportController : BaseApiController
     {
         foreach (var key in new[] { "id", "site", "site_code", "SiteID", "lstSites" })
         {
-            if (
-                filters.TryGetValue(key, out var rawValue)
-                && int.TryParse(rawValue, out var value)
-            )
+            if (filters.TryGetValue(key, out var rawValue) && int.TryParse(rawValue, out var value))
             {
                 return value;
             }
@@ -1700,37 +1712,37 @@ public class ReportController : BaseApiController
     }
 
     [HttpPost("losses/vehicle")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesVehicleReport(
+    public async Task<ActionResult<LegacyReportResultDto>> GetLossesVehicleReport(
         [FromBody] JsonElement payload,
         CancellationToken cancellationToken
-    ) => Ok(await ExecuteLegacyGridAsync("losses", payload, "one-vehicle", cancellationToken));
+    ) => Ok(await ExecutePagedLegacyGridAsync("losses", payload, "one-vehicle", cancellationToken));
 
     [HttpPost("losses/all")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesAllReport(
+    public async Task<ActionResult<LegacyReportResultDto>> GetLossesAllReport(
         [FromBody] JsonElement payload,
         CancellationToken cancellationToken
-    ) => Ok(await ExecuteLegacyGridAsync("losses", payload, "all", cancellationToken));
+    ) => Ok(await ExecutePagedLegacyGridAsync("losses", payload, "all", cancellationToken));
 
     [HttpPost("losses/no-report")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesNoReport(
+    public async Task<ActionResult<LegacyReportResultDto>> GetLossesNoReport(
         [FromBody] JsonElement payload,
         CancellationToken cancellationToken
-    ) => Ok(await ExecuteLegacyGridAsync("losses", payload, "no-report", cancellationToken));
+    ) => Ok(await ExecutePagedLegacyGridAsync("losses", payload, "no-report", cancellationToken));
 
     [HttpPost("losses/with-report")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesWithReport(
+    public async Task<ActionResult<LegacyReportResultDto>> GetLossesWithReport(
         [FromBody] JsonElement payload,
         CancellationToken cancellationToken
-    ) => Ok(await ExecuteLegacyGridAsync("losses", payload, "with-report", cancellationToken));
+    ) => Ok(await ExecutePagedLegacyGridAsync("losses", payload, "with-report", cancellationToken));
 
     [HttpPost("losses/dept-period")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesDeptPeriod(
+    public async Task<ActionResult<LegacyReportResultDto>> GetLossesDeptPeriod(
         [FromBody] JsonElement payload,
         CancellationToken cancellationToken
-    ) => Ok(await ExecuteLegacyGridAsync("losses", payload, "dept-period", cancellationToken));
+    ) => Ok(await ExecutePagedLegacyGridAsync("losses", payload, "dept-period", cancellationToken));
 
     [HttpPost("licences/{mode}")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLicencesByMode(
+    public async Task<ActionResult<LegacyReportResultDto>> GetLicencesByMode(
         string mode,
         [FromBody] JsonElement payload,
         CancellationToken cancellationToken
@@ -1759,10 +1771,10 @@ public class ReportController : BaseApiController
             _ => throw new KeyNotFoundException($"Unsupported licence report mode '{mode}'"),
         };
 
-        return Ok(await ExecuteLegacyGridAsync(key, payload, null, cancellationToken));
+        return Ok(await ExecutePagedLegacyGridAsync(key, payload, null, cancellationToken));
     }
 
-    private async Task<List<Dictionary<string, object?>>> ExecuteLegacyGridAsync(
+    private async Task<LegacyReportResultDto> ExecutePagedLegacyGridAsync(
         string reportKey,
         JsonElement payload,
         string? reportMode,
@@ -1770,31 +1782,81 @@ public class ReportController : BaseApiController
     )
     {
         var filters = JsonPayloadToFilters(payload);
+        filters.Remove("page");
+        filters.Remove("pageSize");
+        filters.Remove("includeAll");
         if (!string.IsNullOrWhiteSpace(reportMode))
         {
             filters["mode"] = reportMode;
         }
         NormalizeLegacyAliases(filters);
-        var report = await _legacyReportResultService.GetReportAsync(
+
+        var (page, pageSize) = GetLegacyReportPaging(payload);
+        var report = await _legacyReportResultService.GetPagedReportAsync(
             reportKey,
             filters,
-            cancellationToken
+            page,
+            pageSize,
+            includeAll: false,
+            cancellationToken: cancellationToken
         );
 
-        var rows = new List<Dictionary<string, object?>>(report.Rows.Count);
+        var mappedRows = new List<Dictionary<string, string?>>(report.Rows.Count);
         foreach (var row in report.Rows)
         {
-            var mapped = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            var mapped = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var column in report.Columns)
             {
                 row.TryGetValue(column.Key, out var value);
                 mapped[column.Header] = value;
             }
 
-            rows.Add(mapped);
+            mappedRows.Add(mapped);
         }
 
-        return rows;
+        report.Rows = mappedRows;
+        return report;
+    }
+
+    private static (int Page, int PageSize) GetLegacyReportPaging(JsonElement payload)
+    {
+        var page = GetJsonInteger(payload, "page") ?? 1;
+        var pageSize = GetJsonInteger(payload, "pageSize") ?? DefaultReportPageSize;
+        return (Math.Max(1, page), Math.Clamp(pageSize, 1, MaximumReportPageSize));
+    }
+
+    private static int? GetJsonInteger(JsonElement payload, string propertyName)
+    {
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        foreach (var property in payload.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, propertyName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (
+                property.Value.ValueKind == JsonValueKind.Number
+                && property.Value.TryGetInt32(out var number)
+            )
+            {
+                return number;
+            }
+
+            if (
+                property.Value.ValueKind == JsonValueKind.String
+                && int.TryParse(property.Value.GetString(), out var parsed)
+            )
+            {
+                return parsed;
+            }
+        }
+
+        return null;
     }
 
     private static Dictionary<string, string?> JsonPayloadToFilters(JsonElement payload)
@@ -2658,6 +2720,52 @@ public class ReportController : BaseApiController
         || reportKey.Equals("traffic-dept-detail", StringComparison.OrdinalIgnoreCase)
         || reportKey.Equals("dept-site-period", StringComparison.OrdinalIgnoreCase);
 
+    private bool HasDynamicReportAccess(string reportKey)
+    {
+        if (IsWorkshopReportKey(reportKey))
+        {
+            return HasAnyRole("Workshop", "Reports");
+        }
+
+        if (IsLossReportKey(reportKey))
+        {
+            return HasAnyRole("Losses", "Reports");
+        }
+
+        if (IsTaxiReportKey(reportKey))
+        {
+            return HasAnyRole("Private Hire Vehicles", "Reports");
+        }
+
+        if (reportKey.Equals("driver-information-finyear", StringComparison.OrdinalIgnoreCase))
+        {
+            return HasAnyRole("TripAuthorities", "Trip Authorities", "Reports")
+                || HasVehicleManagementPermission();
+        }
+
+        if (IsAssetListReportKey(reportKey))
+        {
+            // The profile selector determines an already-authorized Reports
+            // user's scope; it must not turn the Finance role into access to
+            // fleet asset data.
+            return HasReportsRole();
+        }
+
+        return HasReportsRole();
+    }
+
+    private static bool IsWorkshopReportKey(string reportKey) =>
+        reportKey.Equals("workshop", StringComparison.OrdinalIgnoreCase)
+        || reportKey.StartsWith("workshop-", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsLossReportKey(string reportKey) =>
+        reportKey.Equals("losses", StringComparison.OrdinalIgnoreCase)
+        || reportKey.StartsWith("losses-", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsTaxiReportKey(string reportKey) =>
+        reportKey.Equals("taxis", StringComparison.OrdinalIgnoreCase)
+        || reportKey.StartsWith("taxis-", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsAssetListReportKey(string reportKey) =>
         reportKey.Equals("asset-list", StringComparison.OrdinalIgnoreCase)
         || reportKey.Equals("all-departments", StringComparison.OrdinalIgnoreCase)
@@ -2703,14 +2811,7 @@ public class ReportController : BaseApiController
 
     private bool HasAssetListAdministratorAccess()
     {
-        if (
-            HasAnyRole(
-                "admin",
-                "administrator",
-                "system administrator",
-                "systemadministrator"
-            )
-        )
+        if (HasAnyRole("admin", "administrator", "system administrator", "systemadministrator"))
         {
             return true;
         }

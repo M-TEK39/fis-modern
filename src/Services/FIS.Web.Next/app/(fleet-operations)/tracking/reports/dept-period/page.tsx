@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
   DateRangeFields,
   TrackingNotice,
+  TrackingReportPagination,
   TrackingReportTable,
   TrackingShell,
 } from "@/app/(fleet-operations)/tracking/_components";
@@ -42,9 +43,10 @@ async function renderTrackingDeptPeriodReportPageContent({
   const scope = queryValue(query.scope) || "one";
   const departmentCode = parsePositiveInteger(queryValue(query.departmentCode));
   const range = reportDateRange(queryValue(query.startDate), queryValue(query.endDate));
+  const page = parsePositiveInteger(queryValue(query.page)) ?? 1;
   const run = queryValue(query.run) === "1";
   try {
-    const [departments, rows] = await Promise.all([
+    const [departments, report] = await Promise.all([
       getDepartments(),
       run && (scope === "all" || departmentCode)
         ? getTrackingDeptPeriodReport(
@@ -52,8 +54,9 @@ async function renderTrackingDeptPeriodReportPageContent({
             scope === "all",
             range.startDate,
             range.endDate,
+            { page },
           )
-        : Promise.resolve([]),
+        : Promise.resolve(null),
     ]);
     return (
       <TrackingShell
@@ -97,7 +100,20 @@ async function renderTrackingDeptPeriodReportPageContent({
           </div>
         </form>
         {run && (scope === "all" || departmentCode) ? (
-          <TrackingReportTable records={rows} title="Tracking report for department period" />
+          <>
+            <TrackingReportTable
+              records={report?.items ?? []}
+              title="Tracking report for department period"
+            />
+            {report ? (
+              <TrackingReportPagination
+                page={report}
+                query={query}
+                routePath="/tracking/reports/dept-period"
+                label="Tracking report for department period"
+              />
+            ) : null}
+          </>
         ) : (
           <p className="muted-copy">
             Choose a scope, date range, and department when required, then submit the report.

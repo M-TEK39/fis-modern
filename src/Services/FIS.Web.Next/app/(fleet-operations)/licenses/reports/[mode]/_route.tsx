@@ -9,6 +9,7 @@ import { notFound } from "next/navigation";
 
 import { LicenseShell } from "@/app/(fleet-operations)/licenses/_components";
 import { valueOrDash } from "@/app/(fleet-operations)/licenses/_utils";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 import {
   accessRestricted,
   getLicenseSession,
@@ -18,6 +19,7 @@ import {
 } from "@/app/(fleet-operations)/licenses/_page";
 import { getDepartments, DepartmentApiError } from "@/lib/api/reference-data/api-departments";
 import {
+  DEFAULT_LICENSE_REPORT_PAGE_SIZE,
   getLicenseReport,
   LICENSE_REPORT_MODES,
   LicenseReportApiError,
@@ -90,6 +92,30 @@ function errorCard(message: string) {
   );
 }
 
+function positiveInteger(value: string) {
+  const parsed = Number(value);
+  return value && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function reportPageHref(
+  routePath: string,
+  mode: LicenseReportMode,
+  query: Record<string, string>,
+  page: number,
+  pageSize: number,
+) {
+  const reportPath = routePath === "/licenses/reports" ? `${routePath}/${mode}` : routePath;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (["page", "pageSize", "includeAll", "run"].includes(key) || !value.trim()) continue;
+    params.set(key, value);
+  }
+  params.set("run", "1");
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+  return `${reportPath}?${params.toString()}`;
+}
+
 const ReportForm = renderReportForm;
 
 function renderReportForm({
@@ -107,6 +133,8 @@ function renderReportForm({
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
       <input name="run" type="hidden" value="1" />
+      <input name="page" type="hidden" value="1" />
+      <input name="pageSize" type="hidden" value={DEFAULT_LICENSE_REPORT_PAGE_SIZE} />
       {identifier ? (
         <div className="form-grid">
           <div className="form-field">
@@ -303,25 +331,31 @@ function renderReportForm({
   );
 }
 
-function Results({ report }: Readonly<{ report: Awaited<ReturnType<typeof getLicenseReport>> }>) {
-  if (report.rows.length === 0)
-    return (
-      <section className="vehicle-empty-state" aria-live="polite">
-        <p className="eyebrow">No records found</p>
-        <h2>No licences matched the selected filters.</h2>
-        <p className="muted-copy">Adjust the report parameters and try again.</p>
-      </section>
-    );
+function Results({
+  report,
+  pageHref,
+}: Readonly<{
+  report: Awaited<ReturnType<typeof getLicenseReport>>;
+  pageHref: (page: number) => string;
+}>) {
   return (
     <ReportResultsPanel
       headingId="license-report-results-title"
-      heading={`${report.rows.length} record(s) returned`}
+      heading={`${report.totalCount} record${report.totalCount === 1 ? "" : "s"} returned`}
     >
+      {report.rows.length === 0 ? (
+        <div className="vehicle-empty-state" aria-live="polite">
+          <p className="eyebrow">No records found</p>
+          <h2>No licences matched the selected filters.</h2>
+          <p className="muted-copy">Adjust the report parameters and try again.</p>
+        </div>
+      ) : null}
       <ReportRowsTable
-        columns={report.columns.map((column) => ({ key: column, header: column }))}
+        columns={report.columns}
         rows={report.rows}
         caption="Licence report results"
       />
+      <ReportPagination report={report} pageHref={pageHref} label="Licence report pages" />
     </ReportResultsPanel>
   );
 }
@@ -347,26 +381,33 @@ async function renderLicenseReportPageContent({
     Object.entries(raw).map(([key, value]) => [key, queryValue(value)]),
   );
   const run = query.run === "1";
+  const page = positiveInteger(query.page) ?? 1;
+  const pageSize = positiveInteger(query.pageSize) ?? DEFAULT_LICENSE_REPORT_PAGE_SIZE;
   let departments: Awaited<ReturnType<typeof getDepartments>> = [];
   let report: Awaited<ReturnType<typeof getLicenseReport>> | null = null;
   let loadError: string | null = null;
   try {
     if (modeValue === "dept-period") departments = await getDepartments();
     if (run) {
-      report = await getLicenseReport(modeValue, {
-        search: query.search || undefined,
-        searchMode: reportMode(modeValue),
-        departmentCode: query.departmentCode || undefined,
-        location: query.location === "jhb" || query.location === "pta" ? query.location : undefined,
-        status:
-          query.status === "inservice" || query.status === "notinservice"
-            ? query.status
-            : undefined,
-        from: query.from || undefined,
-        to: query.to || undefined,
-        month: Number(query.month) || undefined,
-        year: Number(query.year) || undefined,
-      });
+      report = await getLicenseReport(
+        modeValue,
+        {
+          search: query.search || undefined,
+          searchMode: reportMode(modeValue),
+          departmentCode: query.departmentCode || undefined,
+          location:
+            query.location === "jhb" || query.location === "pta" ? query.location : undefined,
+          status:
+            query.status === "inservice" || query.status === "notinservice"
+              ? query.status
+              : undefined,
+          from: query.from || undefined,
+          to: query.to || undefined,
+          month: Number(query.month) || undefined,
+          year: Number(query.year) || undefined,
+        },
+        { page, pageSize },
+      );
     }
   } catch (error) {
     if (error instanceof LicenseReportApiError && error.reason === "unauthorized")
@@ -393,7 +434,12 @@ async function renderLicenseReportPageContent({
         </div>
       ) : null}
       {report ? (
-        <Results report={report} />
+        <Results
+          report={report}
+          pageHref={(requestedPage) =>
+            reportPageHref(routePath, modeValue, query, requestedPage, report.pageSize)
+          }
+        />
       ) : (
         <section className="vehicle-status-card">
           <p className="eyebrow">Parameters required</p>

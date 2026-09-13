@@ -3,8 +3,12 @@ import type { ReactNode } from "react";
 
 import { FinanceFrame } from "@/app/(fleet-operations)/finance/_components";
 import { FinanceReportTable } from "@/app/(fleet-operations)/finance/report-table";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
+import ReportResultsPanel from "@/components/ui/report-results-panel";
+import ReportRowsTable from "@/components/ui/report-rows-table";
 import type { FinanceOption } from "@/lib/api/finance/api-finance";
 import type { FinanceReport } from "@/lib/api/finance/api-finance-reports";
+import type { LegacyReport } from "@/lib/api/reports/api-legacy-reports";
 
 type Query = Record<string, string | string[] | undefined>;
 
@@ -47,6 +51,50 @@ function renderSummaryReportButtons(
   }, []);
 }
 
+function legacyAssetPageHref(action: string, query: Query, page: number, pageSize: number) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    const item = Array.isArray(value) ? value[0] : value;
+    if (!item || ["page", "pageSize"].includes(key)) continue;
+    params.set(key, item);
+  }
+  params.set("run", "1");
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+  return `/finance/regional/${action}?${params.toString()}`;
+}
+
+function LegacyAssetReportResults({
+  action,
+  query,
+  report,
+}: Readonly<{
+  action: string;
+  query: Query;
+  report: LegacyReport;
+}>) {
+  return (
+    <ReportResultsPanel
+      headingId="regional-asset-report-results"
+      eyebrow={`${report.totalCount} record${report.totalCount === 1 ? "" : "s"}`}
+      heading={report.title}
+    >
+      {report.rows.length === 0 ? (
+        <div className="vehicle-empty-state">
+          <p>No assets matched the selected report parameters.</p>
+        </div>
+      ) : (
+        <ReportRowsTable columns={report.columns} rows={report.rows} caption={report.title} />
+      )}
+      <ReportPagination
+        report={report}
+        pageHref={(page) => legacyAssetPageHref(action, query, page, report.pageSize)}
+        label="Regional asset report pages"
+      />
+    </ReportResultsPanel>
+  );
+}
+
 export function RegionalFinanceView({
   action,
   title,
@@ -59,6 +107,7 @@ export function RegionalFinanceView({
   error,
   output,
   report,
+  legacyAssetReport,
 }: Readonly<{
   action: string;
   title: string;
@@ -71,6 +120,7 @@ export function RegionalFinanceView({
   error: string | null;
   output: { href: string; label: string } | null;
   report: FinanceReport | null;
+  legacyAssetReport: LegacyReport | null;
 }>) {
   return (
     <FinanceFrame title={title} description="Regional finance reporting.">
@@ -223,6 +273,9 @@ export function RegionalFinanceView({
             {output.label}
           </a>
         </section>
+      ) : null}
+      {legacyAssetReport ? (
+        <LegacyAssetReportResults action={action} query={query} report={legacyAssetReport} />
       ) : null}
       {report ? (
         <FinanceReportTable

@@ -7,6 +7,7 @@ import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 import { FuelCardApiError, getFuelCardAllocation } from "@/lib/api/fleet-operations/api-fuel-cards";
 import { getSession } from "@/lib/auth/session";
 
@@ -29,6 +30,26 @@ function hasRole(roles: readonly string[]) {
   return roles.some(
     (role) => role.localeCompare("Fuelcards", undefined, { sensitivity: "accent" }) === 0,
   );
+}
+
+function reportPage(value: string | string[] | undefined) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Number(raw);
+  return raw && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function reportPageHref(
+  query: Record<string, string | string[] | undefined>,
+  page: number,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (["page", "pageSize", "includeAll"].includes(key)) continue;
+    const text = Array.isArray(value) ? value[0] : value;
+    if (text?.trim()) params.set(key, text);
+  }
+  params.set("page", String(page));
+  return `/reports/fuel-cards?${params.toString()}`;
 }
 
 const FuelCardReportsPageContent = renderFuelCardReportsPageContent;
@@ -63,11 +84,12 @@ async function renderFuelCardReportsPageContent({
 
   const query = await searchParams;
   const view = Array.isArray(query.view) ? query.view[0] : query.view;
+  const page = reportPage(query.page);
   let report: Awaited<ReturnType<typeof getFuelCardAllocation>> | null = null;
   let error = "";
   if (view === "result") {
     try {
-      report = await getFuelCardAllocation();
+      report = await getFuelCardAllocation(undefined, { page });
     } catch (requestError) {
       error =
         requestError instanceof FuelCardApiError && requestError.reason === "unavailable"
@@ -114,7 +136,7 @@ async function renderFuelCardReportsPageContent({
               <div>
                 <p className="eyebrow">Live result</p>
                 <h2 id="fuel-card-report-result-title">
-                  Fuelcard activity ({report.recentActivity.length} recent rows)
+                  Fuelcard activity ({report.totalCount} record{report.totalCount === 1 ? "" : "s"})
                 </h2>
               </div>
               <div className="report-print-hide">
@@ -170,6 +192,11 @@ async function renderFuelCardReportsPageContent({
                 </table>
               </div>
             )}
+            <ReportPagination
+              report={report}
+              pageHref={(requestedPage) => reportPageHref(query, requestedPage)}
+              label="Fuelcard report activity pages"
+            />
           </section>
         ) : null}
       </section>

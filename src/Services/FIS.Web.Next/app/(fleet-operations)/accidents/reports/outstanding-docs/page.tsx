@@ -8,11 +8,13 @@ import {
   AccidentReportFormActions,
   AccidentReportFormError,
   AccidentReportLoadingState,
+  AccidentReportPagination,
   AccidentReportPageShell,
   AccidentVehicleSearchFieldsWithMode,
 } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   authorizeAccidentReport,
+  getAccidentReportPageState,
   loadAccidentReport,
 } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import VehicleTable, {
@@ -20,6 +22,7 @@ import VehicleTable, {
 } from "@/app/(fleet-operations)/accidents/vehicle-table";
 import {
   getAccidentOutstandingDocumentLookup,
+  type AccidentReportPage,
   type AccidentOutstandingDocumentLookupRow,
   type AccidentVehicleReportMode,
 } from "@/lib/api/fleet-operations/api-accidents";
@@ -83,9 +86,13 @@ function getOutstandingDocumentsColumns(
 }
 
 function LookupTable({
+  query,
+  report,
   rows,
   mode,
 }: {
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentOutstandingDocumentLookupRow>;
   rows: AccidentOutstandingDocumentLookupRow[];
   mode: AccidentVehicleReportMode;
 }) {
@@ -100,8 +107,16 @@ function LookupTable({
           <p className="eyebrow">Report results</p>
           <h2 id="outstanding-documents-results-title">Accidents found</h2>
         </div>
-        <span className="form-hint">{rows.length} record(s)</span>
+        <span className="form-hint">{report.total} record(s)</span>
       </div>
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/outstanding-docs"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
       <div className="vehicle-table-wrapper">
         <VehicleTable
           caption="Accidents found for the selected vehicle number"
@@ -139,23 +154,28 @@ function OutstandingDocumentsForm({
 }
 
 function OutstandingDocumentsResults({
-  rows,
+  query,
+  report,
   mode,
 }: {
-  rows: AccidentOutstandingDocumentLookupRow[] | null;
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentOutstandingDocumentLookupRow> | null;
   mode: AccidentVehicleReportMode;
 }) {
-  return rows !== null ? (
-    rows.length > 0 ? (
-      <LookupTable rows={rows} mode={mode} />
-    ) : (
-      <section className="vehicle-empty-state" aria-live="polite">
-        <p className="eyebrow">Vehicle not found</p>
-        <h2>This vehicle number does not exist.</h2>
-        <p className="muted-copy">Try another GP or GG number.</p>
-      </section>
-    )
-  ) : null;
+  if (report === null) {
+    return null;
+  }
+
+  const rows = report.items;
+  return rows.length > 0 ? (
+    <LookupTable query={query} report={report} rows={rows} mode={mode} />
+  ) : (
+    <section className="vehicle-empty-state" aria-live="polite">
+      <p className="eyebrow">Vehicle not found</p>
+      <h2>This vehicle number does not exist.</h2>
+      <p className="muted-copy">Try another GP or GG number.</p>
+    </section>
+  );
 }
 
 async function OutstandingDocumentsContent({
@@ -192,11 +212,12 @@ async function OutstandingDocumentsContent({
       : searchTerm.length > 8
         ? "Vehicle numbers can contain no more than 8 characters."
         : null;
+  const { page, pageSize } = getAccidentReportPageState(query);
 
   const report = await loadAccidentReport({
     shouldRun,
     errorMessage,
-    load: () => getAccidentOutstandingDocumentLookup(searchTerm, mode),
+    load: () => getAccidentOutstandingDocumentLookup(searchTerm, mode, page, pageSize),
     context: "FIS outstanding accident document lookup failed",
   });
   if (report.status === "unauthorized") {
@@ -210,12 +231,10 @@ async function OutstandingDocumentsContent({
       />
     );
   }
-  const rows = report.data;
-
   return (
     <>
       <OutstandingDocumentsForm errorMessage={errorMessage} mode={mode} searchTerm={searchTerm} />
-      <OutstandingDocumentsResults rows={rows} mode={mode} />
+      <OutstandingDocumentsResults query={query} report={report.data} mode={mode} />
       <AccidentReportFooter clearHref="/accidents/reports/outstanding-docs" />
     </>
   );

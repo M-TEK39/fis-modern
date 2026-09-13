@@ -485,6 +485,7 @@ export async function getTaxiPage(
     pageSize?: number;
     pendingOnly?: boolean;
     jiaPickupOnly?: boolean;
+    search?: string;
   } = {},
 ): Promise<TaxiPage<TaxiRecord>> {
   const params = new URLSearchParams({
@@ -493,6 +494,7 @@ export async function getTaxiPage(
   });
   if (options.pendingOnly) params.set("pendingOnly", "true");
   if (options.jiaPickupOnly) params.set("jiaPickupOnly", "true");
+  if (options.search?.trim()) params.set("search", options.search.trim());
   return readTaxiPage(await readJson(await requestApi(`api/Taxi/page?${params.toString()}`)));
 }
 

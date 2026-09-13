@@ -104,12 +104,26 @@ public sealed class FuelCardManagementService
         return true;
     }
 
-    public async Task<FuelCardAllocationReport> GetAllocationReportAsync(int? siteCode = null)
+    public async Task<FuelCardAllocationReport> GetAllocationReportAsync(
+        int? siteCode = null,
+        int page = 1,
+        int pageSize = 24,
+        CancellationToken cancellationToken = default
+    )
     {
-        var fuelCards = await _fuelCardRepository.GetActiveFuelCardsAsync();
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var fuelCards = (await _fuelCardRepository.GetActiveFuelCardsAsync()).ToList();
         var filteredCards = siteCode.HasValue
             ? fuelCards.Where(card => card.Petrecsite == siteCode.Value).ToList()
             : fuelCards.ToList();
+        var recentActivityPage = await _fuelCardRepository.GetRecentActivityPageAsync(
+            siteCode,
+            page,
+            pageSize,
+            cancellationToken
+        );
 
         var statusGroups = filteredCards
             .GroupBy(card =>
@@ -149,11 +163,8 @@ public sealed class FuelCardManagementService
                     StringComparison.OrdinalIgnoreCase
                 )
             ),
-            RecentActivity = filteredCards
-                .Where(card => card.Status_date.HasValue)
-                .OrderByDescending(card => card.Status_date)
-                .Take(10)
-                .Select(card => new FuelCardActivity
+            RecentActivity = recentActivityPage
+                .Items.Select(card => new FuelCardActivity
                 {
                     CardNumber = card.card_number ?? "Unknown",
                     VmfCode = card.vmf_code ?? 0,
@@ -162,6 +173,10 @@ public sealed class FuelCardManagementService
                     Receiver = card.PetReceiver ?? "Unknown",
                 })
                 .ToList(),
+            Page = recentActivityPage.Page,
+            PageSize = recentActivityPage.PageSize,
+            Total = recentActivityPage.Total,
+            TotalPages = recentActivityPage.TotalPages,
         };
     }
 }
@@ -175,6 +190,10 @@ public sealed class FuelCardAllocationReport
     public Dictionary<string, int> StatusBreakdown { get; set; } = new();
     public Dictionary<string, int> CardsByGarage { get; set; } = new();
     public List<FuelCardActivity> RecentActivity { get; set; } = new();
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 24;
+    public int Total { get; set; }
+    public int TotalPages { get; set; } = 1;
 }
 
 public sealed class FuelCardActivity

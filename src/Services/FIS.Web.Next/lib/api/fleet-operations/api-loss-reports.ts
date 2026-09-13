@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_LOSS_REPORT_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type LossReportMode = "vehicle" | "all" | "no-report" | "with-report" | "dept-period";
@@ -20,8 +21,22 @@ export type LossReportFilters = {
 };
 
 export type LossReport = {
-  columns: string[];
+  reportKey: string;
+  title: string;
+  legacyTarget: string | null;
+  isApproximate: boolean;
+  approximationReason: string | null;
+  columns: Array<{ key: string; header: string }>;
   rows: Array<Record<string, string | null>>;
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type LossReportRequestOptions = {
+  page?: number;
+  pageSize?: number;
 };
 
 export type LossReportApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
@@ -58,6 +73,21 @@ function asString(value: unknown) {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "bigint") return String(value);
   return null;
+}
+
+function asNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function positiveInteger(value: unknown) {
+  const number = asNumber(value);
+  return number !== null && Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
@@ -123,19 +153,56 @@ async function readJson(response: Response) {
   }
 }
 
-function getRows(payload: unknown) {
-  if (Array.isArray(payload)) return payload;
-  if (isRecord(payload)) {
-    const rows = getValue(payload, "rows", "Rows", "data", "items", "results");
-    return Array.isArray(rows) ? rows : [];
-  }
-
-  return [];
-}
-
 function mapRow(value: unknown): Record<string, string | null> | null {
   if (!isRecord(value)) return null;
   return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, asString(item)]));
+}
+
+function mapReport(value: unknown): LossReport | null {
+  if (!isRecord(value)) return null;
+
+  const rawColumns = getValue(value, "columns", "Columns");
+  const rawRows = getValue(value, "rows", "Rows");
+  if (!Array.isArray(rawColumns) || !Array.isArray(rawRows)) return null;
+
+  const columns = rawColumns
+    .map((column) => {
+      if (!isRecord(column)) return null;
+      const key = asString(getValue(column, "key", "Key"));
+      const header = asString(getValue(column, "header", "Header"));
+      return key && header ? { key, header } : null;
+    })
+    .filter((column): column is { key: string; header: string } => column !== null);
+  const rows = rawRows
+    .map(mapRow)
+    .filter((row): row is Record<string, string | null> => row !== null);
+  const title = asString(getValue(value, "title", "Title"));
+  if (!title || columns.length === 0) return null;
+
+  const totalCount = Math.max(
+    0,
+    asNumber(getValue(value, "totalCount", "TotalCount")) ?? rows.length,
+  );
+  const page = positiveInteger(getValue(value, "page", "Page")) ?? 1;
+  const pageSize =
+    positiveInteger(getValue(value, "pageSize", "PageSize")) ?? DEFAULT_LOSS_REPORT_PAGE_SIZE;
+  const totalPages =
+    positiveInteger(getValue(value, "totalPages", "TotalPages")) ??
+    Math.max(1, Math.ceil(totalCount / pageSize));
+
+  return {
+    reportKey: asString(getValue(value, "reportKey", "ReportKey")) ?? "",
+    title,
+    legacyTarget: asString(getValue(value, "legacyTarget", "LegacyTarget")),
+    isApproximate: getValue(value, "isApproximate", "IsApproximate") === true,
+    approximationReason: asString(getValue(value, "approximationReason", "ApproximationReason")),
+    columns,
+    rows,
+    totalCount,
+    page,
+    pageSize,
+    totalPages,
+  };
 }
 
 function pathForMode(mode: LossReportMode) {
@@ -148,7 +215,7 @@ function pathForMode(mode: LossReportMode) {
   }[mode];
 }
 
-function toPayload(filters: LossReportFilters) {
+function toPayload(filters: LossReportFilters, options: LossReportRequestOptions) {
   return {
     vmf: filters.vmfCode,
     vehicle_number: filters.vehicleNumber,
@@ -159,22 +226,29 @@ function toPayload(filters: LossReportFilters) {
     end_date: filters.endDate,
     report_status: filters.reportStatus,
     hire_type: filters.hireType,
+    page: options.page ?? 1,
+    pageSize: options.pageSize ?? DEFAULT_LOSS_REPORT_PAGE_SIZE,
   };
 }
 
 export async function getLossReport(
   mode: LossReportMode,
   filters: LossReportFilters = {},
+  options: LossReportRequestOptions = {},
 ): Promise<LossReport> {
   const payload = await readJson(
     await requestApi(pathForMode(mode), {
       method: "POST",
-      body: JSON.stringify(toPayload(filters)),
+      body: JSON.stringify(toPayload(filters, options)),
     }),
   );
-  const rows = getRows(payload)
-    .map(mapRow)
-    .filter((row): row is Record<string, string | null> => row !== null);
-  const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
-  return { columns, rows };
+  const report = mapReport(payload);
+  if (!report) {
+    throw new LossReportApiError(
+      "invalid-response",
+      "The FIS API returned an invalid losses report.",
+    );
+  }
+
+  return report;
 }

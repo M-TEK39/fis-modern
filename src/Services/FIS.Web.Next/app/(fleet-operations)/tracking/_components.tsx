@@ -3,7 +3,10 @@ import Link from "next/link";
 import { saveTrackingAction } from "@/app/(fleet-operations)/tracking/actions";
 import DataTableHeader from "@/components/ui/data-table-header";
 import { MenuSection } from "@/components/ui/menu-section";
-import type { TrackingRecord } from "@/lib/api/fleet-operations/api-tracking";
+import type {
+  TrackingRecord,
+  TrackingReportPage,
+} from "@/lib/api/fleet-operations/api-tracking";
 import type { VehicleOption } from "@/lib/api/vehicles/api-vehicles";
 import { valueOrDash, formatDate } from "./_utils";
 
@@ -276,6 +279,74 @@ export function TrackingReportTable({
   title = "Tracking report results",
 }: Readonly<{ records: readonly TrackingRecord[]; title?: string }>) {
   return <TrackingTable records={records} title={title} editable={false} />;
+}
+
+function trackingReportPageHref(
+  routePath: string,
+  query: Record<string, string | string[] | undefined>,
+  page: number,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (key === "page" || key === "run" || value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) params.append(key, item);
+  }
+  params.set("page", String(page));
+  params.set("run", "1");
+  return `${routePath}?${params.toString()}`;
+}
+
+export function TrackingReportPagination({
+  page,
+  query,
+  routePath,
+  label = "Tracking report",
+}: Readonly<{
+  page: TrackingReportPage;
+  query: Record<string, string | string[] | undefined>;
+  routePath: string;
+  label?: string;
+}>) {
+  return (
+    <>
+      {page.totalPages > 1 ? (
+        <nav className="vehicle-pagination" aria-label={`${label} pages`}>
+          {page.page > 1 ? (
+            <Link
+              className="vehicle-pagination-button"
+              href={trackingReportPageHref(routePath, query, page.page - 1)}
+              aria-label={`Go to ${label.toLocaleLowerCase()} page ${page.page - 1}`}
+            >
+              Previous
+            </Link>
+          ) : (
+            <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">
+              Previous
+            </span>
+          )}
+          <span className="vehicle-pagination-meta" aria-live="polite">
+            Page {page.page} of {page.totalPages}
+          </span>
+          {page.page < page.totalPages ? (
+            <Link
+              className="vehicle-pagination-button"
+              href={trackingReportPageHref(routePath, query, page.page + 1)}
+              aria-label={`Go to ${label.toLocaleLowerCase()} page ${page.page + 1}`}
+            >
+              Next
+            </Link>
+          ) : (
+            <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">
+              Next
+            </span>
+          )}
+        </nav>
+      ) : null}
+      <p className="pagination-meta">
+        Total records: {page.total} | Page size: {page.pageSize}
+      </p>
+    </>
+  );
 }
 
 export function VehicleLookup({

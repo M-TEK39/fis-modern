@@ -9,12 +9,15 @@ import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SearchTypeFieldset from "@/components/ui/search-type-fieldset";
 import {
   CallCentreApiError,
+  getCallCentreCaptureStatistics,
   getCallCentreIncident,
   getCallCentreDataAccess,
-  getCallCentreIncidents,
+  getCallCentreReportPage,
   getCallCentreSites,
   searchCallCentreVehicles,
   type CallCentreIncidentRecord,
+  type CallCentreCaptureStatistics,
+  type CallCentreReportPage,
   type CallCentreDataAccessEntry,
   type CallCentreSiteOption,
   type CallCentreVehicleOption,
@@ -49,6 +52,25 @@ function queryValue(value: string | string[] | undefined) {
 function positiveInt(value: string | undefined) {
   const parsed = Number(value);
   return value && Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function reportPageNumber(value: string | undefined) {
+  return positiveInt(value) ?? 1;
+}
+
+function reportPageHref(
+  routePath: string,
+  params: Record<string, string | string[] | undefined>,
+  page: number,
+) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (key === "page" || key === "pageSize") continue;
+    const text = queryValue(value)?.trim();
+    if (text) query.set(key, text);
+  }
+  query.set("page", String(page));
+  return `${routePath}?${query.toString()}`;
 }
 
 function hasRole(roles: readonly string[], role: string) {
@@ -106,19 +128,46 @@ function incidentFilter(params: Record<string, string | string[] | undefined>) {
   return "all";
 }
 
-function matchesIncident(record: CallCentreIncidentRecord, selected: string) {
-  if (selected === "all" || !selected) return true;
-  const type = (record.incidentType ?? "").toLowerCase();
-  if (selected === "accident") return type === "accident";
-  if (selected === "hijack") return type === "hi-jack" || type === "hijack" || type === "highjack";
-  if (selected === "loss") return type === "loss_theft" || type === "loss";
-  if (selected === "road") return type === "road_assistance" || type === "road assistance";
-  return type === selected;
-}
+function CallCentreReportPagination({
+  report,
+  pageHref,
+}: Readonly<{
+  report: Pick<CallCentreReportPage, "page" | "totalPages">;
+  pageHref: (page: number) => string;
+}>) {
+  if (report.totalPages <= 1) return null;
 
-function dateInRange(value: string | null, startDate: string, endDate: string) {
-  const date = dateValue(value);
-  return Boolean(date && (!startDate || date >= startDate) && (!endDate || date <= endDate));
+  return (
+    <nav className="vehicle-pagination report-print-hide" aria-label="Call Centre report pages">
+      {report.page > 1 ? (
+        <Link className="vehicle-pagination-button" href={pageHref(report.page - 1)}>
+          Previous
+        </Link>
+      ) : (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Previous
+        </span>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {report.page} of {report.totalPages}
+      </span>
+      {report.page < report.totalPages ? (
+        <Link className="vehicle-pagination-button" href={pageHref(report.page + 1)}>
+          Next
+        </Link>
+      ) : (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Next
+        </span>
+      )}
+    </nav>
+  );
 }
 
 function reportSite(record: CallCentreIncidentRecord) {
@@ -494,10 +543,14 @@ function RecordTable({
   records,
   sites,
   title,
+  report,
+  pageHref,
 }: Readonly<{
   records: CallCentreIncidentRecord[];
   sites: CallCentreSiteOption[];
   title: string;
+  report?: CallCentreReportPage | null;
+  pageHref?: (page: number) => string;
 }>) {
   if (records.length === 0)
     return (
@@ -517,7 +570,7 @@ function RecordTable({
           <p className="eyebrow">Report results</p>
           <h2 id="call-centre-report-results-title">{title}</h2>
         </div>
-        <span className="form-hint">{records.length} record(s)</span>
+        <span className="form-hint">{report?.total ?? records.length} record(s)</span>
       </div>
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
@@ -551,22 +604,18 @@ function RecordTable({
       {records.map((record) => (
         <LegacyRecordDetails key={`details-${record.code}`} record={record} sites={sites} />
       ))}
+      {report && pageHref ? (
+        <CallCentreReportPagination report={report} pageHref={pageHref} />
+      ) : null}
     </section>
   );
 }
 
 function StatisticsResults({
-  records,
-  captureName,
+  statistics,
   title,
-}: Readonly<{ records: CallCentreIncidentRecord[]; captureName: string; title: string }>) {
-  const groups = [
-    ...records.reduce((result, record) => {
-      const name = record.captureName?.trim() || "(Unknown)";
-      result.set(name, (result.get(name) ?? 0) + 1);
-      return result;
-    }, new Map<string, number>()),
-  ].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+}: Readonly<{ statistics: CallCentreCaptureStatistics; title: string }>) {
+  const groups = statistics.items;
   if (groups.length === 0)
     return (
       <section className="vehicle-empty-state">
@@ -584,7 +633,7 @@ function StatisticsResults({
           <p className="eyebrow">Report results</p>
           <h2 id="call-centre-statistics-results-title">{title}</h2>
         </div>
-        <span className="form-hint">{records.length} incident(s)</span>
+        <span className="form-hint">{statistics.totalCalls} incident(s)</span>
       </div>
       <div className="vehicle-table-wrapper">
         <table className="vehicle-table">
@@ -596,10 +645,10 @@ function StatisticsResults({
             ]}
           />
           <tbody>
-            {groups.map(([name, count]) => (
-              <tr key={name}>
-                <td>{name}</td>
-                <td>{count}</td>
+            {groups.map((item) => (
+              <tr key={item.captureName}>
+                <td>{item.captureName}</td>
+                <td>{item.count}</td>
               </tr>
             ))}
           </tbody>
@@ -614,12 +663,20 @@ function DataAccessResults({
   sites,
   accessTableAvailable,
   entries,
+  total,
+  page,
+  totalPages,
+  pageHref,
   title,
 }: Readonly<{
   record: CallCentreIncidentRecord | null;
   sites: CallCentreSiteOption[];
   accessTableAvailable: boolean;
   entries: CallCentreDataAccessEntry[];
+  total: number;
+  page: number;
+  totalPages: number;
+  pageHref: (page: number) => string;
   title: string;
 }>) {
   if (!record)
@@ -641,7 +698,7 @@ function DataAccessResults({
             <p className="eyebrow">Legacy Call_Centre_Counter</p>
             <h2 id="call-centre-access-results-title">Data access detail</h2>
           </div>
-          <span className="form-hint">{entries.length} access record(s)</span>
+          <span className="form-hint">{total} access record(s)</span>
         </div>
         {!accessTableAvailable ? (
           <p className="muted-copy">
@@ -680,6 +737,7 @@ function DataAccessResults({
             </table>
           </div>
         )}
+        <CallCentreReportPagination report={{ page, totalPages }} pageHref={pageHref} />
       </section>
     </>
   );
@@ -732,15 +790,21 @@ async function renderCallCentreReportContent({
   );
   const department = (queryValue(params.department) ?? queryValue(params.XDEPT) ?? "").trim();
   const captureName = (queryValue(params.captureName) ?? queryValue(params.XNAME) ?? "").trim();
+  const page = reportPageNumber(queryValue(params.page));
   const shouldRun =
     queryValue(params.run) === "1" ||
     Boolean(referenceNumber || searchQuery || startDate || endDate);
 
   let records: CallCentreIncidentRecord[] = [];
+  let pagedReport: CallCentreReportPage | null = null;
+  let statistics: CallCentreCaptureStatistics | null = null;
   let sites: CallCentreSiteOption[] = [];
   let vehicles: CallCentreVehicleOption[] = [];
   let accessTableAvailable = false;
   let accessEntries: CallCentreDataAccessEntry[] = [];
+  let accessPage = 1;
+  let accessTotal = 0;
+  let accessTotalPages = 1;
   let loadError = "";
 
   try {
@@ -750,25 +814,59 @@ async function renderCallCentreReportContent({
       if (referenceNumber && shouldRun) {
         const [record, access] = await Promise.all([
           getCallCentreIncident(referenceNumber),
-          getCallCentreDataAccess(referenceNumber),
+          getCallCentreDataAccess(referenceNumber, page),
         ]);
         records = [record];
         accessTableAvailable = access.accessTableAvailable;
         accessEntries = access.entries;
+        accessPage = access.page;
+        accessTotal = access.total;
+        accessTotalPages = access.totalPages;
       }
     } else if (mode === "one-vehicle") {
       if (searchQuery) vehicles = await searchCallCentreVehicles(searchQuery);
       const matchedVmfCode =
         selectedVmfCode ?? (vehicles.length === 1 ? vehicles[0].vmfCode : null);
-      if (matchedVmfCode && shouldRun)
-        records = (await getCallCentreIncidents()).filter(
-          (record) => record.vmfCode === matchedVmfCode,
-        );
+      if (matchedVmfCode && shouldRun) {
+        pagedReport = await getCallCentreReportPage({
+          mode,
+          page,
+          vmfCode: matchedVmfCode,
+        });
+        records = pagedReport.items;
+      }
     } else if (mode === "dept-site-period" || mode === "clo-report" || mode === "open-calls") {
       sites = await getCallCentreSites();
-      if (shouldRun) records = await getCallCentreIncidents();
-    } else if (mode === "all-reference" || mode === "statistics") {
-      if (shouldRun) records = await getCallCentreIncidents();
+      if (shouldRun) {
+        pagedReport = await getCallCentreReportPage({
+          mode,
+          page,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          siteCode: selectedSiteCode ?? undefined,
+          department: department || undefined,
+        });
+        records = pagedReport.items;
+      }
+    } else if (mode === "all-reference") {
+      if (shouldRun) {
+        pagedReport = await getCallCentreReportPage({
+          mode,
+          page,
+          incident: incidentFilter(params),
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+        });
+        records = pagedReport.items;
+      }
+    } else if (mode === "statistics") {
+      if (shouldRun) {
+        statistics = await getCallCentreCaptureStatistics({
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          captureName: captureName || undefined,
+        });
+      }
     }
   } catch (caughtError) {
     if (caughtError instanceof CallCentreApiError && caughtError.reason === "unauthorized")
@@ -782,48 +880,6 @@ async function renderCallCentreReportContent({
         ? "The requested call centre incident was not found."
         : "The call centre service is temporarily unavailable. Please try again.";
   }
-
-  if (mode === "all-reference")
-    records = records.filter(
-      (record) =>
-        matchesIncident(record, incidentFilter(params)) &&
-        dateInRange(record.callDate, startDate, endDate),
-    );
-  if (mode === "dept-site-period")
-    records = records.filter(
-      (record) =>
-        (selectedSiteCode === null || reportSite(record) === selectedSiteCode) &&
-        (!startDate || dateInRange(record.callDate, startDate, endDate)) &&
-        (!department ||
-          sites
-            .find((site) => site.code === reportSite(record))
-            ?.departmentNumber?.toLowerCase()
-            .includes(department.toLowerCase())),
-    );
-  if (mode === "clo-report")
-    records = records.filter(
-      (record) =>
-        record.croNotification?.toUpperCase() === "Y" &&
-        dateInRange(record.callDate, startDate, endDate) &&
-        (!department ||
-          sites
-            .find((site) => site.code === reportSite(record))
-            ?.departmentNumber?.toLowerCase()
-            .includes(department.toLowerCase())),
-    );
-  if (mode === "open-calls")
-    records = records.filter(
-      (record) =>
-        record.callClosed?.toUpperCase() !== "Y" &&
-        dateInRange(record.callDate, startDate, endDate) &&
-        (selectedSiteCode === null || reportSite(record) === selectedSiteCode),
-    );
-  if (mode === "statistics")
-    records = records.filter(
-      (record) =>
-        dateInRange(record.callDate, startDate, endDate) &&
-        (!captureName || record.captureName?.toLowerCase().includes(captureName.toLowerCase())),
-    );
 
   const title = reportTitle(mode);
   return (
@@ -845,8 +901,8 @@ async function renderCallCentreReportContent({
           </div>
         ) : null}
         <ReportForm mode={mode} params={params} sites={sites} vehicles={vehicles} />
-        {mode === "statistics" && shouldRun && !loadError ? (
-          <StatisticsResults records={records} captureName={captureName} title={title} />
+        {mode === "statistics" && shouldRun && !loadError && statistics ? (
+          <StatisticsResults statistics={statistics} title={title} />
         ) : null}
         {mode === "data-access" && shouldRun && !loadError ? (
           <DataAccessResults
@@ -854,11 +910,21 @@ async function renderCallCentreReportContent({
             sites={sites}
             accessTableAvailable={accessTableAvailable}
             entries={accessEntries}
+            total={accessTotal}
+            page={accessPage}
+            totalPages={accessTotalPages}
+            pageHref={(requestedPage) => reportPageHref(routePath, params, requestedPage)}
             title={title}
           />
         ) : null}
         {mode !== "statistics" && mode !== "data-access" && shouldRun && !loadError ? (
-          <RecordTable records={records} sites={sites} title={title} />
+          <RecordTable
+            records={records}
+            sites={sites}
+            title={title}
+            report={pagedReport}
+            pageHref={(requestedPage) => reportPageHref(routePath, params, requestedPage)}
+          />
         ) : null}
       </section>
     </main>

@@ -19,7 +19,9 @@ public sealed class WorkshopRepository : IWorkshopRepository
 {
     private const string TableName = "workshop";
     private const string VehicleTableName = "vehicle_master";
+    private const string ModelTableName = "model";
     private const int MaximumSnapshotRows = 500;
+    private const int MaximumReportPageSize = 100;
 
     private static readonly string[] LegacyColumns =
     [
@@ -237,6 +239,131 @@ public sealed class WorkshopRepository : IWorkshopRepository
         }
     }
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The report query uses fixed compatibility table, column, join, and ordering identifiers; every report filter and pagination value is parameterized."
+    )]
+    public async Task<WorkshopReportPage> GetReportPageAsync(WorkshopReportPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ValidateReportKind(query.ReportKind);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, MaximumReportPageSize);
+        var requestedPage = Math.Max(1, query.Page);
+        var (startDate, endDate) = NormalizeReportDateRange(query.StartDate, query.EndDate);
+        var vehicleSearch = NormalizeReportSearch(query.VehicleSearch);
+        var garage = NormalizeReportGarage(query.Garage);
+        var category = NormalizeReportCategory(query.Category);
+        var workshopColumns = await GetAvailableColumnsAsync();
+        var vehicleColumns = await GetTableColumnsAsync(VehicleTableName);
+        var modelColumns = await GetTableColumnsAsync(ModelTableName);
+        var hasVehicleJoin =
+            workshopColumns.ContainsKey("vmf_code") && vehicleColumns.ContainsKey("vmf_code");
+        var hasModelJoin =
+            hasVehicleJoin
+            && vehicleColumns.ContainsKey("model_code")
+            && modelColumns.ContainsKey("model_code");
+        var joins = BuildReportJoins(hasVehicleJoin, hasModelJoin);
+        var whereClause = BuildReportWhereClause(
+            query,
+            workshopColumns,
+            vehicleColumns,
+            hasVehicleJoin,
+            startDate,
+            endDate,
+            vehicleSearch,
+            garage,
+            category
+        );
+        var orderBy = BuildReportOrderBy(
+            query.ReportKind,
+            vehicleColumns,
+            hasVehicleJoin,
+            workshopColumns
+        );
+        var projection = BuildReportProjection(
+            workshopColumns,
+            vehicleColumns,
+            modelColumns,
+            hasVehicleJoin,
+            hasModelJoin
+        );
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var countCommand = connection.CreateCommand();
+            countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{TableName}] AS [w]
+                {joins}
+                WHERE {whereClause}
+                """;
+            AddReportParameters(
+                countCommand,
+                query,
+                startDate,
+                endDate,
+                vehicleSearch,
+                garage,
+                category
+            );
+            var total = Convert.ToInt32(
+                await countCommand.ExecuteScalarAsync(),
+                CultureInfo.InvariantCulture
+            );
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = total == 0 ? 1 : Math.Min(requestedPage, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            dataCommand.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}] AS [w]
+                {joins}
+                WHERE {whereClause}
+                ORDER BY {orderBy}
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            AddReportParameters(
+                dataCommand,
+                query,
+                startDate,
+                endDate,
+                vehicleSearch,
+                garage,
+                category
+            );
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<WorkshopReportPageItem>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(MapWorkshopReport(reader, workshopColumns));
+            }
+
+            return new WorkshopReportPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IEnumerable<Workshop>> GetByVehicleAsync(int vmfCode)
     {
         var columns = await GetAvailableColumnsAsync();
@@ -251,6 +378,406 @@ public sealed class WorkshopRepository : IWorkshopRepository
             columns
         );
     }
+
+    private static void ValidateReportKind(WorkshopReportKind reportKind)
+    {
+        if (!Enum.IsDefined(reportKind))
+        {
+            throw new ArgumentOutOfRangeException(nameof(reportKind), reportKind, null);
+        }
+    }
+
+    private static (DateTime StartDate, DateTime EndDate) NormalizeReportDateRange(
+        DateTime? startDate,
+        DateTime? endDate
+    )
+    {
+        var start = (startDate ?? DateTime.Today.AddMonths(-1)).Date;
+        var end = (endDate ?? DateTime.Today).Date;
+        return end < start ? (end, start) : (start, end);
+    }
+
+    private static string? NormalizeReportSearch(string? search)
+    {
+        var value = search?.Trim();
+        return string.IsNullOrWhiteSpace(value) ? null : value.ToLowerInvariant();
+    }
+
+    private static string? NormalizeReportGarage(string? garage) =>
+        garage?.Trim().ToLowerInvariant() switch
+        {
+            "radiojhb" or "jhb" or "j" => "J",
+            "radiopta" or "pta" or "p" => "P",
+            _ => null,
+        };
+
+    private static string? NormalizeReportCategory(string? category) =>
+        category?.Trim().ToLowerInvariant() switch
+        {
+            "radioacc" or "accident" or "accidents" => "accident",
+            "radiomec" or "mechanical" or "mechanic" => "mechanical",
+            _ => null,
+        };
+
+    private static string BuildReportJoins(bool hasVehicleJoin, bool hasModelJoin)
+    {
+        var joins = new List<string>();
+        if (hasVehicleJoin)
+        {
+            joins.Add(
+                $"LEFT JOIN [dbo].[{VehicleTableName}] AS [v] ON [v].[vmf_code] = [w].[vmf_code]"
+            );
+        }
+
+        if (hasModelJoin)
+        {
+            joins.Add(
+                $"LEFT JOIN [dbo].[{ModelTableName}] AS [m] ON [m].[model_code] = [v].[model_code]"
+            );
+        }
+
+        return string.Join(Environment.NewLine, joins);
+    }
+
+    private static string BuildReportWhereClause(
+        WorkshopReportPageQuery query,
+        IReadOnlyDictionary<string, ColumnInfo> workshopColumns,
+        IReadOnlyDictionary<string, ColumnInfo> vehicleColumns,
+        bool hasVehicleJoin,
+        DateTime startDate,
+        DateTime endDate,
+        string? vehicleSearch,
+        string? garage,
+        string? category
+    )
+    {
+        var conditions = new List<string> { GetActiveFilter(workshopColumns, "w") };
+
+        if (query.ReportKind == WorkshopReportKind.Period)
+        {
+            conditions.Add(
+                workshopColumns.ContainsKey("receive_date")
+                    ? "[w].[receive_date] >= @startDate AND [w].[receive_date] < DATEADD(day, 1, @endDate)"
+                    : "1 = 0"
+            );
+        }
+
+        if (garage is not null)
+        {
+            conditions.Add(
+                workshopColumns.ContainsKey("garage")
+                    ? "UPPER(LTRIM(RTRIM(COALESCE([w].[garage], '')))) = @garage"
+                    : "1 = 0"
+            );
+        }
+
+        if (category is not null)
+        {
+            conditions.Add(BuildReportCategoryPredicate(workshopColumns, category));
+        }
+
+        if (query.ReportKind == WorkshopReportKind.InShop || query.OpenOnly)
+        {
+            conditions.Add(BuildReportOpenPredicate(workshopColumns, "w"));
+        }
+
+        switch (query.ReportKind)
+        {
+            case WorkshopReportKind.OneVehicle:
+                conditions.Add(
+                    BuildReportVehicleSearchPredicate(
+                        vehicleColumns,
+                        hasVehicleJoin,
+                        query.VehicleSearchField,
+                        vehicleSearch
+                    )
+                );
+                break;
+            case WorkshopReportKind.PrintJobCard:
+                conditions.Add(
+                    query.WorkshopCode.HasValue
+                        ? "[w].[ww_code] = @workshopCode"
+                        : BuildReportVehicleSearchPredicate(
+                            vehicleColumns,
+                            hasVehicleJoin,
+                            query.VehicleSearchField,
+                            vehicleSearch
+                        )
+                );
+                break;
+        }
+
+        return string.Join(" AND ", conditions);
+    }
+
+    private static string BuildReportCategoryPredicate(
+        IReadOnlyDictionary<string, ColumnInfo> workshopColumns,
+        string category
+    )
+    {
+        if (!workshopColumns.ContainsKey("accid_mech"))
+        {
+            return "1 = 0";
+        }
+
+        return category == "accident"
+            ? "NULLIF(LTRIM(RTRIM(COALESCE([w].[accid_mech], ''))), '') IS NOT NULL AND UPPER(LTRIM(RTRIM([w].[accid_mech]))) < @category"
+            : "NULLIF(LTRIM(RTRIM(COALESCE([w].[accid_mech], ''))), '') IS NOT NULL AND UPPER(LTRIM(RTRIM([w].[accid_mech]))) > @category";
+    }
+
+    private static string BuildReportOpenPredicate(
+        IReadOnlyDictionary<string, ColumnInfo> workshopColumns,
+        string alias
+    )
+    {
+        var jobClose = workshopColumns.ContainsKey("job_close")
+            ? $"UPPER(LTRIM(RTRIM(COALESCE([{alias}].[job_close], '')))) = 'N'"
+            : "1 = 0";
+        var noJobClose = workshopColumns.ContainsKey("job_close")
+            ? $"NULLIF(LTRIM(RTRIM(COALESCE([{alias}].[job_close], ''))), '') IS NULL"
+            : "1 = 1";
+        var incompleteChecks = new List<string>();
+        if (workshopColumns.ContainsKey("complete_date"))
+        {
+            incompleteChecks.Add($"[{alias}].[complete_date] IS NULL");
+        }
+
+        if (workshopColumns.ContainsKey("complete_time"))
+        {
+            incompleteChecks.Add($"[{alias}].[complete_time] IS NULL");
+        }
+
+        var incomplete =
+            incompleteChecks.Count == 0 ? "1 = 1" : string.Join(" AND ", incompleteChecks);
+        return $"({jobClose} OR ({noJobClose} AND {incomplete}))";
+    }
+
+    private static string BuildReportVehicleSearchPredicate(
+        IReadOnlyDictionary<string, ColumnInfo> vehicleColumns,
+        bool hasVehicleJoin,
+        WorkshopReportVehicleField searchField,
+        string? vehicleSearch
+    )
+    {
+        if (vehicleSearch is null || !hasVehicleJoin)
+        {
+            return "1 = 0";
+        }
+
+        var column = searchField switch
+        {
+            WorkshopReportVehicleField.FleetNumber => "fleet_number",
+            WorkshopReportVehicleField.RegistrationNumber => "registration_number",
+            _ => throw new ArgumentOutOfRangeException(nameof(searchField), searchField, null),
+        };
+        return vehicleColumns.ContainsKey(column)
+            ? $"CHARINDEX(@vehicleSearch, LOWER(LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(max), [v].[{column}]), ''))))) > 0"
+            : "1 = 0";
+    }
+
+    private static string BuildReportOrderBy(
+        WorkshopReportKind reportKind,
+        IReadOnlyDictionary<string, ColumnInfo> vehicleColumns,
+        bool hasVehicleJoin,
+        IReadOnlyDictionary<string, ColumnInfo> workshopColumns
+    )
+    {
+        var receiveDate = workshopColumns.ContainsKey("receive_date")
+            ? "[w].[receive_date]"
+            : "[w].[ww_code]";
+        var receiveTime = GetReportTimeOrderExpression(workshopColumns);
+
+        return reportKind switch
+        {
+            WorkshopReportKind.OneVehicle =>
+                $"{GetFleetOrderExpression(vehicleColumns, hasVehicleJoin)} ASC, {receiveDate} DESC, [w].[ww_code] DESC",
+            WorkshopReportKind.InShop => $"{receiveDate} ASC, {receiveTime} ASC, [w].[ww_code] ASC",
+            _ => $"{receiveDate} DESC, [w].[ww_code] DESC",
+        };
+    }
+
+    private static string GetFleetOrderExpression(
+        IReadOnlyDictionary<string, ColumnInfo> vehicleColumns,
+        bool hasVehicleJoin
+    ) =>
+        hasVehicleJoin && vehicleColumns.ContainsKey("fleet_number")
+            ? "[v].[fleet_number]"
+            : "CAST(NULL AS varchar(1))";
+
+    private static string GetReportTimeOrderExpression(
+        IReadOnlyDictionary<string, ColumnInfo> workshopColumns
+    )
+    {
+        if (!workshopColumns.TryGetValue("receive_time", out var info))
+        {
+            return "CAST(NULL AS time)";
+        }
+
+        return string.Equals(info.DataType, "time", StringComparison.OrdinalIgnoreCase)
+            ? "[w].[receive_time]"
+            : "CAST([w].[receive_time] AS time)";
+    }
+
+    private static string BuildReportProjection(
+        IReadOnlyDictionary<string, ColumnInfo> workshopColumns,
+        IReadOnlyDictionary<string, ColumnInfo> vehicleColumns,
+        IReadOnlyDictionary<string, ColumnInfo> modelColumns,
+        bool hasVehicleJoin,
+        bool hasModelJoin
+    ) =>
+        string.Join(
+            ", ",
+            [
+                GetProjection(workshopColumns, "ww_code", "w"),
+                GetProjection(workshopColumns, "vmf_code", "w"),
+                GetReportVehicleProjection(
+                    vehicleColumns,
+                    hasVehicleJoin,
+                    "fleet_number",
+                    "varchar(255)"
+                ),
+                GetReportVehicleProjection(
+                    vehicleColumns,
+                    hasVehicleJoin,
+                    "registration_number",
+                    "varchar(255)"
+                ),
+                GetReportModelProjection(modelColumns, hasModelJoin),
+                GetReportVehicleProjection(vehicleColumns, hasVehicleJoin, "current_odo", "int"),
+                GetProjection(workshopColumns, "receive_date", "w"),
+                GetTimeProjection(workshopColumns, "receive_time", "w"),
+                GetCompleteDateProjection(workshopColumns, "w"),
+                GetCompleteTimeProjection(workshopColumns, "w"),
+                GetProjection(workshopColumns, "contact_name", "w"),
+                GetProjection(workshopColumns, "contact_tel", "w"),
+                GetProjection(workshopColumns, "contact_fax", "w"),
+                GetProjection(workshopColumns, "contact_email", "w"),
+                GetProjection(workshopColumns, "accid_mech", "w"),
+                GetProjection(workshopColumns, "garage", "w"),
+                GetProjection(workshopColumns, "driver_name", "w"),
+                GetProjection(workshopColumns, "call_refer", "w"),
+                GetProjection(workshopColumns, "ww_km", "w"),
+                GetProjection(workshopColumns, "ww_remarks", "w"),
+                GetProjection(workshopColumns, "ww_reason", "w"),
+                GetProjection(workshopColumns, "merch_code", "w"),
+                GetProjection(workshopColumns, "cost_repair", "w"),
+                GetProjection(workshopColumns, "date_from_ww", "w"),
+                GetProjection(workshopColumns, "job_close", "w"),
+            ]
+        );
+
+    private static string GetReportVehicleProjection(
+        IReadOnlyDictionary<string, ColumnInfo> vehicleColumns,
+        bool hasVehicleJoin,
+        string column,
+        string sqlType
+    ) =>
+        hasVehicleJoin && vehicleColumns.ContainsKey(column)
+            ? $"[v].[{column}] AS [{column}]"
+            : $"CAST(NULL AS {sqlType}) AS [{column}]";
+
+    private static string GetReportModelProjection(
+        IReadOnlyDictionary<string, ColumnInfo> modelColumns,
+        bool hasModelJoin
+    ) =>
+        hasModelJoin && modelColumns.ContainsKey("model_description")
+            ? "[m].[model_description] AS [model_description]"
+            : "CAST(NULL AS varchar(255)) AS [model_description]";
+
+    private static string GetTimeProjection(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string alias
+    )
+    {
+        if (!columns.TryGetValue(column, out var info))
+        {
+            return $"CAST(NULL AS time) AS [{column}]";
+        }
+
+        var expression = string.Equals(info.DataType, "time", StringComparison.OrdinalIgnoreCase)
+            ? $"[{alias}].[{column}]"
+            : $"CAST([{alias}].[{column}] AS time)";
+        return $"{expression} AS [{column}]";
+    }
+
+    private static void AddReportParameters(
+        DbCommand command,
+        WorkshopReportPageQuery query,
+        DateTime startDate,
+        DateTime endDate,
+        string? vehicleSearch,
+        string? garage,
+        string? category
+    )
+    {
+        if (query.ReportKind == WorkshopReportKind.Period)
+        {
+            AddParameter(command, "@startDate", DbType.Date, startDate.Date);
+            AddParameter(command, "@endDate", DbType.Date, endDate.Date);
+        }
+
+        if (
+            vehicleSearch is not null
+            && (
+                query.ReportKind == WorkshopReportKind.OneVehicle
+                || (
+                    query.ReportKind == WorkshopReportKind.PrintJobCard
+                    && !query.WorkshopCode.HasValue
+                )
+            )
+        )
+        {
+            AddParameter(command, "@vehicleSearch", DbType.String, vehicleSearch);
+        }
+
+        if (garage is not null)
+        {
+            AddParameter(command, "@garage", DbType.String, garage);
+        }
+
+        if (category is not null)
+        {
+            AddParameter(command, "@category", DbType.String, category == "accident" ? "M" : "L");
+        }
+
+        if (query.ReportKind == WorkshopReportKind.PrintJobCard && query.WorkshopCode.HasValue)
+        {
+            AddParameter(command, "@workshopCode", DbType.Int16, query.WorkshopCode.Value);
+        }
+    }
+
+    private static WorkshopReportPageItem MapWorkshopReport(
+        DbDataReader reader,
+        IReadOnlyDictionary<string, ColumnInfo> workshopColumns
+    ) =>
+        new(
+            ReadInt16(reader, "ww_code") ?? 0,
+            ReadInt32(reader, "vmf_code"),
+            ReadString(reader, "fleet_number"),
+            ReadString(reader, "registration_number"),
+            ReadString(reader, "model_description"),
+            ReadInt32(reader, "current_odo"),
+            ReadDateTime(reader, "receive_date"),
+            ReadTimeSpan(reader, "receive_time"),
+            ReadDateTime(reader, "complete_date"),
+            ReadTimeSpan(reader, "complete_time"),
+            ReadString(reader, "contact_name"),
+            ReadString(reader, "contact_tel"),
+            ReadString(reader, "contact_fax"),
+            ReadString(reader, "contact_email"),
+            ReadString(reader, "accid_mech"),
+            ReadString(reader, "garage"),
+            ReadString(reader, "driver_name"),
+            ReadDecimalIfAvailable(reader, workshopColumns, "call_refer"),
+            ReadDecimalIfAvailable(reader, workshopColumns, "ww_km"),
+            ReadString(reader, "ww_remarks"),
+            ReadString(reader, "ww_reason"),
+            ReadInt32IfAvailable(reader, workshopColumns, "merch_code"),
+            ReadDecimalIfAvailable(reader, workshopColumns, "cost_repair"),
+            ReadDateTimeIfAvailable(reader, workshopColumns, "date_from_ww"),
+            ReadString(reader, "job_close")
+        );
 
     public async Task<Workshop> CreateAsync(Workshop item, int currentUserId)
     {

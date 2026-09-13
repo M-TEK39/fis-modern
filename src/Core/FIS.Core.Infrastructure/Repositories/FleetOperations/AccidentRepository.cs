@@ -21,6 +21,7 @@ public sealed class AccidentRepository : IAccidentRepository
     private const string TableName = "accident";
     private const string VehicleTableName = "vehicle_master";
     private const int LastGgReferenceMinimumAccidentCode = 19760;
+    private const int MaximumReportPageSize = 100;
 
     private static readonly string[] RequiredColumns = ["accident_code", "vmf_code"];
 
@@ -355,15 +356,18 @@ public sealed class AccidentRepository : IAccidentRepository
         "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The report query is composed only from allowlisted schema metadata and fixed SQL fragments; the search value is parameterized."
     )]
-    public async Task<IEnumerable<AccidentDriverReportRow>> GetDriverReportAsync(
+    public async Task<AccidentReportPage<AccidentDriverReportRow>> GetDriverReportAsync(
         string searchTerm,
-        bool searchById
+        bool searchById,
+        AccidentReportPageQuery pageQuery
     )
     {
+        ArgumentNullException.ThrowIfNull(pageQuery);
+
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
         if (normalizedSearchTerm.Length == 0)
         {
-            return Array.Empty<AccidentDriverReportRow>();
+            return CreateEmptyReportPage<AccidentDriverReportRow>(pageQuery);
         }
 
         var accidentColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
@@ -378,8 +382,6 @@ public sealed class AccidentRepository : IAccidentRepository
 
         try
         {
-            await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var searchColumn = searchById ? "driver_employ_number" : "driver_name";
             var searchAvailable = accidentColumns.Contains(searchColumn);
             var vehicleJoinAvailable = vehicleColumns.Contains("vmf_code");
@@ -428,37 +430,36 @@ public sealed class AccidentRepository : IAccidentRepository
 
             var conditions = new List<string> { GetActiveFilter(accidentColumns, "a") };
             conditions.Add(searchAvailable ? $"[a].[{searchColumn}] LIKE @searchTerm" : "1 = 0");
-            command.CommandText = $"""
-                SELECT {string.Join(", ", projection)}
+            var fromClause = $"""
                 FROM [dbo].[{TableName}] AS [a]
                 {string.Join(Environment.NewLine, joins)}
-                WHERE {string.Join(" AND ", conditions)}
-                ORDER BY [a].[{(searchAvailable ? searchColumn : "accident_code")}]
                 """;
-            AddParameter(command, "@searchTerm", DbType.String, $"{normalizedSearchTerm}%");
-
-            var results = new List<AccidentDriverReportRow>();
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                results.Add(
-                    new AccidentDriverReportRow
-                    {
-                        registration_number =
-                            ReadString(reader, "registration_number") ?? string.Empty,
-                        fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
-                        driver_name = ReadString(reader, "driver_name") ?? string.Empty,
-                        driver_employ_number =
-                            ReadString(reader, "driver_employ_number") ?? string.Empty,
-                        occurence_date = ReadDateTime(reader, "occurence_date"),
-                        department_number = ReadString(reader, "department_number") ?? string.Empty,
-                        site_description = ReadString(reader, "site_description") ?? string.Empty,
-                        cost_of_repair = ReadDecimal(reader, "cost_of_repair"),
-                    }
-                );
-            }
-
-            return results;
+            return await ExecutePagedReportQueryAsync(
+                pageQuery,
+                string.Join(", ", projection),
+                fromClause,
+                string.Join(" AND ", conditions),
+                $"[a].[{(searchAvailable ? searchColumn : "accident_code")}]",
+                command => AddParameter(
+                    command,
+                    "@searchTerm",
+                    DbType.String,
+                    $"{normalizedSearchTerm}%"
+                ),
+                reader => new AccidentDriverReportRow
+                {
+                    registration_number =
+                        ReadString(reader, "registration_number") ?? string.Empty,
+                    fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
+                    driver_name = ReadString(reader, "driver_name") ?? string.Empty,
+                    driver_employ_number =
+                        ReadString(reader, "driver_employ_number") ?? string.Empty,
+                    occurence_date = ReadDateTime(reader, "occurence_date"),
+                    department_number = ReadString(reader, "department_number") ?? string.Empty,
+                    site_description = ReadString(reader, "site_description") ?? string.Empty,
+                    cost_of_repair = ReadDecimal(reader, "cost_of_repair"),
+                }
+            );
         }
         finally
         {
@@ -469,14 +470,16 @@ public sealed class AccidentRepository : IAccidentRepository
         }
     }
 
-    public Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportAsync(
+    public Task<AccidentReportPage<AccidentVehicleReportRow>> GetVehicleReportAsync(
         string searchTerm,
-        bool searchByFleet
+        bool searchByFleet,
+        AccidentReportPageQuery pageQuery
     ) =>
         GetVehicleReportCoreAsync(
             searchTerm,
             searchByFleet ? "fleet_number" : "registration_number",
-            containsSearch: false
+            containsSearch: false,
+            pageQuery: pageQuery
         );
 
     [SuppressMessage(
@@ -484,14 +487,19 @@ public sealed class AccidentRepository : IAccidentRepository
         "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The search column is selected from a fixed allowlist and the vehicle value is parameterized."
     )]
-    public async Task<
-        IEnumerable<AccidentOutstandingDocumentLookupRow>
-    > GetOutstandingDocumentLookupAsync(string searchTerm, bool searchByFleet)
+    public async Task<AccidentReportPage<AccidentOutstandingDocumentLookupRow>>
+        GetOutstandingDocumentLookupAsync(
+            string searchTerm,
+            bool searchByFleet,
+            AccidentReportPageQuery pageQuery
+        )
     {
+        ArgumentNullException.ThrowIfNull(pageQuery);
+
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
         if (normalizedSearchTerm.Length == 0)
         {
-            return Array.Empty<AccidentOutstandingDocumentLookupRow>();
+            return CreateEmptyReportPage<AccidentOutstandingDocumentLookupRow>(pageQuery);
         }
 
         var accidentColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
@@ -499,7 +507,7 @@ public sealed class AccidentRepository : IAccidentRepository
         var searchColumn = searchByFleet ? "fleet_number" : "registration_number";
         if (!vehicleColumns.Contains(searchColumn))
         {
-            return Array.Empty<AccidentOutstandingDocumentLookupRow>();
+            return CreateEmptyReportPage<AccidentOutstandingDocumentLookupRow>(pageQuery);
         }
 
         var connection = _context.Database.GetDbConnection();
@@ -511,8 +519,6 @@ public sealed class AccidentRepository : IAccidentRepository
 
         try
         {
-            await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = new[]
             {
                 GetProjection(accidentColumns, "accident_code", "a"),
@@ -532,35 +538,27 @@ public sealed class AccidentRepository : IAccidentRepository
             var orderDateColumn = accidentColumns.Contains("occurence_date")
                 ? "[a].[occurence_date] DESC"
                 : "[a].[accident_code]";
-            command.CommandText = $"""
-                SELECT {string.Join(", ", projection)}
+            var fromClause = $"""
                 FROM [dbo].[{TableName}] AS [a]
                 INNER JOIN [dbo].[{VehicleTableName}] AS [v] ON [v].[vmf_code] = [a].[vmf_code]
-                WHERE {GetActiveFilter(accidentColumns, "a")}
-                  AND {GetActiveFilter(vehicleColumns, "v")}
-                  AND [v].[{searchColumn}] = @searchTerm
-                ORDER BY {orderColumn}, {orderDateColumn}, [a].[accident_code]
                 """;
-            AddParameter(command, "@searchTerm", DbType.String, normalizedSearchTerm);
-
-            var results = new List<AccidentOutstandingDocumentLookupRow>();
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                results.Add(
-                    new AccidentOutstandingDocumentLookupRow
-                    {
-                        accident_code = ReadInt32(reader, "accident_code") ?? 0,
-                        registration_number =
-                            ReadString(reader, "registration_number") ?? string.Empty,
-                        fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
-                        gg_reference = ReadString(reader, "gg_reference") ?? string.Empty,
-                        occurence_date = ReadDateTime(reader, "occurence_date"),
-                    }
-                );
-            }
-
-            return results;
+            return await ExecutePagedReportQueryAsync(
+                pageQuery,
+                string.Join(", ", projection),
+                fromClause,
+                $"{GetActiveFilter(accidentColumns, "a")} AND {GetActiveFilter(vehicleColumns, "v")} AND [v].[{searchColumn}] = @searchTerm",
+                $"{orderColumn}, {orderDateColumn}, [a].[accident_code]",
+                command => AddParameter(command, "@searchTerm", DbType.String, normalizedSearchTerm),
+                reader => new AccidentOutstandingDocumentLookupRow
+                {
+                    accident_code = ReadInt32(reader, "accident_code") ?? 0,
+                    registration_number =
+                        ReadString(reader, "registration_number") ?? string.Empty,
+                    fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
+                    gg_reference = ReadString(reader, "gg_reference") ?? string.Empty,
+                    occurence_date = ReadDateTime(reader, "occurence_date"),
+                }
+            );
         }
         finally
         {
@@ -702,10 +700,12 @@ public sealed class AccidentRepository : IAccidentRepository
         }
     }
 
-    public Task<IEnumerable<AccidentOutstandingDocumentLookupRow>> GetInspectionLetterLookupAsync(
+    public Task<AccidentReportPage<AccidentOutstandingDocumentLookupRow>>
+        GetInspectionLetterLookupAsync(
         string searchTerm,
-        bool searchByFleet
-    ) => GetOutstandingDocumentLookupAsync(searchTerm, searchByFleet);
+        bool searchByFleet,
+        AccidentReportPageQuery pageQuery
+    ) => GetOutstandingDocumentLookupAsync(searchTerm, searchByFleet, pageQuery);
 
     public Task<AccidentOutstandingDocumentReport?> GetInspectionLetterReportAsync(
         int accidentCode
@@ -716,8 +716,11 @@ public sealed class AccidentRepository : IAccidentRepository
         "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The report projection is composed only from fixed legacy columns and the accident threshold is parameterized."
     )]
-    public async Task<IEnumerable<AccidentLastGgReferenceRow>> GetLastGgReferenceReportAsync()
+    public async Task<AccidentReportPage<AccidentLastGgReferenceRow>>
+        GetLastGgReferenceReportAsync(AccidentReportPageQuery pageQuery)
     {
+        ArgumentNullException.ThrowIfNull(pageQuery);
+
         var accidentColumns = await GetAvailableColumnsAsync(
             TableName,
             ["accident_code", "vmf_code", "gg_reference"]
@@ -736,47 +739,38 @@ public sealed class AccidentRepository : IAccidentRepository
 
         try
         {
-            await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = $"""
-                SELECT {string.Join(", ",
-                    [
-                        GetProjection(accidentColumns, "accident_code", "a"),
-                        GetProjection(accidentColumns, "gg_reference", "a"),
-                        GetAliasedProjection(vehicleColumns, "registration_number", "v", "registration_number"),
-                        GetAliasedProjection(vehicleColumns, "fleet_number", "v", "fleet_number")
-                    ])}
+            var projection = new[]
+            {
+                GetProjection(accidentColumns, "accident_code", "a"),
+                GetProjection(accidentColumns, "gg_reference", "a"),
+                GetAliasedProjection(vehicleColumns, "registration_number", "v", "registration_number"),
+                GetAliasedProjection(vehicleColumns, "fleet_number", "v", "fleet_number"),
+            };
+            var fromClause = $"""
                 FROM [dbo].[{TableName}] AS [a]
                 INNER JOIN [dbo].[{VehicleTableName}] AS [v] ON [v].[vmf_code] = [a].[vmf_code]
-                WHERE {GetActiveFilter(accidentColumns, "a")}
-                  AND {GetActiveFilter(vehicleColumns, "v")}
-                  AND [a].[accident_code] > @minimumAccidentCode
-                ORDER BY [a].[accident_code] DESC
                 """;
-            AddParameter(
-                command,
-                "@minimumAccidentCode",
-                DbType.Int32,
-                LastGgReferenceMinimumAccidentCode
+            return await ExecutePagedReportQueryAsync(
+                pageQuery,
+                string.Join(", ", projection),
+                fromClause,
+                $"{GetActiveFilter(accidentColumns, "a")} AND {GetActiveFilter(vehicleColumns, "v")} AND [a].[accident_code] > @minimumAccidentCode",
+                "[a].[accident_code] DESC",
+                command => AddParameter(
+                    command,
+                    "@minimumAccidentCode",
+                    DbType.Int32,
+                    LastGgReferenceMinimumAccidentCode
+                ),
+                reader => new AccidentLastGgReferenceRow
+                {
+                    accident_code = ReadInt32(reader, "accident_code") ?? 0,
+                    gg_reference = ReadString(reader, "gg_reference") ?? string.Empty,
+                    registration_number =
+                        ReadString(reader, "registration_number") ?? string.Empty,
+                    fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
+                }
             );
-
-            var results = new List<AccidentLastGgReferenceRow>();
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                results.Add(
-                    new AccidentLastGgReferenceRow
-                    {
-                        accident_code = ReadInt32(reader, "accident_code") ?? 0,
-                        gg_reference = ReadString(reader, "gg_reference") ?? string.Empty,
-                        registration_number =
-                            ReadString(reader, "registration_number") ?? string.Empty,
-                        fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
-                    }
-                );
-            }
-
-            return results;
         }
         finally
         {
@@ -787,55 +781,72 @@ public sealed class AccidentRepository : IAccidentRepository
         }
     }
 
-    public Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(
+    public Task<AccidentReportPage<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(
         string searchTerm,
-        bool searchByDescription
+        bool searchByDescription,
+        AccidentReportPageQuery pageQuery
     ) =>
         GetVehicleReportCoreAsync(
             searchTerm,
             searchByDescription ? "description" : "third_party_regno",
-            containsSearch: true
+            containsSearch: true,
+            pageQuery: pageQuery
         );
 
-    public Task<IEnumerable<AccidentVehicleReportRow>> GetNewAccidentsReportAsync(string mode) =>
+    public Task<AccidentReportPage<AccidentVehicleReportRow>> GetNewAccidentsReportAsync(
+        string mode,
+        AccidentReportPageQuery pageQuery
+    ) =>
         GetVehicleReportCoreAsync(
             string.Empty,
             string.Empty,
             containsSearch: false,
-            flagMode: mode
+            flagMode: mode,
+            pageQuery: pageQuery
         );
 
-    public Task<IEnumerable<AccidentVehicleReportRow>> GetAllAccidentsReportAsync(string mode) =>
+    public Task<AccidentReportPage<AccidentVehicleReportRow>> GetAllAccidentsReportAsync(
+        string mode,
+        AccidentReportPageQuery pageQuery
+    ) =>
         GetVehicleReportCoreAsync(
             string.Empty,
             string.Empty,
             containsSearch: false,
-            dateRangeMode: mode
+            dateRangeMode: mode,
+            pageQuery: pageQuery
         );
 
-    public Task<IEnumerable<AccidentVehicleReportRow>> GetGarageAccidentsReportAsync(string mode) =>
+    public Task<AccidentReportPage<AccidentVehicleReportRow>> GetGarageAccidentsReportAsync(
+        string mode,
+        AccidentReportPageQuery pageQuery
+    ) =>
         GetVehicleReportCoreAsync(
             string.Empty,
             string.Empty,
             containsSearch: false,
-            garageMode: mode
+            garageMode: mode,
+            pageQuery: pageQuery
         );
 
-    public Task<IEnumerable<AccidentVehicleReportRow>> GetDuplicateAccidentsReportAsync(
-        string garageMode
+    public Task<AccidentReportPage<AccidentVehicleReportRow>> GetDuplicateAccidentsReportAsync(
+        string garageMode,
+        AccidentReportPageQuery pageQuery
     ) =>
         GetVehicleReportCoreAsync(
             string.Empty,
             string.Empty,
             containsSearch: false,
             garageMode: garageMode,
-            duplicateOnly: true
+            duplicateOnly: true,
+            pageQuery: pageQuery
         );
 
-    public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodReportAsync(
+    public Task<AccidentReportPage<AccidentVehicleReportRow>> GetDepartmentPeriodReportAsync(
         string departmentNumber,
         DateTime startDate,
-        DateTime endDate
+        DateTime endDate,
+        AccidentReportPageQuery pageQuery
     ) =>
         GetVehicleReportCoreAsync(
             string.Empty,
@@ -844,14 +855,16 @@ public sealed class AccidentRepository : IAccidentRepository
             departmentNumber: departmentNumber?.Trim() ?? string.Empty,
             periodStartDate: startDate.Date,
             periodEndDate: endDate.Date,
-            orderByDepartment: true
+            orderByDepartment: true,
+            pageQuery: pageQuery
         );
 
-    public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodVipReportAsync(
+    public Task<AccidentReportPage<AccidentVehicleReportRow>> GetDepartmentPeriodVipReportAsync(
         string departmentNumber,
         DateTime startDate,
         DateTime endDate,
-        string hireTypeMode
+        string hireTypeMode,
+        AccidentReportPageQuery pageQuery
     ) =>
         GetVehicleReportCoreAsync(
             string.Empty,
@@ -861,15 +874,17 @@ public sealed class AccidentRepository : IAccidentRepository
             periodStartDate: startDate.Date,
             periodEndDate: endDate.Date,
             hireTypeMode: hireTypeMode,
-            orderByDepartment: true
+            orderByDepartment: true,
+            pageQuery: pageQuery
         );
 
-    public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentMonthReportAsync(
+    public Task<AccidentReportPage<AccidentVehicleReportRow>> GetDepartmentMonthReportAsync(
         string departmentNumber,
         string garageMode,
         string periodMode,
         int? year,
-        int? month
+        int? month,
+        AccidentReportPageQuery pageQuery
     ) =>
         GetVehicleReportCoreAsync(
             string.Empty,
@@ -880,13 +895,15 @@ public sealed class AccidentRepository : IAccidentRepository
             calendarPeriodMode: periodMode,
             accidentYear: year,
             accidentMonth: month,
-            orderByDepartment: true
+            orderByDepartment: true,
+            pageQuery: pageQuery
         );
 
-    public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentFinancialYearReportAsync(
+    public Task<AccidentReportPage<AccidentVehicleReportRow>> GetDepartmentFinancialYearReportAsync(
         string departmentNumber,
         string garageMode,
-        string financialYear
+        string financialYear,
+        AccidentReportPageQuery pageQuery
     ) =>
         GetVehicleReportCoreAsync(
             string.Empty,
@@ -895,18 +912,21 @@ public sealed class AccidentRepository : IAccidentRepository
             garageMode: garageMode,
             departmentNumber: departmentNumber?.Trim() ?? string.Empty,
             financialYear: financialYear?.Trim() ?? string.Empty,
-            orderByDepartment: true
+            orderByDepartment: true,
+            pageQuery: pageQuery
         );
 
-    public Task<IEnumerable<AccidentVehicleReportRow>> GetAccidentCostsFinancialYearReportAsync(
-        string financialYear
+    public Task<AccidentReportPage<AccidentVehicleReportRow>> GetAccidentCostsFinancialYearReportAsync(
+        string financialYear,
+        AccidentReportPageQuery pageQuery
     ) =>
         GetVehicleReportCoreAsync(
             string.Empty,
             string.Empty,
             containsSearch: false,
             financialYear: financialYear?.Trim() ?? string.Empty,
-            orderByDepartment: true
+            orderByDepartment: true,
+            pageQuery: pageQuery
         );
 
     [SuppressMessage(
@@ -914,13 +934,16 @@ public sealed class AccidentRepository : IAccidentRepository
         "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The period report query is composed only from allowlisted schema metadata and fixed SQL fragments; report filters are parameterized."
     )]
-    public async Task<IEnumerable<AccidentPeriodReportRow>> GetPeriodReportAsync(
+    public async Task<AccidentReportPage<AccidentPeriodReportRow>> GetPeriodReportAsync(
         string departmentNumber,
         DateTime startDate,
         DateTime endDate,
-        bool closed
+        bool closed,
+        AccidentReportPageQuery pageQuery
     )
     {
+        ArgumentNullException.ThrowIfNull(pageQuery);
+
         var accidentColumns = await GetAvailableColumnsAsync(TableName);
         var requiredAccidentColumns = PeriodReportColumns
             .Where(column =>
@@ -929,13 +952,13 @@ public sealed class AccidentRepository : IAccidentRepository
             .ToArray();
         if (requiredAccidentColumns.Any(column => !accidentColumns.Contains(column)))
         {
-            return Array.Empty<AccidentPeriodReportRow>();
+            return CreateEmptyReportPage<AccidentPeriodReportRow>(pageQuery);
         }
 
         var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
         if (!vehicleColumns.Contains("vmf_code"))
         {
-            return Array.Empty<AccidentPeriodReportRow>();
+            return CreateEmptyReportPage<AccidentPeriodReportRow>(pageQuery);
         }
 
         var siteColumns = await GetAvailableColumnsAsync("site");
@@ -948,7 +971,7 @@ public sealed class AccidentRepository : IAccidentRepository
             siteJoinAvailable && siteColumns.Contains("Department_number");
         if (normalizedDepartmentNumber.Length > 0 && !siteDepartmentAvailable)
         {
-            return Array.Empty<AccidentPeriodReportRow>();
+            return CreateEmptyReportPage<AccidentPeriodReportRow>(pageQuery);
         }
 
         var typeJoinAvailable =
@@ -965,8 +988,6 @@ public sealed class AccidentRepository : IAccidentRepository
 
         try
         {
-            await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var projection = new[]
             {
                 GetPeriodVehicleProjection(vehicleColumns, "registration_number"),
@@ -1038,32 +1059,32 @@ public sealed class AccidentRepository : IAccidentRepository
             }
 
             orderColumns.Add("[a].[accident_code]");
-            command.CommandText = $"""
-                SELECT {string.Join(", ", projection)}
+            var fromClause = $"""
                 FROM [dbo].[{TableName}] AS [a]
                 {string.Join(Environment.NewLine, joins)}
-                WHERE {string.Join(" AND ", conditions)}
-                ORDER BY {string.Join(", ", orderColumns)}
                 """;
-            AddParameter(command, "@startDate", DbType.Date, startDate.Date);
-            AddParameter(command, "@endDate", DbType.Date, endDate.Date);
-            if (normalizedDepartmentNumber.Length > 0)
-            {
-                AddParameter(
-                    command,
-                    "@departmentNumber",
-                    DbType.String,
-                    $"%{normalizedDepartmentNumber}%"
-                );
-            }
-
-            var results = new List<AccidentPeriodReportRow>();
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                results.Add(
-                    new AccidentPeriodReportRow
+            return await ExecutePagedReportQueryAsync(
+                pageQuery,
+                string.Join(", ", projection),
+                fromClause,
+                string.Join(" AND ", conditions),
+                string.Join(", ", orderColumns),
+                command =>
+                {
+                    AddParameter(command, "@startDate", DbType.Date, startDate.Date);
+                    AddParameter(command, "@endDate", DbType.Date, endDate.Date);
+                    if (normalizedDepartmentNumber.Length > 0)
                     {
+                        AddParameter(
+                            command,
+                            "@departmentNumber",
+                            DbType.String,
+                            $"%{normalizedDepartmentNumber}%"
+                        );
+                    }
+                },
+                reader => new AccidentPeriodReportRow
+                {
                         registration_number =
                             ReadString(reader, "registration_number") ?? string.Empty,
                         fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
@@ -1078,11 +1099,8 @@ public sealed class AccidentRepository : IAccidentRepository
                         call_refer = ReadDecimal(reader, "Call_Refer"),
                         cost_of_repair = ReadDecimal(reader, "cost_of_repair"),
                         file_close_date = ReadDateTime(reader, "file_close_date"),
-                    }
-                );
-            }
-
-            return results;
+                }
+            );
         }
         finally
         {
@@ -1098,10 +1116,11 @@ public sealed class AccidentRepository : IAccidentRepository
         "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The report query is composed only from allowlisted schema metadata and fixed SQL fragments; the vehicle or accident search value is parameterized."
     )]
-    private async Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportCoreAsync(
+    private async Task<AccidentReportPage<AccidentVehicleReportRow>> GetVehicleReportCoreAsync(
         string searchTerm,
         string searchColumn,
         bool containsSearch,
+        AccidentReportPageQuery pageQuery,
         string? flagMode = null,
         string? dateRangeMode = null,
         string? garageMode = null,
@@ -1117,6 +1136,8 @@ public sealed class AccidentRepository : IAccidentRepository
         bool duplicateOnly = false
     )
     {
+        ArgumentNullException.ThrowIfNull(pageQuery);
+
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
         var normalizedDepartmentNumber = departmentNumber?.Trim() ?? string.Empty;
         var hasCalendarPeriodFilter = calendarPeriodMode is not null;
@@ -1135,7 +1156,7 @@ public sealed class AccidentRepository : IAccidentRepository
             && normalizedSearchTerm.Length == 0
         )
         {
-            return Array.Empty<AccidentVehicleReportRow>();
+            return CreateEmptyReportPage<AccidentVehicleReportRow>(pageQuery);
         }
 
         var accidentColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
@@ -1146,7 +1167,7 @@ public sealed class AccidentRepository : IAccidentRepository
         var typeColumns = await GetAvailableColumnsAsync("type");
         if (duplicateOnly && !accidentColumns.Contains("occurence_date"))
         {
-            return Array.Empty<AccidentVehicleReportRow>();
+            return CreateEmptyReportPage<AccidentVehicleReportRow>(pageQuery);
         }
         var siteJoinAvailable =
             accidentColumns.Contains("driver_site_code") && siteColumns.Contains("site_code");
@@ -1169,22 +1190,22 @@ public sealed class AccidentRepository : IAccidentRepository
             )
         )
         {
-            return Array.Empty<AccidentVehicleReportRow>();
+            return CreateEmptyReportPage<AccidentVehicleReportRow>(pageQuery);
         }
 
         if (hasCalendarPeriodFilter && !calendarPeriodAvailable)
         {
-            return Array.Empty<AccidentVehicleReportRow>();
+            return CreateEmptyReportPage<AccidentVehicleReportRow>(pageQuery);
         }
 
         if (hasFinancialYearFilter && !financialYearAvailable)
         {
-            return Array.Empty<AccidentVehicleReportRow>();
+            return CreateEmptyReportPage<AccidentVehicleReportRow>(pageQuery);
         }
 
         if (hireTypeMode is not null && hireTypeMode is not "all" && !typeJoinAvailable)
         {
-            return Array.Empty<AccidentVehicleReportRow>();
+            return CreateEmptyReportPage<AccidentVehicleReportRow>(pageQuery);
         }
 
         var searchAvailable =
@@ -1197,19 +1218,19 @@ public sealed class AccidentRepository : IAccidentRepository
         var flagAvailable = flagMode is not null && accidentColumns.Contains("Flag_gg_hq");
         if (flagMode is not null && !flagAvailable)
         {
-            return Array.Empty<AccidentVehicleReportRow>();
+            return CreateEmptyReportPage<AccidentVehicleReportRow>(pageQuery);
         }
 
         var dateAvailable = dateRangeMode is not null && accidentColumns.Contains("occurence_date");
         if (dateRangeMode is not null && !dateAvailable)
         {
-            return Array.Empty<AccidentVehicleReportRow>();
+            return CreateEmptyReportPage<AccidentVehicleReportRow>(pageQuery);
         }
 
         var garageColumnAvailable = vehicleColumns.Contains("location_code");
         if ((garageMode is "jhb" or "pta") && !garageColumnAvailable)
         {
-            return Array.Empty<AccidentVehicleReportRow>();
+            return CreateEmptyReportPage<AccidentVehicleReportRow>(pageQuery);
         }
 
         var hasFilter =
@@ -1222,7 +1243,7 @@ public sealed class AccidentRepository : IAccidentRepository
             || financialYearAvailable;
         if (!hasFilter)
         {
-            return Array.Empty<AccidentVehicleReportRow>();
+            return CreateEmptyReportPage<AccidentVehicleReportRow>(pageQuery);
         }
 
         var connection = _context.Database.GetDbConnection();
@@ -1234,8 +1255,6 @@ public sealed class AccidentRepository : IAccidentRepository
 
         try
         {
-            await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var locationJoinAvailable =
                 vehicleColumns.Contains("location_code")
                 && locationColumns.Contains("location_code");
@@ -1368,71 +1387,76 @@ public sealed class AccidentRepository : IAccidentRepository
             var orderBy = duplicateOnly
                 ? $"[v].[{orderColumn}], [a].[occurence_date], [a].[accident_code]"
                 : $"{primaryOrderColumn}, [v].[{orderColumn}], [a].[accident_code]";
-            command.CommandText = $"""
-                SELECT {string.Join(", ", projection)}
+            var fromClause = $"""
                 FROM [dbo].[{TableName}] AS [a]
                 {string.Join(Environment.NewLine, joins)}
                 {duplicateJoin}
-                WHERE {string.Join(" AND ", conditions)}
-                ORDER BY {orderBy}
                 """;
-            if (flagMode is null)
-            {
-                if (dateRangeMode is null && garageMode is null && !hasDepartmentPeriodFilter)
+            return await ExecutePagedReportQueryAsync(
+                pageQuery,
+                string.Join(", ", projection),
+                fromClause,
+                string.Join(" AND ", conditions),
+                orderBy,
+                command =>
                 {
-                    AddParameter(
-                        command,
-                        "@searchTerm",
-                        DbType.String,
-                        containsSearch ? $"%{normalizedSearchTerm}%" : normalizedSearchTerm
-                    );
-                }
-
-                AddDateRangeParameters(command, dateRangeMode);
-                AddGarageParameters(command, garageMode);
-                if (periodStartDate.HasValue && periodEndDate.HasValue)
-                {
-                    AddParameter(
-                        command,
-                        "@periodStartDate",
-                        DbType.Date,
-                        periodStartDate.Value.Date
-                    );
-                    AddParameter(command, "@periodEndDate", DbType.Date, periodEndDate.Value.Date);
-                }
-
-                AddCalendarPeriodParameters(
-                    command,
-                    calendarPeriodMode,
-                    accidentYear,
-                    accidentMonth
-                );
-
-                if (financialYear is not null)
-                {
-                    AddParameter(command, "@financialYear", DbType.String, financialYear);
-                }
-
-                if (hasDepartmentPeriodFilter && normalizedDepartmentNumber.Length > 0)
-                {
-                    AddParameter(
-                        command,
-                        "@departmentNumber",
-                        DbType.String,
-                        $"%{normalizedDepartmentNumber}%"
-                    );
-                }
-
-                AddHireTypeParameters(command, hireTypeMode);
-            }
-
-            var results = new List<AccidentVehicleReportRow>();
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                results.Add(
-                    new AccidentVehicleReportRow
+                    if (flagMode is null)
                     {
+                        if (dateRangeMode is null && garageMode is null && !hasDepartmentPeriodFilter)
+                        {
+                            AddParameter(
+                                command,
+                                "@searchTerm",
+                                DbType.String,
+                                containsSearch ? $"%{normalizedSearchTerm}%" : normalizedSearchTerm
+                            );
+                        }
+
+                        AddDateRangeParameters(command, dateRangeMode);
+                        AddGarageParameters(command, garageMode);
+                        if (periodStartDate.HasValue && periodEndDate.HasValue)
+                        {
+                            AddParameter(
+                                command,
+                                "@periodStartDate",
+                                DbType.Date,
+                                periodStartDate.Value.Date
+                            );
+                            AddParameter(
+                                command,
+                                "@periodEndDate",
+                                DbType.Date,
+                                periodEndDate.Value.Date
+                            );
+                        }
+
+                        AddCalendarPeriodParameters(
+                            command,
+                            calendarPeriodMode,
+                            accidentYear,
+                            accidentMonth
+                        );
+
+                        if (financialYear is not null)
+                        {
+                            AddParameter(command, "@financialYear", DbType.String, financialYear);
+                        }
+
+                        if (hasDepartmentPeriodFilter && normalizedDepartmentNumber.Length > 0)
+                        {
+                            AddParameter(
+                                command,
+                                "@departmentNumber",
+                                DbType.String,
+                                $"%{normalizedDepartmentNumber}%"
+                            );
+                        }
+
+                        AddHireTypeParameters(command, hireTypeMode);
+                    }
+                },
+                reader => new AccidentVehicleReportRow
+                {
                         accident_code = ReadInt32(reader, "accident_code") ?? 0,
                         registration_number =
                             ReadString(reader, "registration_number") ?? string.Empty,
@@ -1489,11 +1513,8 @@ public sealed class AccidentRepository : IAccidentRepository
                         z181 = ReadString(reader, "z181") ?? string.Empty,
                         file_close_date = ReadDateTime(reader, "file_close_date"),
                         notes = ReadString(reader, "notes") ?? string.Empty,
-                    }
-                );
-            }
-
-            return results;
+                }
+            );
         }
         finally
         {
@@ -2481,6 +2502,74 @@ public sealed class AccidentRepository : IAccidentRepository
     {
         var prefix = string.IsNullOrWhiteSpace(alias) ? string.Empty : $"[{alias}].";
         return columns.Contains("is_deleted") ? $"ISNULL({prefix}[is_deleted], 0) = 0" : "1 = 1";
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The projection, FROM, WHERE, and ORDER BY fragments are composed from allowlisted schema metadata and fixed report SQL; submitted values are database parameters."
+    )]
+    private async Task<AccidentReportPage<T>> ExecutePagedReportQueryAsync<T>(
+        AccidentReportPageQuery pageQuery,
+        string projection,
+        string fromClause,
+        string whereClause,
+        string orderBy,
+        Action<DbCommand> configure,
+        Func<DbDataReader, T> map
+    )
+    {
+        var pageSize = Math.Clamp(pageQuery.PageSize, 1, MaximumReportPageSize);
+        var requestedPage = Math.Max(1, pageQuery.Page);
+        var connection = _context.Database.GetDbConnection();
+        var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+
+        await using var countCommand = connection.CreateCommand();
+        countCommand.Transaction = transaction;
+        countCommand.CommandText = $"""
+            SELECT COUNT(1)
+            {fromClause}
+            WHERE {whereClause}
+            """;
+        configure(countCommand);
+        var total = Convert.ToInt32(
+            await countCommand.ExecuteScalarAsync(),
+            CultureInfo.InvariantCulture
+        );
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Min(requestedPage, totalPages);
+        var offset = checked((long)(page - 1) * pageSize);
+
+        await using var dataCommand = connection.CreateCommand();
+        dataCommand.Transaction = transaction;
+        dataCommand.CommandText = $"""
+            SELECT {projection}
+            {fromClause}
+            WHERE {whereClause}
+            ORDER BY {orderBy}
+            OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        configure(dataCommand);
+        AddParameter(dataCommand, "@offset", DbType.Int64, offset);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<T>(Math.Min(pageSize, total));
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            items.Add(map(reader));
+        }
+
+        return new AccidentReportPage<T>(items, page, pageSize, total);
+    }
+
+    private static AccidentReportPage<T> CreateEmptyReportPage<T>(
+        AccidentReportPageQuery pageQuery
+    )
+    {
+        var pageSize = Math.Clamp(pageQuery.PageSize, 1, MaximumReportPageSize);
+        return new AccidentReportPage<T>(Array.Empty<T>(), 1, pageSize, 0);
     }
 
     private static string GetSqlType(string column) =>

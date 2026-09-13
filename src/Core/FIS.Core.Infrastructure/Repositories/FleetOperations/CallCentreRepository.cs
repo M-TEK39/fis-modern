@@ -94,6 +94,295 @@ public class CallCentreRepository : ICallCentreRepository
         return await QueryAsync();
     }
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The aggregate uses fixed legacy columns and parameterized date/name filters."
+    )]
+    public async Task<CallCentreCaptureStatistics> GetCaptureStatisticsAsync(
+        DateTime startDate,
+        DateTime endDate,
+        string? captureName
+    )
+    {
+        var availableColumns = await GetAvailableColumnsAsync();
+        if (!availableColumns.Contains("Call_date") || !availableColumns.Contains("Capture_name"))
+        {
+            return new CallCentreCaptureStatistics(0, Array.Empty<CallCentreCaptureStatistic>());
+        }
+
+        const string captureProjection =
+            "COALESCE(NULLIF(LTRIM(RTRIM([Capture_name])), ''), '(Unknown)')";
+        var normalizedCaptureName = captureName?.Trim();
+        var where = new List<string>
+        {
+            GetActiveFilter(availableColumns),
+            "[Call_date] >= @startDate",
+            "[Call_date] <= @endDate",
+        };
+        if (!string.IsNullOrWhiteSpace(normalizedCaptureName))
+        {
+            where.Add("LOWER(LTRIM(RTRIM(COALESCE([Capture_name], '')))) LIKE @captureName");
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        void AddFilters(DbCommand command)
+        {
+            AddParameter(command, "@startDate", DbType.Date, startDate.Date);
+            AddParameter(command, "@endDate", DbType.Date, endDate.Date);
+            if (!string.IsNullOrWhiteSpace(normalizedCaptureName))
+            {
+                AddParameter(
+                    command,
+                    "@captureName",
+                    DbType.String,
+                    $"%{normalizedCaptureName.ToLowerInvariant()}%"
+                );
+            }
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                SELECT {captureProjection} AS [capture_name], COUNT(1) AS [count]
+                FROM [dbo].[{TableName}]
+                WHERE {string.Join(" AND ", where)}
+                GROUP BY {captureProjection}
+                ORDER BY [count] DESC, [capture_name]
+                """;
+            AddFilters(command);
+
+            var items = new List<CallCentreCaptureStatistic>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(
+                    new CallCentreCaptureStatistic(
+                        reader.GetString(reader.GetOrdinal("capture_name")),
+                        Convert.ToInt32(reader.GetValue(reader.GetOrdinal("count")))
+                    )
+                );
+            }
+
+            return new CallCentreCaptureStatistics(items.Sum(item => item.Count), items);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The query is built from allowlisted legacy columns and fixed report modes; every user value is passed as a parameter."
+    )]
+    public async Task<CallCentreReportPage> GetReportPageAsync(CallCentreReportPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var availableColumns = await GetAvailableColumnsAsync();
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var conditions = new List<string> { GetActiveFilter(availableColumns, "c") };
+        var requiresSiteJoin = !string.IsNullOrWhiteSpace(query.Department);
+        var siteColumns = requiresSiteJoin
+            ? await GetAvailableColumnsAsync("site", ["Site_code"])
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (query.VmfCode.HasValue)
+        {
+            conditions.Add("[c].[vmf_code] = @vmfCode");
+        }
+
+        if (query.StartDate.HasValue)
+        {
+            conditions.Add(
+                availableColumns.Contains("Call_date") ? "[c].[Call_date] >= @startDate" : "1 = 0"
+            );
+        }
+
+        if (query.EndDate.HasValue)
+        {
+            conditions.Add(
+                availableColumns.Contains("Call_date") ? "[c].[Call_date] <= @endDate" : "1 = 0"
+            );
+        }
+
+        if (query.SiteCode.HasValue)
+        {
+            var siteColumnsForCall = new List<string>();
+            if (availableColumns.Contains("TrOfficer_Site"))
+            {
+                siteColumnsForCall.Add("[c].[TrOfficer_Site]");
+            }
+
+            if (availableColumns.Contains("Driver_Site"))
+            {
+                siteColumnsForCall.Add("[c].[Driver_Site]");
+            }
+
+            conditions.Add(
+                siteColumnsForCall.Count == 0
+                    ? "1 = 0"
+                    : $"COALESCE({string.Join(", ", siteColumnsForCall)}) = @siteCode"
+            );
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Department))
+        {
+            conditions.Add(
+                siteColumns.Contains("Department_number")
+                    ? "LOWER(LTRIM(RTRIM(COALESCE([s].[Department_number], '')))) LIKE @department"
+                    : "1 = 0"
+            );
+        }
+
+        if (query.IncidentType.HasValue)
+        {
+            conditions.Add(BuildIncidentTypeFilter(query.IncidentType.Value, availableColumns));
+        }
+
+        switch (query.Mode)
+        {
+            case CallCentreReportMode.CloReport:
+                conditions.Add(
+                    availableColumns.Contains("Inform_CRO")
+                        ? "UPPER(LTRIM(RTRIM(COALESCE([c].[Inform_CRO], '')))) = 'Y'"
+                        : "1 = 0"
+                );
+                break;
+            case CallCentreReportMode.OpenCalls:
+                conditions.Add(
+                    availableColumns.Contains("call_closed")
+                        ? "UPPER(LTRIM(RTRIM(COALESCE([c].[call_closed], '')))) <> 'Y'"
+                        : "1 = 1"
+                );
+                break;
+        }
+
+        var projection = LegacyColumns
+            .Select(column => GetColumnProjection(availableColumns, column, "c"))
+            .Concat(
+                OptionalColumns.Select(column =>
+                    GetOptionalProjection(availableColumns, column, "c")
+                )
+            )
+            .ToArray();
+        var siteJoin =
+            requiresSiteJoin && siteColumns.Contains("Site_code")
+                ? $"LEFT JOIN [dbo].[site] AS [s] ON [s].[Site_code] = {BuildSiteReference(availableColumns)}"
+                : string.Empty;
+        var whereClause = string.Join(" AND ", conditions);
+        var orderBy = availableColumns.Contains("Call_date")
+            ? "[c].[Call_date] DESC, [c].[Call_centre_code] DESC"
+            : "[c].[Call_centre_code] DESC";
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        void AddFilters(DbCommand command)
+        {
+            if (query.VmfCode.HasValue)
+            {
+                AddParameter(command, "@vmfCode", DbType.Int32, query.VmfCode.Value);
+            }
+
+            if (query.StartDate.HasValue)
+            {
+                AddParameter(command, "@startDate", DbType.Date, query.StartDate.Value.Date);
+            }
+
+            if (query.EndDate.HasValue)
+            {
+                AddParameter(command, "@endDate", DbType.Date, query.EndDate.Value.Date);
+            }
+
+            if (query.SiteCode.HasValue)
+            {
+                AddParameter(command, "@siteCode", DbType.Int16, query.SiteCode.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.Department))
+            {
+                AddParameter(
+                    command,
+                    "@department",
+                    DbType.String,
+                    $"%{query.Department.Trim().ToLowerInvariant()}%"
+                );
+            }
+        }
+
+        try
+        {
+            int total;
+            await using (var countCommand = connection.CreateCommand())
+            {
+                countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                countCommand.CommandText = $"""
+                    SELECT COUNT(1)
+                    FROM [dbo].[{TableName}] AS [c]
+                    {siteJoin}
+                    WHERE {whereClause}
+                    """;
+                AddFilters(countCommand);
+                total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+            }
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            var page = total == 0 ? 1 : Math.Min(requestedPage, totalPages);
+            var offset = checked((page - 1) * pageSize);
+            var records = new List<CallCentre>();
+
+            await using (var command = connection.CreateCommand())
+            {
+                command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                command.CommandText = $"""
+                    SELECT {string.Join(", ", projection)}
+                    FROM [dbo].[{TableName}] AS [c]
+                    {siteJoin}
+                    WHERE {whereClause}
+                    ORDER BY {orderBy}
+                    OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+                    """;
+                AddFilters(command);
+                AddParameter(command, "@offset", DbType.Int32, offset);
+                AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+
+                await using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    records.Add(MapCallCentre(reader, availableColumns));
+                }
+            }
+
+            return new CallCentreReportPage(records, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IEnumerable<CallCentre>> GetByVehicleAsync(int vmfCode)
     {
         return await QueryAsync(
@@ -419,7 +708,13 @@ public class CallCentreRepository : ICallCentreRepository
         }
     }
 
-    private async Task<HashSet<string>> GetAvailableColumnsAsync()
+    private Task<HashSet<string>> GetAvailableColumnsAsync() =>
+        GetAvailableColumnsAsync(TableName, RequiredColumns);
+
+    private async Task<HashSet<string>> GetAvailableColumnsAsync(
+        string tableName,
+        IReadOnlyCollection<string> requiredColumns
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -439,7 +734,7 @@ public class CallCentreRepository : ICallCentreRepository
                   AND [TABLE_NAME] = @table
                 """;
             AddParameter(command, "@schema", DbType.String, "dbo");
-            AddParameter(command, "@table", DbType.String, TableName);
+            AddParameter(command, "@table", DbType.String, tableName);
 
             var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             await using var reader = await command.ExecuteReaderAsync();
@@ -448,13 +743,13 @@ public class CallCentreRepository : ICallCentreRepository
                 columns.Add(reader.GetString(0));
             }
 
-            var missingColumns = RequiredColumns
+            var missingColumns = requiredColumns
                 .Where(column => !columns.Contains(column))
                 .ToArray();
             if (missingColumns.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"The required Call_centre compatibility columns are not available: {string.Join(", ", missingColumns)}"
+                    $"The required {tableName} compatibility columns are not available: {string.Join(", ", missingColumns)}"
                 );
             }
 
@@ -624,14 +919,67 @@ public class CallCentreRepository : ICallCentreRepository
         command.Parameters.Add(parameter);
     }
 
-    private static string GetActiveFilter(IReadOnlySet<string> availableColumns) =>
-        availableColumns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+    private static string BuildIncidentTypeFilter(
+        CallCentreIncidentType incidentType,
+        IReadOnlySet<string> availableColumns
+    )
+    {
+        if (!availableColumns.Contains("Incident_type"))
+        {
+            return "1 = 0";
+        }
 
-    private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
+        const string normalizedType = "UPPER(LTRIM(RTRIM(COALESCE([c].[Incident_type], ''))))";
+        return incidentType switch
+        {
+            CallCentreIncidentType.Accident => $"{normalizedType} = 'ACCIDENT'",
+            CallCentreIncidentType.Hijack =>
+                $"{normalizedType} IN ('HI-JACK', 'HIJACK', 'HIGHJACK')",
+            CallCentreIncidentType.Loss => $"{normalizedType} IN ('LOSS_THEFT', 'LOSS')",
+            CallCentreIncidentType.Road =>
+                $"{normalizedType} IN ('ROAD_ASSISTANCE', 'ROAD ASSISTANCE')",
+            _ => "1 = 0",
+        };
+    }
+
+    private static string BuildSiteReference(IReadOnlySet<string> availableColumns)
+    {
+        var columns = new List<string>();
+        if (availableColumns.Contains("TrOfficer_Site"))
+        {
+            columns.Add("[c].[TrOfficer_Site]");
+        }
+
+        if (availableColumns.Contains("Driver_Site"))
+        {
+            columns.Add("[c].[Driver_Site]");
+        }
+
+        return columns.Count switch
+        {
+            0 => "CAST(NULL AS smallint)",
+            1 => columns[0],
+            _ => $"COALESCE({string.Join(", ", columns)})",
+        };
+    }
+
+    private static string GetActiveFilter(
+        IReadOnlySet<string> availableColumns,
+        string? tableAlias = null
+    ) =>
+        availableColumns.Contains("is_deleted")
+            ? $"ISNULL({ColumnReference("is_deleted", tableAlias)}, 0) = 0"
+            : "1 = 1";
+
+    private static string GetOptionalProjection(
+        IReadOnlySet<string> columns,
+        string column,
+        string? tableAlias = null
+    )
     {
         if (columns.Contains(column))
         {
-            return $"[{column}] AS [{column}]";
+            return $"{ColumnReference(column, tableAlias)} AS [{column}]";
         }
 
         var sqlType = column switch
@@ -644,15 +992,22 @@ public class CallCentreRepository : ICallCentreRepository
         return $"CAST(NULL AS {sqlType}) AS [{column}]";
     }
 
-    private static string GetColumnProjection(IReadOnlySet<string> columns, string column)
+    private static string GetColumnProjection(
+        IReadOnlySet<string> columns,
+        string column,
+        string? tableAlias = null
+    )
     {
         if (columns.Contains(column))
         {
-            return $"[{column}] AS [{column}]";
+            return $"{ColumnReference(column, tableAlias)} AS [{column}]";
         }
 
         return $"CAST(NULL AS {GetLegacySqlType(column)}) AS [{column}]";
     }
+
+    private static string ColumnReference(string column, string? tableAlias) =>
+        string.IsNullOrWhiteSpace(tableAlias) ? $"[{column}]" : $"[{tableAlias}].[{column}]";
 
     private static string GetLegacySqlType(string column) =>
         column switch

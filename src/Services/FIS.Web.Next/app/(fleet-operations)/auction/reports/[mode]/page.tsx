@@ -6,6 +6,7 @@ import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import { ReportPagination } from "@/app/(fleet-operations)/reports/_components";
 import {
   AuctionApiError,
   getAuctionAllVehiclesReport,
@@ -13,6 +14,7 @@ import {
   getAuctionByNumberReport,
   getAuctionOneVehicleReport,
   getAuctionSaleToNameReport,
+  type AuctionReport,
   getAuctions,
   type AuctionRecord,
 } from "@/lib/api/fleet-operations/api-auction";
@@ -41,6 +43,26 @@ function getQueryValue(value: string | string[] | undefined) {
 function getPositiveInt(value: string | undefined) {
   const parsed = Number(value);
   return value && Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function reportPage(value: string | undefined) {
+  const parsed = Number(value);
+  return value && Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function reportPageHref(
+  path: string,
+  query: Record<string, string | string[] | undefined>,
+  page: number,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (["page", "pageSize", "includeAll"].includes(key)) continue;
+    const text = getQueryValue(value);
+    if (text?.trim()) params.set(key, text);
+  }
+  params.set("page", String(page));
+  return `${path}?${params.toString()}`;
 }
 
 function hasReportsRole(roles: readonly string[]) {
@@ -318,6 +340,7 @@ async function renderAuctionReportPageContent({
   }
 
   const query = await searchParams;
+  const page = reportPage(getQueryValue(query.page));
   const search: Record<string, string> = {
     searchType:
       getQueryValue(query.searchType) ?? (getQueryValue(query.Radio1) === "Radiogp" ? "GP" : "GG"),
@@ -336,21 +359,21 @@ async function renderAuctionReportPageContent({
 
   try {
     const auctions = await getAuctions();
-    let reportRows: AuctionRecord[] | null = null;
+    let report: AuctionReport | null = null;
     if (getQueryValue(query.run) === "1") {
       if (mode === "one-vehicle") {
         const vmfCode = getPositiveInt(search.vmfCode);
         if (vmfCode) {
-          reportRows = (await getAuctionOneVehicleReport(vmfCode)).data;
+          report = await getAuctionOneVehicleReport(vmfCode, page);
         }
       } else if (mode === "all-vehicles") {
-        reportRows = (await getAuctionAllVehiclesReport(search.auctionNumber, search.garage)).data;
+        report = await getAuctionAllVehiclesReport(search.auctionNumber, search.garage, page);
       } else if (mode === "sale-to-name") {
-        reportRows = (await getAuctionSaleToNameReport(search.buyerName)).data;
+        report = await getAuctionSaleToNameReport(search.buyerName, page);
       } else if (mode === "auction-gg") {
-        reportRows = (await getAuctionByNumberReport(search.auctionNumber, search.garage)).data;
+        report = await getAuctionByNumberReport(search.auctionNumber, search.garage, page);
       } else {
-        reportRows = (await getAuctionByLotReport(search.auctionNumber, search.garage)).data;
+        report = await getAuctionByLotReport(search.auctionNumber, search.garage, page);
       }
     }
 
@@ -368,7 +391,7 @@ async function renderAuctionReportPageContent({
             </Link>
           </header>
           <ReportForm mode={mode} search={search} auctions={auctions} />
-          {reportRows !== null ? (
+          {report !== null ? (
             <section
               className="vehicle-status-maintenance-panel"
               aria-labelledby="auction-report-results-title"
@@ -376,10 +399,17 @@ async function renderAuctionReportPageContent({
               <div className="vehicle-form-section-header">
                 <div>
                   <p className="eyebrow">Report results</p>
-                  <h2 id="auction-report-results-title">{reportRows.length} record(s) returned</h2>
+                  <h2 id="auction-report-results-title">{report.total} record(s) returned</h2>
                 </div>
               </div>
-              <ReportTable rows={reportRows} />
+              <ReportTable rows={report.data} />
+              <ReportPagination
+                report={report}
+                pageHref={(requestedPage) =>
+                  reportPageHref(`${routePath}/${mode}`, query, requestedPage)
+                }
+                label="Auction report pages"
+              />
             </section>
           ) : null}
         </section>

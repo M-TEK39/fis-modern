@@ -126,6 +126,14 @@ export type FineReport = {
   columns: Array<{ key: string; header: string }>;
   rows: Array<Record<string, string | null>>;
   totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type FineReportRequestOptions = {
+  page?: number;
+  pageSize?: number;
 };
 
 export type FineApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
@@ -482,6 +490,13 @@ function mapFineReport(value: unknown): FineReport | null {
     return null;
   }
 
+  const totalCount = asNumber(getValue(value, "TotalCount", "totalCount")) ?? rows.length;
+  const page = asNumber(getValue(value, "Page", "page")) ?? 1;
+  const pageSize = asNumber(getValue(value, "PageSize", "pageSize")) ?? DEFAULT_FINE_PAGE_SIZE;
+  const totalPages =
+    asNumber(getValue(value, "TotalPages", "totalPages")) ??
+    Math.max(1, Math.ceil(totalCount / pageSize));
+
   return {
     title,
     legacyTarget: asString(getValue(value, "LegacyTarget", "legacyTarget")),
@@ -489,7 +504,10 @@ function mapFineReport(value: unknown): FineReport | null {
     approximationReason: asString(getValue(value, "ApproximationReason", "approximationReason")),
     columns,
     rows,
-    totalCount: asNumber(getValue(value, "TotalCount", "totalCount")) ?? rows.length,
+    totalCount,
+    page,
+    pageSize,
+    totalPages,
   };
 }
 
@@ -627,6 +645,7 @@ export async function getTrafficDeptPage(
 export async function getFineReport(
   mode: FineReportMode,
   filters: Record<string, string | number | undefined> = {},
+  options: FineReportRequestOptions = {},
 ) {
   const params = new URLSearchParams({ mode });
   for (const [key, value] of Object.entries(filters)) {
@@ -634,6 +653,8 @@ export async function getFineReport(
       params.set(key, String(value));
     }
   }
+  params.set("page", String(options.page ?? 1));
+  params.set("pageSize", String(options.pageSize ?? DEFAULT_FINE_PAGE_SIZE));
 
   const response = await requestApi(`api/report/dynamic/fines?${params.toString()}`);
   const report = mapFineReport(await readJson(response));

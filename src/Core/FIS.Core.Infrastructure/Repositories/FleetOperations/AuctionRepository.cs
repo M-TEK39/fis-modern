@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
@@ -100,6 +101,174 @@ public class AuctionRepository : IAuctionRepository
             "WHERE [a].[vmf_code] = @vmfCode",
             command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
         );
+
+    public async Task<AuctionReportPage> GetOneVehicleReportPageAsync(
+        AuctionOneVehicleReportPageQuery query
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        return await GetReportPageAsync(
+            "[a].[vmf_code] = @vmfCode",
+            command => AddParameter(command, "@vmfCode", DbType.Int32, query.VmfCode),
+            "[a].[auth_date] DESC, [a].[auction_code] DESC",
+            query.Page,
+            query.PageSize
+        );
+    }
+
+    public async Task<AuctionReportPage> GetAllVehiclesReportPageAsync(
+        AuctionAllVehiclesReportPageQuery query
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var (startDate, endDate) = NormalizeDateRange(query.StartDate, query.EndDate);
+        var auctionFilter = BuildAuctionNumberAndGarageFilter(
+            query.AuctionNumber,
+            query.Garage
+        );
+        return await GetReportPageAsync(
+            $"CAST([a].[auth_date] AS date) BETWEEN @startDate AND @endDate AND {auctionFilter.Predicate}",
+            command =>
+            {
+                AddParameter(command, "@startDate", DbType.Date, startDate);
+                AddParameter(command, "@endDate", DbType.Date, endDate);
+                auctionFilter.Configure(command);
+            },
+            "[a].[auth_date] DESC, [a].[auction_code] DESC",
+            query.Page,
+            query.PageSize
+        );
+    }
+
+    public async Task<AuctionReportPage> GetSaleToNameReportPageAsync(
+        AuctionSaleToNameReportPageQuery query
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var (startDate, endDate) = NormalizeDateRange(query.StartDate, query.EndDate);
+        var buyer = query.BuyerName?.Trim();
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
+        var soldToExpression = GetColumnExpression(vehicleColumns, "sold_to", "v");
+        var buyerPredicate = string.IsNullOrWhiteSpace(buyer)
+            ? "1 = 1"
+            : $"(CHARINDEX(@buyer, LOWER(COALESCE({soldToExpression}, ''))) > 0 OR CHARINDEX(@buyer, LOWER(COALESCE([a].[sold_id], ''))) > 0)";
+
+        return await GetReportPageAsync(
+            $"CAST([a].[auth_date] AS date) BETWEEN @startDate AND @endDate AND {buyerPredicate}",
+            command =>
+            {
+                AddParameter(command, "@startDate", DbType.Date, startDate);
+                AddParameter(command, "@endDate", DbType.Date, endDate);
+                if (!string.IsNullOrWhiteSpace(buyer))
+                {
+                    AddParameter(command, "@buyer", DbType.String, buyer.ToLowerInvariant());
+                }
+            },
+            "[a].[auth_date] DESC, [a].[auction_code] DESC",
+            query.Page,
+            query.PageSize,
+            vehicleColumns
+        );
+    }
+
+    public async Task<AuctionReportPage> GetAuctionGgReportPageAsync(
+        AuctionGgReportPageQuery query
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var auctionFilter = BuildAuctionNumberAndGarageFilter(
+            query.AuctionNumber,
+            query.Garage
+        );
+        var gg = query.GGNumber?.Trim();
+        HashSet<string>? vehicleColumns = null;
+        var predicate = auctionFilter.Predicate;
+        if (string.IsNullOrWhiteSpace(query.AuctionNumber))
+        {
+            if (string.IsNullOrWhiteSpace(gg))
+            {
+                predicate = "1 = 0";
+            }
+            else
+            {
+                vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
+                if (!vehicleColumns.Contains("fleet_number"))
+                {
+                    throw new InvalidOperationException(
+                        "The required fleet_number compatibility column is not available on vehicle_master."
+                    );
+                }
+
+                predicate =
+                    $"EXISTS (SELECT 1 FROM [dbo].[{VehicleTableName}] AS [gg] WHERE [gg].[vmf_code] = [a].[vmf_code] AND CHARINDEX(@ggNumber, LOWER(LTRIM(RTRIM(COALESCE(CONVERT(nvarchar(max), [gg].[fleet_number]), N''))))) > 0)";
+            }
+        }
+
+        return await GetReportPageAsync(
+            predicate,
+            command =>
+            {
+                if (!string.IsNullOrWhiteSpace(query.AuctionNumber))
+                {
+                    auctionFilter.Configure(command);
+                }
+                if (string.IsNullOrWhiteSpace(query.AuctionNumber) && !string.IsNullOrWhiteSpace(gg))
+                {
+                    AddParameter(command, "@ggNumber", DbType.String, gg.ToLowerInvariant());
+                }
+            },
+            string.IsNullOrWhiteSpace(query.AuctionNumber)
+                ? "[a].[auth_date] DESC, [a].[auction_code] DESC"
+                : "[a].[vmf_code] ASC, [a].[auth_date] DESC, [a].[auction_code] DESC",
+            query.Page,
+            query.PageSize,
+            vehicleColumns
+        );
+    }
+
+    public async Task<AuctionReportPage> GetAuctionLotReportPageAsync(
+        AuctionLotReportPageQuery query
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var auctionFilter = BuildAuctionNumberAndGarageFilter(
+            query.AuctionNumber,
+            query.Garage
+        );
+        var lot = query.LotNumber?.Trim();
+        var predicate = auctionFilter.Predicate;
+        if (string.IsNullOrWhiteSpace(query.AuctionNumber))
+        {
+            predicate = string.IsNullOrWhiteSpace(lot)
+                ? "1 = 0"
+                : "CHARINDEX(@lotNumber, LTRIM(RTRIM(CONVERT(varchar(50), [a].[lot])))) > 0";
+        }
+
+        return await GetReportPageAsync(
+            predicate,
+            command =>
+            {
+                if (!string.IsNullOrWhiteSpace(query.AuctionNumber))
+                {
+                    auctionFilter.Configure(command);
+                }
+                if (string.IsNullOrWhiteSpace(query.AuctionNumber) && !string.IsNullOrWhiteSpace(lot))
+                {
+                    AddParameter(command, "@lotNumber", DbType.String, lot);
+                }
+            },
+            string.IsNullOrWhiteSpace(query.AuctionNumber)
+                ? "[a].[auth_date] DESC, [a].[auction_code] DESC"
+                : "[a].[lot] ASC, [a].[vmf_code] ASC, [a].[auth_date] DESC, [a].[auction_code] DESC",
+            query.Page,
+            query.PageSize
+        );
+    }
 
     public async Task<Auction> CreateAsync(Auction auction, int currentUserId)
     {
@@ -319,6 +488,168 @@ public class AuctionRepository : IAuctionRepository
         auction.modified_by_user_code = currentUserId > 0 ? currentUserId : null;
         return auction;
     }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The report SELECT, JOIN, ordering, and compatibility predicates are composed only from fixed allowlisted identifiers; every report value and pagination value is parameterized."
+    )]
+    private async Task<AuctionReportPage> GetReportPageAsync(
+        string predicate,
+        Action<DbCommand> configure,
+        string orderBy,
+        int requestedPage,
+        int requestedPageSize,
+        IReadOnlySet<string>? knownVehicleColumns = null
+    )
+    {
+        var pageSize = Math.Clamp(requestedPageSize, 1, 100);
+        var page = Math.Max(1, requestedPage);
+        var auctionColumns = await GetAvailableColumnsAsync(
+            AuctionTableName,
+            RequiredAuctionColumns
+        );
+        var vehicleColumns = knownVehicleColumns ?? await GetAvailableColumnsAsync(VehicleTableName);
+        var whereClause = $"({predicate}) AND {GetActiveFilter(auctionColumns, "a")}";
+        var projection = LegacyColumns
+            .Select(column => $"[a].[{column}] AS [{column}]")
+            .Concat(
+                OptionalColumns.Select(column =>
+                    GetOptionalProjection(auctionColumns, column, "a")
+                )
+            )
+            .Concat(
+                VehicleProjectionColumns.Select(column =>
+                    GetColumnProjection(vehicleColumns, column, "v")
+                )
+            )
+            .ToArray();
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var countCommand = connection.CreateCommand();
+            countCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{AuctionTableName}] AS [a]
+                LEFT JOIN [dbo].[{VehicleTableName}] AS [v]
+                    ON [v].[vmf_code] = [a].[vmf_code]
+                WHERE {whereClause}
+                """;
+            configure(countCommand);
+            var total = Convert.ToInt32(
+                await countCommand.ExecuteScalarAsync(),
+                CultureInfo.InvariantCulture
+            );
+
+            var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+            page = Math.Min(page, totalPages);
+            var skip = checked((long)(page - 1) * pageSize);
+
+            await using var dataCommand = connection.CreateCommand();
+            dataCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            dataCommand.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{AuctionTableName}] AS [a]
+                LEFT JOIN [dbo].[{VehicleTableName}] AS [v]
+                    ON [v].[vmf_code] = [a].[vmf_code]
+                WHERE {whereClause}
+                ORDER BY {orderBy}
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+                """;
+            configure(dataCommand);
+            AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+            AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+            var items = new List<Auction>();
+            await using var reader = await dataCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                items.Add(MapAuction(reader, auctionColumns));
+            }
+
+            return new AuctionReportPage(items, page, pageSize, total);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static AuctionReportFilter BuildAuctionNumberAndGarageFilter(
+        string? auctionNumber,
+        string? garage
+    )
+    {
+        var predicates = new List<string>();
+        var normalizedAuctionNumber = auctionNumber?.Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedAuctionNumber))
+        {
+            predicates.Add(
+                "LOWER(LTRIM(RTRIM(COALESCE([a].[auction_number], '')))) = @auctionNumber"
+            );
+        }
+
+        var garageCode = garage?.Trim().ToUpperInvariant() switch
+        {
+            "JHB" => (short?)1,
+            "PTA" => (short?)2,
+            _ => null,
+        };
+        if (garageCode.HasValue)
+        {
+            predicates.Add("[a].[auction_garage] = @auctionGarage");
+        }
+
+        return new AuctionReportFilter(
+            predicates.Count == 0 ? "1 = 1" : string.Join(" AND ", predicates),
+            command =>
+            {
+                if (!string.IsNullOrWhiteSpace(normalizedAuctionNumber))
+                {
+                    AddParameter(
+                        command,
+                        "@auctionNumber",
+                        DbType.String,
+                        normalizedAuctionNumber.ToLowerInvariant()
+                    );
+                }
+
+                if (garageCode.HasValue)
+                {
+                    AddParameter(command, "@auctionGarage", DbType.Int16, garageCode.Value);
+                }
+            }
+        );
+    }
+
+    private static (DateTime StartDate, DateTime EndDate) NormalizeDateRange(
+        DateTime startDate,
+        DateTime endDate
+    )
+    {
+        var start = startDate.Date;
+        var end = endDate.Date;
+        return end < start ? (end, start) : (start, end);
+    }
+
+    private static string GetColumnExpression(
+        IReadOnlySet<string> columns,
+        string column,
+        string alias
+    ) => columns.Contains(column)
+        ? $"CONVERT(nvarchar(max), [{alias}].[{column}])"
+        : "CAST(NULL AS nvarchar(max))";
 
     [SuppressMessage(
         "Security",
@@ -727,6 +1058,8 @@ public class AuctionRepository : IAuctionRepository
         var ordinal = reader.GetOrdinal(column);
         return reader.IsDBNull(ordinal) ? null : Convert.ToBoolean(reader.GetValue(ordinal));
     }
+
+    private sealed record AuctionReportFilter(string Predicate, Action<DbCommand> Configure);
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 }

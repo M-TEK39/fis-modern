@@ -6,6 +6,7 @@ using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
@@ -14,8 +15,11 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 [Route("api/accidents")]
 [Authorize]
-public class AccidentController : BaseApiController
+public class AccidentController : BaseApiController, IAsyncActionFilter
 {
+    private const int DefaultReportPageSize = 24;
+    private const int MaximumReportPageSize = 100;
+
     private readonly IAccidentRepository _repository;
     private readonly FisDbContext _context;
     private readonly ILogger<AccidentController> _logger;
@@ -46,8 +50,7 @@ public class AccidentController : BaseApiController
     }
 
     /// <summary>
-    /// Paged operational maintenance list. Legacy reports keep their own
-    /// complete-result endpoints so that print and export behavior is unchanged.
+    /// Paged operational maintenance list.
     /// </summary>
     [HttpGet("maintenance")]
     public async Task<IActionResult> GetMaintenancePage(
@@ -138,6 +141,35 @@ public class AccidentController : BaseApiController
         );
     }
 
+    [NonAction]
+    public async Task OnActionExecutionAsync(
+        ActionExecutingContext context,
+        ActionExecutionDelegate next
+    )
+    {
+        var path = context.HttpContext.Request.Path.Value ?? string.Empty;
+        if (path.Contains("/reports", StringComparison.OrdinalIgnoreCase) && !HasAccidentRole())
+        {
+            context.Result = Forbid();
+            return;
+        }
+
+        await next();
+    }
+
+    private static AccidentReportPageQuery CreateReportPageQuery(int page, int pageSize) =>
+        new(Math.Max(1, page), Math.Clamp(pageSize, 1, MaximumReportPageSize));
+
+    private static object CreateReportPageResponse<T>(AccidentReportPage<T> result) =>
+        new
+        {
+            items = result.Items,
+            page = result.Page,
+            pageSize = result.PageSize,
+            total = result.Total,
+            totalPages = result.TotalPages,
+        };
+
     [HttpGet("types")]
     public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetAccidentTypes()
     {
@@ -219,13 +251,17 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/last-gg-reference")]
-    public async Task<
-        ActionResult<IEnumerable<AccidentLastGgReferenceRow>>
-    > GetLastGgReferenceReport()
+    public async Task<ActionResult> GetLastGgReferenceReport(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
+    )
     {
         try
         {
-            return Ok(await _repository.GetLastGgReferenceReportAsync());
+            var result = await _repository.GetLastGgReferenceReportAsync(
+                CreateReportPageQuery(page, pageSize)
+            );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -235,8 +271,10 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/all")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetAllAccidentsReport(
-        [FromQuery] string mode = "2002-current"
+    public async Task<ActionResult> GetAllAccidentsReport(
+        [FromQuery] string mode = "2002-current",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         var normalizedMode = mode.Trim().ToLowerInvariant() switch
@@ -255,7 +293,11 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetAllAccidentsReportAsync(normalizedMode));
+            var result = await _repository.GetAllAccidentsReportAsync(
+                normalizedMode,
+                CreateReportPageQuery(page, pageSize)
+            );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -265,8 +307,10 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/garage-detail")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetGarageAccidentsReport(
-        [FromQuery] string mode = "jhb"
+    public async Task<ActionResult> GetGarageAccidentsReport(
+        [FromQuery] string mode = "jhb",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         var normalizedMode = mode.Trim().ToLowerInvariant() switch
@@ -283,7 +327,11 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetGarageAccidentsReportAsync(normalizedMode));
+            var result = await _repository.GetGarageAccidentsReportAsync(
+                normalizedMode,
+                CreateReportPageQuery(page, pageSize)
+            );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -293,9 +341,11 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/driver")]
-    public async Task<ActionResult<IEnumerable<AccidentDriverReportRow>>> GetDriverReport(
+    public async Task<ActionResult> GetDriverReport(
         [FromQuery] string searchTerm,
-        [FromQuery] string mode = "name"
+        [FromQuery] string mode = "name",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         var searchById = mode.Equals("id", StringComparison.OrdinalIgnoreCase);
@@ -306,7 +356,12 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetDriverReportAsync(searchTerm, searchById));
+            var result = await _repository.GetDriverReportAsync(
+                searchTerm,
+                searchById,
+                CreateReportPageQuery(page, pageSize)
+            );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -316,9 +371,11 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/vehicle")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetVehicleReport(
+    public async Task<ActionResult> GetVehicleReport(
         [FromQuery] string searchTerm,
-        [FromQuery] string mode = "registration"
+        [FromQuery] string mode = "registration",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         var normalizedMode = mode.Trim().ToLowerInvariant();
@@ -331,7 +388,12 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetVehicleReportAsync(searchTerm, searchByFleet));
+            var result = await _repository.GetVehicleReportAsync(
+                searchTerm,
+                searchByFleet,
+                CreateReportPageQuery(page, pageSize)
+            );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -341,11 +403,11 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/outstanding-documents")]
-    public async Task<
-        ActionResult<IEnumerable<AccidentOutstandingDocumentLookupRow>>
-    > GetOutstandingDocumentLookup(
+    public async Task<ActionResult> GetOutstandingDocumentLookup(
         [FromQuery] string searchTerm,
-        [FromQuery] string mode = "registration"
+        [FromQuery] string mode = "registration",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         if (searchTerm?.Trim().Length > 8)
@@ -363,12 +425,12 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(
-                await _repository.GetOutstandingDocumentLookupAsync(
-                    searchTerm ?? string.Empty,
-                    searchByFleet
-                )
+            var result = await _repository.GetOutstandingDocumentLookupAsync(
+                searchTerm ?? string.Empty,
+                searchByFleet,
+                CreateReportPageQuery(page, pageSize)
             );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -404,11 +466,11 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/inspection-letter")]
-    public async Task<
-        ActionResult<IEnumerable<AccidentOutstandingDocumentLookupRow>>
-    > GetInspectionLetterLookup(
+    public async Task<ActionResult> GetInspectionLetterLookup(
         [FromQuery] string searchTerm,
-        [FromQuery] string mode = "registration"
+        [FromQuery] string mode = "registration",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         if (searchTerm?.Trim().Length > 8)
@@ -426,12 +488,12 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(
-                await _repository.GetInspectionLetterLookupAsync(
-                    searchTerm ?? string.Empty,
-                    searchByFleet
-                )
+            var result = await _repository.GetInspectionLetterLookupAsync(
+                searchTerm ?? string.Empty,
+                searchByFleet,
+                CreateReportPageQuery(page, pageSize)
             );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -467,9 +529,11 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/private-vehicle")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetPrivateVehicleReport(
+    public async Task<ActionResult> GetPrivateVehicleReport(
         [FromQuery] string searchTerm,
-        [FromQuery] string mode = "third-party"
+        [FromQuery] string mode = "third-party",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         var normalizedMode = mode.Trim().ToLowerInvariant();
@@ -484,9 +548,12 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(
-                await _repository.GetPrivateVehicleReportAsync(searchTerm, searchByDescription)
+            var result = await _repository.GetPrivateVehicleReportAsync(
+                searchTerm,
+                searchByDescription,
+                CreateReportPageQuery(page, pageSize)
             );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -496,11 +563,13 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/period")]
-    public async Task<ActionResult<IEnumerable<AccidentPeriodReportRow>>> GetPeriodReport(
+    public async Task<ActionResult> GetPeriodReport(
         [FromQuery] string? departmentNumber,
         [FromQuery] DateTime startDate,
         [FromQuery] DateTime endDate,
-        [FromQuery] string status = "open"
+        [FromQuery] string status = "open",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         if (endDate < startDate)
@@ -516,14 +585,14 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(
-                await _repository.GetPeriodReportAsync(
-                    departmentNumber ?? string.Empty,
-                    startDate,
-                    endDate,
-                    normalizedStatus is "closed" or "close"
-                )
+            var result = await _repository.GetPeriodReportAsync(
+                departmentNumber ?? string.Empty,
+                startDate,
+                endDate,
+                normalizedStatus is "closed" or "close",
+                CreateReportPageQuery(page, pageSize)
             );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -533,12 +602,12 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/department-period")]
-    public async Task<
-        ActionResult<IEnumerable<AccidentVehicleReportRow>>
-    > GetDepartmentPeriodReport(
+    public async Task<ActionResult> GetDepartmentPeriodReport(
         [FromQuery] string? departmentNumber,
         [FromQuery] DateTime startDate,
-        [FromQuery] DateTime endDate
+        [FromQuery] DateTime endDate,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         if (endDate < startDate)
@@ -548,13 +617,13 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(
-                await _repository.GetDepartmentPeriodReportAsync(
-                    departmentNumber ?? string.Empty,
-                    startDate,
-                    endDate
-                )
+            var result = await _repository.GetDepartmentPeriodReportAsync(
+                departmentNumber ?? string.Empty,
+                startDate,
+                endDate,
+                CreateReportPageQuery(page, pageSize)
             );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -564,13 +633,13 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/department-period-vip")]
-    public async Task<
-        ActionResult<IEnumerable<AccidentVehicleReportRow>>
-    > GetDepartmentPeriodVipReport(
+    public async Task<ActionResult> GetDepartmentPeriodVipReport(
         [FromQuery] string? departmentNumber,
         [FromQuery] DateTime startDate,
         [FromQuery] DateTime endDate,
-        [FromQuery] string mode = "all"
+        [FromQuery] string mode = "all",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         if (endDate < startDate)
@@ -593,14 +662,14 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(
-                await _repository.GetDepartmentPeriodVipReportAsync(
-                    departmentNumber ?? string.Empty,
-                    startDate,
-                    endDate,
-                    normalizedMode
-                )
+            var result = await _repository.GetDepartmentPeriodVipReportAsync(
+                departmentNumber ?? string.Empty,
+                startDate,
+                endDate,
+                normalizedMode,
+                CreateReportPageQuery(page, pageSize)
             );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -610,12 +679,14 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/department-month")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetDepartmentMonthReport(
+    public async Task<ActionResult> GetDepartmentMonthReport(
         [FromQuery] string? departmentNumber,
         [FromQuery] string garage = "jhb",
         [FromQuery] string period = "month",
         [FromQuery] int? year = null,
-        [FromQuery] int? month = null
+        [FromQuery] int? month = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         var normalizedGarage = garage.Trim().ToLowerInvariant() switch
@@ -662,15 +733,15 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(
-                await _repository.GetDepartmentMonthReportAsync(
-                    departmentNumber ?? string.Empty,
-                    normalizedGarage,
-                    normalizedPeriod,
-                    year,
-                    month
-                )
+            var result = await _repository.GetDepartmentMonthReportAsync(
+                departmentNumber ?? string.Empty,
+                normalizedGarage,
+                normalizedPeriod,
+                year,
+                month,
+                CreateReportPageQuery(page, pageSize)
             );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -680,12 +751,12 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/department-finyear")]
-    public async Task<
-        ActionResult<IEnumerable<AccidentVehicleReportRow>>
-    > GetDepartmentFinancialYearReport(
+    public async Task<ActionResult> GetDepartmentFinancialYearReport(
         [FromQuery] string? departmentNumber,
         [FromQuery] string? financialYear,
-        [FromQuery] string garage = "jhb"
+        [FromQuery] string garage = "jhb",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         var normalizedGarage = garage.Trim().ToLowerInvariant() switch
@@ -710,13 +781,13 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(
-                await _repository.GetDepartmentFinancialYearReportAsync(
-                    departmentNumber ?? string.Empty,
-                    normalizedGarage,
-                    normalizedFinancialYear
-                )
+            var result = await _repository.GetDepartmentFinancialYearReportAsync(
+                departmentNumber ?? string.Empty,
+                normalizedGarage,
+                normalizedFinancialYear,
+                CreateReportPageQuery(page, pageSize)
             );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -726,9 +797,11 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/accident-costs-finyear")]
-    public async Task<
-        ActionResult<IEnumerable<AccidentVehicleReportRow>>
-    > GetAccidentCostsFinancialYearReport([FromQuery] string? financialYear)
+    public async Task<ActionResult> GetAccidentCostsFinancialYearReport(
+        [FromQuery] string? financialYear,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
+    )
     {
         var normalizedFinancialYear = financialYear?.Trim() ?? string.Empty;
         if (normalizedFinancialYear.Length == 0 || normalizedFinancialYear.Length > 5)
@@ -738,9 +811,11 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(
-                await _repository.GetAccidentCostsFinancialYearReportAsync(normalizedFinancialYear)
+            var result = await _repository.GetAccidentCostsFinancialYearReportAsync(
+                normalizedFinancialYear,
+                CreateReportPageQuery(page, pageSize)
             );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -750,9 +825,11 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/duplicates")]
-    public async Task<
-        ActionResult<IEnumerable<AccidentVehicleReportRow>>
-    > GetDuplicateAccidentsReport([FromQuery] string garage = "all")
+    public async Task<ActionResult> GetDuplicateAccidentsReport(
+        [FromQuery] string garage = "all",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
+    )
     {
         var normalizedGarage = garage.Trim().ToLowerInvariant() switch
         {
@@ -768,7 +845,11 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetDuplicateAccidentsReportAsync(normalizedGarage));
+            var result = await _repository.GetDuplicateAccidentsReportAsync(
+                normalizedGarage,
+                CreateReportPageQuery(page, pageSize)
+            );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {
@@ -778,8 +859,10 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/new-accidents")]
-    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetNewAccidentsReport(
-        [FromQuery] string mode = "all"
+    public async Task<ActionResult> GetNewAccidentsReport(
+        [FromQuery] string mode = "all",
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = DefaultReportPageSize
     )
     {
         var normalizedMode = mode.Trim().ToLowerInvariant();
@@ -790,7 +873,11 @@ public class AccidentController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetNewAccidentsReportAsync(normalizedMode));
+            var result = await _repository.GetNewAccidentsReportAsync(
+                normalizedMode,
+                CreateReportPageQuery(page, pageSize)
+            );
+            return Ok(CreateReportPageResponse(result));
         }
         catch (Exception ex)
         {

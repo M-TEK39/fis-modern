@@ -50,12 +50,18 @@ public sealed class WorkshopMerchantRepository : IWorkshopMerchantRepository
 
     public async Task<IEnumerable<WwMerchant>> GetAllAsync() => await QueryAsync();
 
+    public Task<WorkshopMerchantPage> GetPageAsync(WorkshopMerchantPageQuery query) =>
+        GetPageAsyncCore(query, limitSearchLength: true);
+
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The table, columns, ordering, and parameter names are fixed. The merchant search and pagination values are always parameters."
     )]
-    public async Task<WorkshopMerchantPage> GetPageAsync(WorkshopMerchantPageQuery query)
+    private async Task<WorkshopMerchantPage> GetPageAsyncCore(
+        WorkshopMerchantPageQuery query,
+        bool limitSearchLength
+    )
     {
         ArgumentNullException.ThrowIfNull(query);
 
@@ -66,7 +72,7 @@ public sealed class WorkshopMerchantRepository : IWorkshopMerchantRepository
         {
             search = null;
         }
-        else if (search.Length > 40)
+        else if (limitSearchLength && search.Length > 40)
         {
             search = search[..40];
         }
@@ -125,6 +131,19 @@ public sealed class WorkshopMerchantRepository : IWorkshopMerchantRepository
             if (shouldClose)
                 await connection.CloseAsync();
         }
+    }
+
+    public async Task<WorkshopMerchantReportPage> GetReportPageAsync(
+        WorkshopMerchantReportPageQuery query
+    )
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var page = await GetPageAsyncCore(
+            new WorkshopMerchantPageQuery(query.Page, query.PageSize, query.Search),
+            limitSearchLength: false
+        );
+        return new WorkshopMerchantReportPage(page.Items, page.Page, page.PageSize, page.Total);
     }
 
     public async Task<WwMerchant> CreateAsync(WwMerchant merchant, int currentUserId)

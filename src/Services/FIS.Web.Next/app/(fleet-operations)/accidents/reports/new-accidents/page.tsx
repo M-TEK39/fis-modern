@@ -7,10 +7,12 @@ import {
   AccidentReportFormActions,
   AccidentReportFormError,
   AccidentReportLoadingState,
+  AccidentReportPagination,
   AccidentReportPageShell,
 } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   authorizeAccidentReport,
+  getAccidentReportPageState,
   loadAccidentReport,
 } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import VehicleTable, {
@@ -19,6 +21,7 @@ import VehicleTable, {
 import {
   getAccidentNewAccidentsReport,
   type AccidentNewAccidentReportMode,
+  type AccidentReportPage,
   type AccidentVehicleReportRow,
 } from "@/lib/api/fleet-operations/api-accidents";
 type QueryValue = string | string[] | undefined;
@@ -172,12 +175,15 @@ const newAccidentReportColumns: readonly VehicleTableColumn<AccidentVehicleRepor
 ];
 
 function NewAccidentReportTable({
-  rows,
+  query,
+  report,
   mode,
 }: {
-  rows: AccidentVehicleReportRow[];
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentVehicleReportRow>;
   mode: AccidentNewAccidentReportMode;
 }) {
+  const rows = report.items;
   return (
     <section
       className="vehicle-status-maintenance-panel"
@@ -188,7 +194,7 @@ function NewAccidentReportTable({
           <p className="eyebrow">Report results</p>
           <h2 id="new-accident-results-title">{reportTitle(mode)}</h2>
         </div>
-        <span className="form-hint">{rows.length} record(s)</span>
+        <span className="form-hint">{report.total} record(s)</span>
       </div>
       <div className="vehicle-table-wrapper">
         <VehicleTable
@@ -198,7 +204,15 @@ function NewAccidentReportTable({
           rowKey={(row) => row.accidentCode}
         />
       </div>
-      <p className="vehicle-pagination-meta">Total Number: {rows.length}</p>
+      <p className="vehicle-pagination-meta">Total Number: {report.total}</p>
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/new-accidents"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
     </section>
   );
 }
@@ -239,23 +253,28 @@ function NewAccidentsReportForm({
 }
 
 function NewAccidentsReportResults({
-  rows,
+  query,
+  report,
   mode,
 }: {
-  rows: AccidentVehicleReportRow[] | null;
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentVehicleReportRow> | null;
   mode: AccidentNewAccidentReportMode;
 }) {
-  return rows ? (
-    rows.length > 0 ? (
-      <NewAccidentReportTable rows={rows} mode={mode} />
-    ) : (
-      <section className="vehicle-empty-state" aria-live="polite">
-        <p className="eyebrow">No accidents found</p>
-        <h2>No accidents matched this notification status.</h2>
-        <p className="muted-copy">Choose another report type and submit again.</p>
-      </section>
-    )
-  ) : null;
+  if (report === null) {
+    return null;
+  }
+
+  const rows = report.items;
+  return rows.length > 0 ? (
+    <NewAccidentReportTable query={query} report={report} mode={mode} />
+  ) : (
+    <section className="vehicle-empty-state" aria-live="polite">
+      <p className="eyebrow">No accidents found</p>
+      <h2>No accidents matched this notification status.</h2>
+      <p className="muted-copy">Choose another report type and submit again.</p>
+    </section>
+  );
 }
 
 async function NewAccidentsReportContent({ searchParams }: { searchParams: Promise<ReportQuery> }) {
@@ -279,10 +298,11 @@ async function NewAccidentsReportContent({ searchParams }: { searchParams: Promi
   const shouldRun =
     getQueryValue(query, "run") === "1" || getQueryValue(query, "mode", "Radio1") !== undefined;
   const errorMessage = invalid ? "Mode must be all, call centre, garage, or confirmation." : null;
+  const { page, pageSize } = getAccidentReportPageState(query);
   const report = await loadAccidentReport({
     shouldRun,
     errorMessage,
-    load: () => getAccidentNewAccidentsReport(mode),
+    load: () => getAccidentNewAccidentsReport(mode, page, pageSize),
     context: "FIS new accident report failed",
   });
   if (report.status === "unauthorized") {
@@ -296,12 +316,10 @@ async function NewAccidentsReportContent({ searchParams }: { searchParams: Promi
       />
     );
   }
-  const rows = report.data;
-
   return (
     <>
       <NewAccidentsReportForm errorMessage={errorMessage} mode={mode} />
-      <NewAccidentsReportResults rows={rows} mode={mode} />
+      <NewAccidentsReportResults query={query} report={report.data} mode={mode} />
       <AccidentReportFooter clearHref="/accidents/reports/new-accidents" />
     </>
   );

@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_REPORT_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export type LegacyReport = {
@@ -14,6 +15,15 @@ export type LegacyReport = {
   columns: Array<{ key: string; header: string }>;
   rows: Array<Record<string, string | null>>;
   totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+export type LegacyReportRequestOptions = {
+  page?: number;
+  pageSize?: number;
+  includeAll?: boolean;
 };
 
 export type LegacyReportApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
@@ -73,6 +83,11 @@ function asBoolean(value: unknown) {
   if (typeof value === "string")
     return ["true", "1", "yes", "y"].includes(value.trim().toLowerCase());
   return null;
+}
+
+function positiveInteger(value: unknown) {
+  const number = asNumber(value);
+  return number !== null && Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
 async function requestApi(path: string, init: RequestInit = {}) {
@@ -151,6 +166,15 @@ function mapReport(value: unknown): LegacyReport | null {
   const title = asString(getValue(value, "title", "Title"));
   if (!title || columns.length === 0) return null;
 
+  const totalCount = asNumber(getValue(value, "totalCount", "TotalCount")) ?? rows.length;
+  const page = positiveInteger(getValue(value, "page", "Page")) ?? 1;
+  const pageSize =
+    positiveInteger(getValue(value, "pageSize", "PageSize")) ??
+    (rows.length > 0 ? rows.length : DEFAULT_REPORT_PAGE_SIZE);
+  const totalPages =
+    positiveInteger(getValue(value, "totalPages", "TotalPages")) ??
+    Math.max(1, Math.ceil(totalCount / pageSize));
+
   return {
     reportKey: asString(getValue(value, "reportKey", "ReportKey")) ?? "",
     title,
@@ -159,17 +183,28 @@ function mapReport(value: unknown): LegacyReport | null {
     approximationReason: asString(getValue(value, "approximationReason", "ApproximationReason")),
     columns,
     rows,
-    totalCount: asNumber(getValue(value, "totalCount", "TotalCount")) ?? rows.length,
+    totalCount,
+    page,
+    pageSize,
+    totalPages,
   };
 }
 
 export async function getLegacyReport(
   reportKey: string,
   filters: Record<string, string | number | undefined> = {},
+  options: LegacyReportRequestOptions = {},
 ) {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
     if (value !== undefined && String(value).trim() !== "") params.set(key, String(value));
+  }
+
+  if (options.includeAll) {
+    params.set("includeAll", "true");
+  } else {
+    params.set("page", String(options.page ?? 1));
+    params.set("pageSize", String(options.pageSize ?? DEFAULT_REPORT_PAGE_SIZE));
   }
 
   const query = params.size > 0 ? `?${params.toString()}` : "";

@@ -17,6 +17,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 public class TrackingRepository : ITrackingRepository
 {
     private const string TableName = "Tracking";
+    private const string VehicleTableName = "vehicle_master";
+    private const string SiteTableName = "site";
     private static readonly string[] RequiredColumns = ["track_code"];
     private readonly FisDbContext _context;
 
@@ -77,6 +79,56 @@ public class TrackingRepository : ITrackingRepository
             """;
         AddSearchParameter(dataCommand, searchTerm);
         AddVmfParameter(dataCommand, vmfCode);
+        AddParameter(dataCommand, "@skip", DbType.Int64, skip);
+        AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+
+        var items = new List<Tracking>();
+        await using var reader = await dataCommand.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            items.Add(Map(reader));
+
+        return new TrackingPage(items, page, pageSize, total);
+    }
+
+    public async Task<TrackingPage> GetReportPageAsync(TrackingReportPageQuery query)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var requestedPage = Math.Max(1, query.Page);
+        var columns = await GetAvailableColumnsAsync();
+        var reportSql = await BuildReportSqlAsync(query, columns);
+
+        await using var scope = await OpenConnectionAsync();
+
+        await using var countCommand = scope.Connection.CreateCommand();
+        countCommand.Transaction = CurrentTransaction;
+        countCommand.CommandText = $"""
+                SELECT COUNT(1)
+                FROM [dbo].[{TableName}] t
+                {reportSql.VehicleJoin}
+                WHERE {reportSql.WhereClause}
+            """;
+        reportSql.ConfigureParameters(countCommand);
+        var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
+
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Min(requestedPage, totalPages);
+        var skip = checked((long)(page - 1) * pageSize);
+
+        await using var dataCommand = scope.Connection.CreateCommand();
+        dataCommand.Transaction = CurrentTransaction;
+        dataCommand.CommandText = $"""
+                SELECT
+                    {BuildProjection(columns)}
+                FROM [dbo].[{TableName}] t
+                {reportSql.VehicleJoin}
+                WHERE {reportSql.WhereClause}
+                ORDER BY {OptionalExpression(columns, "install_date", "datetime2")} DESC,
+                         t.[track_code] DESC
+                OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
+            """;
+        reportSql.ConfigureParameters(dataCommand);
         AddParameter(dataCommand, "@skip", DbType.Int64, skip);
         AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
 
@@ -423,7 +475,303 @@ public class TrackingRepository : ITrackingRepository
     private static string ContainsSearch(string expression, string sqlType) =>
         $"CHARINDEX(@search, LOWER(LTRIM(RTRIM(COALESCE(CONVERT({sqlType}, {expression}), N''))))) > 0";
 
+    private async Task<TrackingReportSql> BuildReportSqlAsync(
+        TrackingReportPageQuery query,
+        IReadOnlyDictionary<string, ColumnInfo> trackingColumns
+    )
+    {
+        var conditions = new List<string>();
+        if (trackingColumns.ContainsKey("is_deleted"))
+            conditions.Add("ISNULL(t.[is_deleted], 0) = 0");
+
+        var vehicleJoin = BuildVehicleJoin(trackingColumns);
+        var parameters = new List<ReportParameter>();
+
+        switch (query.ReportKind)
+        {
+            case TrackingReportKind.OneVehicle:
+                AddVmfCodeCondition(conditions, parameters, trackingColumns, query.VmfCode);
+                AddInstallDateRangeCondition(
+                    conditions,
+                    parameters,
+                    trackingColumns,
+                    query.StartDate,
+                    query.EndDate
+                );
+                break;
+
+            case TrackingReportKind.OneDevice:
+                AddDeviceCondition(conditions, parameters, trackingColumns, query.DeviceId);
+                break;
+
+            case TrackingReportKind.AllVehicles:
+                AddInstallDateRangeCondition(
+                    conditions,
+                    parameters,
+                    trackingColumns,
+                    query.StartDate,
+                    query.EndDate
+                );
+                AddTrackerTypeCondition(conditions, parameters, trackingColumns, query.TrackerType);
+                break;
+
+            case TrackingReportKind.AllDevices:
+            case TrackingReportKind.InstallPeriod:
+                AddInstallDateRangeCondition(
+                    conditions,
+                    parameters,
+                    trackingColumns,
+                    query.StartDate,
+                    query.EndDate
+                );
+                break;
+
+            case TrackingReportKind.SitePeriod:
+                AddInstallDateRangeCondition(
+                    conditions,
+                    parameters,
+                    trackingColumns,
+                    query.StartDate,
+                    query.EndDate
+                );
+                if (!query.AllSites)
+                {
+                    var vehicleColumns = await GetTableColumnsAsync(VehicleTableName);
+                    AddSiteCondition(
+                        conditions,
+                        parameters,
+                        trackingColumns,
+                        vehicleColumns,
+                        query.SiteCode
+                    );
+                }
+                break;
+
+            case TrackingReportKind.DepartmentPeriod:
+                AddInstallDateRangeCondition(
+                    conditions,
+                    parameters,
+                    trackingColumns,
+                    query.StartDate,
+                    query.EndDate
+                );
+                if (!query.AllDepartments)
+                {
+                    var vehicleColumns = await GetTableColumnsAsync(VehicleTableName);
+                    var siteColumns = await GetTableColumnsAsync(SiteTableName);
+                    AddDepartmentCondition(
+                        conditions,
+                        parameters,
+                        trackingColumns,
+                        vehicleColumns,
+                        siteColumns,
+                        query.DepartmentCode
+                    );
+                }
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(query.ReportKind),
+                    query.ReportKind,
+                    "Unsupported Tracking report type."
+                );
+        }
+
+        return new TrackingReportSql(
+            vehicleJoin,
+            conditions.Count == 0 ? "1 = 1" : string.Join(" AND ", conditions),
+            command => AddReportParameters(command, parameters)
+        );
+    }
+
+    private static string BuildVehicleJoin(
+        IReadOnlyDictionary<string, ColumnInfo> trackingColumns
+    ) =>
+        trackingColumns.ContainsKey("vmf_code")
+            ? $"LEFT JOIN [dbo].[{VehicleTableName}] v ON v.[vmf_code] = t.[vmf_code]"
+            : $"LEFT JOIN [dbo].[{VehicleTableName}] v ON 1 = 0";
+
+    private static void AddVmfCodeCondition(
+        ICollection<string> conditions,
+        ICollection<ReportParameter> parameters,
+        IReadOnlyDictionary<string, ColumnInfo> trackingColumns,
+        int? vmfCode
+    )
+    {
+        if (!trackingColumns.ContainsKey("vmf_code") || vmfCode is null)
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        conditions.Add("t.[vmf_code] = @vmfCode");
+        parameters.Add(new ReportParameter("@vmfCode", DbType.Int32, vmfCode.Value));
+    }
+
+    private static void AddDeviceCondition(
+        ICollection<string> conditions,
+        ICollection<ReportParameter> parameters,
+        IReadOnlyDictionary<string, ColumnInfo> trackingColumns,
+        string? deviceId
+    )
+    {
+        var device = deviceId?.Trim();
+        if (!trackingColumns.ContainsKey("track_num") || string.IsNullOrWhiteSpace(device))
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        conditions.Add("UPPER(t.[track_num]) = UPPER(@deviceId)");
+        parameters.Add(new ReportParameter("@deviceId", DbType.String, device));
+    }
+
+    private static void AddTrackerTypeCondition(
+        ICollection<string> conditions,
+        ICollection<ReportParameter> parameters,
+        IReadOnlyDictionary<string, ColumnInfo> trackingColumns,
+        string? trackerType
+    )
+    {
+        var normalizedTrackerType = trackerType?.Trim();
+        if (
+            string.IsNullOrWhiteSpace(normalizedTrackerType)
+            || string.Equals(normalizedTrackerType, "All", StringComparison.OrdinalIgnoreCase)
+        )
+            return;
+
+        if (!trackingColumns.ContainsKey("track_type"))
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        if (string.Equals(normalizedTrackerType, "Reused", StringComparison.OrdinalIgnoreCase))
+        {
+            conditions.Add("UPPER(t.[track_type]) IN (N'REUSED', N'RE-USED')");
+            return;
+        }
+
+        conditions.Add("UPPER(t.[track_type]) = UPPER(@trackerType)");
+        parameters.Add(new ReportParameter("@trackerType", DbType.String, normalizedTrackerType));
+    }
+
+    private static void AddInstallDateRangeCondition(
+        ICollection<string> conditions,
+        ICollection<ReportParameter> parameters,
+        IReadOnlyDictionary<string, ColumnInfo> trackingColumns,
+        DateTime startDate,
+        DateTime endDate
+    )
+    {
+        if (!trackingColumns.ContainsKey("install_date"))
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        var start = startDate.Date;
+        var end = endDate.Date;
+        if (end < start)
+            (start, end) = (end, start);
+
+        conditions.Add("t.[install_date] >= @startDate");
+        parameters.Add(new ReportParameter("@startDate", DbType.DateTime2, start));
+
+        if (end == DateTime.MaxValue.Date)
+            return;
+
+        conditions.Add("t.[install_date] < @endDateExclusive");
+        parameters.Add(
+            new ReportParameter("@endDateExclusive", DbType.DateTime2, end.AddDays(1))
+        );
+    }
+
+    private static void AddSiteCondition(
+        ICollection<string> conditions,
+        ICollection<ReportParameter> parameters,
+        IReadOnlyDictionary<string, ColumnInfo> trackingColumns,
+        IReadOnlySet<string> vehicleColumns,
+        int? siteCode
+    )
+    {
+        if (
+            !trackingColumns.ContainsKey("vmf_code")
+            || !vehicleColumns.Contains("veh_site_code")
+            || siteCode is null
+        )
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        conditions.Add("v.[veh_site_code] = @siteCode");
+        parameters.Add(new ReportParameter("@siteCode", DbType.Int32, siteCode.Value));
+    }
+
+    private static void AddDepartmentCondition(
+        ICollection<string> conditions,
+        ICollection<ReportParameter> parameters,
+        IReadOnlyDictionary<string, ColumnInfo> trackingColumns,
+        IReadOnlySet<string> vehicleColumns,
+        IReadOnlySet<string> siteColumns,
+        int? departmentCode
+    )
+    {
+        if (
+            !trackingColumns.ContainsKey("vmf_code")
+            || !vehicleColumns.Contains("veh_site_code")
+            || !siteColumns.Contains("Site_code")
+            || !siteColumns.Contains("Depatrment_code")
+            || !siteColumns.Contains("site_active")
+            || departmentCode is null
+        )
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        var siteNotDeletedFilter = siteColumns.Contains("is_deleted")
+            ? " AND (s.[is_deleted] = 0 OR s.[is_deleted] IS NULL)"
+            : string.Empty;
+        conditions.Add(
+            $"""
+            EXISTS (
+                SELECT 1
+                FROM [dbo].[{SiteTableName}] s
+                WHERE s.[Site_code] = v.[veh_site_code]
+                  AND s.[Depatrment_code] = @departmentCode
+                  AND s.[site_active] = 1{siteNotDeletedFilter}
+            )
+            """
+        );
+        parameters.Add(new ReportParameter("@departmentCode", DbType.Int32, departmentCode.Value));
+    }
+
+    private static void AddReportParameters(
+        DbCommand command,
+        IEnumerable<ReportParameter> parameters
+    )
+    {
+        foreach (var parameter in parameters)
+            AddParameter(command, parameter.Name, parameter.Type, parameter.Value);
+    }
+
     private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync()
+    {
+        var tableColumns = await GetTableColumnsAsync(TableName);
+        var columns = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
+        foreach (var column in tableColumns)
+            columns[column] = new ColumnInfo(column);
+        if (RequiredColumns.Any(column => !columns.ContainsKey(column)))
+            throw new InvalidOperationException(
+                "The Tracking compatibility table is missing its required legacy columns."
+            );
+        return columns;
+    }
+
+    private async Task<HashSet<string>> GetTableColumnsAsync(string tableName)
     {
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
@@ -431,15 +779,11 @@ public class TrackingRepository : ITrackingRepository
         command.CommandText =
             "SELECT [COLUMN_NAME] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table";
         AddParameter(command, "@schema", DbType.String, "dbo");
-        AddParameter(command, "@table", DbType.String, TableName);
-        var columns = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
+        AddParameter(command, "@table", DbType.String, tableName);
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         await using var reader = await command.ExecuteReaderAsync();
         while (await reader.ReadAsync())
-            columns[reader.GetString(0)] = new ColumnInfo(reader.GetString(0));
-        if (RequiredColumns.Any(column => !columns.ContainsKey(column)))
-            throw new InvalidOperationException(
-                "The Tracking compatibility table is missing its required legacy columns."
-            );
+            columns.Add(reader.GetString(0));
         return columns;
     }
 
@@ -583,6 +927,14 @@ public class TrackingRepository : ITrackingRepository
     private sealed record ColumnInfo(string Name);
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
+
+    private sealed record ReportParameter(string Name, DbType Type, object? Value);
+
+    private sealed record TrackingReportSql(
+        string VehicleJoin,
+        string WhereClause,
+        Action<DbCommand> ConfigureParameters
+    );
 
     private sealed class ConnectionScope(DbConnection connection, bool shouldClose)
         : IAsyncDisposable

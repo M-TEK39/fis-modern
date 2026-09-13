@@ -17,19 +17,16 @@ public class AuctionController : BaseApiController
 
     private readonly IAuctionRepository _repository;
     private readonly AuctionMaintenanceCompatibilityService _maintenanceService;
-    private readonly IVehicleRepository _vehicleRepository;
     private readonly ILogger<AuctionController> _logger;
 
     public AuctionController(
         IAuctionRepository repository,
         AuctionMaintenanceCompatibilityService maintenanceService,
-        IVehicleRepository vehicleRepository,
         ILogger<AuctionController> logger
     )
     {
         _repository = repository;
         _maintenanceService = maintenanceService;
-        _vehicleRepository = vehicleRepository;
         _logger = logger;
     }
 
@@ -233,13 +230,15 @@ public class AuctionController : BaseApiController
         [FromBody] AuctionOneVehicleRequestDto request
     )
     {
-        var data = (await GetLiveItemsAsync())
-            .Where(item => item.vmf_code == request.VmfCode)
-            .OrderByDescending(item => item.auth_date)
-            .Cast<object>()
-            .ToList();
+        var result = await _repository.GetOneVehicleReportPageAsync(
+            new AuctionOneVehicleReportPageQuery(
+                request.VmfCode,
+                NormalizeReportPage(request.Page),
+                NormalizeReportPageSize(request.PageSize)
+            )
+        );
 
-        return Ok(new AuctionReportDto { ReportType = "OneVehicle", Data = data });
+        return Ok(CreateReportDto("OneVehicle", result));
     }
 
     /// <summary>
@@ -250,18 +249,18 @@ public class AuctionController : BaseApiController
         [FromBody] AuctionAllVehiclesRequestDto request
     )
     {
-        var data = (await GetLiveItemsAsync())
-            .Where(item =>
-                IsWithinInclusiveDateRange(item.auth_date, request.StartDate, request.EndDate)
+        var result = await _repository.GetAllVehiclesReportPageAsync(
+            new AuctionAllVehiclesReportPageQuery(
+                request.StartDate,
+                request.EndDate,
+                request.AuctionNumber,
+                request.Garage,
+                NormalizeReportPage(request.Page),
+                NormalizeReportPageSize(request.PageSize)
             )
-            .Where(item =>
-                MatchesAuctionNumberAndGarage(item, request.AuctionNumber, request.Garage)
-            )
-            .OrderByDescending(item => item.auth_date)
-            .Cast<object>()
-            .ToList();
+        );
 
-        return Ok(new AuctionReportDto { ReportType = "AllVehicles", Data = data });
+        return Ok(CreateReportDto("AllVehicles", result));
     }
 
     /// <summary>
@@ -272,32 +271,17 @@ public class AuctionController : BaseApiController
         [FromBody] AuctionSaleToNameRequestDto request
     )
     {
-        var buyer = request.BuyerName?.Trim();
-        var query = (await GetLiveItemsAsync()).Where(item =>
-            IsWithinInclusiveDateRange(item.auth_date, request.StartDate, request.EndDate)
+        var result = await _repository.GetSaleToNameReportPageAsync(
+            new AuctionSaleToNameReportPageQuery(
+                request.BuyerName,
+                request.StartDate,
+                request.EndDate,
+                NormalizeReportPage(request.Page),
+                NormalizeReportPageSize(request.PageSize)
+            )
         );
 
-        if (!string.IsNullOrWhiteSpace(buyer))
-        {
-            query = query.Where(item =>
-                (
-                    !string.IsNullOrWhiteSpace(item.sold_to)
-                    && item.sold_to.Contains(buyer, StringComparison.OrdinalIgnoreCase)
-                )
-                || (
-                    !string.IsNullOrWhiteSpace(item.sold_id)
-                    && item.sold_id.Contains(buyer, StringComparison.OrdinalIgnoreCase)
-                )
-            );
-        }
-
-        return Ok(
-            new AuctionReportDto
-            {
-                ReportType = "SaleToName",
-                Data = query.OrderByDescending(item => item.auth_date).Cast<object>().ToList(),
-            }
-        );
+        return Ok(CreateReportDto("SaleToName", result));
     }
 
     /// <summary>
@@ -308,47 +292,17 @@ public class AuctionController : BaseApiController
         [FromBody] AuctionGGRequestDto request
     )
     {
-        if (!string.IsNullOrWhiteSpace(request.AuctionNumber))
-        {
-            var auctionData = (await GetLiveItemsAsync())
-                .Where(item =>
-                    MatchesAuctionNumberAndGarage(item, request.AuctionNumber, request.Garage)
-                )
-                .OrderBy(item => item.vmf_code)
-                .ThenByDescending(item => item.auth_date)
-                .Cast<object>()
-                .ToList();
-
-            return Ok(new AuctionReportDto { ReportType = "AuctionGG", Data = auctionData });
-        }
-
-        var gg = request.GGNumber?.Trim();
-        if (string.IsNullOrWhiteSpace(gg))
-        {
-            return Ok(
-                new AuctionReportDto
-                {
-                    ReportType = "AuctionGG",
-                    Data = Array.Empty<object>().ToList(),
-                }
-            );
-        }
-
-        var matchedVmfCodes = (await _vehicleRepository.GetAllAsync())
-            .Where(vehicle =>
-                !string.IsNullOrWhiteSpace(vehicle.fleet_number)
-                && vehicle.fleet_number.Contains(gg, StringComparison.OrdinalIgnoreCase)
+        var result = await _repository.GetAuctionGgReportPageAsync(
+            new AuctionGgReportPageQuery(
+                request.GGNumber,
+                request.AuctionNumber,
+                request.Garage,
+                NormalizeReportPage(request.Page),
+                NormalizeReportPageSize(request.PageSize)
             )
-            .Select(vehicle => vehicle.vmf_code)
-            .ToHashSet();
+        );
 
-        var data = (await GetLiveItemsAsync())
-            .Where(item => matchedVmfCodes.Contains(item.vmf_code))
-            .OrderByDescending(item => item.auth_date)
-            .Cast<object>()
-            .ToList();
-
-        return Ok(new AuctionReportDto { ReportType = "AuctionGG", Data = data });
+        return Ok(CreateReportDto("AuctionGG", result));
     }
 
     /// <summary>
@@ -359,38 +313,36 @@ public class AuctionController : BaseApiController
         [FromBody] AuctionLotRequestDto request
     )
     {
-        if (!string.IsNullOrWhiteSpace(request.AuctionNumber))
-        {
-            var auctionData = (await GetLiveItemsAsync())
-                .Where(item =>
-                    MatchesAuctionNumberAndGarage(item, request.AuctionNumber, request.Garage)
-                )
-                .OrderBy(item => item.lot)
-                .ThenBy(item => item.vmf_code)
-                .Cast<object>()
-                .ToList();
-
-            return Ok(new AuctionReportDto { ReportType = "AuctionLot", Data = auctionData });
-        }
-
-        var lot = request.LotNumber?.Trim();
-        var data = (await GetLiveItemsAsync())
-            .Where(item =>
-                !string.IsNullOrWhiteSpace(lot)
-                && item.lot.HasValue
-                && item.lot.Value.ToString().Contains(lot, StringComparison.OrdinalIgnoreCase)
+        var result = await _repository.GetAuctionLotReportPageAsync(
+            new AuctionLotReportPageQuery(
+                request.LotNumber,
+                request.AuctionNumber,
+                request.Garage,
+                NormalizeReportPage(request.Page),
+                NormalizeReportPageSize(request.PageSize)
             )
-            .OrderByDescending(item => item.auth_date)
-            .Cast<object>()
-            .ToList();
+        );
 
-        return Ok(new AuctionReportDto { ReportType = "AuctionLot", Data = data });
+        return Ok(CreateReportDto("AuctionLot", result));
     }
 
     #endregion
 
-    private async Task<List<Auction>> GetLiveItemsAsync() =>
-        (await _repository.GetAllAsync()).Where(item => !item.is_deleted).ToList();
+    private static AuctionReportDto CreateReportDto(string reportType, AuctionReportPage result) =>
+        new()
+        {
+            ReportType = reportType,
+            Data = result.Items.Cast<object>().ToList(),
+            Page = result.Page,
+            PageSize = result.PageSize,
+            Total = result.Total,
+            TotalPages = result.TotalPages,
+        };
+
+    private static int NormalizeReportPage(int page) => Math.Clamp(page, 1, 1_000_000);
+
+    private static int NormalizeReportPageSize(int pageSize) =>
+        Math.Clamp(pageSize, 1, MaximumPageSize);
 
     private bool HasReportsRole() => HasAnyRole("Reports");
 
@@ -426,53 +378,6 @@ public class AuctionController : BaseApiController
         return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed[..Math.Min(trimmed.Length, 8)];
     }
 
-    private static bool MatchesAuctionNumberAndGarage(
-        Auction item,
-        string? auctionNumber,
-        string? garage
-    )
-    {
-        if (
-            !string.IsNullOrWhiteSpace(auctionNumber)
-            && !string.Equals(
-                item.auction_number?.Trim(),
-                auctionNumber.Trim(),
-                StringComparison.OrdinalIgnoreCase
-            )
-        )
-        {
-            return false;
-        }
-
-        return garage?.Trim().ToUpperInvariant() switch
-        {
-            "JHB" => item.auction_garage == 1,
-            "PTA" => item.auction_garage == 2,
-            _ => true,
-        };
-    }
-
-    private static bool IsWithinInclusiveDateRange(
-        DateTime? candidate,
-        DateTime startDate,
-        DateTime endDate
-    )
-    {
-        if (!candidate.HasValue)
-        {
-            return false;
-        }
-
-        var start = startDate.Date;
-        var end = endDate.Date;
-        if (end < start)
-        {
-            (start, end) = (end, start);
-        }
-
-        var value = candidate.Value.Date;
-        return value >= start && value <= end;
-    }
 }
 
 #region Auction DTOs
@@ -489,6 +394,8 @@ public class AuctionReportMenuDto
 public class AuctionOneVehicleRequestDto
 {
     public int VmfCode { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 24;
 }
 
 public class AuctionAllVehiclesRequestDto
@@ -497,6 +404,8 @@ public class AuctionAllVehiclesRequestDto
     public DateTime EndDate { get; set; }
     public string? AuctionNumber { get; set; }
     public string? Garage { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 24;
 }
 
 public class AuctionSaleToNameRequestDto
@@ -504,6 +413,8 @@ public class AuctionSaleToNameRequestDto
     public string BuyerName { get; set; } = "";
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 24;
 }
 
 public class AuctionGGRequestDto
@@ -511,6 +422,8 @@ public class AuctionGGRequestDto
     public string GGNumber { get; set; } = "";
     public string? AuctionNumber { get; set; }
     public string? Garage { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 24;
 }
 
 public class AuctionLotRequestDto
@@ -518,11 +431,17 @@ public class AuctionLotRequestDto
     public string LotNumber { get; set; } = "";
     public string? AuctionNumber { get; set; }
     public string? Garage { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 24;
 }
 
 public class AuctionReportDto
 {
     public string ReportType { get; set; } = "";
     public List<object> Data { get; set; } = new();
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int Total { get; set; }
+    public int TotalPages { get; set; }
 }
 #endregion

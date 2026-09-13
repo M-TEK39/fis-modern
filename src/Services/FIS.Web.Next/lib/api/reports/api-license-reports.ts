@@ -3,6 +3,7 @@ import "server-only";
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
+export const DEFAULT_LICENSE_REPORT_PAGE_SIZE = 24;
 type JsonRecord = Record<string, unknown>;
 
 export const LICENSE_REPORT_MODES = [
@@ -40,9 +41,18 @@ export type LicenseReportFilters = {
   year?: number;
 };
 
+export type LicenseReportRequestOptions = {
+  page?: number;
+  pageSize?: number;
+};
+
 export type LicenseReport = {
-  columns: string[];
+  columns: Array<{ key: string; header: string }>;
   rows: Array<Record<string, string | null>>;
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 };
 
 export class LicenseReportApiError extends Error {
@@ -74,6 +84,25 @@ function asString(value: unknown) {
   if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean")
     return String(value);
   return null;
+}
+
+function asNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function nonNegativeInteger(value: unknown) {
+  const number = asNumber(value);
+  return number !== null && Number.isSafeInteger(number) && number >= 0 ? number : null;
+}
+
+function positiveInteger(value: unknown) {
+  const number = asNumber(value);
+  return number !== null && Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
 async function requestApi(mode: LicenseReportMode, body: Record<string, unknown>) {
@@ -125,17 +154,30 @@ async function requestApi(mode: LicenseReportMode, body: Record<string, unknown>
 }
 
 function reportRows(payload: unknown) {
-  if (Array.isArray(payload)) return payload;
   if (isRecord(payload)) {
-    const rows = valueOf(payload, "rows", "Rows", "data", "items", "results");
-    return Array.isArray(rows) ? rows : [];
+    const rows = valueOf(payload, "rows", "Rows");
+    return Array.isArray(rows) ? rows : null;
   }
-  return [];
+  return null;
+}
+
+function reportColumns(payload: JsonRecord) {
+  const columns = valueOf(payload, "columns", "Columns");
+  if (!Array.isArray(columns)) return null;
+  return columns
+    .map((column) => {
+      if (!isRecord(column)) return null;
+      const key = asString(valueOf(column, "key", "Key"));
+      const header = asString(valueOf(column, "header", "Header"));
+      return key?.trim() && header?.trim() ? { key, header } : null;
+    })
+    .filter((column): column is { key: string; header: string } => column !== null);
 }
 
 export async function getLicenseReport(
   mode: LicenseReportMode,
   filters: LicenseReportFilters = {},
+  options: LicenseReportRequestOptions = {},
 ): Promise<LicenseReport> {
   const payload = await requestApi(mode, {
     search: filters.search,
@@ -147,13 +189,40 @@ export async function getLicenseReport(
     to: filters.to,
     month: filters.month,
     year: filters.year,
+    page: options.page ?? 1,
+    pageSize: options.pageSize ?? DEFAULT_LICENSE_REPORT_PAGE_SIZE,
   });
-  const rows = reportRows(payload).reduce<Array<Record<string, string | null>>>((result, row) => {
+  const rawRows = reportRows(payload);
+  if (!rawRows || !isRecord(payload)) {
+    throw new LicenseReportApiError(
+      "invalid-response",
+      "The FIS API returned an invalid licence report.",
+    );
+  }
+
+  const columns = reportColumns(payload);
+  if (!columns) {
+    throw new LicenseReportApiError(
+      "invalid-response",
+      "The FIS API returned an invalid licence report.",
+    );
+  }
+
+  const rows = rawRows.reduce<Array<Record<string, string | null>>>((result, row) => {
     if (!isRecord(row)) return result;
     result.push(
       Object.fromEntries(Object.entries(row).map(([key, value]) => [key, asString(value)])),
     );
     return result;
   }, []);
-  return { columns: rows.length > 0 ? Object.keys(rows[0]) : [], rows };
+  const totalCount =
+    nonNegativeInteger(valueOf(payload, "totalCount", "TotalCount")) ?? rows.length;
+  const page = positiveInteger(valueOf(payload, "page", "Page")) ?? 1;
+  const pageSize =
+    positiveInteger(valueOf(payload, "pageSize", "PageSize")) ?? DEFAULT_LICENSE_REPORT_PAGE_SIZE;
+  const totalPages =
+    positiveInteger(valueOf(payload, "totalPages", "TotalPages")) ??
+    Math.max(1, Math.ceil(totalCount / pageSize));
+
+  return { columns, rows, totalCount, page, pageSize, totalPages };
 }

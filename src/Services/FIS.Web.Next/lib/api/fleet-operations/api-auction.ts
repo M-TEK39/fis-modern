@@ -64,6 +64,10 @@ export type AuctionMaintenanceRequest = {
 export type AuctionReport = {
   reportType: string;
   data: AuctionRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 };
 
 export type AuctionApiErrorReason =
@@ -259,6 +263,20 @@ function mapReport(value: unknown): AuctionReport {
     data: getCollection(getValue(value, "Data", "data", "items"))
       .map(mapAuction)
       .filter((auction): auction is AuctionRecord => auction !== null),
+    page: pageNumber(getValue(value, "Page", "page"), 1),
+    pageSize: pageNumber(
+      getValue(value, "PageSize", "pageSize"),
+      Math.max(1, getCollection(getValue(value, "Data", "data", "items")).length),
+    ),
+    total: Math.max(
+      0,
+      asNumber(getValue(value, "Total", "total")) ??
+        getCollection(getValue(value, "Data", "data", "items")).length,
+    ),
+    totalPages: pageNumber(
+      getValue(value, "TotalPages", "totalPages"),
+      1,
+    ),
   };
 }
 
@@ -336,39 +354,56 @@ export async function deleteAuctionAgainstApi(auctionCode: number) {
   await requestApi(`api/Auction/${encodeURIComponent(auctionCode)}`, { method: "DELETE" });
 }
 
-async function postReport(path: string, body: object) {
+async function postReport(
+  path: string,
+  body: object,
+  options: { page?: number; pageSize?: number } = {},
+) {
+  const page = Number.isInteger(options.page) && (options.page ?? 0) > 0 ? options.page : 1;
+  const pageSize =
+    Number.isInteger(options.pageSize) && (options.pageSize ?? 0) > 0
+      ? Math.min(options.pageSize ?? 24, 100)
+      : 24;
   const response = await requestApi(`api/Auction/reports/${path}`, {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, page, pageSize }),
   });
   return mapReport(await readJson(response));
 }
 
-export function getAuctionOneVehicleReport(vmfCode: number) {
-  return postReport("one-vehicle", { VmfCode: vmfCode });
+export function getAuctionOneVehicleReport(vmfCode: number, page?: number) {
+  return postReport("one-vehicle", { VmfCode: vmfCode }, { page });
 }
 
-export function getAuctionAllVehiclesReport(auctionNumber: string, garage: string) {
-  return postReport("all-vehicles", {
-    StartDate: "1900-01-01T00:00:00.000Z",
-    EndDate: "2100-12-31T00:00:00.000Z",
-    AuctionNumber: auctionNumber,
-    Garage: garage,
-  });
+export function getAuctionAllVehiclesReport(auctionNumber: string, garage: string, page?: number) {
+  return postReport(
+    "all-vehicles",
+    {
+      StartDate: "1900-01-01T00:00:00.000Z",
+      EndDate: "2100-12-31T00:00:00.000Z",
+      AuctionNumber: auctionNumber,
+      Garage: garage,
+    },
+    { page },
+  );
 }
 
-export function getAuctionSaleToNameReport(buyerName: string) {
-  return postReport("sale-to-name", {
-    BuyerName: buyerName,
-    StartDate: "1900-01-01T00:00:00.000Z",
-    EndDate: "2100-12-31T00:00:00.000Z",
-  });
+export function getAuctionSaleToNameReport(buyerName: string, page?: number) {
+  return postReport(
+    "sale-to-name",
+    {
+      BuyerName: buyerName,
+      StartDate: "1900-01-01T00:00:00.000Z",
+      EndDate: "2100-12-31T00:00:00.000Z",
+    },
+    { page },
+  );
 }
 
-export function getAuctionByNumberReport(auctionNumber: string, garage: string) {
-  return postReport("auction-gg", { AuctionNumber: auctionNumber, Garage: garage });
+export function getAuctionByNumberReport(auctionNumber: string, garage: string, page?: number) {
+  return postReport("auction-gg", { AuctionNumber: auctionNumber, Garage: garage }, { page });
 }
 
-export function getAuctionByLotReport(auctionNumber: string, garage: string) {
-  return postReport("auction-lot", { AuctionNumber: auctionNumber, Garage: garage });
+export function getAuctionByLotReport(auctionNumber: string, garage: string, page?: number) {
+  return postReport("auction-lot", { AuctionNumber: auctionNumber, Garage: garage }, { page });
 }

@@ -8,68 +8,94 @@ public interface IAccidentRepository
     Task<IEnumerable<Accident>> GetAllAsync();
     Task<AccidentMaintenancePage> GetMaintenancePageAsync(AccidentMaintenancePageQuery query);
     Task<IEnumerable<Accident>> GetByVehicleAsync(int vmfCode);
-    Task<IEnumerable<AccidentDriverReportRow>> GetDriverReportAsync(
+    Task<AccidentReportPage<AccidentDriverReportRow>> GetDriverReportAsync(
         string searchTerm,
-        bool searchById
+        bool searchById,
+        AccidentReportPageQuery pageQuery
     );
-    Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportAsync(
+    Task<AccidentReportPage<AccidentVehicleReportRow>> GetVehicleReportAsync(
         string searchTerm,
-        bool searchByFleet
+        bool searchByFleet,
+        AccidentReportPageQuery pageQuery
     );
-    Task<IEnumerable<AccidentOutstandingDocumentLookupRow>> GetOutstandingDocumentLookupAsync(
+    Task<AccidentReportPage<AccidentOutstandingDocumentLookupRow>>
+        GetOutstandingDocumentLookupAsync(
         string searchTerm,
-        bool searchByFleet
+        bool searchByFleet,
+        AccidentReportPageQuery pageQuery
     );
     Task<AccidentOutstandingDocumentReport?> GetOutstandingDocumentReportAsync(int accidentCode);
-    Task<IEnumerable<AccidentOutstandingDocumentLookupRow>> GetInspectionLetterLookupAsync(
+    Task<AccidentReportPage<AccidentOutstandingDocumentLookupRow>> GetInspectionLetterLookupAsync(
         string searchTerm,
-        bool searchByFleet
+        bool searchByFleet,
+        AccidentReportPageQuery pageQuery
     );
     Task<AccidentOutstandingDocumentReport?> GetInspectionLetterReportAsync(int accidentCode);
-    Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(
+    Task<AccidentReportPage<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(
         string searchTerm,
-        bool searchByDescription
+        bool searchByDescription,
+        AccidentReportPageQuery pageQuery
     );
-    Task<IEnumerable<AccidentVehicleReportRow>> GetNewAccidentsReportAsync(string mode);
-    Task<IEnumerable<AccidentVehicleReportRow>> GetAllAccidentsReportAsync(string mode);
-    Task<IEnumerable<AccidentVehicleReportRow>> GetGarageAccidentsReportAsync(string mode);
-    Task<IEnumerable<AccidentVehicleReportRow>> GetDuplicateAccidentsReportAsync(string garageMode);
-    Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodReportAsync(
-        string departmentNumber,
-        DateTime startDate,
-        DateTime endDate
+    Task<AccidentReportPage<AccidentVehicleReportRow>> GetNewAccidentsReportAsync(
+        string mode,
+        AccidentReportPageQuery pageQuery
     );
-    Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodVipReportAsync(
+    Task<AccidentReportPage<AccidentVehicleReportRow>> GetAllAccidentsReportAsync(
+        string mode,
+        AccidentReportPageQuery pageQuery
+    );
+    Task<AccidentReportPage<AccidentVehicleReportRow>> GetGarageAccidentsReportAsync(
+        string mode,
+        AccidentReportPageQuery pageQuery
+    );
+    Task<AccidentReportPage<AccidentVehicleReportRow>> GetDuplicateAccidentsReportAsync(
+        string garageMode,
+        AccidentReportPageQuery pageQuery
+    );
+    Task<AccidentReportPage<AccidentVehicleReportRow>> GetDepartmentPeriodReportAsync(
         string departmentNumber,
         DateTime startDate,
         DateTime endDate,
-        string hireTypeMode
+        AccidentReportPageQuery pageQuery
     );
-    Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentMonthReportAsync(
+    Task<AccidentReportPage<AccidentVehicleReportRow>> GetDepartmentPeriodVipReportAsync(
+        string departmentNumber,
+        DateTime startDate,
+        DateTime endDate,
+        string hireTypeMode,
+        AccidentReportPageQuery pageQuery
+    );
+    Task<AccidentReportPage<AccidentVehicleReportRow>> GetDepartmentMonthReportAsync(
         string departmentNumber,
         string garageMode,
         string periodMode,
         int? year,
-        int? month
+        int? month,
+        AccidentReportPageQuery pageQuery
     );
-    Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentFinancialYearReportAsync(
+    Task<AccidentReportPage<AccidentVehicleReportRow>> GetDepartmentFinancialYearReportAsync(
         string departmentNumber,
         string garageMode,
-        string financialYear
+        string financialYear,
+        AccidentReportPageQuery pageQuery
     );
-    Task<IEnumerable<AccidentVehicleReportRow>> GetAccidentCostsFinancialYearReportAsync(
-        string financialYear
+    Task<AccidentReportPage<AccidentVehicleReportRow>> GetAccidentCostsFinancialYearReportAsync(
+        string financialYear,
+        AccidentReportPageQuery pageQuery
     );
-    Task<IEnumerable<AccidentPeriodReportRow>> GetPeriodReportAsync(
+    Task<AccidentReportPage<AccidentPeriodReportRow>> GetPeriodReportAsync(
         string departmentNumber,
         DateTime startDate,
         DateTime endDate,
-        bool closed
+        bool closed,
+        AccidentReportPageQuery pageQuery
     );
     Task<IEnumerable<Accident>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
     Task<AccidentClaimsSummary> GetClaimsSummaryAsync();
     Task<IEnumerable<AccidentReport>> GetRecentReportsAsync(int limit = 10);
-    Task<IEnumerable<AccidentLastGgReferenceRow>> GetLastGgReferenceReportAsync();
+    Task<AccidentReportPage<AccidentLastGgReferenceRow>> GetLastGgReferenceReportAsync(
+        AccidentReportPageQuery pageQuery
+    );
     Task<IEnumerable<AccidentOutstandingClaim>> GetOutstandingClaimsAsync();
     Task<AccidentStatistics> GetStatisticsAsync(DateTime? fromDate = null, DateTime? toDate = null);
     Task<Accident> CreateAsync(Accident accident, int currentUserId);
@@ -79,8 +105,7 @@ public interface IAccidentRepository
 }
 
 /// <summary>
-/// The operational accident-maintenance grid only. Report and dashboard queries
-/// deliberately remain complete result sets.
+/// The operational accident-maintenance grid only.
 /// </summary>
 public sealed record AccidentMaintenancePageQuery(
     int Page,
@@ -106,6 +131,24 @@ public sealed record AccidentMaintenancePage(
 )
 {
     public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
+}
+
+/// <summary>
+/// Shared pagination inputs for tabular accident reports.
+/// </summary>
+public sealed record AccidentReportPageQuery(int Page = 1, int PageSize = 24);
+
+/// <summary>
+/// Shared paged result contract for tabular accident reports.
+/// </summary>
+public sealed record AccidentReportPage<T>(
+    IReadOnlyList<T> Items,
+    int Page,
+    int PageSize,
+    int Total
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
 }
 
 public class AccidentDriverReportRow

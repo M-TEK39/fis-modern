@@ -9,9 +9,10 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import RouteLoading from "@/components/app-shell/route-loading";
 import {
   ClearanceApiError,
+  DEFAULT_CLEARANCE_REPORT_PAGE_SIZE,
   getClearanceUniversalReport,
   getMerchants,
-  type ClearanceReportRow,
+  type ClearanceReportPage,
   type MerchantRecord,
 } from "@/lib/api/fleet-operations/api-clearance";
 import { getSession } from "@/lib/auth/session";
@@ -47,6 +48,27 @@ function parseMerchantCode(value: string) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function parsePage(value: string) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function reportPageHref(
+  routePath: string,
+  startDate: string,
+  endDate: string,
+  merchantCode: number | null,
+  page: number,
+) {
+  const params = new URLSearchParams();
+  if (startDate) params.set("startDate", startDate);
+  if (endDate) params.set("endDate", endDate);
+  if (merchantCode !== null) params.set("merchantCode", String(merchantCode));
+  if (page > 1) params.set("page", String(page));
+  const query = params.toString();
+  return `${routePath}${query ? `?${query}` : ""}`;
+}
+
 function AccessRestricted() {
   return (
     <section className="vehicle-status-card" role="alert">
@@ -71,15 +93,74 @@ function ApiUnavailable() {
   );
 }
 
-function ReportResults({ rows }: Readonly<{ rows: ClearanceReportRow[] }>) {
+function ReportPagination({
+  report,
+  pageHref,
+}: Readonly<{
+  report: Pick<ClearanceReportPage, "page" | "totalPages">;
+  pageHref: (page: number) => string;
+}>) {
+  if (report.totalPages <= 1) return null;
+
+  return (
+    <nav className="vehicle-pagination" aria-label="Clearance report pages">
+      {report.page > 1 ? (
+        <Link className="vehicle-pagination-button" href={pageHref(report.page - 1)}>
+          Previous
+        </Link>
+      ) : (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Previous
+        </span>
+      )}
+      <span className="vehicle-pagination-meta" aria-live="polite">
+        Page {report.page} of {report.totalPages}
+      </span>
+      {report.page < report.totalPages ? (
+        <Link className="vehicle-pagination-button" href={pageHref(report.page + 1)}>
+          Next
+        </Link>
+      ) : (
+        <span
+          className="vehicle-pagination-button vehicle-pagination-disabled"
+          aria-disabled="true"
+        >
+          Next
+        </span>
+      )}
+    </nav>
+  );
+}
+
+function ReportResults({
+  report,
+  pageHref,
+}: Readonly<{
+  report: ClearanceReportPage;
+  pageHref: (page: number) => string;
+}>) {
+  const rows = report.items;
+  const firstRow = report.total === 0 ? 0 : (report.page - 1) * report.pageSize + 1;
+  const lastRow = Math.min(report.page * report.pageSize, report.total);
+
   return (
     <section className="vehicle-status-maintenance-panel" aria-labelledby="clearance-results-title">
       <div className="vehicle-form-section-header">
         <div>
-          <p className="eyebrow">Report results</p>
+          <p className="eyebrow">
+            {report.total} record{report.total === 1 ? "" : "s"}
+          </p>
           <h2 id="clearance-results-title">Clearance records</h2>
         </div>
       </div>
+      <p className="muted-copy" aria-live="polite">
+        {report.total === 0
+          ? "0 records"
+          : `Showing ${firstRow}–${lastRow} of ${report.total} records · ${report.pageSize} rows per page`}
+      </p>
       {rows.length === 0 ? (
         <p className="muted-copy">No clearance records matched the selected filters.</p>
       ) : (
@@ -114,6 +195,7 @@ function ReportResults({ rows }: Readonly<{ rows: ClearanceReportRow[] }>) {
           </table>
         </div>
       )}
+      <ReportPagination report={report} pageHref={pageHref} />
     </section>
   );
 }
@@ -142,10 +224,11 @@ async function renderClearanceUniversalReportContent({
   const merchantCode = parseMerchantCode(
     (getQueryValue(query.merchantCode) ?? getQueryValue(query.cmbMerchant) ?? "").trim(),
   );
+  const requestedPage = parsePage((getQueryValue(query.page) ?? "").trim());
   const submitted = Boolean(startDate || endDate || merchantCode);
 
   let merchants: MerchantRecord[] = [];
-  let rows: ClearanceReportRow[] = [];
+  let report: ClearanceReportPage | null = null;
   let errorMessage: string | null = null;
   try {
     merchants = await getMerchants();
@@ -153,10 +236,12 @@ async function renderClearanceUniversalReportContent({
       if (startDate && endDate && startDate > endDate) {
         errorMessage = "The report start date must be before the end date.";
       } else {
-        rows = await getClearanceUniversalReport({
+        report = await getClearanceUniversalReport({
           startDate,
           endDate,
           merchantCode: merchantCode ?? undefined,
+          page: requestedPage,
+          pageSize: DEFAULT_CLEARANCE_REPORT_PAGE_SIZE,
         });
       }
     }
@@ -231,7 +316,12 @@ async function renderClearanceUniversalReportContent({
           {errorMessage}
         </div>
       ) : null}
-      {submitted && !errorMessage ? <ReportResults rows={rows} /> : null}
+      {submitted && !errorMessage && report ? (
+        <ReportResults
+          report={report}
+          pageHref={(page) => reportPageHref(routePath, startDate, endDate, merchantCode, page)}
+        />
+      ) : null}
     </>
   );
 }

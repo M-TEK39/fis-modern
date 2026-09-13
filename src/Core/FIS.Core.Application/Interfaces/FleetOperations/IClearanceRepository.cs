@@ -12,10 +12,12 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<Clearance>> GetAllAsync();
         Task<IEnumerable<Clearance>> GetByVehicleAsync(int vmfCode);
         Task<ClearanceLookupResult?> LookupVehicleAsync(string fleetOrReg);
-        Task<IReadOnlyList<ClearanceReportRow>> GetUniversalReportAsync(
+        Task<ClearanceUniversalReportPage> GetUniversalReportAsync(
             DateTime? startDate,
             DateTime? endDate,
-            int? merchantCode
+            int? merchantCode,
+            int page = 1,
+            int pageSize = 24
         );
         Task<Clearance> CreateAsync(Clearance clearance, int currentUserId);
         Task<Clearance> UpdateAsync(Clearance clearance, int currentUserId);
@@ -40,5 +42,15 @@ namespace FIS.Core.Application.Interfaces
         public string? merchant_name { get; set; }
         public int? clearance_number { get; set; }
         public DateTime? clearance_date { get; set; }
+    }
+
+    public sealed record ClearanceUniversalReportPage(
+        IReadOnlyList<ClearanceReportRow> Items,
+        int Page,
+        int PageSize,
+        int Total
+    )
+    {
+        public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
     }
 }

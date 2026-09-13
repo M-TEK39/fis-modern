@@ -15,19 +15,16 @@ public class TrackingController : BaseApiController
 
     private readonly ITrackingRepository _repository;
     private readonly IVehicleRepository _vehicleRepository;
-    private readonly ISiteRepository _siteRepository;
     private readonly ILogger<TrackingController> _logger;
 
     public TrackingController(
         ITrackingRepository repository,
         IVehicleRepository vehicleRepository,
-        ISiteRepository siteRepository,
         ILogger<TrackingController> logger
     )
     {
         _repository = repository;
         _vehicleRepository = vehicleRepository;
-        _siteRepository = siteRepository;
         _logger = logger;
     }
 
@@ -293,218 +290,165 @@ public class TrackingController : BaseApiController
         );
 
     [HttpPost("reports/one-vehicle")]
-    public async Task<ActionResult<TrackingReportDto>> GetReportOneVehicle(
+    public async Task<ActionResult<TrackingReportPageDto>> GetReportOneVehicle(
         [FromBody] TrackingOneVehicleRequestDto request
     )
     {
-        var data = (await GetLiveItemsAsync())
-            .Where(item => item.vmf_code == request.VmfCode)
-            .Where(item =>
-                IsWithinInclusiveDateRange(item.install_date, request.StartDate, request.EndDate)
+        var result = await _repository.GetReportPageAsync(
+            CreateReportPageQuery(
+                TrackingReportKind.OneVehicle,
+                request,
+                vmfCode: request.VmfCode,
+                startDate: request.StartDate,
+                endDate: request.EndDate
             )
-            .OrderByDescending(item => item.install_date)
-            .Cast<object>()
-            .ToList();
-        return Ok(new TrackingReportDto { ReportType = "OneVehicle", Data = data });
+        );
+        return Ok(CreateReportPage("OneVehicle", result));
     }
 
     [HttpPost("reports/one-device")]
-    public async Task<ActionResult<TrackingReportDto>> GetReportOneDevice(
+    public async Task<ActionResult<TrackingReportPageDto>> GetReportOneDevice(
         [FromBody] TrackingOneDeviceRequestDto request
     )
     {
-        var device = request.DeviceId?.Trim() ?? string.Empty;
-        var data = (await GetLiveItemsAsync())
-            .Where(item =>
-                !string.IsNullOrWhiteSpace(device)
-                && string.Equals(item.track_num, device, StringComparison.OrdinalIgnoreCase)
+        var result = await _repository.GetReportPageAsync(
+            CreateReportPageQuery(
+                TrackingReportKind.OneDevice,
+                request,
+                deviceId: request.DeviceId
             )
-            .OrderByDescending(item => item.install_date)
-            .Cast<object>()
-            .ToList();
-        return Ok(new TrackingReportDto { ReportType = "OneDevice", Data = data });
+        );
+        return Ok(CreateReportPage("OneDevice", result));
     }
 
     [HttpPost("reports/all-vehicles")]
-    public async Task<ActionResult<TrackingReportDto>> GetReportAllVehicles(
+    public async Task<ActionResult<TrackingReportPageDto>> GetReportAllVehicles(
         [FromBody] TrackingAllVehiclesRequestDto request
     )
     {
-        var query = (await GetLiveItemsAsync()).Where(item =>
-            IsWithinInclusiveDateRange(item.install_date, request.StartDate, request.EndDate)
+        var result = await _repository.GetReportPageAsync(
+            CreateReportPageQuery(
+                TrackingReportKind.AllVehicles,
+                request,
+                startDate: request.StartDate,
+                endDate: request.EndDate,
+                trackerType: request.TrackerType
+            )
         );
-
-        if (
-            !string.IsNullOrWhiteSpace(request.TrackerType)
-            && !string.Equals(request.TrackerType, "All", StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            query = query.Where(item => TrackerTypeMatches(item.track_type, request.TrackerType));
-        }
-
-        return Ok(
-            new TrackingReportDto
-            {
-                ReportType = "AllVehicles",
-                Data = query.OrderByDescending(item => item.install_date).Cast<object>().ToList(),
-            }
-        );
+        return Ok(CreateReportPage("AllVehicles", result));
     }
 
     [HttpPost("reports/all-devices")]
-    public async Task<ActionResult<TrackingReportDto>> GetReportAllDevices(
+    public async Task<ActionResult<TrackingReportPageDto>> GetReportAllDevices(
         [FromBody] TrackingAllDevicesRequestDto request
     )
     {
-        var data = (await GetLiveItemsAsync())
-            .Where(item =>
-                IsWithinInclusiveDateRange(item.install_date, request.StartDate, request.EndDate)
+        var result = await _repository.GetReportPageAsync(
+            CreateReportPageQuery(
+                TrackingReportKind.AllDevices,
+                request,
+                startDate: request.StartDate,
+                endDate: request.EndDate
             )
-            .OrderByDescending(item => item.install_date)
-            .Cast<object>()
-            .ToList();
-        return Ok(new TrackingReportDto { ReportType = "AllDevices", Data = data });
+        );
+        return Ok(CreateReportPage("AllDevices", result));
     }
 
     [HttpPost("reports/install-period")]
-    public async Task<ActionResult<TrackingReportDto>> GetReportInstallPeriod(
+    public async Task<ActionResult<TrackingReportPageDto>> GetReportInstallPeriod(
         [FromBody] TrackingInstallPeriodRequestDto request
     )
     {
-        var data = (await GetLiveItemsAsync())
-            .Where(item =>
-                IsWithinInclusiveDateRange(item.install_date, request.StartDate, request.EndDate)
+        var result = await _repository.GetReportPageAsync(
+            CreateReportPageQuery(
+                TrackingReportKind.InstallPeriod,
+                request,
+                startDate: request.StartDate,
+                endDate: request.EndDate
             )
-            .OrderByDescending(item => item.install_date)
-            .Cast<object>()
-            .ToList();
-        return Ok(new TrackingReportDto { ReportType = "InstallPeriod", Data = data });
+        );
+        return Ok(CreateReportPage("InstallPeriod", result));
     }
 
     [HttpPost("reports/site-period")]
-    public async Task<ActionResult<TrackingReportDto>> GetReportSitePeriod(
+    public async Task<ActionResult<TrackingReportPageDto>> GetReportSitePeriod(
         [FromBody] TrackingSitePeriodRequestDto request
     )
     {
-        var tracking = (await GetLiveItemsAsync())
-            .Where(item =>
-                IsWithinInclusiveDateRange(item.install_date, request.StartDate, request.EndDate)
+        var result = await _repository.GetReportPageAsync(
+            CreateReportPageQuery(
+                TrackingReportKind.SitePeriod,
+                request,
+                startDate: request.StartDate,
+                endDate: request.EndDate,
+                siteCode: request.SiteCode,
+                allSites: request.AllSites
             )
-            .ToList();
-
-        if (!request.AllSites)
-        {
-            var vmfForSite = (await _vehicleRepository.GetAllAsync())
-                .Where(vehicle =>
-                    vehicle.veh_site_code.HasValue
-                    && vehicle.veh_site_code.Value == request.SiteCode
-                )
-                .Select(vehicle => vehicle.vmf_code)
-                .ToHashSet();
-
-            tracking = tracking
-                .Where(item => item.vmf_code.HasValue && vmfForSite.Contains(item.vmf_code.Value))
-                .ToList();
-        }
-
-        return Ok(
-            new TrackingReportDto
-            {
-                ReportType = "SitePeriod",
-                Data = tracking
-                    .OrderByDescending(item => item.install_date)
-                    .Cast<object>()
-                    .ToList(),
-            }
         );
+        return Ok(CreateReportPage("SitePeriod", result));
     }
 
     [HttpPost("reports/dept-period")]
-    public async Task<ActionResult<TrackingReportDto>> GetReportDeptPeriod(
+    public async Task<ActionResult<TrackingReportPageDto>> GetReportDeptPeriod(
         [FromBody] TrackingDeptPeriodRequestDto request
     )
     {
-        var tracking = (await GetLiveItemsAsync())
-            .Where(item =>
-                IsWithinInclusiveDateRange(item.install_date, request.StartDate, request.EndDate)
+        var result = await _repository.GetReportPageAsync(
+            CreateReportPageQuery(
+                TrackingReportKind.DepartmentPeriod,
+                request,
+                startDate: request.StartDate,
+                endDate: request.EndDate,
+                departmentCode: request.DepartmentCode,
+                allDepartments: request.AllDepartments
             )
-            .ToList();
-
-        if (!request.AllDepartments)
-        {
-            var departmentSiteCodes = (await _siteRepository.GetActiveSitesAsync())
-                .Where(site =>
-                    site.Depatrment_code.HasValue
-                    && site.Depatrment_code.Value == request.DepartmentCode
-                )
-                .Select(site => site.Site_code)
-                .ToHashSet();
-
-            var vmfForDepartment = (await _vehicleRepository.GetAllAsync())
-                .Where(vehicle =>
-                    vehicle.veh_site_code.HasValue
-                    && departmentSiteCodes.Contains(vehicle.veh_site_code.Value)
-                )
-                .Select(vehicle => vehicle.vmf_code)
-                .ToHashSet();
-
-            tracking = tracking
-                .Where(item =>
-                    item.vmf_code.HasValue && vmfForDepartment.Contains(item.vmf_code.Value)
-                )
-                .ToList();
-        }
-
-        return Ok(
-            new TrackingReportDto
-            {
-                ReportType = "DeptPeriod",
-                Data = tracking
-                    .OrderByDescending(item => item.install_date)
-                    .Cast<object>()
-                    .ToList(),
-            }
         );
+        return Ok(CreateReportPage("DeptPeriod", result));
     }
 
     #endregion
 
-    private async Task<List<Tracking>> GetLiveItemsAsync() =>
-        (await _repository.GetAllAsync()).Where(item => !item.is_deleted).ToList();
+    private static TrackingReportPageQuery CreateReportPageQuery(
+        TrackingReportKind reportKind,
+        TrackingReportPageRequestDto request,
+        int? vmfCode = null,
+        string? deviceId = null,
+        DateTime startDate = default,
+        DateTime endDate = default,
+        string? trackerType = null,
+        int? siteCode = null,
+        int? departmentCode = null,
+        bool allSites = false,
+        bool allDepartments = false
+    ) =>
+        new(
+            reportKind,
+            Math.Max(1, request.Page),
+            Math.Clamp(request.PageSize, 1, MaximumPageSize),
+            vmfCode,
+            deviceId,
+            startDate,
+            endDate,
+            trackerType,
+            siteCode,
+            departmentCode,
+            allSites,
+            allDepartments
+        );
 
-    private static bool IsWithinInclusiveDateRange(
-        DateTime? candidate,
-        DateTime startDate,
-        DateTime endDate
-    )
-    {
-        if (!candidate.HasValue)
+    private static TrackingReportPageDto CreateReportPage(
+        string reportType,
+        TrackingPage result
+    ) =>
+        new()
         {
-            return false;
-        }
-
-        var start = startDate.Date;
-        var end = endDate.Date;
-        if (end < start)
-        {
-            (start, end) = (end, start);
-        }
-
-        var value = candidate.Value.Date;
-        return value >= start && value <= end;
-    }
-
-    private static bool TrackerTypeMatches(string? currentType, string requestedType)
-    {
-        var normalizedRequest = requestedType.Trim();
-        if (normalizedRequest.Equals("Reused", StringComparison.OrdinalIgnoreCase))
-        {
-            return string.Equals(currentType, "Reused", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(currentType, "Re-used", StringComparison.OrdinalIgnoreCase);
-        }
-
-        return string.Equals(currentType, normalizedRequest, StringComparison.OrdinalIgnoreCase);
-    }
+            ReportType = reportType,
+            Items = result.Items,
+            Page = result.Page,
+            PageSize = result.PageSize,
+            Total = result.Total,
+            TotalPages = result.TotalPages,
+        };
 }
 
 #region Tracking DTOs
@@ -525,38 +469,44 @@ public class TrackingReportMenuDto
     public List<string> Reports { get; set; } = new();
 }
 
-public class TrackingOneVehicleRequestDto
+public class TrackingReportPageRequestDto
+{
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 24;
+}
+
+public class TrackingOneVehicleRequestDto : TrackingReportPageRequestDto
 {
     public int VmfCode { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
 }
 
-public class TrackingOneDeviceRequestDto
+public class TrackingOneDeviceRequestDto : TrackingReportPageRequestDto
 {
     public string DeviceId { get; set; } = "";
 }
 
-public class TrackingAllVehiclesRequestDto
+public class TrackingAllVehiclesRequestDto : TrackingReportPageRequestDto
 {
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
     public string? TrackerType { get; set; }
 }
 
-public class TrackingAllDevicesRequestDto
+public class TrackingAllDevicesRequestDto : TrackingReportPageRequestDto
 {
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
 }
 
-public class TrackingInstallPeriodRequestDto
+public class TrackingInstallPeriodRequestDto : TrackingReportPageRequestDto
 {
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
 }
 
-public class TrackingSitePeriodRequestDto
+public class TrackingSitePeriodRequestDto : TrackingReportPageRequestDto
 {
     public int SiteCode { get; set; }
     public bool AllSites { get; set; }
@@ -564,7 +514,7 @@ public class TrackingSitePeriodRequestDto
     public DateTime EndDate { get; set; }
 }
 
-public class TrackingDeptPeriodRequestDto
+public class TrackingDeptPeriodRequestDto : TrackingReportPageRequestDto
 {
     public int DepartmentCode { get; set; }
     public bool AllDepartments { get; set; }
@@ -572,9 +522,13 @@ public class TrackingDeptPeriodRequestDto
     public DateTime EndDate { get; set; }
 }
 
-public class TrackingReportDto
+public class TrackingReportPageDto
 {
     public string ReportType { get; set; } = "";
-    public List<object> Data { get; set; } = new();
+    public IReadOnlyList<Tracking> Items { get; set; } = [];
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int Total { get; set; }
+    public int TotalPages { get; set; }
 }
 #endregion

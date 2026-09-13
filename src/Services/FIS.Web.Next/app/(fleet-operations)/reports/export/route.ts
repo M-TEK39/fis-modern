@@ -28,13 +28,16 @@ export async function GET(request: Request) {
 
   const filters: Record<string, string> = {};
   for (const [key, value] of params.entries()) {
-    if (key !== "reportKey" && key !== "view" && key !== "rtype" && value.trim()) {
+    if (
+      !["reportKey", "view", "rtype", "page", "pageSize", "includeAll"].includes(key) &&
+      value.trim()
+    ) {
       filters[key] = value;
     }
   }
 
   try {
-    const report = await getLegacyReport(reportKey, filters);
+    const report = await getLegacyReport(reportKey, filters, { includeAll: true });
     const rows = [
       report.columns.map((column) => csvCell(column.header)).join(","),
       ...report.rows.map((row) =>

@@ -9,10 +9,12 @@ import {
   AccidentReportFormActions,
   AccidentReportFormError,
   AccidentReportLoadingState,
+  AccidentReportPagination,
   AccidentReportPageShell,
 } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   authorizeAccidentReport,
+  getAccidentReportPageState,
   loadAccidentReport,
 } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import VehicleTable, {
@@ -21,6 +23,7 @@ import VehicleTable, {
 import {
   getAccidentDepartmentPeriodVipReport,
   type AccidentDepartmentPeriodVipMode,
+  type AccidentReportPage,
   type AccidentVehicleReportRow,
 } from "@/lib/api/fleet-operations/api-accidents";
 import {
@@ -185,9 +188,11 @@ const departmentPeriodVipColumns: readonly VehicleTableColumn<AccidentVehicleRep
 
 function DepartmentPeriodVipReportTable({
   rows,
+  total,
   mode,
 }: {
   rows: AccidentVehicleReportRow[];
+  total: number;
   mode: AccidentDepartmentPeriodVipMode;
 }) {
   return (
@@ -200,7 +205,7 @@ function DepartmentPeriodVipReportTable({
           <p className="eyebrow">Report results</p>
           <h2 id="department-period-vip-results-title">{reportTitle(mode)}</h2>
         </div>
-        <span className="form-hint">{rows.length} record(s)</span>
+        <span className="form-hint">{total} record(s)</span>
       </div>
       <div className="vehicle-table-wrapper">
         <VehicleTable
@@ -210,7 +215,7 @@ function DepartmentPeriodVipReportTable({
           rowKey={(row) => row.accidentCode}
         />
       </div>
-      <p className="vehicle-pagination-meta">Total Number: {rows.length}</p>
+      <p className="vehicle-pagination-meta">Total Number: {total}</p>
     </section>
   );
 }
@@ -275,23 +280,38 @@ function DepartmentPeriodVipReportForm({
 }
 
 function DepartmentPeriodVipReportResults({
-  rows,
+  query,
+  report,
   mode,
 }: {
-  rows: AccidentVehicleReportRow[] | null;
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentVehicleReportRow> | null;
   mode: AccidentDepartmentPeriodVipMode;
 }) {
-  return rows ? (
-    rows.length > 0 ? (
-      <DepartmentPeriodVipReportTable rows={rows} mode={mode} />
-    ) : (
-      <section className="vehicle-empty-state" aria-live="polite">
-        <p className="eyebrow">No accidents found</p>
-        <h2>No accidents matched the selected filters.</h2>
-        <p className="muted-copy">Update the department, dates, or hire type and submit again.</p>
-      </section>
-    )
-  ) : null;
+  if (report === null) {
+    return null;
+  }
+
+  const rows = report.items;
+  return rows.length > 0 ? (
+    <>
+      <DepartmentPeriodVipReportTable rows={rows} total={report.total} mode={mode} />
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/department-period-vip"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
+    </>
+  ) : (
+    <section className="vehicle-empty-state" aria-live="polite">
+      <p className="eyebrow">No accidents found</p>
+      <h2>No accidents matched the selected filters.</h2>
+      <p className="muted-copy">Update the department, dates, or hire type and submit again.</p>
+    </section>
+  );
 }
 
 const DepartmentPeriodVipReportContent = renderDepartmentPeriodVipReportContent;
@@ -366,10 +386,20 @@ async function renderDepartmentPeriodVipReportContent({
     errorMessage = "The begin date must be on or before the end date.";
   }
 
+  const { page, pageSize } = getAccidentReportPageState(query);
+
   const report = await loadAccidentReport({
     shouldRun,
     errorMessage,
-    load: () => getAccidentDepartmentPeriodVipReport(departmentNumber, startDate, endDate, mode),
+    load: () =>
+      getAccidentDepartmentPeriodVipReport(
+        departmentNumber,
+        startDate,
+        endDate,
+        mode,
+        page,
+        pageSize,
+      ),
     context: "FIS accident department period VIP report failed",
   });
   if (report.status === "unauthorized") {
@@ -383,8 +413,6 @@ async function renderDepartmentPeriodVipReportContent({
       />
     );
   }
-  const rows = report.data;
-
   return (
     <>
       <DepartmentPeriodVipReportForm
@@ -395,7 +423,7 @@ async function renderDepartmentPeriodVipReportContent({
         endDate={endDate}
         mode={mode}
       />
-      <DepartmentPeriodVipReportResults rows={rows} mode={mode} />
+      <DepartmentPeriodVipReportResults query={query} report={report.data} mode={mode} />
       <AccidentReportFooter clearHref="/accidents/reports/department-period-vip" />
     </>
   );

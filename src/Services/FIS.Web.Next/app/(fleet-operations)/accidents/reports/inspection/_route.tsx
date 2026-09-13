@@ -7,11 +7,13 @@ import {
   AccidentReportFormActions,
   AccidentReportFormError,
   AccidentReportLoadingState,
+  AccidentReportPagination,
   AccidentReportPageShell,
   AccidentVehicleSearchFieldsWithMode,
 } from "@/app/(fleet-operations)/accidents/reports/_report-components";
 import {
   authorizeAccidentReport,
+  getAccidentReportPageState,
   loadAccidentReport,
 } from "@/app/(fleet-operations)/accidents/reports/_report-runtime";
 import InspectionLetter from "@/app/(fleet-operations)/accidents/reports/inspection/_letter";
@@ -23,6 +25,7 @@ import {
   AccidentApiError,
   getAccidentInspectionLetterLookup,
   getAccidentInspectionLetterReport,
+  type AccidentReportPage,
   type AccidentOutstandingDocumentLookupRow,
   type AccidentVehicleReportMode,
 } from "@/lib/api/fleet-operations/api-accidents";
@@ -92,9 +95,13 @@ function getInspectionLookupColumns(
 export const InspectionLoadingState = AccidentReportLoadingState;
 
 function LookupTable({
+  query,
+  report,
   rows,
   mode,
 }: {
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentOutstandingDocumentLookupRow>;
   rows: AccidentOutstandingDocumentLookupRow[];
   mode: AccidentVehicleReportMode;
 }) {
@@ -109,8 +116,16 @@ function LookupTable({
           <p className="eyebrow">Report results</p>
           <h2 id="inspection-letter-results-title">Accidents found</h2>
         </div>
-        <span className="form-hint">{rows.length} record(s)</span>
+        <span className="form-hint">{report.total} record(s)</span>
       </div>
+      <AccidentReportPagination
+        page={report.page}
+        pageSize={report.pageSize}
+        pathname="/accidents/reports/inspection"
+        query={query}
+        total={report.total}
+        totalPages={report.totalPages}
+      />
       <div className="vehicle-table-wrapper">
         <VehicleTable
           caption="Accidents found for the selected vehicle number"
@@ -148,23 +163,28 @@ function InspectionLookupForm({
 }
 
 function InspectionLookupResults({
-  rows,
+  query,
+  report,
   mode,
 }: {
-  rows: AccidentOutstandingDocumentLookupRow[] | null;
+  query: ReportQuery;
+  report: AccidentReportPage<AccidentOutstandingDocumentLookupRow> | null;
   mode: AccidentVehicleReportMode;
 }) {
-  return rows !== null ? (
-    rows.length > 0 ? (
-      <LookupTable rows={rows} mode={mode} />
-    ) : (
-      <section className="vehicle-empty-state" aria-live="polite">
-        <p className="eyebrow">Vehicle not found</p>
-        <h2>This vehicle number does not exist.</h2>
-        <p className="muted-copy">Try another GP or GG number.</p>
-      </section>
-    )
-  ) : null;
+  if (report === null) {
+    return null;
+  }
+
+  const rows = report.items;
+  return rows.length > 0 ? (
+    <LookupTable query={query} report={report} rows={rows} mode={mode} />
+  ) : (
+    <section className="vehicle-empty-state" aria-live="polite">
+      <p className="eyebrow">Vehicle not found</p>
+      <h2>This vehicle number does not exist.</h2>
+      <p className="muted-copy">Try another GP or GG number.</p>
+    </section>
+  );
 }
 
 async function InspectionLookupContent({ searchParams }: { searchParams: Promise<ReportQuery> }) {
@@ -197,11 +217,12 @@ async function InspectionLookupContent({ searchParams }: { searchParams: Promise
       : searchTerm.length > 8
         ? "Vehicle numbers can contain no more than 8 characters."
         : null;
+  const { page, pageSize } = getAccidentReportPageState(query);
 
   const report = await loadAccidentReport({
     shouldRun,
     errorMessage,
-    load: () => getAccidentInspectionLetterLookup(searchTerm, mode),
+    load: () => getAccidentInspectionLetterLookup(searchTerm, mode, page, pageSize),
     context: "FIS inspection letter lookup failed",
   });
   if (report.status === "unauthorized") {
@@ -215,12 +236,10 @@ async function InspectionLookupContent({ searchParams }: { searchParams: Promise
       />
     );
   }
-  const rows = report.data;
-
   return (
     <>
       <InspectionLookupForm errorMessage={errorMessage} mode={mode} searchTerm={searchTerm} />
-      <InspectionLookupResults rows={rows} mode={mode} />
+      <InspectionLookupResults query={query} report={report.data} mode={mode} />
       <AccidentReportFooter clearHref="/accidents/reports/inspection" />
     </>
   );

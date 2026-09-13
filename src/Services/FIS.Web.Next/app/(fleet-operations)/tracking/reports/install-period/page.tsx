@@ -7,6 +7,7 @@ import Link from "next/link";
 import {
   DateRangeFields,
   TrackingNotice,
+  TrackingReportPagination,
   TrackingReportTable,
   TrackingReportDateForm,
   TrackingShell,
@@ -15,6 +16,7 @@ import {
   accessRestricted,
   getTrackingSession,
   hasTrackingAccess,
+  parsePositiveInteger,
   queryValue,
   reportDateRange,
   sessionMessage,
@@ -36,9 +38,12 @@ async function TrackingInstallPeriodReportPageContent({
     return accessRestricted("Your profile does not include Vehicle Management access.");
   const query = await searchParams;
   const range = reportDateRange(queryValue(query.startDate), queryValue(query.endDate));
+  const page = parsePositiveInteger(queryValue(query.page)) ?? 1;
   const run = queryValue(query.run) === "1";
   try {
-    const rows = run ? await getTrackingInstallPeriodReport(range.startDate, range.endDate) : [];
+    const report = run
+      ? await getTrackingInstallPeriodReport(range.startDate, range.endDate, { page })
+      : null;
     return (
       <TrackingShell
         title="Tracking Report for an Install Period"
@@ -47,7 +52,20 @@ async function TrackingInstallPeriodReportPageContent({
         <TrackingNotice query={query} />
         <TrackingReportDateForm startDate={range.startDate} endDate={range.endDate} />
         {run ? (
-          <TrackingReportTable records={rows} title="Tracking report for install period" />
+          <>
+            <TrackingReportTable
+              records={report?.items ?? []}
+              title="Tracking report for install period"
+            />
+            {report ? (
+              <TrackingReportPagination
+                page={report}
+                query={query}
+                routePath="/tracking/reports/install-period"
+                label="Tracking report for install period"
+              />
+            ) : null}
+          </>
         ) : (
           <p className="muted-copy">Choose a date range, then submit the report.</p>
         )}
