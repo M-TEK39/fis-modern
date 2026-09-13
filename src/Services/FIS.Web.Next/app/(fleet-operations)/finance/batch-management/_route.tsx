@@ -12,7 +12,7 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import { hasAdvancedBatchOperationsRole } from "@/app/(fleet-operations)/finance/_utils";
 import {
   FinanceApiError,
   getBatchStatus,
@@ -56,7 +56,7 @@ async function renderBatchManagementContent({ searchParams, action }: BatchPageP
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasAdvancedBatchOperationsRole(session.roles))
     return (
       <FinanceFrame title="Batch Management" description="Batch processing management.">
         <FinanceRestricted />

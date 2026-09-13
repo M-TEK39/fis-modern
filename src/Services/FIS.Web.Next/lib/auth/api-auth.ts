@@ -279,10 +279,13 @@ export type SessionState =
   | {
       status: "authenticated";
       email?: string;
+      legacyUsername?: string;
       departmentCode?: string;
       siteCode?: string;
       userAccessCode?: string;
       accessLevel?: string;
+      canAccessAllFinanceDepartments: boolean;
+      canMaintainFinanceDataAllDepartments: boolean;
       roles: string[];
       passwordChangeRequired: boolean;
     }
@@ -327,6 +330,7 @@ export async function validateSession(): Promise<SessionState> {
     const departmentCode = claims.find((claim) =>
       ["department_code", "department"].includes(claim.type ?? ""),
     )?.value;
+    const legacyUsername = claims.find((claim) => claim.type === "legacy_username")?.value;
     const siteCode = claims.find((claim) =>
       ["site_code", "site"].includes(claim.type ?? ""),
     )?.value;
@@ -338,6 +342,14 @@ export async function validateSession(): Promise<SessionState> {
       passwordChangeRequiredValue?.toLowerCase() ?? "",
     );
     const accessLevel = claims.find((claim) => claim.type === "access_level")?.value;
+    const canAccessAllFinanceDepartments = claims.some(
+      (claim) => claim.type === "finance_all_departments" && claim.value?.toLowerCase() === "true",
+    );
+    const canMaintainFinanceDataAllDepartments = claims.some(
+      (claim) =>
+        claim.type === "finance_all_department_vehicle_list" &&
+        claim.value?.toLowerCase() === "true",
+    );
     const roles: string[] = [];
     for (const claim of claims) {
       if (
@@ -359,10 +371,13 @@ export async function validateSession(): Promise<SessionState> {
     return {
       status: "authenticated",
       email,
+      legacyUsername,
       departmentCode,
       siteCode,
       userAccessCode,
       accessLevel,
+      canAccessAllFinanceDepartments,
+      canMaintainFinanceDataAllDepartments,
       roles,
       passwordChangeRequired,
     };

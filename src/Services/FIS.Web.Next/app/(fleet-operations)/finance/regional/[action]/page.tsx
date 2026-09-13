@@ -9,7 +9,7 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import { hasGeneralFinanceReportsAccess, hasRole } from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions, siteOptions } from "@/app/(fleet-operations)/finance/_location-options";
 import { RegionalFinanceView } from "@/app/(fleet-operations)/finance/regional/[action]/regional-finance-view";
 import { DepartmentApiError, getDepartments } from "@/lib/api/reference-data/api-departments";
@@ -140,10 +140,22 @@ async function renderRegionalFinanceActionContent({ params, searchParams }: Page
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasGeneralFinanceReportsAccess(session.roles))
     return (
       <FinanceFrame title={titleFor(action)} description="Regional finance reporting.">
         <FinanceRestricted />
+      </FinanceFrame>
+    );
+  const assetReport = action.startsWith("assets-");
+  if (
+    assetReport &&
+    !hasRole(session.roles, "Reports") &&
+    !hasRole(session.roles, "Administrator") &&
+    !hasRole(session.roles, "Admin")
+  )
+    return (
+      <FinanceFrame title={titleFor(action)} description="Regional finance reporting.">
+        <FinanceRestricted message="Your account does not have the legacy Reports permission required for Asset List reports." />
       </FinanceFrame>
     );
   if (!ACTIONS.includes(action as (typeof ACTIONS)[number]))
@@ -154,7 +166,6 @@ async function renderRegionalFinanceActionContent({ params, searchParams }: Page
     );
 
   const query = await searchParams;
-  const assetReport = action.startsWith("assets-");
   let departments: FinanceOption[] = [];
   let sites: FinanceOption[] = [];
   let provinces: FinanceOption[] = [];

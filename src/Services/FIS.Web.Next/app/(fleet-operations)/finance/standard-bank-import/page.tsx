@@ -37,7 +37,7 @@ async function StandardBankImportContent({
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasHeadOfficeFinanceAccess(session.siteCode, session.email, session.roles))
+  if (!hasHeadOfficeFinanceAccess(session.siteCode, session.legacyUsername))
     return (
       <FinanceFrame
         title="Import Standard Bank Transactions"

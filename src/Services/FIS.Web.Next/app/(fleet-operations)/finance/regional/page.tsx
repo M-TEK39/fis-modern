@@ -12,7 +12,10 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import {
+  hasFinanceRole,
+  hasGeneralFinanceReportsAccess,
+} from "@/app/(fleet-operations)/finance/_utils";
 import { getSession } from "@/lib/auth/session";
 
 async function RegionalFinanceMenuContent() {
@@ -25,7 +28,7 @@ async function RegionalFinanceMenuContent() {
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasGeneralFinanceReportsAccess(session.roles))
     return (
       <FinanceFrame title="Regional Module: Finance" description="Regional finance reporting.">
         <FinanceRestricted />
@@ -41,15 +44,19 @@ async function RegionalFinanceMenuContent() {
         <FinanceMenuLink href="/finance/regional/summary-all">
           b) Summary Invoice Reports (All)
         </FinanceMenuLink>
-        <FinanceMenuLink href="/finance/reports/department">
-          c) Print Financial Reports by Department
-        </FinanceMenuLink>
-        <FinanceMenuLink href="/finance/reports/site">
-          d) Print Financial Reports by Site
-        </FinanceMenuLink>
-        <FinanceMenuLink href="/finance/reports/vehicle-billing-history">
-          e) Vehicle Billing History (i.e. vehicle Income)
-        </FinanceMenuLink>
+        {hasFinanceRole(session.roles) ? (
+          <>
+            <FinanceMenuLink href="/finance/reports/department">
+              c) Print Financial Reports by Department
+            </FinanceMenuLink>
+            <FinanceMenuLink href="/finance/reports/site">
+              d) Print Financial Reports by Site
+            </FinanceMenuLink>
+            <FinanceMenuLink href="/finance/reports/vehicle-billing-history">
+              e) Vehicle Billing History (i.e. vehicle Income)
+            </FinanceMenuLink>
+          </>
+        ) : null}
         <FinanceMenuLink href="/finance/wesbank/summary-all">
           f) Wesbank Expenses Reports
         </FinanceMenuLink>

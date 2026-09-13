@@ -28,6 +28,7 @@ import {
   LegacyReportApiError,
   type AssetListScope,
 } from "@/lib/api/reports/api-legacy-reports";
+import { getLegacyVehicleStatusOptions } from "@/lib/api/finance/api-finance-reports";
 import {
   DepartmentApiError,
   getDepartments,
@@ -63,6 +64,7 @@ type ReportDefinition = {
   resolveReportKey?: (query: ReportQuery) => string;
   fields?: readonly ReportField[];
   autoLoad?: boolean;
+  unavailableMessage?: string;
 };
 
 const SEARCH_FIELDS: readonly ReportField[] = [
@@ -83,6 +85,150 @@ const DATE_FIELDS: readonly ReportField[] = [
   { name: "from", label: "From Date", type: "date" },
   { name: "to", label: "To Date", type: "date" },
 ];
+
+async function renderLegacyStatusRange(query: ReportQuery): Promise<ReactNode> {
+  let statuses: Awaited<ReturnType<typeof getLegacyVehicleStatusOptions>> = [];
+  let error: string | undefined;
+  try {
+    statuses = await getLegacyVehicleStatusOptions();
+  } catch (caught) {
+    error =
+      assetListResultError(caught) ||
+      (caught instanceof FinanceApiError ? caught.message : undefined);
+  }
+
+  return (
+    <ReportsFrame
+      title="Vehicle List by Status Selection"
+      description="Select the vehicle status and historical date range used by the legacy report."
+    >
+      {error ? <ReportsUnavailable message={error} /> : null}
+      <form
+        action="/finance/reports/output"
+        className="vehicle-status-maintenance-panel"
+        method="get"
+        target="_blank"
+      >
+        <input name="kind" type="hidden" value="legacy-detail" />
+        <input name="item" type="hidden" value="vehicle-status" />
+        <div className="form-grid">
+          <div className="form-field">
+            <label className="form-label" htmlFor="legacy-vehicle-status-id">
+              Status
+            </label>
+            <select
+              className="form-select"
+              defaultValue={queryValue(query, "statusId") || "28"}
+              id="legacy-vehicle-status-id"
+              name="statusId"
+              required
+            >
+              <option value="28">View All</option>
+              {statuses.map((status) => (
+                <option key={status.id} value={status.id}>
+                  {status.description}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-field">
+            <label className="form-label" htmlFor="legacy-vehicle-status-start-date">
+              Start Date
+            </label>
+            <input
+              className="form-input"
+              defaultValue={queryValue(query, "startDate")}
+              id="legacy-vehicle-status-start-date"
+              name="startDate"
+              required
+              type="date"
+            />
+          </div>
+          <div className="form-field">
+            <label className="form-label" htmlFor="legacy-vehicle-status-end-date">
+              End Date
+            </label>
+            <input
+              className="form-input"
+              defaultValue={queryValue(query, "endDate")}
+              id="legacy-vehicle-status-end-date"
+              name="endDate"
+              required
+              type="date"
+            />
+          </div>
+        </div>
+        <div className="button-row">
+          <button className="button button-primary" name="format" type="submit" value="html">
+            View Report
+          </button>
+          <button className="button button-secondary" name="format" type="submit" value="excel">
+            Download Excel
+          </button>
+          <Link className="button button-secondary" href="/reports">
+            Reports Menu
+          </Link>
+        </div>
+      </form>
+    </ReportsFrame>
+  );
+}
+
+function renderLegacyElsLogReport(query: ReportQuery): ReactNode {
+  return (
+    <ReportsFrame
+      title="Electronic and Manual Logsheet Kilo Report"
+      description="Select the historical date range used by the legacy logsheet report."
+    >
+      <form
+        action="/finance/reports/output"
+        className="vehicle-status-maintenance-panel"
+        method="get"
+        target="_blank"
+      >
+        <input name="kind" type="hidden" value="legacy-detail" />
+        <input name="item" type="hidden" value="els-log" />
+        <input name="format" type="hidden" value="html" />
+        <div className="form-grid">
+          <div className="form-field">
+            <label className="form-label" htmlFor="legacy-els-start-date">
+              Start Date
+            </label>
+            <input
+              className="form-input"
+              defaultValue={queryValue(query, "startDate")}
+              id="legacy-els-start-date"
+              name="startDate"
+              required
+              type="date"
+            />
+          </div>
+          <div className="form-field">
+            <label className="form-label" htmlFor="legacy-els-end-date">
+              End Date
+            </label>
+            <input
+              className="form-input"
+              defaultValue={queryValue(query, "endDate")}
+              id="legacy-els-end-date"
+              name="endDate"
+              required
+              type="date"
+            />
+          </div>
+        </div>
+        <div className="button-row">
+          <button className="button button-primary" type="submit">
+            View Report
+          </button>
+          <Link className="button button-secondary" href="/reports/trip-authority">
+            Back to Trip Reports
+          </Link>
+        </div>
+      </form>
+    </ReportsFrame>
+  );
+}
 
 const REPORT_DEFINITIONS: Record<string, ReportDefinition> = {
   "asset-list": {
@@ -349,7 +495,21 @@ const REPORT_DEFINITIONS: Record<string, ReportDefinition> = {
       { label: "3.5) Vehicles with no trips (Any Department)", key: "vehicles-no-trips" },
       { label: "3.7) Vehicles with high distances in Department", key: "high-distance-department" },
       { label: "3.8) Vehicles with high distances in all departments", key: "high-distance-all" },
+      {
+        label: "3.9) Show number of Trips issued in last 3 months to date (All Departments)",
+        href: "/finance/reports/output?kind=legacy-detail&item=trip-number-interval&format=html",
+      },
       { label: "3.10) Trips open for over 31 days", key: "trips-open-over-31" },
+      {
+        label:
+          "3.11) Trip Authorities Exceeding 25 000 per Trip per Department / Site in Date Range",
+        href: "/finance/trip-kilometres?report=AllRoutesOver25000KM",
+      },
+      {
+        label:
+          "3.12) Trip Authorities Exceeding 3 500 per Day per Route per Department / Site in Date Range",
+        href: "/finance/trip-kilometres?report=AllDayTripsOver3500KM",
+      },
       { label: "4.1) Electronic and Manual Logsheet kilo Report", key: "els-manual-kilo" },
       {
         label: "5.1) Driver Information over Financial Year Selection",
@@ -457,27 +617,27 @@ const REPORT_DEFINITIONS: Record<string, ReportDefinition> = {
   },
   "vip-pool-utilization-current": {
     title: "VIP and Pool Utilization (Current Month)",
-    description: "Legacy generated utilization report.",
-    reportKey: "vip-pool-utilization-current",
-    autoLoad: true,
+    description: "Legacy pre-generated utilization workbook.",
+    unavailableMessage:
+      "The original ExcelGeneratedReports workbook is not available in this deployment. It cannot be reproduced from an unrelated trip report.",
   },
   "vip-pool-utilization-previous": {
     title: "VIP and Pool Utilization (Previous Months)",
-    description: "Legacy generated utilization report.",
-    reportKey: "vip-pool-utilization-previous",
-    autoLoad: true,
+    description: "Legacy pre-generated utilization workbook.",
+    unavailableMessage:
+      "The original ExcelGeneratedReports workbook is not available in this deployment. It cannot be reproduced from an unrelated trip report.",
   },
   "vip-pool-income-current": {
     title: "VIP and Pool Utilization (Current Month, Including Income)",
-    description: "Legacy generated utilization and income report.",
-    reportKey: "vip-pool-income-current",
-    autoLoad: true,
+    description: "Legacy pre-generated utilization and income workbook.",
+    unavailableMessage:
+      "The original ExcelGeneratedReports workbook is not available in this deployment. It cannot be reproduced from an unrelated trip report.",
   },
   "vip-pool-income-previous": {
     title: "VIP and Pool Utilization (Previous Months, Including Income)",
-    description: "Legacy generated utilization and income report.",
-    reportKey: "vip-pool-income-previous",
-    autoLoad: true,
+    description: "Legacy pre-generated utilization and income workbook.",
+    unavailableMessage:
+      "The original ExcelGeneratedReports workbook is not available in this deployment. It cannot be reproduced from an unrelated trip report.",
   },
   vehicles: {
     title: "Vehicle Reports",
@@ -664,15 +824,10 @@ function assetListSelectionsForScope(
 ) {
   const requested = assetListSelections(query);
   const departmentSelectionLocked =
-    scope !== null &&
-    !scope.allDepartments &&
-    (mode === "by-department" || mode === "by-site");
+    scope !== null && !scope.allDepartments && (mode === "by-department" || mode === "by-site");
   return {
     province: requested.province,
-    department:
-      departmentSelectionLocked
-        ? scope.departmentCode ?? ""
-        : requested.department,
+    department: departmentSelectionLocked ? (scope.departmentCode ?? "") : requested.department,
     site: requested.site,
     departmentSelectionLocked,
   };
@@ -737,9 +892,7 @@ async function renderAssetListRoute(query: ReportQuery): Promise<ReactNode> {
   const hasRequiredSelection =
     mode === "all-departments" ||
     (mode === "by-province" && reportSubmission && positiveInteger(selections.province)) ||
-    (mode === "by-department" &&
-      reportSubmission &&
-      positiveInteger(selections.department)) ||
+    (mode === "by-department" && reportSubmission && positiveInteger(selections.department)) ||
     (mode === "by-site" &&
       reportSubmission &&
       positiveInteger(selections.department) &&
@@ -762,7 +915,9 @@ async function renderAssetListRoute(query: ReportQuery): Promise<ReactNode> {
           <ReportResult
             report={report}
             backHref={assetListResultBackHref(mode)}
-            pageHref={(requestedPage) => reportPageHref("/reports/asset-list", query, requestedPage)}
+            pageHref={(requestedPage) =>
+              reportPageHref("/reports/asset-list", query, requestedPage)
+            }
           />
         </ReportsFrame>
       );
@@ -869,6 +1024,26 @@ async function renderReportsRoutePageContent({
 
   if (slug === "asset-list" && isAssetListModeQuery(query)) {
     return renderAssetListRoute(query);
+  }
+
+  if (slug === "vehicle-status-range") {
+    return renderLegacyStatusRange(query);
+  }
+
+  if (slug === "trip-authority" && queryValue(query, "rtype") === "els-manual-kilo") {
+    return renderLegacyElsLogReport(query);
+  }
+
+  if (slug === "unallocated-vehicles") {
+    redirect("/finance/reports/output?kind=legacy-detail&item=unallocated-vehicles&format=html");
+  }
+
+  if (definition.unavailableMessage) {
+    return (
+      <ReportsFrame title={definition.title} description={definition.description}>
+        <ReportsUnavailable message={definition.unavailableMessage} />
+      </ReportsFrame>
+    );
   }
 
   const reportKey =

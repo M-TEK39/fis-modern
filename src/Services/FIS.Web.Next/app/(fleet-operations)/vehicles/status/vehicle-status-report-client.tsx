@@ -142,8 +142,9 @@ function ReportFilters({
 }
 
 export default function VehicleStatusReportClient({
+  canManageRemarks,
   initialReport,
-}: Readonly<{ initialReport: VehicleStatusReport }>) {
+}: Readonly<{ canManageRemarks: boolean; initialReport: VehicleStatusReport }>) {
   const [filters, setFilters] = useState<FilterValues>(EMPTY_FILTERS);
   const [report, setReport] = useState(initialReport);
   const [page, setPage] = useState(initialReport.page);
@@ -248,7 +249,7 @@ export default function VehicleStatusReportClient({
           <span>{report.assumptionNote}</span>
         </div>
       ) : null}
-      {!report.remarksAvailable ? (
+      {canManageRemarks && !report.remarksAvailable ? (
         <div className="notice notice-warning" role="note">
           <span aria-hidden="true">!</span>
           <span>
@@ -282,6 +283,7 @@ export default function VehicleStatusReportClient({
         </div>
       ) : (
         <VehicleStatusReportResults
+          canManageRemarks={canManageRemarks}
           onDownload={() => downloadCsv(report.rows, selectedFields)}
           onRemark={(row, resolve) => {
             setRemarkTarget(row);

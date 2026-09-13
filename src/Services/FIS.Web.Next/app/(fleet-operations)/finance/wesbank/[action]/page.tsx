@@ -10,7 +10,7 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import { hasGeneralFinanceReportsAccess } from "@/app/(fleet-operations)/finance/_utils";
 import {
   FinanceApiError,
   getFinanceProvinces,
@@ -193,7 +193,7 @@ async function renderWesbankReportContent({ params, searchParams }: PageProps) {
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasGeneralFinanceReportsAccess(session.roles))
     return (
       <FinanceFrame title={titleFor(action)} description="Wesbank expense reporting.">
         <FinanceRestricted />
@@ -238,7 +238,13 @@ async function renderWesbankReportContent({ params, searchParams }: PageProps) {
       };
     else {
       try {
-        report = await getWesbankFinanceReport({ mode: action, provinceCode, startDate, endDate });
+        report = await getWesbankFinanceReport({
+          mode: action,
+          reportAction: reportDefinition.key,
+          provinceCode,
+          startDate,
+          endDate,
+        });
         output = {
           href: outputHref(action, reportDefinition.key, query, "html"),
           label: "Open printable report",
@@ -343,6 +349,7 @@ async function renderWesbankReportContent({ params, searchParams }: PageProps) {
           basePath={`/finance/wesbank/${action}`}
           query={query}
           page={Number(queryValue(query, "page")) || 1}
+          printOrientation="landscape"
         />
       ) : null}
     </FinanceFrame>

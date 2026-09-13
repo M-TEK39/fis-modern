@@ -2859,6 +2859,16 @@ input:focus-visible {
     margin: 12mm;
   }
 
+  @page finance-report-portrait {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  @page finance-report-landscape {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
   body {
     background: white;
   }
@@ -2878,6 +2888,14 @@ input:focus-visible {
     border-radius: 0;
     background: white;
     padding: 0;
+  }
+
+  .report-print-area--portrait {
+    page: finance-report-portrait;
+  }
+
+  .report-print-area--landscape {
+    page: finance-report-landscape;
   }
 
   body.report-printing-document .report-print-area:not(.report-printing) {
@@ -2976,7 +2994,7 @@ input:focus-visible {
   .report-print-table {
     width: 100%;
     border-collapse: collapse;
-    table-layout: fixed;
+    table-layout: auto;
     font-size: 7.5pt;
   }
 

@@ -62,11 +62,14 @@ function StatusCard({
   );
 }
 
-async function VehicleStatusReportContent({ routePath }: Readonly<{ routePath: string }>) {
+async function VehicleStatusReportContent({
+  canManageRemarks,
+  routePath,
+}: Readonly<{ canManageRemarks: boolean; routePath: string }>) {
   try {
     const report = await getVehicleStatusReport();
 
-    return <VehicleStatusReportClient initialReport={report} />;
+    return <VehicleStatusReportClient canManageRemarks={canManageRemarks} initialReport={report} />;
   } catch (error) {
     if (isUnauthorizedError(error)) {
       return <SessionRecovery returnPath={routePath} />;
@@ -116,18 +119,6 @@ async function VehicleStatusReportPageContent({
     );
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <StatusCard
-          title="Access restricted"
-          message="You do not have permission to view vehicle status reports."
-          href="/vehicles"
-        />
-      </main>
-    );
-  }
-
   if (!hasReportsRole(session.roles)) {
     return (
       <main className="page-shell vehicle-page-shell">
@@ -154,7 +145,10 @@ async function VehicleStatusReportPageContent({
           </Link>
         </header>
         <Suspense fallback={<RouteLoading />}>
-          <VehicleStatusReportContent routePath={routePath} />
+          <VehicleStatusReportContent
+            canManageRemarks={hasVehicleManagementPermission(session.accessLevel)}
+            routePath={routePath}
+          />
         </Suspense>
       </section>
     </main>

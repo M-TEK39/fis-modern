@@ -12,7 +12,7 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import { hasGeneralFinanceReportsAccess } from "@/app/(fleet-operations)/finance/_utils";
 import { getSession } from "@/lib/auth/session";
 
 async function WesbankMenuContent() {
@@ -25,7 +25,7 @@ async function WesbankMenuContent() {
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasGeneralFinanceReportsAccess(session.roles))
     return (
       <FinanceFrame title="Wesbank Expenses Reports" description="Wesbank expense reporting.">
         <FinanceRestricted />

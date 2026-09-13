@@ -5,7 +5,12 @@ import {
   FinanceMenuLink,
   FinanceMenuSection,
 } from "@/app/(fleet-operations)/finance/_components";
-import { activateBasSegmentsAction, importBasAction } from "./actions";
+import {
+  activateBasSegmentsAction,
+  assignFundCodeAction,
+  fixInvalidBasJournalAction,
+  importBasAction,
+} from "./actions";
 import type { BasSegment, FinanceOption, FinanceRow } from "@/lib/api/finance/api-finance";
 
 type Query = Record<string, string | string[] | undefined>;
@@ -145,6 +150,189 @@ function SegmentTable({ segments, action }: Readonly<{ segments: BasSegment[]; a
   );
 }
 
+function BasCodeOptions({
+  segments,
+  placeholder,
+}: Readonly<{ segments: BasSegment[]; placeholder: string }>) {
+  return (
+    <>
+      <option value="">{placeholder}</option>
+      {segments.map((segment) => (
+        <option key={segment.segmentCode} value={segment.segmentNumber}>
+          {segment.segmentValue || segment.segmentNumber}
+        </option>
+      ))}
+    </>
+  );
+}
+
+function InvalidBasCorrectionTable({
+  rows,
+  departmentCode,
+  responsibilitySegments,
+  objectiveSegments,
+}: Readonly<{
+  rows: FinanceRow[];
+  departmentCode: string;
+  responsibilitySegments: BasSegment[];
+  objectiveSegments: BasSegment[];
+}>) {
+  return (
+    <div className="vehicle-table-wrapper">
+      <table className="vehicle-table">
+        <caption className="sr-only">Fix invalid BAS codes</caption>
+        <thead>
+          <tr>
+            <th scope="col">Journal</th>
+            <th scope="col">Type</th>
+            <th scope="col">Responsibility</th>
+            <th scope="col">Objective</th>
+            <th scope="col">Previous BAS values</th>
+            <th scope="col">Site</th>
+            <th scope="col">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={7}>No journals with invalid BAS codes were found.</td>
+            </tr>
+          ) : (
+            rows.map((row) => {
+              const transactionId = value(row, "transactionId", "transaction_id", "id");
+              const formId = `fix-bas-${transactionId}`;
+              return (
+                <tr key={rowKey(row, "fix-invalid-journals")}>
+                  <td>{value(row, "journalNumber", "ggNumber", "gg_number")}</td>
+                  <td>{value(row, "journalType", "journal_type", "reason")}</td>
+                  <td>
+                    <select
+                      aria-label={`Responsibility BAS code for journal ${transactionId}`}
+                      form={formId}
+                      name="responsibility"
+                      required
+                    >
+                      <BasCodeOptions
+                        placeholder="Select responsibility"
+                        segments={responsibilitySegments}
+                      />
+                    </select>
+                  </td>
+                  <td>
+                    <select
+                      aria-label={`Objective BAS code for journal ${transactionId}`}
+                      form={formId}
+                      name="objective"
+                      required
+                    >
+                      <BasCodeOptions placeholder="Select objective" segments={objectiveSegments} />
+                    </select>
+                  </td>
+                  <td>
+                    {value(row, "responsibilityNumber", "responsibility_number")} /{" "}
+                    {value(row, "objectiveNumber", "objective_number")}
+                  </td>
+                  <td>{value(row, "siteName", "site_name")}</td>
+                  <td>
+                    <form action={fixInvalidBasJournalAction} id={formId}>
+                      <input name="transactionId" type="hidden" value={transactionId} />
+                      <input name="departmentCode" type="hidden" value={departmentCode} />
+                      <button className="button button-primary" type="submit">
+                        Save
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function FundCodeAllocationTable({
+  rows,
+  departmentCode,
+  fundSegments,
+}: Readonly<{
+  rows: FinanceRow[];
+  departmentCode: string;
+  fundSegments: BasSegment[];
+}>) {
+  return (
+    <div className="vehicle-table-wrapper">
+      <table className="vehicle-table">
+        <caption className="sr-only">Allocate FUND codes to un-invoiced journals</caption>
+        <thead>
+          <tr>
+            <th scope="col">Journal</th>
+            <th scope="col">Vehicle</th>
+            <th scope="col">Journal month</th>
+            <th scope="col">FUND code</th>
+            <th scope="col">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={5}>No un-invoiced journals require FUND allocation.</td>
+            </tr>
+          ) : (
+            rows.map((row) => {
+              const journalDetailCode = value(row, "journalDetailCode", "journal_detail_code");
+              const vmfCode = value(row, "vmfCode", "vmf_code");
+              const journalDetailTypeCode = value(
+                row,
+                "journalDetailTypeCode",
+                "journal_detail_type_code",
+              );
+              const siteCode = value(row, "siteCode", "site_code");
+              const journalMonth = value(row, "journalMonth", "journal_month");
+              const formId = `fund-bas-${journalDetailCode}`;
+              return (
+                <tr key={rowKey(row, "allocate-fund-codes")}>
+                  <td>{value(row, "journalNumber", "journal_number")}</td>
+                  <td>{vmfCode || value(row, "registrationNumber", "vehicle")}</td>
+                  <td>{journalMonth || value(row, "transactionDate")}</td>
+                  <td>
+                    <select
+                      aria-label={`FUND code for journal ${journalDetailCode}`}
+                      form={formId}
+                      name="fundNumber"
+                      required
+                    >
+                      <BasCodeOptions placeholder="Select FUND code" segments={fundSegments} />
+                    </select>
+                  </td>
+                  <td>
+                    <form action={assignFundCodeAction} id={formId}>
+                      <input name="journalDetailCode" type="hidden" value={journalDetailCode} />
+                      <input name="departmentCode" type="hidden" value={departmentCode} />
+                      <input name="vmfCode" type="hidden" value={vmfCode} />
+                      <input
+                        name="journalDetailTypeCode"
+                        type="hidden"
+                        value={journalDetailTypeCode}
+                      />
+                      <input name="siteCode" type="hidden" value={siteCode} />
+                      <input name="journalMonth" type="hidden" value={journalMonth} />
+                      <button className="button button-primary" type="submit">
+                        Save
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function GenericTable({ action, rows }: Readonly<{ action: string; rows: FinanceRow[] }>) {
   const departmentRows = action.startsWith("departments-");
   return (
@@ -218,6 +406,9 @@ export function FinancialAllocationView({
   departments,
   segmentTypes,
   segments,
+  responsibilitySegments,
+  objectiveSegments,
+  fundSegments,
   rows,
   resultPage,
   totalPages,
@@ -228,6 +419,9 @@ export function FinancialAllocationView({
   departments: FinanceOption[];
   segmentTypes: FinanceOption[];
   segments: BasSegment[];
+  responsibilitySegments: BasSegment[];
+  objectiveSegments: BasSegment[];
+  fundSegments: BasSegment[];
   rows: FinanceRow[];
   resultPage: number;
   totalPages: number;
@@ -253,7 +447,11 @@ export function FinancialAllocationView({
           <div className="field-grid">
             <div className="field">
               <label htmlFor="bas-import-department">Department</label>
-              <select id="bas-import-department" name="departmentCode" defaultValue="">
+              <select
+                id="bas-import-department"
+                name="departmentCode"
+                defaultValue={queryValue(query, "departmentCode")}
+              >
                 <option value="">Select Department</option>
                 {departments.map((item) => (
                   <option key={item.value} value={item.value}>
@@ -411,7 +609,22 @@ export function FinancialAllocationView({
               </Link>
             </div>
           </form>
-          <GenericTable action={action} rows={rows} />
+          {action === "fix-invalid-journals" ? (
+            <InvalidBasCorrectionTable
+              departmentCode={queryValue(query, "departmentCode")}
+              objectiveSegments={objectiveSegments}
+              responsibilitySegments={responsibilitySegments}
+              rows={rows}
+            />
+          ) : action === "allocate-fund-codes" ? (
+            <FundCodeAllocationTable
+              departmentCode={queryValue(query, "departmentCode")}
+              fundSegments={fundSegments}
+              rows={rows}
+            />
+          ) : (
+            <GenericTable action={action} rows={rows} />
+          )}
           <Paginator action={action} query={query} page={resultPage} totalPages={totalPages} />
         </>
       )}

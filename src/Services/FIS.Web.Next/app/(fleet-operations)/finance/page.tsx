@@ -16,6 +16,7 @@ import {
 import {
   hasCoisIdentity,
   hasFinanceRole,
+  hasFinancialReportsRole,
   hasHeadOfficeFinanceAccess,
   hasRole,
 } from "@/app/(fleet-operations)/finance/_utils";
@@ -53,13 +54,11 @@ async function renderFinancePageContent() {
   }
   const batchRunning = batch?.isActive === true;
   const administrator = hasRole(session.roles, "Administrator") || hasRole(session.roles, "Admin");
-  const ownData =
-    administrator ||
-    hasRole(session.roles, "Financial Data (Own Department)") ||
-    hasRole(session.roles, "Financial Data (All Departments)");
-  const headOffice = hasHeadOfficeFinanceAccess(session.siteCode, session.email, session.roles);
+  const ownData = administrator || hasRole(session.roles, "Financial Data (Own Department)");
+  const financialReports = hasFinancialReportsRole(session.roles);
+  const headOffice = hasHeadOfficeFinanceAccess(session.siteCode, session.legacyUsername);
   const dept147 = session.departmentCode === "147";
-  const cois = hasCoisIdentity(session.email, session.roles);
+  const cois = hasCoisIdentity(session.legacyUsername);
 
   return (
     <FinanceFrame title="Finance Menu" description="Finance functions and reports.">
@@ -160,24 +159,26 @@ async function renderFinancePageContent() {
             </FinanceMenuLink>
           </FinanceMenuSection>
         ) : null}
-        <FinanceMenuSection title="2.2) Outstanding Amounts Reports">
-          <FinanceMenuLink href="/finance/outstanding/department-site-vehicle">
-            a) Outstanding Amounts per Department, Site &amp; Vehicle
-          </FinanceMenuLink>
-          <FinanceMenuLink href="/finance/outstanding/department">
-            b) Outstanding Amounts per Department
-          </FinanceMenuLink>
-          <FinanceMenuLink href="/finance/outstanding/department-site">
-            c) Outstanding Amounts per Department &amp; Site
-          </FinanceMenuLink>
-          <FinanceMenuLink href="/finance/outstanding/month-end-vehicle">
-            d) Outstanding Amounts at Month End per Vehicle
-          </FinanceMenuLink>
-          <FinanceMenuLink href="/finance/outstanding/allocation-exception">
-            e) Allocation Exceptions (Un-Interfaced)
-          </FinanceMenuLink>
-        </FinanceMenuSection>
-        {dept147 || cois ? (
+        {financialReports ? (
+          <FinanceMenuSection title="2.2) Outstanding Amounts Reports">
+            <FinanceMenuLink href="/finance/outstanding/department-site-vehicle">
+              a) Outstanding Amounts per Department, Site &amp; Vehicle
+            </FinanceMenuLink>
+            <FinanceMenuLink href="/finance/outstanding/department">
+              b) Outstanding Amounts per Department
+            </FinanceMenuLink>
+            <FinanceMenuLink href="/finance/outstanding/department-site">
+              c) Outstanding Amounts per Department &amp; Site
+            </FinanceMenuLink>
+            <FinanceMenuLink href="/finance/outstanding/month-end-vehicle">
+              d) Outstanding Amounts at Month End per Vehicle
+            </FinanceMenuLink>
+            <FinanceMenuLink href="/finance/outstanding/allocation-exception">
+              e) Allocation Exceptions (Un-Interfaced)
+            </FinanceMenuLink>
+          </FinanceMenuSection>
+        ) : null}
+        {financialReports && (dept147 || cois) ? (
           <FinanceMenuSection title="3) Missing Kilometres">
             <FinanceMenuLink href="/finance/missing-kilometres/fuel-consumption">
               a.1) Missing Kilometres from Fuel Consumption (Date Range)

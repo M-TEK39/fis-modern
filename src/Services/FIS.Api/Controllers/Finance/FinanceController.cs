@@ -5,11 +5,13 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Security.Claims;
 using System.Threading;
+using FIS.Api.Services.Finance;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
@@ -22,6 +24,7 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 [Authorize]
 [Produces("application/json")]
+[ServiceFilter(typeof(LegacyFinanceAuthorizationFilter))]
 public class FinanceController : BaseApiController
 {
     private const int DefaultPageSize = 24;
@@ -29,6 +32,7 @@ public class FinanceController : BaseApiController
     private const int MaximumPage = 1_000_000;
 
     private readonly IJournalDetailService _journalService;
+    private readonly LegacyFinanceReportExecutionService _legacyFinanceReportExecutionService;
     private readonly FisDbContext _context;
     private readonly ILogger<FinanceController> _logger;
     private static readonly ConcurrentDictionary<Guid, ExportTaskState> ExportTasks = new();
@@ -40,11 +44,13 @@ public class FinanceController : BaseApiController
 
     public FinanceController(
         IJournalDetailService journalService,
+        LegacyFinanceReportExecutionService legacyFinanceReportExecutionService,
         FisDbContext context,
         ILogger<FinanceController> logger
     )
     {
         _journalService = journalService;
+        _legacyFinanceReportExecutionService = legacyFinanceReportExecutionService;
         _context = context;
         _logger = logger;
     }
@@ -52,6 +58,8 @@ public class FinanceController : BaseApiController
     #region Batch Operations
 
     [HttpGet("batch/status")]
+    [LegacyFinanceBatchAccess]
+    [ServiceFilter(typeof(LegacyFinanceBatchAuthorizationFilter))]
     public async Task<ActionResult<BatchStatusDto>> GetBatchStatus()
     {
         try
@@ -103,6 +111,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("batch/start")]
+    [LegacyFinanceBatchAccess]
+    [ServiceFilter(typeof(LegacyFinanceBatchAuthorizationFilter))]
     public async Task<ActionResult<BatchStartResultDto>> StartBatch(
         [FromBody] StartBatchDto? request
     )
@@ -207,6 +217,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("batch/check-scoa")]
+    [LegacyFinanceBatchAccess]
+    [ServiceFilter(typeof(LegacyFinanceBatchAuthorizationFilter))]
     public async Task<ActionResult<ScoaCheckResultDto>> CheckScoa()
     {
         try
@@ -282,6 +294,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("batch/rollback")]
+    [LegacyFinanceBatchAccess]
+    [ServiceFilter(typeof(LegacyFinanceBatchAuthorizationFilter))]
     public async Task<ActionResult> RollbackBatch()
     {
         try
@@ -347,6 +361,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("batch/finish")]
+    [LegacyFinanceBatchAccess]
+    [ServiceFilter(typeof(LegacyFinanceBatchAuthorizationFilter))]
     public async Task<ActionResult> FinishBatch()
     {
         try
@@ -410,6 +426,7 @@ public class FinanceController : BaseApiController
     #region BAS Operations
 
     [HttpPost("bas/import")]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult<BasImportResultDto>> ImportBas([FromBody] BasImportDto request)
     {
         if (string.IsNullOrWhiteSpace(request.FileData))
@@ -421,6 +438,21 @@ public class FinanceController : BaseApiController
 
         try
         {
+            var financeAccess = GetFinanceAccess();
+            if (
+                !financeAccess.CanMaintainAllFinanceData
+                && (
+                    financeAccess.Profile is null
+                    || (
+                        request.DepartmentCode.HasValue
+                        && request.DepartmentCode.Value != financeAccess.Profile.DepartmentCode
+                    )
+                )
+            )
+            {
+                return Forbid();
+            }
+
             var decoded = DecodeFileData(request.FileData);
             var lines = decoded
                 .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
@@ -476,6 +508,25 @@ public class FinanceController : BaseApiController
                 )
                 {
                     siteCode = parsedSite;
+                }
+
+                if (
+                    !financeAccess.CanMaintainAllFinanceData
+                    && (
+                        financeAccess.Profile is null
+                        || departmentCode != financeAccess.Profile.DepartmentCode
+                        || (
+                            siteCode.HasValue
+                            && !await IsSiteInProfileDepartmentAsync(
+                                siteCode.Value,
+                                financeAccess.Profile.DepartmentCode,
+                                HttpContext.RequestAborted
+                            )
+                        )
+                    )
+                )
+                {
+                    return Forbid();
                 }
 
                 var existing = await _context.BasSegments.FirstOrDefaultAsync(s =>
@@ -549,6 +600,7 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas")]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult<object>> GetBasOverview()
     {
         try
@@ -578,6 +630,7 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/segments")]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult<IEnumerable<BasSegmentDto>>> GetBasSegments(
         [FromQuery] int? departmentCode,
         [FromQuery] string? segmentType
@@ -632,6 +685,7 @@ public class FinanceController : BaseApiController
             var response = rows.Select(x => new BasSegmentDto
                 {
                     SegmentCode = x.segment_code,
+                    SegmentNumber = x.segment_number ?? string.Empty,
                     SegmentType =
                         x.SegmentTypeName ?? x.SegmentTypeCode?.ToString() ?? string.Empty,
                     SegmentValue =
@@ -651,10 +705,24 @@ public class FinanceController : BaseApiController
     }
 
     /// <summary>
+    /// Supplies the exact segment selectors used by the two legacy BAS
+    /// correction pages. Its separate route preserves the stricter department
+    /// selection rules on the normal importer and activation screens.
+    /// </summary>
+    [HttpGet("bas/segments/correction")]
+    [LegacyFinanceBasMaintenanceAccess]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
+    public Task<ActionResult<IEnumerable<BasSegmentDto>>> GetBasCorrectionSegments(
+        [FromQuery] int? departmentCode,
+        [FromQuery] string? segmentType
+    ) => GetBasSegments(departmentCode, segmentType);
+
+    /// <summary>
     /// Returns a bounded BAS segment page for the operational allocation grid.
     /// The original collection endpoint remains for legacy consumers.
     /// </summary>
     [HttpGet("bas/segments/page")]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult> GetBasSegmentsPage(
         [FromQuery] int? departmentCode,
         [FromQuery] string? segmentType,
@@ -720,6 +788,7 @@ public class FinanceController : BaseApiController
                 .Select(item => new BasSegmentDto
                 {
                     SegmentCode = item.segment_code,
+                    SegmentNumber = item.segment_number ?? string.Empty,
                     SegmentType =
                         item.SegmentTypeName
                         ?? (
@@ -748,6 +817,7 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("bas/segments/activate")]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult> ActivateBasSegments([FromBody] ActivateSegmentsDto request)
     {
         if (request.SegmentCodes is null || request.SegmentCodes.Count == 0)
@@ -757,6 +827,24 @@ public class FinanceController : BaseApiController
 
         try
         {
+            var financeAccess = GetFinanceAccess();
+            if (!financeAccess.CanMaintainAllFinanceData)
+            {
+                if (financeAccess.Profile is null)
+                {
+                    return Forbid();
+                }
+
+                var containsAnotherDepartment = await _context.BasSegments.AnyAsync(segment =>
+                    request.SegmentCodes.Contains(segment.segment_code)
+                    && segment.department_code != financeAccess.Profile.DepartmentCode
+                );
+                if (containsAnotherDepartment)
+                {
+                    return Forbid();
+                }
+            }
+
             var userCode = GetCurrentUserId();
             var now = DateTime.UtcNow;
 
@@ -790,25 +878,49 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/journals/invalid")]
+    [LegacyFinanceBasMaintenanceAccess]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult<IEnumerable<InvalidJournalDto>>> GetInvalidJournals(
         [FromQuery] int? departmentCode
     )
     {
         try
         {
-            var rows = await _context
+            var legacyRows = await TryGetLegacyInvalidBasJournalsAsync(departmentCode);
+            if (legacyRows is not null)
+            {
+                return Ok(legacyRows.Take(500).ToList());
+            }
+
+            var query = _context
                 .JournalWithInvalidBasCodes.AsNoTracking()
-                .Where(x => !x.is_deleted)
+                .Where(x => !x.is_deleted);
+            var permittedSiteNames = await GetProfileInvalidJournalSiteNamesAsync(
+                departmentCode,
+                permitBasCorrectionSelection: true
+            );
+            if (permittedSiteNames is not null)
+            {
+                query = query.Where(x =>
+                    x.SiteName != null && permittedSiteNames.Contains(x.SiteName)
+                );
+            }
+
+            var rows = await query
                 .OrderByDescending(x => x.Id)
                 .Take(500)
                 .ToListAsync();
 
             var response = rows.Select(x => new InvalidJournalDto
                 {
-                    JournalDetailCode = Guid.Empty,
+                    TransactionId = x.Id,
                     JournalNumber = x.GGNumber ?? string.Empty,
                     Reason = x.JournalType ?? "Invalid BAS code",
                     DepartmentCode = departmentCode,
+                    JournalType = x.JournalType ?? string.Empty,
+                    ResponsibilityNumber = x.ResponsibilityNumber ?? string.Empty,
+                    ObjectiveNumber = x.ObjectiveNumber ?? string.Empty,
+                    SiteName = x.SiteName ?? string.Empty,
                 })
                 .ToList();
 
@@ -822,6 +934,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/journals/invalid/page")]
+    [LegacyFinanceBasMaintenanceAccess]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult> GetInvalidJournalsPage(
         [FromQuery] int? departmentCode,
         [FromQuery] int page = 1,
@@ -833,9 +947,32 @@ public class FinanceController : BaseApiController
 
         try
         {
+            var legacyRows = await TryGetLegacyInvalidBasJournalsAsync(departmentCode);
+            if (legacyRows is not null)
+            {
+                var legacyPage = NormalizePage(page);
+                var legacyPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
+                var legacyTotal = legacyRows.Count;
+                var legacyItems = legacyRows
+                    .Skip((legacyPage - 1) * legacyPageSize)
+                    .Take(legacyPageSize)
+                    .ToList();
+                return Ok(CreatePageResponse(legacyItems, legacyPage, legacyPageSize, legacyTotal));
+            }
+
             var query = _context
                 .JournalWithInvalidBasCodes.AsNoTracking()
                 .Where(item => !item.is_deleted);
+            var permittedSiteNames = await GetProfileInvalidJournalSiteNamesAsync(
+                departmentCode,
+                permitBasCorrectionSelection: true
+            );
+            if (permittedSiteNames is not null)
+            {
+                query = query.Where(item =>
+                    item.SiteName != null && permittedSiteNames.Contains(item.SiteName)
+                );
+            }
             var normalizedPage = NormalizePage(page);
             var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
             var total = await query.CountAsync();
@@ -845,10 +982,14 @@ public class FinanceController : BaseApiController
                 .Take(normalizedPageSize)
                 .Select(item => new InvalidJournalDto
                 {
-                    JournalDetailCode = Guid.Empty,
+                    TransactionId = item.Id,
                     JournalNumber = item.GGNumber ?? string.Empty,
                     Reason = item.JournalType ?? "Invalid BAS code",
                     DepartmentCode = departmentCode,
+                    JournalType = item.JournalType ?? string.Empty,
+                    ResponsibilityNumber = item.ResponsibilityNumber ?? string.Empty,
+                    ObjectiveNumber = item.ObjectiveNumber ?? string.Empty,
+                    SiteName = item.SiteName ?? string.Empty,
                 })
                 .ToListAsync();
 
@@ -861,13 +1002,156 @@ public class FinanceController : BaseApiController
         }
     }
 
+    /// <summary>
+    /// Legacy EditJournalBASCodes.aspx saved the responsibility and objective
+    /// selections through DEV_UPD_FixJournalWithInvalidBASCodes. The target
+    /// row, selected department, and BAS segments are all checked here before
+    /// the fixed procedure can run.
+    /// </summary>
+    [HttpPost("bas/journals/invalid/fix")]
+    [LegacyFinanceBasMaintenanceAccess]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
+    public async Task<ActionResult> FixInvalidBasJournal([FromBody] FixInvalidBasJournalDto request)
+    {
+        if (
+            request.TransactionId <= 0
+            || request.DepartmentCode <= 0
+            || string.IsNullOrWhiteSpace(request.Responsibility)
+            || string.IsNullOrWhiteSpace(request.Objective)
+            || request.Responsibility.Trim().Length > 8
+            || request.Objective.Trim().Length > 8
+        )
+        {
+            return BadRequest(
+                new { error = "Select a department, responsibility, and objective before saving the BAS correction." }
+            );
+        }
+
+        try
+        {
+            var access = GetFinanceAccess();
+            var canSelectDepartment = access.CanSelectAllBASCorrectionDepartments;
+            if (
+                !canSelectDepartment
+                && (access.Profile is null || access.Profile.DepartmentCode != request.DepartmentCode)
+            )
+            {
+                return Forbid();
+            }
+
+            var legacyRows = await TryGetLegacyInvalidBasJournalsAsync(request.DepartmentCode);
+            if (legacyRows is not null)
+            {
+                if (!legacyRows.Any(item => item.TransactionId == request.TransactionId))
+                {
+                    return NotFound(new { error = "The invalid BAS journal is no longer available for this department." });
+                }
+            }
+            else
+            {
+                var permittedSiteNames = await GetProfileInvalidJournalSiteNamesAsync(
+                    request.DepartmentCode,
+                    permitBasCorrectionSelection: true
+                );
+                var invalidJournalQuery = _context
+                    .JournalWithInvalidBasCodes.AsNoTracking()
+                    .Where(item => !item.is_deleted && item.Id == request.TransactionId);
+                if (permittedSiteNames is not null)
+                {
+                    invalidJournalQuery = invalidJournalQuery.Where(item =>
+                        item.SiteName != null && permittedSiteNames.Contains(item.SiteName)
+                    );
+                }
+
+                if (await invalidJournalQuery.SingleOrDefaultAsync(HttpContext.RequestAborted) is null)
+                {
+                    return NotFound(new { error = "The invalid BAS journal is no longer available for this department." });
+                }
+            }
+
+            var validSegmentCodes = await _context
+                .BasSegments.AsNoTracking()
+                .Join(
+                    _context.SegmentGroups.AsNoTracking(),
+                    segment => segment.segment_group_code,
+                    group => group.segment_group_code,
+                    (segment, group) => new { segment, group }
+                )
+                .Where(item =>
+                    !item.segment.is_deleted
+                    && item.segment.department_code == request.DepartmentCode
+                    && (
+                        (item.group.segment_type_code == 3 && item.segment.segment_number == request.Responsibility.Trim())
+                        || (item.group.segment_type_code == 2 && item.segment.segment_number == request.Objective.Trim())
+                    )
+                )
+                .Select(item => new { item.group.segment_type_code, item.segment.segment_number })
+                .ToListAsync(HttpContext.RequestAborted);
+            var hasResponsibility = validSegmentCodes.Any(item =>
+                item.segment_type_code == 3
+                && string.Equals(
+                    item.segment_number,
+                    request.Responsibility.Trim(),
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+            var hasObjective = validSegmentCodes.Any(item =>
+                item.segment_type_code == 2
+                && string.Equals(
+                    item.segment_number,
+                    request.Objective.Trim(),
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+            if (!hasResponsibility || !hasObjective)
+            {
+                return BadRequest(
+                    new { error = "Select active responsibility and objective BAS codes for the chosen department." }
+                );
+            }
+
+            var saved = await _legacyFinanceReportExecutionService.TryExecuteMutationAsync(
+                "fix-invalid-bas",
+                new Dictionary<string, object?>
+                {
+                    ["JournalDetailID"] = request.TransactionId,
+                    ["Responsibility"] = request.Responsibility.Trim(),
+                    ["Objective"] = request.Objective.Trim(),
+                },
+                HttpContext.RequestAborted
+            );
+            if (!saved)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new { error = "The legacy BAS correction procedure is unavailable for this database." }
+                );
+            }
+
+            return Ok(new { message = $"Saved BAS correction for journal row {request.TransactionId}." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fixing invalid BAS journal {TransactionId}", request.TransactionId);
+            return StatusCode(500, new { error = "Failed to save the BAS correction." });
+        }
+    }
+
     [HttpGet("bas/journals/uninvoiced")]
+    [LegacyFinanceBasMaintenanceAccess]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult<IEnumerable<UninvoicedJournalDto>>> GetUninvoicedJournals(
         [FromQuery] int? departmentCode
     )
     {
         try
         {
+            var legacyRows = await TryGetLegacyFundAllocationJournalsAsync(departmentCode);
+            if (legacyRows is not null)
+            {
+                return Ok(legacyRows.Take(1000).ToList());
+            }
+
             var query = (await _journalService.GetAllJournalDetailsAsync()).Where(jd =>
                 !jd.is_deleted && !jd.journal_detail_date_posted.HasValue
             );
@@ -885,6 +1169,11 @@ public class FinanceController : BaseApiController
                         : jd.journal_detail_id.ToString(),
                     Amount = jd.journal_detail_amount,
                     TransactionDate = jd.journal_detail_date,
+                    VmfCode = jd.vmf_code.ToString(CultureInfo.InvariantCulture),
+                    JournalDetailTypeCode = jd.journal_detail_type_code,
+                    SiteCode = jd.site_code,
+                    DepartmentCode = jd.department_code,
+                    JournalMonth = jd.journal_detail_date.ToString("yyyyMM", CultureInfo.InvariantCulture),
                 })
                 .Take(1000)
                 .ToList();
@@ -899,6 +1188,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/journals/uninvoiced/page")]
+    [LegacyFinanceBasMaintenanceAccess]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult> GetUninvoicedJournalsPage(
         [FromQuery] int? departmentCode,
         [FromQuery] int page = 1,
@@ -910,6 +1201,19 @@ public class FinanceController : BaseApiController
 
         try
         {
+            var legacyRows = await TryGetLegacyFundAllocationJournalsAsync(departmentCode);
+            if (legacyRows is not null)
+            {
+                var legacyPage = NormalizePage(page);
+                var legacyPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
+                var legacyTotal = legacyRows.Count;
+                var legacyItems = legacyRows
+                    .Skip((legacyPage - 1) * legacyPageSize)
+                    .Take(legacyPageSize)
+                    .ToList();
+                return Ok(CreatePageResponse(legacyItems, legacyPage, legacyPageSize, legacyTotal));
+            }
+
             var result = await _journalService.GetUninvoicedJournalDetailsPageAsync(
                 departmentCode,
                 NormalizePage(page),
@@ -923,6 +1227,11 @@ public class FinanceController : BaseApiController
                         item.journal_code?.ToString() ?? item.journal_detail_id.ToString(),
                     Amount = item.journal_detail_amount,
                     TransactionDate = item.journal_detail_date,
+                    VmfCode = item.vmf_code.ToString(CultureInfo.InvariantCulture),
+                    JournalDetailTypeCode = item.journal_detail_type_code,
+                    SiteCode = item.site_code,
+                    DepartmentCode = item.department_code,
+                    JournalMonth = item.journal_detail_date.ToString("yyyyMM", CultureInfo.InvariantCulture),
                 })
                 .ToList();
 
@@ -939,7 +1248,108 @@ public class FinanceController : BaseApiController
         }
     }
 
+    /// <summary>
+    /// Legacy VehicleJournalBASCodesMap.aspx assigned a selected department's
+    /// FUND code through DEV_INS_VehicleJournalSegmentMap. The request is
+    /// revalidated against the original DEV_REP dataset (or the guarded
+    /// compatibility projection when the procedure is absent), so hidden form
+    /// values cannot target a journal that was not in the selected list.
+    /// </summary>
+    [HttpPost("bas/journals/uninvoiced/fund")]
+    [LegacyFinanceBasMaintenanceAccess]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
+    public async Task<ActionResult> AssignFundCode([FromBody] AssignFundCodeDto request)
+    {
+        if (
+            request.DepartmentCode <= 0
+            || string.IsNullOrWhiteSpace(request.FundNumber)
+            || string.IsNullOrWhiteSpace(request.VmfCode)
+            || request.JournalDetailTypeCode <= 0
+            || request.SiteCode <= 0
+            || string.IsNullOrWhiteSpace(request.JournalMonth)
+        )
+        {
+            return BadRequest(new { error = "Select a FUND code before saving the allocation." });
+        }
+
+        var fundNumber = request.FundNumber.Trim();
+        if (fundNumber.Length > 8)
+        {
+            return BadRequest(new { error = "The selected FUND code is too long." });
+        }
+
+        try
+        {
+            var source = await ResolveFundAllocationJournalAsync(request);
+            if (source is null)
+            {
+                return NotFound(new { error = "The un-invoiced journal is no longer available." });
+            }
+
+            var access = GetFinanceAccess();
+            var canSelectDepartment = access.CanSelectAllBASCorrectionDepartments;
+            if (
+                !canSelectDepartment
+                && (access.Profile is null || source.DepartmentCode != access.Profile.DepartmentCode)
+            )
+            {
+                return Forbid();
+            }
+
+            var fundIsAvailable = await _context
+                .BasSegments.AsNoTracking()
+                .Join(
+                    _context.SegmentGroups.AsNoTracking(),
+                    segment => segment.segment_group_code,
+                    group => group.segment_group_code,
+                    (segment, group) => new { segment, group }
+                )
+                .AnyAsync(
+                    item =>
+                        !item.segment.is_deleted
+                        && item.segment.department_code == source.DepartmentCode
+                        && item.group.segment_type_code == 1
+                        && item.segment.segment_number == fundNumber,
+                    HttpContext.RequestAborted
+                );
+            if (!fundIsAvailable)
+            {
+                return BadRequest(
+                    new { error = "Select an active FUND code for the journal's department." }
+                );
+            }
+
+            var saved = await _legacyFinanceReportExecutionService.TryExecuteMutationAsync(
+                "assign-fund-bas",
+                new Dictionary<string, object?>
+                {
+                    ["FUNDNumber"] = fundNumber,
+                    ["VMFCode"] = source.VmfCode,
+                    ["JournalDetailTypeCode"] = source.JournalDetailTypeCode,
+                    ["SiteCode"] = source.SiteCode,
+                    ["JournalMonth"] = source.JournalMonth,
+                },
+                HttpContext.RequestAborted
+            );
+            if (!saved)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new { error = "The legacy FUND allocation procedure is unavailable for this database." }
+                );
+            }
+
+            return Ok(new { message = $"Assigned FUND code {fundNumber} to the selected journal." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error assigning FUND code to journal {JournalDetailCode}", request.JournalDetailCode);
+            return StatusCode(500, new { error = "Failed to assign the FUND code." });
+        }
+    }
+
     [HttpGet("bas/departments-without-bas")]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult<IEnumerable<FinanceDepartmentDto>>> GetDepartmentsWithoutBas()
     {
         try
@@ -970,6 +1380,7 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/departments-without-bas/page")]
+    [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult> GetDepartmentsWithoutBasPage(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = DefaultPageSize
@@ -1016,6 +1427,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/departments-missing-financial-system")]
+    [ServiceFilter(typeof(LegacyFinanceDepartment147AuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceOwnDepartmentDataAuthorizationFilter))]
     public async Task<
         ActionResult<IEnumerable<FinanceDepartmentDto>>
     > GetDepartmentsMissingFinancialSystem()
@@ -1049,14 +1462,13 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/departments-missing-financial-system/page")]
+    [ServiceFilter(typeof(LegacyFinanceDepartment147AuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceOwnDepartmentDataAuthorizationFilter))]
     public async Task<ActionResult> GetDepartmentsMissingFinancialSystemPage(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = DefaultPageSize
     )
     {
-        if (!HasFinanceDataRole())
-            return Forbid();
-
         try
         {
             var query = _context
@@ -1101,29 +1513,24 @@ public class FinanceController : BaseApiController
     #region Reference Data
 
     [HttpGet("reference/financial-years")]
-    public ActionResult<IEnumerable<FinancialYearDto>> GetFinancialYears()
+    public async Task<ActionResult<IEnumerable<FinancialYearDto>>> GetFinancialYears()
     {
-        var years = new List<FinancialYearDto>
-        {
-            new()
+        var years = await _legacyFinanceReportExecutionService.GetFinancialYearsAsync(
+            HttpContext.RequestAborted
+        );
+        return Ok(
+            years.Select(year => new FinancialYearDto
             {
-                Code = 2023,
-                Name = "2023/2024",
-                StartDate = new DateTime(2023, 7, 1),
-                EndDate = new DateTime(2024, 6, 30),
-            },
-            new()
-            {
-                Code = 2024,
-                Name = "2024/2025",
-                StartDate = new DateTime(2024, 7, 1),
-                EndDate = new DateTime(2025, 6, 30),
-            },
-        };
-        return Ok(years);
+                Code = year.Code,
+                Name = year.Name,
+                StartDate = year.StartDate ?? DateTime.MinValue,
+                EndDate = year.EndDate ?? DateTime.MinValue,
+            })
+        );
     }
 
     [HttpGet("reference/batch-dates")]
+    [LegacyFinanceHeadOfficeAccess]
     public async Task<ActionResult<IEnumerable<DateTime>>> GetBatchDates()
     {
         try
@@ -1161,6 +1568,8 @@ public class FinanceController : BaseApiController
     #region Integration / Interface
 
     [HttpPost("interface/pastel-csv-all")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     public async Task<ActionResult> ExportPastelCsvAll([FromBody] PastelExportDto request)
     {
         if (request.FinancialSystemCode != (byte)ExportFinancialSystem.All)
@@ -1177,6 +1586,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("interface/pastel-csv-customer-all")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     public async Task<ActionResult> ExportPastelCsvCustomerAll(
         [FromBody] PastelCustomerExportDto request
     )
@@ -1208,6 +1619,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("interface/pastel-csv")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     public async Task<ActionResult> ExportPastelCsv([FromBody] PastelExportDto request)
     {
         if (request.FinancialSystemCode == (byte)ExportFinancialSystem.All)
@@ -1277,6 +1690,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("interface/pastel-csv-customer")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     public async Task<ActionResult> ExportPastelCsvCustomer(
         [FromBody] PastelCustomerExportDto request
     )
@@ -1358,6 +1773,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("interface/export-async")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     public ActionResult StartAsyncExport([FromBody] PastelExportDto request)
     {
         if (request.FinancialSystemCode == (byte)ExportFinancialSystem.All)
@@ -1375,6 +1792,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("interface/export-async-all")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     public ActionResult StartAsyncExportAll([FromBody] PastelExportDto request)
     {
         if (request.FinancialSystemCode != (byte)ExportFinancialSystem.All)
@@ -1471,6 +1890,293 @@ public class FinanceController : BaseApiController
                 string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
             )
         );
+    }
+
+    private LegacyFinanceAccessService.LegacyFinanceAccessContext GetFinanceAccess()
+    {
+        if (
+            HttpContext.Items.TryGetValue(LegacyFinanceAccessService.AccessContextItemKey, out var value)
+            && value is LegacyFinanceAccessService.LegacyFinanceAccessContext access
+        )
+        {
+            return access;
+        }
+
+        throw new InvalidOperationException("The Finance access context was not resolved.");
+    }
+
+    private Task<bool> IsSiteInProfileDepartmentAsync(
+        short siteCode,
+        short departmentCode,
+        CancellationToken cancellationToken
+    ) =>
+        _context.Sites.AsNoTracking().AnyAsync(
+            site => site.Site_code == siteCode && site.Depatrment_code == departmentCode,
+            cancellationToken
+        );
+
+    /// <summary>
+    /// Uses the same DEV_REP_JournalsWithInvalidBASCodes dataset as
+    /// EditJournalBASCodes.aspx whenever it is present. The EF projection is
+    /// retained only for databases that do not contain that legacy procedure.
+    /// </summary>
+    private async Task<List<InvalidJournalDto>?> TryGetLegacyInvalidBasJournalsAsync(
+        int? departmentCode
+    )
+    {
+        if (
+            !departmentCode.HasValue
+            || departmentCode.Value <= 0
+            || departmentCode.Value > short.MaxValue
+        )
+        {
+            return null;
+        }
+
+        var scopedDepartmentCode = checked((short)departmentCode.Value);
+
+        var report = await _legacyFinanceReportExecutionService.TryExecuteAsync(
+            new LegacyFinanceProcedureRequest(
+                "invalid-bas-journals",
+                "Un-Invoiced Journals with Invalid BAS Codes",
+                new Dictionary<string, object?> { ["DepartmentCode"] = scopedDepartmentCode }
+            ),
+            HttpContext.RequestAborted
+        );
+        if (report is null)
+        {
+            return null;
+        }
+
+        return report.DataRows
+            .Select(row => new InvalidJournalDto
+            {
+                TransactionId = ReadLegacyReportLong(row, "TransactionID", "TransactionId", "Id"),
+                JournalNumber = ReadLegacyReportText(row, "GGNumber", "JournalNumber"),
+                Reason = ReadLegacyReportText(row, "JournalType", "Reason"),
+                DepartmentCode = departmentCode,
+                DocumentNumber = ReadLegacyReportText(row, "Document_Number", "DocumentNumber"),
+                JournalType = ReadLegacyReportText(row, "JournalType"),
+                ResponsibilityNumber = ReadLegacyReportText(
+                    row,
+                    "Enter_Correct_Responsibility_Number_Only",
+                    "ResponsibilityNumber"
+                ),
+                ObjectiveNumber = ReadLegacyReportText(
+                    row,
+                    "Enter_Correct_Objective_Number_Only",
+                    "ObjectiveNumber"
+                ),
+                JournalStart = ReadLegacyReportText(row, "Journal_Start", "JournalStart"),
+                JournalEnd = ReadLegacyReportText(row, "Journal_End", "JournalEnd"),
+                SiteName = ReadLegacyReportText(row, "SiteName", "Site_Name"),
+            })
+            .Where(item => item.TransactionId > 0)
+            .ToList();
+    }
+
+    private static string ReadLegacyReportText(
+        IReadOnlyDictionary<string, object> row,
+        params string[] columnNames
+    )
+    {
+        foreach (var columnName in columnNames)
+        {
+            var match = row.FirstOrDefault(item =>
+                string.Equals(
+                    NormalizeLegacyReportColumn(item.Key),
+                    NormalizeLegacyReportColumn(columnName),
+                    StringComparison.Ordinal
+                )
+            );
+            if (!string.IsNullOrWhiteSpace(match.Key) && match.Value is not null)
+            {
+                return Convert.ToString(match.Value, CultureInfo.InvariantCulture)?.Trim() ?? string.Empty;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static long ReadLegacyReportLong(
+        IReadOnlyDictionary<string, object> row,
+        params string[] columnNames
+    ) => long.TryParse(
+        ReadLegacyReportText(row, columnNames),
+        NumberStyles.Integer,
+        CultureInfo.InvariantCulture,
+        out var value
+    )
+        ? value
+        : 0;
+
+    private static string NormalizeLegacyReportColumn(string value) => new(
+        value.Where(char.IsLetterOrDigit).ToArray()
+    );
+
+    private async Task<List<UninvoicedJournalDto>?> TryGetLegacyFundAllocationJournalsAsync(
+        int? departmentCode
+    )
+    {
+        if (
+            !departmentCode.HasValue
+            || departmentCode.Value <= 0
+            || departmentCode.Value > short.MaxValue
+        )
+        {
+            return null;
+        }
+
+        var scopedDepartmentCode = checked((short)departmentCode.Value);
+        var report = await _legacyFinanceReportExecutionService.TryExecuteAsync(
+            new LegacyFinanceProcedureRequest(
+                "fund-code-allocation",
+                "Allocate FUND Codes to Vehicle Journals",
+                new Dictionary<string, object?> { ["DepartmentCode"] = scopedDepartmentCode }
+            ),
+            HttpContext.RequestAborted
+        );
+        if (report is null)
+        {
+            return null;
+        }
+
+        return report.DataRows
+            .Select(row => new UninvoicedJournalDto
+            {
+                JournalNumber = ReadLegacyReportText(row, "GGNumber", "JournalNumber"),
+                VmfCode = ReadLegacyReportText(row, "vmf_Code", "VMFCode"),
+                JournalDetailTypeCode = ReadLegacyReportInt(
+                    row,
+                    "journal_detail_type_code",
+                    "JournalDetailTypeCode"
+                ),
+                SiteCode = ReadLegacyReportInt(row, "Site_Code", "SiteCode"),
+                DepartmentCode = scopedDepartmentCode,
+                JournalMonth = ReadLegacyReportText(row, "Journal_Month", "JournalMonth"),
+                JournalType = ReadLegacyReportText(row, "JournalType"),
+                SiteName = ReadLegacyReportText(row, "SiteName", "Site_Name"),
+            })
+            .Where(item =>
+                !string.IsNullOrWhiteSpace(item.VmfCode)
+                && item.JournalDetailTypeCode > 0
+                && item.SiteCode > 0
+                && !string.IsNullOrWhiteSpace(item.JournalMonth)
+            )
+            .ToList();
+    }
+
+    private async Task<UninvoicedJournalDto?> ResolveFundAllocationJournalAsync(
+        AssignFundCodeDto request
+    )
+    {
+        var legacyRows = await TryGetLegacyFundAllocationJournalsAsync(request.DepartmentCode);
+        if (legacyRows is not null)
+        {
+            return legacyRows.SingleOrDefault(item =>
+                string.Equals(item.VmfCode, request.VmfCode.Trim(), StringComparison.OrdinalIgnoreCase)
+                && item.JournalDetailTypeCode == request.JournalDetailTypeCode
+                && item.SiteCode == request.SiteCode
+                && string.Equals(
+                    item.JournalMonth,
+                    request.JournalMonth.Trim(),
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+        }
+
+        if (!Guid.TryParse(request.JournalDetailCode, out var journalDetailCode))
+        {
+            return null;
+        }
+
+        var journal = await _journalService.GetJournalDetailByCodeAsync(journalDetailCode);
+        if (
+            journal is null
+            || journal.is_deleted
+            || journal.journal_detail_date_posted.HasValue
+            || journal.department_code != request.DepartmentCode
+        )
+        {
+            return null;
+        }
+
+        var source = new UninvoicedJournalDto
+        {
+            JournalDetailCode = journal.journal_detail_code,
+            JournalNumber = journal.journal_code?.ToString(CultureInfo.InvariantCulture)
+                ?? journal.journal_detail_id.ToString(CultureInfo.InvariantCulture),
+            VmfCode = journal.vmf_code.ToString(CultureInfo.InvariantCulture),
+            JournalDetailTypeCode = journal.journal_detail_type_code,
+            SiteCode = journal.site_code,
+            DepartmentCode = journal.department_code,
+            JournalMonth = journal.journal_detail_date.ToString("yyyyMM", CultureInfo.InvariantCulture),
+        };
+        return string.Equals(source.VmfCode, request.VmfCode.Trim(), StringComparison.OrdinalIgnoreCase)
+            && source.JournalDetailTypeCode == request.JournalDetailTypeCode
+            && source.SiteCode == request.SiteCode
+            && string.Equals(
+                source.JournalMonth,
+                request.JournalMonth.Trim(),
+                StringComparison.OrdinalIgnoreCase
+            )
+            ? source
+            : null;
+    }
+
+    private static int ReadLegacyReportInt(
+        IReadOnlyDictionary<string, object> row,
+        params string[] columnNames
+    ) => int.TryParse(
+        ReadLegacyReportText(row, columnNames),
+        NumberStyles.Integer,
+        CultureInfo.InvariantCulture,
+        out var value
+    )
+        ? value
+        : 0;
+
+    /// <summary>
+    /// The legacy invalid-BAS view exposes its department through the site name
+    /// rather than a department column. Retain that relationship for the
+    /// compatibility query so an own-department user cannot read another
+    /// department's exception rows.
+    /// </summary>
+    private async Task<List<string>?> GetProfileInvalidJournalSiteNamesAsync(
+        int? requestedDepartmentCode = null,
+        bool permitBasCorrectionSelection = false
+    )
+    {
+        var access = GetFinanceAccess();
+        if (access.CanMaintainAllFinanceData && !permitBasCorrectionSelection)
+        {
+            return null;
+        }
+
+        if (access.Profile is null)
+        {
+            return [];
+        }
+
+        var departmentCode = access.Profile.DepartmentCode;
+        if (
+            permitBasCorrectionSelection
+            && access.CanSelectAllBASCorrectionDepartments
+            && requestedDepartmentCode is int selectedDepartmentCode
+            && selectedDepartmentCode is > 0 and <= short.MaxValue
+        )
+        {
+            departmentCode = checked((short)selectedDepartmentCode);
+        }
+
+        return await _context
+            .Sites.AsNoTracking()
+            .Where(site =>
+                site.Depatrment_code == departmentCode
+                && !string.IsNullOrWhiteSpace(site.description)
+            )
+            .Select(site => site.description!)
+            .ToListAsync(HttpContext.RequestAborted);
     }
 
     private (Guid TaskId, string Status) QueueAsyncExportTask(PastelExportDto request)
@@ -1606,6 +2312,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("interface/export-status/{taskId:guid}")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     public ActionResult GetAsyncExportStatus(Guid taskId)
     {
         if (!ExportTasks.TryGetValue(taskId, out var state))
@@ -1627,6 +2335,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("interface/export-cancel/{taskId:guid}")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     public ActionResult CancelAsyncExport(Guid taskId)
     {
         if (!ExportTasks.TryGetValue(taskId, out var state))
@@ -1662,6 +2372,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("interface/export-cancel-all")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     public ActionResult CancelAllAsyncExports()
     {
         _exportsCancelAll = true;
@@ -1691,6 +2403,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("interface/export-runtime")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     public ActionResult GetExportRuntime()
     {
         var running = Volatile.Read(ref _exportsRunning);
@@ -1713,6 +2427,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("interface/export-download/{taskId:guid}")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     public ActionResult DownloadAsyncExport(Guid taskId)
     {
         if (!ExportTasks.TryGetValue(taskId, out var state))
@@ -1736,7 +2452,109 @@ public class FinanceController : BaseApiController
         );
     }
 
+    /// <summary>
+    /// Recreates the legacy Kilo Gaps data view. This remains separate from
+    /// generic Finance reporting because legacy derives the gaps from adjacent
+    /// vehicle-kilometre rows before filtering the resulting dataset.
+    /// </summary>
+    [HttpGet("missing-kilometres/kilo-gaps")]
+    [ServiceFilter(typeof(LegacyFinanceFinancialReportsAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceDepartment147AuthorizationFilter))]
+    [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetKiloGapsReport([FromQuery] string financialYear)
+    {
+        if (
+            !short.TryParse(
+                financialYear,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var selectedFinancialYear
+            )
+        )
+        {
+            return BadRequest(new { error = "A valid financial year is required." });
+        }
+
+        try
+        {
+            var dataSet = await BuildKiloGapsReportDataSetAsync();
+            var table = dataSet.Tables["KiloGapsTable"];
+            if (table is null)
+            {
+                return StatusCode(500, new { error = "The kilometre gaps report could not be prepared." });
+            }
+
+            // Finance/OpenReport.aspx applies this DataView filter and sort to
+            // both the PDF and XLS variants of the KiloGaps report.
+            var rows = table.Rows.Cast<DataRow>()
+                .Where(row =>
+                    string.Equals(
+                        SafeString(row, "Prev_Site"),
+                        SafeString(row, "Next_Site"),
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                    && !string.Equals(
+                        SafeString(row, "Prev_contract_type"),
+                        "VIP",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                    && !string.Equals(
+                        SafeString(row, "Next_contract_type"),
+                        "VIP",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                    && SafeShort(row, "Prev_FinancialYear") >= selectedFinancialYear - 1
+                    && SafeShort(row, "Next_FinancialYear") == selectedFinancialYear
+                )
+                .OrderBy(row => SafeString(row, "Prev_Dept_Code"), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(row => SafeString(row, "Prev_Site"), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(row => SafeString(row, "Prev_fleet_number"), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(row => SafeDouble(row, "Prev_start_odo"))
+                .Select(row => table.Columns.Cast<DataColumn>().ToDictionary(
+                    column => column.ColumnName,
+                    column => row.IsNull(column) ? (object)string.Empty : row[column]
+                ))
+                .ToList();
+
+            return Ok(
+                new UniversalReport
+                {
+                    ReportType = "financial",
+                    Title = "Missing Kilometres Report — Kilo Gaps in the Same Department and Site (VIP Excluded)",
+                    GeneratedDate = DateTime.UtcNow,
+                    DataRows = rows,
+                    ReportData = new Dictionary<string, object>
+                    {
+                        ["financialYear"] = selectedFinancialYear,
+                        ["sameSiteOnly"] = true,
+                        ["excludeContractType"] = "VIP",
+                    },
+                    Summary = new Dictionary<string, object>
+                    {
+                        ["Total_Rows"] = rows.Count,
+                    },
+                    SupportsDateFilter = false,
+                }
+            );
+        }
+        catch (SqlException ex) when (ex.Number == 2812)
+        {
+            _logger.LogWarning(ex, "Legacy Kilo Gaps procedure is unavailable.");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "The legacy vehicle-kilometres reporting procedure is unavailable." }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating legacy Kilo Gaps report");
+            return StatusCode(500, new { error = "Failed to generate the kilometre gaps report." });
+        }
+    }
+
     [HttpPost("missing-kilometres/close-gaps")]
+    [ServiceFilter(typeof(LegacyFinanceFinancialReportsAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceCoisAuthorizationFilter))]
     public async Task<ActionResult> CloseKilometerGaps([FromBody] CloseKiloGapsRequest? request)
     {
         if (request is null || string.IsNullOrWhiteSpace(request.FinancialYear))
@@ -1782,7 +2600,7 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("reports/reversals-tree/{journalNumber}")]
-    public async Task<ActionResult<ReversalTreeDto>> GetReversalTree(string journalNumber)
+    public async Task<ActionResult> GetReversalTree(string journalNumber)
     {
         if (string.IsNullOrWhiteSpace(journalNumber))
         {
@@ -1791,6 +2609,24 @@ public class FinanceController : BaseApiController
 
         var trimmed = journalNumber.Trim();
         var hasJournalCode = long.TryParse(trimmed, out var journalCode);
+        if (!hasJournalCode || journalCode is < 1 or > int.MaxValue)
+        {
+            return BadRequest(new { error = "A valid reversal journal number is required." });
+        }
+
+        var legacyReport = await _legacyFinanceReportExecutionService.TryExecuteAsync(
+            new LegacyFinanceProcedureRequest(
+                "reversals-tree",
+                "Reversals Tree Report",
+                new Dictionary<string, object?> { ["@ReversalJournalCode"] = (int)journalCode }
+            ),
+            HttpContext.RequestAborted
+        );
+        if (legacyReport is not null)
+        {
+            return Ok(legacyReport);
+        }
+
         var hasJournalDetailId = int.TryParse(trimmed, out var journalDetailId);
 
         var journalDetails = (await _journalService.GetAllJournalDetailsAsync())
@@ -1852,19 +2688,37 @@ public class FinanceController : BaseApiController
             }
         }
 
-        return Ok(
-            new ReversalTreeDto
+        var rows = reversalRows
+            .OrderBy(item => item.ReversalDate)
+            .ThenBy(item => item.JournalNumber)
+            .Select(item => new Dictionary<string, object>
             {
-                JournalNumber = trimmed,
-                Reversals = reversalRows
-                    .OrderBy(x => x.ReversalDate)
-                    .ThenBy(x => x.JournalNumber)
-                    .ToList(),
+                ["Journal Number"] = item.JournalNumber,
+                ["Reversal Date"] = item.ReversalDate,
+                ["Amount"] = item.Amount,
+            })
+            .ToList();
+        return Ok(
+            new UniversalReport
+            {
+                ReportType = "financial",
+                Title = "Reversals Tree Report",
+                GeneratedDate = DateTime.UtcNow,
+                DataRows = rows,
+                Summary = new Dictionary<string, object>
+                {
+                    ["Source"] = "compatibility-query",
+                    ["Journal_Number"] = trimmed,
+                    ["Total_Rows"] = rows.Count,
+                },
+                SupportsDateFilter = false,
             }
         );
     }
 
     [HttpPost("standard-bank/import")]
+    [LegacyFinanceHeadOfficeAccess]
+    [ServiceFilter(typeof(LegacyFinanceHeadOfficeAuthorizationFilter))]
     [RequestFormLimits(MultipartBodyLengthLimit = 20 * 1024 * 1024)]
     [RequestSizeLimit(20 * 1024 * 1024)]
     public async Task<ActionResult<ImportResultDto>> ImportStandardBankData(
@@ -1944,6 +2798,8 @@ public class FinanceController : BaseApiController
     #region Tariff Parameters
 
     [HttpGet("tariff-parameters/years")]
+    [LegacyFinanceTariffAccess]
+    [ServiceFilter(typeof(LegacyFinanceTariffParametersAuthorizationFilter))]
     public async Task<ActionResult<IEnumerable<int>>> GetTariffParameterYears()
     {
         try
@@ -1968,6 +2824,8 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("tariff-parameters/{year}")]
+    [LegacyFinanceTariffAccess]
+    [ServiceFilter(typeof(LegacyFinanceTariffParametersAuthorizationFilter))]
     public async Task<ActionResult<TariffParametersDto>> GetTariffParameters(int year)
     {
         try
@@ -2138,6 +2996,9 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("tariff-parameters/{year}/approve")]
+    [LegacyFinanceTariffAccess]
+    [ServiceFilter(typeof(LegacyFinanceTariffParametersAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceTariffApproverAuthorizationFilter))]
     public async Task<ActionResult> ApproveTariffParameters(
         int year,
         [FromBody] ApproveTariffDto? request = null
@@ -2171,6 +3032,9 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("tariff-parameters/{year}/reject")]
+    [LegacyFinanceTariffAccess]
+    [ServiceFilter(typeof(LegacyFinanceTariffParametersAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceTariffApproverAuthorizationFilter))]
     public async Task<ActionResult> RejectTariffParameters(
         int year,
         [FromBody] RejectTariffDto? request = null
@@ -2867,6 +3731,64 @@ public class FinanceController : BaseApiController
         return result;
     }
 
+    private async Task<DataSet> BuildKiloGapsReportDataSetAsync()
+    {
+        var allKilos = await LoadAllVehicleKilosAsync();
+        var table = CreateKiloGapsTableSchema();
+        var gapNumber = await GetMaxGapRecordNumberAsync() + 1;
+        DataRow? previous = null;
+
+        foreach (DataRow current in allKilos.Rows)
+        {
+            var gapSize = 0;
+            if (
+                previous is not null
+                && SafeInt(previous, "vmf_code") == SafeInt(current, "vmf_code")
+                && !string.Equals(
+                    SafeString(previous, "TA_REK"),
+                    SafeString(current, "TA_REK"),
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                gapSize = SafeInt(current, "start_odo") - SafeInt(previous, "end_odo");
+                if (gapSize > 0)
+                {
+                    var gap = table.NewRow();
+                    // The view/report path in KilosDataController has no user
+                    // context. Keep its generated values distinct from the
+                    // closing workflow, which supplies the capturing user.
+                    FillGapRow(gap, previous, current, gapSize, gapNumber, 0);
+                    table.Rows.Add(gap);
+                    gapNumber++;
+                }
+            }
+
+            // This is the legacy controller's overlapping-reading rule. It
+            // makes subsequent gaps compare against the furthest valid end
+            // odometer instead of blindly replacing the prior record.
+            if (previous is null)
+            {
+                previous = current;
+            }
+            else if (gapSize < 0)
+            {
+                if (SafeInt(previous, "end_odo") < SafeInt(current, "end_odo"))
+                {
+                    previous = current;
+                }
+            }
+            else
+            {
+                previous = current;
+            }
+        }
+
+        var result = new DataSet("NewDataSet");
+        result.Tables.Add(table);
+        return result;
+    }
+
     private static void FillGapRow(
         DataRow row,
         DataRow prev,
@@ -3167,6 +4089,7 @@ public class BasImportResultDto
 public class BasSegmentDto
 {
     public int SegmentCode { get; set; }
+    public string SegmentNumber { get; set; } = "";
     public string SegmentType { get; set; } = "";
     public string SegmentValue { get; set; } = "";
     public int? DepartmentCode { get; set; }
@@ -3181,10 +4104,18 @@ public class ActivateSegmentsDto
 
 public class InvalidJournalDto
 {
+    public long TransactionId { get; set; }
     public Guid JournalDetailCode { get; set; }
     public string JournalNumber { get; set; } = "";
     public string Reason { get; set; } = "";
     public int? DepartmentCode { get; set; }
+    public string DocumentNumber { get; set; } = "";
+    public string JournalType { get; set; } = "";
+    public string ResponsibilityNumber { get; set; } = "";
+    public string ObjectiveNumber { get; set; } = "";
+    public string JournalStart { get; set; } = "";
+    public string JournalEnd { get; set; } = "";
+    public string SiteName { get; set; } = "";
 }
 
 public class UninvoicedJournalDto
@@ -3193,6 +4124,56 @@ public class UninvoicedJournalDto
     public string JournalNumber { get; set; } = "";
     public decimal Amount { get; set; }
     public DateTime TransactionDate { get; set; }
+    public string VmfCode { get; set; } = "";
+    public int JournalDetailTypeCode { get; set; }
+    public int SiteCode { get; set; }
+    public int DepartmentCode { get; set; }
+    public string JournalMonth { get; set; } = "";
+    public string JournalType { get; set; } = "";
+    public string SiteName { get; set; } = "";
+}
+
+public class FixInvalidBasJournalDto
+{
+    [Range(1, long.MaxValue)]
+    public long TransactionId { get; set; }
+
+    [Range(1, short.MaxValue)]
+    public short DepartmentCode { get; set; }
+
+    [Required]
+    [StringLength(8)]
+    public string Responsibility { get; set; } = "";
+
+    [Required]
+    [StringLength(8)]
+    public string Objective { get; set; } = "";
+}
+
+public class AssignFundCodeDto
+{
+    [Required]
+    [StringLength(8)]
+    public string FundNumber { get; set; } = "";
+
+    [Range(1, short.MaxValue)]
+    public short DepartmentCode { get; set; }
+
+    [Required]
+    [StringLength(50)]
+    public string VmfCode { get; set; } = "";
+
+    [Range(1, int.MaxValue)]
+    public int JournalDetailTypeCode { get; set; }
+
+    [Range(1, short.MaxValue)]
+    public short SiteCode { get; set; }
+
+    [Required]
+    [StringLength(6)]
+    public string JournalMonth { get; set; } = "";
+
+    public string? JournalDetailCode { get; set; }
 }
 
 public class FinanceDepartmentDto

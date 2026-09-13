@@ -10,7 +10,11 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import {
+  hasCoisIdentity,
+  hasFinanceRole,
+  hasFinancialReportsRole,
+} from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions } from "@/app/(fleet-operations)/finance/_location-options";
 import { FinanceReportTable } from "@/app/(fleet-operations)/finance/report-table";
 import { getDepartments } from "@/lib/api/reference-data/api-departments";
@@ -51,8 +55,10 @@ function titleFor(action: string) {
       {
         "fuel-consumption": "Missing Kilometres from Fuel Consumption",
         "no-kilos-consuming-fuel": "Vehicles with No Kilos but Consumed Fuel",
-        "kilo-gaps-pdf": "Missing Kilometres Report (PDF)",
-        "kilo-gaps-xls": "Missing Kilometres Report (Excel)",
+        "kilo-gaps-pdf":
+          "Missing Kilometres Report — Kilo Gaps in the Same Department and Site (VIP Excluded)",
+        "kilo-gaps-xls":
+          "Missing Kilometres Report — Kilo Gaps in the Same Department and Site (VIP Excluded)",
         "close-gaps": "Automatically Capture Missing Kilometres",
       } as Record<string, string>
     )[action] ?? "Missing Kilometres"
@@ -104,7 +110,11 @@ async function renderMissingKilometresContent({ params, searchParams }: Props) {
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasFinanceRole(session.roles))
+  if (
+    !hasFinanceRole(session.roles) ||
+    !hasFinancialReportsRole(session.roles) ||
+    (session.departmentCode !== "147" && !hasCoisIdentity(session.legacyUsername))
+  )
     return (
       <FinanceFrame title="Missing Kilometres" description="Missing-kilometres reporting.">
         <FinanceRestricted />
@@ -113,6 +123,12 @@ async function renderMissingKilometresContent({ params, searchParams }: Props) {
 
   const { action } = await params;
   const normalizedAction = action.trim().toLowerCase();
+  if (normalizedAction === "close-gaps" && !hasCoisIdentity(session.legacyUsername))
+    return (
+      <FinanceFrame title="Missing Kilometres" description="Missing-kilometres reporting.">
+        <FinanceRestricted message="Only the legacy cois account can close kilometre gaps." />
+      </FinanceFrame>
+    );
   const query = await searchParams;
   const validAction = ACTIONS.includes(normalizedAction as MissingKilometresAction);
   const dateRange =
@@ -356,6 +372,7 @@ async function renderMissingKilometresContent({ params, searchParams }: Props) {
           basePath={`/finance/missing-kilometres/${normalizedAction}`}
           query={query}
           page={Number(queryValue(query, "page")) || 1}
+          printOrientation="portrait"
         />
       ) : null}
     </FinanceFrame>

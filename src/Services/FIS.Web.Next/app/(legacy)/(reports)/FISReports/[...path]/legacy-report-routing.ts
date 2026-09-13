@@ -8,6 +8,10 @@ const REPORT_PARAMETER_ALIASES = [
   ["startDate", ["StartDate", "startDate"]],
   ["endDate", ["EndDate", "endDate"]],
   ["provinceCode", ["Province", "province", "provinceCode"]],
+  ["departmentCode", ["DepartmentCode", "departmentCode", "DepartmentID", "DepID", "deptCode"]],
+  ["siteCode", ["SiteCode", "siteCode", "SiteID", "siteID"]],
+  ["financialYear", ["FinYear", "finyear", "FinancialYear", "financialYear"]],
+  ["registrationNumber", ["GGNo", "ggno", "RegistrationNumber", "registrationNumber"]],
 ] as const;
 
 function queryValue(query: LegacyReportQuery, key: QueryKey | string) {
@@ -34,6 +38,110 @@ function withReportParameters(query: LegacyReportQuery, params: URLSearchParams)
     const value = direct || numbered;
     if (value) params.set(name, value);
   }
+}
+
+function pathWithQuery(path: string, params: URLSearchParams) {
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
+}
+
+function positiveInteger(value: string | null) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? String(parsed) : "";
+}
+
+function isoDate(value: string | null) {
+  if (!value) return "";
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parts = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!parts) return "";
+  const [, day, month, year] = parts;
+  const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  return parsed.getUTCFullYear() === Number(year) &&
+    parsed.getUTCMonth() === Number(month) - 1 &&
+    parsed.getUTCDate() === Number(day)
+    ? `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+    : "";
+}
+
+function legacyDetailReportPath(query: LegacyReportQuery, item: string, format = "html") {
+  const detailItem =
+    item === "allroutesover25000km"
+      ? "trip-routes-over-25000"
+      : item === "alldaytripsover3500km"
+        ? "trip-day-routes-over-3500"
+        : item === "detailedinvoicefromjournalnumber"
+          ? "journal-detailed-invoice"
+          : item === "vehiclestatusreport"
+            ? "vehicle-status"
+            : "";
+  if (!detailItem) return "";
+
+  const params = new URLSearchParams({ kind: "legacy-detail", item: detailItem, format: "html" });
+  withReportParameters(query, params);
+  if (params.get("startDate")) params.set("startDate", isoDate(params.get("startDate")));
+  if (params.get("endDate")) params.set("endDate", isoDate(params.get("endDate")));
+  if (params.get("departmentCode"))
+    params.set("departmentCode", positiveInteger(params.get("departmentCode")));
+  if (params.get("siteCode")) params.set("siteCode", positiveInteger(params.get("siteCode")));
+  if (detailItem === "journal-detailed-invoice") {
+    const directJournal = firstQueryValue(query, ["JournalCode", "journalCode"]);
+    const numberedJournal = Array.from({ length: 10 }, (_, index) => index + 1)
+      .map((index) => ({
+        name: queryValue(query, `ParamName${index}`).toLowerCase(),
+        value: queryValue(query, `ParamValue${index}`),
+      }))
+      .find((parameter) => parameter.name === "journalcode")?.value;
+    params.set("journalNumber", positiveInteger(directJournal || numberedJournal || ""));
+  }
+  if (detailItem === "vehicle-status") {
+    const directStatus = firstQueryValue(query, ["ID", "id", "lstStatusID"]);
+    const numberedStatus = Array.from({ length: 10 }, (_, index) => index + 1)
+      .map((index) => ({
+        name: queryValue(query, `ParamName${index}`).toLowerCase(),
+        value: queryValue(query, `ParamValue${index}`),
+      }))
+      .find((parameter) => parameter.name === "id")?.value;
+    params.set("statusId", positiveInteger(directStatus || numberedStatus || ""));
+  }
+  const required =
+    detailItem === "journal-detailed-invoice"
+      ? ["journalNumber"]
+      : detailItem === "vehicle-status"
+        ? ["statusId", "startDate", "endDate"]
+        : ["departmentCode", "siteCode", "startDate", "endDate"];
+  return required.some((name) => !params.get(name))
+    ? ""
+    : `/finance/reports/output?${new URLSearchParams({ ...Object.fromEntries(params), format }).toString()}`;
+}
+
+function directReportPath(
+  path: string,
+  query: LegacyReportQuery,
+  requiredParameters: readonly string[] = [],
+) {
+  const params = new URLSearchParams({ run: "1" });
+  withReportParameters(query, params);
+  if (requiredParameters.some((name) => !params.get(name))) return path;
+  return pathWithQuery(path, params);
+}
+
+function directFinancialYearReportPath(
+  path: string,
+  query: LegacyReportQuery,
+  requiredParameters: readonly string[] = [],
+) {
+  const params = new URLSearchParams({ run: "1", reportAction: "financial-year" });
+  withReportParameters(query, params);
+  if (requiredParameters.some((name) => !params.get(name))) return path;
+  return pathWithQuery(path, params);
+}
+
+function directAllocationPath(path: string, query: LegacyReportQuery) {
+  const params = new URLSearchParams({ view: "search" });
+  withReportParameters(query, params);
+  return pathWithQuery(path, params);
 }
 
 function regionalOpenReportPath(query: LegacyReportQuery, report: string) {
@@ -154,37 +262,65 @@ function downloadReportPath(query: LegacyReportQuery, item: string) {
   return `/finance/reports/output?${params.toString()}`;
 }
 
-function openReportPath(item: string) {
+function openReportPath(query: LegacyReportQuery, item: string) {
   return item === "vehiclebillinghistory"
-    ? "/finance/reports/vehicle-billing-history"
+    ? directFinancialYearReportPath("/finance/reports/vehicle-billing-history", query, [
+        "financialYear",
+        "registrationNumber",
+      ])
     : item === "summaryincomesplit"
-      ? "/finance/reports/income-split-summary"
+      ? directFinancialYearReportPath("/finance/reports/income-split-summary", query, [
+          "financialYear",
+        ])
       : item === "detailedincomesplit"
-        ? "/finance/reports/income-split-detailed"
+        ? directFinancialYearReportPath("/finance/reports/income-split-detailed", query, [
+            "financialYear",
+          ])
         : item === "kilogaps"
-          ? "/finance/missing-kilometres/kilo-gaps-pdf"
+          ? directReportPath(
+              (
+                queryValue(query, "OutputFormat") || queryValue(query, "outputformat")
+              ).toLowerCase() === "xls"
+                ? "/finance/missing-kilometres/kilo-gaps-xls"
+                : "/finance/missing-kilometres/kilo-gaps-pdf",
+              query,
+              ["financialYear"],
+            )
           : "/reports";
 }
 
-function defaultReportPath(item: string) {
+function defaultReportPath(query: LegacyReportQuery, item: string) {
+  const detailPath = legacyDetailReportPath(query, item);
+  if (detailPath) return detailPath;
+  if (item === "vehiclestatusreport") return "/reports/vehicle-status-range";
   return item === "journalswithinvalidbascodes"
-    ? "/finance/financial-allocation/invalid-journals"
+    ? directAllocationPath("/finance/financial-allocation/invalid-journals", query)
     : item === "departmentswithnobascodes"
-      ? "/finance/financial-allocation/departments-no-bas"
+      ? directAllocationPath("/finance/financial-allocation/departments-no-bas", query)
       : item === "departmentswithmissingfinancialsystem"
-        ? "/finance/financial-allocation/departments-missing-financial-system"
+        ? directAllocationPath(
+            "/finance/financial-allocation/departments-missing-financial-system",
+            query,
+          )
         : item === "alloutstandingamountsperdepartment"
-          ? "/finance/outstanding/department"
+          ? directReportPath("/finance/outstanding/department", query)
           : item === "alloutstandingamountsperdepartmentandsite"
-            ? "/finance/outstanding/department-site"
+            ? directReportPath("/finance/outstanding/department-site", query)
             : item === "alloutstandingamountsatmonthendpervehicle"
-              ? "/finance/outstanding/month-end-vehicle"
+              ? directReportPath("/finance/outstanding/month-end-vehicle", query)
               : item === "allocationexception"
-                ? "/finance/outstanding/allocation-exception"
+                ? directReportPath("/finance/outstanding/allocation-exception", query)
                 : item === "comparebilledkilosandfuelconsumption"
-                  ? "/finance/missing-kilometres/fuel-consumption"
+                  ? directReportPath("/finance/missing-kilometres/fuel-consumption", query, [
+                      "startDate",
+                      "endDate",
+                    ])
                   : item === "vehicleswithnokilosconsumingfuel"
-                    ? "/finance/missing-kilometres/no-kilos-consuming-fuel"
+                    ? directReportPath(
+                        "/finance/missing-kilometres/no-kilos-consuming-fuel",
+                        query,
+                        ["startDate", "endDate"],
+                      )
                     : item === "exportpastelcsv"
                       ? "/finance/interface/pastel-csv"
                       : item === "exportpastelcsvwithclient"
@@ -212,7 +348,8 @@ export function legacyRedirectPath(route: string, query: LegacyReportQuery) {
 
   if (route === "openreport_4.aspx") return regionalOpenReportPath(query, report);
   if (route === "openreport_3.aspx") return wesbankOpenReportPath(query, report);
-  if (route === "downloadreport.aspx") return downloadReportPath(query, item);
-  if (route === "openreport.aspx") return openReportPath(item);
-  return defaultReportPath(item);
+  if (route === "downloadreport.aspx")
+    return legacyDetailReportPath(query, item, "excel") || downloadReportPath(query, item);
+  if (route === "openreport.aspx") return openReportPath(query, item);
+  return defaultReportPath(query, item);
 }

@@ -12,12 +12,19 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import {
+  canSelectBasCorrectionDepartments,
+  canMaintainAllFinanceData,
+  hasBasCorrectionRole,
+  hasFinanceDataMaintenanceRole,
+  hasFinanceRole,
+} from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions } from "@/app/(fleet-operations)/finance/_location-options";
 import { FinancialAllocationView } from "@/app/(fleet-operations)/finance/financial-allocation/financial-allocation-view";
 import { DepartmentApiError, getDepartments } from "@/lib/api/reference-data/api-departments";
 import {
   FinanceApiError,
+  getBasCorrectionSegments,
   getBasSegmentsPage,
   getDepartmentsMissingFinancialSystemPage,
   getDepartmentsWithoutBasPage,
@@ -58,7 +65,16 @@ async function renderFinancialAllocationContent({ searchParams, action }: Alloca
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasFinanceRole(session.roles))
+  const normalizedAction = action?.trim().toLowerCase() ?? "";
+  const isBasCorrectionAction =
+    normalizedAction === "fix-invalid-journals" || normalizedAction === "allocate-fund-codes";
+  const hasActionAccess = isBasCorrectionAction
+    ? hasBasCorrectionRole(session.roles)
+    : hasFinanceDataMaintenanceRole(session.roles);
+  // FinanceMain.aspx itself required Financial Reports, but the two direct
+  // BAS correction pages applied their own legacy role tests. Preserve those
+  // direct routes without opening the entire Finance menu.
+  if ((!normalizedAction && !hasFinanceRole(session.roles)) || !hasActionAccess)
     return (
       <FinanceFrame
         title="Financial Allocation Codes"
@@ -68,7 +84,25 @@ async function renderFinancialAllocationContent({ searchParams, action }: Alloca
       </FinanceFrame>
     );
   const query = searchParams ? await searchParams : {};
-  const normalizedAction = action?.trim().toLowerCase() ?? "";
+  const profileDepartmentCode = positiveInteger(session.departmentCode ?? "");
+  const canSelectAllDepartments = canMaintainAllFinanceData(
+    session.roles,
+    session.canMaintainFinanceDataAllDepartments,
+  );
+  const canSelectBasCorrections = canSelectBasCorrectionDepartments(
+    session.roles,
+    session.siteCode,
+    session.legacyUsername,
+  );
+  if (!profileDepartmentCode)
+    return (
+      <FinanceFrame
+        title="Financial Allocation Codes"
+        description="Financial allocation maintenance."
+      >
+        <FinanceUnavailable message="Your Finance profile has no department scope. Sign out and sign in again, or ask an administrator to correct your profile." />
+      </FinanceFrame>
+    );
   const validActions = [
     "import-bas",
     "activate-bas",
@@ -115,6 +149,9 @@ async function renderFinancialAllocationContent({ searchParams, action }: Alloca
         </div>
       </FinanceFrame>
     );
+  const canSelectActionDepartment = isBasCorrectionAction
+    ? canSelectBasCorrections
+    : canSelectAllDepartments;
 
   let departments: FinanceOption[] = [];
   let segmentTypes: FinanceOption[] = [];
@@ -123,16 +160,26 @@ async function renderFinancialAllocationContent({ searchParams, action }: Alloca
       getDepartments(),
       getFinanceSegmentTypes(),
     ]);
-    departments = departmentOptions(departmentRecords);
+    departments = departmentOptions(departmentRecords).filter(
+      (department) =>
+        canSelectActionDepartment || department.value === String(profileDepartmentCode),
+    );
     segmentTypes = loadedSegmentTypes;
   } catch (error) {
     if (!(error instanceof FinanceApiError) && !(error instanceof DepartmentApiError)) throw error;
   }
   const submitted = queryValue(query, "view") === "search";
-  const departmentCode = positiveInteger(queryValue(query, "departmentCode"));
+  const requestedDepartmentCode = positiveInteger(queryValue(query, "departmentCode"));
+  const departmentCode = canSelectActionDepartment
+    ? (requestedDepartmentCode ?? profileDepartmentCode)
+    : profileDepartmentCode;
+  const scopedQuery = departmentCode ? { ...query, departmentCode: String(departmentCode) } : query;
   const segmentType = queryValue(query, "segmentType");
   const page = positiveInteger(queryValue(query, "page")) ?? 1;
   let segments: BasSegment[] = [];
+  let responsibilitySegments: BasSegment[] = [];
+  let objectiveSegments: BasSegment[] = [];
+  let fundSegments: BasSegment[] = [];
   let rows: FinanceRow[] = [];
   let resultPage = page;
   let totalPages = 1;
@@ -146,16 +193,30 @@ async function renderFinancialAllocationContent({ searchParams, action }: Alloca
         totalPages = result.totalPages;
       }
       if (normalizedAction === "invalid-journals" || normalizedAction === "fix-invalid-journals") {
-        const result = await getInvalidBasJournalsPage(departmentCode, page);
+        const [result, responsibility, objective] = await Promise.all([
+          getInvalidBasJournalsPage(departmentCode, page),
+          normalizedAction === "fix-invalid-journals"
+            ? getBasCorrectionSegments(departmentCode, "3")
+            : Promise.resolve([]),
+          normalizedAction === "fix-invalid-journals"
+            ? getBasCorrectionSegments(departmentCode, "2")
+            : Promise.resolve([]),
+        ]);
         rows = result.items;
         resultPage = result.page;
         totalPages = result.totalPages;
+        responsibilitySegments = responsibility;
+        objectiveSegments = objective;
       }
       if (normalizedAction === "allocate-fund-codes") {
-        const result = await getUninvoicedBasJournalsPage(departmentCode, page);
+        const [result, fund] = await Promise.all([
+          getUninvoicedBasJournalsPage(departmentCode, page),
+          getBasCorrectionSegments(departmentCode, "1"),
+        ]);
         rows = result.items;
         resultPage = result.page;
         totalPages = result.totalPages;
+        fundSegments = fund;
       }
       if (normalizedAction === "departments-no-bas") {
         const result = await getDepartmentsWithoutBasPage(page);
@@ -179,10 +240,13 @@ async function renderFinancialAllocationContent({ searchParams, action }: Alloca
   return (
     <FinancialAllocationView
       action={normalizedAction}
-      query={query}
+      query={scopedQuery}
       departments={departments}
       segmentTypes={segmentTypes}
       segments={segments}
+      responsibilitySegments={responsibilitySegments}
+      objectiveSegments={objectiveSegments}
+      fundSegments={fundSegments}
       rows={rows}
       resultPage={resultPage}
       totalPages={totalPages}

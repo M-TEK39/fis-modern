@@ -7,9 +7,17 @@ export function printReportFrom(trigger: HTMLElement) {
     return;
   }
 
+  const pageOrientation = printArea.classList.contains("report-print-area--portrait")
+    ? "portrait"
+    : "landscape";
+  const pageRule = document.createElement("style");
+  pageRule.textContent = `@page { size: A4 ${pageOrientation}; margin: 8mm; }`;
+  document.head.append(pageRule);
+
   const clearPrintTarget = () => {
     printArea.classList.remove("report-printing");
     document.body.classList.remove("report-printing-document");
+    pageRule.remove();
   };
 
   printArea.classList.add("report-printing");

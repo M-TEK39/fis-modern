@@ -12,7 +12,10 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import {
+  canSelectAllFinanceDepartments,
+  hasFinanceRole,
+} from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions, siteOptions } from "@/app/(fleet-operations)/finance/_location-options";
 import { DepartmentApiError, getDepartments } from "@/lib/api/reference-data/api-departments";
 import {
@@ -29,7 +32,7 @@ import {
   getDedicatedFinanceReport,
   getDedicatedFinanceReportData,
   getReversalTree,
-  getUniversalFinanceReport,
+  getFinanceMenuReport,
   FINANCE_REPORT_ACTIONS,
   type FinanceReport,
 } from "@/lib/api/finance/api-finance-reports";
@@ -52,6 +55,10 @@ function queryValue(query: Query, name: string) {
 function positiveInteger(value: string) {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function batchDateValue(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
 }
 
 function titleFor(action: string) {
@@ -102,10 +109,14 @@ function formValue(query: Query, name: string) {
   return queryValue(query, name);
 }
 
-function optionList(options: FinanceOption[], emptyLabel: string) {
+function optionList(options: FinanceOption[], emptyLabel: string, selectedValue = "") {
+  const includesSelectedValue = options.some((item) => item.value === selectedValue);
   return (
     <>
       <option value="">{emptyLabel}</option>
+      {selectedValue && !includesSelectedValue ? (
+        <option value={selectedValue}>{selectedValue}</option>
+      ) : null}
       {options.map((item) => (
         <option key={item.value} value={item.value}>
           {item.label}
@@ -133,6 +144,9 @@ function renderReportForm({
   provinces,
   years,
   postingMonths,
+  canSelectAllDepartments,
+  profileDepartmentCode,
+  profileSiteCode,
 }: Readonly<{
   action: string;
   query: Query;
@@ -141,6 +155,9 @@ function renderReportForm({
   provinces: FinanceOption[];
   years: FinanceOption[];
   postingMonths: FinanceOption[];
+  canSelectAllDepartments: boolean;
+  profileDepartmentCode?: string;
+  profileSiteCode?: string;
 }>) {
   const mode = action === "site" || action === "province" ? action : "department";
   const dateRange =
@@ -152,7 +169,9 @@ function renderReportForm({
     action === "income-split-summary" ||
     action === "income-split-detailed";
   const journal = action === "reversals-tree";
-  const dedicated = action === "department" || action === "site";
+  const dedicated = action === "department" || action === "site" || action === "province";
+  const departmentDefault = formValue(query, "departmentCode") || profileDepartmentCode || "";
+  const siteDefault = formValue(query, "siteCode") || profileSiteCode || "";
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
       <input name="run" type="hidden" value="1" />
@@ -169,7 +188,7 @@ function renderReportForm({
               defaultValue={formValue(query, "financialYear")}
               required
             >
-              {optionList(years, "Select Financial Year")}
+              {optionList(years, "Select Financial Year", formValue(query, "financialYear"))}
             </select>
           </div>
         ) : null}
@@ -220,15 +239,14 @@ function renderReportForm({
         ) : null}
         {action === "vehicle-billing-history" ? (
           <div className="form-field">
-            <label className="form-label" htmlFor="finance-report-vmf">
-              Vehicle VMF Code
+            <label className="form-label" htmlFor="finance-report-registration">
+              Vehicle Registration Number
             </label>
             <input
               className="form-input"
-              id="finance-report-vmf"
-              name="vmfCode"
-              defaultValue={formValue(query, "vmfCode")}
-              inputMode="numeric"
+              id="finance-report-registration"
+              name="registrationNumber"
+              defaultValue={formValue(query, "registrationNumber")}
               required
             />
           </div>
@@ -242,8 +260,8 @@ function renderReportForm({
               className="form-select"
               id="finance-report-department"
               name="departmentCode"
-              defaultValue={formValue(query, "departmentCode")}
-              required={mode !== "province"}
+              defaultValue={departmentDefault}
+              required
             >
               {optionList(departments, "Select Department")}
             </select>
@@ -258,7 +276,7 @@ function renderReportForm({
               className="form-select"
               id="finance-report-site"
               name="siteCode"
-              defaultValue={formValue(query, "siteCode")}
+              defaultValue={siteDefault}
               required
             >
               {optionList(sites, "Select Site")}
@@ -284,7 +302,7 @@ function renderReportForm({
         {dedicated ? (
           <div className="form-field">
             <label className="form-label" htmlFor="finance-report-posting-month">
-              Posting Month
+              Posting Date
             </label>
             <select
               className="form-select"
@@ -293,7 +311,7 @@ function renderReportForm({
               defaultValue={formValue(query, "batchDate") || postingMonths[0]?.value || ""}
               required
             >
-              {optionList(postingMonths, "Select Posting Month")}
+              {optionList(postingMonths, "Select Posting Date")}
             </select>
           </div>
         ) : null}
@@ -346,7 +364,7 @@ function outputHref(
   action: string,
   query: Query,
   id: number,
-  postingMonthCode: number,
+  batchDate: string,
   filterBy: "Department" | "Site",
 ) {
   const params = new URLSearchParams({
@@ -354,21 +372,16 @@ function outputHref(
     reportAction,
     action,
     id: String(id),
-    postingMonthCode: String(postingMonthCode),
+    batchDate,
     filterBy,
     format: formatFor(reportAction),
   });
   return `/finance/reports/output?${params.toString()}`;
 }
 
-function universalOutputHref(action: string, reportAction: string, query: Query) {
+function financeMenuOutputHref(action: string, reportAction: string, query: Query) {
   const params = new URLSearchParams({
-    kind:
-      action === "reversals-tree"
-        ? "reversal"
-        : action === "vehicle-billing-history"
-          ? "billing"
-          : "universal",
+    kind: "finance-menu",
     reportAction,
     action,
     format: reportAction.endsWith("excel")
@@ -383,7 +396,7 @@ function universalOutputHref(action: string, reportAction: string, query: Query)
     "province",
     "financialYear",
     "batchDate",
-    "vmfCode",
+    "registrationNumber",
     "startDate",
     "endDate",
     "journalNumber",
@@ -394,10 +407,34 @@ function universalOutputHref(action: string, reportAction: string, query: Query)
   return `/finance/reports/output?${params.toString()}`;
 }
 
-function ReportTable({ report, page }: Readonly<{ report: FinanceReport; page: number }>) {
+function printOrientationFor(action: string, reportAction: string) {
+  if (action === "reversals-tree") return "landscape" as const;
+  if (
+    ["detailed-fuel", "detailed-toll-oil", "detailed-surcharge"].some((prefix) =>
+      reportAction.startsWith(prefix),
+    )
+  )
+    return "landscape" as const;
+  return "portrait" as const;
+}
+
+function ReportTable({
+  report,
+  page,
+  printOrientation,
+}: Readonly<{
+  report: FinanceReport;
+  page: number;
+  printOrientation: "portrait" | "landscape";
+}>) {
   const pageSize = 12;
   const rows = report.rows.slice((page - 1) * pageSize, page * pageSize);
   const columns = report.rows.length > 0 ? Object.keys(report.rows[0]) : [];
+  const columnsPerPrintPage = printOrientation === "landscape" ? 8 : 6;
+  const printColumnGroups = Array.from(
+    { length: Math.ceil(columns.length / columnsPerPrintPage) },
+    (_, index) => columns.slice(index * columnsPerPrintPage, (index + 1) * columnsPerPrintPage),
+  );
   if (report.rows.length === 0)
     return (
       <div className="vehicle-empty-state">
@@ -409,6 +446,9 @@ function ReportTable({ report, page }: Readonly<{ report: FinanceReport; page: n
       headingId="finance-report-results"
       eyebrow={`${report.rows.length} record(s)`}
       heading={report.title}
+      letterheadTitle={report.title}
+      widePrintLayout
+      printOrientation={printOrientation}
     >
       <FinanceReportRowsTable
         columns={columns}
@@ -419,8 +459,40 @@ function ReportTable({ report, page }: Readonly<{ report: FinanceReport; page: n
           `${report.title}-${columns.map((column) => String(row[column] ?? "")).join("|")}`
         }
       />
+      <div className="report-print-table-groups">
+        {printColumnGroups.map((group, groupIndex) => (
+          <section className="report-print-table-group" key={`print-${groupIndex}`}>
+            {printColumnGroups.length > 1 ? (
+              <h2>
+                {report.title} — fields {groupIndex * columnsPerPrintPage + 1}–
+                {groupIndex * columnsPerPrintPage + group.length} of {columns.length}
+              </h2>
+            ) : null}
+            <table className="report-print-table">
+              <thead>
+                <tr>
+                  {group.map((column) => (
+                    <th key={column} scope="col">
+                      {column.replaceAll("_", " ")}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {report.rows.map((row, rowIndex) => (
+                  <tr key={`${groupIndex}-${rowIndex}`}>
+                    {group.map((column) => (
+                      <td key={column}>{rowValue(row, column)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ))}
+      </div>
       {report.rows.length > pageSize ? (
-        <p className="muted-copy">
+        <p className="muted-copy report-print-hide">
           Showing page {page} of {Math.ceil(report.rows.length / pageSize)}.
         </p>
       ) : null}
@@ -458,21 +530,66 @@ async function renderFinanceReportsContent({
   let years: FinanceOption[] = [];
   let postingMonths: FinanceOption[] = [];
   let lookupError: string | null = null;
+  const canSelectAllDepartments = canSelectAllFinanceDepartments(
+    session.roles,
+    session.canAccessAllFinanceDepartments,
+    session.accessLevel,
+  );
+  const profileDepartmentCode = positiveInteger(session.departmentCode ?? "");
+  const profileSiteCode = positiveInteger(session.siteCode ?? "");
+  if (!canSelectAllDepartments && (!profileDepartmentCode || !profileSiteCode)) {
+    lookupError =
+      "Your Finance profile scope has changed. Sign out and sign back in before running a Finance report.";
+  }
   try {
+    if (lookupError) throw new FinanceApiError("invalid-response", lookupError);
     const [departmentRecords, siteRecords, loadedProvinces, loadedYears] = await Promise.all([
       getDepartments(),
       getSites(),
       getFinanceProvinces(),
       getFinanceYears(),
     ]);
-    departments = departmentOptions(departmentRecords);
-    sites = siteOptions(siteRecords);
-    provinces = loadedProvinces;
+    const scopedDepartmentRecords =
+      !canSelectAllDepartments && profileDepartmentCode
+        ? departmentRecords.filter(
+            (department) => department.departmentCode === profileDepartmentCode,
+          )
+        : departmentRecords;
+    const selectedDepartmentCode =
+      positiveInteger(queryValue(query, "departmentCode")) ??
+      (!canSelectAllDepartments ? profileDepartmentCode : undefined);
+    const scopedSiteRecords = siteRecords.filter(
+      (site) => !selectedDepartmentCode || site.departmentCode === selectedDepartmentCode,
+    );
+    const scopedProvinceCodes = new Set(
+      scopedSiteRecords
+        .map((site) => site.provinceCode)
+        .filter((provinceCode): provinceCode is string => Boolean(provinceCode)),
+    );
+    departments = departmentOptions(scopedDepartmentRecords);
+    sites = siteOptions(scopedSiteRecords);
+    provinces = canSelectAllDepartments
+      ? loadedProvinces
+      : loadedProvinces.filter((province) => scopedProvinceCodes.has(province.value));
     years = loadedYears;
-    if (normalizedAction === "department" || normalizedAction === "site")
+    if (
+      normalizedAction === "department" ||
+      normalizedAction === "site" ||
+      normalizedAction === "province"
+    ) {
+      const selectedLocationCode =
+        normalizedAction === "site"
+          ? (positiveInteger(queryValue(query, "siteCode")) ?? profileSiteCode)
+          : (positiveInteger(queryValue(query, "departmentCode")) ?? profileDepartmentCode);
       postingMonths = await getFinancePostingMonths(
-        normalizedAction === "site" ? "Site" : "Department",
+        normalizedAction === "site"
+          ? "Site"
+          : normalizedAction === "province"
+            ? "Province"
+            : "Department",
+        selectedLocationCode,
       );
+    }
   } catch (error) {
     if (
       error instanceof FinanceApiError ||
@@ -498,18 +615,18 @@ async function renderFinanceReportsContent({
             ? queryValue(query, "siteCode")
             : queryValue(query, "departmentCode"),
         );
-        const postingMonthCode = positiveInteger(queryValue(query, "batchDate"));
+        const batchDate = batchDateValue(queryValue(query, "batchDate"));
         if (dedicated && (normalizedAction === "department" || normalizedAction === "site")) {
           if (!id)
             error =
               normalizedAction === "site"
                 ? "Select a site before running the report."
                 : "Select a department before running the report.";
-          else if (!postingMonthCode) error = "Select a posting month before running the report.";
+          else if (!batchDate) error = "Select a posting date before running the report.";
           else if (dedicated.defaultFormat === "json")
             report = await getDedicatedFinanceReportData(reportAction, {
               id,
-              postingMonthCode,
+              batchDate,
               filterBy: normalizedAction === "site" ? "Site" : "Department",
             });
           else
@@ -519,18 +636,38 @@ async function renderFinanceReportsContent({
                 normalizedAction,
                 query,
                 id,
-                postingMonthCode,
+                batchDate,
                 normalizedAction === "site" ? "Site" : "Department",
               ),
               label:
                 formatFor(reportAction) === "csv" ? "Download report" : "Open printable report",
             };
+        } else if (normalizedAction === "province") {
+          const provinceCode = positiveInteger(queryValue(query, "province"));
+          const batchDate = batchDateValue(queryValue(query, "batchDate"));
+          if (!provinceCode) error = "Select a province before running the report.";
+          else if (!batchDate) error = "Select a posting date before running the report.";
+          else {
+            report = await getFinanceMenuReport({
+              mode: normalizedAction,
+              action: reportAction,
+              departmentCode: queryValue(query, "departmentCode"),
+              province: String(provinceCode),
+              batchDate,
+            });
+            if (reportAction.endsWith("-pdf") || reportAction.endsWith("-excel"))
+              output = {
+                href: financeMenuOutputHref(normalizedAction, reportAction, query),
+                label: reportAction.endsWith("excel") ? "Download report" : "Open printable report",
+              };
+          }
         } else if (normalizedAction === "vehicle-billing-history") {
-          const vmfCode = positiveInteger(queryValue(query, "vmfCode"));
+          const registrationNumber = queryValue(query, "registrationNumber").trim();
           const financialYear = positiveInteger(queryValue(query, "financialYear"));
-          if (!vmfCode || !financialYear)
-            error = "Select a vehicle VMF code and financial year before running the report.";
-          else report = await getBillingHistory(vmfCode, financialYear);
+          if (!registrationNumber || !financialYear)
+            error =
+              "Enter a vehicle registration number and select a financial year before running the report.";
+          else report = await getBillingHistory(registrationNumber, financialYear);
         } else if (normalizedAction === "reversals-tree") {
           const journalNumber = queryValue(query, "journalNumber");
           if (!journalNumber) error = "Enter a reversal journal number before running the report.";
@@ -543,10 +680,12 @@ async function renderFinanceReportsContent({
           normalizedAction === "site" ||
           normalizedAction === "province"
         ) {
-          report = await getUniversalFinanceReport({
+          report = await getFinanceMenuReport({
             mode: normalizedAction,
             action: reportAction,
-            departmentCode: queryValue(query, "departmentCode"),
+            departmentCode:
+              queryValue(query, "departmentCode") ||
+              (profileDepartmentCode ? String(profileDepartmentCode) : ""),
             siteCode: queryValue(query, "siteCode"),
             province: queryValue(query, "province"),
             financialYear: queryValue(query, "financialYear"),
@@ -557,11 +696,11 @@ async function renderFinanceReportsContent({
           });
           if (reportAction.endsWith("-pdf") || reportAction.endsWith("-excel"))
             output = {
-              href: universalOutputHref(normalizedAction, reportAction, query),
+              href: financeMenuOutputHref(normalizedAction, reportAction, query),
               label: reportAction.endsWith("excel") ? "Download report" : "Open printable report",
             };
         } else {
-          report = await getUniversalFinanceReport({
+          report = await getFinanceMenuReport({
             mode: normalizedAction,
             action: reportAction,
             financialYear: queryValue(query, "financialYear"),
@@ -594,6 +733,9 @@ async function renderFinanceReportsContent({
         provinces={provinces}
         years={years}
         postingMonths={postingMonths}
+        canSelectAllDepartments={canSelectAllDepartments}
+        profileDepartmentCode={profileDepartmentCode ? String(profileDepartmentCode) : undefined}
+        profileSiteCode={profileSiteCode ? String(profileSiteCode) : undefined}
       />
       {output ? (
         <section
@@ -607,7 +749,13 @@ async function renderFinanceReportsContent({
           </a>
         </section>
       ) : null}
-      {report ? <ReportTable report={report} page={page} /> : null}
+      {report ? (
+        <ReportTable
+          report={report}
+          page={page}
+          printOrientation={printOrientationFor(normalizedAction, reportAction)}
+        />
+      ) : null}
     </FinanceFrame>
   );
 }

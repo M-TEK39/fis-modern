@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import { hasAdvancedBatchOperationsRole } from "@/app/(fleet-operations)/finance/_utils";
 import { FinanceApiError, runFinanceAction } from "@/lib/api/finance/api-finance";
 import { getSession } from "@/lib/auth/session";
 
@@ -67,7 +67,7 @@ export async function runBatchAction(formData: FormData) {
         "The sign-in service is temporarily unavailable. Please try again.",
       ),
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasAdvancedBatchOperationsRole(session.roles))
     redirect(
       resultPath(
         "batch-management",
