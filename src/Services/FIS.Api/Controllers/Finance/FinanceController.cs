@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO.Compression;
 using System.Security.Claims;
@@ -64,6 +66,35 @@ public class FinanceController : BaseApiController
     {
         try
         {
+            var parameterProcedureAvailability = await GetLegacyProcedureAvailabilityAsync(
+                ParameterValueRead
+            );
+            if (parameterProcedureAvailability == LegacyProcedureAvailability.Compatible)
+            {
+                var value = await ReadLegacyParameterAsync("BatchIsRunning");
+                var isRunning = IsLegacyTrue(value);
+                return Ok(
+                    new BatchStatusDto
+                    {
+                        BatchCode = 0,
+                        Status = isRunning ? "Running" : "Not running",
+                        IsActive = isRunning,
+                    }
+                );
+            }
+
+            if (parameterProcedureAvailability == LegacyProcedureAvailability.Incompatible)
+            {
+                return Conflict(
+                    new
+                    {
+                        error = "The deployed DEV_SEL_ParameterValue procedure does not match the archived parameter contract. No batch-status fallback was used.",
+                    }
+                );
+            }
+
+            // A read-only compatibility fallback is retained only while the legacy
+            // parameter procedure is absent. It does not authorize write shortcuts.
             var batch = await _context
                 .Batches.Where(b => !b.is_deleted)
                 .OrderByDescending(b => b.batch_date)
@@ -103,6 +134,10 @@ public class FinanceController : BaseApiController
                 }
             );
         }
+        catch (LegacyBatchCompatibilityException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting batch status");
@@ -122,92 +157,58 @@ public class FinanceController : BaseApiController
         {
             requestedDate = DateTime.Today;
         }
-        var financialSystemCode =
-            request?.FinancialSystemCode > 0 ? request.FinancialSystemCode : (byte)1;
-        var batchMode = request?.BatchMode ?? ExportBatchMode.BatchAppendOrCreate;
-
         if (requestedDate == DateTime.MaxValue)
         {
             return BadRequest(new { error = "Invalid batch date." });
         }
 
-        if (batchMode == ExportBatchMode.BatchMustExist)
-        {
-            return BadRequest(
-                new { error = "The flag BatchMode.BatchMustExist is invalid for batch creation." }
-            );
-        }
-
         try
         {
-            var existing = await _context
-                .Batches.Where(b =>
-                    !b.is_deleted
-                    && b.batch_date.Date == requestedDate
-                    && b.financial_system_code == financialSystemCode
-                )
-                .OrderByDescending(b => b.batch_code)
-                .FirstOrDefaultAsync();
-
-            if (existing is not null)
-            {
-                if (batchMode == ExportBatchMode.BatchMustCreateNew)
-                {
-                    return Conflict(
-                        new
-                        {
-                            error = "Batch already exists for selected date and financial system, but mode requires a new batch.",
-                        }
-                    );
-                }
-
-                await PrepareBatchJournalsAndMappingsAsync(
-                    existing.batch_code,
-                    existing.batch_date.Date,
-                    existing.financial_system_code
-                );
-                return Ok(
-                    new BatchStartResultDto
-                    {
-                        BatchCode = existing.batch_code,
-                        BatchDate = existing.batch_date,
-                        Success = true,
-                        Message =
-                            "Batch already exists for the selected date and financial system.",
-                    }
-                );
-            }
-
-            var newBatchCode = await CreateBatchViaLegacyProcAsync(
-                requestedDate,
-                financialSystemCode
+            var unavailable = await GetUnavailableLegacyProceduresAsync(
+                ParameterValueRead,
+                ParameterValueWrite,
+                TriggerBatchJob
             );
-            var newBatch = await _context
-                .Batches.AsNoTracking()
-                .FirstOrDefaultAsync(b => !b.is_deleted && b.batch_code == newBatchCode);
+            if (unavailable.Count > 0)
+                return LegacyBatchProcedureUnavailable(unavailable);
 
-            if (newBatch is null)
+            var batchJob = await ReadLegacyParameterAsync("BatchJob");
+            if (string.IsNullOrWhiteSpace(batchJob))
             {
-                throw new InvalidOperationException(
-                    $"Batch {newBatchCode} was created but could not be loaded."
+                return Conflict(
+                    new { error = "The legacy BatchJob parameter is unavailable; batch processing was not started." }
                 );
             }
+            var legacyUsername = GetRequiredLegacyUsername();
 
-            await PrepareBatchJournalsAndMappingsAsync(
-                newBatch.batch_code,
-                newBatch.batch_date.Date,
-                newBatch.financial_system_code
+            // This mirrors StartandEndBatch.aspx: mark the batch as running, then
+            // enqueue the legacy job. Do not replace the job chain with modern DML.
+            await WriteLegacyParameterAsync("BatchIsRunning", "true");
+            await ExecuteLegacyProcedureAsync(
+                TriggerBatchJob,
+                new LegacyProcedureParameter("@BatchDate", DbType.DateTime, requestedDate),
+                new LegacyProcedureParameter(
+                    "@TriggerUser",
+                    DbType.String,
+                    legacyUsername
+                ),
+                new LegacyProcedureParameter("@JobName", DbType.String, batchJob),
+                new LegacyProcedureParameter("@StepId", DbType.Int32, 1)
             );
 
             return Ok(
                 new BatchStartResultDto
                 {
-                    BatchCode = newBatch.batch_code,
-                    BatchDate = newBatch.batch_date,
+                    BatchCode = 0,
+                    BatchDate = requestedDate,
                     Success = true,
-                    Message = "Batch created.",
+                    Message = "Legacy batch job was triggered and the site is marked as batch-running.",
                 }
             );
+        }
+        catch (LegacyBatchCompatibilityException ex)
+        {
+            return Conflict(new { error = ex.Message });
         }
         catch (Exception ex)
         {
@@ -223,68 +224,24 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var latestBatch = await _context
-                .Batches.Where(b => !b.is_deleted)
-                .OrderByDescending(b => b.batch_date)
-                .ThenByDescending(b => b.batch_code)
-                .FirstOrDefaultAsync();
+            var unavailable = await GetUnavailableLegacyProceduresAsync(
+                CheckScoaProcedure
+            );
+            if (unavailable.Count > 0)
+                return LegacyBatchProcedureUnavailable(unavailable);
 
-            if (latestBatch is null)
-            {
-                return Ok(
-                    new ScoaCheckResultDto
-                    {
-                        IsCompliant = false,
-                        Errors = new List<string> { "No batch exists to validate." },
-                        TotalChecked = 0,
-                    }
-                );
-            }
-
-            var batchDate = latestBatch.batch_date.Date;
-            var journalDetailCodes = (await _journalService.GetAllJournalDetailsAsync())
-                .Where(jd => !jd.is_deleted && jd.journal_detail_date.Date == batchDate)
-                .Select(jd => jd.journal_detail_code)
-                .Distinct()
-                .ToList();
-
-            if (journalDetailCodes.Count == 0)
-            {
-                return Ok(
-                    new ScoaCheckResultDto
-                    {
-                        IsCompliant = false,
-                        Warnings = new List<string> { "Batch has no journal details to validate." },
-                        TotalChecked = 0,
-                    }
-                );
-            }
-
-            var mappedCodes = await _context
-                .SegmentJournalDetailMaps.AsNoTracking()
-                .Where(m => !m.is_deleted && journalDetailCodes.Contains(m.journal_detail_code))
-                .Select(m => m.journal_detail_code)
-                .Distinct()
-                .ToListAsync();
-
-            var missingCount = journalDetailCodes.Count - mappedCodes.Count;
-            var errors = new List<string>();
-            var warnings = new List<string>();
-
-            if (missingCount > 0)
-            {
-                errors.Add($"{missingCount} journal detail record(s) have no segment mapping.");
-            }
+            await ExecuteLegacyProcedureAsync(CheckScoaProcedure);
 
             return Ok(
                 new ScoaCheckResultDto
                 {
-                    IsCompliant = errors.Count == 0,
-                    Errors = errors,
-                    Warnings = warnings,
-                    TotalChecked = journalDetailCodes.Count,
+                    Message = "The legacy SCOA verification procedure completed. Review its recorded diagnostics before finishing the batch.",
                 }
             );
+        }
+        catch (LegacyBatchCompatibilityException ex)
+        {
+            return Conflict(new { error = ex.Message });
         }
         catch (Exception ex)
         {
@@ -300,58 +257,43 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var latestBatch = await _context
-                .Batches.Where(b => !b.is_deleted)
-                .OrderByDescending(b => b.batch_date)
-                .ThenByDescending(b => b.batch_code)
-                .FirstOrDefaultAsync();
+            var unavailable = await GetUnavailableLegacyProceduresAsync(
+                ParameterValueRead,
+                TriggerRollbackJob
+            );
+            if (unavailable.Count > 0)
+                return LegacyBatchProcedureUnavailable(unavailable);
 
-            if (latestBatch is null)
+            var rollbackLocation = await ReadLegacyParameterAsync("BatchBackLocation");
+            var rollbackJob = await ReadLegacyParameterAsync("RollbackJob");
+            if (string.IsNullOrWhiteSpace(rollbackLocation) || string.IsNullOrWhiteSpace(rollbackJob))
             {
-                return Ok(new { message = "No batch found to roll back.", updated = 0 });
+                return Conflict(
+                    new
+                    {
+                        error = "The legacy BatchBackLocation or RollbackJob parameter is unavailable; batch rollback was not started.",
+                    }
+                );
             }
 
-            var batchDate = latestBatch.batch_date.Date;
-            var journalDetails = (await _journalService.GetAllJournalDetailsAsync())
-                .Where(jd => !jd.is_deleted && jd.journal_detail_date.Date == batchDate)
-                .ToList();
-
-            foreach (var jd in journalDetails)
-            {
-                jd.journal_detail_date_posted = null;
-                jd.journal_code = null;
-                jd.journal_detail_date_updated = DateTime.UtcNow;
-                jd.modified_by_user_code = GetCurrentUserId();
-                jd.date_updated = DateTime.UtcNow;
-            }
-
-            var linkedJournals = await _context
-                .JournalHeaders.Where(j => !j.is_deleted && j.batch_code == latestBatch.batch_code)
-                .ToListAsync();
-
-            foreach (var journal in linkedJournals)
-            {
-                journal.is_deleted = true;
-                journal.date_updated = DateTime.UtcNow;
-                journal.modified_by_user_code = GetCurrentUserId();
-            }
-
-            latestBatch.is_deleted = true;
-            latestBatch.date_updated = DateTime.UtcNow;
-            latestBatch.modified_by_user_code = GetCurrentUserId();
-
-            foreach (var journalDetail in journalDetails)
-                await _journalService.UpdateJournalDetailAsync(journalDetail);
-            await _context.SaveChangesAsync();
+            await ExecuteLegacyProcedureAsync(
+                TriggerRollbackJob,
+                new LegacyProcedureParameter("@Location", DbType.String, rollbackLocation),
+                new LegacyProcedureParameter("@User", DbType.String, GetRequiredLegacyUsername()),
+                new LegacyProcedureParameter("@JobName", DbType.String, rollbackJob),
+                new LegacyProcedureParameter("@StepId", DbType.Int32, 1)
+            );
 
             return Ok(
                 new
                 {
-                    message = "Batch rolled back",
-                    updated = journalDetails.Count,
-                    batchCode = latestBatch.batch_code,
+                    message = "Legacy batch rollback job was triggered.",
                 }
             );
+        }
+        catch (LegacyBatchCompatibilityException ex)
+        {
+            return Conflict(new { error = ex.Message });
         }
         catch (Exception ex)
         {
@@ -367,52 +309,26 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var latestBatch = await _context
-                .Batches.Where(b => !b.is_deleted)
-                .OrderByDescending(b => b.batch_date)
-                .ThenByDescending(b => b.batch_code)
-                .FirstOrDefaultAsync();
+            var unavailable = await GetUnavailableLegacyProceduresAsync(
+                ParameterValueWrite
+            );
+            if (unavailable.Count > 0)
+                return LegacyBatchProcedureUnavailable(unavailable);
 
-            if (latestBatch is null)
-            {
-                return Ok(new { message = "No batch found to finalize.", posted = 0 });
-            }
-
-            var batchDate = latestBatch.batch_date.Date;
-            var now = DateTime.UtcNow;
-            var userCode = GetCurrentUserId();
-
-            var unpostedRows = (await _journalService.GetAllJournalDetailsAsync())
-                .Where(jd =>
-                    !jd.is_deleted
-                    && jd.journal_detail_date.Date == batchDate
-                    && !jd.journal_detail_date_posted.HasValue
-                )
-                .ToList();
-
-            foreach (var row in unpostedRows)
-            {
-                row.journal_detail_date_posted = now;
-                row.journal_detail_date_updated = now;
-                row.modified_by_user_code = userCode;
-                row.date_updated = now;
-            }
-
-            latestBatch.date_updated = now;
-            latestBatch.modified_by_user_code = userCode;
-
-            foreach (var journalDetail in unpostedRows)
-                await _journalService.UpdateJournalDetailAsync(journalDetail);
-            await _context.SaveChangesAsync();
+            // StartandEndBatch.aspx only clears BatchIsRunning here. Posting and
+            // journal mutation belong to the legacy batch job, not this finish action.
+            await WriteLegacyParameterAsync("BatchIsRunning", "false");
 
             return Ok(
                 new
                 {
-                    message = "Batch finalized",
-                    posted = unpostedRows.Count,
-                    batchCode = latestBatch.batch_code,
+                    message = "Legacy batch-running flag cleared; the Finance site can be brought online.",
                 }
             );
+        }
+        catch (LegacyBatchCompatibilityException ex)
+        {
+            return Conflict(new { error = ex.Message });
         }
         catch (Exception ex)
         {
@@ -2842,7 +2758,7 @@ public class FinanceController : BaseApiController
 
             if (param != null)
             {
-                isApproved = !string.IsNullOrEmpty(param.Approval_user_access_name);
+                isApproved = param.Approved;
                 approvedBy = param.Approval_user_access_name;
                 effectiveDate = param.EffectiveDate;
 
@@ -3016,15 +2932,48 @@ public class FinanceController : BaseApiController
             return NotFound(new { error = $"No tariff parameters found for year {year}" });
         }
 
-        tariff.Approved = true;
-        tariff.ApprovalDate = DateTime.UtcNow;
-        tariff.Approval_user_access_code = (short?)currentUserId;
-        tariff.Approval_user_access_name = $"user:{currentUserId}";
-        tariff.modified_by_user_code = currentUserId;
-        tariff.date_updated = DateTime.UtcNow;
-        tariff.ModifiedDate = DateTime.UtcNow;
+        var effectiveDate = request?.EffectiveDate?.Date ?? tariff.EffectiveDate?.Date;
+        if (!effectiveDate.HasValue)
+        {
+            return BadRequest(
+                new { error = "An effective date is required before tariff parameters can be approved." }
+            );
+        }
 
-        await _context.SaveChangesAsync();
+        var unavailable = await GetUnavailableLegacyProceduresAsync(UpdateTariffParameterProcedure);
+        if (unavailable.Count > 0)
+            return LegacyBatchProcedureUnavailable(unavailable);
+
+        await ExecuteLegacyProcedureAsync(
+            UpdateTariffParameterProcedure,
+            new LegacyProcedureParameter("@TariffParameterID", DbType.Int32, tariff.TariffParameterID),
+            new LegacyProcedureParameter("@TariffParameterYear", DbType.Int32, tariff.TariffParameterYear),
+            new LegacyProcedureParameter(
+                "@AnnualInterestRatePercentage",
+                DbType.Decimal,
+                tariff.AnnualInterestRatePercentage
+            ),
+            new LegacyProcedureParameter("@AnnualPayments", DbType.Byte, tariff.AnnualPayments),
+            new LegacyProcedureParameter(
+                "@PoolVehicleChargedDaysPerMonth",
+                DbType.Byte,
+                tariff.PoolVehicleChargedDaysPerMonth
+            ),
+            new LegacyProcedureParameter(
+                "@CostCategoryMultiple",
+                DbType.Int32,
+                tariff.CostCategoryMultiple
+            ),
+            new LegacyProcedureParameter(
+                "@AnnualRecoveredKilos",
+                DbType.Int32,
+                tariff.AnnualRecoveredKilos
+            ),
+            new LegacyProcedureParameter("@AverageFuelPrice", DbType.Decimal, tariff.AverageFuelPrice),
+            new LegacyProcedureParameter("@EffectiveDate", DbType.Date, effectiveDate.Value),
+            new LegacyProcedureParameter("@user_access_code", DbType.Int16, currentUserId),
+            new LegacyProcedureParameter("@Approved", DbType.Boolean, true)
+        );
 
         return Ok(
             new { message = $"Tariff parameters for {year} approved", approvedBy = currentUserId }
@@ -3035,39 +2984,15 @@ public class FinanceController : BaseApiController
     [LegacyFinanceTariffAccess]
     [ServiceFilter(typeof(LegacyFinanceTariffParametersAuthorizationFilter))]
     [ServiceFilter(typeof(LegacyFinanceTariffApproverAuthorizationFilter))]
-    public async Task<ActionResult> RejectTariffParameters(
+    public ActionResult RejectTariffParameters(
         int year,
         [FromBody] RejectTariffDto? request = null
     )
     {
-        var currentUserId = GetCurrentUserId();
-
-        var tariff = await _context
-            .TariffParameters.Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
-            .OrderByDescending(tp => tp.TariffParameterID)
-            .FirstOrDefaultAsync();
-
-        if (tariff is null)
-        {
-            return NotFound(new { error = $"No tariff parameters found for year {year}" });
-        }
-
-        tariff.Approved = false;
-        tariff.ApprovalDate = null;
-        tariff.Approval_user_access_code = null;
-        tariff.Approval_user_access_name = null;
-        tariff.modified_by_user_code = currentUserId;
-        tariff.date_updated = DateTime.UtcNow;
-        tariff.ModifiedDate = DateTime.UtcNow;
-
-        await _context.SaveChangesAsync();
-
-        return Ok(
+        return Conflict(
             new
             {
-                message = $"Tariff parameters for {year} rejected",
-                rejectedBy = currentUserId,
-                notes = request?.RejectionNotes,
+                error = "Rejecting an approved tariff year is not an original Fiscal Tariff Parameter Management action and is unavailable until a legacy workflow is evidenced.",
             }
         );
     }
@@ -3554,6 +3479,274 @@ public class FinanceController : BaseApiController
                 await connection.CloseAsync();
             }
         }
+    }
+
+    private static readonly LegacyProcedureContract ParameterValueRead = new(
+        "DEV_SEL_ParameterValue",
+        ["@receivedParameterName"]
+    );
+
+    private static readonly LegacyProcedureContract ParameterValueWrite = new(
+        "DEV_UPD_ParameterValue",
+        ["@parameterName", "@parameterValue"]
+    );
+
+    private static readonly LegacyProcedureContract TriggerBatchJob = new(
+        "ADM_TriggerBatchJob",
+        ["@BatchDate", "@TriggerUser", "@JobName", "@StepId"]
+    );
+
+    private static readonly LegacyProcedureContract TriggerRollbackJob = new(
+        "ADM_TriggerRollbackJob",
+        ["@Location", "@User", "@JobName", "@StepId"]
+    );
+
+    private static readonly LegacyProcedureContract CheckScoaProcedure = new(
+        "ADM_CheckSCOA_Version5",
+        []
+    );
+
+    private static readonly LegacyProcedureContract UpdateTariffParameterProcedure = new(
+        "DEV_UPD_TariffParameter",
+        [
+            "@TariffParameterID",
+            "@TariffParameterYear",
+            "@AnnualInterestRatePercentage",
+            "@AnnualPayments",
+            "@PoolVehicleChargedDaysPerMonth",
+            "@CostCategoryMultiple",
+            "@AnnualRecoveredKilos",
+            "@AverageFuelPrice",
+            "@EffectiveDate",
+            "@user_access_code",
+            "@Approved",
+        ],
+        "fin"
+    );
+
+    private async Task<List<string>> GetUnavailableLegacyProceduresAsync(
+        params LegacyProcedureContract[] procedures
+    )
+    {
+        var unavailable = new List<string>();
+        foreach (var procedure in procedures)
+        {
+            var availability = await GetLegacyProcedureAvailabilityAsync(procedure);
+            if (availability != LegacyProcedureAvailability.Compatible)
+                unavailable.Add(
+                    availability == LegacyProcedureAvailability.Missing
+                        ? $"{procedure.Name} is missing"
+                        : $"{procedure.Name} has an incompatible parameter contract"
+                );
+        }
+
+        return unavailable;
+    }
+
+    private async Task<LegacyProcedureAvailability> GetLegacyProcedureAvailabilityAsync(
+        LegacyProcedureContract expected
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT [parameterObject].[parameter_id], [parameterObject].[name]
+                FROM [sys].[procedures] AS [procedureObject]
+                INNER JOIN [sys].[schemas] AS [schemaObject]
+                    ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
+                LEFT JOIN [sys].[parameters] AS [parameterObject]
+                    ON [parameterObject].[object_id] = [procedureObject].[object_id]
+                WHERE [schemaObject].[name] = @schemaName
+                  AND [procedureObject].[name] = @procedureName
+                ORDER BY [parameterObject].[parameter_id]
+                """;
+            AddDbParameter(command, "@schemaName", DbType.String, expected.SchemaName);
+            AddDbParameter(command, "@procedureName", DbType.String, expected.Name);
+
+            var actual = new List<string>();
+            await using var reader = await command.ExecuteReaderAsync();
+            var found = false;
+            while (await reader.ReadAsync())
+            {
+                found = true;
+                if (!reader.IsDBNull(0))
+                    actual.Add(reader.GetString(1));
+            }
+
+            if (!found)
+                return LegacyProcedureAvailability.Missing;
+
+            return actual.SequenceEqual(expected.ParameterNames, StringComparer.OrdinalIgnoreCase)
+                ? LegacyProcedureAvailability.Compatible
+                : LegacyProcedureAvailability.Incompatible;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task<string?> ReadLegacyParameterAsync(string parameterName)
+    {
+        await EnsureLegacyProcedureCompatibleAsync(ParameterValueRead);
+        var result = await ExecuteLegacyProcedureScalarAsync(
+            ParameterValueRead,
+            new LegacyProcedureParameter("@receivedParameterName", DbType.String, parameterName)
+        );
+        return result is null || result is DBNull
+            ? null
+            : Convert.ToString(result, CultureInfo.InvariantCulture)?.Trim();
+    }
+
+    private async Task WriteLegacyParameterAsync(string parameterName, string parameterValue)
+    {
+        await EnsureLegacyProcedureCompatibleAsync(ParameterValueWrite);
+        await ExecuteLegacyProcedureAsync(
+            ParameterValueWrite,
+            new LegacyProcedureParameter("@parameterName", DbType.String, parameterName),
+            new LegacyProcedureParameter("@parameterValue", DbType.String, parameterValue)
+        );
+    }
+
+    private async Task EnsureLegacyProcedureCompatibleAsync(LegacyProcedureContract expected)
+    {
+        var availability = await GetLegacyProcedureAvailabilityAsync(expected);
+        if (availability == LegacyProcedureAvailability.Compatible)
+            return;
+
+        throw new LegacyBatchCompatibilityException(
+            availability == LegacyProcedureAvailability.Missing
+                ? $"The required legacy procedure {expected.Name} is not deployed. No direct-DML fallback was run."
+                : $"The deployed legacy procedure {expected.Name} does not match the archived parameter contract. No direct-DML fallback was run."
+        );
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review if the query string passed to 'string DbCommand.CommandText' accepts any user input",
+        Justification = "Procedure names come only from fixed archived legacy procedure contracts."
+    )]
+    private async Task ExecuteLegacyProcedureAsync(
+        LegacyProcedureContract procedure,
+        params LegacyProcedureParameter[] parameters
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = $"{procedure.SchemaName}.{procedure.Name}";
+            command.CommandTimeout = 0;
+            AddDbParameters(command, parameters);
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review if the query string passed to 'string DbCommand.CommandText' accepts any user input",
+        Justification = "Procedure names come only from fixed archived legacy procedure contracts."
+    )]
+    private async Task<object?> ExecuteLegacyProcedureScalarAsync(
+        LegacyProcedureContract procedure,
+        params LegacyProcedureParameter[] parameters
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = $"{procedure.SchemaName}.{procedure.Name}";
+            command.CommandTimeout = 0;
+            AddDbParameters(command, parameters);
+            return await command.ExecuteScalarAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private static void AddDbParameters(
+        DbCommand command,
+        IEnumerable<LegacyProcedureParameter> parameters
+    )
+    {
+        foreach (var parameter in parameters)
+            AddDbParameter(command, parameter.Name, parameter.Type, parameter.Value);
+    }
+
+    private static void AddDbParameter(DbCommand command, string name, DbType type, object? value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value ?? DBNull.Value;
+        command.Parameters.Add(parameter);
+    }
+
+    private ActionResult LegacyBatchProcedureUnavailable(IReadOnlyCollection<string> unavailable) =>
+        Conflict(
+            new
+            {
+                error = $"Legacy batch workflow cannot run: {string.Join("; ", unavailable)}. No direct-DML fallback was run.",
+            }
+        );
+
+    private string GetRequiredLegacyUsername()
+    {
+        var username = User.FindFirst("legacy_username")?.Value?.Trim();
+        if (!string.IsNullOrWhiteSpace(username))
+            return username;
+
+        throw new LegacyBatchCompatibilityException(
+            "The authenticated session does not include the legacy username required by the batch procedure."
+        );
+    }
+
+    private static bool IsLegacyTrue(string? value) =>
+        string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase);
+
+    private sealed record LegacyProcedureContract(
+        string Name,
+        string[] ParameterNames,
+        string SchemaName = "dbo"
+    );
+
+    private sealed record LegacyProcedureParameter(string Name, DbType Type, object? Value);
+
+    private sealed class LegacyBatchCompatibilityException(string message) : InvalidOperationException(message);
+
+    private enum LegacyProcedureAvailability
+    {
+        Missing,
+        Incompatible,
+        Compatible,
     }
 
     private static List<string> ParseCsvLine(string line)
@@ -4069,6 +4262,7 @@ public class ScoaCheckResultDto
     public List<string> Errors { get; set; } = new();
     public List<string> Warnings { get; set; } = new();
     public int TotalChecked { get; set; }
+    public string? Message { get; set; }
 }
 
 public class BasImportDto
@@ -4291,6 +4485,7 @@ public class MaintenanceValueRowDto
 public class ApproveTariffDto
 {
     public string? ApprovalNotes { get; set; }
+    public DateTime? EffectiveDate { get; set; }
 }
 
 public class RejectTariffDto

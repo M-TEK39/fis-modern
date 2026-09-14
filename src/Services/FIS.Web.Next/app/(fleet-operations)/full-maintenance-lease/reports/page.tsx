@@ -9,7 +9,7 @@ import {
   ApiUnavailable,
   FmlFrame,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
-import { hasFmlPermission } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
+import { hasLeaseVehiclePendingRole } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import { getSession } from "@/lib/auth/session";
 
 async function FmlReportsPageContent() {
@@ -28,7 +28,7 @@ async function FmlReportsPageContent() {
         <ApiUnavailable message="The FML reports menu could not be opened." />
       </main>
     );
-  if (!hasFmlPermission(session.accessLevel))
+  if (!hasLeaseVehiclePendingRole(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

@@ -344,8 +344,7 @@ public sealed class LegacyFinanceAccessService
 
         public bool CanUseDepartment147Features => IsCois || Profile?.DepartmentCode == 147;
 
-        public bool CanUseBatchOperations => IsFullAdministrator
-            || Roles.Contains("Advanced Financial Operations - Batch");
+        public bool CanUseBatchOperations => Roles.Contains("Advanced Financial Operations - Batch");
 
         public bool CanRunGeneralReports => IsFullAdministrator
             || Roles.Contains("Reports")

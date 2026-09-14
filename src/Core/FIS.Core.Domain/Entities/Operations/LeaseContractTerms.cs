@@ -98,6 +98,15 @@ public class LeaseContractTerms
     public int? AuthorisedBy { get; set; }
 
     [NotMapped]
+    public string? CreatedByUsername { get; set; }
+
+    [NotMapped]
+    public string? UpdatedByUsername { get; set; }
+
+    [NotMapped]
+    public string? AuthorisedByUsername { get; set; }
+
+    [NotMapped]
     public DateTime? AuthorisedDate { get; set; }
 
     [NotMapped]

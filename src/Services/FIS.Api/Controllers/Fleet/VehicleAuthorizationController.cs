@@ -16,11 +16,6 @@ namespace FIS.Api.Controllers;
 public class VehicleAuthorizationController : BaseApiController
 {
     private const long VehicleManagementPermission = 1;
-    private static readonly string[] InceptionRoles =
-    [
-        "vehicle inception capturer",
-        "vehicle inception authorizer",
-    ];
 
     private readonly IVehicleAuthorizationRepository _repository;
     private readonly ILogger<VehicleAuthorizationController> _logger;
@@ -274,6 +269,14 @@ public class VehicleAuthorizationController : BaseApiController
     {
         try
         {
+            if (!CanAccessAuthorizationQueue())
+                return Forbid();
+            var authorizerComment = approval?.Comment?.Trim();
+            if (string.IsNullOrEmpty(authorizerComment))
+                return BadRequest(new { message = "Authorizer comment is required." });
+            if (authorizerComment.Length > 255)
+                return BadRequest(new { message = "Authorizer comment must be 255 characters or fewer." });
+
             var userId = GetCurrentUserId();
             _logger.LogInformation(
                 "User {UserId} approving vehicle authorization {Id}",
@@ -291,7 +294,7 @@ public class VehicleAuthorizationController : BaseApiController
             if (selfApprovalCheck != null)
                 return selfApprovalCheck;
 
-            await _repository.ApproveAsync(id, userId, approval?.Comment);
+            await _repository.ApproveAsync(id, userId, authorizerComment);
 
             _logger.LogInformation(
                 "Vehicle authorization {Id} approved by user {UserId}",
@@ -329,19 +332,25 @@ public class VehicleAuthorizationController : BaseApiController
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult> RejectVehicle(int id, [FromBody] RejectionDto rejection)
+    public async Task<ActionResult> RejectVehicle(int id, [FromBody] RejectionDto? rejection = null)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(rejection?.RejectionReason))
-                return BadRequest(new { message = "Rejection reason is required" });
+            if (!CanAccessAuthorizationQueue())
+                return Forbid();
+            var authorizerComment = rejection?.Comment?.Trim();
+            if (string.IsNullOrEmpty(authorizerComment))
+                return BadRequest(new { message = "Authorizer comment is required." });
+            if (authorizerComment.Length > 244)
+                return BadRequest(new { message = "Authorizer comment must be 244 characters or fewer." });
 
+            var rejectionReason = rejection?.RejectionReason?.Trim() ?? string.Empty;
             var userId = GetCurrentUserId();
             _logger.LogInformation(
                 "User {UserId} rejecting vehicle authorization {Id} with reason: {Reason}",
                 userId,
                 id,
-                rejection.RejectionReason
+                rejectionReason
             );
 
             // Fetch vehicle to validate self-approval prevention
@@ -354,7 +363,7 @@ public class VehicleAuthorizationController : BaseApiController
             if (selfApprovalCheck != null)
                 return selfApprovalCheck;
 
-            await _repository.RejectAsync(id, userId, rejection.RejectionReason, rejection.Comment);
+            await _repository.RejectAsync(id, userId, rejectionReason, authorizerComment);
 
             _logger.LogInformation(
                 "Vehicle authorization {Id} rejected by user {UserId}",
@@ -367,6 +376,11 @@ public class VehicleAuthorizationController : BaseApiController
         {
             _logger.LogWarning(ex, "Vehicle authorization {Id} not found for rejection", id);
             return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid operation when rejecting vehicle authorization {Id}", id);
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {
@@ -383,6 +397,8 @@ public class VehicleAuthorizationController : BaseApiController
     {
         try
         {
+            if (!CanAccessAuthorizationQueue())
+                return Forbid();
             if (string.IsNullOrWhiteSpace(commentDto?.Comment))
                 return BadRequest(new { message = "Comment cannot be empty" });
 
@@ -424,7 +440,7 @@ public class VehicleAuthorizationController : BaseApiController
     {
         try
         {
-            if (!HasVehicleManagementPermission())
+            if (!CanCaptureVehicleInception())
                 return Forbid();
 
             var validationError = ValidateCreateRequest(dto);
@@ -517,6 +533,9 @@ public class VehicleAuthorizationController : BaseApiController
     {
         try
         {
+            if (!CanCaptureVehicleInception())
+                return Forbid();
+
             var userId = GetCurrentUserId();
             _logger.LogInformation("User {UserId} updating vehicle authorization {Id}", userId, id);
 
@@ -582,6 +601,9 @@ public class VehicleAuthorizationController : BaseApiController
     {
         try
         {
+            if (!CanCaptureVehicleInception())
+                return Forbid();
+
             var userId = GetCurrentUserId();
             _logger.LogInformation("User {UserId} deleting vehicle authorization {Id}", userId, id);
 
@@ -638,11 +660,29 @@ public class VehicleAuthorizationController : BaseApiController
             DamageStatus = v.damage_status,
             DamagesComment = v.damages_comment,
             AuthorityStatus = v.Authority_Status ?? "Awaiting Authorization",
-            AuthorizedByUserCode = v.authorized_by_user_code,
+            AuthorizedByUserCode = v.authorized_by_user_code ?? v.action_user_access_code,
             AuthorizedByUserName = v.AuthorizedByUser?.email,
             AuthorizationDate = v.authorization_date,
-            RejectionReason = v.rejection_reason,
-            AuthorizationComment = v.authorization_comment,
+            RejectionReason = v.rejection_reason
+                ?? (
+                    string.Equals(
+                        v.Authority_Status,
+                        "Rejected",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                        ? v.comment
+                        : null
+                ),
+            AuthorizationComment = v.authorization_comment
+                ?? (
+                    string.Equals(
+                        v.Authority_Status,
+                        "Rejected",
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                        ? null
+                        : v.comment
+                ),
             VmfCode = v.vmf_code,
             DateCreated = v.date_created,
             CreatedByUserCode = v.created_by_user_code,
@@ -661,7 +701,11 @@ public class VehicleAuthorizationController : BaseApiController
 
     private bool CanAccessAuthorizationQueue() =>
         HasVehicleManagementPermission()
-        && (HasAnyRole("vehicle inception authorizer") || !HasAnyRole(InceptionRoles));
+        && HasAnyRole("vehicle inception authorizer");
+
+    private bool CanCaptureVehicleInception() =>
+        HasVehicleManagementPermission()
+        && HasAnyRole("vehicle inception capturer");
 
     private bool HasAnyRole(params string[] expectedRoles)
     {
@@ -994,7 +1038,7 @@ public class ApprovalDto
 
 public class RejectionDto
 {
-    public string RejectionReason { get; set; } = string.Empty;
+    public string? RejectionReason { get; set; }
     public string? Comment { get; set; }
 }
 

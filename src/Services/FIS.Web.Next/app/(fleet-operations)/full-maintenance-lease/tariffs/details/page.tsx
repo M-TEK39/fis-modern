@@ -15,7 +15,9 @@ import {
   formatDate,
   getStatusClass,
   getStatusLabel,
-  hasFmlPermission,
+  hasLeaseVehicleAuthorizerRole,
+  hasLeaseVehicleCapturerRole,
+  hasLeaseVehiclePendingRole,
   vehicleLabel,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import { FmlApiError, getLeaseTerm } from "@/lib/api/finance/api-fml";
@@ -53,7 +55,7 @@ async function renderFmlTariffDetailsPageContent({
         <ApiUnavailable message="The FML tariff detail could not be opened." />
       </main>
     );
-  if (!hasFmlPermission(session.accessLevel))
+  if (!hasLeaseVehiclePendingRole(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />
@@ -89,8 +91,21 @@ async function renderFmlTariffDetailsPageContent({
   }
 
   const vehicle = vehicles.find((candidate) => candidate.vmfCode === term.vmfCode);
-  const editable = mode === "edit" && (term.authorityStatus === 1 || term.authorityStatus === 4);
-  const reviewable = mode === "review" && term.authorityStatus === 1;
+  const isCapturer =
+    Boolean(session.legacyUsername?.trim()) &&
+    Boolean(term.createdByUsername) &&
+    session.legacyUsername!.trim().localeCompare(term.createdByUsername!, undefined, {
+      sensitivity: "accent",
+    }) === 0;
+  const editable =
+    mode === "edit" &&
+    hasLeaseVehicleCapturerRole(session.roles) &&
+    (term.authorityStatus === 0 || term.authorityStatus === 1 || term.authorityStatus === 4);
+  const reviewable =
+    mode === "review" &&
+    hasLeaseVehicleAuthorizerRole(session.roles) &&
+    !isCapturer &&
+    term.authorityStatus === 1;
   return (
     <FmlFrame title="Lease Tariff Detail" description="Review and update lease tariff details.">
       <ActionNotice result={result} message={message} />

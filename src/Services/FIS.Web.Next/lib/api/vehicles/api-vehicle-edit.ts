@@ -337,8 +337,3 @@ export async function updateVehicleInvoiceAgainstApi(
   await readJson(response);
   return { ok: true as const };
 }
-
-export async function deleteVehicleAgainstApi(vmfCode: number) {
-  await requestApi(`api/vehicles/${encodeURIComponent(vmfCode)}`, { method: "DELETE" });
-  return { ok: true as const };
-}

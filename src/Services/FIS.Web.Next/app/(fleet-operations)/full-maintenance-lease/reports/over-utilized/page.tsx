@@ -10,7 +10,7 @@ import {
 import {
   formatCurrency,
   formatDate,
-  hasFmlPermission,
+  hasLeaseVehiclePendingRole,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import {
   ReportEmpty,
@@ -45,7 +45,7 @@ async function FmlOverUtilizedPageContent({
         <ReportEmpty message="The FML report session is unavailable." />
       </main>
     );
-  if (!hasFmlPermission(session.accessLevel))
+  if (!hasLeaseVehiclePendingRole(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

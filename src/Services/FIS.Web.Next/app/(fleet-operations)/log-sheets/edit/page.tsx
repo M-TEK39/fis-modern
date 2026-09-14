@@ -19,8 +19,11 @@ import {
   sessionMessage,
   statusMessage,
 } from "@/app/(fleet-operations)/log-sheets/_page";
-import { getLogsheetsPage, LogsheetApiError } from "@/lib/api/fleet-operations/api-logsheets";
-import { getSites, SiteApiError } from "@/lib/api/reference-data/api-sites";
+import {
+  getLogsheetContracts,
+  getLogsheetsPage,
+  LogsheetApiError,
+} from "@/lib/api/fleet-operations/api-logsheets";
 import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
 
 const PAGE_SIZE = 24;
@@ -64,7 +67,7 @@ async function renderLogsheetEditPageContent({
   const requestedPage = pageValue(query.page);
   const message = statusMessage(query);
   try {
-    const [options, sites] = await Promise.all([getVehicleOptions(), getSites()]);
+    const options = await getVehicleOptions();
     const matches = filterVehicles(options, search, mode);
     const selectedVehicle =
       Number.isInteger(vmfCode) && vmfCode > 0
@@ -84,6 +87,9 @@ async function renderLogsheetEditPageContent({
       Number.isInteger(editCode) && editCode > 0
         ? (selectedRecords.find((record) => record.logCode === editCode) ?? null)
         : null;
+    const contracts = editing
+      ? await getLogsheetContracts(editing.vmfCode)
+      : [];
     const pageValues = {
       ...(search ? { search } : {}),
       mode,
@@ -166,7 +172,7 @@ async function renderLogsheetEditPageContent({
           <LogsheetForm
             record={editing}
             vmfCode={editing.vmfCode}
-            sites={sites}
+            contracts={contracts}
             returnPath={returnPath}
           />
         ) : null}
@@ -179,9 +185,7 @@ async function renderLogsheetEditPageContent({
     );
   } catch (error) {
     const messageText =
-      error instanceof LogsheetApiError ||
-      error instanceof VehicleApiError ||
-      error instanceof SiteApiError
+      error instanceof LogsheetApiError || error instanceof VehicleApiError
         ? "The Logsheet service is temporarily unavailable. Please try again."
         : "Logsheets could not be loaded.";
     return (

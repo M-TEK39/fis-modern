@@ -221,10 +221,7 @@ public class ContractsController : BaseApiController
             "contracts approver",
             "contract approver",
             "contracts_approver",
-            "back dating contract (approver)",
-            "backdating contract (approver)",
             "contract_approver",
-            "contract (back dating approver)",
             "admin",
             "administrator",
             "system administrator",
@@ -1301,7 +1298,10 @@ public class ContractsController : BaseApiController
                 return activeContractFailure;
 
             contract.target_return_date = request.NewTargetReturnDate;
-            await _contractRepository.UpdateAsync(contract, currentUserId);
+            contract.Notes = string.IsNullOrWhiteSpace(request.Notes) ? contract.Notes : request.Notes;
+            contract.contract_estimated_overall_km = request.EstimatedOverallKilometres
+                ?? contract.contract_estimated_overall_km;
+            await _contractRepository.ExtendExistingAsync(contract, currentUserId);
 
             return Ok(
                 new
@@ -1328,63 +1328,22 @@ public class ContractsController : BaseApiController
     [HttpPost("{contractCode}/cancel")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<ActionResult> CancelContract(
+    public ActionResult CancelContract(
         int contractCode,
         [FromBody] CancelContractRequest? request = null
     )
     {
-        if (
-            RequireContractAction(
-                CanCloseActiveContract(),
-                "You do not have permission to cancel vehicle contracts."
-            ) is
-            { } authorization
-        )
-            return authorization;
-
-        try
-        {
-            int currentUserId = GetCurrentUserId();
-
-            var contract = await _contractRepository.GetByIdAsync(contractCode);
-            if (contract == null)
-                return NotFound(new { error = "Contract not found" });
-            if (RequireActiveContract(contract) is { } activeContractFailure)
-                return activeContractFailure;
-
-            var prevStatus = contract.contract_status_code;
-            contract.still_current = "N";
-            contract.end_date = DateTime.Now;
-            contract.contract_status_code = 6; // Cancelled
-            contract.contract_status_date = DateTime.Now;
-            contract.Notes = request?.CancellationReason ?? "Cancelled";
-
-            await _contractRepository.UpdateAsync(contract, currentUserId);
-            await _auditLog.LogAsync(
+        // MNT_Vehicle_Contract_DetailManagement only cancels a pending
+        // contract through DEV_UPD_Contract_New_ApproveDeclineOrCancel. It
+        // does not expose a direct cancellation of an active contract. Do not
+        // substitute modern direct DML for the distinct legacy close flow.
+        return Conflict(
+            new
+            {
+                error = "Active-contract cancellation is not a legacy workflow. Use the legacy close process.",
                 contractCode,
-                "Cancelled",
-                currentUserId,
-                oldStatus: prevStatus,
-                newStatus: 6,
-                notes: request?.CancellationReason
-            );
-
-            _ = _emailNotification.SendContractClosedNotificationAsync(
-                contractCode,
-                currentUserId,
-                request?.CancellationReason ?? "Cancelled"
-            );
-
-            return Ok(new { message = "Contract cancelled successfully", contractCode });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error cancelling contract {ContractCode}", contractCode);
-            return StatusCode(
-                500,
-                new { error = "Failed to cancel contract", message = ex.Message }
-            );
-        }
+            }
+        );
     }
 
     /// <summary>
@@ -1445,17 +1404,8 @@ public class ContractsController : BaseApiController
             if (startOdometer < 0)
                 return BadRequest(new { error = "Start odometer cannot be negative." });
 
-            // The legacy ReassignExisting workflow closes the current record and
-            // inserts a new effective record. Keep both operations atomic and
-            // preserve every legacy contract field on the new record.
-            await using var transaction = await _context.Database.BeginTransactionAsync();
-            await _contractRepository.EndContractAsync(
-                contractId,
-                effectiveDate,
-                currentUserId,
-                startOdometer
-            );
-
+            // DEV_UPD_Contract_ReassignExisting owns the legacy close, insert,
+            // grouping, status-history, and transaction behavior.
             var reassignedContract = new Contract
             {
                 vmf_code = contract.vmf_code,
@@ -1513,8 +1463,11 @@ public class ContractsController : BaseApiController
                 modified_by_user_code = currentUserId,
             };
 
-            var created = await _contractRepository.CreateAsync(reassignedContract, currentUserId);
-            await transaction.CommitAsync();
+            var created = await _contractRepository.ReassignExistingAsync(
+                contract,
+                reassignedContract,
+                currentUserId
+            );
 
             await _auditLog.LogAsync(
                 contractId,
@@ -1839,12 +1792,11 @@ public class ContractsController : BaseApiController
             // Update contract status to approved (status code 2 = Approved)
             contract.contract_status_code = 2; // Approved
             contract.contract_status_date = DateTime.Now;
-            contract.approver_code = currentUserId;
 
             if (!string.IsNullOrEmpty(request?.ApprovalNotes))
                 contract.Notes = $"{contract.Notes}\nApproval: {request.ApprovalNotes}";
 
-            await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _contractRepository.UpdatePendingDecisionAsync(contract, currentUserId);
             await _auditLog.LogAsync(
                 contractId,
                 "Approved",
@@ -1904,16 +1856,27 @@ public class ContractsController : BaseApiController
             if (selfApprovalCheck != null)
                 return selfApprovalCheck;
 
-            // Update contract status to active (status code 3 = Active)
-            contract.contract_status_code = 3; // Active
+            // The legacy approval procedure first records status 2, then its
+            // activation procedure closes/replaces the prior contract and
+            // makes the pending record active in one database transaction.
+            var existingContractCode =
+                (await _contractRepository.GetActiveContractByVehicleAsync(contract.vmf_code))
+                    ?.contract_code ?? 0;
+            contract.contract_status_code = 2; // Approved
             contract.contract_status_date = DateTime.Now;
-            contract.approver_code = currentUserId;
-            contract.still_current = "Y";
 
             if (!string.IsNullOrEmpty(request?.ApprovalNotes))
                 contract.Notes = $"{contract.Notes}\nApproved & Activated: {request.ApprovalNotes}";
 
-            await _contractRepository.UpdateAsync(contract, currentUserId);
+            var approvedContract = await _contractRepository.UpdatePendingDecisionAsync(
+                contract,
+                currentUserId
+            );
+            await _contractRepository.ActivatePendingAsync(
+                approvedContract,
+                existingContractCode,
+                currentUserId
+            );
             await _auditLog.LogAsync(
                 contractId,
                 "ApprovedAndActivated",
@@ -1986,10 +1949,9 @@ public class ContractsController : BaseApiController
             // Update contract status to correction required (status code 4 = Needs Correction)
             contract.contract_status_code = 4; // Needs correction
             contract.contract_status_date = DateTime.Now;
-            contract.approver_code = currentUserId;
             contract.Notes = $"{contract.Notes}\nCorrection Required: {request.DeclineReason}";
 
-            await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _contractRepository.UpdatePendingDecisionAsync(contract, currentUserId);
             await _auditLog.LogAsync(
                 contractId,
                 "DeclinedForCorrection",
@@ -2054,11 +2016,10 @@ public class ContractsController : BaseApiController
             // Update contract status to declined (status code 5 = Declined)
             contract.contract_status_code = 5; // Declined
             contract.contract_status_date = DateTime.Now;
-            contract.approver_code = currentUserId;
             contract.still_current = "N";
             contract.Notes = $"{contract.Notes}\nDeclined: {request.DeclineReason}";
 
-            await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _contractRepository.UpdatePendingDecisionAsync(contract, currentUserId);
             await _auditLog.LogAsync(
                 contractId,
                 "Declined",
@@ -2890,6 +2851,8 @@ public class ExtendContractRequest
 {
     [Required]
     public DateTime NewTargetReturnDate { get; set; }
+    public string? Notes { get; set; }
+    public int? EstimatedOverallKilometres { get; set; }
 }
 
 public class CancelContractRequest

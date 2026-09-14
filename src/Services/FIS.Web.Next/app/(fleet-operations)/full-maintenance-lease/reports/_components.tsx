@@ -5,6 +5,7 @@ import {
   ApiUnavailable,
   FmlFrame,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+import FmlReportOutputActions from "@/app/(fleet-operations)/full-maintenance-lease/reports/report-output-actions";
 
 export function ReportTable({
   caption,
@@ -12,21 +13,27 @@ export function ReportTable({
   children,
 }: Readonly<{ caption: string; headers: string[]; children: ReactNode }>) {
   return (
-    <div className="vehicle-table-wrapper">
-      <table className="vehicle-table">
-        <caption className="sr-only">{caption}</caption>
-        <thead>
-          <tr>
-            {headers.map((header) => (
-              <th scope="col" key={header}>
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
-    </div>
+    <section className="vehicle-status-maintenance-panel report-print-area report-print-area--landscape">
+      <div className="vehicle-form-section-header">
+        <h2>{caption}</h2>
+        <FmlReportOutputActions title={caption} />
+      </div>
+      <div className="vehicle-table-wrapper">
+        <table className="vehicle-table">
+          <caption className="sr-only">{caption}</caption>
+          <thead>
+            <tr>
+              {headers.map((header) => (
+                <th scope="col" key={header}>
+                  {header}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>{children}</tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

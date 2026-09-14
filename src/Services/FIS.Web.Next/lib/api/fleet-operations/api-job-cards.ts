@@ -429,7 +429,13 @@ export async function cancelJobCard(jobCardId: number, cancelReason: string | nu
 
 export async function closeJobCard(
   jobCardId: number,
-  input: JobCardCostInput & { close_notes?: string | null },
+  input: JobCardCostInput & {
+    close_notes?: string | null;
+    damages?: string | null;
+    damage_comment?: string | null;
+    barcode?: string | null;
+    close_date?: string | null;
+  },
 ) {
   return readJobCard(
     await mutate(`api/jobcards/${encodeURIComponent(jobCardId)}/close`, "POST", input),

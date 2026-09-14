@@ -17,7 +17,7 @@ import {
   formatDate,
   getStatusClass,
   getStatusLabel,
-  hasFmlPermission,
+  hasLeaseVehiclePendingRole,
   termNotes,
   vehicleLabel,
   valueOrDash,
@@ -71,7 +71,7 @@ async function renderFullMaintenanceLeasePageContent({
         <ApiUnavailable message="Full Maintenance Lease could not be opened." />
       </main>
     );
-  if (!hasFmlPermission(session.accessLevel))
+  if (!hasLeaseVehiclePendingRole(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

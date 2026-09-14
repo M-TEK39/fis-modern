@@ -472,6 +472,18 @@ public interface IContractRepository
     Task<bool> HasActiveContractAsync(int vmfCode);
     Task<Contract> CreateAsync(Contract contract, int currentUserId);
     Task UpdateAsync(Contract contract, int currentUserId);
+    Task<Contract> UpdatePendingDecisionAsync(Contract contract, int currentUserId);
+    Task<Contract> ActivatePendingAsync(
+        Contract pendingContract,
+        int existingContractCode,
+        int currentUserId
+    );
+    Task<Contract> ReassignExistingAsync(
+        Contract existingContract,
+        Contract reassignment,
+        int currentUserId
+    );
+    Task<Contract> ExtendExistingAsync(Contract contract, int currentUserId);
     Task DeleteAsync(int contractCode, int currentUserId);
     Task EndContractAsync(
         int contractCode,

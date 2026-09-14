@@ -209,7 +209,12 @@ public sealed record TripAuthorityRoute(
     int? EditedByUserCode
 );
 
-public sealed record TripAuthorityRouteUpdate(int RouteCode, int EndOdometer, int Distance);
+public sealed record TripAuthorityRouteUpdate(
+    int RouteCode,
+    int EndOdometer,
+    int Distance,
+    int? StartOdometer = null
+);
 
 public sealed record TripAuthorityDriverInput(
     string? Name,

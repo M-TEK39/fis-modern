@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Operations;
@@ -15,6 +16,9 @@ namespace FIS.Api.Controllers;
 [Route("api/jobcards")]
 public class JobCardController : BaseApiController
 {
+    private const string JobCardCapturerRole = "JobCard Capturer";
+    private const string JobCardAuthorizerRole = "JobCard Authorizer";
+
     private readonly IJobCardRepository _repository;
     private readonly IContractRepository _contractRepository;
     private readonly ILogger<JobCardController> _logger;
@@ -250,6 +254,9 @@ public class JobCardController : BaseApiController
     {
         try
         {
+            if (!HasJobCardCapturerRole())
+                return Forbid();
+
             int currentUserId = GetCurrentUserId();
             _logger.LogInformation(
                 "Creating new job card for vehicle {VmfCode}, extra {ExtraCode} by user {UserId}",
@@ -262,9 +269,6 @@ public class JobCardController : BaseApiController
             {
                 vmf_code = createDto.vmf_code,
                 extra_code = createDto.extra_code,
-                jcs_comment = createDto.jcs_comment,
-                damages = createDto.damages,
-                priority = createDto.priority,
                 status_code = 1, // Pending
                 reviewed = "N",
             };
@@ -305,6 +309,9 @@ public class JobCardController : BaseApiController
     {
         try
         {
+            if (!HasJobCardCapturerRole())
+                return Forbid();
+
             int currentUserId = GetCurrentUserId();
             _logger.LogInformation(
                 "Updating job card {JobCardId} by user {UserId}",
@@ -319,13 +326,23 @@ public class JobCardController : BaseApiController
                 return NotFound(new { error = $"Job card not found with ID: {id}" });
             }
 
+            if (
+                !string.IsNullOrWhiteSpace(updateDto.damages)
+                && !string.Equals(updateDto.damages, "Y", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(updateDto.damages, "N", StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                return BadRequest(new { error = "Damages must be Y or N in the legacy job-card workflow." });
+            }
+
             // Update fields
             existingJobCard.jcs_comment = updateDto.jcs_comment;
             existingJobCard.damages = updateDto.damages;
             existingJobCard.comments = updateDto.comments;
             existingJobCard.assigned_to = updateDto.assigned_to;
             existingJobCard.assigned_date = updateDto.assigned_date;
-            existingJobCard.priority = updateDto.priority;
+            if (updateDto.priority is not null)
+                existingJobCard.priority = updateDto.priority;
 
             var updated = await _repository.UpdateAsync(existingJobCard, currentUserId);
             var dto = MapToDto(updated);
@@ -369,6 +386,9 @@ public class JobCardController : BaseApiController
     {
         try
         {
+            if (!HasJobCardAuthorizerRole())
+                return Forbid();
+
             int currentUserId = GetCurrentUserId();
             _logger.LogInformation(
                 "User {UserId} authorizing job card {JobCardId}",
@@ -435,6 +455,9 @@ public class JobCardController : BaseApiController
     {
         try
         {
+            if (!HasJobCardAuthorizerRole())
+                return Forbid();
+
             if (string.IsNullOrWhiteSpace(declineDto?.decline_reason))
             {
                 return BadRequest(new { error = "Decline reason is required" });
@@ -508,6 +531,9 @@ public class JobCardController : BaseApiController
     {
         try
         {
+            if (!HasJobCardCapturerRole())
+                return Forbid();
+
             int currentUserId = GetCurrentUserId();
             _logger.LogInformation(
                 "User {UserId} canceling job card {JobCardId}",
@@ -553,6 +579,7 @@ public class JobCardController : BaseApiController
     /// </summary>
     [HttpPost("{id}/close")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<JobCardResponseDto>> Close(
@@ -562,8 +589,20 @@ public class JobCardController : BaseApiController
     {
         try
         {
+            if (!HasJobCardCapturerRole())
+                return Forbid();
+
             int currentUserId = GetCurrentUserId();
             _logger.LogInformation("User {UserId} closing job card {JobCardId}", currentUserId, id);
+
+            if (
+                !string.IsNullOrWhiteSpace(closeDto?.damages)
+                && !string.Equals(closeDto.damages, "Y", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(closeDto.damages, "N", StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                return BadRequest(new { error = "Damages must be Y or N in the legacy job-card workflow." });
+            }
 
             var closed = await _repository.CloseAsync(
                 id,
@@ -574,7 +613,11 @@ public class JobCardController : BaseApiController
                 otherCost: closeDto?.other_cost,
                 invoiceNumber: closeDto?.invoice_number,
                 invoiceDate: closeDto?.invoice_date,
-                serviceProvider: closeDto?.service_provider
+                serviceProvider: closeDto?.service_provider,
+                damages: closeDto?.damages,
+                damageComment: closeDto?.damage_comment,
+                barcode: closeDto?.barcode,
+                closeDate: closeDto?.close_date
             );
             var dto = MapToDto(closed);
 
@@ -589,6 +632,10 @@ public class JobCardController : BaseApiController
         {
             _logger.LogWarning(ex, "Job card not found: {JobCardId}", id);
             return NotFound(new { error = ex.Message });
+        }
+        catch (NotSupportedException ex)
+        {
+            return Conflict(new { error = ex.Message });
         }
         catch (Exception ex)
         {
@@ -611,6 +658,9 @@ public class JobCardController : BaseApiController
     {
         try
         {
+            if (!HasJobCardCapturerRole())
+                return Forbid();
+
             int currentUserId = GetCurrentUserId();
             _logger.LogInformation(
                 "User {UserId} deleting job card {JobCardId}",
@@ -647,50 +697,24 @@ public class JobCardController : BaseApiController
     }
 
     /// <summary>
-    /// Amend repair costs on a job card (including after it is closed).
-    /// Used when the invoice arrives after the job card was already closed,
-    /// or to correct a capturing error.
-    /// Only provided fields are updated — omit any field to leave it unchanged.
-    /// Assumption: post-close amendment allowed. Confirm with users (QUESTIONS.md MX-1).
+    /// The original Jobcards workflow has no repair-cost mutation contract.
+    /// This endpoint remains fail-closed rather than silently writing expanded-only fields.
     /// </summary>
     [HttpPatch("{id}/costs")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<JobCardResponseDto>> UpdateCosts(
-        int id,
-        [FromBody] JobCardCostDto costDto
-    )
+    public ActionResult<JobCardResponseDto> UpdateCosts(int id, [FromBody] JobCardCostDto costDto)
     {
-        try
-        {
-            int currentUserId = GetCurrentUserId();
-            var updated = await _repository.UpdateCostsAsync(
-                id,
-                currentUserId,
-                labourCost: costDto.labour_cost,
-                partsCost: costDto.parts_cost,
-                otherCost: costDto.other_cost,
-                invoiceNumber: costDto.invoice_number,
-                invoiceDate: costDto.invoice_date,
-                serviceProvider: costDto.service_provider
-            );
+        if (!HasJobCardCapturerRole())
+            return Forbid();
 
-            _logger.LogInformation(
-                "Repair costs updated on job card {JobCardId} by user {UserId}",
-                id,
-                currentUserId
-            );
-            return Ok(MapToDto(updated));
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { error = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error updating costs on job card {JobCardId}", id);
-            return StatusCode(500, new { error = "Failed to update costs", message = ex.Message });
-        }
+        return Conflict(
+            new
+            {
+                error = "Repair-cost capture is not available in the original Jobcards workflow and will not be saved as a modern-only approximation.",
+            }
+        );
     }
 
     /// <summary>
@@ -923,6 +947,35 @@ public class JobCardController : BaseApiController
             7 => "Canceled",
             _ => "Unknown",
         };
+    }
+
+    private bool HasJobCardCapturerRole() => HasAnyRole(JobCardCapturerRole);
+
+    private bool HasJobCardAuthorizerRole() => HasAnyRole(JobCardAuthorizerRole);
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Any(User.IsInRole))
+            return true;
+
+        var roleClaims = User
+            .Claims.Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            );
+
+        return roleClaims.Any(role =>
+            expectedRoles.Any(expected =>
+                string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+            )
+        );
     }
 
     private static bool TryParseStatusCodes(string[]? values, out int[] statusCodes)

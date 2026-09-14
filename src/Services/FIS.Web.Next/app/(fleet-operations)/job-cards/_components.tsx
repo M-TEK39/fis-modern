@@ -9,7 +9,6 @@ import {
   declineJobCardAction,
   deleteJobCardAction,
   updateJobCardAction,
-  updateJobCardCostsAction,
 } from "@/app/(fleet-operations)/job-cards/actions";
 import { MenuSection } from "@/components/ui/menu-section";
 import type { JobCardRecord, RepairCostLine } from "@/lib/api/fleet-operations/api-job-cards";
@@ -280,64 +279,39 @@ export function JobCardTable({
                         className="form-input"
                         id={`close-notes-${card.jobCardId}`}
                         name="closeNotes"
-                        maxLength={2000}
+                        maxLength={150}
                         placeholder="Close notes"
                       />
-                      <div className="job-card-cost-grid">
-                        <input
-                          className="form-input"
-                          name="labourCost"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="Labour"
-                          defaultValue={card.labourCost ?? ""}
-                          aria-label={`Labour cost for job card ${card.jobCardId}`}
-                        />
-                        <input
-                          className="form-input"
-                          name="partsCost"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="Parts"
-                          defaultValue={card.partsCost ?? ""}
-                          aria-label={`Parts cost for job card ${card.jobCardId}`}
-                        />
-                        <input
-                          className="form-input"
-                          name="otherCost"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="Other"
-                          defaultValue={card.otherCost ?? ""}
-                          aria-label={`Other cost for job card ${card.jobCardId}`}
-                        />
-                        <input
-                          className="form-input"
-                          name="invoiceNumber"
-                          maxLength={50}
-                          placeholder="Invoice #"
-                          defaultValue={card.invoiceNumber ?? ""}
-                          aria-label={`Invoice number for job card ${card.jobCardId}`}
-                        />
-                        <input
-                          className="form-input"
-                          name="invoiceDate"
-                          type="date"
-                          defaultValue={formatDateTimeInput(card.invoiceDate)}
-                          aria-label={`Invoice date for job card ${card.jobCardId}`}
-                        />
-                        <input
-                          className="form-input"
-                          name="serviceProvider"
-                          maxLength={200}
-                          placeholder="Service provider"
-                          defaultValue={card.serviceProvider ?? ""}
-                          aria-label={`Service provider for job card ${card.jobCardId}`}
-                        />
-                      </div>
+                      <select
+                        aria-label={`Damage status for job card ${card.jobCardId}`}
+                        className="form-select"
+                        defaultValue={card.damages?.toUpperCase() === "Y" ? "Y" : "N"}
+                        name="damages"
+                      >
+                        <option value="N">No damage</option>
+                        <option value="Y">Damage recorded</option>
+                      </select>
+                      <input
+                        aria-label={`Damage comment for job card ${card.jobCardId}`}
+                        className="form-input"
+                        maxLength={500}
+                        name="damageComment"
+                        placeholder="Damage comment"
+                      />
+                      <input
+                        aria-label={`Vehicle barcode for job card ${card.jobCardId}`}
+                        className="form-input"
+                        maxLength={20}
+                        name="barcode"
+                        placeholder="Vehicle barcode"
+                      />
+                      <input
+                        aria-label={`Close date for job card ${card.jobCardId}`}
+                        className="form-input"
+                        defaultValue={new Date().toISOString().slice(0, 10)}
+                        name="closeDate"
+                        type="date"
+                      />
                       <button className="button button-primary button-small" type="submit">
                         Close
                       </button>
@@ -469,22 +443,6 @@ export function JobCardDetails({
           />
         </div>
         <div className="form-field">
-          <label className="form-label" htmlFor="job-card-priority">
-            Priority
-          </label>
-          <select
-            className="form-select"
-            id="job-card-priority"
-            name="priority"
-            form="job-card-edit-form"
-            defaultValue={card.priority ?? ""}
-          >
-            <option value="">Unassigned</option>
-            <option value="N">Normal</option>
-            <option value="H">High</option>
-          </select>
-        </div>
-        <div className="form-field">
           <label className="form-label" htmlFor="job-card-assigned-to">
             Assigned user code
           </label>
@@ -520,7 +478,7 @@ export function JobCardDetails({
             id="job-card-jcs-comment"
             name="jcsComment"
             form="job-card-edit-form"
-            maxLength={2000}
+            maxLength={150}
             defaultValue={card.jcsComment ?? ""}
             rows={3}
           />
@@ -529,26 +487,28 @@ export function JobCardDetails({
           <label className="form-label" htmlFor="job-card-damages">
             Damages
           </label>
-          <textarea
-            className="form-input"
+          <select
+            className="form-select"
             id="job-card-damages"
             name="damages"
             form="job-card-edit-form"
-            maxLength={2000}
             defaultValue={card.damages ?? ""}
-            rows={3}
-          />
+          >
+            <option value="">Not specified</option>
+            <option value="N">No</option>
+            <option value="Y">Yes</option>
+          </select>
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="job-card-comments">
-            Comments
+            Damage comment
           </label>
           <textarea
             className="form-input"
             id="job-card-comments"
             name="comments"
             form="job-card-edit-form"
-            maxLength={2000}
+            maxLength={500}
             defaultValue={card.comments ?? ""}
             rows={3}
           />
@@ -566,107 +526,10 @@ export function JobCardDetails({
           </Link>
         </div>
       </form>
-      <JobCardCosts card={card} returnPath={returnPath} />
-    </section>
-  );
-}
-
-export function JobCardCosts({
-  card,
-  returnPath,
-}: Readonly<{ card: JobCardRecord; returnPath: string }>) {
-  return (
-    <section className="vehicle-status-maintenance-panel" aria-labelledby="job-card-costs-title">
-      <p className="eyebrow">Repair costs</p>
-      <h3 id="job-card-costs-title">Cost details</h3>
-      <form action={updateJobCardCostsAction}>
-        <input name="returnPath" type="hidden" value={returnPath} />
-        <input name="jobCardId" type="hidden" value={card.jobCardId} />
-        <div className="form-grid">
-          <div className="form-field">
-            <label className="form-label" htmlFor="job-card-labour">
-              Labour cost
-            </label>
-            <input
-              className="form-input"
-              id="job-card-labour"
-              name="labourCost"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={card.labourCost ?? ""}
-            />
-          </div>
-          <div className="form-field">
-            <label className="form-label" htmlFor="job-card-parts">
-              Parts cost
-            </label>
-            <input
-              className="form-input"
-              id="job-card-parts"
-              name="partsCost"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={card.partsCost ?? ""}
-            />
-          </div>
-          <div className="form-field">
-            <label className="form-label" htmlFor="job-card-other">
-              Other cost
-            </label>
-            <input
-              className="form-input"
-              id="job-card-other"
-              name="otherCost"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={card.otherCost ?? ""}
-            />
-          </div>
-          <div className="form-field">
-            <label className="form-label" htmlFor="job-card-invoice">
-              Invoice number
-            </label>
-            <input
-              className="form-input"
-              id="job-card-invoice"
-              name="invoiceNumber"
-              maxLength={50}
-              defaultValue={card.invoiceNumber ?? ""}
-            />
-          </div>
-          <div className="form-field">
-            <label className="form-label" htmlFor="job-card-invoice-date">
-              Invoice date
-            </label>
-            <input
-              className="form-input"
-              id="job-card-invoice-date"
-              name="invoiceDate"
-              type="date"
-              defaultValue={formatDateTimeInput(card.invoiceDate)}
-            />
-          </div>
-          <div className="form-field">
-            <label className="form-label" htmlFor="job-card-provider">
-              Service provider
-            </label>
-            <input
-              className="form-input"
-              id="job-card-provider"
-              name="serviceProvider"
-              maxLength={200}
-              defaultValue={card.serviceProvider ?? ""}
-            />
-          </div>
-        </div>
-        <p className="muted-copy">Current total: {formatMoney(card.totalCost)}</p>
-        <button className="button button-primary" type="submit">
-          Update costs
-        </button>
-      </form>
+      <p className="muted-copy">
+        Repair-cost capture is not part of the original Jobcards workflow and is unavailable on
+        the legacy database.
+      </p>
     </section>
   );
 }

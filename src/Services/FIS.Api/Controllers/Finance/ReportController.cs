@@ -2316,6 +2316,9 @@ public class ReportController : BaseApiController
         [FromQuery] string? search = null
     )
     {
+        if (!HasLeaseVehiclePendingRole())
+            return Forbid();
+
         var parsedFinancialYear = int.TryParse(finYear, out var financialYear)
             ? financialYear
             : (int?)null;
@@ -2332,6 +2335,9 @@ public class ReportController : BaseApiController
     [HttpGet("fml/contracts-expiring")]
     public async Task<ActionResult> GetFmlContractsExpiring()
     {
+        if (!HasLeaseVehiclePendingRole())
+            return Forbid();
+
         var report = await _fmlReportRepository.GetContractsExpiringAsync();
         return Ok(report);
     }
@@ -2339,6 +2345,9 @@ public class ReportController : BaseApiController
     [HttpGet("fml/expired-open")]
     public async Task<ActionResult> GetFmlExpiredOpen()
     {
+        if (!HasLeaseVehiclePendingRole())
+            return Forbid();
+
         var report = await _fmlReportRepository.GetExpiredOpenContractsAsync();
         return Ok(report);
     }
@@ -2346,6 +2355,9 @@ public class ReportController : BaseApiController
     [HttpGet("fml/vehicles-no-contracts")]
     public async Task<ActionResult> GetFmlVehiclesNoContracts()
     {
+        if (!HasLeaseVehiclePendingRole())
+            return Forbid();
+
         var report = await _fmlReportRepository.GetVehiclesNoContractsAsync();
         return Ok(report);
     }
@@ -2356,6 +2368,9 @@ public class ReportController : BaseApiController
         [FromQuery] DateTime? endDate = null
     )
     {
+        if (!HasLeaseVehiclePendingRole())
+            return Forbid();
+
         var report = await _fmlReportRepository.GetOverUtilizedAsync(startDate, endDate);
         return Ok(report);
     }
@@ -3511,6 +3526,8 @@ public class ReportController : BaseApiController
     );
 
     private bool HasReportsRole() => HasAnyRole("Reports");
+
+    private bool HasLeaseVehiclePendingRole() => HasAnyRole("Lease Vehicle Pending");
 
     private bool HasAssetListAdministratorAccess()
     {

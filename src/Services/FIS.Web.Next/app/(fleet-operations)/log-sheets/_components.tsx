@@ -8,8 +8,10 @@ import {
   updateLogsheetAction,
 } from "@/app/(fleet-operations)/log-sheets/actions";
 import { MenuSection } from "@/components/ui/menu-section";
-import type { LogsheetRecord } from "@/lib/api/fleet-operations/api-logsheets";
-import type { SiteRecord } from "@/lib/api/reference-data/api-sites";
+import type {
+  LogsheetContractOption,
+  LogsheetRecord,
+} from "@/lib/api/fleet-operations/api-logsheets";
 import type { VehicleOption } from "@/lib/api/vehicles/api-vehicles";
 import { formatDate, formatNumber, valueOrDash } from "@/app/(fleet-operations)/log-sheets/_utils";
 
@@ -225,12 +227,12 @@ export function LogsheetTable({
 export function LogsheetForm({
   record,
   vmfCode,
-  sites,
+  contracts,
   returnPath,
 }: Readonly<{
   record: LogsheetRecord | null;
   vmfCode: number;
-  sites: readonly SiteRecord[];
+  contracts: readonly LogsheetContractOption[];
   returnPath: string;
 }>) {
   const action = record ? updateLogsheetAction : createLogsheetAction;
@@ -332,23 +334,24 @@ export function LogsheetForm({
             />
           </div>
           <div className="form-field form-group-full">
-            <label className="form-label" htmlFor="logsheet-site">
-              Site
+            <label className="form-label" htmlFor="logsheet-contract">
+              Contract
             </label>
             <select
               className="form-select"
-              id="logsheet-site"
-              name="siteCode"
+              id="logsheet-contract"
+              name="contractCode"
               required
-              defaultValue={record?.siteCode ? String(record.siteCode) : ""}
+              defaultValue={record?.contractCode ? String(record.contractCode) : ""}
             >
-              <option value="">Select site</option>
-              {sites.map((site) => (
-                <option key={site.siteCode} value={site.siteCode}>
-                  {site.description || "Unnamed site"} ({site.siteCode})
+              <option value="">Select contract</option>
+              {contracts.map((contract) => (
+                <option key={contract.contractCode} value={contract.contractCode}>
+                  #{contract.contractCode} · {contract.startDate?.slice(0, 10) ?? "No start date"} · {contract.siteDescription ?? `Site ${contract.siteCode}`}
                 </option>
               ))}
             </select>
+            <p className="form-hint">The selected legacy contract determines the saved site and department.</p>
           </div>
         </div>
         <div className="button-row">

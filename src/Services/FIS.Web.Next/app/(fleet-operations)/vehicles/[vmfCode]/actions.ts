@@ -10,7 +10,6 @@ import {
   uploadVehicleDocument,
 } from "@/lib/api/vehicles/api-vehicle-documents";
 import {
-  deleteVehicleAgainstApi,
   updateVehicleInvoiceAgainstApi,
   VehicleEditApiError,
 } from "@/lib/api/vehicles/api-vehicle-edit";
@@ -127,38 +126,6 @@ export async function updateVehicleInvoiceAction(
       message: apiErrorMessage(error, "The invoice number could not be updated."),
     };
   }
-}
-
-export async function deleteVehicleAction(
-  _previousState: VehicleDetailActionState,
-  formData: FormData,
-): Promise<VehicleDetailActionState> {
-  const access = await authorizeVehicleDetail();
-  if (!access.ok) {
-    return { status: "error", message: access.message };
-  }
-
-  const vmfCode = getVmfCode(formData);
-  if (vmfCode === null) {
-    return { status: "error", message: "The selected vehicle is invalid." };
-  }
-
-  try {
-    await deleteVehicleAgainstApi(vmfCode);
-    revalidateVehicle(vmfCode);
-    return { status: "success", message: "Vehicle deleted successfully." };
-  } catch (error) {
-    console.error(
-      "FIS vehicle delete failed",
-      error instanceof Error ? error.message : "unknown error",
-    );
-    return {
-      status: "error",
-      message: apiErrorMessage(error, "The vehicle could not be deleted."),
-    };
-  }
-
-  redirect("/vehicles");
 }
 
 export async function uploadVehicleDocumentAction(

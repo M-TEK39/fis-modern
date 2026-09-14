@@ -775,6 +775,31 @@ function ExtendForm({ contract, today }: Readonly<{ contract: ContractRecord; to
           required
         />
       </div>
+      <div className="form-field">
+        <label className="form-label" htmlFor="extend-estimated-kilometres">
+          Estimated overall kilometres
+        </label>
+        <input
+          className="form-input"
+          id="extend-estimated-kilometres"
+          min="0"
+          name="estimatedOverallKilometres"
+          type="number"
+          defaultValue={contract.contractEstimatedOverallKm ?? ""}
+        />
+      </div>
+      <div className="form-field form-group-full">
+        <label className="form-label" htmlFor="extend-notes">
+          Extension notes
+        </label>
+        <textarea
+          className="form-input"
+          id="extend-notes"
+          name="extensionNotes"
+          rows={3}
+          defaultValue={contract.notes ?? ""}
+        />
+      </div>
       <div className="button-row">
         <button className="button button-primary" type="submit">
           Save extension

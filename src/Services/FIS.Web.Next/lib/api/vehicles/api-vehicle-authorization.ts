@@ -355,8 +355,8 @@ export function approveVehicleAuthorization(id: number, comment: string) {
   return postAuthorizationAction(`${id}/approve`, { comment });
 }
 
-export function rejectVehicleAuthorization(id: number, rejectionReason: string, comment: string) {
-  return postAuthorizationAction(`${id}/reject`, { rejectionReason, comment });
+export function rejectVehicleAuthorization(id: number, comment: string) {
+  return postAuthorizationAction(`${id}/reject`, { comment });
 }
 
 export function addVehicleAuthorizationComment(id: number, comment: string) {

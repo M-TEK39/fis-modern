@@ -575,7 +575,11 @@ public class JobCardRepository : IJobCardRepository
         decimal? otherCost = null,
         string? invoiceNumber = null,
         DateTime? invoiceDate = null,
-        string? serviceProvider = null
+        string? serviceProvider = null,
+        string? damages = null,
+        string? damageComment = null,
+        string? barcode = null,
+        DateTime? closeDate = null
     )
     {
         if (!await IsModernSchemaAvailableAsync())
@@ -588,7 +592,11 @@ public class JobCardRepository : IJobCardRepository
                 otherCost,
                 invoiceNumber,
                 invoiceDate,
-                serviceProvider
+                serviceProvider,
+                damages,
+                damageComment,
+                barcode,
+                closeDate
             );
 
         var jobCard =

@@ -39,20 +39,13 @@ export function statusLabel(card: Pick<JobCardRecord, "statusCode" | "statusText
 }
 
 export function hasRole(roles: readonly string[], kind: "capturer" | "authorizer") {
+  const expectedRole = `jobcard${kind}`;
   return roles.some((role) => {
     const normalized = role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
-    return (
-      normalized.includes("jobcard") &&
-      normalized.includes(kind === "capturer" ? "captur" : "author")
-    );
+    return normalized === expectedRole;
   });
 }
 
-export function hasJobCardAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  const numericAccessLevel = Number(accessLevel);
-  return (
-    hasRole(roles, "capturer") ||
-    hasRole(roles, "authorizer") ||
-    (Number.isInteger(numericAccessLevel) && (numericAccessLevel & (1 | 32)) !== 0)
-  );
+export function hasJobCardAccess(_accessLevel: string | undefined, roles: readonly string[]) {
+  return hasRole(roles, "capturer") || hasRole(roles, "authorizer");
 }

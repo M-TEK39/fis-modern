@@ -67,7 +67,7 @@ function redirectWithMessage(
   redirect(`${path}${separator}${new URLSearchParams({ [key]: message }).toString()}`);
 }
 
-async function authorizeLogsheetMutation() {
+async function authorizeLogsheetEntry() {
   const session = await getSession();
   if (session.status === "unavailable")
     return {
@@ -84,9 +84,16 @@ async function authorizeLogsheetMutation() {
   );
   if (!hasReportsRole)
     return { ok: false as const, message: "You do not have permission to change logsheets." };
-  const code = Number(session.userAccessCode);
+  return { ok: true as const, session };
+}
+
+async function authorizeLogsheetManagement() {
+  const access = await authorizeLogsheetEntry();
+  if (!access.ok) return access;
+
+  const code = Number(access.session.userAccessCode);
   return [279, 47, 38].includes(code)
-    ? { ok: true as const, userCode: Number.isInteger(code) ? code : 0 }
+    ? { ok: true as const }
     : { ok: false as const, message: "You do not have permission to change logsheets." };
 }
 
@@ -97,6 +104,7 @@ function apiErrorMessage(error: unknown) {
     if (error.reason === "unavailable")
       return "The Logsheet service is temporarily unavailable. Please try again.";
     if (error.reason === "not-found") return "The logsheet was not found.";
+    if (error.reason === "conflict") return error.message;
   }
   return "The Logsheet operation failed. Please try again.";
 }
@@ -114,17 +122,18 @@ function writeInput(formData: FormData) {
     throw new LogsheetValidationError(
       "End odometer must be greater than or equal to start odometer.",
     );
-  const siteCode = requiredInteger(formData, "siteCode", "Site");
-  if (siteCode > 32767) throw new LogsheetValidationError("Site must be a valid legacy site code.");
+  const contractCode = requiredInteger(formData, "contractCode", "Contract");
   return {
     vmf_code: vmfCode,
     start_odo: startOdo,
     end_odo: endOdo,
     month: date(formData),
-    site_code: siteCode,
+    // The selected legacy contract determines the stored site and department.
+    site_code: 0,
     rek_num: requisition,
     days_used: optionalInteger(formData, "daysUsed", "Days used"),
     bund_num: optionalInteger(formData, "bundleNumber", "Batch number"),
+    contract_code: contractCode,
   };
 }
 
@@ -143,7 +152,7 @@ function revalidateLogsheetPages() {
 
 export async function createLogsheetAction(formData: FormData) {
   const path = returnPath(formData, "/log-sheets/enter");
-  const access = await authorizeLogsheetMutation();
+  const access = await authorizeLogsheetEntry();
   if (!access.ok) redirectWithMessage(path, "error", access.message);
   try {
     await createLogsheet(writeInput(formData));
@@ -161,7 +170,7 @@ export async function createLogsheetAction(formData: FormData) {
 export async function updateLogsheetAction(formData: FormData) {
   const logCode = requiredInteger(formData, "logsheetId", "Logsheet");
   const path = returnPath(formData, "/log-sheets/edit");
-  const access = await authorizeLogsheetMutation();
+  const access = await authorizeLogsheetManagement();
   if (!access.ok) redirectWithMessage(path, "error", access.message);
   try {
     await updateLogsheet(logCode, writeInput(formData));
@@ -179,7 +188,7 @@ export async function updateLogsheetAction(formData: FormData) {
 export async function deleteLogsheetAction(formData: FormData) {
   const logCode = requiredInteger(formData, "logsheetId", "Logsheet");
   const path = returnPath(formData, "/log-sheets/delete");
-  const access = await authorizeLogsheetMutation();
+  const access = await authorizeLogsheetManagement();
   if (!access.ok) redirectWithMessage(path, "error", access.message);
   try {
     await deleteLogsheet(logCode);

@@ -130,8 +130,9 @@ async function renderBatchManagementContent({ searchParams, action }: BatchPageP
             <form action={runBatchAction}>
               <input name="action" type="hidden" value={normalizedAction} />
               <p className="muted-copy">
-                This operation uses the existing Finance batch API and keeps its legacy database
-                workflow.
+                This operation is restricted to the legacy Advanced Financial Operations - Batch
+                role. Its restored database procedure path must be verified on the client system
+                before the operational result can be treated as legacy-equivalent.
               </p>
               <div className="button-row">
                 <button className="button button-primary" type="submit">

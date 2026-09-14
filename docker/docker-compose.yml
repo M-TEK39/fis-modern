@@ -16,7 +16,6 @@ services:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_URLS=http://+:8080
       - TZ=Africa/Johannesburg
-      - ConnectionStrings__Default=${ConnectionStrings__Default:-Server=${DB_HOST:-192.0.2.10},${DB_PORT:-1433};Database=${DB_NAME:-legacy};User Id=${DB_USER:-YOUR_DB_USER};Password=${DB_PASSWORD:-YOUR_DB_PASSWORD};Encrypt=${DB_ENCRYPT:-False};TrustServerCertificate=${DB_TRUST_SERVER_CERTIFICATE:-True};}
       - ApiSettings__WebBaseUrl=https://${SERVER_HOSTNAME:-${SERVER_IP:-localhost}}
       - AzureAd__TenantId=${AzureAd__TenantId:-}
       - AzureAd__ClientId=${AzureAd__ClientId:-}
@@ -91,9 +90,10 @@ services:
     working_dir: /tmp
     volumes:
       - ..:/src
+    env_file:
+      - ../.env
     command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj", "--"]
     environment:
-      - ConnectionStrings__Default=${ConnectionStrings__Default:?Set a real SQL Server connection string for db-migrate}
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - FIS_ALLOW_PRODUCTION_MIGRATIONS=${FIS_ALLOW_PRODUCTION_MIGRATIONS:-}
       - FIS_MIGRATION_OPERATOR=${FIS_MIGRATION_OPERATOR:-}
@@ -110,9 +110,10 @@ services:
     working_dir: /tmp
     volumes:
       - ..:/src
+    env_file:
+      - ../.env
     command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseAuditTool/DatabaseAuditTool.csproj", "--"]
     environment:
-      - ConnectionStrings__Default=${ConnectionStrings__Default:?Set a real SQL Server connection string for db-audit}
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
     restart: "no"
     profiles:
@@ -127,9 +128,10 @@ services:
     working_dir: /tmp
     volumes:
       - ..:/src
+    env_file:
+      - ../.env
     command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseBackfixTool/DatabaseBackfixTool.csproj", "--"]
     environment:
-      - ConnectionStrings__Default=${ConnectionStrings__Default:?Set a real SQL Server connection string for db-backfix}
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - FIS_ALLOW_PRODUCTION_DATA_FIXES=${FIS_ALLOW_PRODUCTION_DATA_FIXES:-}
     restart: "no"

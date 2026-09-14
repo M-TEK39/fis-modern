@@ -11,7 +11,6 @@ import {
 import { getSession } from "@/lib/auth/session";
 
 const VEHICLE_MANAGEMENT_PERMISSION = 1;
-const INCEPTION_ROLES = ["vehicle inception capturer", "vehicle inception authorizer"];
 
 export type VehicleAuthorizationActionState = {
   status: "idle" | "success" | "error";
@@ -46,10 +45,6 @@ function hasVehicleManagementPermission(accessLevel?: string) {
   }
 }
 
-function hasExplicitInceptionRole(roles: readonly string[]) {
-  return roles.some((role) => INCEPTION_ROLES.some((candidate) => hasRole([role], candidate)));
-}
-
 async function authorizeAction() {
   const session = await getSession();
 
@@ -74,9 +69,7 @@ async function authorizeAction() {
     };
   }
 
-  const canAuthorize =
-    hasRole(session.roles, "vehicle inception authorizer") ||
-    !hasExplicitInceptionRole(session.roles);
+  const canAuthorize = hasRole(session.roles, "vehicle inception authorizer");
   if (!canAuthorize) {
     return {
       ok: false as const,
@@ -135,12 +128,7 @@ export async function vehicleAuthorizationAction(
     if (intent === "approve") {
       result = await approveVehicleAuthorization(id, comment);
     } else if (intent === "reject") {
-      const rejectionReason = getText(formData, "rejectionReason");
-      if (!rejectionReason) {
-        return { status: "error", message: "Rejection reason is required." };
-      }
-
-      result = await rejectVehicleAuthorization(id, rejectionReason, comment);
+      result = await rejectVehicleAuthorization(id, comment);
     } else {
       result = await addVehicleAuthorizationComment(id, comment);
     }

@@ -16,10 +16,6 @@ import {
 } from "@/lib/api/finance/api-fml";
 import { getSession } from "@/lib/auth/session";
 
-const CONTRACT_MANAGEMENT_PERMISSION = BigInt(2);
-const VEHICLE_MANAGEMENT_PERMISSION = BigInt(1);
-const FINANCIAL_PERMISSION = BigInt(16);
-
 class FmlValidationError extends Error {}
 
 function getText(formData: FormData, name: string) {
@@ -71,25 +67,52 @@ function getBoolean(formData: FormData, name: string) {
   return getText(formData, name).toLowerCase() === "true";
 }
 
-function hasPermission(accessLevel: string | undefined, permission: bigint) {
-  if (!accessLevel) return false;
-  try {
-    return (BigInt(accessLevel) & permission) === permission;
-  } catch {
-    return false;
-  }
-}
-
-async function authorize(permission: bigint) {
+async function authorizeLeaseVehicleRole(expectedRole: string, action: string) {
   const session = await getSession();
   if (session.status === "unavailable")
     return { ok: false as const, message: "The sign-in service is temporarily unavailable." };
   if (session.status !== "authenticated")
     return { ok: false as const, message: "Your session has expired. Sign in again." };
-  if (!hasPermission(session.accessLevel, permission))
+  if (!session.roles.some((role) => role.trim().toLowerCase() === expectedRole.toLowerCase()))
     return {
       ok: false as const,
-      message: "You do not have permission to maintain Full Maintenance Lease records.",
+      message: `You do not have the ${expectedRole} role required to ${action}.`,
+    };
+  return { ok: true as const, session };
+}
+
+async function authorizeLeaseVehicleCapturer() {
+  return authorizeLeaseVehicleRole("Lease Vehicle Capturer", "capture lease contract terms");
+}
+
+async function authorizeLeaseVehicleAuthorizer() {
+  return authorizeLeaseVehicleRole("Lease Vehicle Authorizer", "authorise lease contract terms");
+}
+
+async function authorizeLeaseTariffMaintenance() {
+  const session = await getSession();
+  if (session.status === "unavailable")
+    return { ok: false as const, message: "The sign-in service is temporarily unavailable." };
+  if (session.status !== "authenticated")
+    return { ok: false as const, message: "Your session has expired. Sign in again." };
+  if (!session.roles.some((role) => role.trim().toLowerCase() === "vehicle master"))
+    return {
+      ok: false as const,
+      message: "You do not have the Vehicle Master role required to maintain lease tariffs.",
+    };
+  return { ok: true as const, session };
+}
+
+async function authorizeLeaseTariffImport() {
+  const session = await getSession();
+  if (session.status === "unavailable")
+    return { ok: false as const, message: "The sign-in service is temporarily unavailable." };
+  if (session.status !== "authenticated")
+    return { ok: false as const, message: "Your session has expired. Sign in again." };
+  if (!session.roles.some((role) => role.trim().toLowerCase() === "lease vehicle pending"))
+    return {
+      ok: false as const,
+      message: "You do not have the Lease Vehicle Pending role required to import lease tariffs.",
     };
   return { ok: true as const, session };
 }
@@ -139,7 +162,7 @@ function readTermInput(formData: FormData, authorityStatus: number): LeaseTermWr
 }
 
 export async function createLeaseTermAction(formData: FormData) {
-  const access = await authorize(CONTRACT_MANAGEMENT_PERMISSION);
+  const access = await authorizeLeaseVehicleCapturer();
   const path = "/full-maintenance-lease/add-lease";
   if (!access.ok) redirect(resultPath(path, "error", access.message));
 
@@ -156,32 +179,34 @@ export async function createLeaseTermAction(formData: FormData) {
 }
 
 export async function saveLeaseTermAction(formData: FormData) {
-  const access = await authorize(CONTRACT_MANAGEMENT_PERMISSION);
   const path = "/full-maintenance-lease/tariffs/details";
   const termId = getRequiredInteger(formData, "termId", "Lease term");
+  const operation = getText(formData, "operation");
+  const access =
+    operation === "approve" || operation === "reject"
+      ? await authorizeLeaseVehicleAuthorizer()
+      : await authorizeLeaseVehicleCapturer();
   if (!access.ok) redirect(resultPath(`${path}?id=${termId}`, "error", access.message));
 
-  const operation = getText(formData, "operation");
   try {
     let updated: LeaseTermRecord | null;
     if (operation === "approve" || operation === "reject") {
-      if (!hasPermission(access.session.accessLevel, FINANCIAL_PERMISSION))
-        throw new FmlValidationError("You do not have financial authorisation for this workflow.");
-
       const existing = await getLeaseTerm(termId);
-      const currentUserCode = Number(access.session.userAccessCode);
+      const legacyUsername = access.session.legacyUsername?.trim();
       if (
-        Number.isSafeInteger(currentUserCode) &&
-        currentUserCode > 0 &&
-        existing.createdByUserCode === currentUserCode
+        legacyUsername &&
+        existing.createdByUsername &&
+        legacyUsername.localeCompare(existing.createdByUsername, undefined, { sensitivity: "accent" }) === 0
       )
         throw new FmlValidationError(
-          "You cannot authorise a lease tariff that you captured yourself.",
+          `You cannot ${operation === "approve" ? "authorise" : "reject"} lease contract terms that you captured yourself.`,
         );
-
+      const reviewerComment = getText(formData, "authorityComment");
+      if (!reviewerComment)
+        throw new FmlValidationError(
+          `${operation === "approve" ? "Approval" : "Rejection"} comment is required.`,
+        );
       const rejectionReason = getText(formData, "rejectionReason");
-      if (operation === "reject" && !rejectionReason)
-        throw new FmlValidationError("Rejection reason is required.");
 
       updated = await updateLeaseTerm(termId, {
         vmf_Code: existing.vmfCode,
@@ -196,8 +221,9 @@ export async function saveLeaseTermAction(formData: FormData) {
         ExcessKilosTarrif: existing.excessKilosTariff,
         RelieveVehicle: existing.relieveVehicle,
         lease_site_code: existing.leaseSiteCode,
-        authority_comment: getText(formData, "authorityComment") || existing.authorityComment,
-        rejection_reason: rejectionReason || existing.rejectionReason,
+        authority_comment: reviewerComment,
+        rejection_reason:
+          operation === "reject" ? rejectionReason || reviewerComment : existing.rejectionReason,
         lease_notes: existing.comments,
       });
     } else {
@@ -226,7 +252,7 @@ export async function saveLeaseTermAction(formData: FormData) {
 }
 
 export async function createLeaseTariffAction(formData: FormData) {
-  const access = await authorize(CONTRACT_MANAGEMENT_PERMISSION | VEHICLE_MANAGEMENT_PERMISSION);
+  const access = await authorizeLeaseTariffMaintenance();
   const path = "/full-maintenance-lease/add-lease";
   if (!access.ok) redirect(resultPath(path, "error", access.message));
 
@@ -256,7 +282,7 @@ export async function createLeaseTariffAction(formData: FormData) {
 }
 
 export async function extendLeaseTariffAction(formData: FormData) {
-  const access = await authorize(CONTRACT_MANAGEMENT_PERMISSION | VEHICLE_MANAGEMENT_PERMISSION);
+  const access = await authorizeLeaseTariffMaintenance();
   const path = "/full-maintenance-lease/extend";
   if (!access.ok) redirect(resultPath(path, "error", access.message));
 
@@ -325,7 +351,7 @@ function csvNumber(value: string | undefined) {
 }
 
 export async function importLeaseTariffsAction(formData: FormData) {
-  const access = await authorize(CONTRACT_MANAGEMENT_PERMISSION | VEHICLE_MANAGEMENT_PERMISSION);
+  const access = await authorizeLeaseTariffImport();
   const path = "/full-maintenance-lease/upload";
   if (!access.ok) redirect(resultPath(path, "error", access.message));
 

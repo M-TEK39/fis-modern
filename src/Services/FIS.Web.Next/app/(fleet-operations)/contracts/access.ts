@@ -28,6 +28,9 @@ const REVIEWER_ROLES = [
   "contracts approver",
   "contract_approver",
   "contracts_approver",
+] as const;
+
+const BACKDATING_APPROVER_ROLES = [
   "back dating contract (approver)",
 ] as const;
 
@@ -77,6 +80,10 @@ export function hasContractCapturerRole(roles: readonly string[]) {
 
 export function hasContractReviewerRole(roles: readonly string[]) {
   return hasNamedRole(roles, REVIEWER_ROLES);
+}
+
+export function hasContractBackdatingApproverRole(roles: readonly string[]) {
+  return isContractAdministrator(roles) || hasNamedRole(roles, BACKDATING_APPROVER_ROLES);
 }
 
 export function isContractAdministrator(roles: readonly string[]) {

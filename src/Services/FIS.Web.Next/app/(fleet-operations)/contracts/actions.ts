@@ -409,7 +409,19 @@ export async function runContractAction(formData: FormData) {
       case "extend":
         await extendContractAgainstApi(
           contractId,
-          getRequiredDate(formData, "newTargetReturnDate", "New target return date"),
+          {
+            NewTargetReturnDate: getRequiredDate(
+              formData,
+              "newTargetReturnDate",
+              "New target return date",
+            ),
+            Notes: getText(formData, "extensionNotes") || null,
+            EstimatedOverallKilometres: getInteger(
+              formData,
+              "estimatedOverallKilometres",
+              "Estimated overall kilometres",
+            ),
+          },
         );
         operation = "extended";
         break;

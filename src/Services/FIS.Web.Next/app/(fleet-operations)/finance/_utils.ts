@@ -87,11 +87,7 @@ export function hasHeadOfficeFinanceAccess(
 }
 
 export function hasAdvancedBatchOperationsRole(roles: readonly string[]) {
-  return (
-    hasRole(roles, "Administrator") ||
-    hasRole(roles, "Admin") ||
-    hasRole(roles, "Advanced Financial Operations - Batch")
-  );
+  return hasRole(roles, "Advanced Financial Operations - Batch");
 }
 
 export function hasGeneralFinanceReportsAccess(roles: readonly string[]) {

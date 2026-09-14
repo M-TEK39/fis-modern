@@ -130,45 +130,6 @@ function CreateJobCardCategories({
                   {item.description || `Extra code ${item.extraCode}`}
                 </label>
               ))}
-            <div className="form-field">
-              <label className="form-label" htmlFor="job-card-create-priority">
-                Priority
-              </label>
-              <select
-                className="form-select"
-                id="job-card-create-priority"
-                name="priority"
-                defaultValue="N"
-              >
-                <option value="N">Normal</option>
-                <option value="H">High</option>
-              </select>
-            </div>
-            <div className="form-field form-group-full">
-              <label className="form-label" htmlFor="job-card-create-comment">
-                Job card comment
-              </label>
-              <textarea
-                className="form-input"
-                id="job-card-create-comment"
-                name="jcsComment"
-                maxLength={2000}
-                rows={3}
-                placeholder="Describe the required work"
-              />
-            </div>
-            <div className="form-field form-group-full">
-              <label className="form-label" htmlFor="job-card-create-damages">
-                Damages
-              </label>
-              <textarea
-                className="form-input"
-                id="job-card-create-damages"
-                name="damages"
-                maxLength={2000}
-                rows={3}
-              />
-            </div>
           </div>
           <div className="button-row">
             <button className="button button-primary" type="submit">

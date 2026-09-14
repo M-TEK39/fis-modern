@@ -8,7 +8,7 @@ import {
   AccessRestricted,
   ApiUnavailable,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
-import { hasFmlPermission } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
+import { hasLeaseVehiclePendingRole } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import { getSession } from "@/lib/auth/session";
 
 function HelpFallback() {
@@ -28,7 +28,7 @@ async function FmlHelpContent() {
     return <SessionRecovery returnPath="/full-maintenance-lease/help" />;
   if (session.status === "unavailable")
     return <ApiUnavailable message="FML help could not be opened." />;
-  if (!hasFmlPermission(session.accessLevel)) return <AccessRestricted />;
+  if (!hasLeaseVehiclePendingRole(session.roles)) return <AccessRestricted />;
 
   return (
     <>

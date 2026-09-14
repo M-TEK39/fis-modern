@@ -22,6 +22,8 @@ namespace FIS.Core.Infrastructure.Repositories;
 public sealed class LeaseTariffRepository : ILeaseTariffRepository
 {
     private const string TableName = "LeaseTariff";
+    private const string LegacyCreateProcedure = "DEV_INS_LeaseTariff";
+    private const string LegacyExtendProcedure = "DEV_UPD_LeaseTariffData";
 
     private static readonly string[] RequiredColumns =
     [
@@ -88,6 +90,17 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
         ArgumentNullException.ThrowIfNull(leaseTariff);
         Validate(leaseTariff);
 
+        if (await StoredProcedureExistsAsync(LegacyCreateProcedure))
+        {
+            await ExecuteLegacyCreateAsync(leaseTariff);
+            return await FindLegacyCreatedTariffAsync(leaseTariff)
+                ?? throw new InvalidOperationException(
+                    "The legacy lease-tariff procedure completed without returning a matching tariff record."
+                );
+        }
+
+        // Compatibility fallback for deployments where the restored legacy procedure is
+        // genuinely absent. Never retry this direct write after a procedure failure.
         var columns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
         var values = BuildWriteValues(leaseTariff, columns).ToList();
@@ -112,14 +125,33 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
     public async Task<LeaseTariff> UpdateAsync(LeaseTariff leaseTariff, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(leaseTariff);
-        Validate(leaseTariff);
 
-        _ =
+        var existing =
             await GetByIdAsync(leaseTariff.lease_tariff_code)
             ?? throw new InvalidOperationException(
                 $"LeaseTariff with lease_tariff_code {leaseTariff.lease_tariff_code} not found"
             );
 
+        if (await StoredProcedureExistsAsync(LegacyExtendProcedure))
+        {
+            if (leaseTariff.end_date < existing.start_date)
+                throw new ArgumentException(
+                    "The tariff end date cannot be earlier than its start date.",
+                    nameof(leaseTariff)
+                );
+
+            // The legacy extension page only supplies the code, new end date, and the
+            // literal D update type. It does not rewrite the remaining tariff fields.
+            await ExecuteLegacyExtendAsync(leaseTariff.lease_tariff_code, leaseTariff.end_date);
+            return await GetByIdAsync(leaseTariff.lease_tariff_code)
+                ?? throw new InvalidOperationException(
+                    "The legacy lease-tariff extension procedure removed the tariff record."
+                );
+        }
+
+        // Compatibility fallback for deployments where the restored legacy procedure is
+        // genuinely absent. Never retry this direct write after a procedure failure.
+        Validate(leaseTariff);
         var columns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
         var values = BuildWriteValues(leaseTariff, columns).ToList();
@@ -477,6 +509,104 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
         AddParameter(command, "@objectName", DbType.String, objectName);
         return Convert.ToInt32(await command.ExecuteScalarAsync()) == 1;
     }
+
+    private async Task<bool> StoredProcedureExistsAsync(string procedureName)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT CASE WHEN EXISTS
+                (
+                    SELECT 1
+                    FROM [sys].[procedures] AS [procedureObject]
+                    INNER JOIN [sys].[schemas] AS [schemaObject]
+                        ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
+                    WHERE [schemaObject].[name] = N'dbo'
+                      AND [procedureObject].[name] = @procedureName
+                ) THEN 1 ELSE 0 END
+                """;
+            AddParameter(command, "@procedureName", DbType.String, procedureName);
+            return Convert.ToInt32(await command.ExecuteScalarAsync()) == 1;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task ExecuteLegacyCreateAsync(LeaseTariff leaseTariff)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = LegacyCreateProcedure;
+            AddParameter(command, "@vmf_code", DbType.Int32, leaseTariff.vmf_code);
+            AddParameter(command, "@start_date", DbType.DateTime2, leaseTariff.start_date);
+            AddParameter(command, "@end_date", DbType.DateTime2, leaseTariff.end_date);
+            AddParameter(command, "@fixed_tariff", DbType.Decimal, leaseTariff.fixed_tariff);
+            AddParameter(
+                command,
+                "@excess_kilo_tariff",
+                DbType.Decimal,
+                leaseTariff.excess_kilo_tariff
+            );
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task ExecuteLegacyExtendAsync(int leaseTariffCode, DateTime newEndDate)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = LegacyExtendProcedure;
+            AddParameter(command, "@leaseCode", DbType.Int32, leaseTariffCode);
+            AddParameter(command, "@newEndDate", DbType.DateTime2, newEndDate);
+            AddParameter(command, "@typeUpdate", DbType.String, "D");
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task<LeaseTariff?> FindLegacyCreatedTariffAsync(LeaseTariff leaseTariff) =>
+        (await GetByVehicleAsync(leaseTariff.vmf_code))
+            .Where(candidate => candidate.start_date.Date == leaseTariff.start_date.Date)
+            .Where(candidate => candidate.end_date.Date == leaseTariff.end_date.Date)
+            .Where(candidate => candidate.fixed_tariff == leaseTariff.fixed_tariff)
+            .Where(candidate => candidate.excess_kilo_tariff == leaseTariff.excess_kilo_tariff)
+            .OrderByDescending(candidate => candidate.lease_tariff_code)
+            .FirstOrDefault();
 
     private static async Task ExecuteNonQueryAsync(
         DbConnection connection,

@@ -79,6 +79,34 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
             )
         ).FirstOrDefault();
 
+    public async Task<string?> GetCapturedByUsernameAsync(int vmfCode)
+    {
+        var availableColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
+        if (!availableColumns.Contains("CreatedBy"))
+            return null;
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText =
+                "SELECT TOP (1) NULLIF(LTRIM(RTRIM(CONVERT(varchar(200), [CreatedBy]))), '') FROM [dbo].[LeaseContractTerms] WHERE [vmf_Code] = @vmfCode";
+            AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
+            var value = await command.ExecuteScalarAsync();
+            return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
     public async Task<IEnumerable<LeaseContractTerms>> GetActiveTermsAsync() =>
         await QueryAsync("[l].[AuthorityStatus] = 2");
 
@@ -180,6 +208,197 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         return await GetByIdAsync(terms.VehicleContractTermID) ?? terms;
     }
 
+    public async Task<LeaseContractTerms> CaptureOrResubmitAsync(
+        LeaseContractTerms terms,
+        string username
+    )
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        ValidateVehicleCode(terms);
+        var comment = FirstNonEmpty(terms.authority_comment, terms.lease_notes, terms.Comments) ?? string.Empty;
+
+        if (
+            await IsLegacyProcedureAvailableAsync(
+                "DEV_UPD_LeaseContractTerms",
+                "@vmf_code",
+                "@AgreedTerms",
+                "@AgreedOverallKilo",
+                "@AgreedKilos",
+                "@AppliedInterest",
+                "@FixedMonthlyAmount",
+                "@ExcessKilos",
+                "@ReliefVehicle",
+                "@site_code",
+                "@Comments",
+                "@userName",
+                "@StartDate",
+                "@EndDate"
+            )
+        )
+        {
+            await ExecuteLegacyProcedureAsync(
+                "DEV_UPD_LeaseContractTerms",
+                new ProcedureParameter("@vmf_code", DbType.Int32, terms.vmf_Code),
+                new ProcedureParameter("@AgreedTerms", DbType.Int32, terms.AgreedTerms),
+                new ProcedureParameter(
+                    "@AgreedOverallKilo",
+                    DbType.Int32,
+                    terms.AgreedOverallKilo
+                ),
+                new ProcedureParameter("@AgreedKilos", DbType.Int64, terms.AgreedKilos),
+                new ProcedureParameter(
+                    "@AppliedInterest",
+                    DbType.Decimal,
+                    terms.AppliedInterest
+                ),
+                new ProcedureParameter(
+                    "@FixedMonthlyAmount",
+                    DbType.Decimal,
+                    terms.FixedMonthlyAmount
+                ),
+                new ProcedureParameter(
+                    "@ExcessKilos",
+                    DbType.Decimal,
+                    terms.ExcessKilosTarrif
+                ),
+                new ProcedureParameter(
+                    "@ReliefVehicle",
+                    DbType.Boolean,
+                    terms.RelieveVehicle ?? false
+                ),
+                new ProcedureParameter("@site_code", DbType.Int16, terms.lease_site_code),
+                new ProcedureParameter("@Comments", DbType.String, comment),
+                new ProcedureParameter("@userName", DbType.String, username),
+                new ProcedureParameter("@StartDate", DbType.Date, terms.StartDate),
+                new ProcedureParameter("@EndDate", DbType.Date, terms.EndDate)
+            );
+
+            var updated =
+                await GetByVehicleAsync(terms.vmf_Code)
+                ?? throw new InvalidOperationException(
+                    "The legacy lease-contract-term capture procedure completed without a readable term."
+                );
+            await InsertLegacyCommentAsync(updated, comment, username);
+            return await GetByIdAsync(updated.VehicleContractTermID) ?? updated;
+        }
+
+        throw new NotSupportedException(
+            "The legacy lease-contract-term capture procedure is unavailable; capture cannot be approximated."
+        );
+    }
+
+    public async Task<LeaseContractTerms> AuthorizeAsync(
+        LeaseContractTerms terms,
+        string comment,
+        string username
+    )
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        ValidateVehicleCode(terms);
+        if (string.IsNullOrWhiteSpace(comment))
+            throw new ArgumentException("A comment is required to authorise lease contract terms.", nameof(comment));
+
+        if (
+            !await IsLegacyProcedureAvailableAsync(
+                "DEV_UPD_LeaseContractTermsAuthorisation",
+                "@vmf_Code",
+                "@Comments",
+                "@AuthorisedBy"
+            )
+        )
+        {
+            throw new NotSupportedException(
+                "The legacy lease-contract-term authorisation procedure is unavailable; authorisation cannot be approximated."
+            );
+        }
+
+        await ExecuteLegacyProcedureAsync(
+            "DEV_UPD_LeaseContractTermsAuthorisation",
+            new ProcedureParameter("@vmf_Code", DbType.Int32, terms.vmf_Code),
+            new ProcedureParameter("@Comments", DbType.String, comment.Trim()),
+            new ProcedureParameter("@AuthorisedBy", DbType.String, username)
+        );
+        var updated =
+            await GetByVehicleAsync(terms.vmf_Code)
+            ?? throw new InvalidOperationException(
+                "The legacy lease-contract-term authorisation procedure completed without a readable term."
+            );
+        await InsertLegacyCommentAsync(updated, comment.Trim(), username);
+        return await GetByIdAsync(updated.VehicleContractTermID) ?? updated;
+    }
+
+    public async Task<LeaseContractTerms> RejectAsync(
+        LeaseContractTerms terms,
+        string comment,
+        string username
+    )
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        ValidateVehicleCode(terms);
+        if (string.IsNullOrWhiteSpace(comment))
+            throw new ArgumentException("A comment is required to reject lease contract terms.", nameof(comment));
+
+        if (
+            !await IsLegacyProcedureAvailableAsync(
+                "DEV_UPD_LeaseContractTermsRejection",
+                "@vmf_code",
+                "@Comments",
+                "@UpdatedBy"
+            )
+        )
+        {
+            throw new NotSupportedException(
+                "The legacy lease-contract-term rejection procedure is unavailable; rejection cannot be approximated."
+            );
+        }
+
+        await ExecuteLegacyProcedureAsync(
+            "DEV_UPD_LeaseContractTermsRejection",
+            new ProcedureParameter("@vmf_code", DbType.Int32, terms.vmf_Code),
+            new ProcedureParameter("@Comments", DbType.String, comment.Trim()),
+            new ProcedureParameter("@UpdatedBy", DbType.String, username)
+        );
+        var updated =
+            await GetByVehicleAsync(terms.vmf_Code)
+            ?? throw new InvalidOperationException(
+                "The legacy lease-contract-term rejection procedure completed without a readable term."
+            );
+        await InsertLegacyCommentAsync(updated, comment.Trim(), username);
+        return await GetByIdAsync(updated.VehicleContractTermID) ?? updated;
+    }
+
+    public async Task<LeaseContractTerms> RecallAsync(LeaseContractTerms terms)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        ValidateVehicleCode(terms);
+        if (terms.Rejected != 3)
+            throw new InvalidOperationException(
+                "Only a pending lease contract term can be recalled in the legacy workflow."
+            );
+
+        var registrationNumber = await FindVehicleRegistrationNumberAsync(terms.vmf_Code);
+        if (string.IsNullOrWhiteSpace(registrationNumber))
+            throw new InvalidOperationException(
+                "The selected lease vehicle has no registration number required by the legacy recall procedure."
+            );
+
+        if (!await IsLegacyProcedureAvailableAsync("DEV_UPD_LeaseContractTermsRecall", "@ggnum"))
+        {
+            throw new NotSupportedException(
+                "The legacy lease-contract-term recall procedure is unavailable; recall cannot be approximated."
+            );
+        }
+
+        await ExecuteLegacyProcedureAsync(
+            "DEV_UPD_LeaseContractTermsRecall",
+            new ProcedureParameter("@ggnum", DbType.String, registrationNumber)
+        );
+        return await GetByIdAsync(terms.VehicleContractTermID)
+            ?? throw new InvalidOperationException(
+                "The legacy lease-contract-term recall procedure removed the selected term."
+            );
+    }
+
     public async Task DeleteAsync(int termId, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
@@ -243,6 +462,156 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         }
     }
 
+    private async Task InsertLegacyCommentAsync(
+        LeaseContractTerms terms,
+        string comment,
+        string username
+    )
+    {
+        if (
+            !await IsLegacyProcedureAvailableAsync(
+                "DEV_INS_LeaseContractTermsComments",
+                "@comment",
+                "@CommentDate",
+                "@user_name",
+                "@vmf_code",
+                "@vehicle_contract_termID",
+                "@Status",
+                "@CommentCode"
+            )
+        )
+        {
+            throw new NotSupportedException(
+                "The legacy lease-contract-term comment procedure is unavailable; the workflow action cannot be completed without its audit comment."
+            );
+        }
+
+        await ExecuteLegacyProcedureAsync(
+            "DEV_INS_LeaseContractTermsComments",
+            new ProcedureParameter("@comment", DbType.String, comment),
+            new ProcedureParameter("@CommentDate", DbType.DateTime, DateTime.Now),
+            new ProcedureParameter("@user_name", DbType.String, username),
+            new ProcedureParameter("@vmf_code", DbType.Int32, terms.vmf_Code),
+            new ProcedureParameter(
+                "@vehicle_contract_termID",
+                DbType.Int32,
+                terms.VehicleContractTermID
+            ),
+            new ProcedureParameter("@Status", DbType.Int32, terms.Rejected ?? 0),
+            new ProcedureParameter("@CommentCode", DbType.Int32, 0, ParameterDirection.Output)
+        );
+    }
+
+    private async Task<string?> FindVehicleRegistrationNumberAsync(int vmfCode)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText =
+                "SELECT TOP (1) NULLIF(LTRIM(RTRIM([registration_number])), '') FROM [dbo].[vehicle_master] WHERE [vmf_code] = @vmfCode";
+            AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
+            var value = await command.ExecuteScalarAsync();
+            return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task<bool> IsLegacyProcedureAvailableAsync(
+        string procedureName,
+        params string[] expectedParameters
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [parameterObject].[name]
+                FROM [sys].[procedures] AS [procedureObject]
+                INNER JOIN [sys].[schemas] AS [schemaObject]
+                    ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
+                LEFT JOIN [sys].[parameters] AS [parameterObject]
+                    ON [parameterObject].[object_id] = [procedureObject].[object_id]
+                WHERE [schemaObject].[name] = N'dbo'
+                  AND [procedureObject].[name] = @procedureName
+                ORDER BY [parameterObject].[parameter_id]
+                """;
+            AddParameter(command, "@procedureName", DbType.String, procedureName);
+            var actualParameters = new List<string>();
+            var procedureFound = false;
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                procedureFound = true;
+                if (!reader.IsDBNull(0))
+                    actualParameters.Add(reader.GetString(0));
+            }
+
+            if (!procedureFound)
+                return false;
+            if (!actualParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"The deployed legacy procedure {procedureName} does not match the verified parameter contract. No direct-DML fallback was run."
+                );
+            return true;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task ExecuteLegacyProcedureAsync(
+        string procedureName,
+        params ProcedureParameter[] parameters
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = procedureName;
+            command.CommandTimeout = 0;
+            foreach (var item in parameters)
+            {
+                var parameter = command.CreateParameter();
+                parameter.ParameterName = item.Name;
+                parameter.DbType = item.Type;
+                parameter.Direction = item.Direction;
+                parameter.Value = item.Value ?? DBNull.Value;
+                command.Parameters.Add(parameter);
+            }
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
     private async Task<List<LeaseContractTerms>> QueryAsync(
         string? predicate = null,
         Action<DbCommand>? configure = null,
@@ -289,7 +658,12 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
                     "decimal(18,2)"
                 ),
                 GetAuthorityStatusProjection(availableColumns),
-                GetProjection(availableColumns, "CreatedBy", "CreatedBy", "int"),
+                GetLegacyUserIdProjection(availableColumns, "CreatedBy", "CreatedBy"),
+                GetLegacyUsernameProjection(
+                    availableColumns,
+                    "CreatedByUsername",
+                    "CreatedBy"
+                ),
                 GetDateProjection(
                     availableColumns,
                     "CreatedDate",
@@ -297,11 +671,17 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
                     "CreatedDate",
                     "date_created"
                 ),
-                GetPreferredProjection(
+                GetLegacyUserIdProjection(
                     availableColumns,
                     "ModifiedBy",
-                    ["ModifiedBy", "UpdatedBy"],
-                    "int"
+                    "ModifiedBy",
+                    "UpdatedBy"
+                ),
+                GetLegacyUsernameProjection(
+                    availableColumns,
+                    "UpdatedByUsername",
+                    "ModifiedBy",
+                    "UpdatedBy"
                 ),
                 GetPreferredDateProjection(
                     availableColumns,
@@ -316,17 +696,18 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
                     "date_updated",
                     ["date_updated", "ModifiedDate", "UpdatedDate"]
                 ),
-                GetPreferredProjection(
+                GetLegacyUserIdProjection(
                     availableColumns,
                     "created_by_user_code",
-                    ["created_by_user_code", "CreatedBy"],
-                    "int"
+                    "created_by_user_code",
+                    "CreatedBy"
                 ),
-                GetPreferredProjection(
+                GetLegacyUserIdProjection(
                     availableColumns,
                     "modified_by_user_code",
-                    ["modified_by_user_code", "ModifiedBy", "UpdatedBy"],
-                    "int"
+                    "modified_by_user_code",
+                    "ModifiedBy",
+                    "UpdatedBy"
                 ),
                 GetOptionalProjection(availableColumns, "is_deleted", "bit", "0"),
                 GetProjection(availableColumns, "AgreedOverallKilo", "AgreedOverallKilo", "int"),
@@ -337,10 +718,20 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
                     "decimal(18,2)"
                 ),
                 GetProjection(availableColumns, "RelieveVehicle", "RelieveVehicle", "bit"),
-                GetProjection(availableColumns, "lease_site_code", "lease_site_code", "smallint"),
+                GetPreferredProjection(
+                    availableColumns,
+                    "lease_site_code",
+                    ["lease_site_code", "site_code"],
+                    "smallint"
+                ),
                 GetProjection(availableColumns, "Comments", "Comments", "varchar(250)"),
                 GetProjection(availableColumns, "Rejected", "Rejected", "int"),
-                GetProjection(availableColumns, "AuthorisedBy", "AuthorisedBy", "int"),
+                GetLegacyUserIdProjection(availableColumns, "AuthorisedBy", "AuthorisedBy"),
+                GetLegacyUsernameProjection(
+                    availableColumns,
+                    "AuthorisedByUsername",
+                    "AuthorisedBy"
+                ),
                 GetProjection(availableColumns, "AuthorisedDate", "AuthorisedDate", "datetime2"),
                 GetPreferredProjection(
                     availableColumns,
@@ -495,20 +886,19 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
 
     private static string? GetStatusPredicate(string? status, IReadOnlySet<string> availableColumns)
     {
-        var statusCode = status switch
-        {
-            "pending" => 1,
-            "approved" => 2,
-            "rejected" => 4,
-            _ => (int?)null,
-        };
-        if (statusCode is null)
-        {
-            return null;
-        }
-
         var statusExpression = GetEffectiveAuthorityStatusExpression(availableColumns);
-        return statusExpression is null ? "1 = 0" : $"{statusExpression} = {statusCode.Value}";
+        if (statusExpression is null)
+            return "1 = 0";
+
+        return status switch
+        {
+            "pending" => $"{statusExpression} = 1",
+            "approved" => $"{statusExpression} = 2",
+            // The live DEV_UPD_LeaseContractTermsRejection procedure stores
+            // AuthorityStatus = 0. Some expanded databases retained 4.
+            "rejected" => $"{statusExpression} IN (0, 4)",
+            _ => null,
+        };
     }
 
     private static string GetVehicleJoinClause(
@@ -827,8 +1217,10 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
             FixedMonthlyAmount = ReadDecimal(reader, "FixedMonthlyAmount"),
             AuthorityStatus = ReadInt32(reader, "AuthorityStatus"),
             CreatedBy = ReadInt32(reader, "CreatedBy"),
+            CreatedByUsername = ReadString(reader, "CreatedByUsername"),
             CreatedDate = ReadDateTime(reader, "CreatedDate"),
             ModifiedBy = ReadInt32(reader, "ModifiedBy"),
+            UpdatedByUsername = ReadString(reader, "UpdatedByUsername"),
             ModifiedDate = ReadDateTime(reader, "ModifiedDate"),
             StartDate = ReadDateTime(reader, "StartDate"),
             EndDate = ReadDateTime(reader, "EndDate"),
@@ -844,6 +1236,7 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
             Comments = ReadString(reader, "Comments"),
             Rejected = ReadInt32(reader, "Rejected"),
             AuthorisedBy = ReadInt32(reader, "AuthorisedBy"),
+            AuthorisedByUsername = ReadString(reader, "AuthorisedByUsername"),
             AuthorisedDate = ReadDateTime(reader, "AuthorisedDate"),
             authority_comment = ReadString(reader, "authority_comment"),
             rejection_reason = ReadString(reader, "rejection_reason"),
@@ -965,6 +1358,30 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         columns.Contains(column)
             ? $"[l].[{column}] AS [{alias}]"
             : $"CAST(NULL AS {sqlType}) AS [{alias}]";
+
+    private static string GetLegacyUserIdProjection(
+        IReadOnlySet<string> columns,
+        string alias,
+        params string[] candidates
+    )
+    {
+        var available = candidates.Where(columns.Contains).ToArray();
+        return available.Length == 0
+            ? $"CAST(NULL AS int) AS [{alias}]"
+            : $"COALESCE({string.Join(", ", available.Select(column => $"TRY_CONVERT(int, [l].[{column}])"))}) AS [{alias}]";
+    }
+
+    private static string GetLegacyUsernameProjection(
+        IReadOnlySet<string> columns,
+        string alias,
+        params string[] candidates
+    )
+    {
+        var available = candidates.Where(columns.Contains).ToArray();
+        return available.Length == 0
+            ? $"CAST(NULL AS varchar(200)) AS [{alias}]"
+            : $"COALESCE({string.Join(", ", available.Select(column => $"NULLIF(LTRIM(RTRIM(CONVERT(varchar(200), [l].[{column}]))), '')"))}) AS [{alias}]";
+    }
 
     private static string GetOptionalProjection(
         IReadOnlySet<string> columns,
@@ -1114,4 +1531,11 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
     );
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
+
+    private sealed record ProcedureParameter(
+        string Name,
+        DbType Type,
+        object? Value,
+        ParameterDirection Direction = ParameterDirection.Input
+    );
 }

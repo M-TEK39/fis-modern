@@ -82,12 +82,10 @@ function redirectWithMessage(
 }
 
 function hasJobCardRole(roles: readonly string[], kind: "capturer" | "authorizer") {
+  const expectedRole = `jobcard${kind}`;
   return roles.some((role) => {
     const normalized = role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
-    return (
-      normalized.includes("jobcard") &&
-      normalized.includes(kind === "capturer" ? "captur" : "author")
-    );
+    return normalized === expectedRole;
   });
 }
 
@@ -104,9 +102,7 @@ async function authorizePage(kind: "capturer" | "authorizer") {
       message: "Your session has expired. Sign in again before continuing.",
     };
 
-  const accessLevel = Number(session.accessLevel);
-  const hasLegacyAccess = Number.isInteger(accessLevel) && (accessLevel & (1 | 32)) !== 0;
-  const allowed = hasJobCardRole(session.roles, kind) || hasLegacyAccess;
+  const allowed = hasJobCardRole(session.roles, kind);
   return allowed
     ? { ok: true as const }
     : { ok: false as const, message: `You do not have Job Card ${kind} access.` };
@@ -153,19 +149,14 @@ export async function createJobCardAction(formData: FormData) {
     }, []);
     if (extraCodes.length === 0)
       throw new JobCardValidationError("Select at least one job card category.");
-    const comment = optionalText(formData, "jcsComment", "Comment", 2000);
-    const damages = optionalText(formData, "damages", "Damages", 2000);
-    await Promise.all(
-      extraCodes.map((extraCode) =>
-        createJobCard({
-          vmf_code: vmfCode,
-          extra_code: extraCode,
-          jcs_comment: comment,
-          damages,
-          priority: text(formData, "priority") || "N",
-        }),
-      ),
-    );
+    // Legacy creates each selected category in its selected order. Do not
+    // parallelize procedure calls: their business side effects are ordered.
+    for (const extraCode of extraCodes) {
+      await createJobCard({
+        vmf_code: vmfCode,
+        extra_code: extraCode,
+      });
+    }
     revalidateJobCardPages();
     redirectWithMessage(path, "saved", "1");
   } catch (error) {
@@ -185,12 +176,11 @@ export async function updateJobCardAction(formData: FormData) {
 
   try {
     await updateJobCard(id, {
-      jcs_comment: optionalText(formData, "jcsComment", "Job card comment", 2000),
-      damages: optionalText(formData, "damages", "Damages", 2000),
-      comments: optionalText(formData, "comments", "Comments", 2000),
+      jcs_comment: optionalText(formData, "jcsComment", "Job card comment", 150),
+      damages: optionalText(formData, "damages", "Damages", 1)?.toUpperCase() ?? null,
+      comments: optionalText(formData, "comments", "Damage comment", 500),
       assigned_to: optionalInteger(formData, "assignedTo", "Assigned user"),
       assigned_date: optionalDate(formData, "assignedDate", "Assigned date"),
-      priority: text(formData, "priority") || null,
     });
     revalidateJobCardPages();
     redirectWithMessage(path, "updated", "1");
@@ -272,13 +262,11 @@ export async function closeJobCardAction(formData: FormData) {
 
   try {
     await closeJobCard(id, {
-      close_notes: optionalText(formData, "closeNotes", "Close notes", 2000),
-      labour_cost: optionalMoney(formData, "labourCost", "Labour cost"),
-      parts_cost: optionalMoney(formData, "partsCost", "Parts cost"),
-      other_cost: optionalMoney(formData, "otherCost", "Other cost"),
-      invoice_number: optionalText(formData, "invoiceNumber", "Invoice number", 50),
-      invoice_date: optionalDate(formData, "invoiceDate", "Invoice date"),
-      service_provider: optionalText(formData, "serviceProvider", "Service provider", 200),
+      close_notes: optionalText(formData, "closeNotes", "Close notes", 150),
+      damages: optionalText(formData, "damages", "Damages", 1)?.toUpperCase() ?? null,
+      damage_comment: optionalText(formData, "damageComment", "Damage comment", 500),
+      barcode: optionalText(formData, "barcode", "Barcode", 20),
+      close_date: optionalDate(formData, "closeDate", "Close date"),
     });
     revalidateJobCardPages();
     redirectWithMessage(path, "updated", "Job card closed.");

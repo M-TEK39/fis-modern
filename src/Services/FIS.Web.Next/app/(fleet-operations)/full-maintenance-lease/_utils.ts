@@ -1,21 +1,19 @@
 import type { LeaseTermRecord } from "@/lib/api/finance/api-fml";
 
-export function hasFmlPermission(accessLevel: string | undefined) {
-  if (!accessLevel) return false;
-  try {
-    return (BigInt(accessLevel) & BigInt(2)) === BigInt(2);
-  } catch {
-    return false;
-  }
+export function hasLeaseTariffMaintenanceRole(roles: readonly string[]) {
+  return roles.some((role) => role.trim().toLowerCase() === "vehicle master");
 }
 
-export function hasFinancialPermission(accessLevel: string | undefined) {
-  if (!accessLevel) return false;
-  try {
-    return (BigInt(accessLevel) & BigInt(16)) === BigInt(16);
-  } catch {
-    return false;
-  }
+export function hasLeaseVehiclePendingRole(roles: readonly string[]) {
+  return roles.some((role) => role.trim().toLowerCase() === "lease vehicle pending");
+}
+
+export function hasLeaseVehicleCapturerRole(roles: readonly string[]) {
+  return roles.some((role) => role.trim().toLowerCase() === "lease vehicle capturer");
+}
+
+export function hasLeaseVehicleAuthorizerRole(roles: readonly string[]) {
+  return roles.some((role) => role.trim().toLowerCase() === "lease vehicle authorizer");
 }
 
 export function getStatusLabel(status: number | null) {
@@ -23,7 +21,7 @@ export function getStatusLabel(status: number | null) {
     ? "Pending"
     : status === 2
       ? "Approved"
-      : status === 4
+      : status === 0 || status === 4
         ? "Rejected"
         : "Unknown";
 }
@@ -31,7 +29,7 @@ export function getStatusLabel(status: number | null) {
 export function getStatusClass(status: number | null) {
   return status === 2
     ? "badge badge-success"
-    : status === 4
+    : status === 0 || status === 4
       ? "badge badge-error"
       : "badge badge-warning";
 }
