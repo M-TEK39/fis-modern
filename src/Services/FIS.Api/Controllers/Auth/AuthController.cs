@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -1531,6 +1532,11 @@ public class AuthController : ControllerBase
     /// enabled audit triggers, so EF Core's generated <c>OUTPUT</c> statement is
     /// incompatible; its expanded audit-column mappings are also optional.
     /// </summary>
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review if the query string passed to 'string DbCommand.CommandText' accepts any user input",
+        Justification = "Each branch is a fixed legacy-table update; user access code and timestamp are supplied as parameters."
+    )]
     private async Task PersistLegacyLoginStateAsync(int userAccessCode, bool successfulLogin)
     {
         var connection = _context.Database.GetDbConnection();
