@@ -17,7 +17,7 @@ import {
 import {
   formatCurrency,
   formatDate,
-  hasFmlPermission,
+  hasLeaseTariffMaintenanceRole,
   vehicleLabel,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import { FmlApiError, getLatestLeaseTariff } from "@/lib/api/finance/api-fml";
@@ -66,7 +66,7 @@ async function renderFmlAddLeasePageContent({
         <ApiUnavailable message="The FML tariff form could not be opened." />
       </main>
     );
-  if (!hasFmlPermission(session.accessLevel))
+  if (!hasLeaseTariffMaintenanceRole(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

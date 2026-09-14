@@ -18,6 +18,7 @@ export type LogsheetRecord = {
   requisitionNumber: string | null;
   daysUsed: number | null;
   bundleNumber: number | null;
+  contractCode: number | null;
   dateCreated: string | null;
   dateUpdated: string | null;
   createdByUserCode: number | null;
@@ -34,6 +35,15 @@ export type LogsheetWriteInput = {
   rek_num: string;
   days_used: number | null;
   bund_num: number | null;
+  contract_code: number;
+};
+
+export type LogsheetContractOption = {
+  contractCode: number;
+  siteCode: number;
+  siteDescription: string | null;
+  startDate: string;
+  endDate: string | null;
 };
 
 export type LogsheetPage = {
@@ -47,7 +57,7 @@ export type LogsheetPage = {
 export const DEFAULT_LOGSHEET_PAGE_SIZE = 24;
 
 export type LogsheetApiErrorReason =
-  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+  "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "conflict";
 
 export class LogsheetApiError extends Error {
   constructor(
@@ -127,8 +137,16 @@ async function requestApi(path: string, init: RequestInit = {}) {
     }
     if (response.status === 404)
       throw new LogsheetApiError("not-found", "The logsheet was not found.");
-    if (!response.ok)
-      throw new LogsheetApiError("invalid-response", `FIS API returned HTTP ${response.status}.`);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      const message = isRecord(payload)
+        ? asString(getValue(payload, "error", "message", "detail", "title"))
+        : null;
+      throw new LogsheetApiError(
+        response.status === 409 ? "conflict" : "invalid-response",
+        message ?? `FIS API returned HTTP ${response.status}.`,
+      );
+    }
     return response;
   } catch (error) {
     if (error instanceof LogsheetApiError) throw error;
@@ -179,6 +197,7 @@ function mapLogsheet(value: unknown): LogsheetRecord | null {
     requisitionNumber: asString(getValue(value, "rek_num", "rekNum")),
     daysUsed: asNumber(getValue(value, "days_used", "daysUsed")),
     bundleNumber: asNumber(getValue(value, "bund_num", "bundNum")),
+    contractCode: asNumber(getValue(value, "contract_code", "contractCode")),
     dateCreated: asString(getValue(value, "date_created", "dateCreated")),
     dateUpdated: asString(getValue(value, "date_updated", "dateUpdated")),
     createdByUserCode: asNumber(getValue(value, "created_by_user_code", "createdByUserCode")),
@@ -273,6 +292,28 @@ export async function getLogsheet(logCode: number) {
   return record;
 }
 
+export async function getLogsheetContracts(vmfCode: number): Promise<LogsheetContractOption[]> {
+  const payload = await readJson(
+    await requestApi(`api/logsheet/vehicle/${encodeURIComponent(vmfCode)}/contracts`),
+  );
+  return getCollection(payload)
+    .map((value) => {
+      if (!isRecord(value)) return null;
+      const contractCode = asNumber(getValue(value, "contractCode", "ContractCode"));
+      const siteCode = asNumber(getValue(value, "siteCode", "SiteCode"));
+      const startDate = asString(getValue(value, "startDate", "StartDate"));
+      if (contractCode === null || siteCode === null || !startDate) return null;
+      return {
+        contractCode,
+        siteCode,
+        siteDescription: asString(getValue(value, "siteDescription", "SiteDescription")),
+        startDate,
+        endDate: asString(getValue(value, "endDate", "EndDate")),
+      };
+    })
+    .filter((value): value is LogsheetContractOption => value !== null);
+}
+
 export async function createLogsheet(input: LogsheetWriteInput) {
   const payload = await readJson(
     await mutate("api/logsheet/entry", "POST", {
@@ -284,6 +325,7 @@ export async function createLogsheet(input: LogsheetWriteInput) {
       requisitionNumber: input.rek_num,
       daysUsed: input.days_used,
       bundleNumber: input.bund_num,
+      contractCode: input.contract_code,
     }),
   );
   const logCode = isRecord(payload) ? asNumber(getValue(payload, "logCode", "LogCode")) : null;
@@ -305,6 +347,7 @@ export async function updateLogsheet(logCode: number, input: LogsheetWriteInput)
     requisitionNumber: input.rek_num,
     daysUsed: input.days_used,
     bundleNumber: input.bund_num,
+    contractCode: input.contract_code,
   });
   const payload = await readJson(response);
   if (isRecord(payload) && getValue(payload, "success", "Success") === false) {

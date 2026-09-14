@@ -19,7 +19,6 @@ export default function ReviewModalActionForm({
   onClose: () => void;
 }>) {
   const [comment, setComment] = useState("");
-  const [rejectionReason, setRejectionReason] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -40,9 +39,10 @@ export default function ReviewModalActionForm({
       return;
     }
 
-    if (intent === "reject" && !rejectionReason.trim()) {
+    const maximumCommentLength = intent === "reject" ? 244 : 255;
+    if (comment.trim().length > maximumCommentLength) {
       event.preventDefault();
-      setFormError("Rejection reason is required.");
+      setFormError(`Authorizer comment must be ${maximumCommentLength} characters or fewer.`);
       return;
     }
 
@@ -73,17 +73,8 @@ export default function ReviewModalActionForm({
           rows={3}
           value={comment}
           onChange={(event) => setComment(event.target.value)}
+          maxLength={255}
           required
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="vehicle-rejection-reason">Rejection Reason</label>
-        <input
-          id="vehicle-rejection-reason"
-          name="rejectionReason"
-          type="text"
-          value={rejectionReason}
-          onChange={(event) => setRejectionReason(event.target.value)}
         />
       </div>
       <div className="vehicle-create-actions">

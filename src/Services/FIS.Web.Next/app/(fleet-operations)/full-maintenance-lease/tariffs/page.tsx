@@ -17,8 +17,9 @@ import {
   formatDate,
   getStatusClass,
   getStatusLabel,
-  hasFinancialPermission,
-  hasFmlPermission,
+  hasLeaseVehicleAuthorizerRole,
+  hasLeaseVehicleCapturerRole,
+  hasLeaseVehiclePendingRole,
   vehicleLabel,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import {
@@ -55,13 +56,18 @@ function pageHref(query: Record<string, string | string[] | undefined>, page: nu
 }
 
 function workflowMode(
-  term: { authorityStatus: number | null; createdByUserCode: number | null },
-  currentUserCode: number | null,
+  term: { authorityStatus: number | null; createdByUsername: string | null },
+  legacyUsername: string | null,
+  canCapture: boolean,
   canReview: boolean,
 ) {
-  const isCapturer = currentUserCode !== null && term.createdByUserCode === currentUserCode;
+  const isCapturer =
+    Boolean(legacyUsername) &&
+    Boolean(term.createdByUsername) &&
+    legacyUsername!.localeCompare(term.createdByUsername!, undefined, { sensitivity: "accent" }) === 0;
   if (term.authorityStatus === 1 && canReview && !isCapturer) return "review";
-  if ((term.authorityStatus === 1 || term.authorityStatus === 4) && isCapturer) return "edit";
+  if ((term.authorityStatus === 0 || term.authorityStatus === 1 || term.authorityStatus === 4) && canCapture)
+    return "edit";
   return "view";
 }
 
@@ -85,7 +91,7 @@ async function renderFmlTariffQueuePageContent({
         <ApiUnavailable message="The FML tariff queue could not be opened." />
       </main>
     );
-  if (!hasFmlPermission(session.accessLevel))
+  if (!hasLeaseVehiclePendingRole(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />
@@ -97,9 +103,7 @@ async function renderFmlTariffQueuePageContent({
   const requestedPage = positivePage(first(query.page));
   const result = first(query.result);
   const message = first(query.message);
-  const currentUserCode = Number(session.userAccessCode);
-  const currentUser =
-    Number.isSafeInteger(currentUserCode) && currentUserCode > 0 ? currentUserCode : null;
+  const legacyUsername = session.legacyUsername?.trim() || null;
   let termsPage: LeaseTermsPage;
   let vehicles;
   try {
@@ -124,7 +128,8 @@ async function renderFmlTariffQueuePageContent({
   }
 
   const labels = new Map(vehicles.map((vehicle) => [vehicle.vmfCode, vehicleLabel(vehicle)]));
-  const canReview = hasFinancialPermission(session.accessLevel);
+  const canCapture = hasLeaseVehicleCapturerRole(session.roles);
+  const canReview = hasLeaseVehicleAuthorizerRole(session.roles);
   return (
     <FmlFrame
       title="Tariff Capture Queue"
@@ -132,8 +137,8 @@ async function renderFmlTariffQueuePageContent({
     >
       <ActionNotice result={result} message={message} />
       <div className="notice notice-info" role="note">
-        Capturers can edit their pending or rejected records. Financial users can review pending
-        records captured by someone else.
+        Capturers can edit pending or rejected records. Lease Vehicle Authorizers can review
+        pending records captured by someone else.
       </div>
       <form method="get" className="form-row">
         <input type="hidden" name="page" value="1" />
@@ -172,7 +177,7 @@ async function renderFmlTariffQueuePageContent({
             />
             <tbody>
               {termsPage.items.map((term) => {
-                const mode = workflowMode(term, currentUser, canReview);
+                const mode = workflowMode(term, legacyUsername, canCapture, canReview);
                 return (
                   <tr key={term.termId}>
                     <td>{term.termId}</td>

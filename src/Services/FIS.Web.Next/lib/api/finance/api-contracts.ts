@@ -484,10 +484,20 @@ export async function postContractAction(path: string, body: unknown = {}) {
   return readJson(await requestApi(path, { method: "POST", body: JSON.stringify(body) }));
 }
 
-export async function extendContractAgainstApi(contractCode: number, newTargetReturnDate: string) {
-  return postContractAction(`api/contracts/${encodeURIComponent(contractCode)}/extend`, {
-    NewTargetReturnDate: newTargetReturnDate,
-  });
+export async function extendContractAgainstApi(
+  contractCode: number,
+  request: {
+    NewTargetReturnDate: string;
+    Notes?: string | null;
+    EstimatedOverallKilometres?: number | null;
+  },
+) {
+  return readJson(
+    await requestApi(`api/contracts/${encodeURIComponent(contractCode)}/extend`, {
+      method: "PUT",
+      body: JSON.stringify(request),
+    }),
+  );
 }
 
 export async function closeContractAgainstApi(contractCode: number, request: CloseContractRequest) {

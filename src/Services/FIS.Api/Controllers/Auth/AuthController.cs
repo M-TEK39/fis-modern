@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using FIS.Api.Services;
+using FIS.Api.Services.Finance;
 using FIS.Api.Services.SessionManagement;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Interfaces.Auth;
@@ -34,6 +35,7 @@ public class AuthController : ControllerBase
     private readonly IEmailNotificationService _emailNotificationService;
     private readonly IPasswordService _passwordService;
     private readonly LegacyCredentialCompatibilityService _legacyCredentialCompatibility;
+    private readonly LegacyFinanceAccessService _legacyFinanceAccess;
     private readonly ISessionManagementService _sessionManagementService;
 
     public AuthController(
@@ -44,6 +46,7 @@ public class AuthController : ControllerBase
         IEmailNotificationService emailNotificationService,
         IPasswordService passwordService,
         LegacyCredentialCompatibilityService legacyCredentialCompatibility,
+        LegacyFinanceAccessService legacyFinanceAccess,
         ISessionManagementService sessionManagementService
     )
     {
@@ -54,6 +57,7 @@ public class AuthController : ControllerBase
         _emailNotificationService = emailNotificationService;
         _passwordService = passwordService;
         _legacyCredentialCompatibility = legacyCredentialCompatibility;
+        _legacyFinanceAccess = legacyFinanceAccess;
         _sessionManagementService = sessionManagementService;
     }
 
@@ -227,9 +231,13 @@ public class AuthController : ControllerBase
 
         var accessLevel = profile.UserAccessOld?.AccessLevel ?? 0L;
 
+        var namedRoles = await _legacyFinanceAccess.GetLegacyNamedRolesAsync(
+            profile.ResolvedUsername,
+            HttpContext.RequestAborted
+        );
         var grantedRoles = LegacyRoleMap
             .RolesForAccessLevel(accessLevel)
-            .Concat(await TryGetLegacyNamedRolesAsync(profile.ResolvedUsername))
+            .Concat(namedRoles)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         _logger.LogInformation(
@@ -240,12 +248,24 @@ public class AuthController : ControllerBase
         );
 
         var email = profile.User?.email ?? profile.UserAccessOld?.E_Mail ?? request.Username.Trim();
+        var financeProfile = await _legacyFinanceAccess.ResolveProfileScopeAsync(
+            profile.UserAccessCode,
+            HttpContext.RequestAborted
+        );
         var authClaims = BuildAuthClaims(
             profile.UserAccessCode,
             email,
             accessLevel,
             passwordExpired,
-            grantedRoles
+            grantedRoles,
+            financeProfile?.DepartmentCode,
+            financeProfile?.SiteCode,
+            namedRoles.Contains("Financial Data (All Departments)", StringComparer.OrdinalIgnoreCase),
+            profile.ResolvedUsername,
+            namedRoles.Contains(
+                "Vehicle List for All Departments in Province",
+                StringComparer.OrdinalIgnoreCase
+            )
         );
         var tokens = _sessionTokenStore.IssueTokens(authClaims, request.RememberMe);
 
@@ -2037,7 +2057,12 @@ public class AuthController : ControllerBase
         string email,
         long accessLevel = 0,
         bool passwordExpired = false,
-        IEnumerable<string>? additionalRoles = null
+        IEnumerable<string>? additionalRoles = null,
+        short? departmentCode = null,
+        short? siteCode = null,
+        bool hasAllDepartmentFinanceDataRole = false,
+        string? legacyUsername = null,
+        bool hasProvinceWideVehicleListRole = false
     )
     {
         var claims = new List<Claim>
@@ -2048,6 +2073,26 @@ public class AuthController : ControllerBase
             new Claim("password_change_required", passwordExpired.ToString().ToLowerInvariant()),
             new Claim("access_level", accessLevel.ToString()),
         };
+        if (departmentCode.HasValue)
+        {
+            claims.Add(new Claim("department_code", departmentCode.Value.ToString()));
+        }
+        if (siteCode.HasValue)
+        {
+            claims.Add(new Claim("site_code", siteCode.Value.ToString()));
+        }
+        if (hasAllDepartmentFinanceDataRole)
+        {
+            claims.Add(new Claim("finance_all_departments", "true"));
+        }
+        if (!string.IsNullOrWhiteSpace(legacyUsername))
+        {
+            claims.Add(new Claim("legacy_username", legacyUsername.Trim()));
+        }
+        if (hasProvinceWideVehicleListRole)
+        {
+            claims.Add(new Claim("finance_all_department_vehicle_list", "true"));
+        }
 
         // Derive named legacy role claims from the bitmask so pages using IsInRole() work
         foreach (
@@ -2098,9 +2143,9 @@ public class AuthController : ControllerBase
             ("Monitor", BitReports),
             ("Fuelcards", BitFinancial),
             ("Auction", BitFinancial),
-            ("Financial Data (All Departments)", BitFinancial),
             ("Financial Data (Own Department)", BitFinancial),
             ("Financial Reports", BitFinancial),
+            ("Administrator", 32767),
             ("Workshop", BitWorkshop),
             ("Trouble Shooting", BitWorkshop),
         ];

@@ -176,7 +176,7 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
             "trans_date",
             "@transDate",
             DbType.DateTime,
-            logsheet.trans_date == default ? now : logsheet.trans_date,
+            now,
             true
         );
         AddValue(
@@ -233,16 +233,17 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
             logsheet.contract_code,
             false
         );
+        // Logsheets defines its own NEWID() default. The legacy entry page did
+        // not manufacture a journal detail key, so preserve that database-owned
+        // default unless a genuine legacy caller supplied a key.
         AddValue(
             values,
             columns,
             "journal_detail_code",
             "@journalDetailCode",
             DbType.Guid,
-            logsheet.journal_detail_code == Guid.Empty
-                ? Guid.NewGuid()
-                : logsheet.journal_detail_code,
-            true
+            logsheet.journal_detail_code == Guid.Empty ? null : logsheet.journal_detail_code,
+            false
         );
         AddValue(
             values,

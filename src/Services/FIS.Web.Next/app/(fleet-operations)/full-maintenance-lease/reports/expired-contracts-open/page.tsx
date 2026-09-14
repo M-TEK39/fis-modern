@@ -7,7 +7,7 @@ import {
   AccessRestricted,
   FmlFrame,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
-import { hasFmlPermission } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
+import { hasLeaseVehiclePendingRole } from "@/app/(fleet-operations)/full-maintenance-lease/_utils";
 import {
   ReportEmpty,
   ReportFooter,
@@ -38,7 +38,7 @@ async function FmlExpiredContractsOpenPageContent() {
         <ReportEmpty message="The FML report session is unavailable." />
       </main>
     );
-  if (!hasFmlPermission(session.accessLevel))
+  if (!hasLeaseVehiclePendingRole(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

@@ -1,4 +1,5 @@
 using FIS.Api.Services;
+using FIS.Api.Services.Finance;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -15,18 +16,21 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
     private readonly ILogger<MicrosoftAuthenticationController> _logger;
     private readonly ISessionTokenStore _sessionTokenStore;
     private readonly MicrosoftIdentityCompatibilityService _identityCompatibility;
+    private readonly LegacyFinanceAccessService _legacyFinanceAccess;
 
     public MicrosoftAuthenticationController(
         IConfiguration configuration,
         ILogger<MicrosoftAuthenticationController> logger,
         ISessionTokenStore sessionTokenStore,
-        MicrosoftIdentityCompatibilityService identityCompatibility
+        MicrosoftIdentityCompatibilityService identityCompatibility,
+        LegacyFinanceAccessService legacyFinanceAccess
     )
     {
         _configuration = configuration;
         _logger = logger;
         _sessionTokenStore = sessionTokenStore;
         _identityCompatibility = identityCompatibility;
+        _legacyFinanceAccess = legacyFinanceAccess;
     }
 
     [HttpGet("sign-in")]
@@ -81,10 +85,30 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
                 return await RejectSignInAsync();
             }
 
+            var financeProfile = await _legacyFinanceAccess.ResolveProfileScopeAsync(
+                resolvedUser.UserAccessCode,
+                cancellationToken
+            );
+            var namedRoles = await _legacyFinanceAccess.GetLegacyNamedRolesAsync(
+                resolvedUser.Username,
+                cancellationToken
+            );
             var claims = AuthController.BuildAuthClaims(
                 resolvedUser.UserAccessCode,
                 resolvedUser.Email,
-                resolvedUser.AccessLevel
+                resolvedUser.AccessLevel,
+                additionalRoles: namedRoles,
+                departmentCode: financeProfile?.DepartmentCode,
+                siteCode: financeProfile?.SiteCode,
+                hasAllDepartmentFinanceDataRole: namedRoles.Contains(
+                    "Financial Data (All Departments)",
+                    StringComparer.OrdinalIgnoreCase
+                ),
+                legacyUsername: resolvedUser.Username,
+                hasProvinceWideVehicleListRole: namedRoles.Contains(
+                    "Vehicle List for All Departments in Province",
+                    StringComparer.OrdinalIgnoreCase
+                )
             );
             var tokens = _sessionTokenStore.IssueTokens(claims);
             WriteAuthCookies(tokens);

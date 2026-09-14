@@ -23,11 +23,16 @@ async function LegacyFinanceSearchParametersPageContent({
   ).toLowerCase();
   if (item === "vehicleswithnokilosconsumingfuel")
     redirect("/finance/missing-kilometres/no-kilos-consuming-fuel");
+  const isDownload = /(?:^|\/)downloadreport\.aspx(?:\?|$)/i.test(followPage);
   const action =
     item === "invoicedamountspermonth"
-      ? "income-department"
+      ? isDownload
+        ? "download-income-department"
+        : "income-department"
       : item === "invoicedamountspermonthpersite"
-        ? "income-department-site"
+        ? isDownload
+          ? "download-income-department-site"
+          : "income-department-site"
         : item === "invoicedamountspermonthpersitepervehicle"
           ? "download-income-department-site-vehicle"
           : "income-department";

@@ -12,11 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace FIS.Core.Infrastructure.Repositories;
 
 /// <summary>
-/// Compatibility implementation for the original dbo.Jobcards table.
+/// Compatibility implementation for the client-era dbo.JobCard table.
 ///
 /// The client database predates the expanded job_cards shape. Its identity is
-/// jc_code and its workflow fields use the original names (captured_by,
-/// hhandover_name, reviewed_by_Authorizer, and DateClosed). The API exposes the
+/// JobCard_code and its workflow fields use the original names (captured_by,
+/// HandedOverTo, reviewed_by_Authoriser, and DateClosed). The API exposes the
 /// modern contract while this repository keeps those legacy fields usable.
 /// </summary>
 [SuppressMessage(
@@ -26,7 +26,7 @@ namespace FIS.Core.Infrastructure.Repositories;
 )]
 internal sealed class LegacyJobCardRepository : IJobCardRepository
 {
-    private const string TableName = "Jobcards";
+    private const string TableName = "JobCard";
     private const string VehicleTableName = "vehicle_master";
     private const string ExtraCodeTableName = "extra_codes";
 
@@ -369,8 +369,10 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         await QueryAsync(
             null,
             columns =>
-                columns.ContainsKey("reviewed_by_Authorizer") && columns.ContainsKey("jc_number")
-                    ? "j.[priority] = 'Y' AND j.[status_code] = 3 AND j.[jc_number] <> 'Not Assigned'"
+                HasLegacyReviewedColumn(columns) && GetNumberColumn(columns) is { } numberColumn
+                    ? IsBitColumn(columns, "priority")
+                        ? $"j.[priority] = 1 AND j.[status_code] = 3 AND j.[{numberColumn}] <> 'Not Assigned'"
+                        : $"j.[priority] = 'Y' AND j.[status_code] = 3 AND j.[{numberColumn}] <> 'Not Assigned'"
                     : "j.[priority] = 'H' AND j.[assigned_to] IS NOT NULL AND j.[status_code] NOT IN (5, 7)"
         );
 
@@ -383,7 +385,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
     public async Task<IEnumerable<JobCard>> GetByAuthorizerAsync(int authorizerUserId) =>
         await QueryAsync(
             command => AddParameter(command, "@authorizer", DbType.Int32, authorizerUserId),
-            _ => "j.[authorizer] = @authorizer"
+            columns => $"{AuthorizerExpression(columns)} = @authorizer"
         );
 
     public async Task<JobCard> CreateAsync(JobCard jobCard, int currentUserId)
@@ -480,7 +482,51 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
     public async Task<JobCard> UpdateAsync(JobCard jobCard, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(jobCard);
+        var existing =
+            await GetByIdAsync(jobCard.job_card_id)
+            ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCard.job_card_id}");
+
         var columns = await GetAvailableColumnsAsync();
+        var mutationProcedure = await GetJobCardMutationProcedureAsync(columns);
+        if (mutationProcedure is not null)
+        {
+            await ExecuteLegacyProcedureAsync(
+                mutationProcedure.Name,
+                new ProcedureParameter("@VmfCode", DbType.Int32, existing.vmf_code),
+                new ProcedureParameter("@extra_code", DbType.Int16, existing.extra_code),
+                new ProcedureParameter(
+                    mutationProcedure.CommentParameter,
+                    DbType.String,
+                    jobCard.jcs_comment
+                ),
+                new ProcedureParameter(
+                    "@AssignedTo",
+                    DbType.String,
+                    jobCard.assigned_to?.ToString()
+                ),
+                new ProcedureParameter(
+                    "@AssignedDate",
+                    DbType.String,
+                    jobCard.assigned_date?.ToString("yyyy/MM/dd")
+                ),
+                new ProcedureParameter("@Damages", DbType.String, NormalizeDamage(jobCard.damages)),
+                new ProcedureParameter("@comments", DbType.String, jobCard.comments),
+                new ProcedureParameter(
+                    mutationProcedure.StatusParameter,
+                    DbType.Byte,
+                    existing.status_code
+                ),
+                new ProcedureParameter("@UserID", DbType.Int32, currentUserId),
+                new ProcedureParameter("@barcode", DbType.String, null),
+                new ProcedureParameter("@dateclosed", DbType.DateTime, null)
+            );
+            return await GetByIdAsync(jobCard.job_card_id)
+                ?? throw new InvalidOperationException(
+                    "The legacy job-card update procedure removed the selected job card."
+                );
+        }
+
+        // Compatibility fallback only where the matching client-era procedure is genuinely absent.
         var values = new List<WriteValue>();
 
         AddValue(
@@ -540,12 +586,21 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             true
         );
 
-        if (columns.ContainsKey("reviewed_by_Authorizer"))
+        if (HasLegacyReviewedColumn(columns))
         {
+            var handoverNameColumn = columns.ContainsKey("HandedOverTo")
+                ? "HandedOverTo"
+                : "hhandover_name";
+            var handoverDateColumn = columns.ContainsKey("HandedOverOn")
+                ? "HandedOverOn"
+                : "hhandover_date";
+            var authorizerCommentColumn = columns.ContainsKey("Authoriser_comments")
+                ? "Authoriser_comments"
+                : "authorizer_jobcard_comments";
             AddValue(
                 values,
                 columns,
-                "hhandover_name",
+                handoverNameColumn,
                 "@handoverName",
                 DbType.String,
                 jobCard.assigned_to?.ToString(),
@@ -554,7 +609,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             AddValue(
                 values,
                 columns,
-                "hhandover_date",
+                handoverDateColumn,
                 "@handoverDate",
                 DbType.String,
                 jobCard.assigned_date?.ToString("yyyy/MM/dd"),
@@ -563,7 +618,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             AddValue(
                 values,
                 columns,
-                "authorizer_jobcard_comments",
+                authorizerCommentColumn,
                 "@authorizerComments",
                 DbType.String,
                 jobCard.comments,
@@ -579,6 +634,39 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
     public async Task DeleteAsync(int jobCardId, int currentUserId)
     {
         var columns = await GetAvailableColumnsAsync();
+        var existing = await GetByIdAsync(jobCardId)
+            ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+
+        if (
+            await IsLegacyProcedureAvailableAsync(
+                "DEV_DEL_Jobcard",
+                "@vmf_code",
+                "@extraDescription"
+            )
+        )
+        {
+            var extraDescription = await FindExtraDescriptionAsync(existing.extra_code);
+            if (string.IsNullOrWhiteSpace(extraDescription))
+            {
+                throw new InvalidOperationException(
+                    "The legacy job-card delete procedure requires the selected category description."
+                );
+            }
+
+            await ExecuteLegacyProcedureAsync(
+                "DEV_DEL_Jobcard",
+                new ProcedureParameter("@vmf_code", DbType.Int32, existing.vmf_code),
+                new ProcedureParameter("@extraDescription", DbType.String, extraDescription)
+            );
+            if (await GetByIdAsync(jobCardId) is not null)
+            {
+                throw new InvalidOperationException(
+                    "The legacy job-card delete procedure completed without deleting the selected job card."
+                );
+            }
+            return;
+        }
+
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
@@ -592,7 +680,8 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         }
         else
         {
-            command.CommandText = $"DELETE FROM [dbo].[{TableName}] WHERE [jc_code] = @jobCardId";
+            command.CommandText =
+                $"DELETE FROM [dbo].[{TableName}] WHERE [{GetIdColumn(columns)}] = @jobCardId";
         }
 
         AddParameter(command, "@jobCardId", DbType.Int32, jobCardId);
@@ -602,21 +691,135 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         }
     }
 
-    public Task<JobCard> AuthorizeAsync(int jobCardId, int authorizerUserId, string? comment) =>
-        UpdateWorkflowAsync(jobCardId, authorizerUserId, 3, "Y", comment, null);
+    public async Task<JobCard> AuthorizeAsync(
+        int jobCardId,
+        int authorizerUserId,
+        string? comment
+    ) =>
+        await UpdateLegacyAuthorizerWorkflowAsync(
+            jobCardId,
+            authorizerUserId,
+            3,
+            comment
+        );
 
-    public Task<JobCard> DeclineAsync(int jobCardId, int authorizerUserId, string declineReason) =>
-        UpdateWorkflowAsync(
+    public async Task<JobCard> DeclineAsync(
+        int jobCardId,
+        int authorizerUserId,
+        string declineReason
+    ) =>
+        await UpdateLegacyAuthorizerWorkflowAsync(
             jobCardId,
             authorizerUserId,
             1,
-            "Y",
-            $"Declined: {declineReason}",
-            null
+            declineReason
         );
 
-    public Task<JobCard> CancelAsync(int jobCardId, int currentUserId, string? cancelReason) =>
-        UpdateWorkflowAsync(
+    private async Task<JobCard> UpdateLegacyAuthorizerWorkflowAsync(
+        int jobCardId,
+        int authorizerUserId,
+        int statusCode,
+        string? comment
+    )
+    {
+        var columns = await GetAvailableColumnsAsync();
+        var authorizerProcedure = await GetJobCardAuthorizerProcedureAsync(columns);
+        if (authorizerProcedure is not null)
+        {
+            var existing =
+                await GetByIdAsync(jobCardId)
+                ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+            var fleetNumber = await FindFleetNumberAsync(existing);
+            if (string.IsNullOrWhiteSpace(fleetNumber))
+            {
+                throw new InvalidOperationException(
+                    "The selected legacy job card has no fleet number required for authorisation."
+                );
+            }
+
+            await ExecuteLegacyProcedureAsync(
+                authorizerProcedure.Name,
+                new ProcedureParameter("@ggnumber", DbType.String, fleetNumber),
+                new ProcedureParameter("@extra_code", DbType.Int16, existing.extra_code),
+                new ProcedureParameter(
+                    "@priority",
+                    authorizerProcedure.UsesBitFlags ? DbType.Boolean : DbType.String,
+                    authorizerProcedure.UsesBitFlags
+                        ? PriorityAsBoolean(existing.priority)
+                        : NormalizePriority(existing.priority, columns)
+                ),
+                new ProcedureParameter(
+                    authorizerProcedure.AuthorizerParameter,
+                    DbType.Int32,
+                    authorizerUserId
+                ),
+                new ProcedureParameter("@comment", DbType.String, comment),
+                new ProcedureParameter(
+                    "@reviewed",
+                    authorizerProcedure.UsesBitFlags ? DbType.Boolean : DbType.String,
+                    authorizerProcedure.UsesBitFlags ? true : "Y"
+                ),
+                new ProcedureParameter(
+                    authorizerProcedure.StatusParameter,
+                    DbType.Byte,
+                    statusCode
+                ),
+                new ProcedureParameter(
+                    "@AssignedTo",
+                    DbType.String,
+                    existing.assigned_to?.ToString()
+                ),
+                new ProcedureParameter(
+                    "@AssignedDate",
+                    DbType.String,
+                    existing.assigned_date?.ToString("yyyy/MM/dd")
+                )
+            );
+            return await GetByIdAsync(jobCardId)
+                ?? throw new InvalidOperationException(
+                    "The legacy job-card authoriser procedure removed the selected job card."
+                );
+        }
+
+        // Compatibility fallback only where the matching client-era procedure is absent.
+        return await UpdateWorkflowAsync(jobCardId, authorizerUserId, statusCode, "Y", comment, null);
+    }
+
+    public async Task<JobCard> CancelAsync(
+        int jobCardId,
+        int currentUserId,
+        string? cancelReason
+    )
+    {
+        if (
+            await IsLegacyProcedureAvailableAsync(
+                "DEV_UPD_JobcardCancelRequest",
+                "@jcnumber",
+                "@userid"
+            )
+        )
+        {
+            var jobCardNumber = await FindLegacyJobCardNumberAsync(jobCardId);
+            if (string.IsNullOrWhiteSpace(jobCardNumber))
+            {
+                throw new InvalidOperationException(
+                    "The selected legacy job card has no job-card number required for cancellation."
+                );
+            }
+
+            await ExecuteLegacyProcedureAsync(
+                "DEV_UPD_JobcardCancelRequest",
+                new ProcedureParameter("@jcnumber", DbType.String, jobCardNumber),
+                new ProcedureParameter("@userid", DbType.Int32, currentUserId)
+            );
+            return await GetByIdAsync(jobCardId)
+                ?? throw new InvalidOperationException(
+                    "The legacy job-card cancellation procedure removed the selected job card."
+                );
+        }
+
+        // Compatibility fallback only where DEV_UPD_JobcardCancelRequest is absent.
+        return await UpdateWorkflowAsync(
             jobCardId,
             currentUserId,
             7,
@@ -624,8 +827,9 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             cancelReason is null ? null : $"Canceled: {cancelReason}",
             currentUserId
         );
+    }
 
-    public Task<JobCard> CloseAsync(
+    public async Task<JobCard> CloseAsync(
         int jobCardId,
         int currentUserId,
         string? closeNotes,
@@ -634,9 +838,63 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         decimal? otherCost = null,
         string? invoiceNumber = null,
         DateTime? invoiceDate = null,
-        string? serviceProvider = null
-    ) =>
-        UpdateWorkflowAsync(
+        string? serviceProvider = null,
+        string? damages = null,
+        string? damageComment = null,
+        string? barcode = null,
+        DateTime? closeDate = null
+    )
+    {
+        var columns = await GetAvailableColumnsAsync();
+        EnsureLegacyCostFieldsAreAvailable(
+            columns,
+            labourCost,
+            partsCost,
+            otherCost,
+            invoiceNumber,
+            invoiceDate,
+            serviceProvider
+        );
+
+        var mutationProcedure = await GetJobCardMutationProcedureAsync(columns);
+        if (mutationProcedure is not null)
+        {
+            var existing =
+                await GetByIdAsync(jobCardId)
+                ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+            await ExecuteLegacyProcedureAsync(
+                mutationProcedure.Name,
+                new ProcedureParameter("@VmfCode", DbType.Int32, existing.vmf_code),
+                new ProcedureParameter("@extra_code", DbType.Int16, existing.extra_code),
+                new ProcedureParameter(
+                    mutationProcedure.CommentParameter,
+                    DbType.String,
+                    closeNotes
+                ),
+                new ProcedureParameter("@AssignedTo", DbType.String, null),
+                new ProcedureParameter("@AssignedDate", DbType.String, null),
+                new ProcedureParameter(
+                    "@Damages",
+                    DbType.String,
+                    NormalizeDamage(damages ?? existing.damages)
+                ),
+                // The legacy close form accepts a fresh damage comment. The modern
+                // close DTO has no equivalent field, so do not replay a historic
+                // comment and create a duplicate vehicle-damage side effect.
+                new ProcedureParameter("@comments", DbType.String, damageComment),
+                new ProcedureParameter(mutationProcedure.StatusParameter, DbType.Byte, 5),
+                new ProcedureParameter("@UserID", DbType.Int32, currentUserId),
+                new ProcedureParameter("@barcode", DbType.String, barcode),
+                new ProcedureParameter("@dateclosed", DbType.DateTime, closeDate ?? DateTime.Now)
+            );
+            return await GetByIdAsync(jobCardId)
+                ?? throw new InvalidOperationException(
+                    "The legacy job-card close procedure removed the selected job card."
+                );
+        }
+
+        // Compatibility fallback only where the matching client-era procedure is genuinely absent.
+        return await UpdateWorkflowAsync(
             jobCardId,
             currentUserId,
             5,
@@ -650,9 +908,49 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             invoiceDate,
             serviceProvider
         );
+    }
 
-    public Task<JobCard> UpdateStatusAsync(int jobCardId, int newStatusCode, int currentUserId) =>
-        UpdateWorkflowAsync(jobCardId, currentUserId, newStatusCode, null, null, null);
+    public async Task<JobCard> UpdateStatusAsync(
+        int jobCardId,
+        int newStatusCode,
+        int currentUserId
+    )
+    {
+        if (
+            newStatusCode == 4
+            && await IsLegacyProcedureAvailableAsync(
+                "DEV_UPD_JobcardUpdateStatusToInProgress",
+                "@ggnumber",
+                "@jcnumber"
+            )
+        )
+        {
+            var existing =
+                await GetByIdAsync(jobCardId)
+                ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+            var fleetNumber = await FindFleetNumberAsync(existing);
+            var jobCardNumber = await FindLegacyJobCardNumberAsync(jobCardId);
+            if (string.IsNullOrWhiteSpace(fleetNumber) || string.IsNullOrWhiteSpace(jobCardNumber))
+            {
+                throw new InvalidOperationException(
+                    "The selected legacy job card lacks the fleet or job-card number required to mark it in progress."
+                );
+            }
+
+            await ExecuteLegacyProcedureAsync(
+                "DEV_UPD_JobcardUpdateStatusToInProgress",
+                new ProcedureParameter("@ggnumber", DbType.String, fleetNumber),
+                new ProcedureParameter("@jcnumber", DbType.String, jobCardNumber)
+            );
+            return await GetByIdAsync(jobCardId)
+                ?? throw new InvalidOperationException(
+                    "The legacy in-progress procedure removed the selected job card."
+                );
+        }
+
+        // Compatibility fallback only where the legacy in-progress procedure is absent.
+        return await UpdateWorkflowAsync(jobCardId, currentUserId, newStatusCode, null, null, null);
+    }
 
     public async Task<JobCard> UpdateCostsAsync(
         int jobCardId,
@@ -666,6 +964,15 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
     )
     {
         var columns = await GetAvailableColumnsAsync();
+        EnsureLegacyCostFieldsAreAvailable(
+            columns,
+            labourCost,
+            partsCost,
+            otherCost,
+            invoiceNumber,
+            invoiceDate,
+            serviceProvider
+        );
         var values = new List<WriteValue>();
         AddValue(values, columns, "labour_cost", "@labourCost", DbType.Decimal, labourCost, false);
         AddValue(values, columns, "parts_cost", "@partsCost", DbType.Decimal, partsCost, false);
@@ -721,11 +1028,52 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             await ExecuteUpdateAsync(jobCardId, columns, values);
         }
 
-        // The original table has no repair-cost columns. Returning the
-        // existing record keeps the workflow available without pretending
-        // that expanded values were persisted in a legacy field.
+        // An empty amendment remains a no-op. Any supplied cost value was
+        // checked above and is never reported as saved when the original
+        // table cannot persist it.
         return await GetByIdAsync(jobCardId)
             ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+    }
+
+    private static void EnsureLegacyCostFieldsAreAvailable(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        decimal? labourCost,
+        decimal? partsCost,
+        decimal? otherCost,
+        string? invoiceNumber,
+        DateTime? invoiceDate,
+        string? serviceProvider
+    )
+    {
+        var containsCostInput = labourCost.HasValue
+            || partsCost.HasValue
+            || otherCost.HasValue
+            || invoiceNumber is not null
+            || invoiceDate.HasValue
+            || serviceProvider is not null;
+        if (!containsCostInput)
+            return;
+
+        var unavailableFields = new List<string>();
+        if (labourCost.HasValue && !columns.ContainsKey("labour_cost"))
+            unavailableFields.Add("labour cost");
+        if (partsCost.HasValue && !columns.ContainsKey("parts_cost"))
+            unavailableFields.Add("parts cost");
+        if (otherCost.HasValue && !columns.ContainsKey("other_cost"))
+            unavailableFields.Add("other cost");
+        if (invoiceNumber is not null && !columns.ContainsKey("invoice_number"))
+            unavailableFields.Add("invoice number");
+        if (invoiceDate.HasValue && !columns.ContainsKey("invoice_date"))
+            unavailableFields.Add("invoice date");
+        if (serviceProvider is not null && !columns.ContainsKey("service_provider"))
+            unavailableFields.Add("service provider");
+
+        if (unavailableFields.Count > 0)
+        {
+            throw new NotSupportedException(
+                $"Repair-cost capture cannot save {string.Join(", ", unavailableFields)} in this Jobcards schema."
+            );
+        }
     }
 
     private async Task<JobCard> UpdateWorkflowAsync(
@@ -846,12 +1194,20 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             );
         }
 
-        if (columns.ContainsKey("reviewed_by_Authorizer"))
+        if (HasLegacyReviewedColumn(columns))
         {
+            var reviewedColumn = GetLegacyReviewedColumn(columns)!;
+            var authorizerColumn = columns.ContainsKey("Authoriser")
+                ? "Authoriser"
+                : "Authorizer";
+            var authorizerCommentColumn = columns.ContainsKey("Authoriser_comments")
+                ? "Authoriser_comments"
+                : "authorizer_jobcard_comments";
+            var authorizerDateColumn = GetAuthorizerUpdateDateColumn(columns);
             AddValue(
                 values,
                 columns,
-                "Authorizer",
+                authorizerColumn,
                 "@legacyAuthorizer",
                 DbType.Int32,
                 statusCode is 3 or 1 ? currentUserId : existing.authorizer,
@@ -860,25 +1216,28 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             AddValue(
                 values,
                 columns,
-                "reviewed_by_Authorizer",
+                reviewedColumn,
                 "@legacyReviewed",
-                DbType.String,
-                reviewed,
+                IsBitColumn(columns, reviewedColumn) ? DbType.Boolean : DbType.String,
+                IsBitColumn(columns, reviewedColumn)
+                    ? string.Equals(reviewed, "Y", StringComparison.OrdinalIgnoreCase)
+                    : reviewed,
                 false
             );
+            if (authorizerDateColumn is not null)
+                AddValue(
+                    values,
+                    columns,
+                    authorizerDateColumn,
+                    "@legacyAuthorizerDate",
+                    DbType.DateTime,
+                    DateTime.Now,
+                    false
+                );
             AddValue(
                 values,
                 columns,
-                "authorizer_update_date",
-                "@legacyAuthorizerDate",
-                DbType.DateTime,
-                DateTime.Now,
-                false
-            );
-            AddValue(
-                values,
-                columns,
-                "authorizer_jobcard_comments",
+                authorizerCommentColumn,
                 "@legacyComment",
                 DbType.String,
                 comment,
@@ -907,7 +1266,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
                 AddValue(
                     values,
                     columns,
-                    "jcs_comment",
+                    columns.ContainsKey("Status_comment") ? "Status_comment" : "jcs_comment",
                     "@legacyWorkflowComment",
                     DbType.String,
                     Append(existing.jcs_comment, comment),
@@ -923,10 +1282,26 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
 
     private async Task<int> CreateLegacyAsync(JobCard jobCard, int currentUserId)
     {
+        if (
+            !await IsLegacyProcedureAvailableAsync(
+                "DEV_INS_NewJobCards",
+                "@GGNumber",
+                "@extraCode",
+                "@CaptureBy"
+            )
+        )
+        {
+            // Compatibility fallback for databases that genuinely do not
+            // contain the archived legacy procedure.
+            return await InsertLegacyDirectAsync(jobCard, currentUserId);
+        }
+
         var vehicleNumber = await FindVehicleNumberAsync(jobCard);
         if (string.IsNullOrWhiteSpace(vehicleNumber))
         {
-            return await InsertLegacyDirectAsync(jobCard, currentUserId);
+            throw new InvalidOperationException(
+                "The selected vehicle has no fleet number required by the legacy job-card procedure."
+            );
         }
 
         await using var scope = await OpenConnectionAsync();
@@ -938,18 +1313,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         AddParameter(command, "@extraCode", DbType.Int32, jobCard.extra_code);
         AddParameter(command, "@CaptureBy", DbType.Int32, currentUserId);
 
-        try
-        {
-            await command.ExecuteNonQueryAsync();
-        }
-        catch (DbException ex) when (IsMissingProcedure(ex))
-        {
-            // Some client databases retained Jobcards but not the original
-            // helper procedure. The parameterized insert below is the safe
-            // equivalent for that shape.
-            await scope.Connection.CloseAsync();
-            return await InsertLegacyDirectAsync(jobCard, currentUserId);
-        }
+        await command.ExecuteNonQueryAsync();
 
         var createdId = await FindLatestLegacyIdAsync(
             scope.Connection,
@@ -958,66 +1322,61 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             currentUserId
         );
         if (createdId > 0)
-        {
-            var columns = await GetAvailableColumnsAsync();
-            var values = new List<WriteValue>();
-            AddValue(
-                values,
-                columns,
-                "jcs_comment",
-                "@jcsComment",
-                DbType.String,
-                jobCard.jcs_comment,
-                false
-            );
-            AddValue(
-                values,
-                columns,
-                "priority",
-                "@priority",
-                DbType.String,
-                NormalizePriority(jobCard.priority, columns),
-                false
-            );
-            if (values.Count > 0)
-            {
-                await ExecuteUpdateAsync(createdId, columns, values);
-            }
             return createdId;
-        }
 
-        await scope.Connection.CloseAsync();
-        return await InsertLegacyDirectAsync(jobCard, currentUserId);
+        throw new InvalidOperationException(
+            "The legacy job-card procedure completed without creating a readable job card."
+        );
     }
 
     private async Task<int> InsertLegacyDirectAsync(JobCard jobCard, int currentUserId)
     {
+        var columns = await GetAvailableColumnsAsync();
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
-        command.CommandText = $"""
-            INSERT INTO [dbo].[{TableName}]
-                ([jc_counter], [year], [jc_number], [vmf_code], [extra_code], [jcs_comment], [jcs_date], [captured_by], [status_code], [priority], [reviewed_by_Authorizer])
-            OUTPUT INSERTED.[jc_code]
-            VALUES
-                ((SELECT ISNULL(MAX([jc_counter]), 0) + 1 FROM [dbo].[{TableName}]), CONVERT(nchar(10), YEAR(GETDATE())), 'Not Assigned', @vmfCode, @extraCode, @jcsComment, CONVERT(varchar(10), GETDATE(), 111), @capturedBy, 1, @priority, 'N')
-            """;
+
+        if (columns.ContainsKey("JobCard_code"))
+        {
+            // DEV_INS_NewJobCards is absent from the restored client database.
+            // This fallback keeps the archived procedure's initial workflow
+            // state (unassigned, status 1) while using its current column names.
+            command.CommandText = $"""
+                INSERT INTO [dbo].[{TableName}]
+                    ([Counter], [year], [Number], [vmf_code], [extra_code], [Status_date], [captured_by], [Status_code], [priority], [reviewed_by_Authoriser])
+                OUTPUT INSERTED.[JobCard_code]
+                VALUES
+                    (0, '0', 'Not Assigned', @vmfCode, @extraCode, CONVERT(varchar(10), GETDATE(), 111), @capturedBy, 1, @priority, 0)
+                """;
+            AddParameter(command, "@priority", DbType.Boolean, PriorityAsBoolean(jobCard.priority));
+        }
+        else
+        {
+            command.CommandText = $"""
+                INSERT INTO [dbo].[{TableName}]
+                    ([jc_counter], [year], [jc_number], [vmf_code], [extra_code], [jcs_comment], [jcs_date], [captured_by], [status_code], [priority], [reviewed_by_Authorizer])
+                OUTPUT INSERTED.[jc_code]
+                VALUES
+                    ((SELECT ISNULL(MAX([jc_counter]), 0) + 1 FROM [dbo].[{TableName}]), CONVERT(nchar(10), YEAR(GETDATE())), 'Not Assigned', @vmfCode, @extraCode, @jcsComment, CONVERT(varchar(10), GETDATE(), 111), @capturedBy, 1, @priority, 'N')
+                """;
+            AddParameter(
+                command,
+                "@priority",
+                DbType.String,
+                NormalizePriority(
+                    jobCard.priority,
+                    new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["reviewed_by_Authorizer"] = new("reviewed_by_Authorizer"),
+                    }
+                )
+            );
+            AddParameter(command, "@jcsComment", DbType.String, jobCard.jcs_comment);
+        }
+
         AddParameter(command, "@vmfCode", DbType.Int32, jobCard.vmf_code);
         AddParameter(command, "@extraCode", DbType.Int32, jobCard.extra_code);
-        AddParameter(command, "@jcsComment", DbType.String, jobCard.jcs_comment);
         AddParameter(command, "@capturedBy", DbType.Int32, currentUserId);
-        AddParameter(
-            command,
-            "@priority",
-            DbType.String,
-            NormalizePriority(
-                jobCard.priority,
-                new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["reviewed_by_Authorizer"] = new("reviewed_by_Authorizer"),
-                }
-            )
-        );
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
@@ -1030,8 +1389,10 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
     {
         await using var command = connection.CreateCommand();
         command.Transaction = CurrentTransaction;
+        var columns = await GetAvailableColumnsAsync();
+        var idColumn = GetIdColumn(columns);
         command.CommandText =
-            $"SELECT TOP (1) [jc_code] FROM [dbo].[{TableName}] WHERE [vmf_code] = @vmfCode AND [extra_code] = @extraCode AND [captured_by] = @capturedBy ORDER BY [jc_code] DESC";
+            $"SELECT TOP (1) [{idColumn}] FROM [dbo].[{TableName}] WHERE [vmf_code] = @vmfCode AND [extra_code] = @extraCode AND [captured_by] = @capturedBy ORDER BY [{idColumn}] DESC";
         AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
         AddParameter(command, "@extraCode", DbType.Int32, extraCode);
         AddParameter(command, "@capturedBy", DbType.Int32, currentUserId);
@@ -1057,11 +1418,226 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
     }
 
-    private static bool IsMissingProcedure(DbException exception) =>
-        exception.Message.Contains(
-            "could not find stored procedure",
-            StringComparison.OrdinalIgnoreCase
-        ) || exception.Message.Contains("does not exist", StringComparison.OrdinalIgnoreCase);
+    private async Task<string?> FindFleetNumberAsync(JobCard jobCard)
+    {
+        if (!string.IsNullOrWhiteSpace(jobCard.Vehicle?.fleet_number))
+            return jobCard.Vehicle.fleet_number.Trim();
+
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandText =
+            "SELECT TOP (1) NULLIF([fleet_number], '') FROM [dbo].[vehicle_master] WHERE [vmf_code] = @vmfCode";
+        AddParameter(command, "@vmfCode", DbType.Int32, jobCard.vmf_code);
+        var value = await command.ExecuteScalarAsync();
+        return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
+    }
+
+    private async Task<string?> FindExtraDescriptionAsync(short extraCode)
+    {
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandText =
+            $"SELECT TOP (1) [extra_description] FROM [dbo].[{ExtraCodeTableName}] WHERE [extra_code] = @extraCode";
+        AddParameter(command, "@extraCode", DbType.Int16, extraCode);
+        var value = await command.ExecuteScalarAsync();
+        return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
+    }
+
+    private async Task<string?> FindLegacyJobCardNumberAsync(int jobCardId)
+    {
+        var columns = await GetAvailableColumnsAsync();
+        var numberColumn = GetNumberColumn(columns);
+        if (numberColumn is null)
+            return null;
+
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandText =
+            $"SELECT [{numberColumn}] FROM [dbo].[{TableName}] WHERE {IdExpression(columns)} = @jobCardId";
+        AddParameter(command, "@jobCardId", DbType.Int32, jobCardId);
+        var value = await command.ExecuteScalarAsync();
+        return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
+    }
+
+    private async Task<bool> StoredProcedureExistsAsync(string procedureName)
+    {
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandText = """
+            SELECT CASE WHEN EXISTS
+            (
+                SELECT 1
+                FROM [sys].[procedures] AS p
+                INNER JOIN [sys].[schemas] AS s ON s.[schema_id] = p.[schema_id]
+                WHERE s.[name] = N'dbo' AND p.[name] = @procedureName
+            ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END
+            """;
+        AddParameter(command, "@procedureName", DbType.String, procedureName);
+        return Convert.ToBoolean(await command.ExecuteScalarAsync());
+    }
+
+    private async Task<bool> IsLegacyProcedureAvailableAsync(
+        string procedureName,
+        params string[] expectedParameters
+    )
+    {
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandText = """
+            SELECT [parameterObject].[name]
+            FROM [sys].[procedures] AS [procedureObject]
+            INNER JOIN [sys].[schemas] AS [schemaObject]
+                ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
+            LEFT JOIN [sys].[parameters] AS [parameterObject]
+                ON [parameterObject].[object_id] = [procedureObject].[object_id]
+            WHERE [schemaObject].[name] = N'dbo'
+              AND [procedureObject].[name] = @procedureName
+            ORDER BY [parameterObject].[parameter_id]
+            """;
+        AddParameter(command, "@procedureName", DbType.String, procedureName);
+
+        var actualParameters = new List<string>();
+        var procedureFound = false;
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            procedureFound = true;
+            if (!reader.IsDBNull(0))
+                actualParameters.Add(reader.GetString(0));
+        }
+
+        if (!procedureFound)
+            return false;
+
+        if (!actualParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The deployed legacy procedure {procedureName} does not match the archived parameter contract. No direct-DML fallback was run."
+            );
+        }
+
+        return true;
+    }
+
+    private async Task<JobCardMutationProcedure?> GetJobCardMutationProcedureAsync(
+        IReadOnlyDictionary<string, ColumnInfo> columns
+    )
+    {
+        if (columns.ContainsKey("JobCard_code"))
+        {
+            return await IsLegacyProcedureAvailableAsync(
+                "DEV_UPD_JobCard",
+                "@VmfCode",
+                "@extra_code",
+                "@Status_comment",
+                "@AssignedTo",
+                "@AssignedDate",
+                "@Damages",
+                "@comments",
+                "@Status_code",
+                "@UserID",
+                "@barcode",
+                "@dateclosed"
+            )
+                ? new JobCardMutationProcedure(
+                    "DEV_UPD_JobCard",
+                    "@Status_comment",
+                    "@Status_code"
+                )
+                : null;
+        }
+
+        return await IsLegacyProcedureAvailableAsync(
+            "DEV_UPD_Jobcards",
+            "@VmfCode",
+            "@extra_code",
+            "@jcs_comment",
+            "@AssignedTo",
+            "@AssignedDate",
+            "@Damages",
+            "@comments",
+            "@status_code",
+            "@UserID",
+            "@barcode",
+            "@dateclosed"
+        )
+            ? new JobCardMutationProcedure("DEV_UPD_Jobcards", "@jcs_comment", "@status_code")
+            : null;
+    }
+
+    private async Task<JobCardAuthorizerProcedure?> GetJobCardAuthorizerProcedureAsync(
+        IReadOnlyDictionary<string, ColumnInfo> columns
+    )
+    {
+        if (columns.ContainsKey("JobCard_code"))
+        {
+            return await IsLegacyProcedureAvailableAsync(
+                "DEV_UPD_JobcardAuthorisersUpdates",
+                "@ggnumber",
+                "@extra_code",
+                "@priority",
+                "@Authoriser",
+                "@comment",
+                "@reviewed",
+                "@JobCardtatus",
+                "@AssignedTo",
+                "@AssignedDate"
+            )
+                ? new JobCardAuthorizerProcedure(
+                    "DEV_UPD_JobcardAuthorisersUpdates",
+                    "@Authoriser",
+                    "@JobCardtatus",
+                    UsesBitFlags: true
+                )
+                : null;
+        }
+
+        return await IsLegacyProcedureAvailableAsync(
+            "DEV_UPD_JobcardAuthorizersUpdates",
+            "@ggnumber",
+            "@extra_code",
+            "@priority",
+            "@Authorizer",
+            "@comment",
+            "@reviewed",
+            "@JobcardStatus",
+            "@AssignedTo",
+            "@AssignedDate"
+        )
+            ? new JobCardAuthorizerProcedure(
+                "DEV_UPD_JobcardAuthorizersUpdates",
+                "@Authorizer",
+                "@JobcardStatus",
+                UsesBitFlags: false
+            )
+            : null;
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Procedure names are fixed archived legacy contracts, never request input."
+    )]
+    private async Task ExecuteLegacyProcedureAsync(
+        string procedureName,
+        params ProcedureParameter[] parameters
+    )
+    {
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = procedureName;
+        command.CommandTimeout = 0;
+        foreach (var parameter in parameters)
+            AddParameter(command, parameter.Name, parameter.Type, parameter.Value);
+        await command.ExecuteNonQueryAsync();
+    }
 
     private async Task<List<JobCard>> QueryAsync(
         Action<DbCommand>? configure = null,
@@ -1153,8 +1729,10 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
     private static string PriorityUnassignedPredicate(
         IReadOnlyDictionary<string, ColumnInfo> columns
     ) =>
-        columns.ContainsKey("priority") && columns.ContainsKey("reviewed_by_Authorizer")
-            ? "j.[priority] = 'Y' AND j.[reviewed_by_Authorizer] = 'Y' AND j.[status_code] IN (1, 2)"
+        columns.ContainsKey("priority") && HasLegacyReviewedColumn(columns)
+            ? IsBitColumn(columns, "priority")
+                ? $"j.[priority] = 1 AND j.[{GetLegacyReviewedColumn(columns)}] = 1 AND j.[status_code] IN (1, 2)"
+                : $"j.[priority] = 'Y' AND j.[{GetLegacyReviewedColumn(columns)}] = 'Y' AND j.[status_code] IN (1, 2)"
             : "j.[priority] = 'H' AND j.[assigned_to] IS NULL AND j.[status_code] NOT IN (5, 7)";
 
     private async Task ExecuteUpdateAsync(
@@ -1231,7 +1809,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
                 CommentExpression(columns, "jcs_comment") + " AS [jcs_comment]",
                 OptionalExpression(columns, "damages", "varchar(2000)") + " AS [damages]",
                 CommentExpression(columns, "comments") + " AS [comments]",
-                OptionalExpression(columns, "authorizer", "int") + " AS [authorizer]",
+                AuthorizerExpression(columns) + " AS [authorizer]",
                 AuthorizerNameExpression(columns) + " AS [authorizer_name]",
                 ReviewedExpression(columns) + " AS [reviewed]",
                 CapturedByExpression(columns) + " AS [captured_by_user_code]",
@@ -1265,27 +1843,32 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             : "CAST(NULL AS varchar(255))";
 
     private static string IdExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
-        columns.ContainsKey("job_card_id") ? "j.[job_card_id]" : "j.[jc_code]";
+        $"j.[{GetIdColumn(columns)}]";
 
     private static string DateExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("date_created") ? "j.[date_created]"
         : columns.ContainsKey("jcs_date") ? "TRY_CONVERT(datetime2, NULLIF(j.[jcs_date], ''), 111)"
+        : columns.ContainsKey("Status_date")
+            ? "TRY_CONVERT(datetime2, NULLIF(j.[Status_date], ''), 111)"
         : "CAST(NULL AS datetime2)";
 
     private static string UpdatedDateExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("date_updated") ? "j.[date_updated]"
-        : columns.ContainsKey("DateClosed") && columns.ContainsKey("authorizer_update_date")
-            ? "COALESCE(j.[DateClosed], j.[authorizer_update_date])"
+        : columns.ContainsKey("DateClosed") && GetAuthorizerUpdateDateColumn(columns) is { } authorizerDate
+            ? $"COALESCE(j.[DateClosed], j.[{authorizerDate}])"
         : OptionalExpression(columns, "DateClosed", "datetime2");
 
     private static string PriorityExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
-        columns.ContainsKey("priority") ? "j.[priority]" : "CAST(NULL AS varchar(1))";
+        !columns.ContainsKey("priority") ? "CAST(NULL AS varchar(1))"
+        : IsBitColumn(columns, "priority") ? "CASE WHEN j.[priority] = 1 THEN 'Y' ELSE 'N' END"
+        : "j.[priority]";
 
     private static string AssignedToExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("assigned_to") ? "j.[assigned_to]" : "CAST(NULL AS int)";
 
     private static string AssignedNameExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("hhandover_name") ? "j.[hhandover_name]"
+        : columns.ContainsKey("HandedOverTo") ? "j.[HandedOverTo]"
         : columns.ContainsKey("assigned_to") ? "CONVERT(varchar(50), j.[assigned_to])"
         : "CAST(NULL AS varchar(50))";
 
@@ -1293,6 +1876,8 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         columns.ContainsKey("assigned_date") ? "j.[assigned_date]"
         : columns.ContainsKey("hhandover_date")
             ? "TRY_CONVERT(datetime2, NULLIF(j.[hhandover_date], ''), 111)"
+        : columns.ContainsKey("HandedOverOn")
+            ? "TRY_CONVERT(datetime2, NULLIF(j.[HandedOverOn], ''), 111)"
         : "CAST(NULL AS datetime2)";
 
     private static string CommentExpression(
@@ -1300,15 +1885,25 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         string modernColumn
     ) =>
         columns.ContainsKey(modernColumn) ? $"j.[{modernColumn}]"
+        : modernColumn.Equals("jcs_comment", StringComparison.OrdinalIgnoreCase)
+        && columns.ContainsKey("Status_comment")
+            ? "j.[Status_comment]"
         : modernColumn.Equals("comments", StringComparison.OrdinalIgnoreCase)
         && columns.ContainsKey("authorizer_jobcard_comments")
             ? "j.[authorizer_jobcard_comments]"
+        : modernColumn.Equals("comments", StringComparison.OrdinalIgnoreCase)
+        && columns.ContainsKey("Authoriser_comments")
+            ? "j.[Authoriser_comments]"
         : "CAST(NULL AS varchar(2000))";
 
     private static string ReviewedExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("reviewed")
             ? "j.[reviewed]"
-            : OptionalExpression(columns, "reviewed_by_Authorizer", "varchar(1)");
+            : HasLegacyReviewedColumn(columns)
+                ? IsBitColumn(columns, GetLegacyReviewedColumn(columns)!)
+                    ? $"CASE WHEN j.[{GetLegacyReviewedColumn(columns)}] = 1 THEN 'Y' ELSE 'N' END"
+                    : $"j.[{GetLegacyReviewedColumn(columns)}]"
+                : "CAST(NULL AS varchar(1))";
 
     private static string CapturedByExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("created_by_user_code")
@@ -1318,14 +1913,18 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
     private static string ModifiedByExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("modified_by_user_code")
             ? "j.[modified_by_user_code]"
-            : OptionalExpression(columns, "Authorizer", "int");
+            : AuthorizerExpression(columns);
 
     private static string AuthorizerNameExpression(
         IReadOnlyDictionary<string, ColumnInfo> columns
     ) =>
-        columns.ContainsKey("authorizer")
-            ? "CONVERT(varchar(50), j.[authorizer])"
-            : "CAST(NULL AS varchar(50))";
+        $"CONVERT(varchar(50), {AuthorizerExpression(columns)})";
+
+    private static string AuthorizerExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
+        columns.ContainsKey("authorizer") ? "j.[authorizer]"
+        : columns.ContainsKey("Authorizer") ? "j.[Authorizer]"
+        : columns.ContainsKey("Authoriser") ? "j.[Authoriser]"
+        : "CAST(NULL AS int)";
 
     private static string OptionalExpression(
         IReadOnlyDictionary<string, ColumnInfo> columns,
@@ -1413,6 +2012,14 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             }
             : priority;
 
+    private static string? NormalizeDamage(string? damages)
+    {
+        if (string.IsNullOrWhiteSpace(damages))
+            return null;
+
+        return damages.Trim().StartsWith("Y", StringComparison.OrdinalIgnoreCase) ? "Y" : "N";
+    }
+
     private static string? Append(string? current, string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -1471,11 +2078,60 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
     }
 
     private static string GetIdColumn(IReadOnlyDictionary<string, ColumnInfo> columns) =>
-        columns.ContainsKey("job_card_id") ? "job_card_id" : "jc_code";
+        columns.ContainsKey("job_card_id") ? "job_card_id"
+        : columns.ContainsKey("jc_code") ? "jc_code"
+        : columns.ContainsKey("JobCard_code") ? "JobCard_code"
+        : throw new InvalidOperationException("The Job Card table has no supported identity column.");
+
+    private static string? GetNumberColumn(IReadOnlyDictionary<string, ColumnInfo> columns) =>
+        columns.ContainsKey("jc_number") ? "jc_number"
+        : columns.ContainsKey("Number") ? "Number"
+        : null;
+
+    private static bool HasLegacyReviewedColumn(IReadOnlyDictionary<string, ColumnInfo> columns) =>
+        GetLegacyReviewedColumn(columns) is not null;
+
+    private static string? GetLegacyReviewedColumn(IReadOnlyDictionary<string, ColumnInfo> columns) =>
+        columns.ContainsKey("reviewed_by_Authorizer") ? "reviewed_by_Authorizer"
+        : columns.ContainsKey("reviewed_by_Authoriser") ? "reviewed_by_Authoriser"
+        : null;
+
+    private static string? GetAuthorizerUpdateDateColumn(
+        IReadOnlyDictionary<string, ColumnInfo> columns
+    ) =>
+        columns.ContainsKey("authorizer_update_date") ? "authorizer_update_date"
+        : columns.ContainsKey("Authoriser_update_date") ? "Authoriser_update_date"
+        : null;
+
+    private static bool IsBitColumn(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column
+    ) => columns.TryGetValue(column, out var info)
+        && string.Equals(info.DataType, "bit", StringComparison.OrdinalIgnoreCase);
+
+    private static bool PriorityAsBoolean(string? priority) =>
+        string.Equals(priority, "Y", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(priority, "H", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(priority, "true", StringComparison.OrdinalIgnoreCase);
 
     private sealed record ColumnInfo(string Name, string DataType = "");
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
+
+    private sealed record ProcedureParameter(string Name, DbType Type, object? Value);
+
+    private sealed record JobCardMutationProcedure(
+        string Name,
+        string CommentParameter,
+        string StatusParameter
+    );
+
+    private sealed record JobCardAuthorizerProcedure(
+        string Name,
+        string AuthorizerParameter,
+        string StatusParameter,
+        bool UsesBitFlags
+    );
 
     private sealed class ConnectionScope(DbConnection connection, bool shouldClose)
         : IAsyncDisposable

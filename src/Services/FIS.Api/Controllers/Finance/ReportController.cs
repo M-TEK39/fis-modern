@@ -1,9 +1,11 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Security.Claims;
 using System.Text.Json;
 using FIS.Api.Services;
+using FIS.Api.Services.Finance;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
@@ -34,6 +36,7 @@ public class ReportController : BaseApiController
 
     private readonly IReportingService _reportingService;
     private readonly ILegacyReportResultService _legacyReportResultService;
+    private readonly LegacyFinanceReportExecutionService _legacyFinanceReportExecutionService;
     private readonly IFineRepository _fineRepository;
     private readonly IVehicleSourceRepository _vehicleSourceRepository;
     private readonly IVehicleStatusReportRepository _vehicleStatusReportRepository;
@@ -46,6 +49,7 @@ public class ReportController : BaseApiController
     public ReportController(
         IReportingService reportingService,
         ILegacyReportResultService legacyReportResultService,
+        LegacyFinanceReportExecutionService legacyFinanceReportExecutionService,
         IFineRepository fineRepository,
         IVehicleSourceRepository vehicleSourceRepository,
         IVehicleStatusReportRepository vehicleStatusReportRepository,
@@ -61,6 +65,9 @@ public class ReportController : BaseApiController
         _legacyReportResultService =
             legacyReportResultService
             ?? throw new ArgumentNullException(nameof(legacyReportResultService));
+        _legacyFinanceReportExecutionService =
+            legacyFinanceReportExecutionService
+            ?? throw new ArgumentNullException(nameof(legacyFinanceReportExecutionService));
         _fineRepository = fineRepository ?? throw new ArgumentNullException(nameof(fineRepository));
         _vehicleSourceRepository =
             vehicleSourceRepository
@@ -817,7 +824,7 @@ public class ReportController : BaseApiController
         [FromQuery] string? search = null
     )
     {
-        if (!HasReportsRole() || !HasVehicleManagementPermission())
+        if (!HasReportsRole())
         {
             return Forbid();
         }
@@ -974,6 +981,30 @@ public class ReportController : BaseApiController
     }
 
     /// <summary>
+    /// Provides the same status selector that Vehicles/VehicleStatus.aspx
+    /// populated with DEV_SEL_Statuses.  The dated report itself is executed
+    /// through the corresponding legacy report procedure below.
+    /// </summary>
+    [HttpGet("vehicle-status-options")]
+    public async Task<ActionResult> GetLegacyVehicleStatusOptions()
+    {
+        if (!HasReportsRole())
+        {
+            return Forbid();
+        }
+
+        var statuses = await _context.VehicleStatuses.AsNoTracking()
+            .OrderBy(status => status.vehicle_status_code)
+            .Select(status => new
+            {
+                id = status.vehicle_status_code,
+                description = status.status_description,
+            })
+            .ToListAsync(HttpContext.RequestAborted);
+        return Ok(statuses);
+    }
+
+    /// <summary>
     /// Generate universal vehicle report with custom filters
     /// </summary>
     [HttpPost("universal")]
@@ -1000,6 +1031,7 @@ public class ReportController : BaseApiController
     /// Dedicated endpoint replacing generic universal mode posting from UI.
     /// </summary>
     [HttpPost("finance/profitability")]
+    [ServiceFilter(typeof(LegacyFinanceAuthorizationFilter))]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
     public async Task<ActionResult> GetFinanceProfitabilityReport(
         [FromBody] FinanceProfitabilityRequest request
@@ -1007,18 +1039,36 @@ public class ReportController : BaseApiController
     {
         try
         {
+            var financialYear = request.FinancialYear?.Trim() ?? string.Empty;
+            var hireType = request.HireType is 1 or 2 ? request.HireType.Value : 1;
             var universalRequest = new UniversalReportRequest
             {
                 ReportType = "financial",
                 Parameters = new Dictionary<string, object>
                 {
                     ["mode"] = "profitability",
-                    ["financialYear"] = request.FinancialYear ?? string.Empty,
+                    ["financialYear"] = financialYear,
+                    ["hireType"] = hireType,
                 },
             };
 
-            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            var report = await ExecuteLegacyFinanceReportOrCompatibilityAsync(
+                "profitability",
+                hireType == 2
+                    ? "VIP Vehicles Profitability Report"
+                    : "Pool Vehicles Profitability Report",
+                new Dictionary<string, object?>
+                {
+                    ["@FinYear"] = financialYear,
+                    ["@HireType"] = hireType,
+                },
+                universalRequest
+            );
             return Ok(report);
+        }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyFinanceProcedureContractMismatch();
         }
         catch (Exception ex)
         {
@@ -1035,6 +1085,10 @@ public class ReportController : BaseApiController
     /// Dedicated endpoint replacing generic universal mode posting from UI.
     /// </summary>
     [HttpPost("finance/outstanding")]
+    [LegacyFinanceOutstandingAllDepartmentsAccess]
+    [ServiceFilter(typeof(LegacyFinanceAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceFinancialReportsAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceRequestScopeFilter))]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
     public async Task<ActionResult> GetFinanceOutstandingReport(
         [FromBody] FinanceOutstandingRequest request
@@ -1057,8 +1111,51 @@ public class ReportController : BaseApiController
                 VmfCode = request.VmfCode,
             };
 
-            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            var mode = request.Mode?.Trim().ToLowerInvariant();
+            var definition = mode switch
+            {
+                "department-site-vehicle" => (
+                    Key: "outstanding-department-site-vehicle",
+                    Title: "Outstanding Amounts per Department, Site and Vehicle",
+                    Parameters: new Dictionary<string, object?>
+                    {
+                        ["@depCode"] = ParseLegacyCodeOrZero(request.DepartmentCode),
+                    }
+                ),
+                "department" => (
+                    Key: "outstanding-department",
+                    Title: "Outstanding Amounts per Department",
+                    Parameters: new Dictionary<string, object?>()
+                ),
+                "department-site" => (
+                    Key: "outstanding-department-site",
+                    Title: "Outstanding Amounts per Department and Site",
+                    Parameters: new Dictionary<string, object?>()
+                ),
+                "month-end-vehicle" => (
+                    Key: "outstanding-month-end-vehicle",
+                    Title: "Outstanding Amounts per Department, Site and Vehicle as at Month End",
+                    Parameters: new Dictionary<string, object?>()
+                ),
+                "allocation-exception" => (
+                    Key: "outstanding-allocation-exception",
+                    Title: "Un-Interfaced Transactions with Allocation Exceptions",
+                    Parameters: new Dictionary<string, object?>()
+                ),
+                _ => throw new ArgumentException("The selected outstanding report is not supported."),
+            };
+
+            var report = await ExecuteLegacyFinanceReportOrCompatibilityAsync(
+                definition.Key,
+                definition.Title,
+                definition.Parameters,
+                universalRequest
+            );
             return Ok(report);
+        }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyFinanceProcedureContractMismatch();
         }
         catch (Exception ex)
         {
@@ -1075,6 +1172,9 @@ public class ReportController : BaseApiController
     /// Dedicated endpoint replacing generic universal mode posting from UI.
     /// </summary>
     [HttpPost("finance/wesbank")]
+    [LegacyFinanceReportsAccess]
+    [ServiceFilter(typeof(LegacyFinanceAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceRequestScopeFilter))]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
     public async Task<ActionResult> GetFinanceWesbankReport(
         [FromBody] FinanceWesbankRequest request
@@ -1085,6 +1185,7 @@ public class ReportController : BaseApiController
             var parameters = new Dictionary<string, object>
             {
                 ["mode"] = request.Mode ?? string.Empty,
+                ["reportAction"] = request.ReportAction ?? string.Empty,
                 ["provinceCode"] = request.ProvinceCode ?? string.Empty,
             };
 
@@ -1096,8 +1197,37 @@ public class ReportController : BaseApiController
                 EndDate = request.EndDate,
             };
 
-            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            var reportAction = request.ReportAction?.Trim().ToLowerInvariant();
+            var definition = reportAction switch
+            {
+                "summary-all" or "summary-all-download" => ("wesbank-summary-all", "Summary Wesbank Expenses Report for All Provinces", false),
+                "department-summary" or "department-summary-download" => ("wesbank-department-summary", "Summary Wesbank Expenses Report for All Provinces and Departments", false),
+                "site-summary" or "site-summary-download" => ("wesbank-site-summary", "Summary Wesbank Expenses Report for All Provinces, Departments and Sites", false),
+                "summary-province" or "summary-province-download" => ("wesbank-summary-province", "Summary Wesbank Expenses Report per Province", true),
+                "department-province-summary" or "department-province-summary-download" => ("wesbank-department-province-summary", "Summary Wesbank Expenses Report per Province and Department", true),
+                "site-province-summary" or "site-province-summary-download" => ("wesbank-site-province-summary", "Summary Wesbank Expenses Report per Province, Department and Site", true),
+                "detailed-fuel-download" => ("wesbank-detailed-fuel", "Detailed Wesbank Expenses Report (Fuel Only)", false),
+                "detailed-other-download" => ("wesbank-detailed-other", "Detailed Wesbank Expenses Report (Excluding Fuel)", false),
+                "detailed-fuel-province-download" => ("wesbank-detailed-fuel-province", "Detailed Wesbank Expenses Report (Fuel Only) per Province", true),
+                "detailed-other-province-download" => ("wesbank-detailed-other-province", "Detailed Wesbank Expenses Report (Excluding Fuel) per Province", true),
+                _ => throw new ArgumentException("The selected Wesbank report is not supported."),
+            };
+            var report = await ExecuteLegacyFinanceReportOrCompatibilityAsync(
+                definition.Item1,
+                definition.Item2,
+                new Dictionary<string, object?>
+                {
+                    ["@StartDate"] = request.StartDate,
+                    ["@EndDate"] = request.EndDate,
+                    ["@Province"] = definition.Item3 ? ParseLegacyCode(request.ProvinceCode) : null,
+                },
+                universalRequest
+            );
             return Ok(report);
+        }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyFinanceProcedureContractMismatch();
         }
         catch (Exception ex)
         {
@@ -1114,6 +1244,9 @@ public class ReportController : BaseApiController
     /// Dedicated endpoint replacing generic universal mode posting from UI.
     /// </summary>
     [HttpPost("finance/audit-trail")]
+    [LegacyFinanceAuditAccess]
+    [ServiceFilter(typeof(LegacyFinanceAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceRequestScopeFilter))]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
     public async Task<ActionResult> GetFinanceAuditTrailReport(
         [FromBody] FinanceAuditTrailRequest request
@@ -1128,6 +1261,8 @@ public class ReportController : BaseApiController
                 ["outputFormat"] = request.OutputFormat ?? string.Empty,
                 ["departmentCode"] = request.DepartmentCode ?? string.Empty,
                 ["siteCode"] = request.SiteCode ?? string.Empty,
+                ["vehicleNumber"] = request.VehicleNumber ?? string.Empty,
+                ["numberType"] = request.NumberType ?? string.Empty,
             };
 
             var universalRequest = new UniversalReportRequest
@@ -1139,8 +1274,52 @@ public class ReportController : BaseApiController
                 VmfCode = request.VmfCode,
             };
 
-            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            var auditType = request.AuditType?.Trim().ToLowerInvariant();
+            var procedureKey = auditType switch
+            {
+                "els" => "audit-els",
+                "manual-kilos" => "audit-manual-kilos",
+                "contracts" => "audit-contracts",
+                "vip-taxi" => "audit-vip-taxi",
+                _ => throw new ArgumentException("The selected audit report is not supported."),
+            };
+            var filterBy = request.Mode?.Trim().ToLowerInvariant() switch
+            {
+                "department" => "Department",
+                "site" => "Site",
+                "vehicle" => "Vehicle",
+                _ => throw new ArgumentException("The selected audit grouping is not supported."),
+            };
+            var auditId = filterBy switch
+            {
+                "Department" => request.DepartmentCode,
+                "Site" => request.SiteCode,
+                _ => request.VehicleNumber,
+            };
+            var numberType = filterBy switch
+            {
+                "Department" => "DEP",
+                "Site" => "Site",
+                _ => request.NumberType?.Trim().ToLowerInvariant() is "gg" ? "gg" : "gp",
+            };
+            var report = await ExecuteLegacyFinanceReportOrCompatibilityAsync(
+                procedureKey,
+                $"{request.AuditType} audit trail",
+                new Dictionary<string, object?>
+                {
+                    ["@StartDate"] = request.StartDate,
+                    ["@EndDate"] = request.EndDate,
+                    ["@FilterBy"] = filterBy,
+                    ["@ID"] = auditId,
+                    ["@NumType"] = numberType,
+                },
+                universalRequest
+            );
             return Ok(report);
+        }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyFinanceProcedureContractMismatch();
         }
         catch (Exception ex)
         {
@@ -1161,6 +1340,9 @@ public class ReportController : BaseApiController
     /// Dedicated endpoint replacing generic universal mode posting from UI.
     /// </summary>
     [HttpPost("finance/regional")]
+    [LegacyFinanceReportsAccess]
+    [ServiceFilter(typeof(LegacyFinanceAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceRequestScopeFilter))]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
     public async Task<ActionResult> GetFinanceRegionalReport(
         [FromBody] FinanceRegionalRequest request
@@ -1191,8 +1373,34 @@ public class ReportController : BaseApiController
                 EndDate = request.EndDate,
             };
 
-            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            var summaryType = request.SummaryType?.Trim();
+            var procedureKey = summaryType switch
+            {
+                "SummaryReport" => "regional-summary",
+                "SummaryReportDeptCostType" => "regional-department-cost-type",
+                "SummaryReportByCostType" => "regional-site-cost-type",
+                "SummaryReportPerProvince" => "regional-summary-province",
+                "SummaryReportPerProvinceDeptCostType" => "regional-department-cost-type-province",
+                "SummaryReportPerProvinceByCostType" => "regional-site-cost-type-province",
+                _ => throw new ArgumentException("The selected regional Finance report is not supported."),
+            };
+            var provinceSummary = procedureKey.EndsWith("-province", StringComparison.Ordinal);
+            var report = await ExecuteLegacyFinanceReportOrCompatibilityAsync(
+                procedureKey,
+                summaryType,
+                new Dictionary<string, object?>
+                {
+                    ["@StartDate"] = request.StartDate,
+                    ["@EndDate"] = request.EndDate,
+                    ["@Province"] = provinceSummary ? ParseLegacyCode(request.ProvinceCode) : null,
+                },
+                universalRequest
+            );
             return Ok(report);
+        }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyFinanceProcedureContractMismatch();
         }
         catch (Exception ex)
         {
@@ -1209,6 +1417,10 @@ public class ReportController : BaseApiController
     /// Dedicated endpoint replacing generic universal mode posting from UI.
     /// </summary>
     [HttpPost("finance/missing-kilometres")]
+    [ServiceFilter(typeof(LegacyFinanceAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceFinancialReportsAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceDepartment147AuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceRequestScopeFilter))]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
     public async Task<ActionResult> GetFinanceMissingKilometresReport(
         [FromBody] FinanceMissingKilometresRequest request
@@ -1233,8 +1445,37 @@ public class ReportController : BaseApiController
                 EndDate = request.EndDate,
             };
 
-            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            var mode = request.Mode?.Trim().ToLowerInvariant();
+            var procedureKey = mode switch
+            {
+                "fuel-consumption" => "missing-fuel-consumption",
+                "no-kilos-consuming-fuel" => "missing-no-kilos-consuming-fuel",
+                _ => throw new ArgumentException("The selected missing-kilometres report is not supported."),
+            };
+            var report = await ExecuteLegacyFinanceReportOrCompatibilityAsync(
+                procedureKey,
+                mode == "fuel-consumption"
+                    ? "Missing Kilometres from Fuel Consumption"
+                    : "Vehicles with No Kilos but Consumed Fuel",
+                new Dictionary<string, object?>
+                {
+                    ["@StartDate"] = request.StartDate,
+                    ["@EndDate"] = request.EndDate,
+                    ["@DepartmentCode"] = mode == "fuel-consumption"
+                        ? ParseLegacyCode(request.DepartmentCode) ?? 0
+                        : null,
+                    ["@ProvinceCode"] = mode == "fuel-consumption"
+                        ? ParseLegacyCode(request.ProvinceCode) ?? 0
+                        : null,
+                    ["@ExcludeUnposted"] = mode == "fuel-consumption" ? request.ExcludeUnposted : null,
+                },
+                universalRequest
+            );
             return Ok(report);
+        }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyFinanceProcedureContractMismatch();
         }
         catch (Exception ex)
         {
@@ -1251,6 +1492,8 @@ public class ReportController : BaseApiController
     /// Dedicated endpoint replacing generic universal mode posting from UI.
     /// </summary>
     [HttpPost("finance/reports")]
+    [ServiceFilter(typeof(LegacyFinanceAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceRequestScopeFilter))]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
     public async Task<ActionResult> GetFinanceReportsPageReport(
         [FromBody] FinanceReportsPageRequest request
@@ -1278,8 +1521,82 @@ public class ReportController : BaseApiController
                 VmfCode = request.VmfCode,
             };
 
-            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            var action = request.Action?.Trim().ToLowerInvariant();
+            var mode = request.Mode?.Trim().ToLowerInvariant();
+            var procedureKey = action switch
+            {
+                "summary-by-cost-type" or "summary-html" or "summary-pdf" => "invoice-summary",
+                "summary-by-cost-type-journal" => "invoice-by-cost-type",
+                "detailed-html" or "detailed-pdf" or "detailed-table" or "detailed-excel" => "invoice-detailed",
+                "detailed-vip-taxi-pdf" => "invoice-vip-taxi",
+                "detailed-fuel-pdf" or "detailed-fuel-excel" => "invoice-fuel",
+                "detailed-toll-oil-pdf" or "detailed-toll-oil-excel" => "invoice-toll-oil",
+                "detailed-surcharge-pdf" or "detailed-surcharge-excel" => "invoice-surcharge",
+                "date-range" when mode is "income-department" or "download-income-department" => "income-by-department",
+                "date-range" when mode is "income-department-site" or "download-income-department-site" => "income-by-department-site",
+                "date-range" when mode == "download-income-department-site-vehicle" => "income-by-department-site-vehicle",
+                "financial-year" when mode is "income-split-summary" or "income-split-detailed" => "income-split",
+                _ => null,
+            };
+            if (procedureKey is null)
+            {
+                return BadRequest(
+                    new { error = "The selected Finance menu action is not mapped to a legacy report procedure." }
+                );
+            }
+
+            if (procedureKey.StartsWith("income-", StringComparison.Ordinal))
+            {
+                var incomeReport = await ExecuteLegacyFinanceReportOrCompatibilityAsync(
+                    procedureKey,
+                    mode is "income-split-summary" or "income-split-detailed"
+                        ? "Previous Years Income Split"
+                        : "Invoiced Amounts Income Report",
+                    new Dictionary<string, object?>
+                    {
+                        ["@StartDate"] = request.StartDate,
+                        ["@EndDate"] = request.EndDate,
+                        ["@FinancialYear"] = request.FinancialYear,
+                    },
+                    universalRequest
+                );
+                return Ok(incomeReport);
+            }
+
+            var reportId = mode switch
+            {
+                "site" => ParseLegacyCode(request.SiteCode),
+                "province" => ParseLegacyCode(request.Province),
+                _ => ParseLegacyCode(request.DepartmentCode),
+            };
+            var batchDate = DateTime.TryParse(request.BatchDate, out var parsedBatchDate)
+                ? parsedBatchDate.Date
+                : (DateTime?)null;
+            if (!reportId.HasValue || !batchDate.HasValue)
+            {
+                return BadRequest(new { error = "A report location and posting date are required." });
+            }
+
+            var report = await ExecuteLegacyFinanceReportOrCompatibilityAsync(
+                procedureKey,
+                "Financial Invoice Report",
+                new Dictionary<string, object?>
+                {
+                    ["@ID"] = reportId.Value,
+                    ["@BatchDate"] = batchDate.Value,
+                    ["@FilterBy"] = mode is "site" or "province"
+                        ? char.ToUpperInvariant(mode![0]) + mode[1..]
+                        : "Department",
+                    ["@filterbysite"] = mode == "site" ? "1" : "0",
+                    ["@DepCode"] = mode == "province" ? ParseLegacyCode(request.DepartmentCode) ?? 0 : 0,
+                },
+                universalRequest
+            );
             return Ok(report);
+        }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyFinanceProcedureContractMismatch();
         }
         catch (Exception ex)
         {
@@ -1293,6 +1610,70 @@ public class ReportController : BaseApiController
                 }
             );
         }
+    }
+
+    private async Task<UniversalReport> ExecuteLegacyFinanceReportOrCompatibilityAsync(
+        string procedureKey,
+        string title,
+        IReadOnlyDictionary<string, object?> parameters,
+        UniversalReportRequest compatibilityRequest
+    )
+    {
+        var legacy = await _legacyFinanceReportExecutionService.TryExecuteAsync(
+            new LegacyFinanceProcedureRequest(procedureKey, title, parameters),
+            HttpContext.RequestAborted
+        );
+        return legacy ?? await _reportingService.GenerateUniversalReportAsync(compatibilityRequest);
+    }
+
+    private ObjectResult LegacyFinanceProcedureContractMismatch() =>
+        StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            new { error = "The legacy Finance report procedure has an incompatible parameter contract." }
+        );
+
+    private static int? ParseLegacyCode(string? value) =>
+        int.TryParse(value, out var parsed) && parsed > 0 ? parsed : null;
+
+    private static int? ParseLegacyCodeOrZero(string? value) =>
+        int.TryParse(value, out var parsed) && parsed >= 0 ? parsed : null;
+
+    private async Task<bool> CanAccessLegacyTripReportScopeAsync(
+        LegacyFinanceAccessService.LegacyFinanceAccessContext access,
+        int? departmentCode,
+        int? siteCode,
+        CancellationToken cancellationToken
+    )
+    {
+        if (!departmentCode.HasValue || !siteCode.HasValue || access.Profile is null)
+        {
+            return false;
+        }
+
+        // ChooseDep_Site_DateRange.ascx offered a profile department by
+        // default. Its named vehicle-list role could choose another department
+        // within the employee's province, but never an arbitrary province.
+        if (!access.IsFullAdministrator)
+        {
+            var departmentAllowed = access.HasProvinceWideVehicleListRole
+                ? await _context.Sites.AsNoTracking().AnyAsync(
+                    site =>
+                        site.Depatrment_code == departmentCode.Value
+                        && site.province_code == access.Profile.ProvinceCode,
+                    cancellationToken
+                )
+                : access.Profile.DepartmentCode == departmentCode.Value;
+            if (!departmentAllowed)
+            {
+                return false;
+            }
+        }
+
+        return await _context.Sites.AsNoTracking().AnyAsync(
+            site =>
+                site.Site_code == siteCode.Value && site.Depatrment_code == departmentCode.Value,
+            cancellationToken
+        );
     }
 
     #endregion
@@ -1388,23 +1769,339 @@ public class ReportController : BaseApiController
     #region Financial Reports
 
     /// <summary>
-    /// Generate vehicle billing history
+    /// Runs the named, legacy Finance drill-down reports. These report paths
+    /// used a generic ActiveReports page in the Web Forms application, but the
+    /// Item value was still a fixed set of Finance menu/drill-down values. Keep
+    /// that allowlist at the API boundary and do not accept a procedure name.
     /// </summary>
-    [HttpGet("billing/history/{vmfCode}")]
-    [ProducesResponseType(typeof(VehicleBillingHistoryReport), StatusCodes.Status200OK)]
-    public async Task<ActionResult> GetBillingHistory(int vmfCode, [FromQuery] int financialYear)
+    [HttpGet("finance/legacy-detail")]
+    [LegacyFinanceReportsAccess]
+    [ServiceFilter(typeof(LegacyFinanceAuthorizationFilter))]
+    [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetLegacyFinanceDetailReport(
+        [FromQuery] string item,
+        [FromQuery] DateTime? startDate = null,
+        [FromQuery] DateTime? endDate = null,
+        [FromQuery] int? departmentCode = null,
+        [FromQuery] int? siteCode = null,
+        [FromQuery] string? province = null,
+        [FromQuery] int? journalNumber = null,
+        [FromQuery] string? registrationNumber = null,
+        [FromQuery] int? statusId = null
+    )
     {
+        var normalizedItem = item?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalizedItem))
+        {
+            return BadRequest(new { error = "A legacy Finance report item is required." });
+        }
+
+        if (
+            !HttpContext.Items.TryGetValue(LegacyFinanceAccessService.AccessContextItemKey, out var rawAccess)
+            || rawAccess is not LegacyFinanceAccessService.LegacyFinanceAccessContext access
+        )
+        {
+            return Forbid();
+        }
+
+        // The generic Web Forms renderers were reached from different menus,
+        // whose roles were not interchangeable. Keep their entry permissions
+        // distinct even though the modern endpoint shares their safe procedure
+        // runner.
+        var permitted = normalizedItem switch
+        {
+            "journal-detailed-invoice" => access.CanRunFinancialReports,
+            "trip-routes-over-25000" or "trip-day-routes-over-3500" or "trip-number-interval" or "els-log" or "vehicle-status" =>
+                access.IsFullAdministrator || access.Roles.Contains("Reports"),
+            "unallocated-vehicles" => access.IsFullAdministrator
+                || (access.Roles.Contains("Reports") && access.Roles.Contains("Management Reports")),
+            _ => access.CanRunGeneralReports,
+        };
+        if (!permitted)
+        {
+            return Forbid();
+        }
+
+        if (
+            normalizedItem is "trip-routes-over-25000" or "trip-day-routes-over-3500"
+            && !await CanAccessLegacyTripReportScopeAsync(
+                access,
+                departmentCode,
+                siteCode,
+                HttpContext.RequestAborted
+            )
+        )
+        {
+            return Forbid();
+        }
+
+        if (
+            (startDate.HasValue && endDate.HasValue && startDate > endDate)
+            || (
+                normalizedItem == "vehicle-status"
+                && (
+                    startDate?.Date > DateTime.Today
+                    || endDate?.Date > DateTime.Today
+                )
+            )
+            || departmentCode <= 0
+            || siteCode <= 0
+            || journalNumber <= 0
+            || statusId is <= 0 or > short.MaxValue
+        )
+        {
+            return BadRequest(new { error = "The supplied legacy Finance report parameters are invalid." });
+        }
+
+        var definition = normalizedItem switch
+        {
+            "wesbank-site-vehicle-detail" when departmentCode.HasValue && startDate.HasValue && endDate.HasValue => new LegacyFinanceDetailReportDefinition(
+                "wesbank-site-vehicle-detail",
+                "Wesbank expenses by site and vehicle",
+                new Dictionary<string, object?>
+                {
+                    ["@departmentCode"] = departmentCode.Value,
+                    ["@startDate"] = startDate.Value,
+                    ["@endDate"] = endDate.Value,
+                }
+            ),
+            "wesbank-registration-number-detail" when siteCode.HasValue && startDate.HasValue && endDate.HasValue => new LegacyFinanceDetailReportDefinition(
+                "wesbank-registration-number-detail",
+                "Wesbank expenses by registration number",
+                new Dictionary<string, object?>
+                {
+                    ["@siteID"] = siteCode.Value,
+                    ["@startDate"] = startDate.Value,
+                    ["@endDate"] = endDate.Value,
+                }
+            ),
+            "wesbank-vehicle-detail" when siteCode.HasValue && startDate.HasValue && endDate.HasValue && !string.IsNullOrWhiteSpace(registrationNumber) => new LegacyFinanceDetailReportDefinition(
+                "wesbank-vehicle-detail",
+                "Wesbank vehicle detail",
+                new Dictionary<string, object?>
+                {
+                    ["@regNum"] = registrationNumber.Trim(),
+                    ["@siteID"] = siteCode.Value,
+                    ["@startDate"] = startDate.Value,
+                    ["@endDate"] = endDate.Value,
+                }
+            ),
+            "regional-total-cost-province" when startDate.HasValue && endDate.HasValue => new LegacyFinanceDetailReportDefinition(
+                "regional-total-cost-province",
+                "Total cost per province",
+                new Dictionary<string, object?>
+                {
+                    ["@startDate"] = startDate.Value,
+                    ["@endDate"] = endDate.Value,
+                }
+            ),
+            "regional-total-cost-province-department" when startDate.HasValue && endDate.HasValue && !string.IsNullOrWhiteSpace(province) => new LegacyFinanceDetailReportDefinition(
+                "regional-total-cost-province-department",
+                "Total cost per province and department",
+                new Dictionary<string, object?>
+                {
+                    ["@startDate"] = startDate.Value,
+                    ["@endDate"] = endDate.Value,
+                    ["@province"] = province.Trim(),
+                }
+            ),
+            "regional-total-cost-province-department-site" when startDate.HasValue && endDate.HasValue && !string.IsNullOrWhiteSpace(province) && departmentCode.HasValue => new LegacyFinanceDetailReportDefinition(
+                "regional-total-cost-province-department-site",
+                "Total cost per province, department and site",
+                new Dictionary<string, object?>
+                {
+                    ["@startDate"] = startDate.Value,
+                    ["@endDate"] = endDate.Value,
+                    ["@province"] = province.Trim(),
+                    ["@deptCode"] = departmentCode.Value,
+                }
+            ),
+            "regional-total-cost-province-department-site-cost-type" when startDate.HasValue && endDate.HasValue && !string.IsNullOrWhiteSpace(province) && departmentCode.HasValue => new LegacyFinanceDetailReportDefinition(
+                "regional-total-cost-province-department-site-cost-type",
+                "Total cost per province, department, site and cost type",
+                new Dictionary<string, object?>
+                {
+                    ["@startDate"] = startDate.Value,
+                    ["@endDate"] = endDate.Value,
+                    ["@province"] = province.Trim(),
+                    ["@deptCode"] = departmentCode.Value,
+                }
+            ),
+            "journal-detailed-invoice" when journalNumber.HasValue => new LegacyFinanceDetailReportDefinition(
+                "journal-detailed-invoice",
+                "Detailed invoice from journal number",
+                new Dictionary<string, object?>
+                {
+                    ["@JournalCode"] = journalNumber.Value,
+                    ["@FilterBy"] = "Department",
+                }
+            ),
+            "trip-routes-over-25000" when departmentCode.HasValue && siteCode.HasValue && startDate.HasValue && endDate.HasValue => new LegacyFinanceDetailReportDefinition(
+                "trip-routes-over-25000",
+                "Trip authorities exceeding 25 000 km",
+                new Dictionary<string, object?>
+                {
+                    ["@DepID"] = departmentCode.Value,
+                    ["@SiteID"] = siteCode.Value,
+                    ["@StartDate"] = startDate.Value,
+                    ["@EndDate"] = endDate.Value,
+                }
+            ),
+            "trip-day-routes-over-3500" when departmentCode.HasValue && siteCode.HasValue && startDate.HasValue && endDate.HasValue => new LegacyFinanceDetailReportDefinition(
+                "trip-day-routes-over-3500",
+                "Trip authorities exceeding 3 500 km per day",
+                new Dictionary<string, object?>
+                {
+                    ["@DepID"] = departmentCode.Value,
+                    ["@SiteID"] = siteCode.Value,
+                    ["@StartDate"] = startDate.Value,
+                    ["@EndDate"] = endDate.Value,
+                }
+            ),
+            "trip-number-interval" => new LegacyFinanceDetailReportDefinition(
+                "trip-number-interval",
+                "Trips issued in the last three months",
+                new Dictionary<string, object?>()
+            ),
+            "els-log" when startDate.HasValue && endDate.HasValue => new LegacyFinanceDetailReportDefinition(
+                "els-log",
+                "Electronic and Manual Logsheet Kilo Report",
+                new Dictionary<string, object?>
+                {
+                    ["@start_date"] = startDate.Value,
+                    ["@end_date"] = endDate.Value,
+                }
+            ),
+            "unallocated-vehicles" => new LegacyFinanceDetailReportDefinition(
+                "unallocated-vehicles",
+                "Un-allocated vehicles",
+                new Dictionary<string, object?>()
+            ),
+            "vehicle-status" when startDate.HasValue && endDate.HasValue && statusId.HasValue => new LegacyFinanceDetailReportDefinition(
+                "vehicle-status",
+                "Vehicle List by Status Selection",
+                new Dictionary<string, object?>
+                {
+                    ["@startdate"] = startDate.Value,
+                    ["@enddate"] = endDate.Value,
+                    ["@id"] = statusId.Value.ToString(CultureInfo.InvariantCulture),
+                }
+            ),
+            _ => null,
+        };
+        if (definition is null)
+        {
+            return BadRequest(new { error = "The legacy Finance report item or its required parameters are not supported." });
+        }
+
         try
         {
-            var report = await _reportingService.GenerateVehicleBillingHistoryAsync(
-                vmfCode,
-                financialYear
+            var report = await _legacyFinanceReportExecutionService.TryExecuteAsync(
+                new LegacyFinanceProcedureRequest(
+                    definition.ProcedureKey,
+                    definition.Title,
+                    definition.Parameters
+                ),
+                HttpContext.RequestAborted
             );
+            if (report is null)
+            {
+                // A detail drill-down has no semantically equivalent EF query.
+                // Returning an availability error is intentional: a fabricated
+                // empty grid would hide a missing database deployment.
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new { error = "The legacy Finance report procedure is unavailable on this database." }
+                );
+            }
+
             return Ok(report);
+        }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "The legacy Finance report procedure has an incompatible parameter contract." }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating billing history for VMF {VmfCode}", vmfCode);
+            _logger.LogError(ex, "Error generating legacy Finance detail report {LegacyFinanceReportItem}", normalizedItem);
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new { error = "Failed to generate the legacy Finance detail report." }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Generate vehicle billing history
+    /// </summary>
+    [HttpGet("billing/history")]
+    [ServiceFilter(typeof(LegacyFinanceAuthorizationFilter))]
+    [ServiceFilter(typeof(LegacyFinanceBillingHistoryAuthorizationFilter))]
+    [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetBillingHistory(
+        [FromQuery] string registrationNumber,
+        [FromQuery] int financialYear
+    )
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(registrationNumber) || registrationNumber.Trim().Length < 7)
+            {
+                return BadRequest(new { error = "A valid vehicle registration number is required." });
+            }
+
+            var selectedRegistration = registrationNumber.Trim();
+            if (
+                !HttpContext.Items.TryGetValue(
+                    LegacyFinanceBillingHistoryAuthorizationFilter.BillingHistoryScopeItemKey,
+                    out var rawScope
+                )
+                || rawScope is not LegacyFinanceAccessService.LegacyFinanceBillingHistoryScope scope
+            )
+            {
+                return Forbid();
+            }
+            var legacyReport = await _legacyFinanceReportExecutionService.TryExecuteAsync(
+                new LegacyFinanceProcedureRequest(
+                    "vehicle-billing-history",
+                    "Vehicle Billing History",
+                    new Dictionary<string, object?>
+                    {
+                        ["@DepCode"] = scope.DepartmentCode,
+                        ["@SiteCode"] = scope.SiteCode,
+                        ["@RegCode"] = selectedRegistration,
+                        ["@FinYear"] = financialYear.ToString(CultureInfo.InvariantCulture),
+                    }
+                ),
+                HttpContext.RequestAborted
+            );
+            if (legacyReport is not null)
+            {
+                return Ok(legacyReport);
+            }
+
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "The legacy vehicle billing history procedure is unavailable on this database." }
+            );
+        }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "The legacy vehicle billing history procedure has an incompatible parameter contract." }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error generating billing history for registration {RegistrationNumber}",
+                registrationNumber
+            );
             return StatusCode(
                 500,
                 new { error = "Failed to generate billing history", message = ex.Message }
@@ -1619,6 +2316,9 @@ public class ReportController : BaseApiController
         [FromQuery] string? search = null
     )
     {
+        if (!HasLeaseVehiclePendingRole())
+            return Forbid();
+
         var parsedFinancialYear = int.TryParse(finYear, out var financialYear)
             ? financialYear
             : (int?)null;
@@ -1635,6 +2335,9 @@ public class ReportController : BaseApiController
     [HttpGet("fml/contracts-expiring")]
     public async Task<ActionResult> GetFmlContractsExpiring()
     {
+        if (!HasLeaseVehiclePendingRole())
+            return Forbid();
+
         var report = await _fmlReportRepository.GetContractsExpiringAsync();
         return Ok(report);
     }
@@ -1642,6 +2345,9 @@ public class ReportController : BaseApiController
     [HttpGet("fml/expired-open")]
     public async Task<ActionResult> GetFmlExpiredOpen()
     {
+        if (!HasLeaseVehiclePendingRole())
+            return Forbid();
+
         var report = await _fmlReportRepository.GetExpiredOpenContractsAsync();
         return Ok(report);
     }
@@ -1649,6 +2355,9 @@ public class ReportController : BaseApiController
     [HttpGet("fml/vehicles-no-contracts")]
     public async Task<ActionResult> GetFmlVehiclesNoContracts()
     {
+        if (!HasLeaseVehiclePendingRole())
+            return Forbid();
+
         var report = await _fmlReportRepository.GetVehiclesNoContractsAsync();
         return Ok(report);
     }
@@ -1659,6 +2368,9 @@ public class ReportController : BaseApiController
         [FromQuery] DateTime? endDate = null
     )
     {
+        if (!HasLeaseVehiclePendingRole())
+            return Forbid();
+
         var report = await _fmlReportRepository.GetOverUtilizedAsync(startDate, endDate);
         return Ok(report);
     }
@@ -2807,7 +3519,15 @@ public class ReportController : BaseApiController
         public static readonly LegacyAssetListProfileScope All = new(null, null, true);
     }
 
+    private sealed record LegacyFinanceDetailReportDefinition(
+        string ProcedureKey,
+        string Title,
+        IReadOnlyDictionary<string, object?> Parameters
+    );
+
     private bool HasReportsRole() => HasAnyRole("Reports");
+
+    private bool HasLeaseVehiclePendingRole() => HasAnyRole("Lease Vehicle Pending");
 
     private bool HasAssetListAdministratorAccess()
     {
@@ -3000,6 +3720,7 @@ public class CaptureActivityEntry
 public class FinanceProfitabilityRequest
 {
     public string? FinancialYear { get; set; }
+    public short? HireType { get; set; }
 }
 
 public class FinanceOutstandingRequest
@@ -3014,6 +3735,7 @@ public class FinanceOutstandingRequest
 public class FinanceWesbankRequest
 {
     public string? Mode { get; set; }
+    public string? ReportAction { get; set; }
     public string? ProvinceCode { get; set; }
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
@@ -3027,6 +3749,8 @@ public class FinanceAuditTrailRequest
     public string? DepartmentCode { get; set; }
     public string? SiteCode { get; set; }
     public int? VmfCode { get; set; }
+    public string? VehicleNumber { get; set; }
+    public string? NumberType { get; set; }
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
 }

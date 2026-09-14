@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import { hasCoisIdentity, hasFinancialReportsRole } from "@/app/(fleet-operations)/finance/_utils";
 import { FinanceApiError, runFinanceAction } from "@/lib/api/finance/api-finance";
 import { getSession } from "@/lib/auth/session";
 
@@ -42,7 +42,7 @@ export async function closeMissingKilometresAction(formData: FormData) {
     redirect(
       resultPath("error", "The sign-in service is temporarily unavailable. Please try again."),
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasFinancialReportsRole(session.roles) || !hasCoisIdentity(session.legacyUsername))
     redirect(
       resultPath("forbidden", "Your account does not have permission to close kilometre gaps."),
     );

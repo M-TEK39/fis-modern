@@ -623,7 +623,7 @@ public sealed class VehicleRepository : IVehicleRepository
         ArgumentNullException.ThrowIfNull(vehicle);
 
         var availableColumns = await GetAvailableColumnsAsync();
-        _ =
+        var existing =
             await GetByIdIncludingDeletedAsync(vehicle.vmf_code, availableColumns)
             ?? throw new InvalidOperationException(
                 $"Vehicle with vmf_code {vehicle.vmf_code} not found"
@@ -643,6 +643,14 @@ public sealed class VehicleRepository : IVehicleRepository
 
         try
         {
+            await EnsureIdentityValuesUniqueAsync(
+                connection,
+                _context.Database.CurrentTransaction?.GetDbTransaction(),
+                availableColumns,
+                existing,
+                vehicle
+            );
+
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
@@ -663,6 +671,75 @@ public sealed class VehicleRepository : IVehicleRepository
             {
                 await connection.CloseAsync();
             }
+        }
+    }
+
+    private static async Task EnsureIdentityValuesUniqueAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        IReadOnlySet<string> availableColumns,
+        Vehicle existing,
+        Vehicle updated
+    )
+    {
+        await EnsureIdentityValueUniqueAsync(
+            connection,
+            transaction,
+            availableColumns,
+            updated.vmf_code,
+            "chassis_number",
+            existing.chassis_number,
+            updated.chassis_number,
+            "Chassis number"
+        );
+        await EnsureIdentityValueUniqueAsync(
+            connection,
+            transaction,
+            availableColumns,
+            updated.vmf_code,
+            "engine_number_1",
+            existing.engine_number_1,
+            updated.engine_number_1,
+            "Engine number"
+        );
+    }
+
+    private static async Task EnsureIdentityValueUniqueAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        IReadOnlySet<string> availableColumns,
+        int vmfCode,
+        string column,
+        string? originalValue,
+        string? updatedValue,
+        string label
+    )
+    {
+        if (
+            !availableColumns.Contains(column)
+            || string.Equals(originalValue, updatedValue, StringComparison.Ordinal)
+        )
+        {
+            return;
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"""
+            SELECT TOP (1) [fleet_number]
+            FROM [dbo].[{VehicleTableName}]
+            WHERE [{column}] = @identityValue
+              AND [vmf_code] <> @vmfCode
+            """;
+        AddParameter(command, "@identityValue", DbType.String, updatedValue);
+        AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
+
+        var duplicateFleetNumber = await command.ExecuteScalarAsync();
+        if (duplicateFleetNumber is not null && duplicateFleetNumber is not DBNull)
+        {
+            throw new InvalidOperationException(
+                $"{label} already exists for vehicle {Convert.ToString(duplicateFleetNumber, CultureInfo.InvariantCulture)}."
+            );
         }
     }
 
@@ -892,68 +969,12 @@ public sealed class VehicleRepository : IVehicleRepository
         }
     }
 
-    public async Task DeleteAsync(int vmfCode, int currentUserId)
-    {
-        var availableColumns = await GetAvailableColumnsAsync();
-        var connection = _context.Database.GetDbConnection();
-        var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose)
-        {
-            await connection.OpenAsync();
-        }
-
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            if (availableColumns.Contains("is_deleted"))
-            {
-                var assignments = new List<string> { "[is_deleted] = 1" };
-                if (availableColumns.Contains("date_updated"))
-                {
-                    assignments.Add("[date_updated] = @dateUpdated");
-                    AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-                }
-
-                if (availableColumns.Contains("modified_by_user_code"))
-                {
-                    assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-                    AddParameter(
-                        command,
-                        "@modifiedByUserCode",
-                        DbType.Int32,
-                        currentUserId > 0 ? currentUserId : null
-                    );
-                }
-
-                command.CommandText = $"""
-                    UPDATE [dbo].[{VehicleTableName}]
-                    SET {string.Join(", ", assignments)}
-                    WHERE [vmf_code] = @vmfCode
-                    AND {GetActiveFilter("", availableColumns)}
-                    """;
-            }
-            else
-            {
-                // The client-era table has no deletion marker. Preserve the
-                // endpoint's legacy hard-delete behavior only on that schema.
-                command.CommandText = $"""
-                    DELETE FROM [dbo].[{VehicleTableName}]
-                    WHERE [vmf_code] = @vmfCode
-                    """;
-            }
-
-            AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
-            await command.ExecuteNonQueryAsync();
-        }
-        finally
-        {
-            if (shouldClose)
-            {
-                await connection.CloseAsync();
-            }
-        }
-    }
+    public Task DeleteAsync(int vmfCode, int currentUserId) =>
+        Task.FromException(
+            new NotSupportedException(
+                "Vehicle Master records cannot be deleted. The legacy FIS database protects vehicle records from deletion."
+            )
+        );
 
     private async Task<Vehicle?> GetByIdIncludingDeletedAsync(
         int vmfCode,

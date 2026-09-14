@@ -53,14 +53,16 @@ export async function updateTariffParametersAction(formData: FormData) {
 
   const year = text(formData, "year");
   const operation = text(formData, "operation").toLowerCase();
-  if (!/^\d{4}$/.test(year) || !["approve", "reject"].includes(operation))
+  if (!/^\d{4}$/.test(year) || operation !== "approve")
     redirect(resultPath(year, "error", "The tariff parameter operation is invalid."));
 
   let result: unknown;
   try {
     result = await runFinanceAction(
       `api/finance/tariff-parameters/${encodeURIComponent(year)}/${operation}`,
-      {},
+      operation === "approve"
+        ? { effectiveDate: text(formData, "effectiveDate") || null }
+        : {},
     );
   } catch (error) {
     redirect(resultPath(year, "error", apiMessage(error)));
@@ -69,7 +71,7 @@ export async function updateTariffParametersAction(formData: FormData) {
     resultPath(
       year,
       "success",
-      responseMessage(result, year, operation === "approve" ? "approved" : "rejected"),
+      responseMessage(result, year, "approved"),
     ),
   );
 }

@@ -914,31 +914,23 @@ public class VehiclesController : BaseApiController
     }
 
     /// <summary>
-    /// Delete a vehicle (soft delete)
+    /// Vehicle Master records cannot be deleted through FIS. The legacy
+    /// database protects the table with an INSTEAD OF DELETE trigger and its
+    /// menu exposes maintenance, not vehicle deletion.
     /// </summary>
     [HttpDelete("{vmfCode}")]
-    public async Task<ActionResult> DeleteVehicle(int vmfCode)
+    public ActionResult DeleteVehicle(int vmfCode)
     {
-        try
-        {
-            int currentUserId = GetCurrentUserId();
-
-            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
-            if (existing == null)
+        _logger.LogWarning(
+            "Blocked unsupported Vehicle Master delete request for VMF code {VmfCode}",
+            vmfCode
+        );
+        return Conflict(
+            new
             {
-                return NotFound($"Vehicle with vmf_code {vmfCode} not found");
+                error = "Vehicle Master records cannot be deleted. The legacy FIS database protects vehicle records from deletion.",
             }
-
-            await _vehicleRepository.DeleteAsync(vmfCode, currentUserId);
-            _logger.LogInformation("Deleted vehicle with vmf_code {VmfCode}", vmfCode);
-
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deleting vehicle {VmfCode}", vmfCode);
-            return StatusCode(500, "An error occurred while deleting the vehicle");
-        }
+        );
     }
 
     // ──────────────────────────────────────────────────────────

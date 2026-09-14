@@ -8,9 +8,22 @@ public interface ILeaseContractTermsRepository
     Task<IEnumerable<LeaseContractTerms>> GetAllAsync();
     Task<LeaseContractTermsPage> GetPageAsync(LeaseContractTermsPageQuery query);
     Task<LeaseContractTerms?> GetByVehicleAsync(int vmfCode);
+    Task<string?> GetCapturedByUsernameAsync(int vmfCode);
     Task<IEnumerable<LeaseContractTerms>> GetActiveTermsAsync();
     Task<LeaseContractTerms> CreateAsync(LeaseContractTerms terms, int currentUserId);
     Task<LeaseContractTerms> UpdateAsync(LeaseContractTerms terms, int currentUserId);
+    Task<LeaseContractTerms> CaptureOrResubmitAsync(LeaseContractTerms terms, string username);
+    Task<LeaseContractTerms> AuthorizeAsync(
+        LeaseContractTerms terms,
+        string comment,
+        string username
+    );
+    Task<LeaseContractTerms> RejectAsync(
+        LeaseContractTerms terms,
+        string comment,
+        string username
+    );
+    Task<LeaseContractTerms> RecallAsync(LeaseContractTerms terms);
     Task DeleteAsync(int termId, int currentUserId);
 }
 

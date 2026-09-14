@@ -64,17 +64,27 @@ async function authorizeReport() {
     };
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasReportsRole(session.roles)) {
     return {
       ok: false as const,
       message: "You do not have permission to view vehicle status reports.",
     };
   }
 
-  if (!hasReportsRole(session.roles)) {
+  return { ok: true as const };
+}
+
+async function authorizeRemarks() {
+  const reportAccess = await authorizeReport();
+  if (!reportAccess.ok) {
+    return reportAccess;
+  }
+
+  const session = await getSession();
+  if (session.status !== "authenticated" || !hasVehicleManagementPermission(session.accessLevel)) {
     return {
       ok: false as const,
-      message: "You do not have permission to view vehicle status reports.",
+      message: "You do not have permission to manage vehicle status remarks.",
     };
   }
 
@@ -169,7 +179,7 @@ export async function loadVehicleStatusReportAction(
 export async function submitVehicleStatusRemarkAction(
   formData: FormData,
 ): Promise<VehicleStatusReportActionResult> {
-  const access = await authorizeReport();
+  const access = await authorizeRemarks();
   if (!access.ok) {
     return { status: "error", message: access.message };
   }

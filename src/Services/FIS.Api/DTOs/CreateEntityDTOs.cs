@@ -297,13 +297,13 @@ namespace FIS.Api.DTOs
     /// </summary>
     public class UpdateJobCardDto
     {
-        [MaxLength(2000)]
+        [MaxLength(150)]
         public string? jcs_comment { get; set; }
 
-        [MaxLength(2000)]
+        [MaxLength(1)]
         public string? damages { get; set; }
 
-        [MaxLength(2000)]
+        [MaxLength(500)]
         public string? comments { get; set; }
 
         public int? assigned_to { get; set; }
@@ -348,10 +348,22 @@ namespace FIS.Api.DTOs
     /// </summary>
     public class JobCardCloseDto
     {
-        [MaxLength(2000)]
+        [MaxLength(150)]
         public string? close_notes { get; set; }
 
-        // Repair cost capture (optional at close time)
+        [MaxLength(1)]
+        public string? damages { get; set; }
+
+        [MaxLength(500)]
+        public string? damage_comment { get; set; }
+
+        [MaxLength(20)]
+        public string? barcode { get; set; }
+
+        public DateTime? close_date { get; set; }
+
+        // Expanded-schema compatibility inputs; they are rejected by the original
+        // Jobcards table and are not exposed by the legacy close screen.
         public decimal? labour_cost { get; set; }
         public decimal? parts_cost { get; set; }
         public decimal? other_cost { get; set; }

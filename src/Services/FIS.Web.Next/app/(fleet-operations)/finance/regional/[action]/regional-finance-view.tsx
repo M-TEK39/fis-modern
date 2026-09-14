@@ -64,6 +64,19 @@ function legacyAssetPageHref(action: string, query: Query, page: number, pageSiz
   return `/finance/regional/${action}?${params.toString()}`;
 }
 
+function legacyAssetPrintHref(report: LegacyReport, query: Query) {
+  const params = new URLSearchParams({ kind: "legacy-asset", reportKey: report.reportKey });
+  const province = queryValue(query, "provinceCode");
+  const department = queryValue(query, "departmentCode");
+  const site = queryValue(query, "siteCode");
+
+  if (province) params.set("province", province);
+  if (department) params.set("department", department);
+  if (site) params.set("site", site);
+
+  return `/finance/reports/output?${params.toString()}`;
+}
+
 function LegacyAssetReportResults({
   action,
   query,
@@ -78,6 +91,17 @@ function LegacyAssetReportResults({
       headingId="regional-asset-report-results"
       eyebrow={`${report.totalCount} record${report.totalCount === 1 ? "" : "s"}`}
       heading={report.title}
+      trailing={
+        <a
+          className="button button-secondary"
+          href={legacyAssetPrintHref(report, query)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Open printable report
+        </a>
+      }
+      printButton={false}
     >
       {report.rows.length === 0 ? (
         <div className="vehicle-empty-state">
@@ -283,6 +307,7 @@ export function RegionalFinanceView({
           basePath={`/finance/regional/${action}`}
           query={query}
           page={Number(queryValue(query, "page")) || 1}
+          printOrientation="landscape"
         />
       ) : null}
     </FinanceFrame>

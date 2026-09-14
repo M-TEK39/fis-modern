@@ -37,7 +37,11 @@ public interface IJobCardRepository
         decimal? otherCost = null,
         string? invoiceNumber = null,
         DateTime? invoiceDate = null,
-        string? serviceProvider = null
+        string? serviceProvider = null,
+        string? damages = null,
+        string? damageComment = null,
+        string? barcode = null,
+        DateTime? closeDate = null
     );
     Task<JobCard> UpdateStatusAsync(int jobCardId, int newStatusCode, int currentUserId);
 

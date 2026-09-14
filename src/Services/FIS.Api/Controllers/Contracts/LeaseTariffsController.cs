@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using Microsoft.AspNetCore.Authorization;
@@ -71,6 +72,9 @@ public sealed class LeaseTariffsController : BaseApiController
     [HttpPost]
     public async Task<ActionResult<LeaseTariff>> Create([FromBody] LeaseTariff tariff)
     {
+        if (!HasVehicleMasterRole())
+            return Forbid();
+
         try
         {
             var created = await _repository.CreateAsync(tariff, GetCurrentUserId());
@@ -96,6 +100,11 @@ public sealed class LeaseTariffsController : BaseApiController
         [FromBody] IReadOnlyList<LeaseTariffImportRow> rows
     )
     {
+        // The legacy FML menu exposes the import to Lease Vehicle Pending users. The
+        // add and extension pages apply the separate Vehicle Master restriction.
+        if (!HasLeaseVehiclePendingRole())
+            return Forbid();
+
         try
         {
             return Ok(await _repository.ImportAsync(rows, GetCurrentUserId()));
@@ -114,6 +123,9 @@ public sealed class LeaseTariffsController : BaseApiController
     [HttpPut("{id:int}")]
     public async Task<ActionResult<LeaseTariff>> Update(int id, [FromBody] LeaseTariff tariff)
     {
+        if (!HasVehicleMasterRole())
+            return Forbid();
+
         if (id != tariff.lease_tariff_code)
         {
             return BadRequest(new { error = "The lease tariff ID does not match the route." });
@@ -139,18 +151,17 @@ public sealed class LeaseTariffsController : BaseApiController
     }
 
     [HttpDelete("{id:int}")]
-    public async Task<IActionResult> Delete(int id)
+    public IActionResult Delete(int id)
     {
-        try
-        {
-            await _repository.DeleteAsync(id, GetCurrentUserId());
-            return NoContent();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error deleting lease tariff {LeaseTariffCode}", id);
-            return StatusCode(500, new { error = "Failed to delete lease tariff" });
-        }
+        if (!HasVehicleMasterRole())
+            return Forbid();
+
+        // The legacy FML tariff pages provide add and extension flows only. Until a
+        // corresponding legacy delete path is evidenced, do not expose a modern-only
+        // destructive action that bypasses its database behavior.
+        return Conflict(
+            new { error = "Deleting a lease tariff is not available in the legacy FML workflow." }
+        );
     }
 
     private async Task<ActionResult<T>> ExecuteAsync<T>(Func<Task<T>> operation, string resource)
@@ -164,5 +175,29 @@ public sealed class LeaseTariffsController : BaseApiController
             _logger.LogError(ex, "Error retrieving {Resource}", resource);
             return StatusCode(500, new { error = $"Failed to retrieve {resource}" });
         }
+    }
+
+    private bool HasVehicleMasterRole() => HasRole("Vehicle Master");
+
+    private bool HasLeaseVehiclePendingRole() => HasRole("Lease Vehicle Pending");
+
+    private bool HasRole(string expectedRole)
+    {
+        if (User.IsInRole(expectedRole))
+            return true;
+
+        return User.Claims
+            .Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            )
+            .Any(role => string.Equals(role, expectedRole, StringComparison.OrdinalIgnoreCase));
     }
 }

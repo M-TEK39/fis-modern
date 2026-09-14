@@ -174,6 +174,7 @@ export type FinanceOption = { value: string; label: string };
 
 export type BasSegment = {
   segmentCode: number;
+  segmentNumber: string;
   segmentType: string;
   segmentValue: string;
   departmentCode: number | null;
@@ -442,9 +443,12 @@ export function getFinanceSegmentTypes() {
   );
 }
 
-export async function getFinancePostingMonths(filterBy = "Department") {
+export async function getFinancePostingMonths(filterBy = "Department", filterId?: number) {
   const payload = await requestJson(
-    `api/finance/reports/posting-months${queryString({ filterBy })}`,
+    `api/finance/reports/posting-months${queryString({
+      filterBy,
+      id: filterId ? String(filterId) : "",
+    })}`,
   );
   const values = isRecord(payload) ? getValue(payload, "months", "Months") : payload;
   return collection(values)
@@ -464,6 +468,7 @@ function mapBasSegment(value: unknown): BasSegment | null {
   if (segmentCode === null) return null;
   return {
     segmentCode,
+    segmentNumber: asString(getValue(value, "segmentNumber", "SegmentNumber", "segment_number")) ?? "",
     segmentType: asString(getValue(value, "segmentType", "SegmentType")) ?? "",
     segmentValue: asString(getValue(value, "segmentValue", "SegmentValue")) ?? "",
     departmentCode: asNumber(
@@ -476,6 +481,19 @@ function mapBasSegment(value: unknown): BasSegment | null {
 export async function getBasSegments(departmentCode?: number, segmentType?: string) {
   return collection(
     await requestJson(`api/finance/bas/segments${queryString({ departmentCode, segmentType })}`),
+  )
+    .map(mapBasSegment)
+    .filter((item): item is BasSegment => item !== null);
+}
+
+export async function getBasCorrectionSegments(
+  departmentCode: number | undefined,
+  segmentType: string,
+) {
+  return collection(
+    await requestJson(
+      `api/finance/bas/segments/correction${queryString({ departmentCode, segmentType })}`,
+    ),
   )
     .map(mapBasSegment)
     .filter((item): item is BasSegment => item !== null);
@@ -594,6 +612,35 @@ export async function activateBasSegments(segmentCodes: number[]) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ segmentCodes }),
+  });
+}
+
+export async function fixInvalidBasJournal(input: {
+  transactionId: number;
+  departmentCode: number;
+  responsibility: string;
+  objective: string;
+}) {
+  return requestJson("api/finance/bas/journals/invalid/fix", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+}
+
+export async function assignFundCode(input: {
+  fundNumber: string;
+  departmentCode: number;
+  vmfCode: string;
+  journalDetailTypeCode: number;
+  siteCode: number;
+  journalMonth: string;
+  journalDetailCode?: string;
+}) {
+  return requestJson("api/finance/bas/journals/uninvoiced/fund", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
   });
 }
 

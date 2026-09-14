@@ -15,6 +15,7 @@ export type LeaseTermRecord = {
   fixedMonthlyAmount: number | null;
   authorityStatus: number | null;
   createdBy: number | null;
+  createdByUsername: string | null;
   createdDate: string | null;
   modifiedBy: number | null;
   modifiedDate: string | null;
@@ -297,6 +298,7 @@ function mapTerm(value: unknown): LeaseTermRecord | null {
     fixedMonthlyAmount: asNumber(getValue(value, "FixedMonthlyAmount", "fixedMonthlyAmount")),
     authorityStatus: asNumber(getValue(value, "AuthorityStatus", "authorityStatus")),
     createdBy: asNumber(getValue(value, "CreatedBy", "createdBy")),
+    createdByUsername: asString(getValue(value, "CreatedByUsername", "createdByUsername")),
     createdDate: asString(getValue(value, "CreatedDate", "createdDate")),
     modifiedBy: asNumber(getValue(value, "ModifiedBy", "modifiedBy")),
     modifiedDate: asString(getValue(value, "ModifiedDate", "modifiedDate")),

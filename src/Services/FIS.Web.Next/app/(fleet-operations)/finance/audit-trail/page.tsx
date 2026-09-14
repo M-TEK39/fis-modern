@@ -12,7 +12,7 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import { hasAuditTrailReportsAccess } from "@/app/(fleet-operations)/finance/_utils";
 import { getSession } from "@/lib/auth/session";
 
 async function FinanceAuditTrailContent() {
@@ -25,7 +25,7 @@ async function FinanceAuditTrailContent() {
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasAuditTrailReportsAccess(session.roles))
     return (
       <FinanceFrame title="Audit Trail Reports" description="Audit trail reporting.">
         <FinanceRestricted />

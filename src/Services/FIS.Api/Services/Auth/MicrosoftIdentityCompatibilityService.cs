@@ -176,6 +176,7 @@ public sealed class MicrosoftIdentityCompatibilityService
 
         return new LegacyMicrosoftIdentityUser(
             UserAccessCode: user.user_access_code,
+            Username: user.name?.Trim() ?? email,
             Email: email,
             AccessLevel: user.AccessLevel,
             IsActive: user.user_active
@@ -206,6 +207,7 @@ public sealed class MicrosoftIdentityCompatibilityService
 
 public sealed record LegacyMicrosoftIdentityUser(
     short UserAccessCode,
+    string Username,
     string Email,
     long AccessLevel,
     bool IsActive

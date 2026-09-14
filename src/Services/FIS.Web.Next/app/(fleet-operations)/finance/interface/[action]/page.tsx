@@ -10,7 +10,7 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import { hasHeadOfficeFinanceAccess } from "@/app/(fleet-operations)/finance/_utils";
 import {
   FinanceApiError,
   getFinanceBatchDates,
@@ -68,7 +68,7 @@ async function renderFinanceInterfaceContent({
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasHeadOfficeFinanceAccess(session.siteCode, session.legacyUsername))
     return (
       <FinanceFrame
         title="GPG-SAP Interface"

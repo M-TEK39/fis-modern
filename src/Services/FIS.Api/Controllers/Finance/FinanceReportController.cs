@@ -1,9 +1,14 @@
+using System.Data;
+using System.Data.Common;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using FIS.Api.Services.Finance;
 using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
@@ -20,13 +25,14 @@ namespace FIS.Api.Controllers;
 ///
 /// Common query parameters for all report endpoints:
 ///   id             — department_code OR site_code (short)
-///   postingMonthCode — posting_month_code PK (short) from posting_month table
+///   batchDate      — legacy batch_date selected by DEV_SEL_BatchLookup
 ///   filterBy       — "Department" (default) or "Site"
 /// </summary>
 [ApiController]
 [Authorize]
 [Route("api/finance/reports")]
 [Produces("application/json")]
+[ServiceFilter(typeof(LegacyFinanceAuthorizationFilter))]
 public class FinanceReportController : BaseApiController
 {
     private readonly FisDbContext _context;
@@ -34,6 +40,7 @@ public class FinanceReportController : BaseApiController
     private readonly ITaxiRepository _taxiRepository;
     private readonly ITaxiLogRepository _taxiLogRepository;
     private readonly IPrivateHireRepository _privateHireRepository;
+    private readonly LegacyFinanceAccessService _financeAccess;
     private readonly ILogger<FinanceReportController> _logger;
 
     public FinanceReportController(
@@ -42,6 +49,7 @@ public class FinanceReportController : BaseApiController
         ITaxiRepository taxiRepository,
         ITaxiLogRepository taxiLogRepository,
         IPrivateHireRepository privateHireRepository,
+        LegacyFinanceAccessService financeAccess,
         ILogger<FinanceReportController> logger
     )
     {
@@ -50,45 +58,62 @@ public class FinanceReportController : BaseApiController
         _taxiRepository = taxiRepository;
         _taxiLogRepository = taxiLogRepository;
         _privateHireRepository = privateHireRepository;
+        _financeAccess = financeAccess;
         _logger = logger;
     }
 
     // ─── Posting Month Lookup ─────────────────────────────────────────────────
 
     /// <summary>
-    /// Returns available posting months ordered newest-first.
-    /// Frontend uses this to populate the posting-month dropdown before any report action.
+    /// Returns legacy batch dates ordered newest-first.
+    /// Frontend uses this to populate the posting-date dropdown before any report action.
     /// Legacy equivalent: DEV_SEL_BatchLookup
     /// </summary>
     [HttpGet("posting-months")]
-    public async Task<ActionResult> GetPostingMonths([FromQuery] string filterBy = "Department")
+    public async Task<ActionResult> GetPostingMonths(
+        [FromQuery] string filterBy = "Department",
+        [FromQuery] short id = 0
+    )
     {
         try
         {
-            var months = await _context
-                .PostingMonths.Where(pm => !pm.is_deleted)
-                .Join(
-                    _context.PostingYears.Where(py => !py.is_deleted),
-                    pm => pm.posting_year_code,
-                    py => py.posting_year_code,
-                    (pm, py) =>
-                        new
-                        {
-                            value = pm.posting_month_code,
-                            label = pm.month_name + " (" + py.description + ")",
-                            month_number = pm.month_number,
-                            month_name = pm.month_name,
-                            is_closed = pm.is_closed,
-                            year_description = py.description,
-                            year_start = py.year_start_date,
-                            year_end = py.year_end_date,
-                            sort_key = py.year_start_date.Year * 100 + (int)pm.month_number,
-                        }
-                )
-                .OrderByDescending(x => x.sort_key)
-                .ToListAsync();
+            var normalizedFilterBy = filterBy.Trim().ToLowerInvariant() switch
+            {
+                "site" => "Site",
+                "province" => "Province",
+                _ => "Department",
+            };
+            var isSite = normalizedFilterBy == "Site";
+            var access = await _financeAccess.ResolveAsync(User, HttpContext.RequestAborted);
+            var selectedId = id > 0
+                ? id
+                : isSite
+                    ? access.Profile?.SiteCode ?? 0
+                    : access.Profile?.DepartmentCode ?? 0;
 
-            return Ok(new { filter_by = filterBy, months });
+            if (selectedId <= 0)
+            {
+                return BadRequest(new { error = "A Finance profile location is required." });
+            }
+
+            var allowed = isSite
+                ? await _financeAccess.CanAccessSiteAsync(access, selectedId, HttpContext.RequestAborted)
+                : await _financeAccess.CanAccessDepartmentAsync(
+                    access,
+                    selectedId,
+                    HttpContext.RequestAborted
+                );
+            if (!allowed)
+            {
+                return Forbid();
+            }
+
+            var batchDates = await GetLegacyBatchDateOptionsAsync(
+                selectedId,
+                normalizedFilterBy,
+                HttpContext.RequestAborted
+            );
+            return Ok(new { filter_by = normalizedFilterBy, filter_id = selectedId, months = batchDates });
         }
         catch (Exception ex)
         {
@@ -105,24 +130,37 @@ public class FinanceReportController : BaseApiController
     /// Legacy equivalent: DEV_REP_DetailedInvoicedReport (summary grouping)
     /// </summary>
     [HttpGet("invoice-summary")]
+    [ServiceFilter(typeof(LegacyFinanceReportScopeFilter))]
     public async Task<ActionResult> GetInvoiceSummary(
         [FromQuery] short id,
-        [FromQuery] short postingMonthCode,
+        [FromQuery] DateTime? batchDate,
+        [FromQuery] short? postingMonthCode,
         [FromQuery] string filterBy = "Department",
         [FromQuery] string format = "json"
     )
     {
         try
         {
-            var pm = await GetPostingMonthInfo(postingMonthCode);
+            var legacyResult = await TryExecuteLegacyProcedureAsync(
+                "SummaryInvoicedReport",
+                "Summarised Invoice",
+                id,
+                batchDate,
+                filterBy,
+                cancellationToken: HttpContext.RequestAborted
+            );
+            if (legacyResult is not null)
+                return FormatResult(format, legacyResult.ReportName, legacyResult.Data);
+
+            var pm = await GetPostingMonthInfo(batchDate, postingMonthCode);
             if (pm == null)
-                return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
+                return NotFound(new { error = "The selected legacy batch date was not found." });
 
             var rows = await _context
                 .InvoiceItems.Where(ii => !ii.is_deleted)
                 .Join(
                     _context.Invoices.Where(i =>
-                        !i.is_deleted && i.posting_month_code == postingMonthCode
+                        !i.is_deleted && i.posting_month_code == pm.posting_month_code
                     ),
                     ii => ii.invoice_code,
                     i => i.invoice_code,
@@ -212,6 +250,10 @@ public class FinanceReportController : BaseApiController
                 result
             );
         }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyProcedureContractMismatch();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating invoice summary");
@@ -227,18 +269,31 @@ public class FinanceReportController : BaseApiController
     /// Legacy equivalent: DEV_REP_SummaryInvoiceByJournalDetailType
     /// </summary>
     [HttpGet("invoice-by-cost-type")]
+    [ServiceFilter(typeof(LegacyFinanceReportScopeFilter))]
     public async Task<ActionResult> GetInvoiceByCostType(
         [FromQuery] short id,
-        [FromQuery] short postingMonthCode,
+        [FromQuery] DateTime? batchDate,
+        [FromQuery] short? postingMonthCode,
         [FromQuery] string filterBy = "Department",
         [FromQuery] string format = "json"
     )
     {
         try
         {
-            var pm = await GetPostingMonthInfo(postingMonthCode);
+            var legacyResult = await TryExecuteLegacyProcedureAsync(
+                "SummaryInvoiceByCostTypeAndJournal",
+                "Invoice by Cost Type, Site and Journal",
+                id,
+                batchDate,
+                filterBy,
+                cancellationToken: HttpContext.RequestAborted
+            );
+            if (legacyResult is not null)
+                return FormatResult(format, legacyResult.ReportName, legacyResult.Data);
+
+            var pm = await GetPostingMonthInfo(batchDate, postingMonthCode);
             if (pm == null)
-                return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
+                return NotFound(new { error = "The selected legacy batch date was not found." });
 
             var jdQuery = (await _journalService.GetAllJournalDetailsAsync()).Where(jd =>
                 jd.journal_detail_date >= pm.PeriodStart
@@ -290,6 +345,10 @@ public class FinanceReportController : BaseApiController
                 result
             );
         }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyProcedureContractMismatch();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating invoice by cost type");
@@ -305,24 +364,39 @@ public class FinanceReportController : BaseApiController
     /// Legacy equivalent: DEV_REP_DetailedInvoicedReport (full detail)
     /// </summary>
     [HttpGet("invoice-detailed")]
+    [ServiceFilter(typeof(LegacyFinanceReportScopeFilter))]
     public async Task<ActionResult> GetInvoiceDetailed(
         [FromQuery] short id,
-        [FromQuery] short postingMonthCode,
+        [FromQuery] DateTime? batchDate,
+        [FromQuery] short? postingMonthCode,
+        [FromQuery] short? departmentCode,
         [FromQuery] string filterBy = "Department",
         [FromQuery] string format = "json"
     )
     {
         try
         {
-            var pm = await GetPostingMonthInfo(postingMonthCode);
+            var legacyResult = await TryExecuteLegacyProcedureAsync(
+                "DetailedInvoicedReport",
+                "Detailed Invoice",
+                id,
+                batchDate,
+                filterBy,
+                HttpContext.RequestAborted,
+                departmentCode
+            );
+            if (legacyResult is not null)
+                return FormatResult(format, legacyResult.ReportName, legacyResult.Data);
+
+            var pm = await GetPostingMonthInfo(batchDate, postingMonthCode);
             if (pm == null)
-                return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
+                return NotFound(new { error = "The selected legacy batch date was not found." });
 
             var rows = await _context
                 .InvoiceItems.Where(ii => !ii.is_deleted)
                 .Join(
                     _context.Invoices.Where(i =>
-                        !i.is_deleted && i.posting_month_code == postingMonthCode
+                        !i.is_deleted && i.posting_month_code == pm.posting_month_code
                     ),
                     ii => ii.invoice_code,
                     i => i.invoice_code,
@@ -335,7 +409,7 @@ public class FinanceReportController : BaseApiController
                 )
                 .Join(
                     _context.PostingMonths.Where(p => !p.is_deleted),
-                    x => postingMonthCode,
+                    x => pm.posting_month_code,
                     p => p.posting_month_code,
                     (x, p) =>
                         new
@@ -412,6 +486,10 @@ public class FinanceReportController : BaseApiController
                 result
             );
         }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyProcedureContractMismatch();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating detailed invoice");
@@ -429,18 +507,31 @@ public class FinanceReportController : BaseApiController
     /// contractor_id = 2 means VIP; all others are Taxi.
     /// </summary>
     [HttpGet("taxi-vip")]
+    [ServiceFilter(typeof(LegacyFinanceReportScopeFilter))]
     public async Task<ActionResult> GetTaxiVip(
         [FromQuery] short id,
-        [FromQuery] short postingMonthCode,
+        [FromQuery] DateTime? batchDate,
+        [FromQuery] short? postingMonthCode,
         [FromQuery] string filterBy = "Department",
         [FromQuery] string format = "json"
     )
     {
         try
         {
-            var pm = await GetPostingMonthInfo(postingMonthCode);
+            var legacyResult = await TryExecuteLegacyProcedureAsync(
+                "DetailedInvoicedVIPAndTAXIReport",
+                "Detailed VIP and Taxi Invoice",
+                id,
+                batchDate,
+                filterBy,
+                cancellationToken: HttpContext.RequestAborted
+            );
+            if (legacyResult is not null)
+                return FormatResult(format, legacyResult.ReportName, legacyResult.Data);
+
+            var pm = await GetPostingMonthInfo(batchDate, postingMonthCode);
             if (pm == null)
-                return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
+                return NotFound(new { error = "The selected legacy batch date was not found." });
 
             var taxis = await _taxiRepository.GetAllAsync();
             var taxisInPeriod = taxis
@@ -531,6 +622,10 @@ public class FinanceReportController : BaseApiController
                 result
             );
         }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyProcedureContractMismatch();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating taxi/vip report");
@@ -547,22 +642,35 @@ public class FinanceReportController : BaseApiController
     /// Fuel transactions identified via CostCategory.description containing "fuel".
     /// </summary>
     [HttpGet("fuel")]
+    [ServiceFilter(typeof(LegacyFinanceReportScopeFilter))]
     public async Task<ActionResult> GetFuel(
         [FromQuery] short id,
-        [FromQuery] short postingMonthCode,
+        [FromQuery] DateTime? batchDate,
+        [FromQuery] short? postingMonthCode,
         [FromQuery] string filterBy = "Department",
         [FromQuery] string format = "json"
     )
     {
         try
         {
-            var pm = await GetPostingMonthInfo(postingMonthCode);
+            var legacyResult = await TryExecuteLegacyProcedureAsync(
+                "FuelDetailedInvoicedReport",
+                "Detailed Fuel Invoice",
+                id,
+                batchDate,
+                filterBy,
+                cancellationToken: HttpContext.RequestAborted
+            );
+            if (legacyResult is not null)
+                return FormatResult(format, legacyResult.ReportName, legacyResult.Data);
+
+            var pm = await GetPostingMonthInfo(batchDate, postingMonthCode);
             if (pm == null)
-                return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
+                return NotFound(new { error = "The selected legacy batch date was not found." });
 
             var rows = await BuildDailyTransactionReport(
                 id,
-                postingMonthCode,
+                pm.posting_month_code,
                 filterBy,
                 new[] { "fuel" }
             );
@@ -581,6 +689,10 @@ public class FinanceReportController : BaseApiController
                 result
             );
         }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyProcedureContractMismatch();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating fuel invoice");
@@ -597,22 +709,35 @@ public class FinanceReportController : BaseApiController
     /// Toll/Oil identified via CostCategory.description containing "toll" or "oil".
     /// </summary>
     [HttpGet("toll-oil")]
+    [ServiceFilter(typeof(LegacyFinanceReportScopeFilter))]
     public async Task<ActionResult> GetTollOil(
         [FromQuery] short id,
-        [FromQuery] short postingMonthCode,
+        [FromQuery] DateTime? batchDate,
+        [FromQuery] short? postingMonthCode,
         [FromQuery] string filterBy = "Department",
         [FromQuery] string format = "json"
     )
     {
         try
         {
-            var pm = await GetPostingMonthInfo(postingMonthCode);
+            var legacyResult = await TryExecuteLegacyProcedureAsync(
+                "TollAndOilDetailedInvoicedReport",
+                "Detailed Toll and Oil Invoice",
+                id,
+                batchDate,
+                filterBy,
+                cancellationToken: HttpContext.RequestAborted
+            );
+            if (legacyResult is not null)
+                return FormatResult(format, legacyResult.ReportName, legacyResult.Data);
+
+            var pm = await GetPostingMonthInfo(batchDate, postingMonthCode);
             if (pm == null)
-                return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
+                return NotFound(new { error = "The selected legacy batch date was not found." });
 
             var rows = await BuildDailyTransactionReport(
                 id,
-                postingMonthCode,
+                pm.posting_month_code,
                 filterBy,
                 new[] { "toll", "oil" }
             );
@@ -631,6 +756,10 @@ public class FinanceReportController : BaseApiController
                 result
             );
         }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyProcedureContractMismatch();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating toll/oil invoice");
@@ -647,18 +776,31 @@ public class FinanceReportController : BaseApiController
     /// Uses the Surcharge table directly (not journal_detail).
     /// </summary>
     [HttpGet("surcharge")]
+    [ServiceFilter(typeof(LegacyFinanceReportScopeFilter))]
     public async Task<ActionResult> GetSurcharge(
         [FromQuery] short id,
-        [FromQuery] short postingMonthCode,
+        [FromQuery] DateTime? batchDate,
+        [FromQuery] short? postingMonthCode,
         [FromQuery] string filterBy = "Department",
         [FromQuery] string format = "json"
     )
     {
         try
         {
-            var pm = await GetPostingMonthInfo(postingMonthCode);
+            var legacyResult = await TryExecuteLegacyProcedureAsync(
+                "SurchargeDetailedInvoicedReport",
+                "Detailed Surcharge Invoice",
+                id,
+                batchDate,
+                filterBy,
+                cancellationToken: HttpContext.RequestAborted
+            );
+            if (legacyResult is not null)
+                return FormatResult(format, legacyResult.ReportName, legacyResult.Data);
+
+            var pm = await GetPostingMonthInfo(batchDate, postingMonthCode);
             if (pm == null)
-                return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
+                return NotFound(new { error = "The selected legacy batch date was not found." });
 
             var query = _context.Surcharges.Where(s =>
                 !s.is_deleted && s.TrxDate >= pm.PeriodStart && s.TrxDate < pm.PeriodEnd
@@ -736,6 +878,10 @@ public class FinanceReportController : BaseApiController
                 result
             );
         }
+        catch (LegacyFinanceProcedureContractException)
+        {
+            return LegacyProcedureContractMismatch();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating surcharge invoice");
@@ -745,10 +891,229 @@ public class FinanceReportController : BaseApiController
 
     // ─── Private Helpers ──────────────────────────────────────────────────────
 
-    private async Task<PostingMonthInfo?> GetPostingMonthInfo(short postingMonthCode)
+    private async Task<IReadOnlyList<LegacyBatchDateOption>> GetLegacyBatchDateOptionsAsync(
+        short filterId,
+        string filterBy,
+        CancellationToken cancellationToken
+    )
     {
-        var result = await _context
-            .PostingMonths.Where(pm => pm.posting_month_code == postingMonthCode && !pm.is_deleted)
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            if (await HasLegacyProcedureAsync(connection, "DEV_SEL_BatchLookup", cancellationToken))
+            {
+                await using var lookupCommand = connection.CreateCommand();
+                lookupCommand.CommandText = "[dbo].[DEV_SEL_BatchLookup]";
+                lookupCommand.CommandType = CommandType.StoredProcedure;
+                AddParameter(lookupCommand, "@filterid", DbType.Int32, (int)filterId);
+                AddParameter(lookupCommand, "@filterby", DbType.String, filterBy);
+
+                var legacyOptions = new List<LegacyBatchDateOption>();
+                await using var lookupReader = await lookupCommand.ExecuteReaderAsync(cancellationToken);
+                var batchDateOrdinal = FindColumnOrdinal(lookupReader, "batch_date");
+                if (batchDateOrdinal < 0)
+                {
+                    _logger.LogWarning(
+                        "Legacy batch lookup did not return batch_date; using the compatibility selector."
+                    );
+                }
+                else
+                {
+                    while (await lookupReader.ReadAsync(cancellationToken))
+                    {
+                        if (lookupReader.IsDBNull(batchDateOrdinal))
+                        {
+                            continue;
+                        }
+
+                        var batchDate = lookupReader.GetDateTime(batchDateOrdinal).Date;
+                        legacyOptions.Add(
+                            new LegacyBatchDateOption(
+                                batchDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                                batchDate.ToString("MMMM dd, yyyy", CultureInfo.InvariantCulture)
+                            )
+                        );
+                    }
+
+                    return legacyOptions;
+                }
+            }
+
+            await using var command = connection.CreateCommand();
+            // This is the DEV_SEL_BatchLookup relationship expressed as a
+            // parameterized compatibility query when the client procedure is
+            // absent. It intentionally avoids expanded-schema audit fields.
+            if (string.Equals(filterBy, "Site", StringComparison.OrdinalIgnoreCase))
+            {
+                command.CommandText = """
+                    SELECT DISTINCT b.[batch_date]
+                    FROM [dbo].[batch] AS b
+                    INNER JOIN [dbo].[journal] AS j ON j.[batch_code] = b.[batch_code]
+                    INNER JOIN [dbo].[journal_detail] AS jd
+                        ON jd.[journal_code] = j.[journal_code]
+                    WHERE jd.[site_code] = @filterId
+                      AND b.[batch_date] IS NOT NULL
+                    ORDER BY b.[batch_date] DESC
+                    """;
+            }
+            else
+            {
+                command.CommandText = """
+                    SELECT DISTINCT b.[batch_date]
+                    FROM [dbo].[batch] AS b
+                    INNER JOIN [dbo].[journal] AS j ON j.[batch_code] = b.[batch_code]
+                    INNER JOIN [dbo].[journal_detail] AS jd
+                        ON jd.[journal_code] = j.[journal_code]
+                    WHERE jd.[department_code] = @filterId
+                      AND b.[batch_date] IS NOT NULL
+                    ORDER BY b.[batch_date] DESC
+                    """;
+            }
+            command.CommandType = CommandType.Text;
+            AddParameter(command, "@filterId", DbType.Int16, filterId);
+
+            var options = new List<LegacyBatchDateOption>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var batchDate = reader.GetDateTime(0).Date;
+                options.Add(
+                    new LegacyBatchDateOption(
+                        batchDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        batchDate.ToString("MMMM dd, yyyy", CultureInfo.InvariantCulture)
+                    )
+                );
+            }
+
+            if (options.Count > 0)
+            {
+                return options;
+            }
+        }
+        catch (SqlException ex) when (ex.Number is 207 or 208 or 2812)
+        {
+            _logger.LogInformation(
+                "Legacy batch lookup table is unavailable; falling back to posting months."
+            );
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+
+        var fallbackMonths = string.Equals(filterBy, "Site", StringComparison.OrdinalIgnoreCase)
+            ? await (
+                    from item in _context.InvoiceItems
+                    join invoice in _context.Invoices
+                        on item.invoice_code equals invoice.invoice_code
+                    join month in _context.PostingMonths
+                        on invoice.posting_month_code equals month.posting_month_code
+                    join year in _context.PostingYears
+                        on month.posting_year_code equals year.posting_year_code
+                    where item.site_code == filterId
+                        && !item.is_deleted
+                        && !invoice.is_deleted
+                        && !month.is_deleted
+                        && !year.is_deleted
+                    select new { year.year_start_date, month.month_number }
+                )
+                .Distinct()
+                .OrderByDescending(item => item.year_start_date)
+                .ThenByDescending(item => item.month_number)
+                .ToListAsync(cancellationToken)
+            : await (
+                    from invoice in _context.Invoices
+                    join month in _context.PostingMonths
+                        on invoice.posting_month_code equals month.posting_month_code
+                    join year in _context.PostingYears
+                        on month.posting_year_code equals year.posting_year_code
+                    where invoice.department_code == filterId
+                        && !invoice.is_deleted
+                        && !month.is_deleted
+                        && !year.is_deleted
+                    select new { year.year_start_date, month.month_number }
+                )
+                .Distinct()
+                .OrderByDescending(item => item.year_start_date)
+                .ThenByDescending(item => item.month_number)
+                .ToListAsync(cancellationToken);
+        return fallbackMonths
+            .Select(
+                item =>
+                {
+                    var fallbackDate = new DateTime(
+                        item.year_start_date.Year,
+                        item.month_number,
+                        1
+                    )
+                        .AddMonths(1)
+                        .AddDays(-1);
+                    return new LegacyBatchDateOption(
+                        fallbackDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        fallbackDate.ToString("MMMM dd, yyyy", CultureInfo.InvariantCulture)
+                    );
+                }
+            )
+            .ToList();
+    }
+
+    private async Task<PostingMonthInfo?> GetPostingMonthInfo(
+        DateTime? batchDate,
+        short? postingMonthCode
+    )
+    {
+        var months = _context.PostingMonths.Where(pm => !pm.is_deleted);
+        if (batchDate.HasValue)
+        {
+            var selectedDate = batchDate.Value.Date;
+            months = months.Where(pm => pm.month_number == selectedDate.Month);
+            var byDate = await months
+                .Join(
+                    _context.PostingYears.Where(py => !py.is_deleted),
+                    pm => pm.posting_year_code,
+                    py => py.posting_year_code,
+                    (pm, py) => new
+                    {
+                        pm.posting_month_code,
+                        pm.month_name,
+                        pm.month_number,
+                        pm.is_closed,
+                        year_description = py.description,
+                        year_start = py.year_start_date,
+                    }
+                )
+                .FirstOrDefaultAsync(item => item.year_start.Year == selectedDate.Year);
+
+            if (byDate is not null)
+            {
+                return CreatePostingMonthInfo(
+                    byDate.posting_month_code,
+                    byDate.month_name,
+                    byDate.month_number,
+                    byDate.year_description,
+                    byDate.is_closed,
+                    byDate.year_start,
+                    selectedDate
+                );
+            }
+        }
+
+        if (!postingMonthCode.HasValue || postingMonthCode.Value <= 0)
+        {
+            return null;
+        }
+
+        var result = await months
+            .Where(pm => pm.posting_month_code == postingMonthCode.Value)
             .Join(
                 _context.PostingYears.Where(py => !py.is_deleted),
                 pm => pm.posting_year_code,
@@ -769,17 +1134,294 @@ public class FinanceReportController : BaseApiController
         if (result == null)
             return null;
 
-        var start = new DateTime(result.year_start.Year, (int)result.month_number, 1);
+        return CreatePostingMonthInfo(
+            result.posting_month_code,
+            result.month_name,
+            result.month_number,
+            result.year_description,
+            result.is_closed,
+            result.year_start,
+            null
+        );
+    }
+
+    private static PostingMonthInfo CreatePostingMonthInfo(
+        short postingMonthCode,
+        string? monthName,
+        byte monthNumber,
+        string? yearDescription,
+        bool isClosed,
+        DateTime yearStart,
+        DateTime? selectedBatchDate
+    )
+    {
+        var start = new DateTime(yearStart.Year, monthNumber, 1);
         return new PostingMonthInfo
         {
-            posting_month_code = result.posting_month_code,
-            month_name = result.month_name,
-            month_number = (int)result.month_number,
-            year_description = result.year_description,
-            is_closed = result.is_closed,
+            posting_month_code = postingMonthCode,
+            month_name = monthName,
+            month_number = monthNumber,
+            year_description = yearDescription,
+            is_closed = isClosed,
+            BatchDate = selectedBatchDate ?? start.AddMonths(1).AddDays(-1),
             PeriodStart = start,
             PeriodEnd = start.AddMonths(1),
         };
+    }
+
+    private async Task<LegacyProcedureResult?> TryExecuteLegacyProcedureAsync(
+        string legacyReport,
+        string reportName,
+        short id,
+        DateTime? batchDate,
+        string filterBy,
+        CancellationToken cancellationToken,
+        short? departmentCode = null
+    )
+    {
+        if (
+            !batchDate.HasValue
+            || !LegacyProcedureNames.TryGetValue(legacyReport, out var procedureName)
+        )
+        {
+            return null;
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using (var existsCommand = connection.CreateCommand())
+            {
+                existsCommand.CommandText = "SELECT OBJECT_ID(@procedureName, 'P');";
+                existsCommand.CommandType = CommandType.Text;
+                AddParameter(existsCommand, "@procedureName", DbType.String, $"dbo.{procedureName}");
+                var exists = await existsCommand.ExecuteScalarAsync(cancellationToken);
+                if (exists is null or DBNull)
+                {
+                    return null;
+                }
+            }
+
+            var parameterNames = await GetLegacyProcedureParameterNamesAsync(
+                connection,
+                procedureName,
+                cancellationToken
+            );
+            if (!parameterNames.Contains("@id") || !parameterNames.Contains("@batchdate"))
+            {
+                _logger.LogWarning(
+                    "Legacy Finance procedure {ProcedureName} does not have the expected ID and BatchDate parameters.",
+                    procedureName
+                );
+                throw new LegacyFinanceProcedureContractException(
+                    procedureName,
+                    ["@ID", "@BatchDate"]
+                );
+            }
+
+            await using var command = connection.CreateCommand();
+            switch (legacyReport)
+            {
+                case "SummaryInvoicedReport":
+                case "DetailedInvoicedReport":
+                    command.CommandText = "[dbo].[DEV_REP_DetailedInvoicedReport]";
+                    break;
+                case "SummaryInvoiceByCostTypeAndJournal":
+                    command.CommandText = "[dbo].[DEV_REP_SummaryInvoiceByJournalDetailType]";
+                    break;
+                case "DetailedInvoicedVIPAndTAXIReport":
+                    command.CommandText = "[dbo].[DEV_REP_DetailedInvoicedVIPandTaxiReport]";
+                    break;
+                case "FuelDetailedInvoicedReport":
+                    command.CommandText = "[dbo].[DEV_REP_FuelDetailedInvoicedReport]";
+                    break;
+                case "TollAndOilDetailedInvoicedReport":
+                    command.CommandText = "[dbo].[DEV_REP_DetailedInvoicedTollAndOil]";
+                    break;
+                case "SurchargeDetailedInvoicedReport":
+                    command.CommandText = "[dbo].[DEV_REP_SurchargeDetailedInvoicedReport]";
+                    break;
+                default:
+                    throw new InvalidOperationException("The requested legacy Finance report is not mapped.");
+            }
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandTimeout = 180;
+            AddParameter(command, "@ID", DbType.Int32, (int)id);
+            AddParameter(command, "@BatchDate", DbType.DateTime, batchDate.Value.Date);
+
+            if (parameterNames.Contains("@filterbysite"))
+            {
+                AddParameter(
+                    command,
+                    "@filterbysite",
+                    DbType.String,
+                    string.Equals(filterBy, "Site", StringComparison.OrdinalIgnoreCase) ? "1" : "0"
+                );
+            }
+            else
+            {
+                // The legacy detailed province path sends the selected
+                // department as the fourth parameter. Department and Site
+                // reports send the legacy sentinel value 0 instead.
+                if (parameterNames.Contains("@depcode"))
+                {
+                    AddParameter(command, "@DepCode", DbType.Int32, departmentCode ?? 0);
+                }
+
+                if (parameterNames.Contains("@filterby"))
+                {
+                    AddParameter(command, "@FilterBy", DbType.String, filterBy);
+                }
+            }
+
+            var rows = new List<Dictionary<string, object?>>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var columns = GetColumnNames(reader);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                for (var columnIndex = 0; columnIndex < reader.FieldCount; columnIndex++)
+                {
+                    row[columns[columnIndex]] = reader.IsDBNull(columnIndex)
+                        ? null
+                        : reader.GetValue(columnIndex);
+                }
+
+                rows.Add(row);
+            }
+
+            return new LegacyProcedureResult(
+                reportName,
+                new
+                {
+                    title = reportName,
+                    source = "legacy-procedure",
+                    filter_by = filterBy,
+                    filter_id = id,
+                    batch_date = batchDate.Value.Date,
+                    total_lines = rows.Count,
+                    rows,
+                }
+            );
+        }
+        catch (SqlException ex) when (ex.Number == 2812)
+        {
+            _logger.LogInformation(
+                "Legacy Finance procedure {ProcedureName} is unavailable; using the explicit compatibility fallback.",
+                procedureName
+            );
+            return null;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> LegacyProcedureNames =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["SummaryInvoicedReport"] = "DEV_REP_DetailedInvoicedReport",
+            ["SummaryInvoiceByCostTypeAndJournal"] = "DEV_REP_SummaryInvoiceByJournalDetailType",
+            ["DetailedInvoicedReport"] = "DEV_REP_DetailedInvoicedReport",
+            ["DetailedInvoicedVIPAndTAXIReport"] = "DEV_REP_DetailedInvoicedVIPandTaxiReport",
+            ["FuelDetailedInvoicedReport"] = "DEV_REP_FuelDetailedInvoicedReport",
+            ["TollAndOilDetailedInvoicedReport"] = "DEV_REP_DetailedInvoicedTollAndOil",
+            ["SurchargeDetailedInvoicedReport"] = "DEV_REP_SurchargeDetailedInvoicedReport",
+        };
+
+    private static void AddParameter(DbCommand command, string name, DbType type, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
+
+    private static async Task<bool> HasLegacyProcedureAsync(
+        DbConnection connection,
+        string procedureName,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT OBJECT_ID(@procedureName, 'P');";
+        command.CommandType = CommandType.Text;
+        AddParameter(command, "@procedureName", DbType.String, $"dbo.{procedureName}");
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result is not null and not DBNull;
+    }
+
+    private static int FindColumnOrdinal(DbDataReader reader, string expectedName)
+    {
+        for (var index = 0; index < reader.FieldCount; index++)
+        {
+            if (string.Equals(reader.GetName(index), expectedName, StringComparison.OrdinalIgnoreCase))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static async Task<IReadOnlySet<string>> GetLegacyProcedureParameterNamesAsync(
+        DbConnection connection,
+        string procedureName,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT [name]
+            FROM [sys].[parameters]
+            WHERE [object_id] = OBJECT_ID(@procedureName, 'P')
+            """;
+        command.CommandType = CommandType.Text;
+        AddParameter(command, "@procedureName", DbType.String, $"dbo.{procedureName}");
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            if (!reader.IsDBNull(0))
+            {
+                names.Add(reader.GetString(0));
+            }
+        }
+
+        return names;
+    }
+
+    private static string[] GetColumnNames(DbDataReader reader)
+    {
+        var names = new string[reader.FieldCount];
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < reader.FieldCount; index++)
+        {
+            var sourceName = reader.GetName(index);
+            var name = string.IsNullOrWhiteSpace(sourceName) ? $"column_{index + 1}" : sourceName;
+            var uniqueName = name;
+            var duplicateIndex = 2;
+            while (!used.Add(uniqueName))
+            {
+                uniqueName = $"{name}_{duplicateIndex++}";
+            }
+
+            names[index] = uniqueName;
+        }
+
+        return names;
     }
 
     private async Task<Dictionary<short, (string site_name, string dept_name)>> BuildSiteMap(
@@ -1015,6 +1657,12 @@ public class FinanceReportController : BaseApiController
         return Content(htmlSb.ToString(), "text/html; charset=utf-8");
     }
 
+    private ObjectResult LegacyProcedureContractMismatch() =>
+        StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            new { error = "The legacy Finance report procedure has an incompatible parameter contract." }
+        );
+
     private static string CsvQuote(string value)
     {
         if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
@@ -1029,7 +1677,12 @@ public class FinanceReportController : BaseApiController
         public int month_number { get; init; }
         public string? year_description { get; init; }
         public bool is_closed { get; init; }
+        public DateTime BatchDate { get; init; }
         public DateTime PeriodStart { get; init; }
         public DateTime PeriodEnd { get; init; }
     }
+
+    private sealed record LegacyBatchDateOption(string value, string label);
+
+    private sealed record LegacyProcedureResult(string ReportName, object Data);
 }

@@ -8,6 +8,9 @@ type ReportResultsPanelProps = Readonly<{
   eyebrow?: ReactNode;
   heading: ReactNode;
   trailing?: ReactNode;
+  widePrintLayout?: boolean;
+  printOrientation?: "portrait" | "landscape";
+  printButton?: boolean;
   letterheadTitle?: string;
   letterheadGovernmentMotorTransport?: boolean;
   children: ReactNode;
@@ -18,13 +21,18 @@ export default function ReportResultsPanel({
   eyebrow = "Report results",
   heading,
   trailing,
+  widePrintLayout = false,
+  printOrientation = "landscape",
+  printButton = true,
   letterheadTitle,
   letterheadGovernmentMotorTransport = false,
   children,
 }: ReportResultsPanelProps) {
   return (
     <section
-      className="vehicle-status-maintenance-panel report-print-area"
+      className={`vehicle-status-maintenance-panel report-print-area report-print-area--${printOrientation}${
+        widePrintLayout ? " report-print-area--wide" : ""
+      }`}
       aria-labelledby={headingId}
     >
       <GovernmentReportLetterhead
@@ -39,7 +47,7 @@ export default function ReportResultsPanel({
         </div>
         <div className="button-row report-print-hide">
           {trailing}
-          <ReportPrintButton />
+          {printButton ? <ReportPrintButton /> : null}
         </div>
       </div>
       {children}

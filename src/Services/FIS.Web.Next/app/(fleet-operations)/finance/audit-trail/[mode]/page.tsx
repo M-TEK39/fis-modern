@@ -10,7 +10,7 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import { hasAuditTrailReportsAccess, hasRole } from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions, siteOptions } from "@/app/(fleet-operations)/finance/_location-options";
 import { DepartmentApiError, getDepartments } from "@/lib/api/reference-data/api-departments";
 import { FinanceApiError, type FinanceOption } from "@/lib/api/finance/api-finance";
@@ -71,7 +71,15 @@ function outputHref(
     outputFormat,
     format: outputFormat === "excel" ? "excel" : "html",
   });
-  for (const name of ["departmentCode", "siteCode", "vmfCode", "startDate", "endDate"]) {
+  for (const name of [
+    "departmentCode",
+    "siteCode",
+    "vmfCode",
+    "vehicleNumber",
+    "numberType",
+    "startDate",
+    "endDate",
+  ]) {
     const value = queryValue(query, name);
     if (value) params.set(name, value);
   }
@@ -92,7 +100,7 @@ async function renderFinanceAuditTrailModeContent({ params, searchParams }: Audi
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasAuditTrailReportsAccess(session.roles))
     return (
       <FinanceFrame title={titleFor(mode)} description="Audit trail parameters.">
         <FinanceRestricted />
@@ -106,13 +114,29 @@ async function renderFinanceAuditTrailModeContent({ params, searchParams }: Audi
     );
 
   const query = await searchParams;
+  const profileDepartmentCode = positiveInteger(session.departmentCode ?? "");
+  const profileSiteCode = positiveInteger(session.siteCode ?? "");
+  const canSelectAllDepartments =
+    hasRole(session.roles, "Administrator") ||
+    hasRole(session.roles, "Admin") ||
+    hasRole(session.roles, "Financial Data (All Departments)");
   let departments: FinanceOption[] = [];
   let sites: FinanceOption[] = [];
   let lookupError: string | null = null;
   try {
     const [departmentRecords, siteRecords] = await Promise.all([getDepartments(), getSites()]);
-    departments = departmentOptions(departmentRecords);
-    sites = siteOptions(siteRecords);
+    departments = departmentOptions(
+      canSelectAllDepartments
+        ? departmentRecords
+        : departmentRecords.filter(
+            (department) => department.departmentCode === profileDepartmentCode,
+          ),
+    );
+    const selectedDepartmentCode =
+      positiveInteger(queryValue(query, "departmentCode")) ?? profileDepartmentCode;
+    sites = siteOptions(
+      siteRecords.filter((site) => site.departmentCode === selectedDepartmentCode),
+    );
   } catch (error) {
     if (
       error instanceof FinanceApiError ||
@@ -122,6 +146,19 @@ async function renderFinanceAuditTrailModeContent({ params, searchParams }: Audi
       lookupError = error.message;
     else throw error;
   }
+  const selectedDepartmentCode =
+    queryValue(query, "departmentCode") ||
+    (profileDepartmentCode ? String(profileDepartmentCode) : "");
+  const selectedSiteCode =
+    queryValue(query, "siteCode") || (profileSiteCode ? String(profileSiteCode) : "");
+  const selectedDepartment = departments.find((item) => item.value === selectedDepartmentCode);
+  const outputQuery = {
+    ...query,
+    ...(mode !== "vehicle" && selectedDepartmentCode
+      ? { departmentCode: selectedDepartmentCode }
+      : {}),
+    ...(mode === "site" && selectedSiteCode ? { siteCode: selectedSiteCode } : {}),
+  };
   const submitted = queryValue(query, "run") === "1";
   const rawReportAction = queryValue(query, "reportAction");
   const outputFormat = rawReportAction.endsWith("-excel") ? "excel" : "pdf";
@@ -133,15 +170,21 @@ async function renderFinanceAuditTrailModeContent({ params, searchParams }: Audi
       error = "Select an audit trail report before continuing.";
     else if (!queryValue(query, "startDate") || !queryValue(query, "endDate"))
       error = "Select a start and end date before running the audit trail report.";
-    else if (mode !== "vehicle" && !positiveInteger(queryValue(query, "departmentCode")))
+    else if (
+      mode !== "vehicle" &&
+      !positiveInteger(queryValue(query, "departmentCode") || String(profileDepartmentCode ?? ""))
+    )
       error = "Select a department before running the audit trail report.";
-    else if (mode === "site" && !positiveInteger(queryValue(query, "siteCode")))
+    else if (
+      mode === "site" &&
+      !positiveInteger(queryValue(query, "siteCode") || String(profileSiteCode ?? ""))
+    )
       error = "Select a site before running the audit trail report.";
-    else if (mode === "vehicle" && !positiveInteger(queryValue(query, "vmfCode")))
-      error = "Enter a vehicle VMF code before running the audit trail report.";
+    else if (mode === "vehicle" && !queryValue(query, "vehicleNumber"))
+      error = "Enter a GG or GP vehicle number before running the audit trail report.";
     else
       output = {
-        href: outputHref(mode, reportAction, outputFormat, query),
+        href: outputHref(mode, reportAction, outputFormat, outputQuery),
         label: outputFormat === "excel" ? "Download Excel report" : "Open printable report",
       };
   }
@@ -161,31 +204,57 @@ async function renderFinanceAuditTrailModeContent({ params, searchParams }: Audi
               <label className="form-label" htmlFor="audit-department">
                 Department
               </label>
-              <select
-                className="form-select"
-                id="audit-department"
-                name="departmentCode"
-                defaultValue={queryValue(query, "departmentCode")}
-                required
-              >
-                {optionList(departments, "Select Department")}
-              </select>
+              {canSelectAllDepartments ? (
+                <select
+                  className="form-select"
+                  id="audit-department"
+                  name="departmentCode"
+                  defaultValue={selectedDepartmentCode}
+                  required
+                >
+                  {optionList(departments, "Select Department")}
+                </select>
+              ) : profileDepartmentCode ? (
+                <>
+                  <input name="departmentCode" type="hidden" value={profileDepartmentCode} />
+                  <div className="form-readonly-value">
+                    {selectedDepartment?.label ?? `Department (${profileDepartmentCode})`}
+                  </div>
+                </>
+              ) : (
+                <div className="form-readonly-value">No report department is available.</div>
+              )}
             </div>
           ) : (
             <div className="form-field">
-              <label className="form-label" htmlFor="audit-vmf">
-                Vehicle VMF Code
+              <label className="form-label" htmlFor="audit-vehicle-number">
+                GG / GP Number
               </label>
               <input
                 className="form-input"
-                id="audit-vmf"
-                name="vmfCode"
-                defaultValue={queryValue(query, "vmfCode")}
-                inputMode="numeric"
+                id="audit-vehicle-number"
+                name="vehicleNumber"
+                defaultValue={queryValue(query, "vehicleNumber")}
                 required
               />
             </div>
           )}
+          {mode === "vehicle" ? (
+            <div className="form-field">
+              <label className="form-label" htmlFor="audit-number-type">
+                Number Type
+              </label>
+              <select
+                className="form-select"
+                id="audit-number-type"
+                name="numberType"
+                defaultValue={queryValue(query, "numberType") || "gp"}
+              >
+                <option value="gp">GP Number</option>
+                <option value="gg">GG Number</option>
+              </select>
+            </div>
+          ) : null}
           {mode === "site" ? (
             <div className="form-field">
               <label className="form-label" htmlFor="audit-site">
@@ -195,7 +264,7 @@ async function renderFinanceAuditTrailModeContent({ params, searchParams }: Audi
                 className="form-select"
                 id="audit-site"
                 name="siteCode"
-                defaultValue={queryValue(query, "siteCode")}
+                defaultValue={selectedSiteCode}
                 required
               >
                 {optionList(sites, "Select Site")}

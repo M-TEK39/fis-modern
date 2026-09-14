@@ -1,6 +1,9 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.Security;
+using System.Text;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
@@ -1122,6 +1125,39 @@ public sealed class TripRepository : ITripRepository
             }
         }
 
+        if (
+            await IsLegacyProcedureAvailableAsync(
+                "DEV_UPD_TripXMLForClosingOfTrip",
+                "@Trip",
+                "@XmlDocument"
+            )
+        )
+        {
+            var existingRoutes = await GetRouteDetailsAsync(tripId);
+            if (existingRoutes.Count != routes.Count)
+            {
+                throw new InvalidOperationException(
+                    "The legacy trip-close procedure requires a complete set of route end-odometer updates."
+                );
+            }
+
+            var submittedRoutes = routes.ToDictionary(route => route.RouteCode);
+            var xml = BuildLegacyCloseTripXml(
+                tripId,
+                existingRoutes,
+                submittedRoutes,
+                endOdometer,
+                currentUserId
+            );
+            await ExecuteLegacyProcedureAsync(
+                "DEV_UPD_TripXMLForClosingOfTrip",
+                new ProcedureParameter("@Trip", DbType.Int32, tripId),
+                new ProcedureParameter("@XmlDocument", DbType.String, xml)
+            );
+            return;
+        }
+
+        // Compatibility fallback only where DEV_UPD_TripXMLForClosingOfTrip is genuinely absent.
         var existingTransaction = _context.Database.CurrentTransaction;
         var transaction = existingTransaction is null
             ? await _context.Database.BeginTransactionAsync()
@@ -1134,6 +1170,11 @@ public sealed class TripRepository : ITripRepository
                 var updates = new List<string> { "[end_odo_meter] = @endOdometer" };
                 await using var command = _context.Database.GetDbConnection().CreateCommand();
                 command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                if (route.StartOdometer.HasValue && routeColumns.Contains("start_odo_meter"))
+                {
+                    updates.Add("[start_odo_meter] = @startOdometer");
+                    AddParameter(command, "@startOdometer", DbType.Int32, route.StartOdometer.Value);
+                }
                 if (routeColumns.Contains("distance"))
                 {
                     updates.Add("[distance] = @distance");
@@ -1268,6 +1309,181 @@ public sealed class TripRepository : ITripRepository
             }
         }
     }
+
+    private static string BuildLegacyCloseTripXml(
+        int tripId,
+        IReadOnlyList<TripAuthorityRoute> existingRoutes,
+        IReadOnlyDictionary<int, TripAuthorityRouteUpdate> submittedRoutes,
+        int? endOdometer,
+        int currentUserId
+    )
+    {
+        var tripEndOdometer = endOdometer ?? submittedRoutes.Values.Max(route => route.EndOdometer);
+        var xml = new StringBuilder();
+        xml.Append("<Root><Trips TripAuthorityNumber=\"")
+            .Append(tripId.ToString(CultureInfo.InvariantCulture))
+            .Append("\" EndODOMeter=\"")
+            .Append(tripEndOdometer.ToString(CultureInfo.InvariantCulture))
+            .Append("\" UserID=\"")
+            .Append(currentUserId.ToString(CultureInfo.InvariantCulture))
+            .Append("\">");
+
+        foreach (var route in existingRoutes)
+        {
+            if (!submittedRoutes.TryGetValue(route.RouteCode, out var submitted))
+            {
+                throw new InvalidOperationException(
+                    $"The legacy trip-close procedure requires route {route.RouteCode}."
+                );
+            }
+
+            var startOdometer = submitted.StartOdometer ?? route.StartOdometer;
+            if (
+                !route.StartDate.HasValue
+                || !route.EndDate.HasValue
+                || !startOdometer.HasValue
+                || string.IsNullOrWhiteSpace(route.StartLocation)
+                || string.IsNullOrWhiteSpace(route.EndLocation)
+                || !route.EstimatedDistance.HasValue
+                || string.IsNullOrWhiteSpace(route.ObjectiveCode)
+                || string.IsNullOrWhiteSpace(route.ResponsibilityCode)
+                || string.IsNullOrWhiteSpace(route.ProjectNumber)
+                || string.IsNullOrWhiteSpace(route.FundCode)
+            )
+            {
+                throw new InvalidOperationException(
+                    $"Route {route.RouteCode} lacks the persisted fields required by the legacy trip-close procedure."
+                );
+            }
+
+            xml.Append("<Route RouteDBId=\"")
+                .Append(route.RouteCode.ToString(CultureInfo.InvariantCulture))
+                .Append("\" TripAuthorityNumber=\"")
+                .Append(tripId.ToString(CultureInfo.InvariantCulture))
+                .Append("\" StartLocationName=\"")
+                .Append(EscapeXml(route.StartLocation))
+                .Append("\" StartDate=\"")
+                .Append(FormatXmlDate(route.StartDate.Value))
+                .Append("\" StartODOMeter=\"")
+                .Append(startOdometer.Value.ToString(CultureInfo.InvariantCulture))
+                .Append("\" EndLocationName=\"")
+                .Append(EscapeXml(route.EndLocation))
+                .Append("\" EndDate=\"")
+                .Append(FormatXmlDate(route.EndDate.Value))
+                .Append("\" EndODOMeter=\"")
+                .Append(submitted.EndOdometer.ToString(CultureInfo.InvariantCulture))
+                .Append("\" EstimatedDistance=\"")
+                .Append(route.EstimatedDistance.Value.ToString(CultureInfo.InvariantCulture))
+                .Append("\" Objective=\"")
+                .Append(EscapeXml(route.ObjectiveCode))
+                .Append("\" Responsibility=\"")
+                .Append(EscapeXml(route.ResponsibilityCode))
+                .Append("\" ProjectNumber=\"")
+                .Append(EscapeXml(route.ProjectNumber))
+                .Append("\" Fund=\"")
+                .Append(EscapeXml(route.FundCode))
+                .Append("\" UserID=\"")
+                .Append(currentUserId.ToString(CultureInfo.InvariantCulture))
+                .Append("\" PrimaryDriver=\"0\" />");
+        }
+
+        xml.Append("</Trips></Root>");
+        return xml.ToString();
+    }
+
+    private async Task<bool> IsLegacyProcedureAvailableAsync(
+        string procedureName,
+        params string[] expectedParameters
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [parameterObject].[name]
+                FROM [sys].[procedures] AS [procedureObject]
+                INNER JOIN [sys].[schemas] AS [schemaObject]
+                    ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
+                LEFT JOIN [sys].[parameters] AS [parameterObject]
+                    ON [parameterObject].[object_id] = [procedureObject].[object_id]
+                WHERE [schemaObject].[name] = N'dbo'
+                  AND [procedureObject].[name] = @procedureName
+                ORDER BY [parameterObject].[parameter_id]
+                """;
+            AddParameter(command, "@procedureName", DbType.String, procedureName);
+
+            var actualParameters = new List<string>();
+            var procedureFound = false;
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                procedureFound = true;
+                if (!reader.IsDBNull(0))
+                    actualParameters.Add(reader.GetString(0));
+            }
+
+            if (!procedureFound)
+                return false;
+
+            if (!actualParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"The deployed legacy procedure {procedureName} does not match the archived parameter contract. No direct-DML fallback was run."
+                );
+            }
+
+            return true;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Procedure names are fixed archived legacy contracts, never request input."
+    )]
+    private async Task ExecuteLegacyProcedureAsync(
+        string procedureName,
+        params ProcedureParameter[] parameters
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = procedureName;
+            command.CommandTimeout = 0;
+            foreach (var parameter in parameters)
+                AddParameter(command, parameter.Name, parameter.DbType, parameter.Value);
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private static string EscapeXml(string value) => SecurityElement.Escape(value) ?? string.Empty;
+
+    private static string FormatXmlDate(DateTime value) =>
+        value.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture);
 
     private async Task<string?> ResolveTripDriverTableAsync()
     {
@@ -2344,4 +2560,6 @@ public sealed class TripRepository : ITripRepository
         DbType DbType,
         object? Value
     );
+
+    private readonly record struct ProcedureParameter(string Name, DbType DbType, object? Value);
 }

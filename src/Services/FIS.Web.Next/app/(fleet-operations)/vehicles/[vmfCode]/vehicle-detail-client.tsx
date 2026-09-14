@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect } from "react";
 
 import {
-  deleteVehicleAction,
   deleteVehicleDocumentAction,
   updateVehicleInvoiceAction,
   uploadVehicleDocumentAction,
@@ -14,8 +13,6 @@ import type { VehicleDetailActionState } from "@/app/(fleet-operations)/vehicles
 import type { VehicleDocumentRecord } from "@/lib/api/vehicles/api-vehicle-documents";
 import type { VehicleEditVehicle } from "@/lib/api/vehicles/api-vehicle-edit";
 
-import { VehicleDetailActionNotice } from "./vehicle-detail-action-ui";
-import { VehicleDeleteDialog } from "./vehicle-delete-dialog";
 import { VehicleDocumentsSection } from "./vehicle-documents-section";
 import { VehicleDetailSections } from "./vehicle-detail-sections";
 import { valueOrDash } from "./vehicle-detail-formatters";
@@ -34,12 +31,10 @@ export default function VehicleDetailClient({
   documentsUnavailable,
 }: VehicleDetailClientProps) {
   const router = useRouter();
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [invoiceState, invoiceAction] = useActionState(
     updateVehicleInvoiceAction,
     INITIAL_ACTION_STATE,
   );
-  const [deleteState, deleteAction] = useActionState(deleteVehicleAction, INITIAL_ACTION_STATE);
   const [uploadState, uploadAction] = useActionState(
     uploadVehicleDocumentAction,
     INITIAL_ACTION_STATE,
@@ -76,17 +71,9 @@ export default function VehicleDetailClient({
           <Link className="button button-secondary" href={`/vehicles/${vehicle.vmfCode}/edit`}>
             Edit vehicle
           </Link>
-          <button
-            className="button button-danger"
-            type="button"
-            onClick={() => setShowDeleteDialog(true)}
-          >
-            Delete
-          </button>
         </div>
       </header>
 
-      <VehicleDetailActionNotice state={deleteState} />
       <section className="vehicle-detail-status" aria-label="Vehicle status">
         <span className="vehicle-badge">{valueOrDash(vehicle.statusDescription)}</span>
         <span>
@@ -119,13 +106,6 @@ export default function VehicleDetailClient({
         </Link>
       </div>
 
-      {showDeleteDialog ? (
-        <VehicleDeleteDialog
-          action={deleteAction}
-          onClose={() => setShowDeleteDialog(false)}
-          vehicle={vehicle}
-        />
-      ) : null}
     </>
   );
 }

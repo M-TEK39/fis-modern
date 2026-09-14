@@ -333,15 +333,19 @@ async function renderTariffParametersContent({
                 <form action={updateTariffParametersAction}>
                   <input name="year" type="hidden" value={yearText} />
                   <input name="operation" type="hidden" value="approve" />
+                  <label className="sr-only" htmlFor="tariff-effective-date">
+                    Effective date
+                  </label>
+                  <input
+                    className="form-input"
+                    defaultValue={data.effectiveDate?.slice(0, 10) ?? ""}
+                    id="tariff-effective-date"
+                    name="effectiveDate"
+                    required
+                    type="date"
+                  />
                   <button className="button button-primary" type="submit">
                     Approve Year
-                  </button>
-                </form>
-                <form action={updateTariffParametersAction}>
-                  <input name="year" type="hidden" value={yearText} />
-                  <input name="operation" type="hidden" value="reject" />
-                  <button className="button button-secondary" type="submit">
-                    Reject Year
                   </button>
                 </form>
               </div>

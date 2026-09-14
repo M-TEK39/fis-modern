@@ -27,12 +27,26 @@ export function FinanceReportTable({
   basePath,
   query,
   page = 1,
-}: Readonly<{ report: FinanceReport; basePath: string; query: Query; page?: number }>) {
+  printOrientation,
+}: Readonly<{
+  report: FinanceReport;
+  basePath: string;
+  query: Query;
+  page?: number;
+  printOrientation?: "portrait" | "landscape";
+}>) {
   const pageSize = 12;
   const columns = Array.from(new Set(report.rows.flatMap((row) => Object.keys(row))));
   const totalPages = Math.max(1, Math.ceil(report.rows.length / pageSize));
   const currentPage = Math.min(Math.max(page, 1), totalPages);
   const rows = report.rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const resolvedPrintOrientation =
+    printOrientation ?? (columns.length > 6 ? "landscape" : "portrait");
+  const columnsPerPrintPage = resolvedPrintOrientation === "landscape" ? 8 : 6;
+  const printColumnGroups = Array.from(
+    { length: Math.ceil(columns.length / columnsPerPrintPage) },
+    (_, index) => columns.slice(index * columnsPerPrintPage, (index + 1) * columnsPerPrintPage),
+  );
   if (report.rows.length === 0)
     return (
       <div className="vehicle-empty-state">
@@ -44,6 +58,9 @@ export function FinanceReportTable({
       headingId="finance-report-results"
       eyebrow={`${report.rows.length} record(s)`}
       heading={report.title}
+      letterheadTitle={report.title}
+      widePrintLayout
+      printOrientation={resolvedPrintOrientation}
     >
       <FinanceReportRowsTable
         columns={columns}
@@ -54,6 +71,38 @@ export function FinanceReportTable({
           `${report.title}-${columns.map((column) => String(row[column] ?? "")).join("|")}`
         }
       />
+      <div className="report-print-table-groups">
+        {printColumnGroups.map((group, groupIndex) => (
+          <section className="report-print-table-group" key={`print-${groupIndex}`}>
+            {printColumnGroups.length > 1 ? (
+              <h2>
+                {report.title} — fields {groupIndex * columnsPerPrintPage + 1}–
+                {groupIndex * columnsPerPrintPage + group.length} of {columns.length}
+              </h2>
+            ) : null}
+            <table className="report-print-table">
+              <thead>
+                <tr>
+                  {group.map((column) => (
+                    <th key={column} scope="col">
+                      {column.replaceAll("_", " ")}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {report.rows.map((row, rowIndex) => (
+                  <tr key={`${groupIndex}-${rowIndex}`}>
+                    {group.map((column) => (
+                      <td key={column}>{value(row, column)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ))}
+      </div>
       {totalPages > 1 ? (
         <nav className="vehicle-pagination" aria-label="Report result pages">
           {currentPage > 1 ? (

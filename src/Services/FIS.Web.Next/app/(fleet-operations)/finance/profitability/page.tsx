@@ -71,7 +71,10 @@ async function renderFinanceProfitabilityContent({
     else {
       try {
         report = mapFinanceReport(
-          await runFinanceAction("api/report/finance/profitability", { financialYear: year }),
+          await runFinanceAction("api/report/finance/profitability", {
+            financialYear: year,
+            hireType: queryValue(query, "hireType") === "2" ? 2 : 1,
+          }),
           "Profitability results",
         );
       } catch (caught) {
@@ -114,6 +117,21 @@ async function renderFinanceProfitabilityContent({
               ))}
             </select>
           </div>
+          <div className="form-field">
+            <label className="form-label" htmlFor="profitability-hire-type">
+              Hire Type
+            </label>
+            <select
+              className="form-select"
+              id="profitability-hire-type"
+              name="hireType"
+              defaultValue={queryValue(query, "hireType") || "1"}
+              required
+            >
+              <option value="1">Pool Vehicles</option>
+              <option value="2">VIP Vehicles</option>
+            </select>
+          </div>
         </div>
         <div className="button-row">
           <button className="button button-primary" type="submit">
@@ -130,6 +148,7 @@ async function renderFinanceProfitabilityContent({
           basePath="/finance/profitability"
           query={query}
           page={Number(queryValue(query, "page")) || 1}
+          printOrientation="landscape"
         />
       ) : null}
     </FinanceFrame>

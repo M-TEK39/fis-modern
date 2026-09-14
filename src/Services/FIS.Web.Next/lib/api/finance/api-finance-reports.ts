@@ -13,14 +13,20 @@ export type FinanceReport = {
   supportsDateFilter: boolean | null;
 };
 
+export type LegacyVehicleStatusOption = {
+  id: number;
+  description: string;
+};
+
 export type DedicatedFinanceReport = {
   endpoint: string;
   defaultFormat: "json" | "html" | "csv";
+  title: string;
 };
 
 export type DedicatedFinanceReportParams = {
   id: number;
-  postingMonthCode: number;
+  batchDate: string;
   filterBy: "Department" | "Site";
   format: "json" | "html" | "csv";
 };
@@ -62,10 +68,14 @@ function rowsFrom(valueToMap: unknown) {
 export function mapFinanceReport(payload: unknown, fallbackTitle: string): FinanceReport {
   const rows = rowsFrom(payload);
   const record = isRecord(payload) ? payload : null;
-  const title =
+  const reportedTitle =
     record && typeof value(record, "title", "Title") === "string"
-      ? String(value(record, "title", "Title"))
-      : fallbackTitle;
+      ? String(value(record, "title", "Title")).trim()
+      : "";
+  // A legacy Finance action has its own report definition and title. The API
+  // returns an explicit dependency error when that definition is unavailable,
+  // rather than returning a generic report under a misleading heading.
+  const title = reportedTitle || fallbackTitle;
   const supportsDateFilter = record
     ? typeof value(record, "supportsDateFilter", "SupportsDateFilter") === "boolean"
       ? Boolean(value(record, "supportsDateFilter", "SupportsDateFilter"))
@@ -74,7 +84,12 @@ export function mapFinanceReport(payload: unknown, fallbackTitle: string): Finan
   return { title, rows, supportsDateFilter };
 }
 
-export async function getUniversalFinanceReport(input: {
+/**
+ * Executes one of the fixed FinanceMain.aspx report actions. The API maps the
+ * action to an allow-listed legacy procedure; this is not the generic report
+ * builder used elsewhere in the application.
+ */
+export async function getFinanceMenuReport(input: {
   mode: string;
   action: string;
   departmentCode?: string;
@@ -102,11 +117,59 @@ export async function getUniversalFinanceReport(input: {
   return mapFinanceReport(payload, `${input.action} results`);
 }
 
-export async function getBillingHistory(vmfCode: number, financialYear: number) {
+export async function getBillingHistory(registrationNumber: string, financialYear: number) {
   const payload = await getFinanceJson(
-    `api/report/billing/history/${vmfCode}?financialYear=${financialYear}`,
+    `api/report/billing/history?registrationNumber=${encodeURIComponent(registrationNumber)}&financialYear=${financialYear}`,
   );
   return mapFinanceReport(payload, "Vehicle billing history");
+}
+
+export async function getLegacyFinanceDetailReport(input: {
+  item: string;
+  startDate?: string;
+  endDate?: string;
+  departmentCode?: number;
+  siteCode?: number;
+  province?: string;
+  journalNumber?: number;
+  registrationNumber?: string;
+  statusId?: number;
+}) {
+  const query = new URLSearchParams({ item: input.item });
+  if (input.startDate) query.set("startDate", input.startDate);
+  if (input.endDate) query.set("endDate", input.endDate);
+  if (input.departmentCode) query.set("departmentCode", String(input.departmentCode));
+  if (input.siteCode) query.set("siteCode", String(input.siteCode));
+  if (input.province) query.set("province", input.province);
+  if (input.journalNumber) query.set("journalNumber", String(input.journalNumber));
+  if (input.registrationNumber) query.set("registrationNumber", input.registrationNumber);
+  if (input.statusId) query.set("statusId", String(input.statusId));
+  const payload = await getFinanceJson(`api/report/finance/legacy-detail?${query.toString()}`);
+  return mapFinanceReport(payload, "Legacy Finance detail report");
+}
+
+export async function getLegacyVehicleStatusOptions(): Promise<LegacyVehicleStatusOption[]> {
+  const payload = await getFinanceJson("api/report/vehicle-status-options");
+  if (!Array.isArray(payload)) {
+    throw new FinanceApiError(
+      "invalid-response",
+      "The FIS API returned invalid vehicle status options.",
+    );
+  }
+
+  return payload
+    .map((item) => {
+      if (!isRecord(item)) return null;
+      const id = Number(value(item, "id", "Id"));
+      const description = value(item, "description", "Description");
+      return Number.isSafeInteger(id) &&
+        id >= 0 &&
+        typeof description === "string" &&
+        description.trim()
+        ? { id, description: description.trim() }
+        : null;
+    })
+    .filter((item): item is LegacyVehicleStatusOption => item !== null);
 }
 
 export async function getReversalTree(journalNumber: string) {
@@ -123,6 +186,8 @@ export async function getAuditFinanceReport(input: {
   departmentCode?: string;
   siteCode?: string;
   vmfCode?: number;
+  vehicleNumber?: string;
+  numberType?: "gg" | "gp";
   startDate?: string;
   endDate?: string;
 }) {
@@ -133,6 +198,8 @@ export async function getAuditFinanceReport(input: {
     departmentCode: input.departmentCode ?? "",
     siteCode: input.siteCode ?? "",
     vmfCode: input.vmfCode,
+    vehicleNumber: input.vehicleNumber ?? "",
+    numberType: input.numberType ?? "gp",
     startDate: input.startDate || undefined,
     endDate: input.endDate || undefined,
   });
@@ -141,12 +208,14 @@ export async function getAuditFinanceReport(input: {
 
 export async function getWesbankFinanceReport(input: {
   mode: string;
+  reportAction: string;
   provinceCode?: string;
   startDate?: string;
   endDate?: string;
 }) {
   const payload = await runFinanceAction("api/report/finance/wesbank", {
     mode: input.mode,
+    reportAction: input.reportAction,
     provinceCode: input.provinceCode ?? "",
     startDate: input.startDate || undefined,
     endDate: input.endDate || undefined,
@@ -183,6 +252,16 @@ export async function getMissingKilometresFinanceReport(input: {
   startDate?: string;
   endDate?: string;
 }) {
+  if (input.mode === "kilo-gaps-pdf" || input.mode === "kilo-gaps-xls") {
+    const financialYear = input.financialYear?.trim();
+    if (!financialYear)
+      throw new FinanceApiError("invalid-response", "A financial year is required.");
+    const payload = await getFinanceJson(
+      `api/finance/missing-kilometres/kilo-gaps?financialYear=${encodeURIComponent(financialYear)}`,
+    );
+    return mapFinanceReport(payload, "Missing Kilometres Report");
+  }
+
   const payload = await runFinanceAction("api/report/finance/missing-kilometres", {
     mode: input.mode,
     departmentCode: input.departmentCode ?? "",
@@ -224,22 +303,86 @@ export const REGIONAL_SUMMARY_ACTIONS = [
 ] as const;
 
 const DEDICATED_REPORTS: Record<string, DedicatedFinanceReport> = {
-  "summary-by-cost-type": { endpoint: "invoice-summary", defaultFormat: "html" },
-  "summary-by-cost-type-journal": { endpoint: "invoice-by-cost-type", defaultFormat: "html" },
-  "summary-html": { endpoint: "invoice-summary", defaultFormat: "html" },
-  "summary-pdf": { endpoint: "invoice-summary", defaultFormat: "html" },
-  "detailed-html": { endpoint: "invoice-detailed", defaultFormat: "html" },
-  "detailed-pdf": { endpoint: "invoice-detailed", defaultFormat: "html" },
-  "detailed-table": { endpoint: "invoice-detailed", defaultFormat: "json" },
-  "detailed-excel": { endpoint: "invoice-detailed", defaultFormat: "csv" },
-  "detailed-vip-taxi": { endpoint: "taxi-vip", defaultFormat: "html" },
-  "detailed-vip-taxi-pdf": { endpoint: "taxi-vip", defaultFormat: "html" },
-  "detailed-fuel-pdf": { endpoint: "fuel", defaultFormat: "html" },
-  "detailed-fuel-excel": { endpoint: "fuel", defaultFormat: "csv" },
-  "detailed-toll-oil-pdf": { endpoint: "toll-oil", defaultFormat: "html" },
-  "detailed-toll-oil-excel": { endpoint: "toll-oil", defaultFormat: "csv" },
-  "detailed-surcharge-pdf": { endpoint: "surcharge", defaultFormat: "html" },
-  "detailed-surcharge-excel": { endpoint: "surcharge", defaultFormat: "csv" },
+  "summary-by-cost-type": {
+    endpoint: "invoice-summary",
+    defaultFormat: "html",
+    title: "Summarised Invoice",
+  },
+  "summary-by-cost-type-journal": {
+    endpoint: "invoice-by-cost-type",
+    defaultFormat: "html",
+    title: "Invoice by Cost Type, Site and Journal",
+  },
+  "summary-html": {
+    endpoint: "invoice-summary",
+    defaultFormat: "html",
+    title: "Summarised Invoice",
+  },
+  "summary-pdf": {
+    endpoint: "invoice-summary",
+    defaultFormat: "html",
+    title: "Summarised Invoice",
+  },
+  "detailed-html": {
+    endpoint: "invoice-detailed",
+    defaultFormat: "html",
+    title: "Detailed Invoice",
+  },
+  "detailed-pdf": {
+    endpoint: "invoice-detailed",
+    defaultFormat: "html",
+    title: "Detailed Invoice",
+  },
+  "detailed-table": {
+    endpoint: "invoice-detailed",
+    defaultFormat: "json",
+    title: "Detailed Invoice",
+  },
+  "detailed-excel": {
+    endpoint: "invoice-detailed",
+    defaultFormat: "csv",
+    title: "Detailed Invoice",
+  },
+  "detailed-vip-taxi": {
+    endpoint: "taxi-vip",
+    defaultFormat: "html",
+    title: "Detailed VIP and Taxi Invoice",
+  },
+  "detailed-vip-taxi-pdf": {
+    endpoint: "taxi-vip",
+    defaultFormat: "html",
+    title: "Detailed VIP and Taxi Invoice",
+  },
+  "detailed-fuel-pdf": {
+    endpoint: "fuel",
+    defaultFormat: "html",
+    title: "Detailed Fuel Invoice",
+  },
+  "detailed-fuel-excel": {
+    endpoint: "fuel",
+    defaultFormat: "csv",
+    title: "Detailed Fuel Invoice",
+  },
+  "detailed-toll-oil-pdf": {
+    endpoint: "toll-oil",
+    defaultFormat: "html",
+    title: "Detailed Toll and Oil Invoice",
+  },
+  "detailed-toll-oil-excel": {
+    endpoint: "toll-oil",
+    defaultFormat: "csv",
+    title: "Detailed Toll and Oil Invoice",
+  },
+  "detailed-surcharge-pdf": {
+    endpoint: "surcharge",
+    defaultFormat: "html",
+    title: "Detailed Surcharge Invoice",
+  },
+  "detailed-surcharge-excel": {
+    endpoint: "surcharge",
+    defaultFormat: "csv",
+    title: "Detailed Surcharge Invoice",
+  },
 };
 
 export function getDedicatedFinanceReport(action: string) {
@@ -252,7 +395,7 @@ export function dedicatedFinanceReportPath(action: string, params: DedicatedFina
     throw new FinanceApiError("invalid-response", "The requested Finance report is not available.");
   const query = new URLSearchParams({
     id: String(params.id),
-    postingMonthCode: String(params.postingMonthCode),
+    batchDate: params.batchDate,
     filterBy: params.filterBy,
     format: params.format,
   });
@@ -263,8 +406,11 @@ export async function getDedicatedFinanceReportData(
   action: string,
   params: Omit<DedicatedFinanceReportParams, "format">,
 ) {
+  const report = getDedicatedFinanceReport(action);
+  if (!report)
+    throw new FinanceApiError("invalid-response", "The requested Finance report is not available.");
   const path = dedicatedFinanceReportPath(action, { ...params, format: "json" });
-  return mapFinanceReport(await getFinanceJson(path), `${action} results`);
+  return mapFinanceReport(await getFinanceJson(path), report.title);
 }
 
 export const FINANCE_REPORT_ACTIONS = [

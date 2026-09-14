@@ -12,7 +12,7 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
+import { hasAdvancedBatchOperationsRole } from "@/app/(fleet-operations)/finance/_utils";
 import {
   FinanceApiError,
   getBatchStatus,
@@ -56,7 +56,7 @@ async function renderBatchManagementContent({ searchParams, action }: BatchPageP
         <FinanceUnavailable message="The sign-in service is temporarily unavailable. Please try again." />
       </FinanceFrame>
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasAdvancedBatchOperationsRole(session.roles))
     return (
       <FinanceFrame title="Batch Management" description="Batch processing management.">
         <FinanceRestricted />
@@ -130,8 +130,9 @@ async function renderBatchManagementContent({ searchParams, action }: BatchPageP
             <form action={runBatchAction}>
               <input name="action" type="hidden" value={normalizedAction} />
               <p className="muted-copy">
-                This operation uses the existing Finance batch API and keeps its legacy database
-                workflow.
+                This operation is restricted to the legacy Advanced Financial Operations - Batch
+                role. Its restored database procedure path must be verified on the client system
+                before the operational result can be treated as legacy-equivalent.
               </p>
               <div className="button-row">
                 <button className="button button-primary" type="submit">

@@ -289,36 +289,13 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
 
     public async Task DeleteAsync(short logbookCode, int currentUserId)
     {
-        var columns = await GetAvailableColumnsAsync();
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
-
-        if (columns.ContainsKey("is_deleted"))
-        {
-            var assignments = new List<string> { "[is_deleted] = @isDeleted" };
-            AddParameter(command, "@isDeleted", DbType.Boolean, true);
-            if (columns.ContainsKey("date_updated"))
-            {
-                assignments.Add("[date_updated] = @dateUpdated");
-                AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-            }
-
-            if (columns.ContainsKey("modified_by_user_code"))
-            {
-                assignments.Add("[modified_by_user_code] = @modifiedBy");
-                AddParameter(command, "@modifiedBy", DbType.Int32, UserIdOrNull(currentUserId));
-            }
-
-            command.CommandText =
-                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [logbookcode] = @logbookCode";
-        }
-        else
-        {
-            // The original maintenance flow deleted the handout row.
-            command.CommandText =
-                $"DELETE FROM [dbo].[{TableName}] WHERE [logbookcode] = @logbookCode";
-        }
+        // MNT_logbkdelj_delete.aspx physically removes the issued-handout row.
+        // An expanded audit column does not change that legacy business action.
+        command.CommandText =
+            $"DELETE FROM [dbo].[{TableName}] WHERE [logbookcode] = @logbookCode";
 
         AddParameter(command, "@logbookCode", DbType.Int16, logbookCode);
         if (await command.ExecuteNonQueryAsync() == 0)

@@ -321,7 +321,12 @@ public class TripService : ITripService
             }
 
             validatedRoutes.Add(
-                new TripAuthorityRouteUpdate(route.RouteCode, submitted.EndOdometer, (int)distance)
+                new TripAuthorityRouteUpdate(
+                    route.RouteCode,
+                    submitted.EndOdometer,
+                    (int)distance,
+                    startOdometer
+                )
             );
             previousEndOdometer = submitted.EndOdometer;
             maxEndOdometer = Math.Max(maxEndOdometer, submitted.EndOdometer);

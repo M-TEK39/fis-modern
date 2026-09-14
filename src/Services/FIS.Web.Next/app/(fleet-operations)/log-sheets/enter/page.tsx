@@ -18,8 +18,10 @@ import {
   sessionMessage,
   statusMessage,
 } from "@/app/(fleet-operations)/log-sheets/_page";
-import { getSites, SiteApiError } from "@/lib/api/reference-data/api-sites";
-import { LogsheetApiError } from "@/lib/api/fleet-operations/api-logsheets";
+import {
+  getLogsheetContracts,
+  LogsheetApiError,
+} from "@/lib/api/fleet-operations/api-logsheets";
 import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
 
 const LogsheetEntryPageContent = renderLogsheetEntryPageContent;
@@ -41,12 +43,13 @@ async function renderLogsheetEntryPageContent({
   const vmfCode = Number(queryValue(query.vmfCode));
   const message = statusMessage(query);
   try {
-    const [options, sites] = await Promise.all([getVehicleOptions(), getSites()]);
+    const options = await getVehicleOptions();
     const matches = filterVehicles(options, search, mode);
     const selected =
       Number.isInteger(vmfCode) && vmfCode > 0
         ? options.find((vehicle) => vehicle.vmfCode === vmfCode)
         : null;
+    const contracts = selected ? await getLogsheetContracts(selected.vmfCode) : [];
     const returnPath = `/log-sheets/enter?${new URLSearchParams({ ...(search ? { search } : {}), mode, ...(selected ? { vmfCode: String(vmfCode) } : {}) }).toString()}`;
     return (
       <LogsheetShell
@@ -72,7 +75,7 @@ async function renderLogsheetEntryPageContent({
           <LogsheetForm
             record={null}
             vmfCode={selected.vmfCode}
-            sites={sites}
+            contracts={contracts}
             returnPath={returnPath}
           />
         ) : (
@@ -89,9 +92,7 @@ async function renderLogsheetEntryPageContent({
     );
   } catch (error) {
     const messageText =
-      error instanceof LogsheetApiError ||
-      error instanceof VehicleApiError ||
-      error instanceof SiteApiError
+      error instanceof LogsheetApiError || error instanceof VehicleApiError
         ? "The Logsheet service is temporarily unavailable. Please try again."
         : "Logsheet entry could not be loaded.";
     return (

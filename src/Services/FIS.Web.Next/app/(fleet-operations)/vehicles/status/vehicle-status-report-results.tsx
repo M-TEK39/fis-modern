@@ -22,9 +22,11 @@ import {
 } from "./vehicle-status-report-utils";
 
 function VehicleStatusTable({
+  canManageRemarks,
   report,
   onRemark,
 }: Readonly<{
+  canManageRemarks: boolean;
   report: VehicleStatusReport;
   onRemark: (row: VehicleStatusReportRow, resolve: boolean) => void;
 }>) {
@@ -41,7 +43,7 @@ function VehicleStatusTable({
             { key: "column-6", label: <>Site</> },
             { key: "column-7", label: <>Active Remark</> },
             { key: "column-8", label: <>Remark Category</> },
-            { key: "column-9", label: <>Actions</> },
+            ...(canManageRemarks ? [{ key: "column-9", label: <>Actions</> }] : []),
           ]}
         />
         <tbody>
@@ -55,28 +57,30 @@ function VehicleStatusTable({
               <td>{getSiteLabel(row)}</td>
               <td>{valueOrDash(row.remark?.text ?? null)}</td>
               <td>{valueOrDash(row.remark?.category ?? null)}</td>
-              <td>
-                <div className="table-actions">
-                  <button
-                    className="button button-secondary button-small"
-                    type="button"
-                    disabled={!report.remarksAvailable}
-                    onClick={() => onRemark(row, false)}
-                  >
-                    Add Remark
-                  </button>
-                  {row.remark ? (
+              {canManageRemarks ? (
+                <td>
+                  <div className="table-actions">
                     <button
-                      className="button button-primary button-small"
+                      className="button button-secondary button-small"
                       type="button"
                       disabled={!report.remarksAvailable}
-                      onClick={() => onRemark(row, true)}
+                      onClick={() => onRemark(row, false)}
                     >
-                      Resolve
+                      Add Remark
                     </button>
-                  ) : null}
-                </div>
-              </td>
+                    {row.remark ? (
+                      <button
+                        className="button button-primary button-small"
+                        type="button"
+                        disabled={!report.remarksAvailable}
+                        onClick={() => onRemark(row, true)}
+                      >
+                        Resolve
+                      </button>
+                    ) : null}
+                  </div>
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>
@@ -160,6 +164,7 @@ function VehicleStatusPagination({
 }
 
 export default function VehicleStatusReportResults({
+  canManageRemarks,
   onDownload,
   onRemark,
   onPage,
@@ -171,6 +176,7 @@ export default function VehicleStatusReportResults({
   showFieldSelector,
   visiblePage,
 }: Readonly<{
+  canManageRemarks: boolean;
   onDownload: () => void;
   onRemark: (row: VehicleStatusReportRow, resolve: boolean) => void;
   onPage: (page: number) => void;
@@ -213,7 +219,7 @@ export default function VehicleStatusReportResults({
       {showFieldSelector ? (
         <CsvFieldSelector selectedFields={selectedFields} onToggle={onToggleField} />
       ) : null}
-      <VehicleStatusTable report={report} onRemark={onRemark} />
+      <VehicleStatusTable canManageRemarks={canManageRemarks} report={report} onRemark={onRemark} />
       <VehicleStatusPagination
         page={visiblePage}
         pageSize={report.pageSize}

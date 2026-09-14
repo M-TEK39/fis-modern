@@ -370,10 +370,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "users-one" => "audit-trail",
             "vehicle-by-barcode" => "vehicles",
             "vehicles-with-history" => "vehicles",
-            "vip-pool-utilization-current" => "trips-open-31",
-            "vip-pool-utilization-previous" => "trips-open-31",
-            "vip-pool-income-current" => "trips-open-31",
-            "vip-pool-income-previous" => "trips-open-31",
 
             // Audit trail variants
             "audit-trail-department" => "audit-trail",

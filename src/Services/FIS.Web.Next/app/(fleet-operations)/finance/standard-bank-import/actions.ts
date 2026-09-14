@@ -46,7 +46,7 @@ export async function importStandardBankAction(formData: FormData) {
     redirect(
       resultPath("error", "The sign-in service is temporarily unavailable. Please try again."),
     );
-  if (!hasHeadOfficeFinanceAccess(session.siteCode, session.email, session.roles))
+  if (!hasHeadOfficeFinanceAccess(session.siteCode, session.legacyUsername))
     redirect(
       resultPath(
         "forbidden",

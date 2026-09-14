@@ -2,8 +2,17 @@
 
 import { redirect } from "next/navigation";
 
-import { hasFinanceRole } from "@/app/(fleet-operations)/finance/_utils";
-import { activateBasSegments, FinanceApiError, importBas } from "@/lib/api/finance/api-finance";
+import {
+  hasBasCorrectionRole,
+  hasFinanceDataMaintenanceRole,
+} from "@/app/(fleet-operations)/finance/_utils";
+import {
+  activateBasSegments,
+  assignFundCode,
+  FinanceApiError,
+  fixInvalidBasJournal,
+  importBas,
+} from "@/lib/api/finance/api-finance";
 import { getSession } from "@/lib/auth/session";
 
 function text(formData: FormData, name: string) {
@@ -20,6 +29,22 @@ function department(formData: FormData) {
   if (!value) return undefined;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function positiveNumber(formData: FormData, name: string) {
+  const value = Number(text(formData, name));
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
+function selectedDepartmentPath(
+  action: string,
+  result: string,
+  message: string,
+  departmentCode?: number,
+) {
+  const params = new URLSearchParams({ result, message, view: "search" });
+  if (departmentCode) params.set("departmentCode", String(departmentCode));
+  return `/finance/financial-allocation/${encodeURIComponent(action)}?${params.toString()}`;
 }
 
 function responseMessage(value: unknown, fallback: string) {
@@ -59,7 +84,7 @@ export async function importBasAction(formData: FormData) {
         "The sign-in service is temporarily unavailable. Please try again.",
       ),
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasFinanceDataMaintenanceRole(session.roles))
     redirect(
       resultPath(
         "import-bas",
@@ -102,7 +127,7 @@ export async function activateBasSegmentsAction(formData: FormData) {
         "The sign-in service is temporarily unavailable. Please try again.",
       ),
     );
-  if (!hasFinanceRole(session.roles))
+  if (!hasFinanceDataMaintenanceRole(session.roles))
     redirect(
       resultPath(
         "activate-bas",
@@ -133,4 +158,126 @@ export async function activateBasSegmentsAction(formData: FormData) {
   redirect(
     resultPath("activate-bas", "success", responseMessage(result, "BAS segment list updated.")),
   );
+}
+
+export async function fixInvalidBasJournalAction(formData: FormData) {
+  const action = "fix-invalid-journals";
+  const session = await getSession();
+  if (session.status === "anonymous") redirect("/login");
+  const departmentCode = positiveNumber(formData, "departmentCode");
+  if (session.status !== "authenticated")
+    redirect(
+      selectedDepartmentPath(
+        action,
+        "error",
+        "The sign-in service is temporarily unavailable.",
+        departmentCode,
+      ),
+    );
+  if (!hasBasCorrectionRole(session.roles))
+    redirect(
+      selectedDepartmentPath(
+        action,
+        "forbidden",
+        "Your account cannot correct BAS journals.",
+        departmentCode,
+      ),
+    );
+
+  const transactionId = positiveNumber(formData, "transactionId");
+  const responsibility = text(formData, "responsibility");
+  const objective = text(formData, "objective");
+  if (!transactionId || !departmentCode || !responsibility || !objective)
+    redirect(
+      selectedDepartmentPath(
+        action,
+        "error",
+        "Select responsibility and objective BAS codes before saving.",
+        departmentCode,
+      ),
+    );
+
+  try {
+    const result = await fixInvalidBasJournal({
+      transactionId,
+      departmentCode,
+      responsibility,
+      objective,
+    });
+    redirect(
+      selectedDepartmentPath(
+        action,
+        "success",
+        responseMessage(result, "BAS correction saved."),
+        departmentCode,
+      ),
+    );
+  } catch (error) {
+    redirect(selectedDepartmentPath(action, "error", apiMessage(error), departmentCode));
+  }
+}
+
+export async function assignFundCodeAction(formData: FormData) {
+  const action = "allocate-fund-codes";
+  const session = await getSession();
+  if (session.status === "anonymous") redirect("/login");
+  const departmentCode = positiveNumber(formData, "departmentCode");
+  if (session.status !== "authenticated")
+    redirect(
+      selectedDepartmentPath(
+        action,
+        "error",
+        "The sign-in service is temporarily unavailable.",
+        departmentCode,
+      ),
+    );
+  if (!hasBasCorrectionRole(session.roles))
+    redirect(
+      selectedDepartmentPath(
+        action,
+        "forbidden",
+        "Your account cannot allocate FUND codes.",
+        departmentCode,
+      ),
+    );
+
+  const journalDetailCode = text(formData, "journalDetailCode");
+  const fundNumber = text(formData, "fundNumber");
+  const vmfCode = text(formData, "vmfCode");
+  const journalDetailTypeCode = positiveNumber(formData, "journalDetailTypeCode");
+  const siteCode = positiveNumber(formData, "siteCode");
+  const journalMonth = text(formData, "journalMonth");
+  if (
+    !departmentCode ||
+    !fundNumber ||
+    !vmfCode ||
+    !journalDetailTypeCode ||
+    !siteCode ||
+    !journalMonth
+  )
+    redirect(
+      selectedDepartmentPath(action, "error", "Select a FUND code before saving.", departmentCode),
+    );
+
+  try {
+    const result = await assignFundCode({
+      fundNumber,
+      departmentCode,
+      vmfCode,
+      journalDetailTypeCode,
+      siteCode,
+      journalMonth,
+      journalDetailCode: journalDetailCode || undefined,
+    });
+    redirect(
+      selectedDepartmentPath(
+        action,
+        "success",
+        responseMessage(result, "FUND code assigned."),
+        departmentCode,
+      ),
+    );
+  } catch (error) {
+    redirect(selectedDepartmentPath(action, "error", apiMessage(error), departmentCode));
+  }
 }

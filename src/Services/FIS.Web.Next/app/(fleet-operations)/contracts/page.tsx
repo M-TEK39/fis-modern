@@ -4,9 +4,8 @@ import { connection } from "next/server";
 
 import {
   hasContractAccess,
+  hasContractBackdatingApproverRole,
   hasContractHistoryBackdatingRole,
-  hasContractReviewerRole,
-  isContractAdministrator,
 } from "@/app/(fleet-operations)/contracts/access";
 import { MenuSection } from "@/components/ui/menu-section";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
@@ -78,7 +77,7 @@ async function ContractsPageContent() {
             <Link className="vehicle-menu-link" href="/contracts/maintenance">
               1) Vehicle Contract Maintenance
             </Link>
-            {isContractAdministrator(session.roles) || hasContractReviewerRole(session.roles) ? (
+            {hasContractBackdatingApproverRole(session.roles) ? (
               <Link className="vehicle-menu-link" href="/contracts/backdating-approval">
                 2) Vehicle Contract Back Date Requests - Approval
               </Link>
