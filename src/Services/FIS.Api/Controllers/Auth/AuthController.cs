@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -154,9 +155,7 @@ public class AuthController : ControllerBase
 
             if (profile.UserAccessOld is not null)
             {
-                profile.UserAccessOld.Retry = (short)
-                    Math.Min(short.MaxValue, (profile.UserAccessOld.Retry ?? 0) + 1);
-                _context.UserAccessOlds.Update(profile.UserAccessOld);
+                await PersistLegacyLoginStateAsync(profile.UserAccessCode, successfulLogin: false);
             }
 
             await _context.SaveChangesAsync();
@@ -177,10 +176,7 @@ public class AuthController : ControllerBase
 
         if (profile.UserAccessOld is not null)
         {
-            profile.UserAccessOld.Retry = 0;
-            profile.UserAccessOld.last_log_on = DateTime.UtcNow;
-            profile.UserAccessOld.date_updated = DateTime.UtcNow;
-            _context.UserAccessOlds.Update(profile.UserAccessOld);
+            await PersistLegacyLoginStateAsync(profile.UserAccessCode, successfulLogin: true);
         }
 
         await _context.SaveChangesAsync();
@@ -1528,6 +1524,75 @@ public class AuthController : ControllerBase
         if (credential is not null)
         {
             await _legacyCredentialCompatibility.PersistAsync(credential);
+        }
+    }
+
+    /// <summary>
+    /// Persists only the legacy login-state fields. The restored client table has
+    /// enabled audit triggers, so EF Core's generated <c>OUTPUT</c> statement is
+    /// incompatible; its expanded audit-column mappings are also optional.
+    /// </summary>
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review if the query string passed to 'string DbCommand.CommandText' accepts any user input",
+        Justification = "Each branch is a fixed legacy-table update; user access code and timestamp are supplied as parameters."
+    )]
+    private async Task PersistLegacyLoginStateAsync(int userAccessCode, bool successfulLogin)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = successfulLogin
+                ? """
+                    UPDATE [dbo].[user_access_old1]
+                    SET [Retry] = 0,
+                        [last_log_on] = @now
+                    WHERE [user_access_code] = @userAccessCode;
+                    """
+                : """
+                    UPDATE [dbo].[user_access_old1]
+                    SET [Retry] = CASE
+                        WHEN [Retry] IS NULL OR [Retry] < 32767 THEN ISNULL([Retry], 0) + 1
+                        ELSE 32767
+                    END
+                    WHERE [user_access_code] = @userAccessCode;
+                    """;
+
+            var userAccessCodeParameter = command.CreateParameter();
+            userAccessCodeParameter.ParameterName = "@userAccessCode";
+            userAccessCodeParameter.DbType = DbType.Int32;
+            userAccessCodeParameter.Value = userAccessCode;
+            command.Parameters.Add(userAccessCodeParameter);
+
+            if (successfulLogin)
+            {
+                var nowParameter = command.CreateParameter();
+                nowParameter.ParameterName = "@now";
+                nowParameter.DbType = DbType.DateTime;
+                nowParameter.Value = DateTime.UtcNow;
+                command.Parameters.Add(nowParameter);
+            }
+
+            if (await command.ExecuteNonQueryAsync() != 1)
+            {
+                throw new InvalidOperationException(
+                    $"Legacy login-state update did not affect user {userAccessCode}."
+                );
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
         }
     }
 
