@@ -9,7 +9,7 @@ import {
   TripRouteFields,
 } from "@/app/(fleet-operations)/trips/create/create-trip-form-sections";
 import type { DriverManagementDriver } from "@/lib/api/reference-data/api-driver-management";
-import type { UserAdminProfile } from "@/lib/api/administration/api-user-admin";
+import type { UserApproverChoice } from "@/lib/api/administration/api-user-admin";
 
 type FormAction = (formData: FormData) => void | Promise<void>;
 
@@ -43,7 +43,7 @@ export default function CreateTripForm({
 }: Readonly<{
   action: FormAction;
   context: VehicleContext;
-  approvers: UserAdminProfile[];
+  approvers: UserApproverChoice[];
   drivers: DriverManagementDriver[];
   mode: string;
   today: string;

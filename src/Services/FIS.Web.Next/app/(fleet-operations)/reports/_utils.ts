@@ -9,6 +9,10 @@ export function hasReportsRole(roles: readonly string[]) {
   );
 }
 
+export function hasContractReportsRole(roles: readonly string[]) {
+  return hasReportsRole(roles) || roles.some((role) => role.trim().toLowerCase() === "contracts");
+}
+
 export type ReportMenuEntry = {
   label: string;
   key?: string;

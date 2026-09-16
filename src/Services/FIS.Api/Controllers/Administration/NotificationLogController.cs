@@ -7,7 +7,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/notification-log")]
-[Authorize]
+[Authorize(Roles = "User Administration")]
 public class NotificationLogController : BaseApiController
 {
     private readonly INotificationLogRepository _repository;

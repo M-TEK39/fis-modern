@@ -1,4 +1,5 @@
 using FIS.Core.Application.Interfaces.Workflow;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FIS.Api.Controllers;
@@ -7,6 +8,10 @@ namespace FIS.Api.Controllers;
 /// Controller for workflow analytics and performance reporting
 /// </summary>
 [ApiController]
+// Workflow analytics is an administrative/reporting surface, not a generic
+// authenticated data feed. Background metrics use the application service
+// directly and do not depend on this controller.
+[Authorize(Roles = "Management Reports")]
 [Route("api/workflow-analytics")]
 public class WorkflowAnalyticsController : ControllerBase
 {

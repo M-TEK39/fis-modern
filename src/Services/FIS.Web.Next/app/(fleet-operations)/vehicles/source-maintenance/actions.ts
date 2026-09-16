@@ -8,9 +8,9 @@ import {
   updateVehicleSource,
   VehicleSourceApiError,
 } from "@/lib/api/vehicles/api-vehicle-sources";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import { getSession } from "@/lib/auth/session";
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 const ALLOWED_RETURN_PATHS = [
   "/vehicles/source-maintenance",
   "/Master-File/Vehicle_Source.aspx",
@@ -29,21 +29,6 @@ const initialState: VehicleSourceActionState = { status: "idle" };
 function getText(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
-}
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
 }
 
 function getReturnPath(value: string) {
@@ -80,7 +65,7 @@ export async function saveVehicleSourceAction(
     return errorState("Your session has expired. Sign in again before continuing.");
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return errorState("You do not have permission to maintain vehicle sources.");
   }
 

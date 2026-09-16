@@ -207,7 +207,7 @@ async function renderVehiclePhotosPageContent({
         <StatusCard title="API unavailable" message="Vehicle photo search is unavailable." />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasVehicleManagementPermission(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <StatusCard

@@ -179,6 +179,7 @@ public sealed class MicrosoftIdentityCompatibilityService
             Username: user.name?.Trim() ?? email,
             Email: email,
             AccessLevel: user.AccessLevel,
+            AccessString: user.Access_str,
             IsActive: user.user_active
         );
     }
@@ -210,5 +211,6 @@ public sealed record LegacyMicrosoftIdentityUser(
     string Username,
     string Email,
     long AccessLevel,
+    string? AccessString,
     bool IsActive
 );

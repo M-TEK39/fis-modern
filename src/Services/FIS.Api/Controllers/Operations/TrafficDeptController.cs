@@ -128,6 +128,15 @@ public class TrafficDeptController : BaseApiController
             return Forbid();
         try
         {
+            var name = item.Traf_name?.Trim() ?? string.Empty;
+            if (ValidateName(name) is { } validationError)
+                return BadRequest(new { error = validationError });
+
+            var duplicate = await _repository.GetByNameAsync(name);
+            if (duplicate is not null)
+                return Conflict(new { error = "A traffic department with this name already exists." });
+
+            item.Traf_name = name;
             var created = await _repository.CreateAsync(item, GetCurrentUserId());
             return CreatedAtAction(
                 nameof(GetById),
@@ -151,6 +160,15 @@ public class TrafficDeptController : BaseApiController
         {
             if (id != item.Traffic_dept_code)
                 return BadRequest();
+            var name = item.Traf_name?.Trim() ?? string.Empty;
+            if (ValidateName(name) is { } validationError)
+                return BadRequest(new { error = validationError });
+
+            var duplicate = await _repository.GetByNameAsync(name);
+            if (duplicate is not null && duplicate.Traffic_dept_code != id)
+                return Conflict(new { error = "A traffic department with this name already exists." });
+
+            item.Traf_name = name;
             return Ok(await _repository.UpdateAsync(item, GetCurrentUserId()));
         }
         catch (Exception ex)
@@ -177,7 +195,17 @@ public class TrafficDeptController : BaseApiController
         }
     }
 
-    private bool HasReportsRole() => HasAnyRole("Reports");
+    private bool HasReportsRole() =>
+        HasAnyRole("Reports", "SystemAdministrator", "System Administrator");
+
+    private static string? ValidateName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return "Traffic department name is required.";
+        if (name.Trim().Length > 50)
+            return "Traffic department name must be 50 characters or fewer.";
+        return null;
+    }
 
     private bool HasAnyRole(params string[] expectedRoles)
     {

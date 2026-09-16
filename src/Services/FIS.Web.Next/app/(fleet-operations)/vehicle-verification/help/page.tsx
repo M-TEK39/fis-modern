@@ -47,7 +47,7 @@ async function AssetVerificationHelpContent() {
     return <ApiUnavailable />;
   }
 
-  if (!hasAssetVerificationAccess(session.roles, session.accessLevel)) {
+  if (!hasAssetVerificationAccess(session.roles)) {
     return <AccessRestricted />;
   }
 

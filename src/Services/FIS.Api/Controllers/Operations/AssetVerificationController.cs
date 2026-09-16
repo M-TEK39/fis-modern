@@ -7,7 +7,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = "Asset Verification")]
 public class AssetVerificationController : BaseApiController
 {
     private const int DefaultPageSize = 24;
@@ -39,7 +39,6 @@ public class AssetVerificationController : BaseApiController
         }
     }
 
-    [Authorize(Roles = "Asset Verification")]
     [HttpGet("page")]
     public async Task<ActionResult> GetPage(
         [FromQuery] int page = 1,

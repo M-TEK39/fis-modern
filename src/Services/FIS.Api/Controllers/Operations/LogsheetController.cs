@@ -1,39 +1,49 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Reports")]
+[Authorize]
 [Route("api/[controller]")]
 public class LogsheetController : BaseApiController
 {
-    private static readonly int[] LegacyLogsheetManagerUserCodes = [279, 47, 38];
-
     private readonly ILogsheetRepository _repository;
     private readonly IContractRepository _contractRepository;
+    private readonly ISiteRepository _siteRepository;
+    private readonly FisDbContext _context;
     private readonly ILogger<LogsheetController> _logger;
 
     public LogsheetController(
         ILogsheetRepository repository,
         IContractRepository contractRepository,
+        ISiteRepository siteRepository,
+        FisDbContext context,
         ILogger<LogsheetController> logger
     )
     {
         _repository = repository;
         _contractRepository = contractRepository;
+        _siteRepository = siteRepository;
+        _context = context;
         _logger = logger;
     }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Logsheet>>> GetAll()
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         try
         {
-            return Ok(await _repository.GetAllAsync());
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            return Ok(FilterByAllowedSites(await _repository.GetAllAsync(), allowedSites).ToList());
         }
         catch (Exception ex)
         {
@@ -50,8 +60,47 @@ public class LogsheetController : BaseApiController
         [FromQuery] string? requisition = null
     )
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         try
         {
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            if (allowedSites is not null)
+            {
+                var boundedPageSize = Math.Clamp(pageSize, 1, 100);
+                var all = FilterByAllowedSites(await _repository.GetAllAsync(), allowedSites)
+                    .Where(item => !vmfCode.HasValue || item.vmf_code == vmfCode.Value)
+                    .Where(item =>
+                        string.IsNullOrWhiteSpace(requisition)
+                        || string.Equals(
+                            item.rek_num,
+                            requisition.Trim(),
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
+                    .OrderByDescending(item => item.month)
+                    .ThenByDescending(item => item.log_code)
+                    .ToList();
+                var totalPages = Math.Max(
+                    1,
+                    (int)Math.Ceiling(all.Count / (double)boundedPageSize)
+                );
+                var boundedPage = Math.Min(Math.Max(1, page), totalPages);
+                return Ok(
+                    new
+                    {
+                        items = all.Skip((boundedPage - 1) * boundedPageSize)
+                            .Take(boundedPageSize)
+                            .ToList(),
+                        page = boundedPage,
+                        pageSize = boundedPageSize,
+                        total = all.Count,
+                        totalPages,
+                    }
+                );
+            }
+
             var result = await _repository.GetPageAsync(
                 new LogsheetPageQuery(
                     Math.Max(1, page),
@@ -82,10 +131,17 @@ public class LogsheetController : BaseApiController
     [HttpGet("{id}")]
     public async Task<ActionResult<Logsheet>> GetById(int id)
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         try
         {
             var item = await _repository.GetByIdAsync(id);
-            return item == null ? NotFound() : Ok(item);
+            if (item == null)
+                return NotFound();
+            if (!await IsSiteAllowedAsync(item.site_code))
+                return Forbid();
+            return Ok(item);
         }
         catch (Exception ex)
         {
@@ -99,6 +155,9 @@ public class LogsheetController : BaseApiController
         int vmfCode
     )
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         if (vmfCode <= 0)
             return BadRequest(new { error = "A vehicle is required." });
 
@@ -108,8 +167,12 @@ public class LogsheetController : BaseApiController
             // choices. The entry action subsequently verifies the selected
             // period; it never auto-selects a contract.
             var contracts = await _contractRepository.GetContractsByVehicleAsync(vmfCode);
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
             return Ok(
                 contracts
+                    .Where(contract =>
+                        allowedSites is null || allowedSites.Contains(contract.site_code)
+                    )
                     .Where(contract => contract.start_date.Date < DateTime.Today)
                     .OrderByDescending(contract => contract.start_date)
                     .ThenByDescending(contract => contract.contract_code)
@@ -135,6 +198,9 @@ public class LogsheetController : BaseApiController
     [HttpPost]
     public async Task<ActionResult<Logsheet>> Create([FromBody] Logsheet item)
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         try
         {
             var contractFailure = await ApplyLegacySelectedContractAsync(
@@ -145,6 +211,19 @@ public class LogsheetController : BaseApiController
                 return contractFailure;
             var created = await _repository.CreateAsync(item, GetCurrentUserId());
             return CreatedAtAction(nameof(GetById), new { id = created.log_code }, created);
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("legacy procedure", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(ex, "Legacy logsheet insert procedure is unavailable or incompatible");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The legacy logsheet insert procedure is unavailable or incompatible. No direct-DML fallback was run.",
+                    source = "legacy-procedure-required",
+                }
+            );
         }
         catch (SqlException ex) when (IsLegacyLogsheetBusinessRule(ex))
         {
@@ -161,13 +240,18 @@ public class LogsheetController : BaseApiController
     [HttpPut("{id}")]
     public async Task<ActionResult<Logsheet>> Update(int id, [FromBody] Logsheet item)
     {
-        if (!CanManageLegacyLogsheets())
+        if (!HasLogsheetAccess() || !CanManageLegacyLogsheets())
             return Forbid();
 
         try
         {
             if (id != item.log_code)
                 return BadRequest();
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound();
+            if (!await IsSiteAllowedAsync(existing.site_code))
+                return Forbid();
             var contractFailure = await ApplyLegacySelectedContractAsync(
                 item,
                 item.contract_code
@@ -191,11 +275,16 @@ public class LogsheetController : BaseApiController
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(int id)
     {
-        if (!CanManageLegacyLogsheets())
+        if (!HasLogsheetAccess() || !CanManageLegacyLogsheets())
             return Forbid();
 
         try
         {
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound();
+            if (!await IsSiteAllowedAsync(existing.site_code))
+                return Forbid();
             await _repository.DeleteAsync(id, GetCurrentUserId());
             return NoContent();
         }
@@ -219,6 +308,9 @@ public class LogsheetController : BaseApiController
     [HttpGet("menu")]
     public ActionResult<LogsheetMenuDto> GetMenu()
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         var menu = new LogsheetMenuDto
         {
             Options = new List<string> { "Enter", "Edit", "Delete", "Reports", "Help" },
@@ -248,6 +340,9 @@ public class LogsheetController : BaseApiController
         [FromBody] LogsheetEntryDto request
     )
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         try
         {
             var validationError = ValidateEntry(request);
@@ -284,6 +379,19 @@ public class LogsheetController : BaseApiController
             };
             return Ok(result);
         }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("legacy procedure", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(ex, "Legacy logsheet insert procedure is unavailable or incompatible");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The legacy logsheet insert procedure is unavailable or incompatible. No direct-DML fallback was run.",
+                    source = "legacy-procedure-required",
+                }
+            );
+        }
         catch (SqlException ex) when (IsLegacyLogsheetBusinessRule(ex))
         {
             _logger.LogInformation(ex, "Legacy logsheet creation rule rejected the entry request");
@@ -305,7 +413,7 @@ public class LogsheetController : BaseApiController
         [FromBody] LogsheetEntryDto request
     )
     {
-        if (!CanManageLegacyLogsheets())
+        if (!HasLogsheetAccess() || !CanManageLegacyLogsheets())
             return Forbid();
 
         try
@@ -317,6 +425,8 @@ public class LogsheetController : BaseApiController
             var existing = await _repository.GetByIdAsync(id);
             if (existing == null)
                 return NotFound(new { message = $"Logsheet entry with code {id} not found" });
+            if (!await IsSiteAllowedAsync(existing.site_code))
+                return Forbid();
 
             existing.vmf_code = request.VmfCode;
             existing.start_odo = request.StartOdometer;
@@ -362,7 +472,7 @@ public class LogsheetController : BaseApiController
     [HttpDelete("entry/{id}")]
     public async Task<ActionResult> DeleteEntry(int id)
     {
-        if (!CanManageLegacyLogsheets())
+        if (!HasLogsheetAccess() || !CanManageLegacyLogsheets())
             return Forbid();
 
         try
@@ -370,6 +480,8 @@ public class LogsheetController : BaseApiController
             var logsheet = await _repository.GetByIdAsync(id);
             if (logsheet == null)
                 return NotFound(new { message = $"Logsheet entry with code {id} not found" });
+            if (!await IsSiteAllowedAsync(logsheet.site_code))
+                return Forbid();
 
             await _repository.DeleteAsync(id, GetCurrentUserId());
             return Ok(new { message = "Logsheet entry deleted successfully", id });
@@ -438,6 +550,8 @@ public class LogsheetController : BaseApiController
         var contract = await _contractRepository.GetByIdAsync(contractCode.Value);
         if (contract is null)
             return BadRequest(new { error = "The selected contract was not found." });
+        if (!await IsSiteAllowedAsync(contract.site_code))
+            return Forbid();
         if (contract.vmf_code != logsheet.vmf_code)
             return BadRequest(
                 new { error = "The selected contract does not belong to the selected vehicle." }
@@ -470,8 +584,67 @@ public class LogsheetController : BaseApiController
         return null;
     }
 
-    private bool CanManageLegacyLogsheets() =>
-        LegacyLogsheetManagerUserCodes.Contains(GetCurrentUserId());
+    // The legacy edit/delete pages do not use a fixed user-code allow-list;
+    // access follows the Logsheets/Reports module entitlement. Keep the
+    // server-side site scope checks on each record, but do not introduce a
+    // modern-only set of three users that prevents authorised operators from
+    // correcting captured odometer values.
+    private bool CanManageLegacyLogsheets() => HasLogsheetAccess();
+
+    private async Task<IReadOnlySet<short>?> ResolveAllowedSiteCodesAsync()
+    {
+        if (HasGlobalLogsheetScope())
+            return null;
+
+        var userId = GetCurrentUserId();
+        var profileSiteCode = await _context.UserAccessOlds.AsNoTracking()
+            .Where(user => user.user_access_code == userId)
+            .Select(user => user.Site_code)
+            .SingleOrDefaultAsync(HttpContext.RequestAborted);
+        if (profileSiteCode is not > 0)
+            return new HashSet<short>();
+
+        var profileSite = await _siteRepository.GetByIdAsync(profileSiteCode.Value);
+        if (profileSite is null)
+            return new HashSet<short>();
+
+        var sites = await _siteRepository.GetActiveSitesAsync();
+        if (HasRole("Vehicle List for All Departments in Province") && profileSite.province_code.HasValue)
+            sites = sites.Where(site => site.province_code == profileSite.province_code.Value);
+        else if (HasRole("Vehicle List for All Sites in Department") && profileSite.Depatrment_code.HasValue)
+            sites = sites.Where(site => site.Depatrment_code == profileSite.Depatrment_code.Value);
+        else
+            sites = sites.Where(site => site.Site_code == profileSite.Site_code);
+
+        return sites.Select(site => site.Site_code).ToHashSet();
+    }
+
+    private async Task<bool> IsSiteAllowedAsync(short siteCode)
+    {
+        var allowedSites = await ResolveAllowedSiteCodesAsync();
+        return allowedSites is null || allowedSites.Contains(siteCode);
+    }
+
+    private static IEnumerable<Logsheet> FilterByAllowedSites(
+        IEnumerable<Logsheet> records,
+        IReadOnlySet<short>? allowedSites
+    ) => allowedSites is null
+        ? records
+        : records.Where(item => allowedSites.Contains(item.site_code));
+
+    private bool HasGlobalLogsheetScope() =>
+        HasRole("Administrator")
+        || HasRole("Admin")
+        || HasRole("System Administrator")
+        || HasRole("SystemAdministrator");
+
+    private bool HasRole(string role) => User.Claims
+        .Where(claim =>
+            claim.Type == System.Security.Claims.ClaimTypes.Role
+            || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+        )
+        .SelectMany(claim => claim.Value.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        .Any(value => string.Equals(value.Trim(), role, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsLegacyLogsheetBusinessRule(SqlException exception)
     {
@@ -499,6 +672,9 @@ public class LogsheetController : BaseApiController
             }
         );
 
+    private bool HasLogsheetAccess() =>
+        HasGlobalLogsheetScope() || HasRole("Logsheets") || HasRole("Reports");
+
     #region Reports
 
     /// <summary>
@@ -507,6 +683,9 @@ public class LogsheetController : BaseApiController
     [HttpGet("reports/menu")]
     public ActionResult<LogsheetReportMenuDto> GetReportsMenu()
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         var menu = new LogsheetReportMenuDto
         {
             Reports = new List<string>
@@ -529,12 +708,15 @@ public class LogsheetController : BaseApiController
         [FromBody] LogsheetOneVehicleRequestDto request
     )
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         try
         {
             var vehicleLogsheets = await _repository.GetByVehicleAsync(request.VmfCode);
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
 
-            var filteredLogsheets = vehicleLogsheets
-                .Where(l => !l.is_deleted)
+            var filteredLogsheets = FilterByAllowedSites(vehicleLogsheets, allowedSites)
                 .Where(l => l.month >= request.StartDate && l.month <= request.EndDate)
                 .OrderByDescending(l => l.month)
                 .ToList();
@@ -569,14 +751,17 @@ public class LogsheetController : BaseApiController
         [FromBody] LogsheetOneRequisitionRequestDto request
     )
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         try
         {
             if (string.IsNullOrWhiteSpace(request.RequisitionNumber))
                 return BadRequest(new { message = "Requisition number is required" });
 
             var allLogsheets = await _repository.GetAllAsync();
-            var filteredLogsheets = allLogsheets
-                .Where(l => !l.is_deleted)
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            var filteredLogsheets = FilterByAllowedSites(allLogsheets, allowedSites)
                 .Where(l =>
                     l.rek_num != null
                     && l.rek_num.Equals(
@@ -615,14 +800,18 @@ public class LogsheetController : BaseApiController
         [FromBody] LogsheetDepartmentPeriodRequestDto request
     )
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         try
         {
             var allLogsheets = await _repository.GetAllAsync();
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
 
-            // Filter by site code (department) and date range
-            var filteredLogsheets = allLogsheets
-                .Where(l => !l.is_deleted)
-                .Where(l => l.site_code == request.DepartmentCode)
+            // Legacy RPT_outstanding2 filters by the logsheet's department
+            // column. Do not compare a department code with site_code.
+            var filteredLogsheets = FilterByAllowedSites(allLogsheets, allowedSites)
+                .Where(l => l.department_code == request.DepartmentCode)
                 .Where(l => l.month >= request.StartDate && l.month <= request.EndDate)
                 .OrderByDescending(l => l.month)
                 .ToList();
@@ -659,13 +848,16 @@ public class LogsheetController : BaseApiController
         [FromBody] LogsheetCapturedRequestDto request
     )
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         try
         {
             var allLogsheets = await _repository.GetAllAsync();
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
 
             // Filter by date range (captured in this period)
-            var filteredLogsheets = allLogsheets
-                .Where(l => !l.is_deleted)
+            var filteredLogsheets = FilterByAllowedSites(allLogsheets, allowedSites)
                 .Where(l =>
                     l.date_created >= request.StartDate && l.date_created <= request.EndDate
                 )
@@ -703,13 +895,16 @@ public class LogsheetController : BaseApiController
         [FromBody] LogsheetKmPerClassRequestDto request
     )
     {
+        if (!HasLogsheetAccess())
+            return Forbid();
+
         try
         {
             var allLogsheets = await _repository.GetAllAsync();
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
 
             // Filter by date range and calculate total km per class code
-            var filteredLogsheets = allLogsheets
-                .Where(l => !l.is_deleted)
+            var filteredLogsheets = FilterByAllowedSites(allLogsheets, allowedSites)
                 .Where(l => l.month >= request.StartDate && l.month <= request.EndDate)
                 .Where(l => l.Vehicle != null) // Ensure vehicle navigation property is loaded
                 .ToList();

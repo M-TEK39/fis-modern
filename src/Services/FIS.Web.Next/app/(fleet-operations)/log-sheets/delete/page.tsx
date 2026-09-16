@@ -49,7 +49,7 @@ async function renderLogsheetDeletePageContent({
   if (session.status !== "authenticated")
     return accessRestricted("Your session could not be loaded.");
   if (!hasLogsheetAccess(session))
-    return accessRestricted("Your profile does not include Reports access.");
+    return accessRestricted("Your profile does not include Log Sheets access.");
   if (!session.userAccessCode || ![279, 47, 38].includes(Number(session.userAccessCode)))
     return accessRestricted("Your profile cannot delete logsheets.");
 

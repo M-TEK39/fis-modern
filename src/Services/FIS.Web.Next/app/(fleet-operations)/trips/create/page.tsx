@@ -31,8 +31,8 @@ import {
   type TripAuthorityVehicle,
 } from "@/lib/api/fleet-operations/api-trip-authorities";
 import {
-  getUserAdminUserChoices,
-  type UserAdminProfile,
+  getUserApproverChoices,
+  type UserApproverChoice,
 } from "@/lib/api/administration/api-user-admin";
 import {
   getVehicleForStatus,
@@ -65,20 +65,11 @@ function resultMessage(result: string) {
   }
 }
 
-function isContractManager(user: UserAdminProfile) {
-  try {
-    return (BigInt(String(user.accessLevel)) & BigInt(2)) === BigInt(2);
-  } catch {
-    return false;
-  }
-}
-
-function filterApprovers(users: UserAdminProfile[], currentUserCode: number | null) {
+function filterApprovers(users: UserApproverChoice[], currentUserCode: number | null) {
   const candidates = users.filter(
     (user) => user.userAccessCode !== currentUserCode && user.userActive,
   );
-  const contractManagers = candidates.filter(isContractManager);
-  return (contractManagers.length > 0 ? contractManagers : candidates).sort((left, right) =>
+  return candidates.sort((left, right) =>
     (left.userName ?? `${left.firstName ?? ""} ${left.lastName ?? ""}`).localeCompare(
       right.userName ?? `${right.firstName ?? ""} ${right.lastName ?? ""}`,
     ),
@@ -213,12 +204,12 @@ async function renderCreateTripPageContent({
   }
 
   let vehicle: VehicleStatusVehicle;
-  let users: UserAdminProfile[];
+  let users: UserApproverChoice[];
   let drivers: DriverManagementDriver[];
   try {
     const [vehicleResult, userResult, driverResult] = await Promise.all([
       getVehicleForStatus(selectedVmfCode),
-      getUserAdminUserChoices(),
+      getUserApproverChoices(),
       getDriverManagementSiteDrivers(contract.siteCode),
     ]);
     vehicle = vehicleResult;

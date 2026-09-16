@@ -34,6 +34,24 @@ public sealed class TripRepository : ITripRepository
     private const string TripPassengerTableName = "trip_passengers";
     private const string RouteDetailTableName = "route_details";
 
+    private static readonly string[] TripMutationTriggerNames =
+    ["TRG_INS_UPD_RejectIncompleteTrip"];
+
+    private static readonly string[] RouteInsertTriggerNames =
+    [
+        "TRG_INS_RouteJournalDetailRecord",
+        "TRG_INS_UPD_CheckOverLapping_RouteDetailsKilos",
+        "TRG_INS_UPD_RouteDetails_CheckOverLapping_ManualLogsheets",
+    ];
+
+    private static readonly string[] RouteUpdateTriggerNames =
+    [
+        "TRG_INS_RouteJournalDetailRecord",
+        "TRG_UPD_RouteJournalDetailRecord",
+        "TRG_INS_UPD_CheckOverLapping_RouteDetailsKilos",
+        "TRG_INS_UPD_RouteDetails_CheckOverLapping_ManualLogsheets",
+    ];
+
     private static readonly string[] RequiredColumns =
     [
         "trip_authority_code",
@@ -94,19 +112,26 @@ public sealed class TripRepository : ITripRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Trip?> GetByIdAsync(int tripId) =>
+    public async Task<Trip?> GetByIdAsync(
+        int tripId,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    ) =>
         (
             await QueryAsync(
                 "[t].[trip_authority_code] = @tripId",
                 command => AddParameter(command, "@tripId", DbType.Int32, tripId),
                 includeDeleted: false,
+                allowedSiteCodes: allowedSiteCodes,
                 take: 1
             )
         ).SingleOrDefault();
 
-    public async Task<TripAuthorityDetails?> GetDetailsAsync(int tripId)
+    public async Task<TripAuthorityDetails?> GetDetailsAsync(
+        int tripId,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
-        var trip = await GetByIdAsync(tripId);
+        var trip = await GetByIdAsync(tripId, allowedSiteCodes);
         if (trip is null)
         {
             return null;
@@ -118,8 +143,11 @@ public sealed class TripRepository : ITripRepository
         return new TripAuthorityDetails(trip, drivers, passengers, routes);
     }
 
-    public async Task<IEnumerable<Trip>> GetAllAsync() =>
-        await QueryAsync(orderBy: "[t].[issue_date] DESC, [t].[trip_authority_code] DESC");
+    public async Task<IEnumerable<Trip>> GetAllAsync(IReadOnlySet<short>? allowedSiteCodes = null) =>
+        await QueryAsync(
+            orderBy: "[t].[issue_date] DESC, [t].[trip_authority_code] DESC",
+            allowedSiteCodes: allowedSiteCodes
+        );
 
     public async Task<TripSummaryPage> GetTripSummaryPageAsync(TripSummaryPageQuery query)
     {
@@ -317,7 +345,9 @@ public sealed class TripRepository : ITripRepository
         }
     }
 
-    public async Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync()
+    public async Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync(
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
         var contractColumns = await GetTableColumnsAsync(ContractTableName);
         var vehicleColumns = await GetTableColumnsAsync(VehicleTableName);
@@ -403,6 +433,25 @@ public sealed class TripRepository : ITripRepository
             conditions.Add("ISNULL([v].[is_deleted], 0) = 0");
         }
 
+        var siteParameters = new List<(string Name, object? Value)>();
+        if (allowedSiteCodes is not null)
+        {
+            var siteCodes = allowedSiteCodes.Where(code => code > 0).Distinct().ToArray();
+            if (siteCodes.Length == 0)
+            {
+                return [];
+            }
+
+            var placeholders = siteCodes
+                .Select((_, index) => $"@allowedSite{index}")
+                .ToArray();
+            conditions.Add($"[c].[site_code] IN ({string.Join(", ", placeholders)})");
+            for (var index = 0; index < siteCodes.Length; index++)
+            {
+                siteParameters.Add((placeholders[index], siteCodes[index]));
+            }
+        }
+
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)
@@ -422,6 +471,10 @@ public sealed class TripRepository : ITripRepository
                 WHERE {string.Join(" AND ", conditions)}
                 ORDER BY [v].[fleet_number], [c].[contract_code]
                 """;
+            foreach (var parameter in siteParameters)
+            {
+                AddParameter(command, parameter.Name, DbType.Int16, parameter.Value);
+            }
 
             var results = new List<TripAuthorityVehicle>();
             await using var reader = await command.ExecuteReaderAsync();
@@ -479,6 +532,11 @@ public sealed class TripRepository : ITripRepository
                 ? null
                 : query.SearchTerm.Trim(),
         };
+
+        if (normalizedQuery.AllowedSiteCodes is { Count: 0 })
+        {
+            return EmptyTripAuthorityVehiclePage(normalizedQuery);
+        }
 
         // The legacy page only shows OUT rows for an authority-number search.
         // Keep the IN result empty for that filter instead of silently ignoring
@@ -776,6 +834,26 @@ public sealed class TripRepository : ITripRepository
     {
         var filters = new List<string> { "1 = 1" };
 
+        if (query.AllowedSiteCodes is not null)
+        {
+            var siteCodes = query.AllowedSiteCodes.Where(code => code > 0).Distinct().ToArray();
+            if (siteCodes.Length == 0)
+            {
+                filters.Add("1 = 0");
+            }
+            else
+            {
+                var placeholders = siteCodes
+                    .Select((_, index) => $"@allowedSite{index}")
+                    .ToArray();
+                filters.Add($"[r].[site_code] IN ({string.Join(", ", placeholders)})");
+                for (var index = 0; index < siteCodes.Length; index++)
+                {
+                    AddParameter(command, placeholders[index], DbType.Int16, siteCodes[index]);
+                }
+            }
+        }
+
         if (query.SiteCode.HasValue)
         {
             filters.Add("[r].[site_code] = @siteCode");
@@ -822,13 +900,20 @@ public sealed class TripRepository : ITripRepository
             .Replace("_", "\\_", StringComparison.Ordinal)
             .Replace("[", "\\[", StringComparison.Ordinal);
 
-    public async Task<IEnumerable<Trip>> GetTripsByContractAsync(int contractCode) =>
+    public async Task<IEnumerable<Trip>> GetTripsByContractAsync(
+        int contractCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    ) =>
         await QueryAsync(
             "[t].[contract_code] = @contractCode",
-            command => AddParameter(command, "@contractCode", DbType.Int32, contractCode)
+            command => AddParameter(command, "@contractCode", DbType.Int32, contractCode),
+            allowedSiteCodes: allowedSiteCodes
         );
 
-    public async Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode)
+    public async Task<IEnumerable<Trip>> GetTripsByVehicleAsync(
+        int vmfCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
         var contractColumns = await GetTableColumnsAsync(ContractTableName);
         if (!RequiredContractColumns.All(contractColumns.Contains))
@@ -839,11 +924,15 @@ public sealed class TripRepository : ITripRepository
         return await QueryAsync(
             "[c].[vmf_code] = @vmfCode",
             command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode),
+            allowedSiteCodes: allowedSiteCodes,
             contractJoin: true
         );
     }
 
-    public async Task<IEnumerable<Trip>> GetTripsByDriverAsync(string driverId)
+    public async Task<IEnumerable<Trip>> GetTripsByDriverAsync(
+        string driverId,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
         if (string.IsNullOrWhiteSpace(driverId))
         {
@@ -868,13 +957,15 @@ public sealed class TripRepository : ITripRepository
         return await QueryAsync(
             driverColumn,
             command => AddParameter(command, "@driverId", DbType.String, driverId.Trim()),
+            allowedSiteCodes: allowedSiteCodes,
             contractJoin: true
         );
     }
 
     public async Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(
         DateTime startDate,
-        DateTime endDate
+        DateTime endDate,
+        IReadOnlySet<short>? allowedSiteCodes = null
     ) =>
         await QueryAsync(
             "[t].[issue_date] >= @startDate AND [t].[issue_date] <= @endDate",
@@ -882,12 +973,14 @@ public sealed class TripRepository : ITripRepository
             {
                 AddParameter(command, "@startDate", DbType.DateTime, startDate);
                 AddParameter(command, "@endDate", DbType.DateTime, endDate);
-            }
+            },
+            allowedSiteCodes: allowedSiteCodes
         );
 
     public async Task<Trip> CreateAsync(Trip trip, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(trip);
+        await EnsureLegacyTriggersAsync(TableName, TripMutationTriggerNames);
 
         var availableColumns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
@@ -966,6 +1059,8 @@ public sealed class TripRepository : ITripRepository
             );
         }
 
+        await EnsureLegacyTriggersAsync(RouteDetailTableName, RouteInsertTriggerNames);
+
         var existingTransaction = _context.Database.CurrentTransaction;
         var transaction = existingTransaction is null
             ? await _context.Database.BeginTransactionAsync()
@@ -1043,6 +1138,7 @@ public sealed class TripRepository : ITripRepository
     public async Task UpdateAsync(Trip trip, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(trip);
+        await EnsureLegacyTriggersAsync(TableName, TripMutationTriggerNames);
 
         var existing =
             await GetByIdAsync(trip.trip_authority_code)
@@ -1108,6 +1204,7 @@ public sealed class TripRepository : ITripRepository
         int currentUserId
     )
     {
+        await EnsureLegacyTriggersAsync(RouteDetailTableName, RouteUpdateTriggerNames);
         var routeColumns = await GetTableColumnsAsync(RouteDetailTableName);
         if (routes.Count > 0)
         {
@@ -2086,11 +2183,16 @@ public sealed class TripRepository : ITripRepository
         bool includeDeleted = false,
         bool contractJoin = false,
         int? take = null,
-        string orderBy = "[t].[issue_date] DESC, [t].[trip_authority_code] DESC"
+        string orderBy = "[t].[issue_date] DESC, [t].[trip_authority_code] DESC",
+        IReadOnlySet<short>? allowedSiteCodes = null
     )
     {
         var availableColumns = await GetAvailableColumnsAsync();
         var hasContractProjection = contractJoin || await HasContractProjectionAsync();
+        if (allowedSiteCodes is { Count: 0 } || (allowedSiteCodes is not null && !hasContractProjection))
+        {
+            return [];
+        }
         var projection = RequiredColumns
             .Concat(OptionalColumns)
             .Select(column => GetColumnProjection("t", column, availableColumns))
@@ -2118,6 +2220,26 @@ public sealed class TripRepository : ITripRepository
             conditions.Add("([t].[is_deleted] = 0 OR [t].[is_deleted] IS NULL)");
         }
 
+        var allowedSiteParameters = new List<(string Name, short Value)>();
+        if (allowedSiteCodes is not null)
+        {
+            var placeholders = allowedSiteCodes
+                .Where(code => code > 0)
+                .Distinct()
+                .Select((code, index) =>
+                {
+                    var name = $"@allowedSite{index}";
+                    allowedSiteParameters.Add((name, code));
+                    return name;
+                })
+                .ToArray();
+            if (placeholders.Length == 0)
+            {
+                return [];
+            }
+            conditions.Add($"[c].[site_code] IN ({string.Join(", ", placeholders)})");
+        }
+
         var whereClause =
             conditions.Count == 0 ? string.Empty : $"WHERE {string.Join(" AND ", conditions)}";
         var contractClause = hasContractProjection
@@ -2143,6 +2265,10 @@ public sealed class TripRepository : ITripRepository
                 {whereClause}
                 ORDER BY {orderBy}
                 """;
+            foreach (var parameter in allowedSiteParameters)
+            {
+                AddParameter(command, parameter.Name, DbType.Int16, parameter.Value);
+            }
             configure?.Invoke(command);
 
             var results = new List<Trip>();
@@ -2452,6 +2578,63 @@ public sealed class TripRepository : ITripRepository
         availableColumns.Contains(column)
             ? $"[{alias}].[{column}] AS [{column}]"
             : $"CAST(NULL AS sql_variant) AS [{column}]";
+
+    private async Task EnsureLegacyTriggersAsync(
+        string tableName,
+        IReadOnlyCollection<string> requiredTriggers
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [tr].[name], [tr].[is_disabled]
+                FROM [sys].[triggers] AS [tr]
+                INNER JOIN [sys].[tables] AS [tb]
+                    ON [tb].[object_id] = [tr].[parent_id]
+                INNER JOIN [sys].[schemas] AS [sc]
+                    ON [sc].[schema_id] = [tb].[schema_id]
+                WHERE [sc].[name] = N'dbo'
+                  AND [tb].[name] = @tableName
+                  AND [tr].[name] IN
+                  (
+                      N'TRG_INS_UPD_RejectIncompleteTrip',
+                      N'TRG_INS_RouteJournalDetailRecord',
+                      N'TRG_UPD_RouteJournalDetailRecord',
+                      N'TRG_INS_UPD_CheckOverLapping_RouteDetailsKilos',
+                      N'TRG_INS_UPD_RouteDetails_CheckOverLapping_ManualLogsheets'
+                  );
+                """;
+            AddParameter(command, "@tableName", DbType.String, tableName);
+
+            var enabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0) && !reader.IsDBNull(1) && !reader.GetBoolean(1))
+                    enabled.Add(reader.GetString(0));
+            }
+
+            var missing = requiredTriggers.Where(trigger => !enabled.Contains(trigger)).ToArray();
+            if (missing.Length > 0)
+            {
+                throw new NotSupportedException(
+                    $"The legacy trip/route trigger workflow is unavailable ({string.Join(", ", missing)}); no direct-DML fallback was run."
+                );
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
 
     private static string GetFirstColumnProjection(
         string alias,

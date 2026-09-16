@@ -104,7 +104,20 @@ ELSE IF EXISTS
       AND (data_type.name <> N'nvarchar' OR column_info.max_length <> 200 OR column_info.is_nullable <> 1)
 )
 BEGIN
-    ;THROW 51004, 'dbo.Call_centre.Incident_type exists with an unexpected shape; manual review is required.', 1;
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.columns column_info
+        JOIN sys.types data_type ON data_type.user_type_id = column_info.user_type_id
+        WHERE column_info.object_id = OBJECT_ID(N'dbo.Call_centre')
+          AND column_info.name = N'Incident_type'
+          AND data_type.name = N'varchar'
+          AND column_info.max_length = 20
+          AND column_info.is_nullable = 1
+    )
+    BEGIN
+        ;THROW 51004, 'dbo.Call_centre.Incident_type exists with an unexpected shape; manual review is required.', 1;
+    END
 END
 
 IF NOT EXISTS
@@ -127,7 +140,20 @@ ELSE IF EXISTS
       AND (data_type.name <> N'nvarchar' OR column_info.max_length <> 1000 OR column_info.is_nullable <> 1)
 )
 BEGIN
-    ;THROW 51005, 'dbo.Call_centre.Incident_Desc exists with an unexpected shape; manual review is required.', 1;
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM sys.columns column_info
+        JOIN sys.types data_type ON data_type.user_type_id = column_info.user_type_id
+        WHERE column_info.object_id = OBJECT_ID(N'dbo.Call_centre')
+          AND column_info.name = N'Incident_Desc'
+          AND data_type.name = N'varchar'
+          AND column_info.max_length = 60
+          AND column_info.is_nullable = 1
+    )
+    BEGIN
+        ;THROW 51005, 'dbo.Call_centre.Incident_Desc exists with an unexpected shape; manual review is required.', 1;
+    END
 END
 
 IF OBJECT_ID(N'dbo.fis_data_fix_audit', N'U') IS NULL

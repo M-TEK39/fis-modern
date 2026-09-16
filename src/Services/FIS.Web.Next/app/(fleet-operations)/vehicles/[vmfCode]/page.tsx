@@ -7,6 +7,7 @@ import { logoutAction } from "@/app/(auth)/actions/auth";
 import RouteLoading from "@/components/app-shell/route-loading";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import VehicleDetailClient from "@/app/(fleet-operations)/vehicles/[vmfCode]/vehicle-detail-client";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import {
   getVehicleDocuments,
   VehicleDocumentApiError,
@@ -15,26 +16,9 @@ import {
 import { getVehicleForEdit, VehicleEditApiError } from "@/lib/api/vehicles/api-vehicle-edit";
 import { getSession } from "@/lib/auth/session";
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
-
 type VehicleDetailPageProps = {
   params: Promise<{ vmfCode: string }>;
 };
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
 
 function AccessRestricted() {
   return (
@@ -98,7 +82,7 @@ async function renderVehicleDetailPageContent({ params }: VehicleDetailPageProps
     return <ApiUnavailable />;
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return <AccessRestricted />;
   }
 

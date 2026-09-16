@@ -5,13 +5,12 @@ import Link from "next/link";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
+import { hasContractAccess } from "@/app/(fleet-operations)/contracts/access";
 
 import { loadReliefVehicleSearchData } from "./_data";
 import { ReliefVehicleSearchView } from "./_view";
 import { ReliefVehicleNotFound } from "./not-found";
 import { ReliefVehicleUnavailable } from "./unavailable";
-
-const CONTRACT_PERMISSION = BigInt(2);
 
 export type ReliefVehicleSearchPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -25,22 +24,6 @@ function getQueryValue(value: string | string[] | undefined) {
 function positiveInt(value: string | undefined) {
   const parsed = Number(value);
   return value && Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function hasContractAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  if (
-    roles.some((role) =>
-      ["contracts", "contract", "admin", "administrator"].includes(role.trim().toLowerCase()),
-    )
-  )
-    return true;
-  try {
-    return accessLevel
-      ? (BigInt(accessLevel) & CONTRACT_PERMISSION) === CONTRACT_PERMISSION
-      : false;
-  } catch {
-    return false;
-  }
 }
 
 function hasLoadAndManageAccess(roles: readonly string[]) {

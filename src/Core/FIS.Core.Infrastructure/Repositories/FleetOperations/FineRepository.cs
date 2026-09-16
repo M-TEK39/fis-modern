@@ -89,6 +89,14 @@ public class FineRepository : IFineRepository
             ? "GG"
             : "GP";
         var searchQuery = query.SearchQuery?.Trim() ?? string.Empty;
+        var allowedSiteCodes = query.AllowedSiteCodes is null
+            ? null
+            : query.AllowedSiteCodes.Where(code => code > 0).Distinct().ToArray();
+        if (allowedSiteCodes is { Length: 0 })
+        {
+            return new FinePage([], 1, pageSize, 0);
+        }
+
         var fineColumns = await GetAvailableColumnsAsync();
         var vehicleColumns =
             searchQuery.Length > 0
@@ -113,6 +121,13 @@ public class FineRepository : IFineRepository
         if (fineColumns.Contains("is_deleted"))
         {
             conditions.Add("ISNULL([f].[is_deleted], 0) = 0");
+        }
+
+        if (allowedSiteCodes is not null && fineColumns.Contains("Site_code"))
+        {
+            conditions.Add(
+                $"[f].[Site_code] IN ({string.Join(", ", allowedSiteCodes.Select((_, index) => $"@allowedSite{index}"))})"
+            );
         }
 
         if (searchQuery.Length > 0)
@@ -163,6 +178,7 @@ public class FineRepository : IFineRepository
                 WHERE {whereClause}
                 """;
             AddSearchParameter(countCommand, searchQuery, searchQuery.Length > 0);
+            AddAllowedSiteParameters(countCommand, allowedSiteCodes);
             var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
             var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
             var page = Math.Min(requestedPage, totalPages);
@@ -179,6 +195,7 @@ public class FineRepository : IFineRepository
                 OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
                 """;
             AddSearchParameter(dataCommand, searchQuery, searchQuery.Length > 0);
+            AddAllowedSiteParameters(dataCommand, allowedSiteCodes);
             AddParameter(dataCommand, "@skip", DbType.Int64, skip);
             AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
 
@@ -267,6 +284,7 @@ public class FineRepository : IFineRepository
     public async Task<Fine> CreateAsync(Fine fine, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(fine);
+        await EnsureLegacyFineTriggersAsync();
 
         var availableColumns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
@@ -357,6 +375,7 @@ public class FineRepository : IFineRepository
     public async Task<Fine> UpdateAsync(Fine fine, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(fine);
+        await EnsureLegacyFineTriggersAsync();
 
         var existing = await GetByIdAsync(fine.Fine_code);
         if (existing == null)
@@ -372,7 +391,7 @@ public class FineRepository : IFineRepository
             "Dept_person_name",
             "@deptPersonName",
             DbType.String,
-            fine.Dept_person_name ?? existing.Dept_person_name
+            fine.Dept_person_name
         );
         AddOptionalValue(
             values,
@@ -380,7 +399,7 @@ public class FineRepository : IFineRepository
             "Dept_person_id",
             "@deptPersonId",
             DbType.String,
-            fine.Dept_person_id ?? existing.Dept_person_id
+            fine.Dept_person_id
         );
         AddOptionalValue(
             values,
@@ -388,7 +407,7 @@ public class FineRepository : IFineRepository
             "Document_type",
             "@documentType",
             DbType.String,
-            fine.Document_type ?? existing.Document_type
+            fine.Document_type
         );
         AddOptionalValue(
             values,
@@ -396,7 +415,7 @@ public class FineRepository : IFineRepository
             "Traffic_dept_code",
             "@trafficDeptCode",
             DbType.Int16,
-            fine.Traffic_dept_code ?? existing.Traffic_dept_code
+            fine.Traffic_dept_code
         );
 
         var now = DateTime.UtcNow;
@@ -438,6 +457,7 @@ public class FineRepository : IFineRepository
     )]
     public async Task DeleteAsync(int fineCode, int currentUserId)
     {
+        await EnsureLegacyFineTriggersAsync();
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)
@@ -572,6 +592,53 @@ public class FineRepository : IFineRepository
         }
     }
 
+    private async Task EnsureLegacyFineTriggersAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT COUNT(1)
+                FROM [sys].[triggers] AS [tr]
+                INNER JOIN [sys].[tables] AS [tb]
+                    ON [tb].[object_id] = [tr].[parent_id]
+                INNER JOIN [sys].[schemas] AS [sc]
+                    ON [sc].[schema_id] = [tb].[schema_id]
+                WHERE [sc].[name] = @schemaName
+                  AND [tb].[name] = @tableName
+                  AND [tr].[name] IN (@insertTrigger, @updateTrigger, @deleteTrigger)
+                  AND [tr].[is_disabled] = 0;
+                """;
+            AddParameter(command, "@schemaName", DbType.String, "dbo");
+            AddParameter(command, "@tableName", DbType.String, "Fines");
+            AddParameter(command, "@insertTrigger", DbType.String, "TRG_Audit_Fines_Insert");
+            AddParameter(command, "@updateTrigger", DbType.String, "TRG_Audit_Fines_Update");
+            AddParameter(command, "@deleteTrigger", DbType.String, "TRG_Audit_Fines_Delete");
+
+            if (Convert.ToInt32(await command.ExecuteScalarAsync()) != 3)
+            {
+                throw new LegacyFineWorkflowUnavailableException(
+                    "The legacy Fines audit-trigger chain is unavailable or disabled; the fine mutation was not applied."
+                );
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     private static string BuildPageProjection(IReadOnlySet<string> availableColumns)
     {
         return string.Join(
@@ -587,6 +654,22 @@ public class FineRepository : IFineRepository
         if (include)
         {
             AddParameter(command, "@searchQuery", DbType.String, searchQuery.ToLowerInvariant());
+        }
+    }
+
+    private static void AddAllowedSiteParameters(
+        DbCommand command,
+        IReadOnlyList<short>? allowedSiteCodes
+    )
+    {
+        if (allowedSiteCodes is null)
+        {
+            return;
+        }
+
+        for (var index = 0; index < allowedSiteCodes.Count; index++)
+        {
+            AddParameter(command, $"@allowedSite{index}", DbType.Int16, allowedSiteCodes[index]);
         }
     }
 
@@ -788,4 +871,10 @@ public class FineRepository : IFineRepository
     }
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
+}
+
+public sealed class LegacyFineWorkflowUnavailableException : InvalidOperationException
+{
+    public LegacyFineWorkflowUnavailableException(string message)
+        : base(message) { }
 }

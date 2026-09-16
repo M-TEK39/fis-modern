@@ -29,6 +29,9 @@ public class VehicleSearchCriteriaController : BaseApiController
     [ProducesResponseType(typeof(List<string>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<string>>> Get()
     {
+        if (!User.IsInRole("Vehicle Master"))
+            return Forbid();
+
         try
         {
             var vehicles = await _vehicleRepository.GetActiveVehiclesAsync();

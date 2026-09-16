@@ -59,6 +59,17 @@ export type VehicleCreateReferenceData = {
   maintenanceTypes: VehicleMaintenanceTypeOption[];
 };
 
+/**
+ * The Vehicle Master edit form deliberately has a smaller dependency surface
+ * than the inception-capture form.  In particular, it must not require the
+ * capture-only maintenance selector (or optional extras/source selectors)
+ * merely to load an existing vehicle for editing.
+ */
+export type VehicleEditReferenceData = Pick<
+  VehicleCreateReferenceData,
+  "models" | "locations" | "types"
+>;
+
 export type VehicleSearchResult = {
   vmfCode: number;
   fleetNumber: string | null;
@@ -101,7 +112,11 @@ export type CreateVehicleRequest = {
   maintenance_value: number | null;
 };
 
-export type VehicleCreateApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
+export type VehicleCreateApiErrorReason =
+  | "unauthorized"
+  | "forbidden"
+  | "unavailable"
+  | "invalid-response";
 
 export class VehicleCreateApiError extends Error {
   constructor(
@@ -194,12 +209,34 @@ async function fetchApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new VehicleCreateApiError("unauthorized", "The FIS access cookie was rejected.");
     }
 
+    if (response.status === 403) {
+      throw new VehicleCreateApiError(
+        "forbidden",
+        "Your account is not assigned the required Vehicle Master role.",
+      );
+    }
+
     if (!response.ok) {
-      throw new VehicleCreateApiError("unavailable", `FIS API returned HTTP ${response.status}.`);
+      let message = `FIS API returned HTTP ${response.status}.`;
+      try {
+        const payload = (await response.json()) as unknown;
+        if (isRecord(payload)) {
+          message = asString(getValue(payload, "message", "error")) || message;
+        } else if (typeof payload === "string" && payload.trim()) {
+          message = payload.trim();
+        }
+      } catch {
+        // Keep the status-based message when the API has no readable body.
+      }
+
+      throw new VehicleCreateApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+      );
     }
 
     return response;
@@ -329,6 +366,25 @@ function mapSearchResults(payload: unknown) {
 }
 
 export async function getVehicleCreateReferenceData(): Promise<VehicleCreateReferenceData> {
+  async function optionalLookup<T>(load: () => Promise<T>, fallback: T): Promise<T> {
+    try {
+      return await load();
+    } catch (error) {
+      // A rejected access cookie must still take the user through session
+      // recovery. Extras and maintenance plans themselves are optional legacy
+      // capture sections, however, so a transient failure there must not block
+      // the mandatory vehicle identity and allocation workflow.
+      if (
+        error instanceof VehicleCreateApiError &&
+        (error.reason === "unauthorized" || error.reason === "forbidden")
+      ) {
+        throw error;
+      }
+
+      return fallback;
+    }
+  }
+
   const [makes, models, locations, types, sources, sites, extras, maintenanceTypes] =
     await Promise.all([
       fetchApi("api/make").then(readJson).then(mapMakes),
@@ -337,13 +393,41 @@ export async function getVehicleCreateReferenceData(): Promise<VehicleCreateRefe
       fetchApi("api/Type").then(readJson).then(mapTypes),
       fetchApi("api/vehicle-source").then(readJson).then(mapSources),
       fetchApi("api/Site").then(readJson).then(mapSites),
-      fetchApi("api/ExtraCode").then(readJson).then(mapExtras),
-      fetchApi("api/vehicle/authorization/maintenance-types")
-        .then(readJson)
-        .then(mapMaintenanceTypes),
+      optionalLookup(
+        () => fetchApi("api/ExtraCode").then(readJson).then(mapExtras),
+        [] as VehicleExtraOption[],
+      ),
+      optionalLookup(
+        () =>
+          fetchApi("api/vehicle/authorization/maintenance-types")
+            .then(readJson)
+            .then(mapMaintenanceTypes),
+        [] as VehicleMaintenanceTypeOption[],
+      ),
     ]);
 
   return { makes, models, locations, types, sources, sites, extras, maintenanceTypes };
+}
+
+export async function getVehicleEditReferenceData(): Promise<VehicleEditReferenceData> {
+  const [models, locations] = await Promise.all([
+    fetchApi("api/model").then(readJson).then(mapModels),
+    fetchApi("api/Location").then(readJson).then(mapLocations),
+  ]);
+
+  let types: VehicleTypeOption[] = [];
+  try {
+    types = await fetchApi("api/Type").then(readJson).then(mapTypes);
+  } catch (error) {
+    if (
+      error instanceof VehicleCreateApiError &&
+      (error.reason === "unauthorized" || error.reason === "forbidden")
+    ) {
+      throw error;
+    }
+  }
+
+  return { models, locations, types };
 }
 
 export async function searchVehiclesAgainstApi(searchTerm: string) {
@@ -354,10 +438,48 @@ export async function searchVehiclesAgainstApi(searchTerm: string) {
 }
 
 export async function createVehicleAgainstApi(request: CreateVehicleRequest) {
+  // The inception controller exposes the legacy workflow DTO with normal
+  // ASP.NET property names (FleetNumber, ModelCode, ...).  The adapter's
+  // snake_case shape is intentionally shared with the rest of the vehicle
+  // APIs, so translate it at this boundary instead of relying on an
+  // underscore-insensitive JSON binder.
+  const apiRequest = {
+    fleetNumber: request.fleet_number,
+    registrationNumber: request.registration_number,
+    chassisNumber: request.chassis_number,
+    engineNumber: request.engine_number,
+    modelCode: request.model_code,
+    colour: request.colour,
+    yearManufactured: request.year_manufactured,
+    locationCode: request.location_code,
+    vehicleStatusCode: request.vehicle_status_code,
+    typeCode: request.type_code,
+    vsCode: request.vs_code,
+    takeOnDate: request.take_on_date,
+    takeOnOdo: request.take_on_odo,
+    purchaseDate: request.purchase_date,
+    purchaseAmount: request.purchase_amount,
+    purchaseFrom: request.purchase_from,
+    replacedGGNumber: request.replaced_gg_number,
+    siteCode: request.site_code,
+    invoiceNumber: request.invoice_number,
+    gpNumber: request.gp_number,
+    comment: request.comment,
+    damageStatus: request.damage_status,
+    damagesComment: request.damages_comment,
+    fleetNotes: request.fleet_notes,
+    extraCodes: request.extra_codes,
+    maintenanceTypeCode: request.maintenance_type_code,
+    maintenanceStartDate: request.maintenance_start_date,
+    maintenancePeriodMonths: request.maintenance_period_months,
+    maintenanceKilos: request.maintenance_kilos,
+    maintenanceValue: request.maintenance_value,
+  };
+
   const response = await fetchApi("api/vehicle/authorization", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(request),
+    body: JSON.stringify(apiRequest),
   });
 
   await readJson(response);

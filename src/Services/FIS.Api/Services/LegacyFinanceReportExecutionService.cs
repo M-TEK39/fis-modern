@@ -77,6 +77,8 @@ public sealed class LegacyFinanceReportExecutionService
             ["invoice-fuel"] = "DEV_REP_FuelDetailedInvoicedReport",
             ["invoice-toll-oil"] = "DEV_REP_DetailedInvoicedTollAndOil",
             ["invoice-surcharge"] = "DEV_REP_SurchargeDetailedInvoicedReport",
+            ["pastel-csv"] = "DEV_REP_ExportPastelCSV",
+            ["pastel-csv-customer"] = "DEV_REP_ExportPastelCSVWithClientName",
             ["income-by-department"] = "DEV_REP_InvoicedAmountsPerMonth",
             ["income-by-department-site"] = "DEV_REP_InvoicedAmountsPerMonthPerSite",
             ["income-by-department-site-vehicle"] = "DEV_REP_InvoicedAmountsPerMonthPerSitePerVehicle",
@@ -139,7 +141,15 @@ public sealed class LegacyFinanceReportExecutionService
 
             var providedNames = request.Parameters
                 .Where(parameter => parameter.Value is not null)
-                .Select(parameter => parameter.Key.TrimStart('@'))
+                .Select(parameter =>
+                    ResolveProcedureParameterName(
+                        request.ProcedureKey,
+                        procedureParameters,
+                        parameter.Key
+                    )
+                    ?? parameter.Key
+                )
+                .Select(parameter => parameter.TrimStart('@'))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var missingRequired = procedureParameters
                 .Where(parameter => !parameter.HasDefaultValue)
@@ -169,12 +179,12 @@ public sealed class LegacyFinanceReportExecutionService
                     continue;
                 }
 
-                var normalizedName = parameter.Key.StartsWith('@')
-                    ? parameter.Key
-                    : $"@{parameter.Key}";
-                if (!procedureParameters.Any(item =>
-                        string.Equals(item.Name, normalizedName, StringComparison.OrdinalIgnoreCase)
-                    ))
+                var normalizedName = ResolveProcedureParameterName(
+                    request.ProcedureKey,
+                    procedureParameters,
+                    parameter.Key
+                );
+                if (normalizedName is null)
                 {
                     continue;
                 }
@@ -451,6 +461,44 @@ public sealed class LegacyFinanceReportExecutionService
             : parameters;
     }
 
+    private static string? ResolveProcedureParameterName(
+        string procedureKey,
+        IReadOnlyList<ProcedureParameter> procedureParameters,
+        string requestedName
+    )
+    {
+        var normalizedRequestedName = requestedName.StartsWith('@')
+            ? requestedName
+            : $"@{requestedName}";
+        var exact = procedureParameters.FirstOrDefault(parameter =>
+            string.Equals(parameter.Name, normalizedRequestedName, StringComparison.OrdinalIgnoreCase)
+        );
+        if (exact is not null)
+        {
+            return exact.Name;
+        }
+
+        // The archived cost-type ActiveReport invokes the procedure
+        // positionally as FilterBy, BatchDate, SiteOrDeptCode, while the
+        // database script names the third parameter @id. Named binding lets
+        // the modern API support either deployed contract without guessing a
+        // result shape or calling a different procedure.
+        if (
+            string.Equals(procedureKey, "invoice-by-cost-type", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(normalizedRequestedName, "@ID", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return procedureParameters
+                .Select(parameter => parameter.Name)
+                .FirstOrDefault(name =>
+                    string.Equals(name, "@SiteOrDeptCode", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(name, "@SiteOrDepartmentCode", StringComparison.OrdinalIgnoreCase)
+                );
+        }
+
+        return null;
+    }
+
     private static async Task<bool> ProcedureExistsAsync(
         DbConnection connection,
         string procedureName,
@@ -655,4 +703,19 @@ public sealed class LegacyFinanceProcedureContractException : Exception
     public string ProcedureName { get; }
 
     public IReadOnlyCollection<string> MissingRequiredParameters { get; }
+}
+
+public sealed class LegacyFinanceProcedureUnavailableException : InvalidOperationException
+{
+    public LegacyFinanceProcedureUnavailableException(string procedureName, string? reportTitle = null)
+        : base(
+            string.IsNullOrWhiteSpace(reportTitle)
+                ? $"Legacy Finance procedure {procedureName} is unavailable on this database."
+                : $"Legacy Finance procedure {procedureName} for {reportTitle} is unavailable on this database."
+        )
+    {
+        ProcedureName = procedureName;
+    }
+
+    public string ProcedureName { get; }
 }

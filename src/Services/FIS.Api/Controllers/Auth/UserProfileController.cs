@@ -6,6 +6,8 @@ using System.Text;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Auth;
+using FIS.Api.Services;
+using FIS.Api.Services.SessionManagement;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -29,22 +31,29 @@ public class UserProfileController : BaseApiController
     private readonly IUserProfileRepository _repository;
     private readonly FisDbContext _context;
     private readonly ILogger<UserProfileController> _logger;
+    private readonly ISessionManagementService _sessionManagementService;
+    private readonly ISessionTokenStore _sessionTokenStore;
 
     public UserProfileController(
         IUserProfileRepository repository,
         FisDbContext context,
-        ILogger<UserProfileController> logger
+        ILogger<UserProfileController> logger,
+        ISessionManagementService sessionManagementService,
+        ISessionTokenStore sessionTokenStore
     )
     {
         _repository = repository;
         _context = context;
         _logger = logger;
+        _sessionManagementService = sessionManagementService;
+        _sessionTokenStore = sessionTokenStore;
     }
 
     /// <summary>
     /// Get user profile by user access code
     /// </summary>
     [HttpGet("{userAccessCode}")]
+    [Authorize(Roles = "User Administration")]
     public async Task<ActionResult<UserProfileDto>> GetById(short userAccessCode)
     {
         try
@@ -73,7 +82,7 @@ public class UserProfileController : BaseApiController
     /// Get user profile by first name (for login lookup)
     /// </summary>
     [HttpGet("by-name/{firstName}")]
-    [AllowAnonymous] // Allow for login flow
+    [Authorize(Roles = "User Administration")]
     public async Task<ActionResult<UserProfileDto>> GetByFirstName(string firstName)
     {
         try
@@ -103,6 +112,7 @@ public class UserProfileController : BaseApiController
     /// Get all active user profiles
     /// </summary>
     [HttpGet]
+    [Authorize(Roles = "User Administration")]
     public async Task<ActionResult<IEnumerable<UserProfileDto>>> GetAllActive()
     {
         try
@@ -116,6 +126,53 @@ public class UserProfileController : BaseApiController
         {
             _logger.LogError(ex, "Error fetching active user profiles");
             return StatusCode(500, "Error retrieving user profiles");
+        }
+    }
+
+    /// <summary>
+    /// Get the limited active-user fields needed when a workflow selects an
+    /// approver or user reference. This deliberately does not expose access
+    /// levels or the rest of the administration profile to operational users.
+    /// </summary>
+    [HttpGet("approver-choices")]
+    [Authorize(Roles = "User Administration,Call Centre,Trip Authorities,TripAuthorities")]
+    public async Task<ActionResult<IEnumerable<UserApproverChoiceDto>>> GetApproverChoices()
+    {
+        try
+        {
+            var users = await _repository.GetAllActiveAsync();
+            var positionNames = await GetLookupNamesAsync(
+                "Positions",
+                "Position_Code",
+                "Position_Name"
+            );
+
+            return Ok(
+                users
+                    .Where(user => user.user_active)
+                    .Select(user => new UserApproverChoiceDto
+                    {
+                        UserAccessCode = user.user_access_code,
+                        UserName = user.name,
+                        FirstName = user.FirstName,
+                        LastName = user.LastName,
+                        Telephone = user.telephone,
+                        PositionName =
+                            user.Position_Code is byte positionCode
+                            && positionNames.TryGetValue(positionCode, out var positionName)
+                                ? positionName
+                                : null,
+                        SiteCode = user.Site_code,
+                    })
+                    .OrderBy(user => user.UserName)
+                    .ThenBy(user => user.LastName)
+                    .ThenBy(user => user.UserAccessCode)
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving limited approver choices");
+            return StatusCode(500, "Error retrieving approver choices");
         }
     }
 
@@ -220,6 +277,7 @@ public class UserProfileController : BaseApiController
     /// Get user profiles by site
     /// </summary>
     [HttpGet("by-site/{siteCode}")]
+    [Authorize(Roles = "User Administration")]
     public async Task<ActionResult<IEnumerable<UserProfileDto>>> GetBySite(short siteCode)
     {
         try
@@ -242,6 +300,7 @@ public class UserProfileController : BaseApiController
     /// a partial backup, so active profile codes remain a safe fallback.
     /// </summary>
     [HttpGet("positions")]
+    [Authorize(Roles = "User Administration")]
     public async Task<ActionResult<IEnumerable<UserPositionDto>>> GetPositions()
     {
         try
@@ -289,6 +348,7 @@ public class UserProfileController : BaseApiController
     /// Search user profiles
     /// </summary>
     [HttpGet("search")]
+    [Authorize(Roles = "User Administration")]
     public async Task<ActionResult<IEnumerable<UserProfileDto>>> Search([FromQuery] string term)
     {
         try
@@ -309,6 +369,7 @@ public class UserProfileController : BaseApiController
     /// Create new user profile
     /// </summary>
     [HttpPost]
+    [Authorize(Roles = "User Administration")]
     public async Task<ActionResult<UserProfileDto>> CreateUserProfile(
         [FromBody] CreateUserProfileDto dto
     )
@@ -431,6 +492,7 @@ public class UserProfileController : BaseApiController
     /// Update user profile
     /// </summary>
     [HttpPut("{userAccessCode}")]
+    [Authorize(Roles = "User Administration")]
     public async Task<ActionResult> UpdateUserProfile(
         short userAccessCode,
         [FromBody] UpdateUserProfileDto dto
@@ -502,6 +564,7 @@ public class UserProfileController : BaseApiController
                 existing.E_Mail,
                 existing.telephone
             );
+            await RevokeSessionsAfterProfileChangeAsync(existing.user_access_code);
 
             _logger.LogInformation(
                 "User profile {UserAccessCode} updated by user {UserId}",
@@ -530,6 +593,7 @@ public class UserProfileController : BaseApiController
     /// Delete user profile (soft delete)
     /// </summary>
     [HttpDelete("{userAccessCode}")]
+    [Authorize(Roles = "User Administration")]
     public async Task<ActionResult> DeleteUserProfile(short userAccessCode)
     {
         try
@@ -542,6 +606,7 @@ public class UserProfileController : BaseApiController
             );
 
             await _repository.DeleteAsync(userAccessCode, userId);
+            await RevokeSessionsAfterProfileChangeAsync(userAccessCode);
 
             _logger.LogInformation(
                 "User profile {UserAccessCode} deleted by user {UserId}",
@@ -563,6 +628,23 @@ public class UserProfileController : BaseApiController
         {
             _logger.LogError(ex, "Error deleting user profile {UserAccessCode}", userAccessCode);
             return StatusCode(500, "Error deleting user profile");
+        }
+    }
+
+    private async Task RevokeSessionsAfterProfileChangeAsync(int userAccessCode)
+    {
+        _sessionTokenStore.RevokeByUserAccessCode(userAccessCode);
+        var result = await _sessionManagementService.RevokeUserSessionsAsync(
+            userAccessCode,
+            HttpContext.RequestAborted
+        );
+        if (result.Status is SessionManagementStatus.Failed)
+        {
+            _logger.LogWarning(
+                "Could not revoke sessions for user profile {UserAccessCode} after an entitlement change: {Reason}",
+                userAccessCode,
+                result.Description
+            );
         }
     }
 
@@ -809,6 +891,17 @@ public class UserProfileDto
     public long AccessLevel { get; set; }
     public bool UserActive { get; set; }
     public DateTime? LastLogOn { get; set; }
+}
+
+public class UserApproverChoiceDto
+{
+    public short UserAccessCode { get; set; }
+    public string? UserName { get; set; }
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? Telephone { get; set; }
+    public string? PositionName { get; set; }
+    public short? SiteCode { get; set; }
 }
 
 public class CreateUserProfileDto

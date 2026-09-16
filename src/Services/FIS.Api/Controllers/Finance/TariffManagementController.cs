@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Core.Infrastructure.Repositories;
@@ -28,6 +29,9 @@ public class TariffManagementController : BaseApiController
 {
     private readonly ITariffManagementRepository _repository;
     private readonly ILogger<TariffManagementController> _logger;
+
+    private const string TariffParametersRole = "Financial Tariff Parameters";
+    private const string TariffApproverRole = "Financial Tariff Parameters (Approver)";
 
     public TariffManagementController(
         ITariffManagementRepository repository,
@@ -106,6 +110,36 @@ public class TariffManagementController : BaseApiController
             approval_threshold = TariffManagementRepository.ApprovalThreshold,
         };
 
+    private bool HasTariffParametersAccess() =>
+        HasAnyRole(TariffParametersRole, TariffApproverRole);
+
+    private bool HasTariffApproverAccess() => HasAnyRole(TariffApproverRole);
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Any(User.IsInRole))
+            return true;
+
+        var roleClaims = User
+            .Claims.Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            );
+
+        return roleClaims.Any(role =>
+            expectedRoles.Any(expected =>
+                string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+            )
+        );
+    }
+
     /// <summary>
     /// Get all tariffs with optional filters.
     /// </summary>
@@ -121,6 +155,9 @@ public class TariffManagementController : BaseApiController
         [FromQuery] DateTime? effective_on = null
     )
     {
+        if (!HasTariffParametersAccess())
+            return Forbid();
+
         try
         {
             var tariffs = await _repository.GetAllAsync();
@@ -177,6 +214,9 @@ public class TariffManagementController : BaseApiController
     [HttpGet("approved")]
     public async Task<ActionResult> GetApproved()
     {
+        if (!HasTariffParametersAccess())
+            return Forbid();
+
         try
         {
             var tariffs = await _repository.GetApprovedAsync();
@@ -195,6 +235,9 @@ public class TariffManagementController : BaseApiController
     [HttpGet("pending")]
     public async Task<ActionResult> GetPendingApproval()
     {
+        if (!HasTariffApproverAccess())
+            return Forbid();
+
         try
         {
             var tariffs = await _repository.GetPendingApprovalAsync();
@@ -213,6 +256,9 @@ public class TariffManagementController : BaseApiController
     [HttpGet("{tariffCode}")]
     public async Task<ActionResult> GetById(int tariffCode)
     {
+        if (!HasTariffParametersAccess())
+            return Forbid();
+
         try
         {
             var tariff = await _repository.GetByIdAsync(tariffCode);
@@ -235,6 +281,9 @@ public class TariffManagementController : BaseApiController
     [HttpPost]
     public async Task<ActionResult> Create([FromBody] CreateTariffDto request)
     {
+        if (!HasTariffParametersAccess())
+            return Forbid();
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -295,6 +344,9 @@ public class TariffManagementController : BaseApiController
     [HttpPut("{tariffCode}")]
     public async Task<ActionResult> Update(int tariffCode, [FromBody] UpdateTariffDto request)
     {
+        if (!HasTariffParametersAccess())
+            return Forbid();
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -351,6 +403,9 @@ public class TariffManagementController : BaseApiController
     [HttpPost("{tariffCode}/submit")]
     public async Task<ActionResult> Submit(int tariffCode)
     {
+        if (!HasTariffParametersAccess())
+            return Forbid();
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -397,6 +452,9 @@ public class TariffManagementController : BaseApiController
         [FromBody] TariffApprovalDto? request = null
     )
     {
+        if (!HasTariffApproverAccess())
+            return Forbid();
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -449,6 +507,9 @@ public class TariffManagementController : BaseApiController
     [HttpPost("{tariffCode}/reject")]
     public async Task<ActionResult> Reject(int tariffCode, [FromBody] TariffRejectionDto request)
     {
+        if (!HasTariffApproverAccess())
+            return Forbid();
+
         try
         {
             int currentUserId = GetCurrentUserId();

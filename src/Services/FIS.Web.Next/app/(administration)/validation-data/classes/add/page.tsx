@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { createClassAction } from "@/app/(administration)/validation-data/classes/actions";
 import ClassForm from "@/app/(administration)/validation-data/classes/class-form";
@@ -56,7 +56,7 @@ async function ClassAddPageContent() {
         <ErrorCard message="Class maintenance is temporarily unavailable." />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <ErrorCard message="You do not have permission to add vehicle classes." />

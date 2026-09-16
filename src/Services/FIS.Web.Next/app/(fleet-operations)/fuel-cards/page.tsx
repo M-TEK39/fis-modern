@@ -15,10 +15,11 @@ import { getFuelCardAllocation, FuelCardApiError } from "@/lib/api/fleet-operati
 import { getSession } from "@/lib/auth/session";
 
 const FUEL_CARDS_ROLE = "Fuelcards";
+const REPORTS_ROLE = "Reports";
 
-function hasRole(roles: readonly string[]) {
+function hasRole(roles: readonly string[], expectedRole: string) {
   return roles.some(
-    (role) => role.localeCompare(FUEL_CARDS_ROLE, undefined, { sensitivity: "accent" }) === 0,
+    (role) => role.localeCompare(expectedRole, undefined, { sensitivity: "accent" }) === 0,
   );
 }
 
@@ -40,7 +41,7 @@ async function FuelCardsPageContent({
         <SessionRecovery returnPath="/fuel-cards" />
       </main>
     );
-  if (!hasRole(session.roles))
+  if (!hasRole(session.roles, FUEL_CARDS_ROLE))
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-status-card" role="alert">
@@ -54,10 +55,12 @@ async function FuelCardsPageContent({
   const query = await searchParams;
   let preview: Awaited<ReturnType<typeof getFuelCardAllocation>> | null = null;
   let previewUnavailable = false;
-  try {
-    preview = await getFuelCardAllocation();
-  } catch (error) {
-    previewUnavailable = error instanceof FuelCardApiError && error.reason === "unavailable";
+  if (hasRole(session.roles, REPORTS_ROLE)) {
+    try {
+      preview = await getFuelCardAllocation();
+    } catch (error) {
+      previewUnavailable = error instanceof FuelCardApiError && error.reason === "unavailable";
+    }
   }
 
   return (
@@ -95,9 +98,11 @@ async function FuelCardsPageContent({
             <Link className="vehicle-menu-link" href="/fuel-cards/report/latest">
               1) Latest Fuelcard Report for a GG Vehicle
             </Link>
-            <Link className="vehicle-menu-link" href="/reports/fuel-cards">
-              Open Fuelcard Reports Menu
-            </Link>
+            {hasRole(session.roles, REPORTS_ROLE) ? (
+              <Link className="vehicle-menu-link" href="/reports/fuel-cards">
+                Open Fuelcard Reports Menu
+              </Link>
+            ) : null}
           </MenuSection>
           <MenuSection title="Private Hire Vehicle Fuelcards - Maintenance">
             <Link className="vehicle-menu-link" href="/fuel-cards/private-hire/vehicle">

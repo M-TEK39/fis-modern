@@ -4,30 +4,13 @@ import { connection } from "next/server";
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
+import { hasContractAccess } from "@/app/(fleet-operations)/contracts/access";
 
 import { loadContractPrintMenuData } from "./_data";
 import { ContractPrintMenuView } from "./_view";
 
-const CONTRACT_PERMISSION = BigInt(2);
-
 function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function hasContractAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  if (
-    roles.some((role) =>
-      ["contracts", "contract", "admin", "administrator"].includes(role.trim().toLowerCase()),
-    )
-  )
-    return true;
-  try {
-    return accessLevel
-      ? (BigInt(accessLevel) & CONTRACT_PERMISSION) === CONTRACT_PERMISSION
-      : false;
-  } catch {
-    return false;
-  }
 }
 
 async function ContractPrintMenuPageContent({

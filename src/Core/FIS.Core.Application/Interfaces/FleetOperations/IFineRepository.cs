@@ -23,7 +23,8 @@ namespace FIS.Core.Application.Interfaces
         int Page = 1,
         int PageSize = 24,
         string SearchType = "GP",
-        string? SearchQuery = null
+        string? SearchQuery = null,
+        IReadOnlySet<short>? AllowedSiteCodes = null
     );
 
     public sealed record FinePage(IReadOnlyList<Fine> Items, int Page, int PageSize, int Total)

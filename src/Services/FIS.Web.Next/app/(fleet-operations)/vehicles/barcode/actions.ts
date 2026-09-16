@@ -6,9 +6,8 @@ import {
   VehicleBarcodeApiError,
   type VehicleBarcodeVehicle,
 } from "@/lib/api/vehicles/api-vehicle-barcode";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import { getSession } from "@/lib/auth/session";
-
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 
 export type VehicleBarcodeSearchActionState = {
   status: "idle" | "success" | "error";
@@ -28,21 +27,6 @@ function getText(formData: FormData, key: string) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
-
 async function authorizeBarcodeMaintenance() {
   const session = await getSession();
 
@@ -60,7 +44,7 @@ async function authorizeBarcodeMaintenance() {
     };
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return {
       ok: false as const,
       message: "You do not have permission to maintain vehicle barcodes.",

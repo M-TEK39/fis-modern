@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   DEFAULT_LICENSE_FEE_PAGE_SIZE,
@@ -301,7 +301,7 @@ async function renderLicenseFeeListPageContent({
         <ErrorCard message="Licence fee maintenance is temporarily unavailable." />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <ErrorCard message="You do not have permission to maintain licence fees." />

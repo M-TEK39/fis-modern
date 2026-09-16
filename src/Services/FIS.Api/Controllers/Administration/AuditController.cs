@@ -11,7 +11,7 @@ namespace FIS.Api.Controllers;
 /// All endpoints require authentication.
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(Roles = "User Administration")]
 [Route("api/[controller]")]
 public class AuditController : BaseApiController
 {

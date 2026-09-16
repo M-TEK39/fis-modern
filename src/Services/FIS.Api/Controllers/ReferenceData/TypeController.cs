@@ -166,6 +166,7 @@ public class TypeController : BaseApiController
     /// <param name="createTypeDto">The type data to create</param>
     /// <returns>Created type with assigned code</returns>
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<TypeEntity>> CreateType(CreateTypeDto createTypeDto)
     {
         try
@@ -205,6 +206,7 @@ public class TypeController : BaseApiController
     /// <param name="type">The updated type data</param>
     /// <returns>Updated type data</returns>
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<TypeEntity>> UpdateType(short id, TypeEntity type)
     {
         try
@@ -243,6 +245,7 @@ public class TypeController : BaseApiController
     /// <param name="id">The type code to delete</param>
     /// <returns>No content if successful</returns>
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> DeleteType(short id)
     {
         try

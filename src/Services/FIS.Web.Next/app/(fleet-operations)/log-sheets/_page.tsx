@@ -38,7 +38,10 @@ function normalizedRole(role: string) {
 }
 
 export function hasLogsheetAccess(session: Extract<SessionState, { status: "authenticated" }>) {
-  return session.roles.some((role) => normalizedRole(role) === "reports");
+  return session.roles.some((role) => {
+    const normalized = normalizedRole(role);
+    return normalized === "logsheets" || normalized === "reports";
+  });
 }
 
 export function hasLogsheetManagerAccess(

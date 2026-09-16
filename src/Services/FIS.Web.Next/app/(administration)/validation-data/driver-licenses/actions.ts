@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import {
   createDriverLicence,
   deleteDriverLicence,
@@ -60,7 +60,7 @@ async function authorizeDriverLicenceMaintenance() {
       message: "Your session has expired. Sign in again before continuing.",
     };
   }
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasLegacyRole(session.roles, "Validation")) {
     return {
       ok: false as const,
       message: "You do not have permission to maintain driver licences.",

@@ -12,6 +12,7 @@ public class TariffCalculationService : ITariffCalculationService
     private readonly ILogger<TariffCalculationService> _logger;
     private readonly FisDbContext _context;
     private readonly IContractRepository _contractRepository;
+    private readonly IVehicleRepository _vehicleRepository;
     private readonly ITariffRepository _tariffRepository;
     private readonly IVehicleTariffRepository _vehicleTariffRepository;
     private readonly ILeaseTariffRepository _leaseTariffRepository;
@@ -21,6 +22,7 @@ public class TariffCalculationService : ITariffCalculationService
         ILogger<TariffCalculationService> logger,
         FisDbContext context,
         IContractRepository contractRepository,
+        IVehicleRepository vehicleRepository,
         ITariffRepository tariffRepository,
         IVehicleTariffRepository vehicleTariffRepository,
         ILeaseTariffRepository leaseTariffRepository,
@@ -30,6 +32,7 @@ public class TariffCalculationService : ITariffCalculationService
         _logger = logger;
         _context = context;
         _contractRepository = contractRepository;
+        _vehicleRepository = vehicleRepository;
         _tariffRepository = tariffRepository;
         _vehicleTariffRepository = vehicleTariffRepository;
         _leaseTariffRepository = leaseTariffRepository;
@@ -78,9 +81,11 @@ public class TariffCalculationService : ITariffCalculationService
         TariffType tariffType
     )
     {
-        var vehicle = await _context
-            .Vehicles.Include(v => v.Model)
-            .FirstOrDefaultAsync(v => v.vmf_code == vmfCode && !v.is_deleted);
+        // The legacy vehicle_master table does not contain the modern audit
+        // columns mapped by EF. Resolve the vehicle through the guarded
+        // compatibility repository so billing works against both schemas and
+        // the model class code needed by legacy tariffs is preserved.
+        var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
 
         if (vehicle is null)
         {
@@ -240,20 +245,22 @@ public class TariffCalculationService : ITariffCalculationService
         DateTime effectiveDate
     )
     {
-        var activeTariff = await _context
-            .VehicleTariffs.Where(t => t.vmf_code == vmfCode && !t.is_deleted)
-            .Where(t => t.parameter_year == parameterYear)
-            .Where(t => t.start_date <= effectiveDate)
-            .Where(t => t.end_date == null || t.end_date >= effectiveDate)
-            .OrderByDescending(t => t.start_date)
-            .FirstOrDefaultAsync();
+        var activeTariff = await _vehicleTariffRepository.GetTariffForVehicleAsync(
+            vmfCode,
+            parameterYear,
+            effectiveDate
+        );
 
-        if (activeTariff is not null)
-        {
-            return activeTariff;
-        }
-
-        return await _vehicleTariffRepository.GetCurrentTariffForVehicleAsync(vmfCode);
+        // A tariff is valid for one capture year. Falling back to whichever
+        // row has no end_date silently reuses stale rates (for example a 2017
+        // tariff for a 2026 contract) and was the source of the reported
+        // revenue leakage. A missing or stale row must remain a visible tariff
+        // error so Finance can capture/release the new year's tariff, even if
+        // the user deliberately recaptures the same amount.
+        return activeTariff is not null
+            && activeTariff.start_date.Date >= effectiveDate.Date.AddYears(-1)
+            ? activeTariff
+            : null;
     }
 
     public decimal GetModernFixedTariff(VehicleTariff vehicleTariff, string contractType)
@@ -521,6 +528,16 @@ public class TariffCalculationService : ITariffCalculationService
         if (!vehicleTariff.maintenance_kilometer_amount.HasValue)
         {
             errors.Add("Missing maintenance_kilometer_amount.");
+        }
+
+        if (!vehicleTariff.vehicle_fixed_tariff.HasValue)
+        {
+            errors.Add("Missing vehicle_fixed_tariff.");
+        }
+
+        if (!vehicleTariff.vehicle_kilometer_tariff.HasValue)
+        {
+            errors.Add("Missing vehicle_kilometer_tariff.");
         }
 
         if (errors.Count > 0)

@@ -109,12 +109,45 @@ public class InMemorySessionTokenStore : ISessionTokenStore
         _refreshSessions.TryRemove(refreshToken, out _);
     }
 
+    public void RevokeByUserAccessCode(int userAccessCode)
+    {
+        if (userAccessCode <= 0)
+        {
+            return;
+        }
+
+        foreach (var pair in _accessSessions)
+        {
+            if (HasUserAccessCode(pair.Value.Claims, userAccessCode))
+            {
+                _accessSessions.TryRemove(pair.Key, out _);
+            }
+        }
+
+        foreach (var pair in _refreshSessions)
+        {
+            if (HasUserAccessCode(pair.Value.Claims, userAccessCode))
+            {
+                _refreshSessions.TryRemove(pair.Key, out _);
+            }
+        }
+    }
+
     private static string GenerateToken()
     {
         Span<byte> bytes = stackalloc byte[32];
         RandomNumberGenerator.Fill(bytes);
         return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
+
+    private static bool HasUserAccessCode(
+        IReadOnlyCollection<Claim> claims,
+        int userAccessCode
+    ) => claims.Any(claim =>
+        string.Equals(claim.Type, "user_access_code", StringComparison.OrdinalIgnoreCase)
+        && int.TryParse(claim.Value, out var value)
+        && value == userAccessCode
+    );
 
     private sealed record SessionRecord(
         IReadOnlyCollection<Claim> Claims,

@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import RouteLoading from "@/components/app-shell/route-loading";
 import { redirect } from "next/navigation";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { deleteModelAction } from "@/app/(administration)/validation-data/models/actions";
 import { getModel, getModelDeleteCheck, ModelApiError } from "@/lib/api/reference-data/api-models";
@@ -51,7 +51,7 @@ async function renderModelDeleteCheckPage({ searchParams }: ModelDeleteCheckPage
         <ErrorCard message="Model deletion is temporarily unavailable." />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <ErrorCard message="You do not have permission to delete vehicle models." />

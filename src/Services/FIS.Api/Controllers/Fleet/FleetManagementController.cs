@@ -41,6 +41,7 @@ public class FleetManagementController : BaseApiController
     /// POST /api/fleetmanagement/fuelcards/issue
     /// </summary>
     [HttpPost("fuelcards/issue")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult<FuelCardIssueResponse>> IssueFuelCard(
         [FromBody] IssueFuelCardRequest request
     )
@@ -108,6 +109,7 @@ public class FleetManagementController : BaseApiController
     /// PUT /api/fleetmanagement/fuelcards/{fuelCardCode}/return
     /// </summary>
     [HttpPut("fuelcards/{fuelCardCode}/return")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult<ApiResponse>> ReturnFuelCard(
         int fuelCardCode,
         [FromBody] ReturnFuelCardRequest request
@@ -166,6 +168,7 @@ public class FleetManagementController : BaseApiController
     /// GET /api/fleetmanagement/reports/fuelcard-allocation
     /// </summary>
     [HttpGet("reports/fuelcard-allocation")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<FuelCardReportResponse>> GetFuelCardReport(
         [FromQuery] int? siteCode = null,
         [FromQuery] int page = 1,

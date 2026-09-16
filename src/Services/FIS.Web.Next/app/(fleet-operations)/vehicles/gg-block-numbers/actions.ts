@@ -4,9 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { createGgBlock, GgBlockApiError } from "@/lib/api/vehicles/api-gg-blocks";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import { getSession } from "@/lib/auth/session";
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 const GgNumberPattern = /^[A-Z]{3}[0-9]{3}G$/;
 const ALLOWED_RETURN_PATHS = [
   "/vehicles/gg-block-numbers",
@@ -30,21 +30,6 @@ function getText(formData: FormData, key: string) {
 function getRawText(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
-}
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
 }
 
 function getReturnPath(value: string) {
@@ -91,7 +76,7 @@ export async function createGgBlockAction(
     );
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return errorState(
       "You do not have permission to maintain GG block numbers.",
       startGgNumber,

@@ -343,43 +343,18 @@ public sealed class FuelCardRepository : IFuelCardRepository
 
     public async Task DeleteAsync(int fuelCardId, int currentUserId)
     {
-        var columns = await GetAvailableColumnsAsync();
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
 
-        if (columns.ContainsKey("is_deleted"))
-        {
-            var assignments = new List<string> { "[is_deleted] = 1" };
-            if (columns.ContainsKey("date_updated"))
-            {
-                assignments.Add("[date_updated] = @dateUpdated");
-                AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-            }
-            if (columns.ContainsKey("modified_by_user_code"))
-            {
-                assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-                AddParameter(
-                    command,
-                    "@modifiedByUserCode",
-                    DbType.Int32,
-                    currentUserId > 0 ? currentUserId : null
-                );
-            }
-            command.CommandText = $"""
-                UPDATE [dbo].[{TableName}]
-                SET {string.Join(", ", assignments)}
-                WHERE [Fuel_card_code] = @fuelCardCode
-                  AND {GetActiveFilter(columns)}
-                """;
-        }
-        else
-        {
-            command.CommandText = $"""
-                DELETE FROM [dbo].[{TableName}]
-                WHERE [Fuel_card_code] = @fuelCardCode
-                """;
-        }
+        // MNT_fdelj_update.aspx physically deletes the Fuel_card row. The
+        // optional modern is_deleted column must not turn this legacy action
+        // into a soft delete; the database's audit/delete triggers are part of
+        // the source-of-truth behavior.
+        command.CommandText = $"""
+            DELETE FROM [dbo].[{TableName}]
+            WHERE [Fuel_card_code] = @fuelCardCode
+            """;
 
         AddParameter(command, "@fuelCardCode", DbType.Int32, fuelCardId);
         await command.ExecuteNonQueryAsync();

@@ -468,9 +468,25 @@ export function FinancialAllocationView({
               <label htmlFor="bas-import-end">End Date</label>
               <input id="bas-import-end" name="endDate" type="date" />
             </div>
+            <div className="field">
+              <label htmlFor="bas-import-confirmation">Legacy confirmation code</label>
+              <input
+                id="bas-import-confirmation"
+                name="confirmationActionCode"
+                inputMode="numeric"
+                pattern="4|5"
+                placeholder="Only after prompted"
+              />
+            </div>
             <div className="field field-group-full">
               <label htmlFor="bas-import-file">Upload File</label>
-              <input id="bas-import-file" name="file" type="file" accept=".csv,text/csv" required />
+              <input
+                id="bas-import-file"
+                name="file"
+                type="file"
+                accept=".csv,.txt,.bas,.zip,text/csv,text/plain,application/zip"
+                required
+              />
             </div>
           </div>
           <div className="button-row">
@@ -516,6 +532,13 @@ export function FinancialAllocationView({
             </div>
           </form>
           <form action={activateBasSegmentsAction} className="vehicle-status-maintenance-panel">
+            {queryValue(query, "departmentCode") ? (
+              <input
+                name="departmentCode"
+                type="hidden"
+                value={queryValue(query, "departmentCode")}
+              />
+            ) : null}
             <SegmentTable segments={segments} action={action} />
             <div className="button-row">
               <button className="button button-primary" type="submit">

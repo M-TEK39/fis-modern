@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Vehicle Master")]
 [Route("api/[controller]")]
 public class VehiclePhotoController : BaseApiController
 {

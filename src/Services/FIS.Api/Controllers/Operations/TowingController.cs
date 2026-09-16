@@ -156,6 +156,7 @@ public class TowingController : BaseApiController
     #region Specialized Operations
 
     [HttpGet("tow-trucks")]
+    [Authorize(Roles = "Towing,Call Centre")]
     public async Task<ActionResult<IEnumerable<TowTruckOption>>> GetTowTrucks()
     {
         try
@@ -356,6 +357,9 @@ public class TowingController : BaseApiController
         [FromBody] TowtruckDataDto request
     )
     {
+        if (!HasTowingRole())
+            return Forbid();
+
         try
         {
             var existing = await _repository.GetByIdAsync(id);

@@ -27,6 +27,7 @@ public class FuelCardController : BaseApiController
     }
 
     [HttpGet]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult<IEnumerable<FuelCard>>> GetAll()
     {
         try
@@ -42,6 +43,7 @@ public class FuelCardController : BaseApiController
     }
 
     [HttpGet("{id}")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult<FuelCard>> GetById(int id)
     {
         try
@@ -57,6 +59,7 @@ public class FuelCardController : BaseApiController
     }
 
     [HttpGet("vehicle/{vmfCode}")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult<IEnumerable<FuelCard>>> GetByVehicle(int vmfCode)
     {
         try
@@ -72,6 +75,7 @@ public class FuelCardController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult<FuelCard>> Create([FromBody] FuelCard item)
     {
         try
@@ -87,6 +91,7 @@ public class FuelCardController : BaseApiController
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult> Update(int id, [FromBody] FuelCard item)
     {
         try
@@ -105,6 +110,7 @@ public class FuelCardController : BaseApiController
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult> Delete(int id)
     {
         try
@@ -125,6 +131,7 @@ public class FuelCardController : BaseApiController
     /// Get fuel card menu options
     /// </summary>
     [HttpGet("menu")]
+    [Authorize(Roles = "Fuelcards")]
     public ActionResult<FuelCardMenuDto> GetMenu()
     {
         var menu = new FuelCardMenuDto
@@ -147,6 +154,7 @@ public class FuelCardController : BaseApiController
     /// Search fuel cards for vehicle maintenance
     /// </summary>
     [HttpPost("maintenance/vehicle/search")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult<FuelCardSearchResultDto>> SearchVehicleForMaintenance(
         [FromBody] FuelCardVehicleSearchDto request
     )
@@ -218,6 +226,7 @@ public class FuelCardController : BaseApiController
     /// Search fuel cards for multiple collection
     /// </summary>
     [HttpPost("collection/multiple/search")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult<FuelCardCollectionResultDto>> SearchCollectionMultiple(
         [FromBody] FuelCardCollectionSearchDto request
     )
@@ -262,6 +271,7 @@ public class FuelCardController : BaseApiController
     /// Search fuel cards for deletion
     /// </summary>
     [HttpPost("delete/search")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult<FuelCardSearchResultDto>> SearchForDelete(
         [FromBody] FuelCardDeleteSearchDto request
     )
@@ -309,6 +319,7 @@ public class FuelCardController : BaseApiController
     /// Search private hire fuel cards for maintenance
     /// </summary>
     [HttpPost("privatehire/maintenance/vehicle/search")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult<FuelCardSearchResultDto>> SearchPrivateHireVehicleForMaintenance(
         [FromBody] FuelCardVehicleSearchDto request
     )
@@ -399,6 +410,7 @@ public class FuelCardController : BaseApiController
     /// Search private hire fuel cards for multiple collection
     /// </summary>
     [HttpPost("privatehire/collection/multiple/search")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<
         ActionResult<FuelCardCollectionResultDto>
     > SearchPrivateHireCollectionMultiple([FromBody] FuelCardCollectionSearchDto request)
@@ -453,6 +465,7 @@ public class FuelCardController : BaseApiController
     /// Search private hire fuel cards for deletion
     /// </summary>
     [HttpPost("privatehire/delete/search")]
+    [Authorize(Roles = "Fuelcards")]
     public async Task<ActionResult<FuelCardSearchResultDto>> SearchPrivateHireForDelete(
         [FromBody] FuelCardDeleteSearchDto request
     )
@@ -506,16 +519,15 @@ public class FuelCardController : BaseApiController
     /// Get fuel card reports menu
     /// </summary>
     [HttpGet("reports/menu")]
+    [Authorize(Roles = "Reports")]
     public ActionResult<FuelCardReportMenuDto> GetReportsMenu()
     {
         var menu = new FuelCardReportMenuDto
         {
             Reports = new List<string>
             {
-                "Latest Report",
                 "One Vehicle",
                 "All Vehicles",
-                "Private Hire - All Vehicles",
             },
         };
         return Ok(menu);
@@ -525,6 +537,7 @@ public class FuelCardController : BaseApiController
     /// Generate latest fuel card report
     /// </summary>
     [HttpPost("reports/latest")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<FuelCardReportDto>> GetReportLatest(
         [FromBody] FuelCardLatestReportRequestDto request
     )
@@ -563,6 +576,7 @@ public class FuelCardController : BaseApiController
     /// Generate fuel card report for one vehicle
     /// </summary>
     [HttpPost("reports/one-vehicle")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<FuelCardReportDto>> GetReportOneVehicle(
         [FromBody] FuelCardOneVehicleReportRequestDto request
     )
@@ -608,6 +622,7 @@ public class FuelCardController : BaseApiController
     /// Generate fuel card report for all vehicles
     /// </summary>
     [HttpPost("reports/all-vehicles")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<FuelCardReportDto>> GetReportAllVehicles(
         [FromBody] FuelCardAllVehiclesReportRequestDto request
     )
@@ -648,6 +663,7 @@ public class FuelCardController : BaseApiController
     /// Generate private hire fuel card report for all vehicles
     /// </summary>
     [HttpPost("privatehire/reports/all")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<FuelCardReportDto>> GetReportPrivateHireAll(
         [FromBody] FuelCardPrivateHireReportRequestDto request
     )

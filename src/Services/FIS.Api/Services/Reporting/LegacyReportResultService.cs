@@ -36,6 +36,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     private const string InternalPageFilter = "__legacyReportPage";
     private const string InternalPageSizeFilter = "__legacyReportPageSize";
     private const string InternalIncludeAllFilter = "__legacyReportIncludeAll";
+    private const string InternalFineSiteScopeFilter = "__fineAllowedSiteCodes";
+    private const string InternalReportSiteScopeFilter = "__reportAllowedSiteCodes";
 
     private readonly FisDbContext _context;
     private readonly IAssetVerificationRepository _assetVerificationRepository;
@@ -130,14 +132,12 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             throw new KeyNotFoundException($"Legacy report key '{reportKey}' is not mapped.");
         }
 
-        // The legacy procedures return a complete reader and do not expose a
-        // compatible count/page contract. A normal table request must therefore
-        // use the guarded table fallback, where the count and page both execute
-        // in SQL. Full exports retain the historical procedure path.
-        if (
-            definition.StoredProcedureItem is not null
-            && (pagination is null || pagination.IncludeAll)
-        )
+        // Legacy procedures return the authoritative rows and do not expose a
+        // compatible count/page contract. Execute the procedure for every
+        // request, then paginate the exact result in memory. Falling back to
+        // a table projection merely because the caller asked for a page can
+        // omit journal/reversal/allocation rows from an operational report.
+        if (definition.StoredProcedureItem is not null || definition.StoredProcedureName is not null)
         {
             try
             {
@@ -154,25 +154,27 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                     storedProcResult.ReportKey = reportKey;
                     return ApplyPagination(storedProcResult, pagination);
                 }
+
+                // A report with a named legacy procedure has an authoritative
+                // database contract. Do not silently replace its journal,
+                // reversal, allocation, or status semantics with a table
+                // approximation merely because that procedure is absent on a
+                // particular database.
+                throw new LegacyReportProcedureUnavailableException(GetStoredProcedureName(definition));
             }
-            catch (SqlException ex) when (ex.Number == 2812)
+            catch (Exception ex)
+                when (ex is LegacyReportProcedureUnavailableException)
             {
-                // The client-era database does not necessarily include the
-                // reporting procedures. A missing optional procedure is the
-                // normal compatibility path, so use the legacy-table fallback
-                // without treating the request as a database failure.
-                _logger.LogInformation(
-                    "Stored procedure for legacy report {ReportKey} is unavailable; using the compatibility query.",
-                    resolvedKey
-                );
+                throw;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(
+                _logger.LogError(
                     ex,
-                    "Stored procedure execution failed for legacy report {ReportKey}. Falling back to approximate query.",
+                    "Stored procedure execution failed for legacy report {ReportKey}; no compatibility fallback will be used.",
                     resolvedKey
                 );
+                throw new LegacyReportProcedureExecutionException(GetStoredProcedureName(definition), ex);
             }
         }
 
@@ -358,8 +360,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "class-code-totals" => "tariffs-class-2007",
             "clearance" => "unallocated-vehicles",
             "fuel-cards" => "wesbank",
-            "logbooks" => "vehicle-logs-report",
-            "logsheets" => "vehicle-logs-report",
             "registration-certificate-one-vehicle" => "registration-certificates",
             "tariffs-class-codes" => "tariffs-class-2007",
             "tariffs-licence-fees" => "tariffs-fin-year",
@@ -483,12 +483,12 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "one-auction-sort-lot" => "auction-one-sort-lot",
 
             // Logbook/logsheet fine-grained variants
-            "logbooks-number" => "logbooks",
-            "logbooks-one-vehicle" => "logbooks",
-            "logsheets-all-outstanding" => "logsheets",
-            "logsheets-one-vehicle" => "logsheets",
-            "logsheets-vehicle-details-per-rek" => "logsheets",
-            "logsheets-vehicle-odo-balance" => "logsheets",
+            "logbooks-number" => "logbooks-number",
+            "logbooks-one-vehicle" => "logbooks-one-vehicle",
+            "logsheets-all-outstanding" => "logsheets-all-outstanding",
+            "logsheets-one-vehicle" => "logsheets-one-vehicle",
+            "logsheets-vehicle-details-per-rek" => "logsheets-vehicle-details-per-rek",
+            "logsheets-vehicle-odo-balance" => "logsheets-vehicle-odo-balance",
             "logbook-number" => "logbooks-number",
             "all-outstanding" => "logsheets-all-outstanding",
             "vehicle-details-per-rek" => "logsheets-vehicle-details-per-rek",
@@ -673,7 +673,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         CancellationToken cancellationToken
     )
     {
-        if (definition.StoredProcedureItem is null)
+        if (definition.StoredProcedureItem is null && definition.StoredProcedureName is null)
         {
             return null;
         }
@@ -688,6 +688,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 && !string.IsNullOrWhiteSpace(kvp.Value)
             )
             && definition.BuildStoredProcedureParameters is null
+            && definition.StoredProcedureName is null
         )
         {
             return null;
@@ -702,9 +703,24 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
         try
         {
+            var procedureName = GetStoredProcedureName(definition);
+            await using (var existsCommand = connection.CreateCommand())
+            {
+                existsCommand.CommandText = "SELECT OBJECT_ID(@procedureName, 'P');";
+                var procedureParameter = existsCommand.CreateParameter();
+                procedureParameter.ParameterName = "@procedureName";
+                procedureParameter.DbType = DbType.String;
+                procedureParameter.Value = procedureName;
+                existsCommand.Parameters.Add(procedureParameter);
+                if (await existsCommand.ExecuteScalarAsync(cancellationToken) is null or DBNull)
+                {
+                    return null;
+                }
+            }
+
             await using var command = connection.CreateCommand();
 #pragma warning disable CA2100
-            command.CommandText = $"DEV_REP_{definition.StoredProcedureItem}";
+            command.CommandText = procedureName;
 #pragma warning restore CA2100
             command.CommandType = CommandType.StoredProcedure;
             command.CommandTimeout = 180;
@@ -729,6 +745,10 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             }
         }
     }
+
+    private static string GetStoredProcedureName(LegacyReportDefinition definition) =>
+        definition.StoredProcedureName
+        ?? $"dbo.DEV_REP_{definition.StoredProcedureItem}";
 
     private static async Task<LegacyReportResultDto> ReadDynamicResultAsync(
         System.Data.Common.DbDataReader reader,
@@ -871,6 +891,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 "/FISReports/Contracts/Contracts.aspx",
                 "VehicleContractsAuditReport",
                 BuildContractsAsync,
+                "The archived legacy source exposes this as a custom OpenReport_2/ActiveReports item but does not provide a matching stored procedure definition. This compatibility result is a labelled table projection and is not the operational invoice/billing report.",
                 BuildStoredProcedureParameters: _ => Array.Empty<LegacyStoredProcedureParameter>()
             ),
 
@@ -947,6 +968,79 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 null,
                 BuildLicencesAsync,
                 "Legacy licence reports include multiple one-vehicle and grouped variants. This approximation consolidates core licence fields with vehicle, model, status, site, and licence-fee data."
+            ),
+
+            ["logbooks"] = new(
+                "logbooks",
+                "Logbook Report for a Department/Site and Period",
+                "Logbook/RPT_dept_period_report_Logbk.aspx",
+                null,
+                BuildLogbookDepartmentPeriodAsync,
+                "Uses the legacy Logbook report joins and filters. The client database remains authoritative for any procedure/view-backed report variant."
+            ),
+
+            ["logbooks-one-vehicle"] = new(
+                "logbooks-one-vehicle",
+                "Logbook Report on One Vehicle",
+                "Logbook/RPT_one_num_report_Logbk.aspx",
+                null,
+                BuildLogbookOneVehicleAsync,
+                "Uses the legacy Logbook report joins and exact GG/GP vehicle filter."
+            ),
+
+            ["logbooks-number"] = new(
+                "logbooks-number",
+                "Logbook Report on a Logbook Number",
+                "Logbook/RPT_one_lbnum_report_Logbk.aspx",
+                null,
+                BuildLogbookNumberAsync,
+                "Uses the legacy Logbook report joins and contains matching on begin_num."
+            ),
+
+            ["logsheets"] = new(
+                "logsheets",
+                "Logsheet Report per Department or Site",
+                "Logs/RPT_Logs_per_Dept_1.aspx",
+                null,
+                BuildLogsheetDepartmentOrSiteAsync,
+                "Uses the legacy active-contract, permanent-vehicle, twelve-month logsheet report path."
+            ),
+
+            ["logsheets-one-vehicle"] = new(
+                "logsheets-one-vehicle",
+                "Log Report on One Vehicle",
+                "Logs/RPT_Logs_per_vehicle.aspx",
+                null,
+                BuildLogsheetOneVehicleAsync,
+                "Uses the legacy latest-logsheet vehicle report projection and odometer-gap calculation."
+            ),
+
+            ["logsheets-vehicle-odo-balance"] = new(
+                "logsheets-vehicle-odo-balance",
+                "Report per Vehicle - Log ODO Balance",
+                "Logs/RPT_logs_per_vehicle_2.aspx",
+                null,
+                BuildLogsheetOdoBalanceAsync,
+                "Uses the legacy vehicle lookup and sequential logsheet odometer balance calculation."
+            ),
+
+            ["logsheets-vehicle-details-per-rek"] = new(
+                "logsheets-vehicle-details-per-rek",
+                "Vehicle Details per Requisition Number",
+                "Logs/RPT_logsheet_per_rek.aspx",
+                null,
+                BuildLogsheetPerRequisitionAsync,
+                "Uses the legacy requisition contains search and vehicle/logsheet projection."
+            ),
+
+            ["logsheets-all-outstanding"] = new(
+                "logsheets-all-outstanding",
+                "All Outstanding Logsheets",
+                "Logs/RPT_uits_els_en_logs_geld_main.aspx",
+                null,
+                BuildLogsheetsAllOutstandingAsync,
+                "The legacy report is owned by DEV_SEL_All_Logs; no direct-DML or table approximation is used when that procedure is unavailable.",
+                StoredProcedureName: "dbo.DEV_SEL_All_Logs"
             ),
 
             ["management"] = new(
@@ -2932,6 +3026,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         );
         var predicates = BuildFineLivePredicates(fineColumns);
         var parameters = new List<ReportParameter>();
+        ApplyFineSiteScope(predicates, parameters, filters);
         var mode = GetString(filters, "mode")?.Trim().ToLowerInvariant();
 
         if (mode == "fine-detail")
@@ -2985,6 +3080,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var fineColumns = await GetReportTableColumnsAsync("Fines", cancellationToken);
         var predicates = BuildFineLivePredicates(fineColumns);
         var parameters = new List<ReportParameter>();
+        ApplyFineSiteScope(predicates, parameters, filters);
         var vmfCode = GetInt(filters, "vmf") ?? GetInt(filters, "vmfCode");
         if (vmfCode.HasValue)
         {
@@ -3038,6 +3134,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var fineColumns = await GetReportTableColumnsAsync("Fines", cancellationToken);
         var predicates = BuildFineLivePredicates(fineColumns);
         var parameters = new List<ReportParameter>();
+        ApplyFineSiteScope(predicates, parameters, filters);
         var mode = GetString(filters, "mode")?.Trim().ToLowerInvariant();
 
         var startDate =
@@ -3233,6 +3330,91 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
     private static List<string> BuildFineLivePredicates(IReadOnlySet<string> fineColumns) =>
         new List<string> { fineColumns.Contains("is_deleted") ? "f.[is_deleted] = 0" : "1 = 1" };
+
+    private static void ApplyFineSiteScope(
+        ICollection<string> predicates,
+        ICollection<ReportParameter> parameters,
+        IDictionary<string, string?> filters
+    )
+    {
+        if (!filters.TryGetValue(InternalFineSiteScopeFilter, out var rawScope))
+        {
+            return;
+        }
+
+        var siteCodes = (rawScope ?? string.Empty)
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(value => short.TryParse(value, out var code) ? (short?)code : null)
+            .Where(code => code is > 0)
+            .Select(code => code!.Value)
+            .Distinct()
+            .ToArray();
+        if (siteCodes.Length == 0)
+        {
+            predicates.Add("1 = 0");
+            return;
+        }
+
+        var placeholders = siteCodes
+            .Select((_, index) => $"@fineScopeSite{index}")
+            .ToArray();
+        predicates.Add($"f.[Site_code] IN ({string.Join(", ", placeholders)})");
+        for (var index = 0; index < siteCodes.Length; index++)
+        {
+            parameters.Add(new ReportParameter(placeholders[index], DbType.Int16, siteCodes[index]));
+        }
+    }
+
+    private static string BuildReportSiteScope(
+        ICollection<ReportParameter> parameters,
+        IDictionary<string, string?> filters,
+        string siteExpression
+    )
+    {
+        if (!filters.TryGetValue(InternalReportSiteScopeFilter, out var rawScope))
+        {
+            return "1 = 1";
+        }
+
+        var siteCodes = (rawScope ?? string.Empty)
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(value => short.TryParse(value, out var code) ? (short?)code : null)
+            .Where(code => code is > 0)
+            .Select(code => code!.Value)
+            .Distinct()
+            .ToArray();
+        if (siteCodes.Length == 0)
+        {
+            return "1 = 0";
+        }
+
+        var placeholders = siteCodes
+            .Select((_, index) => $"@reportScopeSite{index}")
+            .ToArray();
+        for (var index = 0; index < siteCodes.Length; index++)
+        {
+            parameters.Add(
+                new ReportParameter(placeholders[index], DbType.Int16, siteCodes[index])
+            );
+        }
+
+        return $"{siteExpression} IN ({string.Join(", ", placeholders)})";
+    }
+
+    private static IReadOnlySet<short>? GetReportSiteScope(
+        IDictionary<string, string?> filters
+    )
+    {
+        if (!filters.TryGetValue(InternalReportSiteScopeFilter, out var rawScope))
+            return null;
+
+        return (rawScope ?? string.Empty)
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(value => short.TryParse(value, out var code) ? (short?)code : null)
+            .Where(code => code is > 0)
+            .Select(code => code!.Value)
+            .ToHashSet();
+    }
 
     [SuppressMessage(
         "Security",
@@ -3445,6 +3627,61 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             }
 
             return columns;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<string> ResolveReportRelationAsync(
+        string preferredObject,
+        string fallbackTable,
+        CancellationToken cancellationToken
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT COALESCE(OBJECT_ID(@preferredObject), OBJECT_ID(@fallbackTable));
+                """;
+            AddReportParameter(command, "@preferredObject", DbType.String, $"dbo.{preferredObject}");
+            AddReportParameter(command, "@fallbackTable", DbType.String, $"dbo.{fallbackTable}");
+            var objectId = await command.ExecuteScalarAsync(cancellationToken);
+            if (objectId is null or DBNull)
+            {
+                throw new LegacyReportRelationUnavailableException(preferredObject, fallbackTable);
+            }
+
+            await using var typeCommand = connection.CreateCommand();
+            typeCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            typeCommand.CommandText = """
+                SELECT [type]
+                FROM [sys].[objects]
+                WHERE [object_id] = COALESCE(OBJECT_ID(@preferredObject), OBJECT_ID(@fallbackTable));
+                """;
+            AddReportParameter(typeCommand, "@preferredObject", DbType.String, $"dbo.{preferredObject}");
+            AddReportParameter(typeCommand, "@fallbackTable", DbType.String, $"dbo.{fallbackTable}");
+            var objectType = Convert.ToString(
+                await typeCommand.ExecuteScalarAsync(cancellationToken),
+                CultureInfo.InvariantCulture
+            );
+            var relation = string.Equals(objectType, "V", StringComparison.OrdinalIgnoreCase)
+                ? preferredObject
+                : fallbackTable;
+            return $"[dbo].[{relation}]";
         }
         finally
         {
@@ -4611,7 +4848,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 new TaxiReportPageQuery(
                     TaxiReportKind.PreviousFinYearVipTaxi,
                     pagination.Page,
-                    pagination.PageSize
+                    pagination.PageSize,
+                    AllowedSiteCodes: GetReportSiteScope(filters)
                 )
             );
             var pagedRows = page.Items.Select(taxi => new
@@ -4656,7 +4894,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
         var currentFinancialYear = GetFinancialYearKey(DateTime.Today);
 
-        var taxis = await _taxiRepository.GetAllAsync();
+        var taxis = await _taxiRepository.GetAllAsync(GetReportSiteScope(filters));
         cancellationToken.ThrowIfCancellationRequested();
         var rows = taxis
             .Select(taxi => new
@@ -5047,7 +5285,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                     TaxiReportKind.ListPerDepartment,
                     pagination.Page,
                     pagination.PageSize,
-                    search
+                    search,
+                    AllowedSiteCodes: GetReportSiteScope(filters)
                 )
             );
             var pagedRows = page.Items.Select(
@@ -5079,7 +5318,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             );
         }
 
-        var taxis = await _taxiRepository.GetAllAsync();
+        var taxis = await _taxiRepository.GetAllAsync(GetReportSiteScope(filters));
         cancellationToken.ThrowIfCancellationRequested();
         var query = taxis.Select(taxi => new
         {
@@ -5168,7 +5407,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                     TaxiReportKind.ListInServicePerDepartment,
                     pagination.Page,
                     pagination.PageSize,
-                    search
+                    search,
+                    AllowedSiteCodes: GetReportSiteScope(filters)
                 )
             );
             var pagedRows = page.Items.Select(
@@ -5200,7 +5440,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             );
         }
 
-        var taxis = await _taxiRepository.GetAllAsync();
+        var taxis = await _taxiRepository.GetAllAsync(GetReportSiteScope(filters));
         var vehicles = await _vehicleRepository.GetAllAsync();
         cancellationToken.ThrowIfCancellationRequested();
         var inServiceVmfCodes = vehicles
@@ -5290,7 +5530,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                     TaxiReportKind.Financial,
                     pagination.Page,
                     pagination.PageSize,
-                    search
+                    search,
+                    AllowedSiteCodes: GetReportSiteScope(filters)
                 )
             );
             var pagedRows = page.Items.Select(taxi => new
@@ -5333,7 +5574,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             );
         }
 
-        var taxis = await _taxiRepository.GetAllAsync();
+        var taxis = await _taxiRepository.GetAllAsync(GetReportSiteScope(filters));
         cancellationToken.ThrowIfCancellationRequested();
         var query = taxis.Select(taxi => new
         {
@@ -6373,6 +6614,596 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Target", row => row.Target)
         );
     }
+
+    private async Task<LegacyReportResultDto> BuildLogbookOneVehicleAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    )
+    {
+        var search = GetString(filters, "search")
+            ?? GetString(filters, "vehicleNumber")
+            ?? GetString(filters, "xnumber");
+        var mode = (GetString(filters, "mode") ?? GetString(filters, "Radio1") ?? "GG")
+            .Trim()
+            .ToUpperInvariant();
+
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            return CreateDynamicResult(
+                "Logbook Report on One Vehicle",
+                "Logbook/RPT_one_num_report_Logbk.aspx",
+                false,
+                null,
+                new[]
+                {
+                    new
+                    {
+                        Message = "Enter a GG or GP number to run the legacy one-vehicle Logbook report.",
+                    },
+                },
+                Column("Message", row => row.Message)
+            );
+        }
+
+        // The legacy page exposes exactly two branches: Radiogg (fleet/GG)
+        // and the registration-number branch. Do not silently reinterpret a
+        // third selector as a different identifier.
+        var identifierColumn = mode switch
+        {
+            "GG" or "RADIOGG" => "v.[fleet_number]",
+            "GP" or "RADIOGP" or "REG" or "REGISTRATION" => "v.[registration_number]",
+            _ => null,
+        };
+        if (identifierColumn is null)
+        {
+            return CreateDynamicResult(
+                "Logbook Report on One Vehicle",
+                "Logbook/RPT_one_num_report_Logbk.aspx",
+                false,
+                null,
+                new[]
+                {
+                    new
+                    {
+                        Message = "The legacy report accepts only GG or GP number searches.",
+                    },
+                },
+                Column("Message", row => row.Message)
+            );
+        }
+
+        var parameters = new List<ReportParameter>
+        {
+            new("@vehicleNumber", DbType.String, search.Trim()),
+        };
+        var siteScope = BuildReportSiteScope(parameters, filters, "l.[site_code]");
+
+        var sql = $"""
+            SELECT
+                v.[registration_number] AS [Prov Reg Number],
+                v.[fleet_number] AS [GG Number],
+                loc.[description] AS [Garage],
+                typ.[type_description] AS [Hire Type],
+                s.[description] AS [Site],
+                s.[Department_number] AS [Site Code],
+                s.[res_person] AS [Site Person],
+                s.[telephone] AS [Site Tel],
+                s.[fax] AS [Site Fax],
+                l.[logbookcode] AS [Logbook Code],
+                l.[handout_date] AS [Handout Date],
+                l.[begin_num] AS [Logbook Begin Number],
+                l.[end_num] AS [Logbook End Number],
+                l.[lb_receiver_name] AS [Receiver Name],
+                l.[lb_tel_num] AS [Receiver Tel],
+                l.[lb_comment] AS [Comment]
+            FROM [dbo].[logbook] AS l
+            INNER JOIN [dbo].[vehicle_master] AS v ON l.[vmf_code] = v.[vmf_code]
+            INNER JOIN [dbo].[site] AS s ON l.[site_code] = s.[Site_code]
+            INNER JOIN [dbo].[location] AS loc ON v.[location_code] = loc.[location_code]
+            INNER JOIN [dbo].[type] AS typ ON v.[type_code] = typ.[type_code]
+            WHERE {identifierColumn} = @vehicleNumber
+              AND {siteScope}
+            ORDER BY v.[registration_number] DESC, l.[logbookcode] DESC
+            """;
+
+        return await ExecutePagedRawReportQueryAsync(
+            "logbooks-one-vehicle",
+            "Logbook Report on One Vehicle",
+            "Logbook/RPT_one_num_report_Logbk.aspx",
+            sql,
+            parameters,
+            filters,
+            cancellationToken
+        );
+    }
+
+    private async Task<LegacyReportResultDto> BuildLogbookNumberAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    )
+    {
+        var search = GetString(filters, "search")
+            ?? GetString(filters, "logbookNumber")
+            ?? GetString(filters, "xnumber");
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            return CreateDynamicResult(
+                "Logbook Report on a Logbook Number",
+                "Logbook/RPT_one_lbnum_report_Logbk.aspx",
+                false,
+                null,
+                new[]
+                {
+                    new
+                    {
+                        Message = "Enter a Logbook begin number to run the legacy Logbook-number report.",
+                    },
+                },
+                Column("Message", row => row.Message)
+            );
+        }
+
+        var parameters = new List<ReportParameter>();
+        var siteScope = BuildReportSiteScope(parameters, filters, "l.[site_code]");
+        parameters.Add(
+            new ReportParameter(
+                "@logbookNumber",
+                DbType.String,
+                ToSqlContainsPattern(search.Trim())
+            )
+        );
+        var sql = $"""
+            SELECT
+                v.[fleet_number] AS [GG Number],
+                v.[registration_number] AS [Reg Number],
+                l.[begin_num] AS [Logbook Begin Number],
+                l.[end_num] AS [Logbook End Number],
+                l.[handout_date] AS [Handout Date],
+                l.[lb_receiver_name] AS [Received By],
+                s.[Department_number] AS [Dept/Site Code],
+                l.[logbookcode] AS [Logbook Code]
+            FROM [dbo].[logbook] AS l
+            INNER JOIN [dbo].[vehicle_master] AS v ON l.[vmf_code] = v.[vmf_code]
+            INNER JOIN [dbo].[site] AS s ON l.[site_code] = s.[Site_code]
+            INNER JOIN [dbo].[location] AS loc ON v.[location_code] = loc.[location_code]
+            INNER JOIN [dbo].[type] AS typ ON v.[type_code] = typ.[type_code]
+            WHERE l.[begin_num] LIKE @logbookNumber ESCAPE '~'
+              AND {siteScope}
+            ORDER BY l.[begin_num], l.[logbookcode]
+            """;
+
+        return await ExecutePagedRawReportQueryAsync(
+            "logbooks-number",
+            "Logbook Report on a Logbook Number",
+            "Logbook/RPT_one_lbnum_report_Logbk.aspx",
+            sql,
+            parameters,
+            filters,
+            cancellationToken
+        );
+    }
+
+    private async Task<LegacyReportResultDto> BuildLogbookDepartmentPeriodAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    )
+    {
+        var department = GetString(filters, "department")
+            ?? GetString(filters, "dept")
+            ?? GetString(filters, "XDEPT");
+        var fromRaw = GetString(filters, "from") ?? GetString(filters, "BDAT");
+        var toRaw = GetString(filters, "to") ?? GetString(filters, "EDAT");
+        var from = GetDate(filters, "from") ?? GetDate(filters, "BDAT");
+        var to = GetDate(filters, "to") ?? GetDate(filters, "EDAT");
+
+        if (
+            string.IsNullOrWhiteSpace(department)
+            || string.IsNullOrWhiteSpace(fromRaw)
+            || string.IsNullOrWhiteSpace(toRaw)
+            || !from.HasValue
+            || !to.HasValue
+        )
+        {
+            return CreateDynamicResult(
+                "Logbook Report for a Department/Site and Period",
+                "Logbook/RPT_dept_period_report_Logbk.aspx",
+                false,
+                null,
+                new[]
+                {
+                    new
+                    {
+                        Message = "Select a department/site and both dates to run the legacy period report.",
+                    },
+                },
+                Column("Message", row => row.Message)
+            );
+        }
+
+        var parameters = new List<ReportParameter>
+        {
+            new(
+                "@department",
+                DbType.String,
+                ToSqlContainsPattern(department.Trim())
+            ),
+            new("@fromDate", DbType.DateTime, from.Value.Date),
+            new("@toDate", DbType.DateTime, to.Value.Date),
+        };
+        var siteScope = BuildReportSiteScope(parameters, filters, "s.[Site_code]");
+
+        var sql = $"""
+            SELECT
+                v.[registration_number] AS [Prov Reg Number],
+                v.[fleet_number] AS [GG Number],
+                l.[handout_date] AS [Handout Date],
+                l.[begin_num] AS [Begin Number],
+                l.[end_num] AS [End Number],
+                l.[lb_receiver_name] AS [Receiver],
+                l.[lb_tel_num] AS [Receiver Tel],
+                s.[Department_number] AS [Dept/Site],
+                l.[logbookcode] AS [Logbook Code]
+            FROM [dbo].[logbook] AS l
+            INNER JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = l.[vmf_code]
+            INNER JOIN [dbo].[model] AS m ON v.[model_code] = m.[model_code]
+            INNER JOIN [dbo].[site] AS s ON l.[site_code] = s.[Site_code]
+            WHERE s.[Department_number] LIKE @department ESCAPE '~'
+              AND l.[handout_date] >= @fromDate
+              AND l.[handout_date] <= @toDate
+              AND {siteScope}
+            ORDER BY s.[Department_number], v.[fleet_number], l.[handout_date] DESC
+            """;
+
+        return await ExecutePagedRawReportQueryAsync(
+            "logbooks",
+            "Logbook Report for a Department/Site and Period",
+            "Logbook/RPT_dept_period_report_Logbk.aspx",
+            sql,
+            parameters,
+            filters,
+            cancellationToken
+        );
+    }
+
+    private async Task<LegacyReportResultDto> BuildLogsheetOneVehicleAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    )
+    {
+        var search = GetString(filters, "search")
+            ?? GetString(filters, "vehicleNumber")
+            ?? GetString(filters, "GGnum")
+            ?? GetString(filters, "txtGGNum");
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            return CreateDynamicResult(
+                "Log Report on One Vehicle",
+                "Logs/RPT_Logs_per_vehicle.aspx",
+                false,
+                null,
+                new[]
+                {
+                    new
+                    {
+                        Message = "Enter a GG or GP number to run the legacy one-vehicle log report.",
+                    },
+                },
+                Column("Message", row => row.Message)
+            );
+        }
+
+        var mode = (GetString(filters, "mode") ?? "GG").Trim().ToUpperInvariant();
+        var identifierColumn = mode == "GP" ? "v.[registration_number]" : "v.[fleet_number]";
+        var logRelation = await ResolveReportRelationAsync(
+            "LatestLogsheets",
+            "Logsheets",
+            cancellationToken
+        );
+        var parameters = new List<ReportParameter>
+        {
+            new("@vehicleNumber", DbType.String, search.Trim()),
+        };
+        var siteScope = BuildReportSiteScope(parameters, filters, "l.[site_code]");
+        var sql = $"""
+            WITH ordered AS
+            (
+                SELECT
+                    v.[fleet_number] AS [GG Number],
+                    l.[start_odo] AS [Start ODO],
+                    l.[end_odo] AS [End ODO],
+                    l.[rek_num] AS [Requisition],
+                    CONVERT(varchar(20), l.[month], 120) AS [Month],
+                    l.[bund_num] AS [Batch],
+                    l.[trans_date] AS [Captured],
+                    s.[Department_number] AS [Department],
+                    LAG(l.[start_odo]) OVER (ORDER BY l.[start_odo] DESC, l.[end_odo] DESC) AS [Previous Start ODO]
+                FROM {logRelation} AS l
+                INNER JOIN [dbo].[vehicle_master] AS v ON l.[vmf_code] = v.[vmf_code]
+                LEFT JOIN [dbo].[site] AS s ON s.[Site_code] = l.[site_code]
+                WHERE {identifierColumn} = @vehicleNumber
+                  AND {siteScope}
+            )
+            SELECT
+                [GG Number],
+                [Start ODO],
+                [End ODO],
+                [Requisition],
+                [Month],
+                [Batch],
+                [Captured],
+                [Department],
+                CASE
+                    WHEN [Previous Start ODO] IS NULL THEN 0
+                    ELSE [Previous Start ODO] - [End ODO]
+                END AS [Outstanding]
+            FROM ordered
+            ORDER BY [Start ODO] DESC, [End ODO] DESC
+            """;
+
+        return await ExecutePagedRawReportQueryAsync(
+            "logsheets-one-vehicle",
+            "Log Report on One Vehicle",
+            "Logs/RPT_Logs_per_vehicle.aspx",
+            sql,
+            parameters,
+            filters,
+            cancellationToken
+        );
+    }
+
+    private async Task<LegacyReportResultDto> BuildLogsheetOdoBalanceAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    )
+    {
+        var search = GetString(filters, "search")
+            ?? GetString(filters, "vehicleNumber")
+            ?? GetString(filters, "GGnum");
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            return CreateDynamicResult(
+                "Report per Vehicle - Log ODO Balance",
+                "Logs/RPT_logs_per_vehicle_2.aspx",
+                false,
+                null,
+                new[]
+                {
+                    new
+                    {
+                        Message = "Enter a GG or GP number to run the legacy odometer balance report.",
+                    },
+                },
+                Column("Message", row => row.Message)
+            );
+        }
+
+        var mode = (GetString(filters, "mode") ?? "GG").Trim().ToUpperInvariant();
+        var identifierColumn = mode == "GP" ? "v.[registration_number]" : "v.[fleet_number]";
+        var logRelation = await ResolveReportRelationAsync(
+            "LatestLogsheets",
+            "Logsheets",
+            cancellationToken
+        );
+        var fromMonth = GetDate(filters, "from")?.Date ?? new DateTime(2002, 1, 1);
+        var parameters = new List<ReportParameter>
+        {
+            new("@vehicleNumber", DbType.String, search.Trim()),
+            new("@fromMonth", DbType.DateTime, fromMonth),
+        };
+        var siteScope = BuildReportSiteScope(parameters, filters, "l.[site_code]");
+        var sql = $"""
+            WITH ordered AS
+            (
+                SELECT
+                    l.[end_odo] AS [End ODO],
+                    LEAD(l.[start_odo]) OVER (ORDER BY l.[start_odo]) AS [Start ODO],
+                    l.[month] AS [Month],
+                    l.[rek_num] AS [End Requisition],
+                    LEAD(l.[rek_num]) OVER (ORDER BY l.[start_odo]) AS [Start Requisition]
+                FROM {logRelation} AS l
+                INNER JOIN [dbo].[vehicle_master] AS v ON l.[vmf_code] = v.[vmf_code]
+                WHERE {identifierColumn} = @vehicleNumber
+                  AND l.[month] >= @fromMonth
+                  AND {siteScope}
+            )
+            SELECT
+                [End ODO],
+                [Start ODO],
+                [Month],
+                CASE
+                    WHEN [Start ODO] IS NULL OR [Start ODO] = [End ODO] THEN NULL
+                    ELSE [Start ODO] - [End ODO]
+                END AS [Difference],
+                [End Requisition],
+                [Start Requisition]
+            FROM ordered
+            ORDER BY [End ODO], [Start ODO], [Month]
+            """;
+
+        return await ExecutePagedRawReportQueryAsync(
+            "logsheets-vehicle-odo-balance",
+            "Report per Vehicle - Log ODO Balance",
+            "Logs/RPT_logs_per_vehicle_2.aspx",
+            sql,
+            parameters,
+            filters,
+            cancellationToken
+        );
+    }
+
+    private async Task<LegacyReportResultDto> BuildLogsheetPerRequisitionAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    )
+    {
+        var search = GetString(filters, "search")
+            ?? GetString(filters, "requisition")
+            ?? GetString(filters, "txtNum");
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            return CreateDynamicResult(
+                "Vehicle Details per Requisition Number",
+                "Logs/RPT_logsheet_per_rek.aspx",
+                false,
+                null,
+                new[]
+                {
+                    new
+                    {
+                        Message = "Enter a requisition number or part of it to run the legacy report.",
+                    },
+                },
+                Column("Message", row => row.Message)
+            );
+        }
+
+        var parameters = new List<ReportParameter>
+        {
+            new(
+                "@requisition",
+                DbType.String,
+                ToSqlContainsPattern(search.Trim())
+            ),
+        };
+        var siteScope = BuildReportSiteScope(parameters, filters, "l.[site_code]");
+        var sql = $"""
+            SELECT
+                l.[rek_num] AS [Requisition],
+                v.[fleet_number] AS [GG Number],
+                v.[registration_number] AS [GP Number],
+                l.[start_odo] AS [Start ODO],
+                l.[end_odo] AS [End ODO],
+                l.[trans_date] AS [Captured],
+                l.[bund_num] AS [Batch]
+            FROM [dbo].[Logsheets] AS l
+            LEFT JOIN [dbo].[vehicle_master] AS v ON l.[vmf_code] = v.[vmf_code]
+            WHERE l.[rek_num] LIKE @requisition ESCAPE '~'
+              AND {siteScope}
+            ORDER BY l.[rek_num], v.[fleet_number]
+            """;
+
+        return await ExecutePagedRawReportQueryAsync(
+            "logsheets-vehicle-details-per-rek",
+            "Vehicle Details per Requisition Number",
+            "Logs/RPT_logsheet_per_rek.aspx",
+            sql,
+            parameters,
+            filters,
+            cancellationToken
+        );
+    }
+
+    private async Task<LegacyReportResultDto> BuildLogsheetDepartmentOrSiteAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    )
+    {
+        var departmentCode = GetShort(filters, "department") ?? GetShort(filters, "dept");
+        var siteCode = GetShort(filters, "site") ?? GetShort(filters, "site_code");
+        if (!departmentCode.HasValue && !siteCode.HasValue)
+        {
+            return CreateDynamicResult(
+                "Logsheet Report per Department or Site",
+                "Logs/RPT_Logs_per_Dept_1.aspx",
+                false,
+                null,
+                new[]
+                {
+                    new
+                    {
+                        Message = "Select a department or site to run the legacy logsheet report.",
+                    },
+                },
+                Column("Message", row => row.Message)
+            );
+        }
+
+        var fromDate = GetDate(filters, "from")?.Date ?? DateTime.Today.AddMonths(-12).Date;
+        var toDateExclusive = (GetDate(filters, "to")?.Date ?? DateTime.Today.Date).AddDays(1);
+        var predicate = departmentCode.HasValue
+            ? "s.[Depatrment_code] = @departmentCode"
+            : "s.[Site_code] = @siteCode";
+        var logRelation = await ResolveReportRelationAsync(
+            "LatestLogsheets",
+            "Logsheets",
+            cancellationToken
+        );
+        var parameters = new List<ReportParameter>
+        {
+            new("@fromDate", DbType.DateTime, fromDate),
+            new("@toDateExclusive", DbType.DateTime, toDateExclusive),
+        };
+        if (departmentCode.HasValue)
+        {
+            parameters.Add(new ReportParameter("@departmentCode", DbType.Int16, departmentCode.Value));
+        }
+        else
+        {
+            parameters.Add(new ReportParameter("@siteCode", DbType.Int16, siteCode!.Value));
+        }
+        var siteScope = BuildReportSiteScope(parameters, filters, "c.[site_code]");
+        var sql = $"""
+            WITH ordered AS
+            (
+                SELECT
+                    v.[fleet_number] AS [GG Number],
+                    l.[vmf_code] AS [VMF Code],
+                    l.[start_odo] AS [Start ODO],
+                    l.[end_odo] AS [End ODO],
+                    l.[month] AS [Month],
+                    l.[rek_num] AS [Logsheet],
+                    c.[site_code] AS [Contract Site Code],
+                    l.[site_code] AS [Log Site Code],
+                    s.[description] AS [Site],
+                    l.[trans_date] AS [Captured],
+                    LAG(l.[start_odo]) OVER (
+                        PARTITION BY l.[vmf_code]
+                        ORDER BY l.[start_odo] DESC
+                    ) AS [Previous Start ODO]
+                FROM [dbo].[vehicle_master] AS v
+                INNER JOIN [dbo].[contract] AS c ON v.[vmf_code] = c.[vmf_code]
+                INNER JOIN {logRelation} AS l ON v.[vmf_code] = l.[vmf_code]
+                INNER JOIN [dbo].[site] AS s ON c.[site_code] = s.[Site_code]
+                WHERE c.[still_current] = 'Y'
+                  AND v.[type_code] = 3
+                  AND {predicate}
+                  AND {siteScope}
+                  AND l.[trans_date] >= @fromDate
+                  AND l.[trans_date] < @toDateExclusive
+            )
+            SELECT
+                [GG Number],
+                [VMF Code],
+                [Start ODO],
+                [End ODO],
+                [Month],
+                [Logsheet],
+                [Contract Site Code],
+                [Log Site Code],
+                [Site],
+                [Captured],
+                CASE
+                    WHEN [Previous Start ODO] IS NULL OR [Previous Start ODO] = [End ODO] THEN 0
+                    ELSE [Previous Start ODO] - [End ODO]
+                END AS [Difference]
+            FROM ordered
+            ORDER BY [Contract Site Code], [GG Number], [Start ODO] DESC
+            """;
+        return await ExecutePagedRawReportQueryAsync(
+            "logsheets",
+            "Logsheet Report per Department or Site",
+            "Logs/RPT_Logs_per_Dept_1.aspx",
+            sql,
+            parameters,
+            filters,
+            cancellationToken
+        );
+    }
+
+    private Task<LegacyReportResultDto> BuildLogsheetsAllOutstandingAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    ) => throw new LegacyReportProcedureUnavailableException("dbo.DEV_SEL_All_Logs");
 
     private async Task<LegacyReportResultDto> BuildVehicleStatusRangeAsync(
         IDictionary<string, string?> filters,
@@ -7842,7 +8673,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         Func<
             IDictionary<string, string?>,
             IReadOnlyList<LegacyStoredProcedureParameter>
-        >? BuildStoredProcedureParameters = null
+        >? BuildStoredProcedureParameters = null,
+        string? StoredProcedureName = null
     );
 
     private sealed record LegacyReportPagination(int Page, int PageSize, bool IncludeAll);
@@ -8081,4 +8913,46 @@ public sealed class LegacyReportColumnDto
 {
     public string Key { get; set; } = string.Empty;
     public string Header { get; set; } = string.Empty;
+}
+
+public sealed class LegacyReportProcedureExecutionException : InvalidOperationException
+{
+    public LegacyReportProcedureExecutionException(string procedureName, Exception innerException)
+        : base(
+            $"The legacy report procedure {procedureName} exists but could not be executed. No compatibility fallback was used.",
+            innerException
+        )
+    {
+        ProcedureName = procedureName;
+    }
+
+    public string ProcedureName { get; }
+}
+
+public sealed class LegacyReportProcedureUnavailableException : InvalidOperationException
+{
+    public LegacyReportProcedureUnavailableException(string procedureName)
+        : base(
+            $"The required legacy report procedure {procedureName} is not available. No compatibility report fallback was used."
+        )
+    {
+        ProcedureName = procedureName;
+    }
+
+    public string ProcedureName { get; }
+}
+
+public sealed class LegacyReportRelationUnavailableException : InvalidOperationException
+{
+    public LegacyReportRelationUnavailableException(string preferredObject, string fallbackTable)
+        : base(
+            $"Neither the legacy report relation {preferredObject} nor its table fallback {fallbackTable} is available."
+        )
+    {
+        PreferredObject = preferredObject;
+        FallbackTable = fallbackTable;
+    }
+
+    public string PreferredObject { get; }
+    public string FallbackTable { get; }
 }

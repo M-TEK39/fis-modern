@@ -22,6 +22,23 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
 {
     private const string TableName = "Taxi_logs";
 
+    private static readonly string[] InsertTriggerNames =
+    [
+        "TRG_INS_TaxiLogJournalDetailRecord",
+        "TRG_INS_TaxiLog_RejectDuplicateRequsition",
+        "TRG_INS_VIPBillingRecord",
+        "TRG_INS_UPD_TaxiLog_CheckVIPContract",
+    ];
+
+    private static readonly string[] UpdateTriggerNames =
+    [
+        "TRG_INS_TaxiLogJournalDetailRecord",
+        "TRG_INS_VIPBillingRecord",
+        "TRG_UPD_TaxiLogJournalDetailRecord",
+        "TRG_UPD_TaxiLogVIPBillingRecord",
+        "TRG_INS_UPD_TaxiLog_CheckVIPContract",
+    ];
+
     private static readonly string[] BusinessColumns =
     [
         "request_id",
@@ -127,11 +144,18 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
     {
         ArgumentNullException.ThrowIfNull(log);
         ValidateLog(log);
+        await EnsureLegacyTriggersAsync(InsertTriggerNames);
         var columns = await GetAvailableColumnsAsync(RequiredColumns);
         var now = DateTime.UtcNow;
         log.date_created = now;
         log.created_by_user_code = UserIdOrNull(currentUserId);
         log.is_deleted = false;
+        // The archived Web Forms taxi-log pages issue a parameterized-equivalent
+        // INSERT into Taxi_logs themselves (the stored DEV_INS_TaxiLog wrapper
+        // predates request_id and is not their active path). Keep that direct
+        // insert, but only after proving the source-backed accounting triggers
+        // are enabled so a local/partial schema cannot report an unbilled log
+        // as successful.
         var values = BuildValues(log, columns, currentUserId, includeAudit: true);
         log.log_id = await ExecuteInsertAsync(values);
         return await GetByIdAsync(log.log_id)
@@ -143,6 +167,7 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
     public async Task<TaxiLog> UpdateAsync(TaxiLog log, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(log);
+        await EnsureLegacyTriggersAsync(UpdateTriggerNames);
         var existing =
             await GetByIdAsync(log.log_id)
             ?? throw new InvalidOperationException($"Taxi log {log.log_id} not found");
@@ -254,6 +279,60 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
             """;
         AddParameters(command, values);
         return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
+    private async Task EnsureLegacyTriggersAsync(IReadOnlyCollection<string> requiredTriggers)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [tr].[name], [tr].[is_disabled]
+                FROM [sys].[triggers] AS [tr]
+                INNER JOIN [sys].[tables] AS [tb]
+                    ON [tb].[object_id] = [tr].[parent_id]
+                INNER JOIN [sys].[schemas] AS [sc]
+                    ON [sc].[schema_id] = [tb].[schema_id]
+                WHERE [sc].[name] = N'dbo'
+                  AND [tb].[name] = N'Taxi_logs'
+                  AND [tr].[name] IN
+                  (
+                      N'TRG_INS_TaxiLogJournalDetailRecord',
+                      N'TRG_INS_TaxiLog_RejectDuplicateRequsition',
+                      N'TRG_INS_VIPBillingRecord',
+                      N'TRG_UPD_TaxiLogJournalDetailRecord',
+                      N'TRG_UPD_TaxiLogVIPBillingRecord',
+                      N'TRG_INS_UPD_TaxiLog_CheckVIPContract'
+                  );
+                """;
+
+            var enabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0) && !reader.IsDBNull(1) && !reader.GetBoolean(1))
+                    enabled.Add(reader.GetString(0));
+            }
+
+            var missing = requiredTriggers.Where(trigger => !enabled.Contains(trigger)).ToArray();
+            if (missing.Length > 0)
+            {
+                throw new LegacyTaxiLogWorkflowUnavailableException(
+                    $"The legacy taxi-log trigger workflow is unavailable ({string.Join(", ", missing)}); no direct-DML fallback was run."
+                );
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
     }
 
     private async Task ExecuteUpdateAsync(
@@ -710,4 +789,15 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
                 await Connection.CloseAsync();
         }
     }
+}
+
+/// <summary>
+/// Indicates that the database does not expose the legacy taxi-log trigger
+/// chain needed to keep journal and VIP billing rows in sync. The API must not
+/// report a direct table write as a successful billable taxi transaction.
+/// </summary>
+public sealed class LegacyTaxiLogWorkflowUnavailableException : InvalidOperationException
+{
+    public LegacyTaxiLogWorkflowUnavailableException(string message)
+        : base(message) { }
 }

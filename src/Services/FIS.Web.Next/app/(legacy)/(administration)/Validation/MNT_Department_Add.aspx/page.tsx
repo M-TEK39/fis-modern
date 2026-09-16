@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import RouteLoading from "@/components/app-shell/route-loading";
 import { redirect } from "next/navigation";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import DepartmentForm from "@/app/(administration)/validation-data/departments/department-form";
 import { createDepartmentAction } from "@/app/(administration)/validation-data/departments/actions";
@@ -30,7 +30,7 @@ async function DepartmentAddPageContent() {
         </section>
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-status-card" role="alert">

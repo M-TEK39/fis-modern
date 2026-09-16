@@ -79,11 +79,12 @@ async function authorizeLogsheetEntry() {
       ok: false as const,
       message: "Your session has expired. Sign in again before continuing.",
     };
-  const hasReportsRole = session.roles.some(
-    (role) => role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "") === "reports",
-  );
-  if (!hasReportsRole)
-    return { ok: false as const, message: "You do not have permission to change logsheets." };
+  const hasLogsheetRole = session.roles.some((role) => {
+    const normalized = role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+    return normalized === "logsheets" || normalized === "reports";
+  });
+  if (!hasLogsheetRole)
+    return { ok: false as const, message: "You do not have permission to use Log Sheets." };
   return { ok: true as const, session };
 }
 
@@ -94,7 +95,7 @@ async function authorizeLogsheetManagement() {
   const code = Number(access.session.userAccessCode);
   return [279, 47, 38].includes(code)
     ? { ok: true as const }
-    : { ok: false as const, message: "You do not have permission to change logsheets." };
+    : { ok: false as const, message: "You do not have permission to manage Log Sheets." };
 }
 
 function apiErrorMessage(error: unknown) {

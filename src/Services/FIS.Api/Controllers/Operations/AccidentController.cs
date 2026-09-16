@@ -148,13 +148,42 @@ public class AccidentController : BaseApiController, IAsyncActionFilter
     )
     {
         var path = context.HttpContext.Request.Path.Value ?? string.Empty;
-        if (path.Contains("/reports", StringComparison.OrdinalIgnoreCase) && !HasAccidentRole())
+        var requiredRole = path.Contains("/reports", StringComparison.OrdinalIgnoreCase)
+            ? "Reports"
+            : "Accidents";
+        if (!HasAnyRole(requiredRole))
         {
             context.Result = Forbid();
             return;
         }
 
         await next();
+    }
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Any(User.IsInRole))
+        {
+            return true;
+        }
+
+        return User.Claims.Any(claim =>
+            (
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            && claim
+                .Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+                .Any(role =>
+                    expectedRoles.Any(expected =>
+                        string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+                    )
+                )
+        );
     }
 
     private static AccidentReportPageQuery CreateReportPageQuery(int page, int pageSize) =>

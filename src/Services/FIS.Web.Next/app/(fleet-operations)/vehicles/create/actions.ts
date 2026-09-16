@@ -106,7 +106,7 @@ function validateAndBuildRequest(
   formData: FormData,
 ): { request: CreateVehicleRequest } | { error: string } {
   try {
-    const fleetNumber = getText(formData, "fleetNumber").toUpperCase() || null;
+    const fleetNumber = getText(formData, "fleetNumber").toUpperCase();
     const gpNumber = getText(formData, "gpNumber").toUpperCase() || null;
     const registrationNumber = null;
     const engineNumber = getText(formData, "engineNumber").toUpperCase();
@@ -119,8 +119,10 @@ function validateAndBuildRequest(
     const fleetNotes = getText(formData, "fleetNotes") || null;
     const damagesComment = getText(formData, "damagesComment") || null;
 
-    if (!engineNumber || !chassisNumber || !colour || !purchaseFrom || !comment) {
-      return { error: "Complete all required vehicle identity, purchase, and comment fields." };
+    if (!fleetNumber || !engineNumber || !chassisNumber || !colour || !purchaseFrom || !comment) {
+      return {
+        error: "Complete all required vehicle identity, purchase, and comment fields.",
+      };
     }
 
     const tooLong = [
@@ -326,9 +328,11 @@ export async function createVehicleAction(
         message:
           error.reason === "unauthorized"
             ? "Your session has expired. Sign in again before creating a vehicle."
-            : error.reason === "unavailable"
-              ? "The vehicle service is temporarily unavailable. Please try again."
-              : "The vehicle service returned an unexpected response. Please try again.",
+            : error.reason === "forbidden"
+              ? "You do not have permission to capture Vehicle Master records."
+              : error.reason === "unavailable"
+                ? `The vehicle service is temporarily unavailable. ${error.message}`
+                : error.message || "The vehicle service rejected the capture. Please review the form.",
       };
     }
 
@@ -371,9 +375,11 @@ export async function searchVehicleAction(
         message:
           error.reason === "unauthorized"
             ? "Your session has expired. Sign in again before searching."
-            : error.reason === "unavailable"
-              ? "The vehicle search service is temporarily unavailable. Please try again."
-              : "The vehicle search service returned an unexpected response. Please try again.",
+            : error.reason === "forbidden"
+              ? "You do not have permission to search Vehicle Master records."
+              : error.reason === "unavailable"
+                ? "The vehicle search service is temporarily unavailable. Please try again."
+                : "The vehicle search service returned an unexpected response. Please try again.",
         results: [],
       };
     }

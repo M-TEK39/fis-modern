@@ -3,6 +3,7 @@ using AspNetCoreRateLimit;
 using DotNetEnv;
 using FIS.Api.Services;
 using FIS.Api.Services.Finance;
+using FIS.Api.Services.Fleet;
 using FIS.Api.Services.SessionManagement;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Interfaces.Auth;
@@ -129,6 +130,11 @@ builder.Services.AddHangfire(configuration =>
                 QueuePollInterval = TimeSpan.Zero,
                 UseRecommendedIsolationLevel = true,
                 DisableGlobalLocks = true,
+                // Hangfire is an optional modern worker layer. Never let startup
+                // attempt to create its tables in the immutable legacy database;
+                // the API remains usable when the client has not provisioned the
+                // optional Hangfire schema yet.
+                PrepareSchemaIfNecessary = false,
             }
         )
 );
@@ -251,7 +257,11 @@ builder.Services.AddSingleton<ISystemConfigurationAuditSink, SystemConfiguration
 builder.Services.AddSingleton<ISystemConfigurationService, SystemConfigurationService>();
 builder.Services.AddScoped<LegacyCredentialCompatibilityService>();
 builder.Services.AddScoped<LegacyFinanceAccessService>();
+builder.Services.AddScoped<LegacyRoleCompatibilityService>();
 builder.Services.AddScoped<LegacyFinanceReportExecutionService>();
+builder.Services.AddScoped<LegacyBasCompatibilityService>();
+builder.Services.AddScoped<LegacyWesbankCompatibilityService>();
+builder.Services.AddScoped<LegacyVehicleStatusCompatibilityService>();
 builder.Services.AddScoped<LegacyFinanceAuthorizationFilter>();
 builder.Services.AddScoped<LegacyFinanceFinancialReportsAuthorizationFilter>();
 builder.Services.AddScoped<LegacyFinanceReportScopeFilter>();
@@ -501,6 +511,7 @@ builder.Services.AddScoped<IJournalDetailRepository, JournalDetailRepository>();
 builder.Services.AddScoped<WorkflowMetricsJob>();
 builder.Services.AddScoped<ContractExpiryReminderJob>();
 builder.Services.AddScoped<MonthlyBillingJob>();
+builder.Services.AddScoped<LegacyContractBillingSchedulerService>();
 builder.Services.AddScoped<FinancialYearRolloverJob>();
 
 // Add health checks. Liveness is process-only; readiness includes the database
@@ -598,42 +609,60 @@ app.MapHealthChecks(
 // Add controllers
 app.MapControllers();
 
-// Configure recurring Hangfire jobs (Phase 5 - Analytics)
-var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+// Configure recurring Hangfire jobs (Phase 5 - Analytics). A restored legacy
+// database may not have the optional Hangfire tables; registration failure is
+// logged and must not prevent the HTTP API (and therefore the web application)
+// from starting. The legacy database-owned billing procedure remains the
+// source of truth when the worker is provisioned.
+try
+{
+    var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
 
-// Daily workflow metrics generation (runs at 2 AM daily)
-recurringJobManager.AddOrUpdate<WorkflowMetricsJob>(
-    "generate-daily-workflow-metrics",
-    job => job.GenerateDailyMetricsAsync(),
-    "0 2 * * *"
-); // Cron: Daily at 2:00 AM
+    // Daily workflow metrics generation (runs at 2 AM daily)
+    recurringJobManager.AddOrUpdate<WorkflowMetricsJob>(
+        "generate-daily-workflow-metrics",
+        job => job.GenerateDailyMetricsAsync(),
+        "0 2 * * *"
+    ); // Cron: Daily at 2:00 AM
 
-// Contract expiry reminders (runs at 7 AM daily)
-// Sends emails at 90, 60, 30, 14, and 7 days before target_return_date
-// Recipients: site contact (client) + original capturer
-recurringJobManager.AddOrUpdate<ContractExpiryReminderJob>(
-    "contract-expiry-reminders",
-    job => job.RunAsync(),
-    "0 7 * * *"
-); // Cron: Daily at 7:00 AM
+    // Contract expiry reminders (runs at 7 AM daily)
+    // Sends emails at 90, 60, 30, 14, and 7 days before target_return_date
+    // Recipients: site contact (client) + original capturer
+    recurringJobManager.AddOrUpdate<ContractExpiryReminderJob>(
+        "contract-expiry-reminders",
+        job => job.RunAsync(),
+        "0 7 * * *"
+    ); // Cron: Daily at 7:00 AM
 
-// Monthly billing (runs on the 1st of each month at 06:00)
-// Bills all still_current = 'Y' contracts from Charged_Until → today.
-// end_date does NOT stop billing — only closing/reassigning a contract does.
-recurringJobManager.AddOrUpdate<MonthlyBillingJob>(
-    "monthly-contract-billing",
-    job => job.RunAsync(),
-    "0 6 1 * *"
-); // Cron: 1st of each month at 06:00
+    // Legacy contract billing scheduler (runs daily in the legacy 00:00–03:00
+    // window). The database procedure owns Charged_Until, journal-detail,
+    // recreation, overcharge repair, transaction, and trigger behavior.
+    recurringJobManager.AddOrUpdate<MonthlyBillingJob>(
+        "monthly-contract-billing",
+        job => job.RunAsync(),
+        "0 2 * * *",
+        new RecurringJobOptions
+        {
+            TimeZone = TimeZoneInfo.FindSystemTimeZoneById("Africa/Johannesburg"),
+        }
+    ); // Cron: daily at 02:00
 
-// Financial year rollover (runs at 00:05 on 1 April every year)
-// Creates the next financial_year record (FY = year it ends in).
-// e.g. runs 1 April 2026 → creates FY2027 (2026-04-01 to 2027-03-31).
-// Idempotent: safe to re-run, skips if record already exists.
-recurringJobManager.AddOrUpdate<FinancialYearRolloverJob>(
-    "financial-year-rollover",
-    job => job.RunAsync(),
-    "5 0 1 4 *"
-); // Cron: 00:05 on 1 April each year
+    // Financial year rollover (runs at 00:05 on 1 April every year)
+    // Creates the next financial_year record (FY = year it ends in).
+    // e.g. runs 1 April 2026 → creates FY2027 (2026-04-01 to 2027-03-31).
+    // Idempotent: safe to re-run, skips if record already exists.
+    recurringJobManager.AddOrUpdate<FinancialYearRolloverJob>(
+        "financial-year-rollover",
+        job => job.RunAsync(),
+        "5 0 1 4 *"
+    ); // Cron: 00:05 on 1 April each year
+}
+catch (Exception ex)
+{
+    app.Logger.LogWarning(
+        ex,
+        "Optional Hangfire storage is unavailable; the HTTP API will start without recurring workers."
+    );
+}
 
 app.Run();

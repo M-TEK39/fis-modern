@@ -65,7 +65,7 @@ async function renderVehicleVerificationSearchContent({
         </section>
       </main>
     );
-  if (!hasAssetVerificationAccess(session.roles, session.accessLevel))
+  if (!hasAssetVerificationAccess(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-status-card" role="alert">

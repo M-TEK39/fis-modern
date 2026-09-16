@@ -88,7 +88,22 @@ public sealed class ModelRepository : IModelRepository
         ).SingleOrDefault();
     }
 
-    public async Task<IEnumerable<Model>> GetAllModelsAsync() => await QueryAsync();
+    public async Task<IEnumerable<Model>> GetAllModelsAsync()
+    {
+        try
+        {
+            return await QueryAsync();
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("required model compatibility columns", StringComparison.OrdinalIgnoreCase))
+        {
+            // Vehicle capture only needs the three legacy selector columns.
+            // Some restored client generations do not carry every later model
+            // maintenance column, so do not make the Add Vehicle page fail
+            // merely because the full maintenance projection is unavailable.
+            return await QueryVehicleSelectorModelsAsync();
+        }
+    }
 
     [SuppressMessage(
         "Security",
@@ -484,6 +499,58 @@ public sealed class ModelRepository : IModelRepository
             }
 
             return results;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<List<Model>> QueryVehicleSelectorModelsAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [model_code], [make_code], [model_description]
+                FROM [dbo].[model]
+                ORDER BY [model_description], [model_code]
+                """;
+
+            var models = new List<Model>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var modelCode = reader.IsDBNull(0) ? (short)0 : Convert.ToInt16(reader.GetValue(0));
+                var makeCode = reader.IsDBNull(1) ? (short)0 : Convert.ToInt16(reader.GetValue(1));
+                var description = reader.IsDBNull(2) ? string.Empty : reader.GetString(2).Trim();
+                if (modelCode <= 0 || makeCode <= 0 || string.IsNullOrWhiteSpace(description))
+                {
+                    continue;
+                }
+
+                models.Add(
+                    new Model
+                    {
+                        model_code = modelCode,
+                        make_code = makeCode,
+                        model_description = description,
+                    }
+                );
+            }
+
+            return models;
         }
         finally
         {

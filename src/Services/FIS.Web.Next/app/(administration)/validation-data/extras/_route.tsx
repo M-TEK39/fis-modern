@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import StatusCardView from "@/components/app-shell/status-card";
 import { createExtraCodeAction } from "@/app/(administration)/validation-data/extras/actions";
@@ -289,7 +289,7 @@ async function ExtraCodeListPageContent({
         />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <ErrorCard message="You do not have permission to maintain extras." routePath="/home" />

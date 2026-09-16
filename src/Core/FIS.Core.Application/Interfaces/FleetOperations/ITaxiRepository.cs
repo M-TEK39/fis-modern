@@ -8,15 +8,21 @@ namespace FIS.Core.Application.Interfaces
     /// </summary>
     public interface ITaxiRepository
     {
-        Task<Taxi?> GetByIdAsync(int requestId);
-        Task<Taxi?> GetLatestByRequisitionAsync(string rekNum);
-        Task<IEnumerable<Taxi>> GetAllAsync();
+        Task<Taxi?> GetByIdAsync(int requestId, IReadOnlySet<short>? allowedSiteCodes = null);
+        Task<Taxi?> GetLatestByRequisitionAsync(string rekNum, IReadOnlySet<short>? allowedSiteCodes = null);
+        Task<IEnumerable<Taxi>> GetAllAsync(IReadOnlySet<short>? allowedSiteCodes = null);
         Task<TaxiPage> GetPageAsync(TaxiPageQuery query);
         Task<TaxiReportPage> GetReportPageAsync(TaxiReportPageQuery query);
-        Task<IEnumerable<Taxi>> GetBySiteAsync(short siteCode);
-        Task<IEnumerable<Taxi>> GetByDepartmentAsync(short departmentCode);
-        Task<IEnumerable<Taxi>> GetByDateAsync(DateTime date);
+        Task<IEnumerable<Taxi>> GetBySiteAsync(short siteCode, IReadOnlySet<short>? allowedSiteCodes = null);
+        Task<IEnumerable<Taxi>> GetByDepartmentAsync(short departmentCode, IReadOnlySet<short>? allowedSiteCodes = null);
+        Task<IEnumerable<Taxi>> GetByDateAsync(DateTime date, IReadOnlySet<short>? allowedSiteCodes = null);
         Task<Taxi> CreateAsync(Taxi taxi, int currentUserId);
+        Task<IReadOnlyList<Taxi>> CreateRecurringAsync(
+            Taxi taxi,
+            DateTime startDate,
+            DateTime endDate,
+            int currentUserId
+        );
         Task<Taxi> UpdateAsync(Taxi taxi, int currentUserId);
         Task DeleteAsync(int requestId, int currentUserId);
     }
@@ -26,7 +32,8 @@ namespace FIS.Core.Application.Interfaces
         int PageSize = 24,
         bool PendingOnly = false,
         bool JiaPickupOnly = false,
-        string? Search = null
+        string? Search = null,
+        IReadOnlySet<short>? AllowedSiteCodes = null
     );
 
     public sealed record TaxiPage(IReadOnlyList<Taxi> Items, int Page, int PageSize, int Total)
@@ -47,7 +54,8 @@ namespace FIS.Core.Application.Interfaces
         int Page = 1,
         int PageSize = 24,
         string? Search = null,
-        DateTime? AsOfDate = null
+        DateTime? AsOfDate = null,
+        IReadOnlySet<short>? AllowedSiteCodes = null
     );
 
     public sealed record TaxiReportPage(

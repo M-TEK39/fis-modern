@@ -33,6 +33,12 @@ export type LogbookPage = {
   totalPages: number;
 };
 
+export type LogbookVehicleOption = {
+  vmfCode: number;
+  fleetNumber: string | null;
+  registrationNumber: string | null;
+};
+
 export const DEFAULT_LOGBOOK_PAGE_SIZE = 24;
 
 export type LogbookWriteInput = {
@@ -48,7 +54,11 @@ export type LogbookWriteInput = {
 };
 
 export type LogbookApiErrorReason =
-  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+  | "unauthorized"
+  | "forbidden"
+  | "unavailable"
+  | "invalid-response"
+  | "not-found";
 
 export class LogbookApiError extends Error {
   constructor(
@@ -167,13 +177,35 @@ async function requestApi(path: string, init: RequestInit = {}) {
       },
       signal: controller.signal,
     });
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new LogbookApiError("unauthorized", "The FIS access cookie was rejected.");
+    }
+    if (response.status === 403) {
+      throw new LogbookApiError(
+        "forbidden",
+        "Your account is not assigned the required Logbooks role or site scope.",
+      );
     }
     if (response.status === 404)
       throw new LogbookApiError("not-found", "The logbook was not found.");
-    if (!response.ok)
-      throw new LogbookApiError("invalid-response", `FIS API returned HTTP ${response.status}.`);
+    if (!response.ok) {
+      let message = `FIS API returned HTTP ${response.status}.`;
+      try {
+        const payload = (await response.json()) as unknown;
+        if (isRecord(payload)) {
+          const detail = getValue(payload, "message", "error", "detail");
+          if (typeof detail === "string" && detail.trim()) message = detail.trim();
+        } else if (typeof payload === "string" && payload.trim()) {
+          message = payload.trim();
+        }
+      } catch {
+        // Keep the status-based message when the API has no readable body.
+      }
+      throw new LogbookApiError(
+        response.status >= 500 ? "unavailable" : "invalid-response",
+        message,
+      );
+    }
     return response;
   } catch (error) {
     if (error instanceof LogbookApiError) throw error;
@@ -275,6 +307,22 @@ export async function getLogbookPage(
   const vmfCode = normalizePositiveInteger(options.vmfCode);
   if (vmfCode !== null) params.set("vmfCode", String(vmfCode));
   return readLogbookPage(await readJson(await requestApi(`api/logbook/page?${params.toString()}`)));
+}
+
+export async function getLogbookVehicleOptions(): Promise<LogbookVehicleOption[]> {
+  const payload = getCollection(await readJson(await requestApi("api/logbook/vehicle-options")));
+  return payload.flatMap((value) => {
+    if (!isRecord(value)) return [];
+    const vmfCode = asNumber(getValue(value, "vmfCode", "vmf_code"));
+    if (vmfCode === null) return [];
+    return [
+      {
+        vmfCode,
+        fleetNumber: asString(getValue(value, "fleetNumber", "fleet_number")),
+        registrationNumber: asString(getValue(value, "registrationNumber", "registration_number")),
+      },
+    ];
+  });
 }
 
 export async function getLogbook(logbookCode: number) {

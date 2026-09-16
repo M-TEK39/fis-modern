@@ -214,6 +214,7 @@ public class UnitOfMeasureController : BaseApiController
     /// <param name="createUnitDto">The unit of measure data to create</param>
     /// <returns>The created unit of measure entity</returns>
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<UnitOfMeasure>> CreateUnit(
         [FromBody] CreateUnitOfMeasureDto createUnitDto
     )
@@ -253,6 +254,7 @@ public class UnitOfMeasureController : BaseApiController
     /// <param name="unit">The updated unit of measure data</param>
     /// <returns>The updated unit of measure entity</returns>
     [HttpPut("{unitCode}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<UnitOfMeasure>> UpdateUnit(
         short unitCode,
         [FromBody] UnitOfMeasure unit
@@ -285,6 +287,7 @@ public class UnitOfMeasureController : BaseApiController
     /// <param name="unitCode">The unit code to delete</param>
     /// <returns>No content if successful</returns>
     [HttpDelete("{unitCode}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> DeleteUnit(short unitCode)
     {
         try

@@ -144,6 +144,8 @@ function apiErrorMessage(error: unknown, operation: string) {
   if (error instanceof ContractApiError) {
     if (error.reason === "unauthorized")
       return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "forbidden")
+      return "You do not have permission to perform this contract operation.";
     if (error.reason === "unavailable")
       return `The contract ${operation} service is temporarily unavailable. Please try again.`;
     if (error.reason === "not-found")
@@ -426,11 +428,19 @@ export async function runContractAction(formData: FormData) {
         operation = "extended";
         break;
       case "reassign": {
-        const newSiteCode = getRequiredInteger(formData, "newSiteCode", "Destination site");
-        if (newSiteCode <= 0)
-          throw new ContractValidationError("Destination site must be a positive whole number.");
+        const newSiteCode = getInteger(formData, "newSiteCode", "Destination site");
+        const newSiteDriverCode = getInteger(
+          formData,
+          "newSiteDriverCode",
+          "Destination custodian driver",
+        );
+        if ((newSiteCode ?? 0) <= 0 && (newSiteDriverCode ?? 0) <= 0)
+          throw new ContractValidationError(
+            "Select a destination site or destination custodian driver.",
+          );
         await reassignContractAgainstApi(contractId, {
           NewSiteCode: newSiteCode,
+          NewSiteDriverCode: newSiteDriverCode,
           StartDate: getRequiredDate(formData, "reassignStartDate", "Effective start date"),
           StartOdometer: getRequiredInteger(formData, "reassignStartOdometer", "Start odometer"),
           Reason:

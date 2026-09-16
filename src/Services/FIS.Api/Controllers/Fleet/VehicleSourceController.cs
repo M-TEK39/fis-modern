@@ -10,7 +10,6 @@ namespace FIS.Api.Controllers;
 [Route("api/vehicle-source")]
 public sealed class VehicleSourceController : BaseApiController
 {
-    private const long VehicleManagementPermission = 1;
 
     private readonly IVehicleSourceRepository _repository;
     private readonly ILogger<VehicleSourceController> _logger;
@@ -27,7 +26,11 @@ public sealed class VehicleSourceController : BaseApiController
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        if (!HasVehicleManagementPermission())
+        // Vehicle inception capturers select the legacy hired-from value while
+        // capturing a vehicle. Reading this reference data is part of their
+        // capture workflow; only source maintenance itself remains restricted
+        // to Vehicle Master.
+        if (!HasVehicleSourceReadPermission())
         {
             return Forbid();
         }
@@ -60,7 +63,7 @@ public sealed class VehicleSourceController : BaseApiController
     [HttpGet("{sourceCode:int}")]
     public async Task<IActionResult> GetByCode(byte sourceCode)
     {
-        if (!HasVehicleManagementPermission())
+        if (!HasVehicleSourceReadPermission())
         {
             return Forbid();
         }
@@ -189,10 +192,31 @@ public sealed class VehicleSourceController : BaseApiController
 
     private bool HasVehicleManagementPermission()
     {
-        var accessLevelClaim = User.FindFirst("access_level")?.Value;
-        return long.TryParse(accessLevelClaim, out var accessLevel)
-            && (accessLevel & VehicleManagementPermission) == VehicleManagementPermission;
+        return HasRole("Vehicle Master") || HasSystemAdministratorRole();
     }
+
+    private bool HasVehicleSourceReadPermission()
+    {
+        return HasSystemAdministratorRole()
+            || HasVehicleManagementPermission()
+            || HasRole("Vehicle Inception Capturer")
+            || HasRole("Vehicle Inception Authorizer");
+    }
+
+    private bool HasSystemAdministratorRole() =>
+        HasRole("SystemAdministrator")
+        || HasRole("System Administrator");
+
+    private bool HasRole(string expectedRole) =>
+        User.Claims.Any(claim =>
+            (claim.Type == System.Security.Claims.ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            && claim.Value.Split(
+                ',',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+            ).Any(role => string.Equals(role, expectedRole, StringComparison.OrdinalIgnoreCase))
+        );
 
     private static string? Validate(
         VehicleSourceRequest? request,

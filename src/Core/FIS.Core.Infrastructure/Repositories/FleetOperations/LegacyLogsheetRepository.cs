@@ -142,8 +142,255 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
     public async Task<Logsheet> CreateAsync(Logsheet logsheet, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(logsheet);
+        IDbContextTransaction? ownedTransaction = null;
+        if (_context.Database.CurrentTransaction is null)
+        {
+            ownedTransaction = await _context.Database.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted
+            );
+        }
+
+        var committed = false;
+        try
+        {
+            await EnsureLegacyTriggersAsync(
+                "TRG_INS_LogsheetJournalDetailRecord",
+                "TRG_INS_UPD_Logsheet_Check_Overlap",
+                "TRG_INS_UPD_Logsheet_CheckOverlappingOpenELsTrip"
+            );
+            var columns = await GetAvailableColumnsAsync();
+            var now = DateTime.Now;
+            if (logsheet.trans_date == default)
+            {
+                logsheet.trans_date = now;
+            }
+
+            var insertProcedure = await ResolveProcedureParametersAsync("DEV_INS_Logsheets");
+            int insertedCode;
+            if (insertProcedure is not null)
+            {
+                EnsureProcedureContract("DEV_INS_Logsheets", insertProcedure, InsertProcedureParameters);
+                insertedCode = await ExecuteLegacyInsertProcedureAsync(logsheet, currentUserId);
+            }
+            else
+            {
+                // Explicit compatibility fallback: only older databases without the
+                // original insert procedure may use the parameterized trigger-backed
+                // DML path below.
+                var values = new List<WriteValue>();
+
+                AddValue(values, columns, "vmf_code", "@vmfCode", DbType.Int32, logsheet.vmf_code, true);
+                AddValue(
+                    values,
+                    columns,
+                    "start_odo",
+                    "@startOdo",
+                    DbType.Double,
+                    logsheet.start_odo,
+                    true
+                );
+                AddValue(values, columns, "end_odo", "@endOdo", DbType.Double, logsheet.end_odo, true);
+                AddValue(values, columns, "month", "@month", DbType.DateTime, logsheet.month, true);
+                AddValue(values, columns, "site_code", "@siteCode", DbType.Int16, logsheet.site_code, true);
+                AddValue(values, columns, "rek_num", "@requisition", DbType.String, logsheet.rek_num, true);
+                AddValue(values, columns, "days_used", "@daysUsed", DbType.Int32, logsheet.days_used, true);
+                AddValue(
+                    values,
+                    columns,
+                    "bund_num",
+                    "@bundleNumber",
+                    DbType.Int32,
+                    logsheet.bund_num,
+                    true
+                );
+                // Log_Entry_flow derives these accounting/ownership fields from the
+                // selected legacy contract and the current user. They are added once
+                // below; repeating a column in an INSERT is rejected by SQL Server.
+                AddValue(
+                    values,
+                    columns,
+                    "trans_date",
+                    "@transDate",
+                    DbType.DateTime,
+                    logsheet.trans_date,
+                    true
+                );
+                AddValue(
+                    values,
+                    columns,
+                    "driver_time",
+                    "@driverTime",
+                    DbType.Double,
+                    logsheet.driver_time,
+                    false
+                );
+                AddValue(
+                    values,
+                    columns,
+                    "FBS_comp",
+                    "@fbsComp",
+                    DbType.DateTime,
+                    logsheet.FBS_comp,
+                    false
+                );
+                AddValue(
+                    values,
+                    columns,
+                    "user_access_code",
+                    "@userAccessCode",
+                    DbType.Int16,
+                    UserAccessCode(currentUserId),
+                    true
+                );
+                AddValue(
+                    values,
+                    columns,
+                    "trans_time",
+                    "@transTime",
+                    DbType.Time,
+                    logsheet.trans_time == default ? now.TimeOfDay : logsheet.trans_time,
+                    true
+                );
+                AddValue(
+                    values,
+                    columns,
+                    "department_code",
+                    "@departmentCode",
+                    DbType.Int16,
+                    logsheet.department_code > 0 ? logsheet.department_code : logsheet.site_code,
+                    true
+                );
+                AddValue(
+                    values,
+                    columns,
+                    "contract_code",
+                    "@contractCode",
+                    DbType.Int32,
+                    logsheet.contract_code,
+                    false
+                );
+                // Logsheets defines its own NEWID() default. The legacy entry page did
+                // not manufacture a journal detail key, so preserve that database-owned
+                // default unless a genuine legacy caller supplied a key.
+                AddValue(
+                    values,
+                    columns,
+                    "journal_detail_code",
+                    "@journalDetailCode",
+                    DbType.Guid,
+                    logsheet.journal_detail_code == Guid.Empty ? null : logsheet.journal_detail_code,
+                    false
+                );
+                AddValue(
+                    values,
+                    columns,
+                    "parent_log_code",
+                    "@parentLogCode",
+                    DbType.Int32,
+                    logsheet.parent_log_code,
+                    false
+                );
+                AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, now, true);
+                AddValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, now, false);
+                AddValue(
+                    values,
+                    columns,
+                    "created_by_user_code",
+                    "@createdBy",
+                    DbType.Int32,
+                    UserIdOrNull(currentUserId),
+                    false
+                );
+                AddValue(
+                    values,
+                    columns,
+                    "modified_by_user_code",
+                    "@modifiedBy",
+                    DbType.Int32,
+                    UserIdOrNull(currentUserId),
+                    false
+                );
+                AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false, true);
+
+                await using var scope = await OpenConnectionAsync();
+                await using var command = scope.Connection.CreateCommand();
+                command.Transaction = CurrentTransaction;
+                command.CommandText =
+                    $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[log_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+                AddParameters(command, values);
+                insertedCode = Convert.ToInt32(await command.ExecuteScalarAsync());
+            }
+
+            // Legacy Log_Entry_ACT1.aspx updates the vehicle's current odometer
+            // and its odometer-update date after a successful logsheet insert.
+            // Keep this in the same transaction as the insert/procedure call so
+            // billing and vehicle state cannot diverge.
+            await UpdateVehicleOdometerAsync(logsheet);
+
+            // Read the inserted row while the owned transaction is still
+            // active. A committed DbTransaction must not be reused for the
+            // reload after CommitAsync; disposing it happens in finally.
+            var inserted = await GetByIdAsync(insertedCode)
+                ?? throw new InvalidOperationException("The legacy logsheet procedure inserted a row that could not be read.");
+
+            if (ownedTransaction is not null)
+            {
+                await ownedTransaction.CommitAsync();
+                committed = true;
+            }
+
+            return inserted;
+        }
+        catch
+        {
+            if (ownedTransaction is not null && !committed)
+            {
+                await ownedTransaction.RollbackAsync();
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (ownedTransaction is not null)
+            {
+                await ownedTransaction.DisposeAsync();
+            }
+        }
+    }
+
+    private async Task UpdateVehicleOdometerAsync(Logsheet logsheet)
+    {
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandText = """
+            UPDATE [dbo].[vehicle_master]
+            SET [current_odo] = @currentOdo,
+                [odo_update_date] = @odoUpdateDate
+            WHERE [vmf_code] = @vmfCode
+              AND [current_odo] < @currentOdo
+            """;
+        AddParameter(command, "@currentOdo", DbType.Int32, Convert.ToInt32(logsheet.end_odo));
+        AddParameter(command, "@odoUpdateDate", DbType.DateTime, logsheet.trans_date);
+        AddParameter(command, "@vmfCode", DbType.Int32, logsheet.vmf_code);
+        // Legacy Log_Entry_ACT1.aspx only advances current_odo when the new
+        // end reading is greater than the vehicle's existing value. An
+        // out-of-order historical log is still accepted; it must not roll
+        // the master odometer backwards or turn a successful log insert into
+        // a false failure.
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task<Logsheet> UpdateAsync(Logsheet logsheet, int currentUserId)
+    {
+        ArgumentNullException.ThrowIfNull(logsheet);
+        await EnsureLegacyTriggersAsync(
+            "TRG_UPD_LogsheetJournalDetailRecord",
+            "TRG_INS_UPD_Logsheet_Check_Overlap",
+            "TRG_INS_UPD_Logsheet_CheckOverlappingOpenELsTrip"
+        );
         var columns = await GetAvailableColumnsAsync();
-        var now = DateTime.Now;
         var values = new List<WriteValue>();
 
         AddValue(values, columns, "vmf_code", "@vmfCode", DbType.Int32, logsheet.vmf_code, true);
@@ -170,15 +417,9 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
             logsheet.bund_num,
             true
         );
-        AddValue(
-            values,
-            columns,
-            "trans_date",
-            "@transDate",
-            DbType.DateTime,
-            now,
-            true
-        );
+        // Log_Edit3.aspx updates these transaction fields together with the
+        // odometer range. Keep the selected contract/department and editor
+        // aligned with the row that the legacy journal trigger sees.
         AddValue(
             values,
             columns,
@@ -186,16 +427,7 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
             "@driverTime",
             DbType.Double,
             logsheet.driver_time,
-            false
-        );
-        AddValue(
-            values,
-            columns,
-            "FBS_comp",
-            "@fbsComp",
-            DbType.DateTime,
-            logsheet.FBS_comp,
-            false
+            true
         );
         AddValue(
             values,
@@ -204,15 +436,6 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
             "@userAccessCode",
             DbType.Int16,
             UserAccessCode(currentUserId),
-            true
-        );
-        AddValue(
-            values,
-            columns,
-            "trans_time",
-            "@transTime",
-            DbType.Time,
-            logsheet.trans_time == default ? now.TimeOfDay : logsheet.trans_time,
             true
         );
         AddValue(
@@ -231,90 +454,6 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
             "@contractCode",
             DbType.Int32,
             logsheet.contract_code,
-            false
-        );
-        // Logsheets defines its own NEWID() default. The legacy entry page did
-        // not manufacture a journal detail key, so preserve that database-owned
-        // default unless a genuine legacy caller supplied a key.
-        AddValue(
-            values,
-            columns,
-            "journal_detail_code",
-            "@journalDetailCode",
-            DbType.Guid,
-            logsheet.journal_detail_code == Guid.Empty ? null : logsheet.journal_detail_code,
-            false
-        );
-        AddValue(
-            values,
-            columns,
-            "parent_log_code",
-            "@parentLogCode",
-            DbType.Int32,
-            logsheet.parent_log_code,
-            false
-        );
-        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, now, true);
-        AddValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, now, false);
-        AddValue(
-            values,
-            columns,
-            "created_by_user_code",
-            "@createdBy",
-            DbType.Int32,
-            UserIdOrNull(currentUserId),
-            false
-        );
-        AddValue(
-            values,
-            columns,
-            "modified_by_user_code",
-            "@modifiedBy",
-            DbType.Int32,
-            UserIdOrNull(currentUserId),
-            false
-        );
-        AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false, true);
-
-        await using var scope = await OpenConnectionAsync();
-        await using var command = scope.Connection.CreateCommand();
-        command.Transaction = CurrentTransaction;
-        command.CommandText =
-            $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) OUTPUT INSERTED.[log_code] VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
-        AddParameters(command, values);
-        var id = Convert.ToInt32(await command.ExecuteScalarAsync());
-        return await GetByIdAsync(id)
-            ?? throw new InvalidOperationException("Created logsheet could not be read.");
-    }
-
-    public async Task<Logsheet> UpdateAsync(Logsheet logsheet, int currentUserId)
-    {
-        ArgumentNullException.ThrowIfNull(logsheet);
-        var columns = await GetAvailableColumnsAsync();
-        var values = new List<WriteValue>();
-
-        AddValue(values, columns, "vmf_code", "@vmfCode", DbType.Int32, logsheet.vmf_code, true);
-        AddValue(
-            values,
-            columns,
-            "start_odo",
-            "@startOdo",
-            DbType.Double,
-            logsheet.start_odo,
-            true
-        );
-        AddValue(values, columns, "end_odo", "@endOdo", DbType.Double, logsheet.end_odo, true);
-        AddValue(values, columns, "month", "@month", DbType.DateTime, logsheet.month, true);
-        AddValue(values, columns, "site_code", "@siteCode", DbType.Int16, logsheet.site_code, true);
-        AddValue(values, columns, "rek_num", "@requisition", DbType.String, logsheet.rek_num, true);
-        AddValue(values, columns, "days_used", "@daysUsed", DbType.Int32, logsheet.days_used, true);
-        AddValue(
-            values,
-            columns,
-            "bund_num",
-            "@bundleNumber",
-            DbType.Int32,
-            logsheet.bund_num,
             true
         );
         AddValue(
@@ -342,34 +481,15 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
 
     public async Task DeleteAsync(int logCode, int currentUserId)
     {
-        var columns = await GetAvailableColumnsAsync();
+        await EnsureLegacyTriggersAsync("TRG_DEL_Logsheet");
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
 
-        if (columns.ContainsKey("is_deleted"))
-        {
-            var assignments = new List<string> { "[is_deleted] = @isDeleted" };
-            AddParameter(command, "@isDeleted", DbType.Boolean, true);
-            if (columns.ContainsKey("date_updated"))
-            {
-                assignments.Add("[date_updated] = @dateUpdated");
-                AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-            }
-
-            if (columns.ContainsKey("modified_by_user_code"))
-            {
-                assignments.Add("[modified_by_user_code] = @modifiedBy");
-                AddParameter(command, "@modifiedBy", DbType.Int32, UserIdOrNull(currentUserId));
-            }
-
-            command.CommandText =
-                $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", assignments)} WHERE [log_code] = @logCode";
-        }
-        else
-        {
-            command.CommandText = $"DELETE FROM [dbo].[{TableName}] WHERE [log_code] = @logCode";
-        }
+        // Log_Delete_3.aspx physically deletes the logsheet row. An optional
+        // modern is_deleted column is not a license to change that business
+        // action; retain the legacy delete/audit-trigger path.
+        command.CommandText = $"DELETE FROM [dbo].[{TableName}] WHERE [log_code] = @logCode";
 
         AddParameter(command, "@logCode", DbType.Int32, logCode);
         if (await command.ExecuteNonQueryAsync() == 0)
@@ -453,6 +573,156 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
                 "The logsheet compatibility table is missing required legacy columns."
             );
         return columns;
+    }
+
+    private async Task EnsureLegacyTriggersAsync(params string[] triggerNames)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = CurrentTransaction;
+            command.CommandText = """
+                SELECT [tr].[name], [tr].[is_disabled]
+                FROM [sys].[triggers] AS [tr]
+                INNER JOIN [sys].[tables] AS [tb]
+                    ON [tb].[object_id] = [tr].[parent_id]
+                INNER JOIN [sys].[schemas] AS [sc]
+                    ON [sc].[schema_id] = [tb].[schema_id]
+                WHERE [sc].[name] = N'dbo'
+                  AND [tb].[name] = N'Logsheets'
+                  AND [tr].[name] IN (N'TRG_INS_LogsheetJournalDetailRecord', N'TRG_UPD_LogsheetJournalDetailRecord', N'TRG_INS_UPD_Logsheet_Check_Overlap', N'TRG_INS_UPD_Logsheet_CheckOverlappingOpenELsTrip', N'TRG_DEL_Logsheet');
+                """;
+            var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0) && !reader.IsDBNull(1) && !reader.GetBoolean(1))
+                    present.Add(reader.GetString(0));
+            }
+
+            var missing = triggerNames.Where(name => !present.Contains(name)).ToArray();
+            if (missing.Length > 0)
+            {
+                throw new NotSupportedException(
+                    $"The legacy logsheet trigger workflow is unavailable ({string.Join(", ", missing)}); no direct-DML fallback was run."
+                );
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private static readonly string[] InsertProcedureParameters =
+    [
+        "@LogCode",
+        "@VMFCode",
+        "@StartOdoMeter",
+        "@EndOdoMeter",
+        "@Month",
+        "@SiteCode",
+        "@RekNum",
+        "@DaysUsed",
+        "@BundNum",
+        "@TransactionDate",
+        "@DriverTime",
+        "@FBSComp",
+        "@UserAccessCode",
+        "@TransactionTime",
+        "@DepartmentCode",
+        "@ContractCode",
+        "@ParentLogCode",
+    ];
+
+    private async Task<IReadOnlyList<string>?> ResolveProcedureParametersAsync(string procedureName)
+    {
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandText = """
+            SELECT [p].[name]
+            FROM [sys].[procedures] AS [sp]
+            INNER JOIN [sys].[schemas] AS [s] ON [s].[schema_id] = [sp].[schema_id]
+            LEFT JOIN [sys].[parameters] AS [p]
+                ON [p].[object_id] = [sp].[object_id]
+               AND [p].[parameter_id] > 0
+            WHERE [s].[name] = N'dbo' AND [sp].[name] = @procedureName
+            ORDER BY [p].[parameter_id]
+            """;
+        AddParameter(command, "@procedureName", DbType.String, procedureName);
+        var found = false;
+        var parameters = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            found = true;
+            if (!reader.IsDBNull(0))
+                parameters.Add(reader.GetString(0));
+        }
+
+        return found ? parameters : null;
+    }
+
+    private static void EnsureProcedureContract(
+        string procedureName,
+        IReadOnlyList<string> actual,
+        IReadOnlyList<string> expected
+    )
+    {
+        if (!actual.SequenceEqual(expected, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The deployed legacy procedure {procedureName} does not match its archived parameter contract; no direct-DML fallback was run."
+            );
+        }
+    }
+
+    private async Task<int> ExecuteLegacyInsertProcedureAsync(Logsheet logsheet, int currentUserId)
+    {
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = "dbo.DEV_INS_Logsheets";
+
+        var output = command.CreateParameter();
+        output.ParameterName = "@LogCode";
+        output.DbType = DbType.Int32;
+        output.Direction = ParameterDirection.Output;
+        command.Parameters.Add(output);
+        AddParameter(command, "@VMFCode", DbType.Int32, logsheet.vmf_code);
+        AddParameter(command, "@StartOdoMeter", DbType.Int32, Convert.ToInt32(logsheet.start_odo));
+        AddParameter(command, "@EndOdoMeter", DbType.Int32, Convert.ToInt32(logsheet.end_odo));
+        AddParameter(command, "@Month", DbType.DateTime, logsheet.month);
+        AddParameter(command, "@SiteCode", DbType.Int32, logsheet.site_code);
+        AddParameter(command, "@RekNum", DbType.String, logsheet.rek_num);
+        AddParameter(command, "@DaysUsed", DbType.Int32, logsheet.days_used);
+        AddParameter(command, "@BundNum", DbType.Int32, logsheet.bund_num);
+        AddParameter(command, "@TransactionDate", DbType.DateTime, logsheet.trans_date == default ? DateTime.Now : logsheet.trans_date);
+        AddParameter(command, "@DriverTime", DbType.Double, logsheet.driver_time);
+        AddParameter(command, "@FBSComp", DbType.DateTime, logsheet.FBS_comp);
+        AddParameter(command, "@UserAccessCode", DbType.Int32, UserAccessCode(currentUserId));
+        AddParameter(command, "@TransactionTime", DbType.DateTime, DateTime.Today.Add(logsheet.trans_time == default ? DateTime.Now.TimeOfDay : logsheet.trans_time));
+        AddParameter(command, "@DepartmentCode", DbType.Int16, logsheet.department_code > 0 ? logsheet.department_code : logsheet.site_code);
+        AddParameter(command, "@ContractCode", DbType.Int32, logsheet.contract_code);
+        AddParameter(command, "@ParentLogCode", DbType.Int32, logsheet.parent_log_code);
+
+        await command.ExecuteNonQueryAsync();
+        if (output.Value is null or DBNull || !int.TryParse(output.Value.ToString(), out var logCode) || logCode <= 0)
+        {
+            throw new InvalidOperationException(
+                "The legacy logsheet insert procedure did not return a log code."
+            );
+        }
+
+        return logCode;
     }
 
     private static string BuildProjection(IReadOnlyDictionary<string, ColumnInfo> columns) =>

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Private Hire Vehicles,SystemAdministrator,System Administrator")]
 [Route("api/taxi-scan-docs")]
 public sealed class TaxiScanDocsController : BaseApiController
 {

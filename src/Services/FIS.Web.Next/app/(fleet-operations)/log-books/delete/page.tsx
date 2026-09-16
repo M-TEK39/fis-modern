@@ -20,9 +20,10 @@ import {
 import {
   DEFAULT_LOGBOOK_PAGE_SIZE,
   getLogbookPage,
+  getLogbookVehicleOptions,
   LogbookApiError,
+  type LogbookVehicleOption,
 } from "@/lib/api/fleet-operations/api-logbooks";
-import { getVehicleOptions, type VehicleOption } from "@/lib/api/vehicles/api-vehicles";
 
 const routePath = "/log-books/delete";
 
@@ -90,7 +91,7 @@ function LogbookDeletePagination({
   );
 }
 
-function filterVehicles(options: readonly VehicleOption[], search: string, mode: string) {
+function filterVehicles(options: readonly LogbookVehicleOption[], search: string, mode: string) {
   const normalized = search.trim().toLocaleLowerCase();
   if (!normalized) return [];
   const isGp = mode === "GP";
@@ -130,7 +131,7 @@ async function renderLogbookDeletePageContent({
   const message = statusMessage(query);
   try {
     const [options, logbookPage] = await Promise.all([
-      getVehicleOptions(),
+      getLogbookVehicleOptions(),
       vmfCode
         ? getLogbookPage({
             page: requestedPage,

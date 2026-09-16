@@ -29,7 +29,7 @@ export default function ReviewModalActionForm({
       return;
     }
 
-    if (!comment.trim()) {
+    if (!comment.trim() && intent !== "approve") {
       event.preventDefault();
       setFormError(
         intent === "comment"
@@ -65,7 +65,7 @@ export default function ReviewModalActionForm({
       ) : null}
       <div className="field">
         <label htmlFor="vehicle-authorizer-comment">
-          Authorizer&apos;s Comment <span aria-hidden="true">*</span>
+          Authorizer&apos;s Comment
         </label>
         <textarea
           id="vehicle-authorizer-comment"
@@ -74,7 +74,6 @@ export default function ReviewModalActionForm({
           value={comment}
           onChange={(event) => setComment(event.target.value)}
           maxLength={255}
-          required
         />
       </div>
       <div className="vehicle-create-actions">

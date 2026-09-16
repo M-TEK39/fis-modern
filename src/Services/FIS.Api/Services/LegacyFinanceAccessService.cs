@@ -1,8 +1,6 @@
-using System.Data;
 using System.Globalization;
 using System.Security.Claims;
 using FIS.Data.SqlServer;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Services.Finance;
@@ -17,19 +15,14 @@ public sealed class LegacyFinanceAccessService
 {
     public const string AccessContextItemKey = "LegacyFinanceAccessContext";
 
-    private const long FullLegacyAdministratorAccessLevel = 32767;
     private const string LegacyUsernameClaimType = "legacy_username";
 
     private readonly FisDbContext _context;
-    private readonly ILogger<LegacyFinanceAccessService> _logger;
-
     public LegacyFinanceAccessService(
-        FisDbContext context,
-        ILogger<LegacyFinanceAccessService> logger
+        FisDbContext context
     )
     {
         _context = context;
-        _logger = logger;
     }
 
     public async Task<LegacyFinanceAccessContext> ResolveAsync(
@@ -45,16 +38,16 @@ public sealed class LegacyFinanceAccessService
             .Select(role => role.Trim())
             .Where(role => role.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var accessLevel = ReadLongClaim(principal, "access_level");
         var userAccessCode = ReadIntClaim(principal, "user_access_code");
         var profile = await ResolveProfileScopeAsync(userAccessCode, cancellationToken);
         // Legacy pages compare User.Identity.Name to the literal `cois`; an
         // email local part and a similarly named role are not equivalent.
         var legacyUsername = principal.FindFirst(LegacyUsernameClaimType)?.Value?.Trim();
         var isCois = string.Equals(legacyUsername, "cois", StringComparison.OrdinalIgnoreCase);
-        var isFullAdministrator = accessLevel == FullLegacyAdministratorAccessLevel
-            || roles.Contains("administrator")
-            || roles.Contains("admin");
+        var isFullAdministrator = roles.Contains("administrator")
+            || roles.Contains("admin")
+            || roles.Contains("systemadministrator")
+            || roles.Contains("system administrator");
 
         var hasAllDepartmentDataRole = string.Equals(
             principal.FindFirst("finance_all_departments")?.Value,
@@ -75,76 +68,6 @@ public sealed class LegacyFinanceAccessService
             hasAllDepartmentDataRole,
             hasProvinceWideVehicleListRole
         );
-    }
-
-    /// <summary>
-    /// The fine-grained legacy role tables are optional in expanded databases.
-    /// When they exist, they remain the source of truth for the permission that
-    /// spans all departments; the access-level bit is deliberately not enough.
-    /// </summary>
-    public async Task<IReadOnlyList<string>> GetLegacyNamedRolesAsync(
-        string? username,
-        CancellationToken cancellationToken = default
-    )
-    {
-        if (string.IsNullOrWhiteSpace(username))
-        {
-            return [];
-        }
-
-        var connection = _context.Database.GetDbConnection();
-        var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose)
-        {
-            await connection.OpenAsync(cancellationToken);
-        }
-
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT r.[RoleName]
-                FROM [dbo].[aspnet_Users] AS u
-                INNER JOIN [dbo].[aspnet_UsersInRoles] AS ur ON ur.[UserId] = u.[UserId]
-                INNER JOIN [dbo].[aspnet_Roles] AS r
-                    ON r.[RoleId] = ur.[RoleId]
-                   AND r.[ApplicationId] = u.[ApplicationId]
-                WHERE LOWER(u.[UserName]) = @username
-                """;
-            var parameter = command.CreateParameter();
-            parameter.ParameterName = "@username";
-            parameter.DbType = DbType.String;
-            parameter.Value = username.Trim().ToLowerInvariant();
-            command.Parameters.Add(parameter);
-
-            var roles = new List<string>();
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                var role = reader.IsDBNull(0) ? null : reader.GetString(0).Trim();
-                if (!string.IsNullOrWhiteSpace(role))
-                {
-                    roles.Add(role);
-                }
-            }
-
-            return roles;
-        }
-        catch (SqlException ex) when (ex.Number is 207 or 208)
-        {
-            _logger.LogInformation(
-                "Legacy ASP.NET role tables are unavailable; continuing without named role hydration for {Username}",
-                username
-            );
-            return [];
-        }
-        finally
-        {
-            if (shouldClose)
-            {
-                await connection.CloseAsync();
-            }
-        }
     }
 
     public async Task<LegacyFinanceProfileScope?> ResolveProfileScopeAsync(
@@ -274,13 +197,6 @@ public sealed class LegacyFinanceAccessService
         return int.TryParse(principal.FindFirst(type)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
             ? value
             : null;
-    }
-
-    private static long ReadLongClaim(ClaimsPrincipal principal, string type)
-    {
-        return long.TryParse(principal.FindFirst(type)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : 0;
     }
 
     public sealed record LegacyFinanceProfileScope(

@@ -7,7 +7,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/notice-management")]
-[Authorize]
+[Authorize(Roles = "User Administration")]
 public class NoticeManagementController : BaseApiController
 {
     private readonly INoticeRepository _noticeRepository;

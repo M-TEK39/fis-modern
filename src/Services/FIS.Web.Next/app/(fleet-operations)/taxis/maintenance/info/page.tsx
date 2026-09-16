@@ -7,6 +7,7 @@ import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { TaxiHeader, TaxiRestricted } from "@/app/(fleet-operations)/taxis/_components";
+import { hasTaxiAccess } from "@/app/(fleet-operations)/taxis/access";
 import { getSession } from "@/lib/auth/session";
 
 async function TaxiMaintenanceInfoPageContent() {
@@ -19,13 +20,7 @@ async function TaxiMaintenanceInfoPageContent() {
         <SessionRecovery returnPath="/taxis/maintenance/info" />
       </main>
     );
-  if (
-    !session.roles.some(
-      (role) =>
-        role.localeCompare("Taxi Information Maintenance", undefined, { sensitivity: "accent" }) ===
-        0,
-    )
-  )
+  if (!hasTaxiAccess(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <TaxiRestricted subject="Taxi Information Maintenance" />

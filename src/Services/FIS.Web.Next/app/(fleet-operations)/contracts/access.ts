@@ -1,7 +1,5 @@
 import type { ContractRecord } from "@/lib/api/finance/api-contracts";
 
-const CONTRACT_PERMISSION = BigInt(2);
-
 const ADMIN_ROLES = [
   "admin",
   "administrator",
@@ -54,20 +52,8 @@ function hasNamedRole(roles: readonly string[], candidates: readonly string[]) {
   return roles.some((role) => candidateSet.has(role.trim().toLowerCase()));
 }
 
-function hasAccessBit(accessLevel: string | undefined, permission: bigint) {
-  try {
-    return accessLevel ? (BigInt(accessLevel) & permission) === permission : false;
-  } catch {
-    return false;
-  }
-}
-
-export function hasContractAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  if (hasNamedRole(roles, ["contracts", "contract", ...ADMIN_ROLES])) {
-    return true;
-  }
-
-  return hasAccessBit(accessLevel, CONTRACT_PERMISSION);
+export function hasContractAccess(_accessLevel: string | undefined, roles: readonly string[]) {
+  return hasNamedRole(roles, ["contracts", "contract", ...ADMIN_ROLES]);
 }
 
 export function isContractAdmin(roles: readonly string[]) {

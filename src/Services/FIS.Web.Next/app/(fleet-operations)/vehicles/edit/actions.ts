@@ -11,10 +11,9 @@ import {
   VehicleEditApiError,
   type VehicleUpdateRequest,
 } from "@/lib/api/vehicles/api-vehicle-edit";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import { getSession } from "@/lib/auth/session";
 import type { VehicleEditSearchActionState } from "@/app/(fleet-operations)/vehicles/edit/vehicle-edit-types";
-
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 
 export type VehicleEditActionState = {
   status: "idle" | "success" | "error";
@@ -55,21 +54,6 @@ function getInteger(
   return parsed;
 }
 
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
-
 async function authorizeVehicleEdit() {
   const session = await getSession();
 
@@ -87,7 +71,7 @@ async function authorizeVehicleEdit() {
     };
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return {
       ok: false as const,
       message: "You do not have permission to maintain Vehicle Master records.",
@@ -100,6 +84,10 @@ async function authorizeVehicleEdit() {
 function searchErrorMessage(error: VehicleCreateApiError) {
   if (error.reason === "unauthorized") {
     return "Your session has expired. Sign in again before searching.";
+  }
+
+  if (error.reason === "forbidden") {
+    return "You do not have permission to search Vehicle Master records.";
   }
 
   if (error.reason === "unavailable") {
@@ -220,12 +208,16 @@ function updateErrorMessage(error: VehicleEditApiError) {
     return "Your session has expired or you are no longer allowed to edit vehicles. Sign in again.";
   }
 
+  if (error.reason === "forbidden") {
+    return "You do not have permission to edit Vehicle Master records.";
+  }
+
   if (error.reason === "not-found") {
     return "The vehicle could not be found. Return to search and choose another record.";
   }
 
   if (error.reason === "unavailable") {
-    return "The vehicle service is temporarily unavailable. Please try again.";
+    return `The vehicle service is temporarily unavailable. ${error.message}`;
   }
 
   return error.message || "The vehicle service returned an unexpected response. Please try again.";

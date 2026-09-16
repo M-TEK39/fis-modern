@@ -46,6 +46,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpPost("hijack")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<HiJackCreateResultDto>> CreateHiJack(
         [FromBody] CreateHiJackDto dto
     )
@@ -123,6 +124,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpPost("loss")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<LossCreateResultDto>> CreateLoss([FromBody] CreateLossDto dto)
     {
         if (!ModelState.IsValid)
@@ -240,6 +242,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpPost("accident")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<AccidentCreateResultDto>> CreateAccident(
         [FromBody] CreateAccidentDto dto
     )
@@ -363,6 +366,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpGet]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<IEnumerable<CallCentre>>> GetAll()
     {
         try
@@ -377,6 +381,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpGet("{id}")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<CallCentre>> GetById(short id)
     {
         try
@@ -392,6 +397,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpGet("vehicle/{vmfCode}")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<IEnumerable<CallCentre>>> GetByVehicle(int vmfCode)
     {
         try
@@ -406,6 +412,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<CallCentre>> Create([FromBody] CreateCallCentreDto dto)
     {
         try
@@ -439,6 +446,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpPost("road-assistance")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<RoadAssistanceCreateResultDto>> CreateRoadAssistance(
         [FromBody] CreateRoadAssistanceDto dto
     )
@@ -529,6 +537,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<CallCentre>> Update(short id, [FromBody] UpdateCallCentreDto dto)
     {
         try
@@ -556,6 +565,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpGet("{id}/edit-details")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<CallCentreEditDetails>> GetEditDetails(short id)
     {
         try
@@ -580,6 +590,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpPut("{id}/booking-link")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<CallCentre>> LinkBooking(short id, [FromBody] LinkBookingDto dto)
     {
         if (!ModelState.IsValid || dto.BookingId <= 0)
@@ -622,6 +633,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpPut("{id}/edit-details")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<CallCentre>> UpdateEditDetails(
         short id,
         [FromBody] UpdateCallCentreEditDetailsDto dto
@@ -668,6 +680,7 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult> Delete(short id)
     {
         try
@@ -688,6 +701,7 @@ public class CallCentreController : BaseApiController
     /// Get call centre menu options
     /// </summary>
     [HttpGet("menu")]
+    [Authorize(Roles = "Call Centre")]
     public ActionResult<CallCentreMenuDto> GetMenu()
     {
         var menu = new CallCentreMenuDto
@@ -708,6 +722,7 @@ public class CallCentreController : BaseApiController
     /// Get call centre help information
     /// </summary>
     [HttpGet("help")]
+    [Authorize(Roles = "Call Centre")]
     public ActionResult<CallCentreHelpDto> GetHelp()
     {
         var help = new CallCentreHelpDto
@@ -740,6 +755,7 @@ public class CallCentreController : BaseApiController
     /// Get call centre notifications
     /// </summary>
     [HttpGet("notifications")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<CallCentreNotificationsDto>> GetNotifications()
     {
         try
@@ -786,6 +802,7 @@ public class CallCentreController : BaseApiController
     /// Get call centre reports menu
     /// </summary>
     [HttpGet("reports/menu")]
+    [Authorize(Roles = "Reports")]
     public ActionResult<CallCentreReportMenuDto> GetReportsMenu()
     {
         var menu = new CallCentreReportMenuDto
@@ -807,6 +824,7 @@ public class CallCentreController : BaseApiController
     /// single-reference detail retain their separate aggregate/detail contracts.
     /// </summary>
     [HttpGet("reports/page")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult> GetReportPage(
         [FromQuery] string mode,
         [FromQuery] int page = 1,
@@ -900,6 +918,7 @@ public class CallCentreController : BaseApiController
     /// Generate call centre report by department and site for a period
     /// </summary>
     [HttpPost("reports/dept-site-period")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<CallCentreReportDto>> GetReportDeptSitePeriod(
         [FromBody] CallCentreDeptSitePeriodRequestDto request
     )
@@ -944,6 +963,7 @@ public class CallCentreController : BaseApiController
     /// Generate call centre statistics report
     /// </summary>
     [HttpGet("reports/statistics")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<CallCentreReportDto>> GetReportStatistics(
         [FromQuery] DateTime? startDate,
         [FromQuery] DateTime? endDate
@@ -1018,6 +1038,7 @@ public class CallCentreController : BaseApiController
     /// view. It deliberately returns summary data, not an unpaged incident set.
     /// </summary>
     [HttpGet("reports/statistics-capture")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult> GetCaptureStatistics(
         [FromQuery] DateTime? startDate,
         [FromQuery] DateTime? endDate,
@@ -1056,6 +1077,7 @@ public class CallCentreController : BaseApiController
     /// Generate CLO inquiry report
     /// </summary>
     [HttpGet("reports/clo")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<CallCentreReportDto>> GetReportClo([FromQuery] string? cloNumber)
     {
         try
@@ -1096,6 +1118,7 @@ public class CallCentreController : BaseApiController
     /// Generate data access report
     /// </summary>
     [HttpGet("reports/data-access")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<CallCentreReportDto>> GetReportDataAccess(
         [FromQuery] DateTime? startDate,
         [FromQuery] DateTime? endDate
@@ -1157,6 +1180,7 @@ public class CallCentreController : BaseApiController
     /// resolved at runtime in the same way as the Call_centre repository.
     /// </summary>
     [HttpGet("reports/data-access/{callCentreCode:int}")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<CallCentreDataAccessReportDto>> GetReportDataAccessDetail(
         int callCentreCode,
         [FromQuery] int page = 1,
@@ -1360,6 +1384,7 @@ public class CallCentreController : BaseApiController
     /// Generate open calls report
     /// </summary>
     [HttpGet("reports/open-calls")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<CallCentreReportDto>> GetReportOpenCalls()
     {
         try

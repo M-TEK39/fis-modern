@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Authorize]
+// Damage capture is part of the legacy Vehicle Inception/Vehicle Master
+// workflow; a generic authenticated principal must not mutate it directly.
+[Authorize(Roles = "Vehicle Master,Vehicle Inception Capturer,Vehicle Inception Authorizer")]
 [Route("api/[controller]")]
 public class VehicleDamageController : BaseApiController
 {

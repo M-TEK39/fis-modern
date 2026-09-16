@@ -9,7 +9,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = "Reports")]
 public class AuctionController : BaseApiController
 {
     private const int DefaultPageSize = 24;

@@ -77,7 +77,7 @@ export async function saveAssetVerificationAction(formData: FormData) {
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status !== "authenticated") redirect(resultPath(failurePath, gg, "unavailable"));
-  if (!hasAssetVerificationAccess(session.roles, session.accessLevel))
+  if (!hasAssetVerificationAccess(session.roles))
     redirect(resultPath(failurePath, gg, "forbidden"));
 
   let saved: Awaited<ReturnType<typeof createAssetVerification>> = null;

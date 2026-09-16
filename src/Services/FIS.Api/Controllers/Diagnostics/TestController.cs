@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "SystemAdministrator,User Administration")]
 [Route("api/[controller]")]
 public class TestController : ControllerBase
 {

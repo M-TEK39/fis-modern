@@ -144,6 +144,17 @@ export async function getForwardedAuthCookieHeader() {
     .join("; ");
 }
 
+export async function getMicrosoftSignInStatus() {
+  try {
+    const response = await fetchApi("api/auth/microsoft/status");
+    if (!response.ok) return false;
+    const payload = await readJson<{ enabled?: unknown }>(response);
+    return payload?.enabled === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function setAuthCookies(authCookies: ForwardedAuthCookie[]) {
   const cookieStore = await cookies();
   const secure = process.env.NODE_ENV === "production";

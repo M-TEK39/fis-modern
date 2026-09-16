@@ -61,7 +61,7 @@ async function renderVehiclePhotosManagePageContent({ params, searchParams }: Pa
         <StatusCard title="API unavailable" message="Vehicle photo maintenance is unavailable." />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasVehicleManagementPermission(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <StatusCard

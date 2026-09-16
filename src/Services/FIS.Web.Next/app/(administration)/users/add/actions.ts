@@ -96,7 +96,13 @@ function getAccessLevel(formData: FormData) {
       throw new UserFormValidationError("Access level contains an invalid permission.");
     }
 
-    accessLevel |= permissionBit;
+    // JavaScript bitwise operators coerce to signed 32-bit integers. The
+    // legacy AccessLevel catalogue contains values above 2^31, so combine
+    // the distinct power-of-two permissions with safe-number arithmetic.
+    const remainder = accessLevel % (permissionBit * 2);
+    if (remainder < permissionBit) {
+      accessLevel += permissionBit;
+    }
   }
 
   return accessLevel;

@@ -30,7 +30,7 @@ async function LogsheetHelpContent() {
   if (session.status !== "authenticated")
     return <AccessRestricted message="Your session could not be loaded." />;
   if (!hasLogsheetAccess(session))
-    return <AccessRestricted message="Your profile does not include Reports access." />;
+    return <AccessRestricted message="Your profile does not include Log Sheets access." />;
 
   return (
     <>

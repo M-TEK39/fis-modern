@@ -706,6 +706,15 @@ async function renderContractMaintenancePageContent({
         <SessionRecovery returnPath={routePath} />
       </main>
     );
+  if (data.kind === "forbidden")
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <section className="vehicle-status-card" role="alert">
+          <p className="eyebrow">Access restricted</p>
+          <h2>You do not have permission to maintain vehicle contracts.</h2>
+        </section>
+      </main>
+    );
   if (data.kind === "error")
     return (
       <main className="page-shell vehicle-page-shell">

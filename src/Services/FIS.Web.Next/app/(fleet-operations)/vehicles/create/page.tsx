@@ -9,39 +9,19 @@ import AccessRestrictedCard from "@/components/app-shell/access-restricted-card"
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import VehicleCreateClient from "@/app/(fleet-operations)/vehicles/create/vehicle-create-client";
 import {
+  hasVehicleInceptionCapturerRole,
+} from "@/app/(fleet-operations)/vehicles/access";
+import {
   VehicleCreateApiError,
   getVehicleCreateReferenceData,
 } from "@/lib/api/vehicles/api-vehicle-create";
 import { getSession } from "@/lib/auth/session";
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
-
 function AccessRestricted() {
   return <AccessRestrictedCard message="You do not have permission to capture a new vehicle." />;
 }
 
-function ApiUnavailable() {
+function ApiUnavailable({ detail }: Readonly<{ detail?: string }>) {
   return (
     <section className="vehicle-status-card" role="alert">
       <div className="status-icon status-icon-error" aria-hidden="true">
@@ -52,6 +32,7 @@ function ApiUnavailable() {
       <p className="muted-copy">
         The application is still running. Retry when the FIS API is available.
       </p>
+      {detail ? <p className="muted-copy">Details: {detail}</p> : null}
       <div className="button-row">
         <Link className="button button-primary" href="/vehicles/create">
           Try again
@@ -84,21 +65,7 @@ async function VehicleCreatePageContent() {
     );
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return (
-      <main className="page-shell vehicle-page-shell">
-        <AccessRestricted />
-      </main>
-    );
-  }
-
-  const hasExplicitInceptionRoles = session.roles.some((role) =>
-    ["vehicle inception capturer", "vehicle inception authorizer"].some(
-      (candidate) => role.localeCompare(candidate, undefined, { sensitivity: "accent" }) === 0,
-    ),
-  );
-
-  if (hasExplicitInceptionRoles && !hasRole(session.roles, "vehicle inception capturer")) {
+  if (!hasVehicleInceptionCapturerRole(session.roles)) {
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />
@@ -142,13 +109,23 @@ async function VehicleCreatePageContent() {
       return <SessionRecovery returnPath="/vehicles/create" />;
     }
 
+    if (error instanceof VehicleCreateApiError && error.reason === "forbidden") {
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <AccessRestricted />
+        </main>
+      );
+    }
+
     console.error(
       "FIS vehicle create reference data request failed",
       error instanceof Error ? error.message : "unknown error",
     );
     return (
       <main className="page-shell vehicle-page-shell">
-        <ApiUnavailable />
+        <ApiUnavailable
+          detail={error instanceof VehicleCreateApiError ? error.message : undefined}
+        />
       </main>
     );
   }

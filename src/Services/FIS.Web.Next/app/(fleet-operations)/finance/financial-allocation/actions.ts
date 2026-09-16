@@ -31,6 +31,16 @@ function department(formData: FormData) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
+function dateValue(formData: FormData, name: string) {
+  const value = text(formData, name);
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+}
+
+function confirmationActionCode(formData: FormData) {
+  const value = Number(text(formData, "confirmationActionCode"));
+  return Number.isSafeInteger(value) && (value === 4 || value === 5) ? value : undefined;
+}
+
 function positiveNumber(formData: FormData, name: string) {
   const value = Number(text(formData, name));
   return Number.isSafeInteger(value) && value > 0 ? value : undefined;
@@ -68,6 +78,16 @@ function apiMessage(error: unknown) {
       return "Your session has expired. Sign in again before continuing.";
     if (error.reason === "unavailable")
       return "The Finance service is temporarily unavailable. Please try again.";
+    if (error.responseBody && typeof error.responseBody === "object") {
+      const body = error.responseBody as Record<string, unknown>;
+      const message = body.message ?? body.Message ?? body.error ?? body.Error;
+      const actionCode = body.actionCode ?? body.ActionCode;
+      if (typeof message === "string" && message.trim()) {
+        return typeof actionCode === "number"
+          ? `${message.trim()} Re-submit the same file with confirmation code ${actionCode} to continue.`
+          : message.trim();
+      }
+    }
     return error.message;
   }
   return "The Finance operation could not be completed.";
@@ -109,7 +129,13 @@ export async function importBasAction(formData: FormData) {
   let result: unknown;
   try {
     const fileData = Buffer.from(await file.arrayBuffer()).toString("base64");
-    result = await importBas(fileData, department(formData));
+    result = await importBas(
+      fileData,
+      department(formData),
+      dateValue(formData, "startDate"),
+      dateValue(formData, "endDate"),
+      confirmationActionCode(formData),
+    );
   } catch (error) {
     redirect(resultPath("import-bas", "error", apiMessage(error)));
   }
@@ -151,7 +177,7 @@ export async function activateBasSegmentsAction(formData: FormData) {
     );
   let result: unknown;
   try {
-    result = await activateBasSegments(segmentCodes);
+    result = await activateBasSegments(segmentCodes, department(formData));
   } catch (error) {
     redirect(resultPath("activate-bas", "error", apiMessage(error)));
   }

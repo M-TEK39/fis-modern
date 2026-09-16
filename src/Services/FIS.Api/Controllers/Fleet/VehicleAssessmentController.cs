@@ -1,5 +1,6 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Core.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,6 +8,10 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Authorize]
+// Vehicle assessments are captured from the legacy Contracts workflow; do
+// not expose this shared table endpoint to an authenticated user without a
+// Contracts entitlement.
+[ContractAccess]
 [Route("api/[controller]")]
 public class VehicleAssessmentController : BaseApiController
 {
@@ -32,6 +37,17 @@ public class VehicleAssessmentController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            if (ex is LegacyVehicleAssessmentWorkflowUnavailableException)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new
+                    {
+                        error = "The legacy vehicle-assessment read procedure is unavailable or incompatible.",
+                        source = "legacy-procedure-required",
+                    }
+                );
+            }
             return StatusCode(500);
         }
     }
@@ -47,6 +63,17 @@ public class VehicleAssessmentController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            if (ex is LegacyVehicleAssessmentWorkflowUnavailableException)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new
+                    {
+                        error = "The legacy vehicle-assessment read procedure is unavailable or incompatible.",
+                        source = "legacy-procedure-required",
+                    }
+                );
+            }
             return StatusCode(500);
         }
     }
@@ -62,6 +89,17 @@ public class VehicleAssessmentController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            if (ex is LegacyVehicleAssessmentWorkflowUnavailableException)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new
+                    {
+                        error = "The legacy vehicle-assessment read procedure is unavailable or incompatible.",
+                        source = "legacy-procedure-required",
+                    }
+                );
+            }
             return StatusCode(500);
         }
     }
@@ -76,6 +114,17 @@ public class VehicleAssessmentController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            if (ex is LegacyVehicleAssessmentWorkflowUnavailableException)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new
+                    {
+                        error = "The legacy vehicle-assessment read procedure is unavailable or incompatible.",
+                        source = "legacy-procedure-required",
+                    }
+                );
+            }
             return StatusCode(500);
         }
     }
@@ -95,6 +144,17 @@ public class VehicleAssessmentController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            if (ex is NotSupportedException or LegacyVehicleAssessmentWorkflowUnavailableException)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new
+                    {
+                        error = "The legacy vehicle-assessment procedure is unavailable or incompatible. No partial inspection mutation was written.",
+                        source = "legacy-procedure-required",
+                    }
+                );
+            }
             return StatusCode(500);
         }
     }
@@ -114,6 +174,17 @@ public class VehicleAssessmentController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            if (ex is NotSupportedException or LegacyVehicleAssessmentWorkflowUnavailableException)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new
+                    {
+                        error = "The legacy vehicle-assessment procedure is unavailable or incompatible. No partial inspection mutation was written.",
+                        source = "legacy-procedure-required",
+                    }
+                );
+            }
             return StatusCode(500);
         }
     }
@@ -129,6 +200,17 @@ public class VehicleAssessmentController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
+            if (ex is NotSupportedException or LegacyVehicleAssessmentWorkflowUnavailableException)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new
+                    {
+                        error = "Legacy vehicle assessments cannot be deleted; the inspection record is retained for audit history.",
+                        source = "legacy-procedure-required",
+                    }
+                );
+            }
             return StatusCode(500);
         }
     }

@@ -15,7 +15,6 @@ import {
 } from "@/lib/api/fleet-operations/api-third-party";
 import { getSession } from "@/lib/auth/session";
 
-const CONTRACT_MANAGEMENT_PERMISSION = BigInt(2);
 const THIRD_PARTY_ROLE = "Third Party Rental";
 
 function text(formData: FormData, name: string) {
@@ -83,22 +82,10 @@ async function authorize() {
       ok: false as const,
       message: "Your session has expired. Sign in again before continuing.",
     };
-  const hasPermission = session.accessLevel
-    ? (() => {
-        try {
-          return (
-            (BigInt(session.accessLevel) & CONTRACT_MANAGEMENT_PERMISSION) ===
-            CONTRACT_MANAGEMENT_PERMISSION
-          );
-        } catch {
-          return false;
-        }
-      })()
-    : false;
   const hasRole = session.roles.some(
     (role) => role.localeCompare(THIRD_PARTY_ROLE, undefined, { sensitivity: "accent" }) === 0,
   );
-  return hasPermission || hasRole
+  return hasRole
     ? { ok: true as const }
     : {
         ok: false as const,

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 using System.Text.RegularExpressions;
 using FIS.Core.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -11,7 +12,6 @@ namespace FIS.Api.Controllers;
 [Route("api/vehicle-inception/gg-blocks")]
 public sealed class GgBlocksController : BaseApiController
 {
-    private const long VehicleManagementPermission = 1;
     private static readonly Regex GgNumberPattern = new(
         "^[A-Z]{3}[0-9]{3}G$",
         RegexOptions.CultureInvariant
@@ -159,10 +159,19 @@ public sealed class GgBlocksController : BaseApiController
 
     private bool HasVehicleManagementPermission()
     {
-        var accessLevelClaim = User.FindFirst("access_level")?.Value;
-        return long.TryParse(accessLevelClaim, out var accessLevel)
-            && (accessLevel & VehicleManagementPermission) == VehicleManagementPermission;
+        return HasRole("Vehicle Master");
     }
+
+    private bool HasRole(string expectedRole) =>
+        User.Claims.Any(claim =>
+            (claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            && claim.Value.Split(
+                ',',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+            ).Any(role => string.Equals(role, expectedRole, StringComparison.OrdinalIgnoreCase))
+        );
 
     private static object MapHistoryRecord(GgBlockHistoryRecord record) =>
         new

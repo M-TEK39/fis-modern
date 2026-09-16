@@ -840,10 +840,10 @@ function ReassignForm({
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">Reassign active contract</p>
-          <h2>Move contract to another site</h2>
+          <h2>Update site or custodian</h2>
           <p>
             The legacy workflow creates a new effective contract record and closes the previous
-            active record.
+            active record. Select a new site, custodian, or both.
           </p>
         </div>
       </div>
@@ -852,7 +852,18 @@ function ReassignForm({
           <label className="form-label" htmlFor="reassign-site">
             Destination site
           </label>
-          <SiteSelect id="reassign-site" name="newSiteCode" required sites={references.sites} />
+          <SiteSelect id="reassign-site" name="newSiteCode" sites={references.sites} />
+        </div>
+        <div className="form-field">
+          <label className="form-label" htmlFor="reassign-driver">
+            Destination custodian driver
+          </label>
+          <SiteDriverSelect
+            drivers={references.drivers}
+            id="reassign-driver"
+            name="newSiteDriverCode"
+            sites={references.sites}
+          />
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="reassign-start-date">

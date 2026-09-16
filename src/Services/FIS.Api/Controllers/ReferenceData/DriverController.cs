@@ -1,7 +1,10 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace FIS.Api.Controllers;
 
@@ -49,15 +52,24 @@ public class DriverDto
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = "Driver and Authoriser Management,SystemAdministrator,System Administrator")]
 public class DriverController : BaseApiController
 {
     private readonly IDriverRepository _driverRepository;
+    private readonly ISiteRepository _siteRepository;
+    private readonly FisDbContext _context;
     private readonly ILogger<DriverController> _logger;
 
-    public DriverController(IDriverRepository driverRepository, ILogger<DriverController> logger)
+    public DriverController(
+        IDriverRepository driverRepository,
+        ISiteRepository siteRepository,
+        FisDbContext context,
+        ILogger<DriverController> logger
+    )
     {
         _driverRepository = driverRepository;
+        _siteRepository = siteRepository;
+        _context = context;
         _logger = logger;
     }
 
@@ -66,9 +78,11 @@ public class DriverController : BaseApiController
     {
         try
         {
-            int currentUserId = GetCurrentUserId();
-
-            var drivers = await _driverRepository.GetActiveDriversAsync();
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            var drivers = FilterByAllowedSites(
+                await _driverRepository.GetActiveDriversAsync(),
+                allowedSites
+            );
             var driverDtos = drivers.Select(d => new DriverDto
             {
                 SiteDriverCode = d.site_driver_code,
@@ -109,6 +123,9 @@ public class DriverController : BaseApiController
             {
                 return NotFound();
             }
+
+            if (!await IsSiteAllowedAsync(driver.site_code))
+                return Forbid();
 
             var driverDto = new DriverDto
             {
@@ -158,6 +175,9 @@ public class DriverController : BaseApiController
                 return NotFound();
             }
 
+            if (!await IsSiteAllowedAsync(driver.site_code))
+                return Forbid();
+
             var driverDto = new DriverDto
             {
                 SiteDriverCode = driver.site_driver_code,
@@ -200,7 +220,11 @@ public class DriverController : BaseApiController
         {
             int currentUserId = GetCurrentUserId();
 
-            var drivers = await _driverRepository.SearchDriversAsync(searchTerm);
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            var drivers = FilterByAllowedSites(
+                await _driverRepository.SearchDriversAsync(searchTerm),
+                allowedSites
+            );
             var driverDtos = drivers.Select(d => new DriverDto
             {
                 SiteDriverCode = d.site_driver_code,
@@ -230,6 +254,7 @@ public class DriverController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Driver and Authoriser Management,SystemAdministrator,System Administrator")]
     public async Task<ActionResult<DriverDto>> CreateDriver(
         [FromBody] CreateDriverDto createDriverDto
     )
@@ -237,6 +262,10 @@ public class DriverController : BaseApiController
         try
         {
             int currentUserId = GetCurrentUserId();
+            if (!await IsSiteAllowedAsync(createDriverDto.SiteCode))
+                return Forbid();
+            if (await ValidateNoDuplicateIdentityAsync(createDriverDto) is { } duplicateError)
+                return Conflict(new { error = duplicateError });
 
             var driver = new Driver
             {
@@ -285,6 +314,24 @@ public class DriverController : BaseApiController
                 driverDto
             );
         }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("cannot be captured or assigned", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(ex, "Duplicate driver identity rejected");
+            return Conflict(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("procedure", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(ex, "Legacy driver procedure contract is unavailable or incompatible");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The deployed legacy driver procedure is unavailable or incompatible. No direct-DML fallback was run.",
+                }
+            );
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating driver");
@@ -293,6 +340,7 @@ public class DriverController : BaseApiController
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Driver and Authoriser Management,SystemAdministrator,System Administrator")]
     public async Task<ActionResult<DriverDto>> UpdateDriver(
         string id,
         [FromBody] UpdateDriverDto updateDriverDto
@@ -307,6 +355,13 @@ public class DriverController : BaseApiController
             {
                 return NotFound();
             }
+            if (
+                !await IsSiteAllowedAsync(existingDriver.site_code)
+                || !await IsSiteAllowedAsync(updateDriverDto.SiteCode)
+            )
+                return Forbid();
+            if (await ValidateNoDuplicateIdentityAsync(updateDriverDto, existingDriver.site_driver_code) is { } duplicateError)
+                return Conflict(new { error = duplicateError });
 
             existingDriver.site_code = updateDriverDto.SiteCode;
             existingDriver.driver_licence_type_id = updateDriverDto.DriverLicenceTypeId;
@@ -349,6 +404,24 @@ public class DriverController : BaseApiController
 
             return Ok(driverDto);
         }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("cannot be captured or assigned", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(ex, "Duplicate driver identity rejected for {DriverId}", id);
+            return Conflict(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("procedure", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(ex, "Legacy driver procedure contract is unavailable or incompatible for {DriverId}", id);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The deployed legacy driver procedure is unavailable or incompatible. No direct-DML fallback was run.",
+                }
+            );
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating driver with id {DriverId}", id);
@@ -357,6 +430,7 @@ public class DriverController : BaseApiController
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Driver and Authoriser Management,SystemAdministrator,System Administrator")]
     public async Task<ActionResult> DeleteDriver(string id)
     {
         try
@@ -368,6 +442,8 @@ public class DriverController : BaseApiController
             {
                 return NotFound();
             }
+            if (!await IsSiteAllowedAsync(existingDriver.site_code))
+                return Forbid();
 
             await _driverRepository.DeleteAsync(id, currentUserId);
             return NoContent();
@@ -378,4 +454,88 @@ public class DriverController : BaseApiController
             return StatusCode(500, "Internal server error");
         }
     }
+
+    private async Task<string?> ValidateNoDuplicateIdentityAsync(
+        CreateDriverDto candidate,
+        int? excludedSiteDriverCode = null
+    )
+    {
+        var southAfricanId = NormalizeIdentity(candidate.DriverSAId);
+        var passportNumber = NormalizeIdentity(candidate.DriverPassportNumber);
+        var licenceNumber = NormalizeIdentity(candidate.DriverLicenceNumber);
+        var existingDrivers = await _driverRepository.GetAllDriversAsync();
+        var duplicate = existingDrivers.FirstOrDefault(driver =>
+            (!excludedSiteDriverCode.HasValue || driver.site_driver_code != excludedSiteDriverCode.Value)
+            && (
+                MatchesIdentity(driver.driver_SA_id, southAfricanId)
+                || MatchesIdentity(driver.driver_passportnumber, passportNumber)
+                || MatchesIdentity(driver.driver_licence_number, licenceNumber)
+            )
+        );
+        if (duplicate is null)
+            return null;
+
+        return duplicate.site_code == candidate.SiteCode
+            ? "This driver already exists at the selected site. Update the existing driver record instead."
+            : $"This driver already exists at site {duplicate.site_code}. A driver cannot be captured at more than one site.";
+    }
+
+    private static string? NormalizeIdentity(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim().Replace(" ", string.Empty).ToUpperInvariant();
+
+    private static bool MatchesIdentity(string? existingValue, string? candidateValue) =>
+        candidateValue is not null
+        && string.Equals(NormalizeIdentity(existingValue), candidateValue, StringComparison.Ordinal);
+
+    private async Task<IReadOnlySet<int>?> ResolveAllowedSiteCodesAsync()
+    {
+        if (HasGlobalDriverScope())
+            return null;
+
+        var userId = GetCurrentUserId();
+        var profileSiteCode = await _context.UserAccessOlds.AsNoTracking()
+            .Where(user => user.user_access_code == userId)
+            .Select(user => user.Site_code)
+            .SingleOrDefaultAsync(HttpContext.RequestAborted);
+        if (profileSiteCode is not > 0)
+            return new HashSet<int>();
+
+        var profileSite = await _siteRepository.GetByIdAsync(profileSiteCode.Value);
+        if (profileSite is null)
+            return new HashSet<int>();
+
+        var sites = await _siteRepository.GetActiveSitesAsync();
+        if (HasRole("Vehicle List for All Departments in Province") && profileSite.province_code.HasValue)
+            sites = sites.Where(site => site.province_code == profileSite.province_code.Value);
+        else if (HasRole("Vehicle List for All Sites in Department") && profileSite.Depatrment_code.HasValue)
+            sites = sites.Where(site => site.Depatrment_code == profileSite.Depatrment_code.Value);
+        else
+            sites = sites.Where(site => site.Site_code == profileSite.Site_code);
+
+        return sites.Select(site => (int)site.Site_code).ToHashSet();
+    }
+
+    private async Task<bool> IsSiteAllowedAsync(int siteCode)
+    {
+        var allowed = await ResolveAllowedSiteCodesAsync();
+        return allowed is null || allowed.Contains(siteCode);
+    }
+
+    private static IEnumerable<Driver> FilterByAllowedSites(
+        IEnumerable<Driver> drivers,
+        IReadOnlySet<int>? allowedSites
+    ) => allowedSites is null
+        ? drivers
+        : drivers.Where(driver => allowedSites.Contains(driver.site_code));
+
+    private bool HasGlobalDriverScope() => HasRole("SystemAdministrator") || HasRole("System Administrator");
+
+    private bool HasRole(string expectedRole) => User.Claims
+        .Where(claim =>
+            claim.Type == ClaimTypes.Role
+            || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+            || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+        )
+        .SelectMany(claim => claim.Value.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        .Any(role => string.Equals(role.Trim(), expectedRole, StringComparison.OrdinalIgnoreCase));
 }

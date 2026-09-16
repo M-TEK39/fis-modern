@@ -45,6 +45,7 @@ export default function StatusMaintenanceStatusForm({
     <form action={statusAction} className="status-maintenance-form">
       <input type="hidden" name="vmfCode" value={vehicle.vmfCode} />
       <input type="hidden" name="currentStatusCode" value={vehicle.statusCode} />
+      <input type="hidden" name="currentStatusDate" value={vehicle.statusDate?.slice(0, 10) ?? ""} />
       <input type="hidden" name="returnUrl" value={returnUrl} />
       <div className="status-maintenance-radio-list">
         {statusOptions.map((status) => (
@@ -80,6 +81,7 @@ export default function StatusMaintenanceStatusForm({
           type="number"
           min="0"
           defaultValue={vehicle.currentOdo ?? undefined}
+          required
         />
       </div>
 
@@ -105,9 +107,8 @@ export default function StatusMaintenanceStatusForm({
       {showSoldFields ? (
         <div className="status-maintenance-sold-fields">
           <h3>Sold Information</h3>
-          <p className="status-maintenance-note" role="note">
-            Sold fields are required by the legacy flow, but the current C# status endpoint cannot
-            persist them. The update is blocked until that API contract is extended.
+            <p className="status-maintenance-note" role="note">
+            Sold fields are required by the legacy status procedure.
           </p>
           <div className="field">
             <label htmlFor="soldAmount">Sold Amount</label>
@@ -125,8 +126,8 @@ export default function StatusMaintenanceStatusForm({
       ) : null}
 
       <p className="status-maintenance-note" role="note">
-        The current endpoint persists the status and effective date, and applies its stolen-vehicle
-        site side effect. Odometer and general comments are not persisted by this API contract.
+        Status, effective date, end odometer, comments, and sold details are written through the
+        legacy status procedure.
       </p>
 
       {statusState.status === "error" && statusState.message ? (

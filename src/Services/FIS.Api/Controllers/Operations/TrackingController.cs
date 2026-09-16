@@ -29,6 +29,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpGet]
+    [Authorize(Roles = "Tracking")]
     public async Task<ActionResult<IEnumerable<Tracking>>> GetAll()
     {
         try
@@ -43,6 +44,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpGet("page")]
+    [Authorize(Roles = "Tracking")]
     public async Task<ActionResult> GetPage(
         [FromQuery] string? search = null,
         [FromQuery] int page = 1,
@@ -80,6 +82,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpGet("{id}")]
+    [Authorize(Roles = "Tracking")]
     public async Task<ActionResult<Tracking>> GetById(short id)
     {
         try
@@ -95,6 +98,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpGet("vehicle/{vmfCode}")]
+    [Authorize(Roles = "Tracking")]
     public async Task<ActionResult<IEnumerable<Tracking>>> GetByVehicle(int vmfCode)
     {
         try
@@ -109,6 +113,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpGet("active")]
+    [Authorize(Roles = "Tracking")]
     public async Task<ActionResult<IEnumerable<Tracking>>> GetActive()
     {
         try
@@ -123,6 +128,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Tracking")]
     public async Task<ActionResult<Tracking>> Create([FromBody] Tracking item)
     {
         var validation = Validate(item);
@@ -142,6 +148,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Tracking")]
     public async Task<ActionResult<Tracking>> Update(short id, [FromBody] Tracking item)
     {
         if (item is null)
@@ -168,6 +175,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Tracking")]
     public async Task<ActionResult> Delete(short id)
     {
         try
@@ -185,6 +193,7 @@ public class TrackingController : BaseApiController
     #region Specialized Operations
 
     [HttpGet("menu")]
+    [Authorize(Roles = "Tracking")]
     public ActionResult<TrackingMenuDto> GetMenu() =>
         Ok(
             new TrackingMenuDto
@@ -194,6 +203,7 @@ public class TrackingController : BaseApiController
         );
 
     [HttpGet("vehicle-search")]
+    [Authorize(Roles = "Tracking")]
     public async Task<ActionResult<TrackingVehicleLookupDto>> SearchVehicle(
         [FromQuery] string identifier
     )
@@ -272,6 +282,7 @@ public class TrackingController : BaseApiController
     #region Reports
 
     [HttpGet("reports/menu")]
+    [Authorize(Roles = "Reports")]
     public ActionResult<TrackingReportMenuDto> GetReportsMenu() =>
         Ok(
             new TrackingReportMenuDto
@@ -290,6 +301,7 @@ public class TrackingController : BaseApiController
         );
 
     [HttpPost("reports/one-vehicle")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<TrackingReportPageDto>> GetReportOneVehicle(
         [FromBody] TrackingOneVehicleRequestDto request
     )
@@ -307,6 +319,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpPost("reports/one-device")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<TrackingReportPageDto>> GetReportOneDevice(
         [FromBody] TrackingOneDeviceRequestDto request
     )
@@ -322,6 +335,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpPost("reports/all-vehicles")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<TrackingReportPageDto>> GetReportAllVehicles(
         [FromBody] TrackingAllVehiclesRequestDto request
     )
@@ -339,6 +353,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpPost("reports/all-devices")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<TrackingReportPageDto>> GetReportAllDevices(
         [FromBody] TrackingAllDevicesRequestDto request
     )
@@ -355,6 +370,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpPost("reports/install-period")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<TrackingReportPageDto>> GetReportInstallPeriod(
         [FromBody] TrackingInstallPeriodRequestDto request
     )
@@ -371,6 +387,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpPost("reports/site-period")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<TrackingReportPageDto>> GetReportSitePeriod(
         [FromBody] TrackingSitePeriodRequestDto request
     )
@@ -389,6 +406,7 @@ public class TrackingController : BaseApiController
     }
 
     [HttpPost("reports/dept-period")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<TrackingReportPageDto>> GetReportDeptPeriod(
         [FromBody] TrackingDeptPeriodRequestDto request
     )

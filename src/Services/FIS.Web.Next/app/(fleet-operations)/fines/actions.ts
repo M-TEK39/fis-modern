@@ -15,8 +15,7 @@ import {
   type TrafficDeptRequest,
 } from "@/lib/api/fleet-operations/api-fines";
 import { getSession } from "@/lib/auth/session";
-
-const REPORTS_ROLE = "Reports";
+import { hasFinesAccess } from "@/app/(fleet-operations)/fines/access";
 
 class FineValidationError extends Error {}
 
@@ -112,9 +111,7 @@ function getOptionalAmount(formData: FormData) {
 }
 
 function hasReportsRole(roles: readonly string[]) {
-  return roles.some(
-    (role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0,
-  );
+  return hasFinesAccess(roles);
 }
 
 async function authorizeReports() {
@@ -166,6 +163,9 @@ function fineApiErrorMessage(error: unknown, operation: string) {
   if (error instanceof FineApiError) {
     if (error.reason === "unauthorized") {
       return "Your session has expired. Sign in again before continuing.";
+    }
+    if (error.reason === "forbidden") {
+      return "You do not have permission to maintain Fines.";
     }
     if (error.reason === "unavailable") {
       return `The Fines ${operation} service is temporarily unavailable. Please try again.`;
@@ -310,6 +310,9 @@ function trafficApiErrorMessage(error: unknown, operation: string) {
   if (error instanceof FineApiError) {
     if (error.reason === "unauthorized") {
       return "Your session has expired. Sign in again before continuing.";
+    }
+    if (error.reason === "forbidden") {
+      return "You do not have permission to maintain Traffic Departments.";
     }
     if (error.reason === "unavailable") {
       return `The Traffic Dept ${operation} service is temporarily unavailable. Please try again.`;

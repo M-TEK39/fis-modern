@@ -6,7 +6,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = "User Administration")]
 public class NotifyListController : BaseApiController
 {
     private readonly NotifyListCompatibilityService _notifyListService;

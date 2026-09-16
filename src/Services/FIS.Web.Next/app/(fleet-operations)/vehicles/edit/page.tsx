@@ -8,29 +8,13 @@ import RouteLoading from "@/components/app-shell/route-loading";
 import AccessRestrictedCard from "@/components/app-shell/access-restricted-card";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { searchVehicleEditAction } from "@/app/(fleet-operations)/vehicles/edit/actions";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import VehicleEditSearchClient from "@/app/(fleet-operations)/vehicles/edit/vehicle-edit-search-client";
 import { getSession } from "@/lib/auth/session";
-
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 
 type VehicleEditSearchPageProps = {
   searchParams: Promise<{ searchTerm?: string | string[]; updated?: string | string[] }>;
 };
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
 
 function AccessRestricted() {
   return (
@@ -66,7 +50,7 @@ async function VehicleEditSearchPageContent({ searchParams }: VehicleEditSearchP
     );
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

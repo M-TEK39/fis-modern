@@ -114,8 +114,6 @@ services:
       NODE_ENV: "production"
       NEXT_TELEMETRY_DISABLED: "1"
       API_BASE_URL: "http://fis-api-dev:8080"
-      MICROSOFT_SIGN_IN_ENABLED: "${AzureAd__ClientId:-}"
-      MICROSOFT_SIGN_IN_URL: "/api/auth/microsoft/sign-in"
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
       TZ: "Africa/Johannesburg"

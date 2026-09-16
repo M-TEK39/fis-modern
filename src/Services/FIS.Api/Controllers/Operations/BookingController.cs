@@ -7,7 +7,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = "Call Centre")]
 public class BookingController : BaseApiController
 {
     private readonly IBookingRepository _repository;

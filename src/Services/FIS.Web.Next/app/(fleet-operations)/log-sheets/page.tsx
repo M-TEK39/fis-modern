@@ -40,7 +40,7 @@ async function LogsheetMenuPageContent({ searchParams }: Readonly<{ searchParams
   if (session.status !== "authenticated")
     return accessRestricted("Your session could not be loaded.");
   if (!hasLogsheetAccess(session))
-    return accessRestricted("Your profile does not include Reports access.");
+    return accessRestricted("Your profile does not include Log Sheets access.");
 
   try {
     const query = await searchParams;

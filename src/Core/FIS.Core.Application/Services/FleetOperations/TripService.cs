@@ -55,6 +55,14 @@ public class TripService : ITripService
                 throw new InvalidOperationException("Trip validation failed");
             }
 
+            // The legacy capture flow records the authenticated operator, not
+            // a caller-supplied user_access_code. Keep ownership stable even
+            // when this application service is called outside the controller.
+            var currentUserId = _currentUserContext.GetCurrentUserIdOrDefault();
+            trip.user_access_code = currentUserId is > 0 and <= short.MaxValue
+                ? (short)currentUserId
+                : null;
+
             // Set defaults
             trip.issue_date = DateTime.Now;
             trip.locked_for_transfer = false;
@@ -71,7 +79,7 @@ public class TripService : ITripService
 
             var createdTrip = await _tripRepository.CreateAsync(
                 trip,
-                _currentUserContext.GetCurrentUserIdOrDefault()
+                currentUserId
             );
 
             _logger.LogInformation(
@@ -161,6 +169,10 @@ public class TripService : ITripService
         }
 
         trip.issue_date = DateTime.Now;
+        var currentUserId = _currentUserContext.GetCurrentUserIdOrDefault();
+        trip.user_access_code = currentUserId is > 0 and <= short.MaxValue
+            ? (short)currentUserId
+            : null;
         trip.end_odo_meter = null;
         trip.locked_for_transfer = false;
 
@@ -180,7 +192,7 @@ public class TripService : ITripService
             drivers,
             normalizedPassengers,
             normalizedRoutes,
-            _currentUserContext.GetCurrentUserIdOrDefault()
+            currentUserId
         );
 
         _logger.LogInformation(
@@ -198,7 +210,10 @@ public class TripService : ITripService
     /// Update an existing trip authority
     /// Legacy: Trip authority modification
     /// </summary>
-    public async Task UpdateTripAsync(Trip trip)
+    public async Task UpdateTripAsync(
+        Trip trip,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
         try
         {
@@ -208,7 +223,10 @@ public class TripService : ITripService
             );
 
             // Check if trip is locked
-            var existingTrip = await _tripRepository.GetByIdAsync(trip.trip_authority_code);
+            var existingTrip = await _tripRepository.GetByIdAsync(
+                trip.trip_authority_code,
+                allowedSiteCodes
+            );
             if (existingTrip == null)
             {
                 throw new InvalidOperationException($"Trip {trip.trip_authority_code} not found");
@@ -224,6 +242,11 @@ public class TripService : ITripService
                     $"Trip {trip.trip_authority_code} is locked for transfer and cannot be modified"
                 );
             }
+
+            // Approval/edit actions must not replace the original capturer.
+            // The audit actor is carried by modified_by_user_code in the
+            // repository; user_access_code remains the legacy owner.
+            trip.user_access_code = existingTrip.user_access_code;
 
             await _tripRepository.UpdateAsync(
                 trip,
@@ -249,11 +272,12 @@ public class TripService : ITripService
     public async Task CloseTripAsync(
         int tripAuthorityCode,
         IReadOnlyList<TripAuthorityRouteUpdate> routes,
-        int? endOdometer = null
+        int? endOdometer = null,
+        IReadOnlySet<short>? allowedSiteCodes = null
     )
     {
         var details =
-            await _tripRepository.GetDetailsAsync(tripAuthorityCode)
+            await _tripRepository.GetDetailsAsync(tripAuthorityCode, allowedSiteCodes)
             ?? throw new InvalidOperationException($"Trip {tripAuthorityCode} not found");
 
         if (details.Trip.locked_for_transfer)
@@ -345,40 +369,56 @@ public class TripService : ITripService
     /// <summary>
     /// Get trip authority by ID
     /// </summary>
-    public async Task<Trip?> GetTripByIdAsync(int tripAuthorityCode)
+    public async Task<Trip?> GetTripByIdAsync(
+        int tripAuthorityCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
-        return await _tripRepository.GetByIdAsync(tripAuthorityCode);
+        return await _tripRepository.GetByIdAsync(tripAuthorityCode, allowedSiteCodes);
     }
 
-    public async Task<TripAuthorityDetails?> GetTripAuthorityDetailsAsync(int tripAuthorityCode)
+    public async Task<TripAuthorityDetails?> GetTripAuthorityDetailsAsync(
+        int tripAuthorityCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
-        return await _tripRepository.GetDetailsAsync(tripAuthorityCode);
+        return await _tripRepository.GetDetailsAsync(tripAuthorityCode, allowedSiteCodes);
     }
 
-    public async Task<IEnumerable<Trip>> GetAllTripsAsync()
+    public async Task<IEnumerable<Trip>> GetAllTripsAsync(
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
-        return await _tripRepository.GetAllAsync();
+        return await _tripRepository.GetAllAsync(allowedSiteCodes);
     }
 
-    public async Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync()
+    public async Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync(
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
-        return await _tripRepository.GetTripAuthorityVehiclesAsync();
+        return await _tripRepository.GetTripAuthorityVehiclesAsync(allowedSiteCodes);
     }
 
     /// <summary>
     /// Get all trips for a vehicle (via contract)
     /// </summary>
-    public async Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode)
+    public async Task<IEnumerable<Trip>> GetTripsByVehicleAsync(
+        int vmfCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
-        return await _tripRepository.GetTripsByVehicleAsync(vmfCode);
+        return await _tripRepository.GetTripsByVehicleAsync(vmfCode, allowedSiteCodes);
     }
 
     /// <summary>
     /// Get all trips for a driver
     /// </summary>
-    public async Task<IEnumerable<Trip>> GetTripsByDriverAsync(string driverId)
+    public async Task<IEnumerable<Trip>> GetTripsByDriverAsync(
+        string driverId,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
-        return await _tripRepository.GetTripsByDriverAsync(driverId);
+        return await _tripRepository.GetTripsByDriverAsync(driverId, allowedSiteCodes);
     }
 
     /// <summary>
@@ -386,10 +426,11 @@ public class TripService : ITripService
     /// </summary>
     public async Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(
         DateTime startDate,
-        DateTime endDate
+        DateTime endDate,
+        IReadOnlySet<short>? allowedSiteCodes = null
     )
     {
-        return await _tripRepository.GetTripsByDateRangeAsync(startDate, endDate);
+        return await _tripRepository.GetTripsByDateRangeAsync(startDate, endDate, allowedSiteCodes);
     }
 
     /// <summary>
@@ -668,7 +709,10 @@ public class TripService : ITripService
     /// Delete trip authority
     /// Validates that trip can be deleted (not locked, no associated records)
     /// </summary>
-    public async Task DeleteTripAsync(int tripAuthorityCode)
+    public async Task DeleteTripAsync(
+        int tripAuthorityCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
         try
         {
@@ -677,7 +721,7 @@ public class TripService : ITripService
                 tripAuthorityCode
             );
 
-            var trip = await _tripRepository.GetByIdAsync(tripAuthorityCode);
+            var trip = await _tripRepository.GetByIdAsync(tripAuthorityCode, allowedSiteCodes);
             if (trip == null)
             {
                 throw new InvalidOperationException($"Trip {tripAuthorityCode} not found");

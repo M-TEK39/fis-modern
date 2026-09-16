@@ -11,7 +11,7 @@ import {
   type CreateTripAuthorityRequest,
 } from "@/lib/api/fleet-operations/api-trip-authorities";
 import { getDriverManagementSiteDriver } from "@/lib/api/reference-data/api-driver-management";
-import { getUserAdminUserChoices } from "@/lib/api/administration/api-user-admin";
+import { getUserApproverChoices } from "@/lib/api/administration/api-user-admin";
 import { getSession } from "@/lib/auth/session";
 
 const RETURN_PATH = "/trips/show";
@@ -119,7 +119,7 @@ export async function createTripAuthorityAction(formData: FormData) {
 
   let approver;
   try {
-    const approvers = await getUserAdminUserChoices();
+    const approvers = await getUserApproverChoices();
     approver = approvers.find((candidate) => candidate.userAccessCode === approverCode);
   } catch (error) {
     console.error(

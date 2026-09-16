@@ -21,7 +21,10 @@ namespace FIS.Api.Controllers;
 ///   Contract | Registration | Insurance | RoadWorthy | Other
 /// </summary>
 [ApiController]
-[Authorize]
+// Vehicle documents are exposed from the Vehicle Master detail workflow. Keep
+// the file and metadata endpoints behind the same legacy entitlement as that
+// workflow; authentication alone must not disclose fleet documents.
+[Authorize(Roles = "Vehicle Master")]
 [Route("api/vehicles/{vmfCode:int}/documents")]
 public class VehicleDocumentsController : BaseApiController
 {

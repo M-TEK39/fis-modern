@@ -31,6 +31,7 @@ import {
 } from "@/lib/api/reports/api-legacy-reports";
 import { getTaxiPage, TaxiApiError, type TaxiRecord } from "@/lib/api/fleet-operations/api-taxis";
 import { getSession } from "@/lib/auth/session";
+import { hasTaxiAccess } from "@/app/(fleet-operations)/taxis/access";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export type TaxiReportKind =
@@ -208,12 +209,7 @@ async function renderTaxiReportsPageContent({
         <SessionRecovery returnPath={routePath} />
       </main>
     );
-  if (
-    !session.roles.some(
-      (role) =>
-        role.localeCompare("Private Hire Vehicles", undefined, { sensitivity: "accent" }) === 0,
-    )
-  )
+  if (!hasTaxiAccess(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <TaxiRestricted subject="Taxi reports" />

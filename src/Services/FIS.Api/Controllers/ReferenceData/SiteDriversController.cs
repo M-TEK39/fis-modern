@@ -1,6 +1,9 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Security.Claims;
+using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,21 +33,154 @@ public sealed class SiteDriversController : BaseApiController
     private const int MaximumPageSize = 100;
     private const string DriversTable = "site_drivers";
     private const string LicenceTypesTable = "driver_licence_types";
+    private const string InsertDriverProcedure = "DEV_INS_SiteDrivers";
+    private const string UpdateDriverProcedure = "DEV_UPD_SiteDrivers";
+    private const string DeleteDriverProcedure = "DEV_DEL_SiteDrivers";
+
+    private static readonly string[] InsertDriverParameters =
+    [
+        "@SiteDriverCode",
+        "@SiteCode",
+        "@DriverLicenceTypeID",
+        "@Surname",
+        "@FirstName",
+        "@SAIDNumber",
+        "@PassportNumber",
+        "@PersalNumber",
+        "@DriverContractNumber",
+        "@DriverLicenceNumber",
+        "@DriverLicenceIssueDate",
+        "@DriverLicenceLastVerifiedDate",
+        "@HasPDP",
+        "@PDPExpiryDate",
+        "@LicenceExpiryDate",
+        "@Active",
+    ];
+
+    private static readonly string[] UpdateDriverParameters =
+    [
+        "@SiteDriverCode",
+        "@SiteCode",
+        "@DriverLicenceTypeID",
+        "@Surname",
+        "@FirstName",
+        "@SAIDNumber",
+        "@PassportNumber",
+        "@PersalNumber",
+        "@DriverContractNumber",
+        "@DriverLicenceNumber",
+        "@DriverLicenceIssueDate",
+        "@DriverLicenceLastVerifiedDate",
+        "@HasPDP",
+        "@PDPExpiryDate",
+        "@LicenceExpiryDate",
+        "@Active",
+    ];
+
+    private static readonly string[] DeleteDriverParameters = ["@ID"];
 
     private readonly FisDbContext _context;
+    private readonly ISiteRepository _siteRepository;
     private readonly ILogger<SiteDriversController> _logger;
 
-    public SiteDriversController(FisDbContext context, ILogger<SiteDriversController> logger)
+    public SiteDriversController(
+        FisDbContext context,
+        ISiteRepository siteRepository,
+        ILogger<SiteDriversController> logger
+    )
     {
         _context = context;
+        _siteRepository = siteRepository;
         _logger = logger;
+    }
+
+    private bool HasRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Any(User.IsInRole))
+            return true;
+
+        return User.Claims
+            .Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            )
+            .Any(role => expectedRoles.Any(expected =>
+                string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private bool HasDriverMaintenanceRole() =>
+        HasRole(
+            "Driver and Authoriser Management",
+            "SystemAdministrator",
+            "System Administrator"
+        );
+
+    private bool HasDriverWorkflowReadRole() =>
+        HasDriverMaintenanceRole()
+        || HasRole(
+            "Contracts",
+            "Contract",
+            "Contract (load and manage)",
+            "Contracts (load and manage)",
+            "Contract (approver)",
+            "Contracts approver",
+            "Contract (cancel and close)",
+            "Contracts (cancel and close)"
+        );
+
+    private async Task<IReadOnlySet<int>?> ResolveAllowedSiteCodesAsync()
+    {
+        if (HasRole("SystemAdministrator", "System Administrator"))
+            return null;
+
+        var userId = GetCurrentUserId();
+        var profileSiteCode = await _context.UserAccessOlds.AsNoTracking()
+            .Where(user => user.user_access_code == userId)
+            .Select(user => user.Site_code)
+            .SingleOrDefaultAsync(HttpContext.RequestAborted);
+        if (profileSiteCode is not > 0)
+            return new HashSet<int>();
+
+        var profileSite = await _siteRepository.GetByIdAsync(profileSiteCode.Value);
+        if (profileSite is null)
+            return new HashSet<int>();
+
+        var sites = await _siteRepository.GetActiveSitesAsync();
+        if (HasRole("Vehicle List for All Departments in Province") && profileSite.province_code.HasValue)
+            sites = sites.Where(site => site.province_code == profileSite.province_code.Value);
+        else if (HasRole("Vehicle List for All Sites in Department") && profileSite.Depatrment_code.HasValue)
+            sites = sites.Where(site => site.Depatrment_code == profileSite.Depatrment_code.Value);
+        else
+            sites = sites.Where(site => site.Site_code == profileSite.Site_code);
+
+        return sites.Select(site => (int)site.Site_code).ToHashSet();
+    }
+
+    private async Task<bool> IsSiteAllowedAsync(int siteCode)
+    {
+        var allowedSites = await ResolveAllowedSiteCodesAsync();
+        return allowedSites is null || allowedSites.Contains(siteCode);
     }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<DriverDto>>> GetDrivers([FromQuery] int? siteCode)
     {
+        if (!HasDriverWorkflowReadRole())
+            return Forbid();
+
         try
         {
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            if (siteCode.HasValue && allowedSites is not null && !allowedSites.Contains(siteCode.Value))
+                return Forbid();
+
             var drivers = await WithConnectionAsync(async connection =>
             {
                 var schema = await ReadTableSchemaAsync(connection, DriversTable);
@@ -59,7 +195,10 @@ public sealed class SiteDriversController : BaseApiController
                     AddParameter(command, "@siteCode", siteCode.Value);
                 }
 
-                return await ReadDriversAsync(command);
+                var rows = await ReadDriversAsync(command);
+                return allowedSites is null
+                    ? rows
+                    : rows.Where(driver => allowedSites.Contains(driver.SiteCode)).ToList();
             });
 
             return Ok(drivers);
@@ -77,6 +216,9 @@ public sealed class SiteDriversController : BaseApiController
         [FromQuery] int pageSize = DefaultPageSize
     )
     {
+        if (!HasDriverWorkflowReadRole())
+            return Forbid();
+
         if (siteCode is null)
         {
             return BadRequest(new { message = "siteCode is required." });
@@ -87,6 +229,10 @@ public sealed class SiteDriversController : BaseApiController
 
         try
         {
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            if (allowedSites is not null && !allowedSites.Contains(siteCode.Value))
+                return Forbid();
+
             var result = await WithConnectionAsync(async connection =>
             {
                 var schema = await ReadTableSchemaAsync(connection, DriversTable);
@@ -137,6 +283,9 @@ public sealed class SiteDriversController : BaseApiController
     [HttpGet("{id:int}")]
     public async Task<ActionResult<DriverDto>> GetDriver(int id)
     {
+        if (!HasDriverWorkflowReadRole())
+            return Forbid();
+
         try
         {
             var driver = await WithConnectionAsync(async connection =>
@@ -145,6 +294,9 @@ public sealed class SiteDriversController : BaseApiController
                 EnsureDriverTable(schema);
                 return await ReadDriverByIdAsync(connection, schema, id);
             });
+
+            if (driver is not null && !await IsSiteAllowedAsync(driver.SiteCode))
+                return Forbid();
 
             return driver is null
                 ? NotFound(new { message = $"Site driver not found with code: {id}" })
@@ -159,6 +311,9 @@ public sealed class SiteDriversController : BaseApiController
     [HttpGet("licence-types")]
     public async Task<ActionResult<IEnumerable<SiteDriverLicenceTypeDto>>> GetLicenceTypes()
     {
+        if (!HasDriverMaintenanceRole())
+            return Forbid();
+
         try
         {
             var types = await WithConnectionAsync(async connection =>
@@ -214,6 +369,9 @@ public sealed class SiteDriversController : BaseApiController
         [FromBody] SiteDriverLicenceTypeWriteDto dto
     )
     {
+        if (!HasDriverMaintenanceRole())
+            return Forbid();
+
         try
         {
             var created = await WithConnectionAsync(async connection =>
@@ -269,6 +427,9 @@ public sealed class SiteDriversController : BaseApiController
         [FromBody] SiteDriverLicenceTypeWriteDto dto
     )
     {
+        if (!HasDriverMaintenanceRole())
+            return Forbid();
+
         try
         {
             var updated = await WithConnectionAsync(async connection =>
@@ -328,6 +489,9 @@ public sealed class SiteDriversController : BaseApiController
     [HttpDelete("licence-types/{id:int}")]
     public async Task<ActionResult> DeleteLicenceType(int id)
     {
+        if (!HasDriverMaintenanceRole())
+            return Forbid();
+
         try
         {
             var deleted = await WithConnectionAsync(async connection =>
@@ -382,6 +546,9 @@ public sealed class SiteDriversController : BaseApiController
     [HttpPost]
     public async Task<ActionResult<DriverDto>> CreateDriver([FromBody] CreateDriverDto dto)
     {
+        if (!HasDriverMaintenanceRole())
+            return Forbid();
+
         try
         {
             var created = await WithConnectionAsync(async connection =>
@@ -389,17 +556,40 @@ public sealed class SiteDriversController : BaseApiController
                 var schema = await ReadTableSchemaAsync(connection, DriversTable);
                 EnsureDriverTable(schema);
                 ValidateDriver(dto);
+                if (!await IsSiteAllowedAsync(dto.SiteCode))
+                    throw new SiteDriverScopeException();
+                NormalizeDriverLicenceFlags(dto);
+                    await EnsureNoDuplicateIdentityAsync(connection, schema, dto);
 
-                var columns = DriverColumns.ToList();
-                var values = DriverValues(dto);
-                AddOptionalAuditInsertFields(schema, columns, values, GetCurrentUserId());
+                var procedureParameters = await ReadProcedureParametersAsync(
+                    connection,
+                    InsertDriverProcedure
+                );
+                int driverId;
+                if (procedureParameters is not null)
+                {
+                    EnsureProcedureContract(
+                        InsertDriverProcedure,
+                        procedureParameters,
+                        InsertDriverParameters
+                    );
+                    driverId = await ExecuteInsertDriverProcedureAsync(connection, dto);
+                }
+                else
+                {
+                    // The direct write is a compatibility path only for databases
+                    // where the legacy procedure genuinely does not exist.
+                    var columns = DriverColumns.ToList();
+                    var values = DriverValues(dto);
+                    AddOptionalAuditInsertFields(schema, columns, values, GetCurrentUserId());
 
-                await using var command = connection.CreateCommand();
-                command.CommandText =
-                    $"INSERT INTO [dbo].[{DriversTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[site_driver_code] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
-                AddParameters(command, values);
+                    await using var command = connection.CreateCommand();
+                    command.CommandText =
+                        $"INSERT INTO [dbo].[{DriversTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[site_driver_code] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
+                    AddParameters(command, values);
+                    driverId = Convert.ToInt32(await command.ExecuteScalarAsync());
+                }
 
-                var driverId = Convert.ToInt32(await command.ExecuteScalarAsync());
                 return await ReadDriverByIdAsync(connection, schema, driverId);
             });
 
@@ -414,6 +604,14 @@ public sealed class SiteDriversController : BaseApiController
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (SiteDriverDuplicateException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (SiteDriverScopeException)
+        {
+            return Forbid();
+        }
         catch (Exception ex)
         {
             return HandleFailure(ex, "creating a site driver");
@@ -423,6 +621,9 @@ public sealed class SiteDriversController : BaseApiController
     [HttpPut("{id:int}")]
     public async Task<ActionResult<DriverDto>> UpdateDriver(int id, [FromBody] UpdateDriverDto dto)
     {
+        if (!HasDriverMaintenanceRole())
+            return Forbid();
+
         try
         {
             var updated = await WithConnectionAsync(async connection =>
@@ -430,24 +631,47 @@ public sealed class SiteDriversController : BaseApiController
                 var schema = await ReadTableSchemaAsync(connection, DriversTable);
                 EnsureDriverTable(schema);
                 ValidateDriver(dto);
+                NormalizeDriverLicenceFlags(dto);
 
-                if (await ReadDriverByIdAsync(connection, schema, id) is null)
+                var existing = await ReadDriverByIdAsync(connection, schema, id);
+                if (existing is null)
                 {
                     return null;
                 }
+                if (!await IsSiteAllowedAsync(existing.SiteCode) || !await IsSiteAllowedAsync(dto.SiteCode))
+                    throw new SiteDriverScopeException();
+                await EnsureNoDuplicateIdentityAsync(connection, schema, dto, id);
 
-                var assignments = DriverColumns
-                    .Select(column => $"{QuoteIdentifier(column)} = @{ParameterName(column)}")
-                    .ToList();
-                var values = DriverValues(dto);
-                AddOptionalAuditUpdateFields(schema, assignments, values, GetCurrentUserId());
+                var procedureParameters = await ReadProcedureParametersAsync(
+                    connection,
+                    UpdateDriverProcedure
+                );
+                if (procedureParameters is not null)
+                {
+                    EnsureProcedureContract(
+                        UpdateDriverProcedure,
+                        procedureParameters,
+                        UpdateDriverParameters
+                    );
+                    await ExecuteUpdateDriverProcedureAsync(connection, id, dto);
+                }
+                else
+                {
+                    // The direct write is a compatibility path only for databases
+                    // where the legacy procedure genuinely does not exist.
+                    var assignments = DriverColumns
+                        .Select(column => $"{QuoteIdentifier(column)} = @{ParameterName(column)}")
+                        .ToList();
+                    var values = DriverValues(dto);
+                    AddOptionalAuditUpdateFields(schema, assignments, values, GetCurrentUserId());
 
-                await using var command = connection.CreateCommand();
-                command.CommandText =
-                    $"UPDATE [dbo].[{DriversTable}] SET {string.Join(", ", assignments)} WHERE [site_driver_code] = @siteDriverCode";
-                AddParameters(command, values);
-                AddParameter(command, "@siteDriverCode", id);
-                await command.ExecuteNonQueryAsync();
+                    await using var command = connection.CreateCommand();
+                    command.CommandText =
+                        $"UPDATE [dbo].[{DriversTable}] SET {string.Join(", ", assignments)} WHERE [site_driver_code] = @siteDriverCode";
+                    AddParameters(command, values);
+                    AddParameter(command, "@siteDriverCode", id);
+                    await command.ExecuteNonQueryAsync();
+                }
 
                 return await ReadDriverByIdAsync(connection, schema, id);
             });
@@ -460,6 +684,14 @@ public sealed class SiteDriversController : BaseApiController
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (SiteDriverDuplicateException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (SiteDriverScopeException)
+        {
+            return Forbid();
+        }
         catch (Exception ex)
         {
             return HandleFailure(ex, $"updating site driver {id}");
@@ -469,6 +701,9 @@ public sealed class SiteDriversController : BaseApiController
     [HttpDelete("{id:int}")]
     public async Task<ActionResult> DeleteDriver(int id)
     {
+        if (!HasDriverMaintenanceRole())
+            return Forbid();
+
         try
         {
             var deleted = await WithConnectionAsync(async connection =>
@@ -476,40 +711,66 @@ public sealed class SiteDriversController : BaseApiController
                 var schema = await ReadTableSchemaAsync(connection, DriversTable);
                 EnsureDriverTable(schema);
 
-                if (await ReadDriverByIdAsync(connection, schema, id) is null)
+                var existing = await ReadDriverByIdAsync(connection, schema, id);
+                if (existing is null)
                 {
                     return false;
                 }
+                if (!await IsSiteAllowedAsync(existing.SiteCode))
+                    throw new SiteDriverScopeException();
 
-                var assignments = new List<string> { "[driver_active] = @driverActive" };
-                if (schema.Has("is_deleted"))
+                var procedureParameters = await ReadProcedureParametersAsync(
+                    connection,
+                    DeleteDriverProcedure
+                );
+                if (procedureParameters is not null)
                 {
-                    assignments.Add("[is_deleted] = @isDeleted");
+                    EnsureProcedureContract(
+                        DeleteDriverProcedure,
+                        procedureParameters,
+                        DeleteDriverParameters
+                    );
+                    await ExecuteDeleteDriverProcedureAsync(connection, id);
                 }
-                if (schema.Has("date_updated"))
+                else
                 {
-                    assignments.Add("[date_updated] = @dateUpdated");
-                }
-                if (schema.Has("modified_by_user_code"))
-                {
-                    assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-                }
+                    // The direct write is a compatibility path only for databases
+                    // where the legacy procedure genuinely does not exist. Legacy
+                    // deletion is deactivation, never physical deletion.
+                    var assignments = new List<string> { "[driver_active] = @driverActive" };
+                    if (schema.Has("is_deleted"))
+                    {
+                        assignments.Add("[is_deleted] = @isDeleted");
+                    }
+                    if (schema.Has("date_updated"))
+                    {
+                        assignments.Add("[date_updated] = @dateUpdated");
+                    }
+                    if (schema.Has("modified_by_user_code"))
+                    {
+                        assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
+                    }
 
-                await using var command = connection.CreateCommand();
-                command.CommandText =
-                    $"UPDATE [dbo].[{DriversTable}] SET {string.Join(", ", assignments)} WHERE [site_driver_code] = @siteDriverCode";
-                AddParameter(command, "@driverActive", false);
-                AddParameter(command, "@isDeleted", true);
-                AddParameter(command, "@dateUpdated", DateTime.UtcNow);
-                AddParameter(command, "@modifiedByUserCode", GetCurrentUserId());
-                AddParameter(command, "@siteDriverCode", id);
-                await command.ExecuteNonQueryAsync();
+                    await using var command = connection.CreateCommand();
+                    command.CommandText =
+                        $"UPDATE [dbo].[{DriversTable}] SET {string.Join(", ", assignments)} WHERE [site_driver_code] = @siteDriverCode";
+                    AddParameter(command, "@driverActive", false);
+                    AddParameter(command, "@isDeleted", true);
+                    AddParameter(command, "@dateUpdated", DateTime.UtcNow);
+                    AddParameter(command, "@modifiedByUserCode", GetCurrentUserId());
+                    AddParameter(command, "@siteDriverCode", id);
+                    await command.ExecuteNonQueryAsync();
+                }
                 return true;
             });
 
             return deleted
                 ? NoContent()
                 : NotFound(new { message = $"Site driver not found with code: {id}" });
+        }
+        catch (SiteDriverScopeException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -811,16 +1072,101 @@ public sealed class SiteDriversController : BaseApiController
         {
             throw new ArgumentException("The licence number is required.");
         }
+        if (string.IsNullOrWhiteSpace(dto.DriverSAId) && string.IsNullOrWhiteSpace(dto.DriverPassportNumber))
+        {
+            throw new ArgumentException(
+                "Either a South African ID number or a passport number is required."
+            );
+        }
+        if (!string.IsNullOrWhiteSpace(dto.DriverSAId))
+        {
+            var southAfricanId = dto.DriverSAId.Trim();
+            if (southAfricanId.Length != 13 || !southAfricanId.All(char.IsDigit))
+            {
+                throw new ArgumentException("The South African ID number must contain 13 digits.");
+            }
+            if (!IsValidSouthAfricanId(southAfricanId))
+            {
+                throw new ArgumentException("The South African ID number is not valid.");
+            }
+        }
+        if (string.IsNullOrWhiteSpace(dto.DriverPersonalNumber) && string.IsNullOrWhiteSpace(dto.DriverContractNumber))
+        {
+            throw new ArgumentException(
+                "A Persal number or driver contract number is required."
+            );
+        }
         if (dto.DriverLicenceIssueDate == default || dto.DriverLicenceLastVerifiedDate == default)
         {
             throw new ArgumentException("The licence issue and last verified dates are required.");
         }
-        if (dto.DriverHasPDP && dto.DriverPDPExpiryDate is null)
+        if (dto.DriverLicenceExpiryDate is null)
+        {
+            throw new ArgumentException("The licence expiry date is required.");
+        }
+        if (IsPdpLicenceType(dto.DriverLicenceTypeId) && dto.DriverPDPExpiryDate is null)
         {
             throw new ArgumentException(
                 "The PDP expiry date is required when the driver has a PDP."
             );
         }
+    }
+
+    private static void NormalizeDriverLicenceFlags(CreateDriverDto dto)
+    {
+        // The legacy page derives PDP eligibility from the licence type (3, 5,
+        // 9, or 13); it does not trust a separate checkbox value. Preserve
+        // that database contract and clear an accidentally supplied PDP date
+        // for a non-PDP licence.
+        dto.DriverHasPDP = IsPdpLicenceType(dto.DriverLicenceTypeId);
+        if (!dto.DriverHasPDP)
+        {
+            dto.DriverPDPExpiryDate = null;
+        }
+    }
+
+    private static bool IsPdpLicenceType(int licenceTypeId) =>
+        licenceTypeId is 3 or 5 or 9 or 13;
+
+    private static bool IsValidSouthAfricanId(string value)
+    {
+        var currentYear = DateTime.Today.Year % 100;
+        var year = int.Parse(value[..2]);
+        var month = int.Parse(value.Substring(2, 2));
+        var day = int.Parse(value.Substring(4, 2));
+        var fullYear = year <= currentYear ? 2000 + year : 1900 + year;
+        if (!DateTime.TryParse(
+                $"{fullYear:0000}-{month:00}-{day:00}",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None,
+                out var birthDate
+            )
+            || birthDate.Year != fullYear
+            || birthDate.Month != month
+            || birthDate.Day != day)
+        {
+            return false;
+        }
+
+        var sum = 0;
+        var doubleDigit = false;
+        for (var index = value.Length - 1; index >= 0; index--)
+        {
+            var digit = value[index] - '0';
+            if (doubleDigit)
+            {
+                digit *= 2;
+                if (digit > 9)
+                {
+                    digit -= 9;
+                }
+            }
+
+            sum += digit;
+            doubleDigit = !doubleDigit;
+        }
+
+        return sum % 10 == 0;
     }
 
     private static void ValidateLength(string? value, int maxLength, string label)
@@ -898,6 +1244,195 @@ public sealed class SiteDriversController : BaseApiController
 
     private static string ParameterName(string column) => column;
 
+    private static async Task<int> ExecuteInsertDriverProcedureAsync(
+        DbConnection connection,
+        CreateDriverDto dto
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = $"[dbo].[{InsertDriverProcedure}]";
+        var output = command.CreateParameter();
+        output.ParameterName = "@SiteDriverCode";
+        output.DbType = DbType.Int32;
+        output.Direction = ParameterDirection.Output;
+        command.Parameters.Add(output);
+        AddProcedureDriverParameters(command, dto);
+        await command.ExecuteNonQueryAsync();
+
+        if (output.Value is null or DBNull || !int.TryParse(output.Value.ToString(), out var id) || id <= 0)
+        {
+            throw new LegacySiteDriverProcedureContractException(
+                $"The deployed legacy procedure {InsertDriverProcedure} did not return a site-driver code."
+            );
+        }
+
+        return id;
+    }
+
+    private static async Task ExecuteUpdateDriverProcedureAsync(
+        DbConnection connection,
+        int id,
+        UpdateDriverDto dto
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = $"[dbo].[{UpdateDriverProcedure}]";
+        AddParameter(command, "@SiteDriverCode", id);
+        AddProcedureDriverParameters(command, dto);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task ExecuteDeleteDriverProcedureAsync(DbConnection connection, int id)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = $"[dbo].[{DeleteDriverProcedure}]";
+        AddParameter(command, "@ID", id);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static void AddProcedureDriverParameters(DbCommand command, CreateDriverDto dto)
+    {
+        AddParameter(command, "@SiteCode", dto.SiteCode);
+        AddParameter(command, "@DriverLicenceTypeID", dto.DriverLicenceTypeId);
+        AddParameter(command, "@Surname", dto.DriverSurname.Trim());
+        AddParameter(command, "@FirstName", dto.DriverFirstname.Trim());
+        AddParameter(command, "@SAIDNumber", NullIfWhiteSpace(dto.DriverSAId));
+        AddParameter(command, "@PassportNumber", NullIfWhiteSpace(dto.DriverPassportNumber));
+        AddParameter(command, "@PersalNumber", NullIfWhiteSpace(dto.DriverPersonalNumber));
+        AddParameter(command, "@DriverContractNumber", NullIfWhiteSpace(dto.DriverContractNumber));
+        AddParameter(command, "@DriverLicenceNumber", dto.DriverLicenceNumber!.Trim());
+        AddParameter(command, "@DriverLicenceIssueDate", dto.DriverLicenceIssueDate);
+        AddParameter(command, "@DriverLicenceLastVerifiedDate", dto.DriverLicenceLastVerifiedDate);
+        AddParameter(command, "@HasPDP", dto.DriverHasPDP);
+        AddParameter(command, "@PDPExpiryDate", dto.DriverPDPExpiryDate);
+        AddParameter(command, "@LicenceExpiryDate", dto.DriverLicenceExpiryDate);
+        AddParameter(command, "@Active", dto.DriverActive);
+    }
+
+    private static async Task EnsureNoDuplicateIdentityAsync(
+        DbConnection connection,
+        TableSchema schema,
+        CreateDriverDto dto,
+        int? excludedId = null
+    )
+    {
+        var identities = new (string Column, string? Value)[]
+        {
+            ("driver_SA_id", NullIfWhiteSpace(dto.DriverSAId)),
+            ("driver_passportnumber", NullIfWhiteSpace(dto.DriverPassportNumber)),
+            ("driver_persalnumber", NullIfWhiteSpace(dto.DriverPersonalNumber)),
+            ("driver_contractnumber", NullIfWhiteSpace(dto.DriverContractNumber)),
+            ("driver_licence_number", NullIfWhiteSpace(dto.DriverLicenceNumber)),
+        };
+        var populated = identities.Where(item => item.Value is not null).ToArray();
+        if (populated.Length == 0)
+        {
+            return;
+        }
+
+        var identityPredicates = populated
+            .Select((item, index) =>
+                $"NULLIF(LTRIM(RTRIM([{item.Column}])), '') = @identity{index}")
+            .ToArray();
+        // A driver identity is global across sites, including historical
+        // inactive rows. Re-capturing the same person at another site would
+        // make contracts and vehicle allocation ambiguous after reactivation.
+        var excludedPredicate = excludedId.HasValue
+            ? " AND [site_driver_code] <> @excludedId"
+            : string.Empty;
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT TOP (1) [site_driver_code], [site_code], [driver_firstname], [driver_surname]
+            FROM [dbo].[{DriversTable}]
+            WHERE 1 = 1{excludedPredicate}
+              AND ({string.Join(" OR ", identityPredicates)})
+            """;
+        for (var index = 0; index < populated.Length; index++)
+        {
+            AddParameter(command, $"@identity{index}", populated[index].Value);
+        }
+        if (excludedId.HasValue)
+        {
+            AddParameter(command, "@excludedId", excludedId.Value);
+        }
+
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+        {
+            return;
+        }
+
+        var existingId = Convert.ToInt32(reader["site_driver_code"]);
+        var existingSite = Convert.ToInt32(reader["site_code"]);
+        var firstName = reader["driver_firstname"] is DBNull
+            ? string.Empty
+            : reader["driver_firstname"].ToString()?.Trim() ?? string.Empty;
+        var surname = reader["driver_surname"] is DBNull
+            ? string.Empty
+            : reader["driver_surname"].ToString()?.Trim() ?? string.Empty;
+        throw new SiteDriverDuplicateException(
+            $"This driver already exists at site {existingSite} (site-driver {existingId}, {firstName} {surname}). A driver cannot be captured or assigned to more than one site."
+        );
+    }
+
+    private static async Task<IReadOnlyList<string>?> ReadProcedureParametersAsync(
+        DbConnection connection,
+        string procedureName
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT [parameterObject].[name]
+            FROM [sys].[procedures] AS [procedureObject]
+            INNER JOIN [sys].[schemas] AS [schemaObject]
+                ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
+            LEFT JOIN [sys].[parameters] AS [parameterObject]
+                ON [parameterObject].[object_id] = [procedureObject].[object_id]
+            WHERE [schemaObject].[name] = N'dbo'
+              AND [procedureObject].[name] = @procedureName
+              AND [parameterObject].[parameter_id] > 0
+            ORDER BY [parameterObject].[parameter_id]
+            """;
+        AddParameter(command, "@procedureName", procedureName);
+        var parameters = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                parameters.Add(reader.GetString(0));
+            }
+        }
+
+        if (parameters.Count > 0)
+        {
+            return parameters;
+        }
+
+        await using var existsCommand = connection.CreateCommand();
+        existsCommand.CommandText = "SELECT OBJECT_ID(@procedureName, 'P');";
+        AddParameter(existsCommand, "@procedureName", $"dbo.{procedureName}");
+        var objectId = await existsCommand.ExecuteScalarAsync();
+        return objectId is null or DBNull ? null : parameters;
+    }
+
+    private static void EnsureProcedureContract(
+        string procedureName,
+        IReadOnlyList<string> actualParameters,
+        IReadOnlyList<string> expectedParameters
+    )
+    {
+        if (!actualParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new LegacySiteDriverProcedureContractException(
+                $"The deployed legacy procedure {procedureName} does not match its verified parameter contract. No direct-DML fallback was run."
+            );
+        }
+    }
+
     private static void AddParameters(
         DbCommand command,
         IEnumerable<(string Name, object? Value)> values
@@ -917,7 +1452,7 @@ public sealed class SiteDriversController : BaseApiController
         command.Parameters.Add(parameter);
     }
 
-    private static object? NullIfWhiteSpace(string? value) =>
+    private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static int? ReadInt(DbDataReader reader, string name)
@@ -953,6 +1488,10 @@ public sealed class SiteDriversController : BaseApiController
     private ActionResult HandleFailure(Exception ex, string operation)
     {
         _logger.LogError(ex, "Error {Operation}", operation);
+        if (ex is LegacySiteDriverProcedureContractException contractException)
+        {
+            return StatusCode(503, new { message = contractException.Message });
+        }
         return ex is DbException
             ? StatusCode(503, new { message = "The site-driver database is unavailable." })
             : StatusCode(500, new { message = $"Error {operation}." });
@@ -964,6 +1503,20 @@ public sealed class SiteDriversController : BaseApiController
     {
         public bool Has(string column) => Columns.Contains(column);
     }
+}
+
+public sealed class LegacySiteDriverProcedureContractException : InvalidOperationException
+{
+    public LegacySiteDriverProcedureContractException(string message)
+        : base(message) { }
+}
+
+public sealed class SiteDriverScopeException : InvalidOperationException { }
+
+public sealed class SiteDriverDuplicateException : InvalidOperationException
+{
+    public SiteDriverDuplicateException(string message)
+        : base(message) { }
 }
 
 public sealed class SiteDriverLicenceTypeDto

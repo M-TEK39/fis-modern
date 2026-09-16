@@ -38,13 +38,19 @@ public class VehicleAssessment
     [Column("fire_extinguisher")]
     public bool? fire_extinguisher { get; set; }
 
-    [Column("first_aid_kit")]
+    // The first-aid field exists only on some expanded databases. The
+    // procedure-backed compatibility repository reads it when available;
+    // keeping it out of the static EF model prevents legacy projections from
+    // failing when the column is absent.
+    [NotMapped]
     public bool? first_aid_kit { get; set; }
 
-    [Column("assessment_date")]
+    // Legacy vehicle_assessment stores this value as capture_date.
+    [NotMapped]
     public DateTime? assessment_date { get; set; }
 
-    [Column("notes")]
+    // Legacy vehicle_assessment stores this value as assessment_notes.
+    [NotMapped]
     public string? notes { get; set; }
 
     // Navigation properties
@@ -52,20 +58,66 @@ public class VehicleAssessment
     public virtual Vehicle? Vehicle { get; set; }
 
     // Global audit fields (AI_CODING_RULES.md - Section 4.5)
-    [Column("date_created")]
+    [NotMapped]
     public DateTime date_created { get; set; }
 
-    [Column("date_updated")]
+    [NotMapped]
     public DateTime? date_updated { get; set; }
 
-    [Column("created_by_user_code")]
+    [NotMapped]
     public int? created_by_user_code { get; set; }
 
-    [Column("modified_by_user_code")]
+    [NotMapped]
     public int? modified_by_user_code { get; set; }
 
-    [Column("is_deleted")]
+    [NotMapped]
     public bool is_deleted { get; set; } = false;
+
+    // Legacy assessment fields retained for procedure-backed writes. They are
+    // intentionally not EF-mapped because the modern entity previously
+    // omitted them even though the client schema and stored procedures use
+    // them.
+    [NotMapped]
+    public bool radio { get; set; }
+
+    [NotMapped]
+    public bool gear_lock { get; set; }
+
+    [NotMapped]
+    public bool logbook { get; set; }
+
+    [NotMapped]
+    public string? logbook_start_number { get; set; }
+
+    [NotMapped]
+    public string? logbook_end_number { get; set; }
+
+    [NotMapped]
+    public bool smash_and_grab { get; set; }
+
+    [NotMapped]
+    public bool tracker { get; set; }
+
+    [NotMapped]
+    public short? sets_of_keys { get; set; }
+
+    [NotMapped]
+    public bool damages { get; set; }
+
+    [Column("assessment_notes")]
+    public string? assessment_notes { get; set; }
+
+    [Column("capture_date")]
+    public DateTime? capture_date { get; set; }
+
+    [Column("modified_date")]
+    public DateTime? modified_date { get; set; }
+
+    [Column("user_access_code")]
+    public short? user_access_code { get; set; }
+
+    [Column("user_access_name")]
+    public string? user_access_name { get; set; }
 
     // Navigation properties for audit trail
     [ForeignKey("created_by_user_code")]

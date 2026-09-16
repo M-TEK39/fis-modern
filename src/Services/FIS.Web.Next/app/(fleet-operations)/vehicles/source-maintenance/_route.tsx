@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import RouteLoading from "@/components/app-shell/route-loading";
 import { saveVehicleSourceAction } from "@/app/(fleet-operations)/vehicles/source-maintenance/actions";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import VehicleSourceClient from "@/app/(fleet-operations)/vehicles/source-maintenance/vehicle-source-client";
 import {
   getVehicleSources,
@@ -14,8 +15,6 @@ import {
 } from "@/lib/api/vehicles/api-vehicle-sources";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
-
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 
 const ROUTE_PATHS = [
   "/vehicles/source-maintenance",
@@ -32,21 +31,6 @@ export type VehicleSourcePageProps = {
 
 function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
 }
 
 function StatusCard({ title, message }: Readonly<{ title: string; message: string }>) {
@@ -88,7 +72,7 @@ async function VehicleSourcePageContent({
     );
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return (
       <main className="page-shell vehicle-page-shell">
         <StatusCard

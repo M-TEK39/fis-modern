@@ -30,7 +30,9 @@ public sealed class LegacyFinanceAuthorizationFilter : IAsyncActionFilter, IOrde
             || (HasActionAttribute<LegacyFinanceReportsAccessAttribute>(context) && access.CanRunGeneralReports)
             || (HasActionAttribute<LegacyFinanceAuditAccessAttribute>(context) && access.CanRunAuditTrailReports)
             || (HasActionAttribute<LegacyFinanceHeadOfficeAccessAttribute>(context) && access.CanUseHeadOfficeFinanceFeatures)
-            || (HasActionAttribute<LegacyFinanceTariffAccessAttribute>(context) && access.CanManageTariffParameters);
+            || (HasActionAttribute<LegacyFinanceTariffAccessAttribute>(context) && access.CanManageTariffParameters)
+            || (HasActionAttribute<LegacyFinanceDataAccessAttribute>(context) && access.CanMaintainFinanceData)
+            || (HasActionAttribute<LegacyFinanceBasMaintenanceAccessAttribute>(context) && access.CanMaintainBASCorrectionData);
         if (!isAllowed)
         {
             context.Result = new ForbidResult();
@@ -52,6 +54,14 @@ public sealed class LegacyFinanceBatchAccessAttribute : Attribute;
 
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class LegacyFinanceReportsAccessAttribute : Attribute;
+
+/// <summary>
+/// Marks Finance data-maintenance and BAS selection actions. These actions
+/// are available to Financial Data roles even when the employee does not hold
+/// the separate Financial Reports role.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class LegacyFinanceDataAccessAttribute : Attribute;
 
 /// <summary>
 /// The FISReports audit-trail menu is available to the general legacy

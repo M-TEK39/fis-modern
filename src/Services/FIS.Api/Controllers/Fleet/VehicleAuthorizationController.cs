@@ -15,7 +15,6 @@ namespace FIS.Api.Controllers;
 [Route("api/vehicle/authorization")]
 public class VehicleAuthorizationController : BaseApiController
 {
-    private const long VehicleManagementPermission = 1;
 
     private readonly IVehicleAuthorizationRepository _repository;
     private readonly ILogger<VehicleAuthorizationController> _logger;
@@ -129,15 +128,19 @@ public class VehicleAuthorizationController : BaseApiController
         [FromQuery] int pageSize = 24
     )
     {
-        if (!CanAccessAuthorizationQueue())
+        if (!CanViewVehicleInception())
             return Forbid();
 
         try
         {
             _logger.LogInformation("Fetching rejected vehicles");
+            int? capturedByUserCode = CanAccessAuthorizationQueue()
+                ? null
+                : GetCurrentUserId();
             var result = await _repository.GetRejectedVehiclesAsync(
                 Math.Max(1, page),
-                Math.Clamp(pageSize, 1, 100)
+                Math.Clamp(pageSize, 1, 100),
+                capturedByUserCode
             );
             return Ok(ToPageResponse(result));
         }
@@ -157,6 +160,9 @@ public class VehicleAuthorizationController : BaseApiController
         [FromQuery] DateTime? endDate = null
     )
     {
+        if (!CanViewVehicleInception())
+            return Forbid();
+
         try
         {
             _logger.LogInformation(
@@ -164,7 +170,14 @@ public class VehicleAuthorizationController : BaseApiController
                 startDate,
                 endDate
             );
-            var vehicles = await _repository.GetAuthorizationHistoryAsync(startDate, endDate);
+            int? capturedByUserCode = CanAccessAuthorizationQueue()
+                ? null
+                : GetCurrentUserId();
+            var vehicles = await _repository.GetAuthorizationHistoryAsync(
+                startDate,
+                endDate,
+                capturedByUserCode
+            );
             var dtos = vehicles.Select(MapToDto);
             return Ok(dtos);
         }
@@ -182,7 +195,7 @@ public class VehicleAuthorizationController : BaseApiController
     [HttpGet("maintenance-types")]
     public async Task<ActionResult<IEnumerable<object>>> GetMaintenanceTypes()
     {
-        if (!HasVehicleManagementPermission())
+        if (!CanCaptureVehicleInception())
             return Forbid();
 
         try
@@ -206,6 +219,9 @@ public class VehicleAuthorizationController : BaseApiController
     [HttpGet("chassis/{chassisNumber}")]
     public async Task<ActionResult<PreVehicleMasterDto>> GetByChassisNumber(string chassisNumber)
     {
+        if (!CanViewVehicleInception())
+            return Forbid();
+
         try
         {
             _logger.LogInformation(
@@ -221,6 +237,9 @@ public class VehicleAuthorizationController : BaseApiController
                         message = $"Vehicle authorization not found for chassis number: {chassisNumber}",
                     }
                 );
+
+            if (!CanViewPreVehicle(vehicle))
+                return NotFound(new { message = $"Vehicle authorization not found for chassis number: {chassisNumber}" });
 
             return Ok(MapToDto(vehicle));
         }
@@ -241,12 +260,18 @@ public class VehicleAuthorizationController : BaseApiController
     [HttpGet("{id}")]
     public async Task<ActionResult<PreVehicleMasterDto>> GetById(int id)
     {
+        if (!CanViewVehicleInception())
+            return Forbid();
+
         try
         {
             _logger.LogInformation("Fetching vehicle authorization {Id}", id);
             var vehicle = await _repository.GetByIdAsync(id);
 
             if (vehicle == null)
+                return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
+
+            if (!CanViewPreVehicle(vehicle))
                 return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
 
             return Ok(MapToDto(vehicle));
@@ -272,7 +297,7 @@ public class VehicleAuthorizationController : BaseApiController
             if (!CanAccessAuthorizationQueue())
                 return Forbid();
             var authorizerComment = approval?.Comment?.Trim();
-            if (string.IsNullOrEmpty(authorizerComment))
+            if (string.IsNullOrWhiteSpace(authorizerComment))
                 return BadRequest(new { message = "Authorizer comment is required." });
             if (authorizerComment.Length > 255)
                 return BadRequest(new { message = "Authorizer comment must be 255 characters or fewer." });
@@ -288,6 +313,9 @@ public class VehicleAuthorizationController : BaseApiController
             var preVehicle = await _repository.GetByIdAsync(id);
             if (preVehicle == null)
                 return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
+
+            if (!CanViewPreVehicle(preVehicle))
+                return Forbid();
 
             // Prevent self-approval
             var selfApprovalCheck = ValidateSelfApprovalPrevention(preVehicle, userId);
@@ -307,6 +335,18 @@ public class VehicleAuthorizationController : BaseApiController
         {
             _logger.LogWarning(ex, "Vehicle authorization {Id} not found for approval", id);
             return NotFound(new { message = ex.Message });
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy vehicle promotion/tariff workflow is unavailable for {Id}", id);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    message = "The legacy vehicle promotion or tariff workflow is unavailable. No authorization fallback was committed.",
+                    source = "legacy-trigger-required",
+                }
+            );
         }
         catch (InvalidOperationException ex)
         {
@@ -357,6 +397,9 @@ public class VehicleAuthorizationController : BaseApiController
             var preVehicle = await _repository.GetByIdAsync(id);
             if (preVehicle == null)
                 return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
+
+            if (!CanViewPreVehicle(preVehicle))
+                return Forbid();
 
             // Prevent self-review/rejection
             var selfApprovalCheck = ValidateSelfApprovalPrevention(preVehicle, userId);
@@ -458,8 +501,8 @@ public class VehicleAuthorizationController : BaseApiController
 
             var vehicleAuth = new PreVehicleMaster
             {
-                fleet_number = dto.FleetNumber,
-                registration_number = dto.RegistrationNumber,
+                fleet_number = dto.FleetNumber?.Trim().ToUpperInvariant(),
+                registration_number = dto.RegistrationNumber?.Trim().ToUpperInvariant(),
                 chassis_number = dto.ChassisNumber.Trim().ToUpperInvariant(),
                 engine_number = dto.EngineNumber?.Trim().ToUpperInvariant(),
                 model_code = dto.ModelCode ?? (short)0,
@@ -515,6 +558,29 @@ public class VehicleAuthorizationController : BaseApiController
             _logger.LogWarning(ex, "Invalid vehicle inception capture rejected");
             return BadRequest(new { message = ex.Message });
         }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy vehicle inception procedure is unavailable");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    message = "The legacy vehicle inception procedure is unavailable. No direct-DML fallback was run.",
+                }
+            );
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("legacy procedure", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(ex, "Legacy vehicle inception procedure contract mismatch");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    message = "The deployed legacy vehicle inception procedure is incompatible. No direct-DML fallback was run.",
+                }
+            );
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating vehicle authorization");
@@ -542,6 +608,9 @@ public class VehicleAuthorizationController : BaseApiController
             var existing = await _repository.GetByIdAsync(id);
             if (existing == null)
                 return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
+
+            if (!CanViewPreVehicle(existing))
+                return Forbid();
 
             if (existing.Authority_Status == "Authorized")
                 return BadRequest(new { message = "Cannot update an already authorized vehicle" });
@@ -586,6 +655,29 @@ public class VehicleAuthorizationController : BaseApiController
             _logger.LogWarning(ex, "Vehicle authorization {Id} not found for update", id);
             return NotFound(new { message = ex.Message });
         }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy vehicle inception procedure is unavailable for update");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    message = "The legacy vehicle inception procedure is unavailable. No direct-DML fallback was run.",
+                }
+            );
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("legacy procedure", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(ex, "Legacy vehicle inception procedure contract mismatch on update");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    message = "The deployed legacy vehicle inception procedure is incompatible. No direct-DML fallback was run.",
+                }
+            );
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating vehicle authorization {Id}", id);
@@ -606,6 +698,12 @@ public class VehicleAuthorizationController : BaseApiController
 
             var userId = GetCurrentUserId();
             _logger.LogInformation("User {UserId} deleting vehicle authorization {Id}", userId, id);
+
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing is null)
+                return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
+            if (!CanViewPreVehicle(existing))
+                return Forbid();
 
             await _repository.DeleteAsync(id, userId);
 
@@ -700,12 +798,28 @@ public class VehicleAuthorizationController : BaseApiController
         };
 
     private bool CanAccessAuthorizationQueue() =>
-        HasVehicleManagementPermission()
-        && HasAnyRole("vehicle inception authorizer");
+        HasSystemAdministratorRole() || HasAnyRole("vehicle inception authorizer");
+
+    private bool CanViewVehicleInception() =>
+        HasSystemAdministratorRole()
+        || HasAnyRole("vehicle inception capturer", "vehicle inception authorizer");
 
     private bool CanCaptureVehicleInception() =>
-        HasVehicleManagementPermission()
-        && HasAnyRole("vehicle inception capturer");
+        HasSystemAdministratorRole() || HasAnyRole("vehicle inception capturer");
+
+    private bool CanViewPreVehicle(PreVehicleMaster vehicle)
+    {
+        if (HasSystemAdministratorRole() || HasAnyRole("vehicle inception authorizer"))
+            return true;
+
+        var currentUserId = GetCurrentUserId();
+        return vehicle.captured_by_user_code == currentUserId
+            || vehicle.created_by_user_code == currentUserId;
+    }
+
+    private bool HasSystemAdministratorRole() =>
+        HasRoleClaim("SystemAdministrator")
+        || HasRoleClaim("System Administrator");
 
     private bool HasAnyRole(params string[] expectedRoles)
     {
@@ -734,12 +848,18 @@ public class VehicleAuthorizationController : BaseApiController
         );
     }
 
-    private bool HasVehicleManagementPermission()
-    {
-        var accessLevelClaim = User.FindFirst("access_level")?.Value;
-        return long.TryParse(accessLevelClaim, out var accessLevel)
-            && (accessLevel & VehicleManagementPermission) == VehicleManagementPermission;
-    }
+    private bool HasRoleClaim(string expectedRole) =>
+        User.Claims.Any(claim =>
+            (
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            && claim.Value.Split(
+                ',',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+            ).Any(role => string.Equals(role, expectedRole, StringComparison.OrdinalIgnoreCase))
+        );
 
     private static string? ValidateCreateRequest(CreatePreVehicleMasterDto? dto)
     {
@@ -748,8 +868,8 @@ public class VehicleAuthorizationController : BaseApiController
             return "Vehicle inception data is required.";
         }
 
-        if (
-            string.IsNullOrWhiteSpace(dto.ChassisNumber)
+        if (string.IsNullOrWhiteSpace(dto.FleetNumber)
+            || string.IsNullOrWhiteSpace(dto.ChassisNumber)
             || string.IsNullOrWhiteSpace(dto.EngineNumber)
             || string.IsNullOrWhiteSpace(dto.Colour)
             || string.IsNullOrWhiteSpace(dto.PurchaseFrom)
@@ -803,7 +923,7 @@ public class VehicleAuthorizationController : BaseApiController
             return "Chassis and engine numbers must be different.";
         }
 
-        if (!string.IsNullOrWhiteSpace(dto.FleetNumber) && !IsValidGgNumber(dto.FleetNumber))
+        if (!IsValidGgNumber(dto.FleetNumber))
         {
             return "Current GG number must use the legacy format G|letters|letters|numbers|numbers|numbers|G, for example GVN001G.";
         }

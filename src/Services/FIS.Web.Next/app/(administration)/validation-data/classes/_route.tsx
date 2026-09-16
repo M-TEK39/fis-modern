@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { logoutAction } from "@/app/(auth)/actions/auth";
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
 import {
@@ -286,7 +286,7 @@ async function renderClassListPageContent({
         <ApiUnavailable routePath={routePath} />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

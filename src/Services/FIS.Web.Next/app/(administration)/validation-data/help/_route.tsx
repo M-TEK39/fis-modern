@@ -5,7 +5,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import RouteLoading from "@/components/app-shell/route-loading";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
@@ -58,7 +58,7 @@ async function ValidationHelpContent({ routePath }: Required<ValidationHelpPageP
       </section>
     );
   }
-  if (!hasVehicleManagementPermission(session.accessLevel)) return <AccessRestricted />;
+  if (!hasLegacyRole(session.roles, "Validation")) return <AccessRestricted />;
 
   return (
     <div className="module-help-content">

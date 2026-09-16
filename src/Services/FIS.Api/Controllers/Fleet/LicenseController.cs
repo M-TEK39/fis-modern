@@ -13,7 +13,7 @@ namespace FIS.Api.Controllers;
 /// Provides endpoints for managing license types and requirements
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Licence")]
 [Route("api/[controller]")]
 public class LicenseController : BaseApiController
 {

@@ -13,7 +13,7 @@ import { deleteSiteDriverAction } from "@/app/(administration)/drivers/actions";
 import {
   contextPath,
   getQueryValue,
-  hasVehicleManagementPermission,
+  hasDriverAuthoriserManagementRole,
   parsePositiveInteger,
 } from "@/app/(administration)/drivers/access";
 import {
@@ -315,7 +315,7 @@ async function SiteDriversContent({ searchParams }: Readonly<{ searchParams: Sea
         </section>
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasDriverAuthoriserManagementRole(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

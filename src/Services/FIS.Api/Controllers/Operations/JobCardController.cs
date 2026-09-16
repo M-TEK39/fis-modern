@@ -42,6 +42,9 @@ public class JobCardController : BaseApiController
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<IEnumerable<JobCardResponseDto>>> GetAll()
     {
+        if (!HasJobCardAccess())
+            return Forbid();
+
         try
         {
             _logger.LogInformation("Getting all job cards");
@@ -74,6 +77,9 @@ public class JobCardController : BaseApiController
         [FromQuery] string? mode = null
     )
     {
+        if (!HasJobCardAccess())
+            return Forbid();
+
         var normalizedSearchType = (mode ?? searchType)?.Trim().ToUpperInvariant() ?? "GG";
         if (normalizedSearchType is not ("GG" or "GP"))
             return BadRequest(new { error = "Search type must be GG or GP." });
@@ -127,6 +133,9 @@ public class JobCardController : BaseApiController
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<JobCardResponseDto>> GetById(int id)
     {
+        if (!HasJobCardAccess())
+            return Forbid();
+
         try
         {
             _logger.LogInformation("Getting job card with ID: {JobCardId}", id);
@@ -159,6 +168,9 @@ public class JobCardController : BaseApiController
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<IEnumerable<JobCardResponseDto>>> GetByGGNumber(string ggNumber)
     {
+        if (!HasJobCardAccess())
+            return Forbid();
+
         try
         {
             _logger.LogInformation("Getting job cards for GG number: {GGNumber}", ggNumber);
@@ -182,6 +194,9 @@ public class JobCardController : BaseApiController
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<IEnumerable<JobCardResponseDto>>> GetPriorityUnassigned()
     {
+        if (!HasJobCardAccess())
+            return Forbid();
+
         try
         {
             _logger.LogInformation("Getting priority unassigned job cards");
@@ -210,6 +225,9 @@ public class JobCardController : BaseApiController
         [FromQuery] int pageSize = 24
     )
     {
+        if (!HasJobCardAccess())
+            return Forbid();
+
         try
         {
             var result = await _repository.GetPriorityUnassignedPageAsync(
@@ -733,6 +751,9 @@ public class JobCardController : BaseApiController
         [FromQuery] DateTime? toDate = null
     )
     {
+        if (!HasJobCardAccess())
+            return Forbid();
+
         try
         {
             var results = (await _repository.GetByStatusAsync(5)).AsEnumerable();
@@ -824,6 +845,9 @@ public class JobCardController : BaseApiController
         [FromQuery] int pageSize = 24
     )
     {
+        if (!HasJobCardAccess())
+            return Forbid();
+
         try
         {
             IReadOnlyCollection<int>? vehiclesAtSite = null;
@@ -952,6 +976,8 @@ public class JobCardController : BaseApiController
     private bool HasJobCardCapturerRole() => HasAnyRole(JobCardCapturerRole);
 
     private bool HasJobCardAuthorizerRole() => HasAnyRole(JobCardAuthorizerRole);
+
+    private bool HasJobCardAccess() => HasJobCardCapturerRole() || HasJobCardAuthorizerRole();
 
     private bool HasAnyRole(params string[] expectedRoles)
     {

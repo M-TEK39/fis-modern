@@ -13,6 +13,7 @@ import {
   ReportsUnavailable,
 } from "@/app/(fleet-operations)/reports/_components";
 import {
+  hasContractReportsRole,
   hasReportsRole,
   queryValue,
   REPORT_MENU_ENTRIES,
@@ -79,6 +80,51 @@ const SEARCH_FIELDS: readonly ReportField[] = [
     ],
   },
   { name: "search", label: "Search", placeholder: "Enter GG, GP, Engine or VIN/Chassis" },
+];
+
+const LOGBOOK_VEHICLE_FIELDS: readonly ReportField[] = [
+  {
+    name: "mode",
+    label: "Number Type",
+    options: [
+      { value: "GG", label: "GG number" },
+      { value: "GP", label: "GP / registration number" },
+    ],
+  },
+  { name: "search", label: "Vehicle Number", placeholder: "Enter the GG or GP number" },
+];
+
+const LOGBOOK_NUMBER_FIELDS: readonly ReportField[] = [
+  { name: "search", label: "Logbook Begin Number", placeholder: "Enter part of the begin number" },
+];
+
+const LOGBOOK_PERIOD_FIELDS: readonly ReportField[] = [
+  { name: "department", label: "Department / Site Code", placeholder: "Enter a department or site code" },
+  { name: "from", label: "From Date", type: "date" },
+  { name: "to", label: "To Date", type: "date" },
+];
+
+const LOGSHEET_VEHICLE_FIELDS: readonly ReportField[] = [
+  {
+    name: "mode",
+    label: "Number Type",
+    options: [
+      { value: "GG", label: "GG number" },
+      { value: "GP", label: "GP / registration number" },
+    ],
+  },
+  { name: "search", label: "Vehicle Number", placeholder: "Enter the GG or GP number" },
+];
+
+const LOGSHEET_REQUISITION_FIELDS: readonly ReportField[] = [
+  { name: "search", label: "Requisition Number", placeholder: "Enter part of the requisition number" },
+];
+
+const LOGSHEET_SCOPE_FIELDS: readonly ReportField[] = [
+  { name: "department", label: "Department Code", placeholder: "Enter a department code" },
+  { name: "site", label: "Site Code", placeholder: "Or enter a site code" },
+  { name: "from", label: "From Date", type: "date" },
+  { name: "to", label: "To Date", type: "date" },
 ];
 
 const DATE_FIELDS: readonly ReportField[] = [
@@ -335,8 +381,11 @@ const REPORT_DEFINITIONS: Record<string, ReportDefinition> = {
     resolveReportKey: (query) =>
       ({
         "one-vehicle": "logbooks-one-vehicle",
+        "logbooks-one-vehicle": "logbooks-one-vehicle",
         "logbook-number": "logbooks-number",
+        "logbooks-number": "logbooks-number",
         "dept-site-period": "logbooks",
+        logbooks: "logbooks",
       })[queryValue(query, "rtype")] ?? "logbooks",
   },
   logsheets: {
@@ -351,6 +400,7 @@ const REPORT_DEFINITIONS: Record<string, ReportDefinition> = {
         "vehicle-details-per-rek": "logsheets-vehicle-details-per-rek",
         "all-outstanding": "logsheets-all-outstanding",
         "per-dept-site": "logsheets",
+        logsheets: "logsheets",
       })[queryValue(query, "rtype")] ?? "logsheets",
   },
   management: {
@@ -738,6 +788,48 @@ function definitionFor(slug: string): ReportDefinition | null {
   return REPORT_DEFINITIONS[slug] ?? null;
 }
 
+function reportFieldsFor(slug: string, reportKey: string): readonly ReportField[] | undefined {
+  if (slug === "logbooks") {
+    if (reportKey === "logbooks-one-vehicle") return LOGBOOK_VEHICLE_FIELDS;
+    if (reportKey === "logbooks-number") return LOGBOOK_NUMBER_FIELDS;
+    return LOGBOOK_PERIOD_FIELDS;
+  }
+  if (slug === "logsheets") {
+    if (reportKey === "logsheets-one-vehicle" || reportKey === "logsheets-vehicle-odo-balance") {
+      return LOGSHEET_VEHICLE_FIELDS;
+    }
+    if (reportKey === "logsheets-vehicle-details-per-rek") return LOGSHEET_REQUISITION_FIELDS;
+    if (reportKey === "logsheets") return LOGSHEET_SCOPE_FIELDS;
+  }
+  return undefined;
+}
+
+function reportInputIsMissing(slug: string, reportKey: string, query: ReportQuery) {
+  if (slug === "logbooks") {
+    if (reportKey === "logbooks-one-vehicle" || reportKey === "logbooks-number") {
+      return !queryValue(query, "search").trim();
+    }
+    return (
+      !queryValue(query, "department").trim() ||
+      !queryValue(query, "from").trim() ||
+      !queryValue(query, "to").trim()
+    );
+  }
+  if (slug === "logsheets") {
+    if (
+      reportKey === "logsheets-one-vehicle" ||
+      reportKey === "logsheets-vehicle-odo-balance" ||
+      reportKey === "logsheets-vehicle-details-per-rek"
+    ) {
+      return !queryValue(query, "search").trim();
+    }
+    if (reportKey === "logsheets") {
+      return !queryValue(query, "department").trim() && !queryValue(query, "site").trim();
+    }
+  }
+  return false;
+}
+
 function filterQuery(query: ReportQuery) {
   const filters: Record<string, string> = {};
   for (const [key, value] of Object.entries(query)) {
@@ -1003,7 +1095,11 @@ async function renderReportsRoutePageContent({
         <ReportsUnavailable />
       </ReportsFrame>
     );
-  if (!hasReportsRole(session.roles))
+  const hasRouteAccess =
+    slug === "contracts" || slug === "contract-history"
+      ? hasContractReportsRole(session.roles)
+      : hasReportsRole(session.roles);
+  if (!hasRouteAccess)
     return (
       <ReportsFrame title="Reports" description="Legacy report access is enforced on the server.">
         <AccessRestricted />
@@ -1048,10 +1144,12 @@ async function renderReportsRoutePageContent({
 
   const reportKey =
     forcedReportKey ?? definition.resolveReportKey?.(query) ?? definition.reportKey ?? "";
+  const reportFields = definition.fields ?? reportFieldsFor(slug, reportKey);
   const page = reportPage(query);
   const showingResult =
     forcedReportKey !== undefined || queryValue(query, "view").toLowerCase() === "report";
-  const showFilter = !showingResult && definition.fields;
+  const showFilter =
+    reportFields && (!showingResult || reportInputIsMissing(slug, reportKey, query));
 
   if (!showingResult && definition.menu) {
     return (
@@ -1072,7 +1170,7 @@ async function renderReportsRoutePageContent({
         <ReportFilterForm
           slug={slug}
           reportKey={reportKey}
-          fields={definition.fields ?? []}
+          fields={reportFields ?? []}
           query={query}
         />
       </ReportsFrame>
@@ -1083,6 +1181,13 @@ async function renderReportsRoutePageContent({
   try {
     report = await getLegacyReport(reportKey, filterQuery(query), { page });
   } catch (error) {
+    if (error instanceof LegacyReportApiError && error.reason === "forbidden") {
+      return (
+        <ReportsFrame title={definition.title} description={definition.description}>
+          <AccessRestricted message="Your account is not allowed to run this report." />
+        </ReportsFrame>
+      );
+    }
     const message =
       error instanceof LegacyReportApiError && error.reason === "invalid-response"
         ? error.message

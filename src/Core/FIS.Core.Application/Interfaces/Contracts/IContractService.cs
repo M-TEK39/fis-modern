@@ -18,7 +18,8 @@ public interface IContractService
     Task<bool> EndContractByVmfCodeAsync(
         int vmfCode,
         int? endOdometer = null,
-        string? notes = null
+        string? notes = null,
+        int currentUserId = 0
     );
 
     /// <summary>

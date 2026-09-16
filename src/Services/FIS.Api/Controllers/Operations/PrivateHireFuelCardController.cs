@@ -8,7 +8,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = "Fuelcards")]
 public class PrivateHireFuelCardController : BaseApiController
 {
     private readonly IPrivateHireFuelCardRepository _repository;

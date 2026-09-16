@@ -6,7 +6,7 @@ type NavigationItem = {
   label: string;
   href: string;
   roles?: readonly string[];
-  accessBits?: readonly number[];
+  allRoles?: readonly string[];
 };
 
 type NavigationGroup = {
@@ -25,11 +25,11 @@ const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
   {
     label: "Fleet operations",
     items: [
-      { label: "Accidents", href: "/accidents", roles: ["Accidents"], accessBits: [1] },
-      { label: "Auction", href: "/auction", roles: ["Auction"], accessBits: [16] },
+      { label: "Accidents", href: "/accidents", roles: ["Accidents"] },
+      { label: "Auction", href: "/auction", roles: ["Auction"], allRoles: ["Reports"] },
       { label: "Call Centre", href: "/call-centre", roles: ["Call Centre"] },
       { label: "Clearance", href: "/clearance", roles: ["Clearance"] },
-      { label: "Contracts", href: "/contracts", roles: ["Contracts"], accessBits: [2] },
+      { label: "Contracts", href: "/contracts", roles: ["Contracts"] },
       {
         label: "Finance",
         href: "/finance",
@@ -38,68 +38,71 @@ const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
           "Financial Data (Own Department)",
           "Financial Data (All Departments)",
         ],
-        accessBits: [16],
       },
-      { label: "Fines", href: "/fines", roles: ["Fines"], accessBits: [1] },
-      { label: "Fuel Cards", href: "/fuel-cards", roles: ["Fuelcards"], accessBits: [16] },
+      { label: "Fines", href: "/fines", roles: ["Fines"], allRoles: ["Reports"] },
+      { label: "Fuel Cards", href: "/fuel-cards", roles: ["Fuelcards"] },
       {
         label: "Job Cards",
         href: "/job-cards",
         roles: ["Jobcard Capturer", "Jobcard Authorizer"],
-        accessBits: [1, 32],
       },
       { label: "Licenses", href: "/licenses", roles: ["Licence"] },
-      { label: "Log Books", href: "/log-books", roles: ["Logbooks"], accessBits: [8] },
-      { label: "Log Sheets", href: "/log-sheets", roles: ["Logsheets"], accessBits: [8] },
+      {
+        label: "Log Books",
+        href: "/log-books",
+        roles: ["Logbooks", "SystemAdministrator", "System Administrator"],
+      },
+      { label: "Log Sheets", href: "/log-sheets", roles: ["Logsheets"], allRoles: ["Reports"] },
       { label: "Losses", href: "/losses", roles: ["Losses"] },
-      { label: "Monitor", href: "/monitor", roles: ["Monitor"], accessBits: [8] },
+      { label: "Monitor", href: "/monitor", roles: ["Monitor"], allRoles: ["Call Centre"] },
       { label: "Private Hire", href: "/private-hire", roles: ["Private Hire Vehicles"] },
       {
         label: "Reports",
         href: "/reports",
         roles: ["Reports", "Management Reports"],
-        accessBits: [8],
       },
       {
         label: "Taxis",
         href: "/taxis",
-        roles: ["Private Hire Vehicles", "Taxis", "Taxi information maintenance"],
-        accessBits: [1],
+        roles: ["Private Hire Vehicles", "Taxi information maintenance"],
       },
       {
         label: "Third Party Rentals",
         href: "/third-party",
         roles: ["Third Party Rental"],
-        accessBits: [2],
       },
       { label: "Towing", href: "/towing", roles: ["Towing"] },
-      { label: "Tracking", href: "/tracking", accessBits: [1] },
+      { label: "Tracking", href: "/tracking", roles: ["Tracking"] },
       {
         label: "Trip Authorities",
         href: "/trip-authorities",
         roles: ["TripAuthorities", "Trip Authorities"],
-        accessBits: [1],
       },
       { label: "Troubleshoot", href: "/troubleshoot", roles: ["Trouble Shooting"] },
       {
         label: "Validation Data",
         href: "/validation-data",
         roles: ["Validation"],
-        accessBits: [1],
       },
       {
         label: "Vehicle Asset Verification",
         href: "/vehicle-verification",
         roles: ["Asset Verification"],
-        accessBits: [1],
       },
-      { label: "Vehicle Master", href: "/vehicles", roles: ["Vehicle Master"], accessBits: [1] },
-      { label: "Vehicle Photos", href: "/vehicle-photos", accessBits: [1] },
+      {
+        label: "Vehicle Master",
+        href: "/vehicles",
+        roles: ["Vehicle Master", "SystemAdministrator", "System Administrator"],
+      },
+      {
+        label: "Vehicle Photos",
+        href: "/vehicle-photos",
+        roles: ["Vehicle Master", "SystemAdministrator", "System Administrator"],
+      },
       {
         label: "Full Maintenance Lease",
         href: "/full-maintenance-lease",
         roles: ["Lease Vehicle Pending", "Lease Vehicle Capturer", "Lease Vehicle Authorizer"],
-        accessBits: [2],
       },
       { label: "Workshop", href: "/workshop", roles: ["Workshop"] },
     ],
@@ -111,14 +114,12 @@ const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
         label: "Driver and Authoriser Management",
         href: "/drivers",
         roles: ["Driver and Authoriser Management"],
-        accessBits: [1],
       },
-      { label: "User Admin", href: "/users", roles: ["User Administration"], accessBits: [4] },
+      { label: "User Admin", href: "/users", roles: ["User Administration"] },
       {
         label: "Notice Management",
         href: "/notice-management",
         roles: ["User Administration"],
-        accessBits: [4],
       },
       { label: "Change Password", href: "/change-password" },
       { label: "Change Password and Question", href: "/change-password-question" },
@@ -136,22 +137,10 @@ function hasRole(session: AuthenticatedSession, roles: readonly string[] | undef
   return roles.some((role) => availableRoles.has(normalize(role)));
 }
 
-function hasAccessBit(session: AuthenticatedSession, accessBits: readonly number[] | undefined) {
-  if (!accessBits || accessBits.length === 0 || !session.accessLevel) return false;
-
-  try {
-    const accessLevel = BigInt(session.accessLevel);
-    return accessBits.some((bit) => (accessLevel & BigInt(bit)) === BigInt(bit));
-  } catch {
-    return false;
-  }
-}
-
 function canNavigate(session: AuthenticatedSession, item: NavigationItem) {
   return (
-    (!item.roles && !item.accessBits) ||
-    hasRole(session, item.roles) ||
-    hasAccessBit(session, item.accessBits)
+    (!item.roles || hasRole(session, item.roles)) &&
+    (!item.allRoles || item.allRoles.every((role) => hasRole(session, [role])))
   );
 }
 

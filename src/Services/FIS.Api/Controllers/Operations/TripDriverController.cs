@@ -10,7 +10,11 @@ namespace FIS.Api.Controllers;
 /// API Controller for trip driver assignment operations
 /// </summary>
 [ApiController]
-[Authorize]
+// Trip drivers are embedded in Trip Authorities. The legacy menu exposes
+// that module only to its entitlement (or the separate driver-management
+// administrators); do not leave this compatibility controller open to every
+// authenticated user.
+[Authorize(Roles = "Trip Authorities,TripAuthorities,Driver and Authoriser Management")]
 [Route("api/[controller]")]
 public class TripDriverController : BaseApiController
 {

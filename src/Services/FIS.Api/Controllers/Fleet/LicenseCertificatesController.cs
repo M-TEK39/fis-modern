@@ -12,7 +12,7 @@ namespace FIS.Api.Controllers;
 /// read and written when it is the available client-era source.
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Licence")]
 [Route("api/licence-certificates")]
 public sealed class LicenseCertificatesController : BaseApiController
 {

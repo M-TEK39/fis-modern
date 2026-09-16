@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { updateLossTypeAction } from "@/app/(administration)/validation-data/loss-types/actions";
 import LossTypeForm from "@/app/(administration)/validation-data/loss-types/loss-type-form";
@@ -77,7 +77,7 @@ async function renderLossTypeEditPage({ searchParams }: LossTypeEditPageProps) {
         <ErrorCard message="Loss description maintenance is temporarily unavailable." />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <ErrorCard message="You do not have permission to edit loss descriptions." />

@@ -133,7 +133,8 @@ export type ContractHistoryBackdatingRequest = {
 };
 
 export type ContractReassignRequest = {
-  NewSiteCode: number;
+  NewSiteCode: number | null;
+  NewSiteDriverCode: number | null;
   StartDate: string | null;
   StartOdometer: number | null;
   Reason: string;
@@ -147,7 +148,7 @@ export type ReliefVehicleRequest = {
 };
 
 export type ContractApiErrorReason =
-  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+  "unauthorized" | "forbidden" | "unavailable" | "invalid-response" | "not-found";
 
 export class ContractApiError extends Error {
   constructor(
@@ -353,8 +354,14 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new ContractApiError("unauthorized", "The FIS access cookie was rejected.");
+    }
+    if (response.status === 403) {
+      throw new ContractApiError(
+        "forbidden",
+        "You do not have permission to access this contract operation.",
+      );
     }
     if (response.status === 404) {
       throw new ContractApiError("not-found", "The requested contract was not found.");

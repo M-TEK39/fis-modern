@@ -6,7 +6,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Authorize]
+// The archived Vehicle Orders menu is a Vehicle Master maintenance surface.
+// Keep the compatibility API aligned with that server-side entitlement.
+[Authorize(Roles = "Vehicle Master")]
 [Route("api/[controller]")]
 public class VehicleOrderController : BaseApiController
 {

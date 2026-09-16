@@ -1,6 +1,8 @@
+using System.Data;
 using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using TypeEntity = FIS.Core.Domain.Entities.ReferenceData.VehicleType;
 
 namespace FIS.Core.Infrastructure.Repositories
@@ -48,10 +50,55 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Collection of all type entities</returns>
         public async Task<IEnumerable<TypeEntity>> GetAllTypesAsync()
         {
-            return await _context
-                .VehicleTypes.Where(x => !x.is_deleted)
-                .OrderBy(t => t.type_description)
-                .ToListAsync();
+            // The legacy dbo.type table contains only type_code and
+            // type_description. Vehicle capture needs that exact selector;
+            // do not project expanded audit columns which are absent on the
+            // restored client schema.
+            return await QueryLegacyTypesAsync();
+        }
+
+        private async Task<List<TypeEntity>> QueryLegacyTypesAsync()
+        {
+            var connection = _context.Database.GetDbConnection();
+            var shouldClose = connection.State != ConnectionState.Open;
+            if (shouldClose)
+            {
+                await connection.OpenAsync();
+            }
+
+            try
+            {
+                await using var command = connection.CreateCommand();
+                command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                command.CommandText = """
+                    SELECT [type_code], [type_description]
+                    FROM [dbo].[type]
+                    ORDER BY [type_description], [type_code]
+                    """;
+
+                var types = new List<TypeEntity>();
+                await using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var typeCode = reader.IsDBNull(0) ? (short)0 : Convert.ToInt16(reader.GetValue(0));
+                    var description = reader.IsDBNull(1) ? string.Empty : reader.GetString(1).Trim();
+                    if (typeCode <= 0 || string.IsNullOrWhiteSpace(description))
+                    {
+                        continue;
+                    }
+
+                    types.Add(new TypeEntity { type_code = typeCode, type_description = description });
+                }
+
+                return types;
+            }
+            finally
+            {
+                if (shouldClose)
+                {
+                    await connection.CloseAsync();
+                }
+            }
         }
 
         /// <summary>

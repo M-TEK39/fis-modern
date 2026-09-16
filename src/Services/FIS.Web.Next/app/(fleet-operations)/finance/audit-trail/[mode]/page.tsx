@@ -10,7 +10,11 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasAuditTrailReportsAccess, hasRole } from "@/app/(fleet-operations)/finance/_utils";
+import {
+  hasAdministratorRole,
+  hasAuditTrailReportsAccess,
+  hasRole,
+} from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions, siteOptions } from "@/app/(fleet-operations)/finance/_location-options";
 import { DepartmentApiError, getDepartments } from "@/lib/api/reference-data/api-departments";
 import { FinanceApiError, type FinanceOption } from "@/lib/api/finance/api-finance";
@@ -117,8 +121,7 @@ async function renderFinanceAuditTrailModeContent({ params, searchParams }: Audi
   const profileDepartmentCode = positiveInteger(session.departmentCode ?? "");
   const profileSiteCode = positiveInteger(session.siteCode ?? "");
   const canSelectAllDepartments =
-    hasRole(session.roles, "Administrator") ||
-    hasRole(session.roles, "Admin") ||
+    hasAdministratorRole(session.roles) ||
     hasRole(session.roles, "Financial Data (All Departments)");
   let departments: FinanceOption[] = [];
   let sites: FinanceOption[] = [];

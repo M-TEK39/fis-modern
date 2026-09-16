@@ -5,7 +5,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = "Validation")]
 public class ValidationController : BaseApiController
 {
     private readonly ILogger<ValidationController> _logger;

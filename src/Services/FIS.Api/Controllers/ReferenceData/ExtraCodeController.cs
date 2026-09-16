@@ -109,6 +109,7 @@ public class ExtraCodeController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<ExtraCodeDto>> Create([FromBody] CreateExtraCodeDto request)
     {
         try
@@ -143,6 +144,7 @@ public class ExtraCodeController : BaseApiController
     }
 
     [HttpPut("{code:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<ExtraCodeDto>> Update(
         short code,
         [FromBody] UpdateExtraCodeDto request
@@ -182,6 +184,7 @@ public class ExtraCodeController : BaseApiController
     }
 
     [HttpDelete("{code:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> Delete(short code)
     {
         try

@@ -13,6 +13,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[ContractAccess]
 public class ContractStatusController : BaseApiController
 {
     private readonly IContractStatusRepository _contractStatusRepository;
@@ -213,6 +214,9 @@ public class ContractStatusController : BaseApiController
         [FromBody] CreateContractStatusDto createStatusDto
     )
     {
+        if (!HasStatusAdministrationRole())
+            return Forbid();
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -254,6 +258,9 @@ public class ContractStatusController : BaseApiController
         [FromBody] ContractStatus status
     )
     {
+        if (!HasStatusAdministrationRole())
+            return Forbid();
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -287,6 +294,9 @@ public class ContractStatusController : BaseApiController
     [HttpDelete("{statusCode}")]
     public async Task<ActionResult> DeleteStatus(short statusCode)
     {
+        if (!HasStatusAdministrationRole())
+            return Forbid();
+
         try
         {
             int currentUserId = GetCurrentUserId();
@@ -306,5 +316,23 @@ public class ContractStatusController : BaseApiController
             );
             return StatusCode(500, "Internal server error");
         }
+    }
+
+    private bool HasStatusAdministrationRole()
+    {
+        var expectedRoles = new[] { "SystemAdministrator", "System Administrator", "User Administration" };
+        return User.Claims.Any(claim =>
+            (
+                claim.Type == System.Security.Claims.ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            && claim.Value.Split(
+                ',',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+            ).Any(role => expectedRoles.Any(expected =>
+                string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+            ))
+        );
     }
 }

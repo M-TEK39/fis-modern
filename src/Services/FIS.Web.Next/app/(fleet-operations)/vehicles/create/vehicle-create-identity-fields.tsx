@@ -39,13 +39,16 @@ export function VehicleCreateIdentityFields({
         <span className="vehicle-required-note">* Required</span>
       </div>
       <div className="vehicle-create-grid">
-        <VehicleCreateField id="fleetNumber" label="Current GG number">
+        <VehicleCreateField id="fleetNumber" label="Current GG number" required>
           <input
             id="fleetNumber"
             name="fleetNumber"
             type="text"
             autoComplete="off"
+            pattern="G[A-Za-z]{2}[0-9]{3}G"
+            title="Use the legacy GG format, for example GVN001G."
             maxLength={20}
+            required
           />
         </VehicleCreateField>
         <VehicleCreateField id="replacedGgNumber" label="Replace GG number">

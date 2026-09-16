@@ -5,7 +5,7 @@ import RouteLoading from "@/components/app-shell/route-loading";
 import { redirect } from "next/navigation";
 
 import {
-  hasVehicleManagementPermission,
+  hasLegacyRole,
   getQueryValue,
 } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -48,7 +48,7 @@ async function renderSiteDeleteCheckPage({ searchParams }: SiteDeleteCheckPagePr
         <ErrorCard message="Site deletion is temporarily unavailable." />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <ErrorCard message="You do not have permission to delete sites." />

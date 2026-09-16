@@ -7,6 +7,7 @@ import { logoutAction } from "@/app/(auth)/actions/auth";
 import RouteLoading from "@/components/app-shell/route-loading";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import VehicleEditFormClient from "@/app/(fleet-operations)/vehicles/[vmfCode]/edit/vehicle-edit-form-client";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import { updateVehicleAction } from "@/app/(fleet-operations)/vehicles/edit/actions";
 import type {
   VehicleEditFormData,
@@ -14,31 +15,14 @@ import type {
 } from "@/app/(fleet-operations)/vehicles/edit/vehicle-edit-types";
 import {
   VehicleCreateApiError,
-  getVehicleCreateReferenceData,
+  getVehicleEditReferenceData,
 } from "@/lib/api/vehicles/api-vehicle-create";
 import { getVehicleForEdit, VehicleEditApiError } from "@/lib/api/vehicles/api-vehicle-edit";
 import { getSession } from "@/lib/auth/session";
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
-
 type VehicleEditPageProps = {
   params: Promise<{ vmfCode: string }>;
 };
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
 
 function AccessRestricted() {
   return (
@@ -55,7 +39,7 @@ function AccessRestricted() {
   );
 }
 
-function ApiUnavailable() {
+function ApiUnavailable({ detail }: Readonly<{ detail?: string }>) {
   return (
     <section className="vehicle-status-card" role="alert">
       <div className="status-icon status-icon-error" aria-hidden="true">
@@ -64,6 +48,7 @@ function ApiUnavailable() {
       <p className="eyebrow">API unavailable</p>
       <h2>The vehicle record could not be loaded.</h2>
       <p className="muted-copy">Retry when the FIS API is available.</p>
+      {detail ? <p className="muted-copy">Details: {detail}</p> : null}
       <Link className="button button-primary" href="/vehicles/edit">
         Return to vehicle search
       </Link>
@@ -87,7 +72,7 @@ function NotFoundVehicle() {
 }
 
 function toEditReferenceData(
-  referenceData: Awaited<ReturnType<typeof getVehicleCreateReferenceData>>,
+  referenceData: Awaited<ReturnType<typeof getVehicleEditReferenceData>>,
   vehicleStatusCode: number,
   statusDescription: string | null,
 ): VehicleEditReferenceData {
@@ -96,14 +81,10 @@ function toEditReferenceData(
     name: model.name,
     typeCode: model.typeCode,
   }));
-  const typeCodes = new Set<number>();
-  const types = models.reduce<{ code: number; label: string }[]>((result, model) => {
-    if (model.typeCode !== null && !typeCodes.has(model.typeCode)) {
-      typeCodes.add(model.typeCode);
-      result.push({ code: model.typeCode, label: "Vehicle type" });
-    }
-    return result;
-  }, []);
+  const types = referenceData.types.map((type) => ({
+    code: type.code,
+    label: type.name,
+  }));
   const statuses =
     vehicleStatusCode > 0
       ? [{ code: vehicleStatusCode, label: statusDescription || "Current status" }]
@@ -166,7 +147,7 @@ async function renderVehicleEditPageContent({ params }: VehicleEditPageProps) {
     );
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />
@@ -183,7 +164,7 @@ async function renderVehicleEditPageContent({ params }: VehicleEditPageProps) {
   try {
     const [vehicle, referenceData] = await Promise.all([
       getVehicleForEdit(vmfCode),
-      getVehicleCreateReferenceData(),
+      getVehicleEditReferenceData(),
     ]);
 
     return (
@@ -231,6 +212,17 @@ async function renderVehicleEditPageContent({ params }: VehicleEditPageProps) {
       return <SessionRecovery returnPath={`/vehicles/${vmfCode}/edit`} />;
     }
 
+    if (
+      (error instanceof VehicleEditApiError || error instanceof VehicleCreateApiError) &&
+      error.reason === "forbidden"
+    ) {
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <AccessRestricted />
+        </main>
+      );
+    }
+
     if (error instanceof VehicleEditApiError && error.reason === "not-found") {
       return (
         <main className="page-shell vehicle-page-shell">
@@ -245,7 +237,13 @@ async function renderVehicleEditPageContent({ params }: VehicleEditPageProps) {
     );
     return (
       <main className="page-shell vehicle-page-shell">
-        <ApiUnavailable />
+        <ApiUnavailable
+          detail={
+            error instanceof VehicleEditApiError || error instanceof VehicleCreateApiError
+              ? error.message
+              : undefined
+          }
+        />
       </main>
     );
   }

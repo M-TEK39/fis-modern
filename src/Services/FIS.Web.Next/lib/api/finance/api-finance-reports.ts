@@ -304,7 +304,7 @@ export const REGIONAL_SUMMARY_ACTIONS = [
 
 const DEDICATED_REPORTS: Record<string, DedicatedFinanceReport> = {
   "summary-by-cost-type": {
-    endpoint: "invoice-summary",
+    endpoint: "invoice-by-cost-type",
     defaultFormat: "html",
     title: "Summarised Invoice",
   },

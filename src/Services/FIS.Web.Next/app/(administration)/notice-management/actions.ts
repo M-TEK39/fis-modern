@@ -15,7 +15,6 @@ import {
 } from "@/lib/api/administration/api-notices";
 import { getSession } from "@/lib/auth/session";
 
-const NOTICE_MANAGEMENT_PERMISSION = 4;
 const RETURN_PATHS = [
   "/notice-management",
   "/Admin/NoticeManagement.aspx",
@@ -55,17 +54,11 @@ function getSortOrder(formData: FormData) {
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
-function hasNoticeManagementPermission(accessLevel?: string) {
-  if (!accessLevel) return false;
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(NOTICE_MANAGEMENT_PERMISSION)) ===
-      BigInt(NOTICE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
+function hasNoticeManagementPermission(roles: readonly string[]) {
+  return roles.some(
+    (role) =>
+      role.localeCompare("User Administration", undefined, { sensitivity: "accent" }) === 0,
+  );
 }
 
 function returnPath(value: string) {
@@ -115,7 +108,7 @@ export async function saveNoticeAction(
     return errorState("The sign-in service is temporarily unavailable. Please try again.");
   if (session.status !== "authenticated")
     return errorState("Your session has expired. Sign in again before continuing.");
-  if (!hasNoticeManagementPermission(session.accessLevel))
+  if (!hasNoticeManagementPermission(session.roles))
     return errorState("You do not have permission to manage notices.");
 
   let savedNotice: Notice;
@@ -179,7 +172,7 @@ export async function deleteNoticeScheduleAction(formData: FormData) {
   if (!scheduleId) redirect(`${destination}?${query.toString()}`);
 
   const session = await getSession();
-  if (session.status !== "authenticated" || !hasNoticeManagementPermission(session.accessLevel)) {
+  if (session.status !== "authenticated" || !hasNoticeManagementPermission(session.roles)) {
     query.set("error", session.status === "authenticated" ? "forbidden" : "session");
     redirect(`${destination}?${query.toString()}`);
   }

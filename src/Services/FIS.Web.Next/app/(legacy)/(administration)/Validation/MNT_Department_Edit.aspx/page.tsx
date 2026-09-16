@@ -5,7 +5,7 @@ import RouteLoading from "@/components/app-shell/route-loading";
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import DepartmentForm from "@/app/(administration)/validation-data/departments/department-form";
 import { updateDepartmentAction } from "@/app/(administration)/validation-data/departments/actions";
@@ -53,7 +53,7 @@ async function renderDepartmentEditPage({ searchParams }: DepartmentEditPageProp
         <ErrorCard>Department maintenance is temporarily unavailable.</ErrorCard>
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <ErrorCard>You do not have permission to edit departments.</ErrorCard>

@@ -11,7 +11,10 @@ namespace FIS.Api.Controllers;
 /// Provides access to the comprehensive tariff calculation system
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(
+    Roles =
+        "Contracts,Contract (Load and Manage),Contract (Approver),Financial Reports,Financial Data (Own Department),Financial Data (All Departments),Financial Tariff Parameters,Financial Tariff Parameters (Approver),Vehicle Master"
+)]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class TariffController : BaseApiController

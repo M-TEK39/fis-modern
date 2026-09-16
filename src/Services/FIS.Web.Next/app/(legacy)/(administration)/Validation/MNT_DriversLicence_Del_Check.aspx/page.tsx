@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import RouteLoading from "@/components/app-shell/route-loading";
 import { redirect } from "next/navigation";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { deleteDriverLicenceAction } from "@/app/(administration)/validation-data/driver-licenses/actions";
 import {
@@ -57,7 +57,7 @@ async function renderDriverLicenceDeleteCheckPage({
         <ErrorCard message="Driver licence maintenance is temporarily unavailable." />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <ErrorCard message="You do not have permission to delete driver licences." />

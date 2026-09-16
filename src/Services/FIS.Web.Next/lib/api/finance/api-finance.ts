@@ -11,6 +11,7 @@ export class FinanceApiError extends Error {
     public readonly reason: FinanceApiErrorReason,
     message: string,
     public readonly status?: number,
+    public readonly responseBody?: unknown,
   ) {
     super(message);
     this.name = "FinanceApiError";
@@ -80,12 +81,20 @@ async function requestJson(path: string, init: RequestInit = {}) {
         "The FIS access cookie was rejected.",
         response.status,
       );
-    if (!response.ok)
+    if (!response.ok) {
+      let responseBody: unknown;
+      try {
+        responseBody = await response.json();
+      } catch {
+        responseBody = undefined;
+      }
       throw new FinanceApiError(
         response.status >= 500 ? "unavailable" : "invalid-response",
         `FIS API returned HTTP ${response.status}.`,
         response.status,
+        responseBody,
       );
+    }
     try {
       return (await response.json()) as unknown;
     } catch {
@@ -599,19 +608,31 @@ export async function getBasRows(path: string) {
     .filter((item): item is FinanceRow => item !== null);
 }
 
-export async function importBas(fileData: string, departmentCode?: number) {
+export async function importBas(
+  fileData: string,
+  departmentCode?: number,
+  startDate?: string,
+  endDate?: string,
+  confirmationActionCode?: number,
+) {
   return requestJson("api/finance/bas/import", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ fileData, departmentCode }),
+    body: JSON.stringify({
+      fileData,
+      departmentCode,
+      startDate,
+      endDate,
+      confirmationActionCode,
+    }),
   });
 }
 
-export async function activateBasSegments(segmentCodes: number[]) {
+export async function activateBasSegments(segmentCodes: number[], departmentCode?: number) {
   return requestJson("api/finance/bas/segments/activate", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ segmentCodes }),
+    body: JSON.stringify({ segmentCodes, departmentCode }),
   });
 }
 

@@ -18,8 +18,8 @@ import {
   type BookingRecord,
 } from "@/lib/api/fleet-operations/api-bookings";
 import {
-  getUserAdminUserChoices,
-  type UserAdminProfile,
+  getUserApproverChoices,
+  type UserApproverChoice,
 } from "@/lib/api/administration/api-user-admin";
 import { getSession } from "@/lib/auth/session";
 
@@ -106,12 +106,12 @@ function siteOptions(sites: readonly CallCentreSiteOption[]) {
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
-function userDisplayName(user: UserAdminProfile) {
+function userDisplayName(user: UserApproverChoice) {
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
   return fullName || user.userName?.trim() || null;
 }
 
-function userOptions(users: readonly UserAdminProfile[]) {
+function userOptions(users: readonly UserApproverChoice[]) {
   return users
     .map((user) => namedOption(user.userAccessCode, userDisplayName(user)))
     .filter((item): item is SelectOption => item !== null)
@@ -122,7 +122,7 @@ async function getBookingLookups(): Promise<BookingLookups> {
   const [classesResult, sitesResult, usersResult] = await Promise.allSettled([
     getClasses(),
     getCallCentreSites(),
-    getUserAdminUserChoices(),
+    getUserApproverChoices(),
   ]);
   const classes = classesResult.status === "fulfilled" ? classesResult.value : [];
   const sites = sitesResult.status === "fulfilled" ? sitesResult.value : [];

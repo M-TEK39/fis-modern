@@ -135,9 +135,9 @@ export default function VehicleCreateClient({ referenceData, today }: VehicleCre
         <div className="notice notice-info" role="note">
           <span aria-hidden="true">i</span>
           <span>
-            GG numbers are allocated during authorization when a free number is available. This
-            capture is saved to the pre-vehicle authorization workflow, including its legacy
-            purchase, site, damage, notes, extras, and maintenance details.
+            Enter the available GG number in the legacy format (for example GVN001G). This capture
+            is saved to the pre-vehicle authorization workflow, including its legacy purchase,
+            site, damage, notes, extras, and maintenance details.
           </span>
         </div>
         <VehicleCreateIdentityFields

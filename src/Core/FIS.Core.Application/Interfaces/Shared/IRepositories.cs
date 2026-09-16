@@ -405,11 +405,16 @@ public interface IVehicleAuthorizationRepository
     Task<PreVehicleMaster?> GetByChassisNumberAsync(string chassisNumber);
     Task<VehicleAuthorizationPage> GetPendingAuthorizationsAsync(int page = 1, int pageSize = 24);
     Task<VehicleAuthorizationPage> GetAuthorizedVehiclesAsync(int page = 1, int pageSize = 24);
-    Task<VehicleAuthorizationPage> GetRejectedVehiclesAsync(int page = 1, int pageSize = 24);
+    Task<VehicleAuthorizationPage> GetRejectedVehiclesAsync(
+        int page = 1,
+        int pageSize = 24,
+        int? capturedByUserCode = null
+    );
     Task<IEnumerable<PreVehicleMaster>> GetByStatusAsync(string status);
     Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(
         DateTime? startDate = null,
-        DateTime? endDate = null
+        DateTime? endDate = null,
+        int? capturedByUserCode = null
     );
     Task<IReadOnlyList<VehicleMaintenanceTypeOption>> GetMaintenanceTypesAsync();
     Task<PreVehicleMaster> CreateAsync(PreVehicleMaster vehicleAuth, int currentUserId);
@@ -466,12 +471,26 @@ public interface IContractRepository
     Task<IEnumerable<Contract>> GetContractsByVehicleAsync(int vmfCode);
     Task<IEnumerable<Contract>> GetAllAsync();
     Task<ContractPage> GetPageAsync(ContractPageQuery query);
-    Task<IEnumerable<ContractVehicleLookup>> SearchVehiclesForContractsAsync(string searchTerm);
-    Task<ContractVehicleLookup?> GetVehicleForContractAsync(int vmfCode);
+    Task<IEnumerable<ContractVehicleLookup>> SearchVehiclesForContractsAsync(
+        string searchTerm,
+        IReadOnlyCollection<short>? allowedSiteCodes = null
+    );
+    Task<ContractVehicleLookup?> GetVehicleForContractAsync(
+        int vmfCode,
+        IReadOnlyCollection<short>? allowedSiteCodes = null
+    );
     Task<Contract?> GetActiveContractByVehicleAsync(int vmfCode);
     Task<bool> HasActiveContractAsync(int vmfCode);
+    /// <summary>
+    /// Creates an ordinary pending contract through the legacy approval
+    /// procedure. The procedure owns status normalization, contract-group
+    /// initialization, status history, and the database transaction/trigger
+    /// chain; callers must not substitute a direct insert when it is absent.
+    /// </summary>
+    Task<Contract> CreateForApprovalAsync(Contract contract, int currentUserId);
     Task<Contract> CreateAsync(Contract contract, int currentUserId);
     Task UpdateAsync(Contract contract, int currentUserId);
+    Task<Contract> UpdatePendingForApprovalAsync(Contract contract, int currentUserId);
     Task<Contract> UpdatePendingDecisionAsync(Contract contract, int currentUserId);
     Task<Contract> ActivatePendingAsync(
         Contract pendingContract,
@@ -502,7 +521,9 @@ public sealed record ContractPageQuery(
     string? StillCurrent = null,
     DateTime? StartDateFrom = null,
     DateTime? StartDateTo = null,
-    int? VmfCode = null
+    int? VmfCode = null,
+    IReadOnlyCollection<short>? AllowedSiteCodes = null,
+    int? OwnerUserCode = null
 );
 
 public sealed record ContractPage(
@@ -522,7 +543,8 @@ public sealed record ContractVehicleLookup(
     string? ChassisNumber,
     string? EngineNumber,
     string? InvoiceNumber,
-    short? VehicleStatusCode = null
+    short? VehicleStatusCode = null,
+    short? SiteCode = null
 );
 
 /// <summary>
@@ -655,6 +677,7 @@ public interface IDriverRepository
     Task<Driver?> GetByIdAsync(string driverId);
     Task<Driver?> GetByLicenceNumberAsync(string licenceNumber);
     Task<IEnumerable<Driver>> GetActiveDriversAsync();
+    Task<IEnumerable<Driver>> GetAllDriversAsync();
     Task<IEnumerable<Driver>> SearchDriversAsync(string searchTerm);
     Task<Driver> CreateAsync(Driver driver, int currentUserId);
     Task UpdateAsync(Driver driver, int currentUserId);
@@ -666,21 +689,23 @@ public interface IDriverRepository
 /// </summary>
 public interface ITripRepository
 {
-    Task<Trip?> GetByIdAsync(int tripId);
-    Task<TripAuthorityDetails?> GetDetailsAsync(int tripId);
-    Task<IEnumerable<Trip>> GetAllAsync();
+    Task<Trip?> GetByIdAsync(int tripId, IReadOnlySet<short>? allowedSiteCodes = null);
+    Task<TripAuthorityDetails?> GetDetailsAsync(int tripId, IReadOnlySet<short>? allowedSiteCodes = null);
+    Task<IEnumerable<Trip>> GetAllAsync(IReadOnlySet<short>? allowedSiteCodes = null);
     Task<TripSummaryPage> GetTripSummaryPageAsync(TripSummaryPageQuery query);
-    Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync();
+    Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync(
+        IReadOnlySet<short>? allowedSiteCodes = null
+    );
     Task<TripAuthorityVehiclePage> GetTripAuthorityInServicePageAsync(
         TripAuthorityVehiclePageQuery query
     );
     Task<TripAuthorityVehiclePage> GetTripAuthorityOutPageAsync(
         TripAuthorityVehiclePageQuery query
     );
-    Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode);
-    Task<IEnumerable<Trip>> GetTripsByDriverAsync(string driverId);
-    Task<IEnumerable<Trip>> GetTripsByContractAsync(int contractCode);
-    Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(DateTime startDate, DateTime endDate);
+    Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode, IReadOnlySet<short>? allowedSiteCodes = null);
+    Task<IEnumerable<Trip>> GetTripsByDriverAsync(string driverId, IReadOnlySet<short>? allowedSiteCodes = null);
+    Task<IEnumerable<Trip>> GetTripsByContractAsync(int contractCode, IReadOnlySet<short>? allowedSiteCodes = null);
+    Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(DateTime startDate, DateTime endDate, IReadOnlySet<short>? allowedSiteCodes = null);
     Task<Trip> CreateAsync(Trip trip, int currentUserId);
     Task<Trip> CreateAuthorityAsync(
         Trip trip,
@@ -701,9 +726,8 @@ public interface ITripRepository
 
 /// <summary>
 /// Filters for the two server-paginated Trip Authority vehicle lists.
-/// The selected location filters are data filters only; callers must retain
-/// the existing role-based access filtering because this contract intentionally
-/// does not accept an access mode or role override.
+/// The selected location filters are data filters. AllowedSiteCodes is an
+/// authenticated resource scope resolved by the API and is never caller-owned.
 /// </summary>
 public sealed record TripAuthorityVehiclePageQuery(
     int Page = 1,
@@ -712,7 +736,8 @@ public sealed record TripAuthorityVehiclePageQuery(
     string? SearchTerm = null,
     short? DepartmentCode = null,
     short? SiteCode = null,
-    int? TripAuthorityCode = null
+    int? TripAuthorityCode = null,
+    IReadOnlySet<short>? AllowedSiteCodes = null
 );
 
 public sealed record TripAuthorityVehiclePageItem(
@@ -1347,6 +1372,11 @@ public interface IVehicleTariffRepository
 {
     Task<VehicleTariff?> GetByIdAsync(int vehicleTariffCode);
     Task<VehicleTariff?> GetCurrentTariffForVehicleAsync(int vmfCode);
+    Task<VehicleTariff?> GetTariffForVehicleAsync(
+        int vmfCode,
+        int? parameterYear,
+        DateTime effectiveDate
+    );
     Task<IEnumerable<VehicleTariff>> GetTariffHistoryForVehicleAsync(int vmfCode);
     Task<VehicleTariff> CreateAsync(VehicleTariff tariff);
     Task UpdateAsync(VehicleTariff tariff);

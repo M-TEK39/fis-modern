@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Lease Vehicle Pending,Vehicle Master")]
 [Route("api/lease-tariffs")]
 public sealed class LeaseTariffsController : BaseApiController
 {

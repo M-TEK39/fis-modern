@@ -22,6 +22,21 @@ namespace FIS.Data.SqlServer.Interceptors;
 /// </summary>
 public class AuditInterceptor : SaveChangesInterceptor
 {
+    private static readonly string[] RequiredAuditColumns =
+    [
+        "AuditID",
+        "Action",
+        "TableName",
+        "PrimaryKey",
+        "Changes",
+        "ActionedBy",
+        "date_created",
+        "date_updated",
+        "created_by_user_code",
+        "modified_by_user_code",
+        "is_deleted",
+    ];
+
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<AuditInterceptor> _logger;
 
@@ -124,12 +139,21 @@ public class AuditInterceptor : SaveChangesInterceptor
         CancellationToken cancellationToken
     )
     {
-        if (await TableExistsAsync(context, "Workflow", "Audit", cancellationToken))
+        if (
+            await TableHasRequiredColumnsAsync(
+                context,
+                "Workflow",
+                "Audit",
+                cancellationToken
+            )
+        )
         {
             return AuditStore.Workflow;
         }
 
-        if (await TableExistsAsync(context, "dbo", "Audit", cancellationToken))
+        if (
+            await TableHasRequiredColumnsAsync(context, "dbo", "Audit", cancellationToken)
+        )
         {
             return AuditStore.Legacy;
         }
@@ -139,12 +163,12 @@ public class AuditInterceptor : SaveChangesInterceptor
 
     private AuditStore ResolveAuditStore(FisDbContext context)
     {
-        if (TableExists(context, "Workflow", "Audit"))
+        if (TableHasRequiredColumns(context, "Workflow", "Audit"))
         {
             return AuditStore.Workflow;
         }
 
-        if (TableExists(context, "dbo", "Audit"))
+        if (TableHasRequiredColumns(context, "dbo", "Audit"))
         {
             return AuditStore.Legacy;
         }
@@ -232,6 +256,96 @@ public class AuditInterceptor : SaveChangesInterceptor
             AddParameter(command, "@schema", DbType.String, schema);
             AddParameter(command, "@table", DbType.String, table);
             return Convert.ToInt32(command.ExecuteScalar()) == 1;
+        }
+        catch (DbException)
+        {
+            return false;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                connection.Close();
+            }
+        }
+    }
+
+    private static async Task<bool> TableHasRequiredColumnsAsync(
+        FisDbContext context,
+        string schema,
+        string table,
+        CancellationToken cancellationToken
+    )
+    {
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT COUNT(1)
+                FROM [INFORMATION_SCHEMA].[COLUMNS]
+                WHERE [TABLE_SCHEMA] = @schema
+                  AND [TABLE_NAME] = @table
+                  AND [COLUMN_NAME] IN
+                  (
+                      N'AuditID', N'Action', N'TableName', N'PrimaryKey', N'Changes',
+                      N'ActionedBy', N'date_created', N'date_updated',
+                      N'created_by_user_code', N'modified_by_user_code', N'is_deleted'
+                  )
+                """;
+            AddParameter(command, "@schema", DbType.String, schema);
+            AddParameter(command, "@table", DbType.String, table);
+            return Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken))
+                == RequiredAuditColumns.Length;
+        }
+        catch (DbException)
+        {
+            return false;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static bool TableHasRequiredColumns(FisDbContext context, string schema, string table)
+    {
+        var connection = context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            connection.Open();
+        }
+
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT COUNT(1)
+                FROM [INFORMATION_SCHEMA].[COLUMNS]
+                WHERE [TABLE_SCHEMA] = @schema
+                  AND [TABLE_NAME] = @table
+                  AND [COLUMN_NAME] IN
+                  (
+                      N'AuditID', N'Action', N'TableName', N'PrimaryKey', N'Changes',
+                      N'ActionedBy', N'date_created', N'date_updated',
+                      N'created_by_user_code', N'modified_by_user_code', N'is_deleted'
+                  )
+                """;
+            AddParameter(command, "@schema", DbType.String, schema);
+            AddParameter(command, "@table", DbType.String, table);
+            return Convert.ToInt32(command.ExecuteScalar()) == RequiredAuditColumns.Length;
         }
         catch (DbException)
         {

@@ -6,8 +6,9 @@
   stored procedure, trigger, or application mutation.
 
   It is deliberately scoped to the high-risk legacy-write paths currently
-  exposed by the modern API: Contracts, Vehicle Master, Fines, Logbooks,
-  Logsheets, Trips/Routes, Job Cards, Lease Tariffs, and Finance journals.
+  exposed by the modern API: Contracts (including the revenue scheduler),
+  Vehicle Master/tariffs, Fines, Logbooks, Logsheets, Trips/Routes, Job
+  Cards, Lease Tariffs, and Finance journals.
 */
 SET NOCOUNT ON;
 
@@ -32,12 +33,15 @@ VALUES
     (N'Contracts', N'Approve or decline a backdating request', N'contract', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', NULL),
     (N'Contracts', N'Activate a contract', N'contract', N'DEV_UPD_Contract_NewActivate', N'TRG_UPD_ContractJournalDetailRecord'),
     (N'Contracts', N'Extend a contract', N'contract', N'DEV_UPD_Contract_ExtendExisting', N'TRG_Audit_Contract_Update'),
+    (N'Contracts', N'Close an active contract and finalize its billing boundary', N'contract', NULL, N'TRG_UPD_ContractJournalDetailRecord'),
     (N'Contracts', N'Reassign a contract', N'contract', N'DEV_UPD_Contract_ReassignExisting', N'TRG_INS_UpdateContractChargedUntil'),
+    (N'Contracts', N'Run the legacy daily contract billing scheduler', N'contract', N'ADM_Contract_JobScheduler', N'TRG_INS_UpdateContractChargedUntil'),
     (N'Contracts', N'Write contract status history', N'contract_status_history', N'DEV_UPD_ContractStatusHistory', NULL),
     (N'Contracts', N'Delete a contract', N'contract', NULL, N'TRG_DEL_Contract'),
     (N'Contracts', N'Delete a contract', N'contract', NULL, N'TRG_Audit_Contract_Delete'),
     (N'Vehicle Master', N'Capture a pre-vehicle', N'pre_vehicle_master', N'DEV_INS_New_Vehicle_Master', N'TRG_Audit_Pre_Vehicle_Master_Insert'),
     (N'Vehicle Master', N'Authorise a pre-vehicle', N'pre_vehicle_master', N'DEV_INS_VehicleFromPre_Vehicle_Master', N'TRG_Audit_Pre_Vehicle_Master_Update'),
+    (N'Vehicle Master', N'Authorise a pre-vehicle and generate the calculated vehicle tariff', N'vehicle_master', NULL, N'TRG_UPSERT_CheckPurchaseAmount'),
     (N'Vehicle Master', N'Reject a pre-vehicle', N'pre_vehicle_master', N'DEV_UPD_Rejected_PreVehicles', N'TRG_Audit_Pre_Vehicle_Master_Update'),
     (N'Vehicle Master', N'Print and clear a pre-vehicle authorisation listing', N'pre_vehicle_master', N'DEV_CLR_NewVehicleFromAuthList', NULL),
     (N'Vehicle Master', N'Capture vehicle notes, extras, damages, and maintenance settings', N'pre_vehicle_master', N'DEV_INS_PreVehicle_master_Notes', N'TRG_Audit_Pre_Vehicle_Master_Update'),
@@ -48,6 +52,9 @@ VALUES
     (N'Vehicle Master', N'Authorise a pre-vehicle maintenance plan', N'Vehicle_Maintenance', N'DEV_UPD_MaintenanceVmfCode', NULL),
     (N'Vehicle Master', N'Edit or delete vehicle master', N'vehicle_master', NULL, N'TRG_Audit_Vehicle_Master_Delete'),
     (N'Vehicle Master', N'Edit or delete vehicle master', N'vehicle_master', NULL, N'trg_del_preventvehicledeletion'),
+    (N'Drivers', N'Create a site driver', N'site_drivers', N'DEV_INS_SiteDrivers', NULL),
+    (N'Drivers', N'Update a site driver', N'site_drivers', N'DEV_UPD_SiteDrivers', NULL),
+    (N'Drivers', N'Deactivate a site driver', N'site_drivers', N'DEV_DEL_SiteDrivers', NULL),
     (N'Fines', N'Create, update, or delete a fine', N'Fines', NULL, N'TRG_Audit_Fines_Insert'),
     (N'Fines', N'Create, update, or delete a fine', N'Fines', NULL, N'TRG_Audit_Fines_Update'),
     (N'Fines', N'Create, update, or delete a fine', N'Fines', NULL, N'TRG_Audit_Fines_Delete'),
@@ -58,10 +65,30 @@ VALUES
     (N'Logsheets', N'Create or update a manual logsheet', N'Logsheets', NULL, N'TRG_INS_UPD_Logsheet_CheckOverlappingOpenELsTrip'),
     (N'Logsheets', N'Update a manual logsheet', N'Logsheets', NULL, N'TRG_UPD_LogsheetJournalDetailRecord'),
     (N'Logsheets', N'Delete a manual logsheet', N'Logsheets', NULL, N'TRG_DEL_Logsheet'),
-    (N'Trips and Routes', N'Create a trip authority and routes', N'trip_authorities', N'DEV_INS_TripXML', NULL),
-    (N'Trips and Routes', N'Update a trip authority and routes', N'trip_authorities', N'DEV_UPD_TripXML', NULL),
-    (N'Trips and Routes', N'Close a trip authority and routes', N'route_details', N'DEV_UPD_TripXMLForClosingOfTrip', N'TRG_INS_RouteJournalDetailRecord'),
-    (N'Trips and Routes', N'Renew a trip authority and routes', N'trip_authorities', N'DEV_UPD_TripXMLForRenewalOfTrip', NULL),
+    -- Taxi_log_2.aspx writes Taxi_logs directly; DEV_INS_TaxiLog is an
+    -- archived wrapper that omits request_id and is not the active page path.
+    (N'Taxi Logs', N'Create a taxi log and create its billable journal detail', N'Taxi_logs', NULL, N'TRG_INS_TaxiLogJournalDetailRecord'),
+    (N'Taxi Logs', N'Create a taxi log and reject duplicate requisitions', N'Taxi_logs', NULL, N'TRG_INS_TaxiLog_RejectDuplicateRequsition'),
+    (N'Taxi Logs', N'Create or update a VIP taxi log within a contract', N'Taxi_logs', NULL, N'TRG_INS_UPD_TaxiLog_CheckVIPContract'),
+    (N'Taxi Logs', N'Update a taxi log and reverse/rebill posted journal detail', N'Taxi_logs', NULL, N'TRG_UPD_TaxiLogJournalDetailRecord'),
+    (N'Taxi Logs', N'Update VIP billing derived from a taxi log', N'Taxi_logs', NULL, N'TRG_UPD_TaxiLogVIPBillingRecord'),
+    -- Request_GGVIP_33[2].aspx uses DEV_INS_Requisition: it allocates the
+    -- requisition sequence and inserts Taxis in one transaction. DEV_INS_Taxi
+    -- is an older wrapper that requires a caller-supplied number and is not the
+    -- active legacy request path.
+    (N'Taxi Requests', N'Create a taxi request, allocate its requisition number, and reject duplicates', N'Taxis', N'DEV_INS_Requisition', N'TRG_INS_Taxi_RejectDuplicateRequisition'),
+    -- Request_GGVIP_Recurring.aspx is a separate legacy mutation. It creates
+    -- one weekday Taxis row per requested date and advances Req_num itself;
+    -- there is no stored procedure in the archived source. Keep this explicit
+    -- so a missing modern recurring-booking route cannot be mistaken for parity.
+    (N'Taxi Requests', N'Create weekday recurring taxi requests and advance Req_num', N'Taxis', NULL, NULL),
+    (N'Taxi Requests', N'Update a taxi request and maintain journal detail', N'Taxis', NULL, N'TRG_UPD_TaxiJournalDetailRecord'),
+    (N'Taxi Requests', N'Update VIP billing derived from a taxi request', N'Taxis', NULL, N'TRG_UPD_TaxiVIPBillingRecord'),
+    (N'Taxi Requests', N'Delete a taxi request subject to legacy log restrictions', N'Taxis', NULL, N'TRG_DEL_Taxis'),
+    (N'Trips and Routes', N'Create a trip authority and routes', N'trip_authorities', N'DEV_INS_TripXML', N'TRG_INS_UPD_RejectIncompleteTrip'),
+    (N'Trips and Routes', N'Update a trip authority and routes', N'trip_authorities', N'DEV_UPD_TripXML', N'TRG_INS_UPD_RejectIncompleteTrip'),
+    (N'Trips and Routes', N'Close a trip authority and routes', N'route_details', N'DEV_UPD_TripXMLForClosingOfTrip', N'TRG_UPD_RouteJournalDetailRecord'),
+    (N'Trips and Routes', N'Renew a trip authority and routes', N'trip_authorities', N'DEV_UPD_TripXMLForRenewalOfTrip', N'TRG_INS_UPD_RejectIncompleteTrip'),
     (N'Trips and Routes', N'Create or amend route details', N'route_details', N'DEV_INS_RouteDetails2', N'TRG_INS_RouteJournalDetailRecord'),
     (N'Trips and Routes', N'Create or amend route details', N'route_details', NULL, N'TRG_INS_UPD_CheckOverLapping_RouteDetailsKilos'),
     (N'Trips and Routes', N'Create or amend route details', N'route_details', NULL, N'TRG_INS_UPD_RouteDetails_CheckOverLapping_ManualLogsheets'),
@@ -162,6 +189,76 @@ VALUES
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 4, N'@contract_estimated_overall_km', N'GGMT.Database/v2.1.08 DEV_UPD_Contract_ExtendExisting'),
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 5, N'@Notes', N'GGMT.Database/v2.1.08 DEV_UPD_Contract_ExtendExisting'),
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 6, N'@UserID', N'GGMT.Database/v2.1.08 DEV_UPD_Contract_ExtendExisting'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 1, N'@SiteDriverCode', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 2, N'@SiteCode', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 3, N'@DriverLicenceTypeID', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 4, N'@Surname', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 5, N'@FirstName', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 6, N'@SAIDNumber', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 7, N'@PassportNumber', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 8, N'@PersalNumber', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 9, N'@DriverContractNumber', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 10, N'@DriverLicenceNumber', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 11, N'@DriverLicenceIssueDate', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 12, N'@DriverLicenceLastVerifiedDate', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 13, N'@HasPDP', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 14, N'@PDPExpiryDate', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 15, N'@LicenceExpiryDate', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_INS_SiteDrivers', 16, N'@Active', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 1, N'@SiteDriverCode', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 2, N'@SiteCode', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 3, N'@DriverLicenceTypeID', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 4, N'@Surname', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 5, N'@FirstName', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 6, N'@SAIDNumber', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 7, N'@PassportNumber', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 8, N'@PersalNumber', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 9, N'@DriverContractNumber', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 10, N'@DriverLicenceNumber', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 11, N'@DriverLicenceIssueDate', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 12, N'@DriverLicenceLastVerifiedDate', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 13, N'@HasPDP', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 14, N'@PDPExpiryDate', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 15, N'@LicenceExpiryDate', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_UPD_SiteDrivers', 16, N'@Active', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_SiteDrivers'),
+    (N'Drivers', N'DEV_DEL_SiteDrivers', 1, N'@ID', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_DEL_SiteDrivers'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 1, N'@reqnum', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 2, N'@contractor_id', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 3, N'@vmf_code', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 4, N'@reg_num', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 5, N'@site_code', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 6, N'@department_code', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 7, N'@date_required', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 8, N'@time_required', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 9, N'@official', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 10, N'@rank', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 11, N'@address_1', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 12, N'@address_2', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 13, N'@address_3', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 14, N'@flight', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 15, N'@instructions', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 16, N'@destination_1', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 17, N'@destination_2', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 18, N'@destination_3', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 19, N'@user_access_code', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 20, N'@request_date', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 21, N'@resp_code', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 22, N'@object_code', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 23, N'@fund_code', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 24, N'@fms_code', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 25, N'@project', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 26, N'@trans_man_name', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 27, N'@trans_man_date', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 28, N'@trans_man_rank', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 29, N'@trans_man_tel', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 30, N'@booking_by', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 31, N'@driver', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 32, N'@arrival_time', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 33, N'@driver_available', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 34, N'@persal', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 35, N'@jia_pickup', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 36, N'@official_tel_num', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
+    (N'Taxi Requests', N'DEV_INS_Requisition', 37, N'@vehicle_type_code', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
     (N'Trips and Routes', N'DEV_UPD_TripXMLForClosingOfTrip', 1, N'@Trip', N'GGFIS_DataAccessLayer/Trips.vb CloseTrip'),
     (N'Trips and Routes', N'DEV_UPD_TripXMLForClosingOfTrip', 2, N'@XmlDocument', N'GGFIS_DataAccessLayer/Trips.vb CloseTrip'),
     (N'Finance Tariff Parameters', N'DEV_UPD_TariffParameter', 1, N'@TariffParameterID', N'GGFIS_DataAccessLayer/Finance.vb TariffParameter_ApprovedYear'),
@@ -222,6 +319,137 @@ LEFT JOIN [sys].[triggers] AS triggerObject
     ON triggerObject.[parent_id] = tableObject.[object_id]
    AND triggerObject.[name] = target.[LegacyTrigger]
 ORDER BY target.[Module], target.[ModernMutation], target.[TableName], target.[LegacyProcedure], target.[LegacyTrigger];
+
+/* 1b. The legacy contract billing scheduler has no input parameters. Its
+   presence is required before the modern Hangfire entry point is enabled. */
+SELECT
+    N'Contracts' AS [Module],
+    N'ADM_Contract_JobScheduler' AS [LegacyProcedure],
+    CASE WHEN procedureObject.[object_id] IS NULL
+              AND OBJECT_ID(N'dbo.ADM_Contract_JobScheduler_Off', N'P') IS NOT NULL
+         THEN N'DISABLED (RENAMED TO ADM_Contract_JobScheduler_Off)'
+         WHEN procedureObject.[object_id] IS NULL THEN N'PROCEDURE MISSING'
+         WHEN EXISTS
+         (
+             SELECT 1
+             FROM [sys].[parameters] AS parameterObject
+             WHERE parameterObject.[object_id] = procedureObject.[object_id]
+               AND parameterObject.[parameter_id] > 0
+         ) THEN N'UNEXPECTED INPUT PARAMETERS'
+         ELSE N'NO INPUT PARAMETERS'
+    END AS [VerificationStatus],
+    procedureObject.[create_date],
+    procedureObject.[modify_date]
+FROM [sys].[schemas] AS schemaObject
+LEFT JOIN [sys].[procedures] AS procedureObject
+    ON procedureObject.[schema_id] = schemaObject.[schema_id]
+   AND procedureObject.[name] = N'ADM_Contract_JobScheduler'
+WHERE schemaObject.[name] = N'dbo';
+
+/* 1c. The scheduler source contains EXEC calls that may not all appear in
+   sys.sql_expression_dependencies (for example when a deployed definition
+   uses dynamic SQL). Verify every known database-owned billing step by name. */
+DECLARE @BillingSchedulerSteps TABLE
+(
+    [StepOrder] int NOT NULL,
+    [ProcedureName] sysname NOT NULL
+);
+
+INSERT INTO @BillingSchedulerSteps ([StepOrder], [ProcedureName])
+VALUES
+    (1, N'ADM_ContractScheduler_RecreateAllOpen'),
+    (2, N'ADM_ContractScheduler_UpdateAllOpenAndNotCharged'),
+    (3, N'ADM_ContractScheduler_RecreateAllOpenAndCharged'),
+    (4, N'ADM_FIX_OverChargedContracts'),
+    (5, N'ADM_INS_CopyTariffFromPreviousYear'),
+    (6, N'ADM_FIX_VehiclesWithNoTariffs'),
+    (7, N'ADM_CreateRebill_ForPreviousYearReversalsNotRebilledYet'),
+    (8, N'ADM_RUN_SplitRebillContract'),
+    (9, N'ADM_UPD_ExtendSegmentEndDate_AllDefaultsAndLedgerCodes');
+
+SELECT
+    [StepOrder],
+    [ProcedureName],
+    CASE WHEN OBJECT_ID(N'dbo.' + [ProcedureName], N'P') IS NULL
+         THEN N'MISSING'
+         ELSE N'PRESENT'
+    END AS [VerificationStatus]
+FROM @BillingSchedulerSteps
+ORDER BY [StepOrder];
+
+/* 1e. If the scheduler was previously disabled, the archived maintenance
+   procedure is the client-side repair path for contracts closed after their
+   last Charged_Until date. It is inventoried only; never execute it from this
+   read-only script. */
+SELECT
+    N'Contracts' AS [Module],
+    N'ADM_Contract_Jobscheduler_when_Stopped' AS [LegacyProcedure],
+    CASE WHEN OBJECT_ID(N'dbo.ADM_Contract_Jobscheduler_when_Stopped', N'P') IS NULL
+         THEN N'MISSING'
+         ELSE N'PRESENT'
+    END AS [VerificationStatus];
+
+/* 1d. Revenue- and tariff-producing trigger state. A scheduler run alone is
+   not enough: these triggers create/update journal_detail rows, reversal/
+   rebill data, or the calculated vehicle tariff consumed by billing. */
+DECLARE @BillingTriggers TABLE
+(
+    [SchemaName] sysname NOT NULL,
+    [TableName] sysname NOT NULL,
+    [TriggerName] sysname NOT NULL
+);
+
+INSERT INTO @BillingTriggers ([SchemaName], [TableName], [TriggerName])
+VALUES
+    (N'dbo', N'contract', N'TRG_INS_UpdateContractChargedUntil'),
+    (N'dbo', N'contract', N'TRG_INS_ContractJournalDetailRecord'),
+    (N'dbo', N'contract', N'TRG_UPD_ContractJournalDetailRecord'),
+    (N'dbo', N'vehicle_master', N'TRG_UPSERT_CheckPurchaseAmount'),
+    (N'dbo', N'Logsheets', N'TRG_INS_LogsheetJournalDetailRecord'),
+    (N'dbo', N'Logsheets', N'TRG_UPD_LogsheetJournalDetailRecord'),
+    (N'dbo', N'Logsheets', N'TRG_DEL_Logsheet'),
+    (N'dbo', N'route_details', N'TRG_INS_RouteJournalDetailRecord'),
+    (N'dbo', N'route_details', N'TRG_UPD_RouteJournalDetailRecord'),
+    (N'dbo', N'route_details', N'TRG_INS_UPD_CheckOverLapping_RouteDetailsKilos'),
+    (N'dbo', N'route_details', N'TRG_INS_UPD_RouteDetails_CheckOverLapping_ManualLogsheets'),
+    (N'dbo', N'trip_authorities', N'TRG_INS_UPD_RejectIncompleteTrip'),
+    (N'dbo', N'taxi_logs', N'TRG_INS_TaxiLogJournalDetailRecord'),
+    (N'dbo', N'taxi_logs', N'TRG_INS_TaxiLog_RejectDuplicateRequsition'),
+    (N'dbo', N'taxi_logs', N'TRG_INS_VIPBillingRecord'),
+    (N'dbo', N'taxi_logs', N'TRG_INS_UPD_TaxiLog_CheckVIPContract'),
+    (N'dbo', N'taxi_logs', N'TRG_UPD_TaxiLogJournalDetailRecord'),
+    (N'dbo', N'taxi_logs', N'TRG_UPD_TaxiLogVIPBillingRecord'),
+    (N'dbo', N'Taxis', N'TRG_INS_Taxi_RejectDuplicateRequisition'),
+    (N'dbo', N'Taxis', N'TRG_UPD_TaxiVIPBillingRecord'),
+    (N'dbo', N'Taxis', N'TRG_UPD_TaxiJournalDetailRecord'),
+    (N'dbo', N'Taxis', N'TRG_DEL_Taxis'),
+    (N'dbo', N'wesbank_transaction', N'TRG_INS_WesbankTransactionJournalDetailRecord'),
+    (N'dbo', N'journal_detail_allocation_exception', N'TRG_UPD_AllocationExceptionJournalDetailRecord'),
+    (N'fin', N'vehicle_tariff', N'TRG_UPSERT_Vehicle_Tariff');
+
+SELECT
+    expected.[SchemaName],
+    expected.[TableName],
+    expected.[TriggerName],
+    triggerObject.[is_disabled],
+    triggerObject.[is_instead_of_trigger],
+    CASE
+        WHEN triggerObject.[object_id] IS NULL THEN N'MISSING'
+        WHEN triggerObject.[is_disabled] = 1 THEN N'DISABLED'
+        ELSE N'ENABLED'
+    END AS [VerificationStatus],
+    triggerObject.[create_date],
+    triggerObject.[modify_date]
+FROM @BillingTriggers AS expected
+LEFT JOIN [sys].[schemas] AS schemaObject
+    ON schemaObject.[name] = expected.[SchemaName]
+LEFT JOIN [sys].[tables] AS tableObject
+    ON tableObject.[schema_id] = schemaObject.[schema_id]
+   AND tableObject.[name] = expected.[TableName]
+LEFT JOIN [sys].[triggers] AS triggerObject
+    ON triggerObject.[parent_id] = tableObject.[object_id]
+   AND triggerObject.[name] = expected.[TriggerName]
+ORDER BY expected.[SchemaName], expected.[TableName], expected.[TriggerName];
 
 /* 2. Exact live parameter contract for every expected stored procedure. */
 SELECT DISTINCT
@@ -427,6 +655,115 @@ INNER JOIN [sys].[objects] AS objectDefinition
 LEFT JOIN [sys].[sql_modules] AS moduleDefinition
     ON moduleDefinition.[object_id] = expected.[object_id]
 ORDER BY expected.[Module], expected.[ModernMutation], expected.[ObjectName];
+
+/* 7. Billing boundary audit (read-only). The legacy scheduler bills from
+   still_current and journal state; target_return_date is an expected-return
+   reminder field and must not be treated as end_date/closure. These rows are
+   review candidates only and are not proof that a row is incorrect. */
+SELECT
+    c.[contract_code],
+    c.[vmf_code],
+    c.[site_code],
+    c.[still_current],
+    c.[start_date],
+    c.[target_return_date],
+    c.[end_date],
+    c.[Charged_Until],
+    c.[journal_detail_code],
+    CASE
+        WHEN c.[still_current] = 'Y' AND c.[end_date] IS NOT NULL
+            THEN N'ACTIVE_WITH_END_DATE_REVIEW'
+        WHEN c.[still_current] = 'Y'
+             AND c.[target_return_date] IS NOT NULL
+             AND c.[target_return_date] < CONVERT(date, GETDATE())
+            THEN N'OVERDUE_TARGET_STILL_CURRENT_REVIEW'
+        WHEN c.[still_current] = 'N'
+             AND c.[target_return_date] IS NOT NULL
+             AND c.[end_date] IS NULL
+            THEN N'CLOSED_WITH_TARGET_BUT_NO_END_DATE_REVIEW'
+        ELSE N'NO_BOUNDARY_FLAG'
+    END AS [BillingBoundaryReview]
+FROM [dbo].[contract] AS c
+WHERE (
+        (c.[still_current] = 'Y' AND c.[end_date] IS NOT NULL)
+        OR (c.[still_current] = 'Y'
+            AND c.[target_return_date] IS NOT NULL
+            AND c.[target_return_date] < CONVERT(date, GETDATE()))
+        OR (c.[still_current] = 'N'
+            AND c.[target_return_date] IS NOT NULL
+            AND c.[end_date] IS NULL)
+      )
+ORDER BY c.[site_code], c.[vmf_code], c.[contract_code];
+
+/* 8. Current-contract billing eligibility snapshot (read-only). This mirrors
+   the legacy scheduler's documented distinction between open/current rows and
+   already journaled rows without executing the scheduler or changing data. */
+SELECT
+    c.[contract_code],
+    c.[vmf_code],
+    c.[site_code],
+    c.[still_current],
+    c.[Charged_Until],
+    jd.[journal_detail_code],
+    jd.[journal_code],
+    jd.[journal_detail_date],
+    CASE
+        WHEN c.[still_current] = 'Y' AND jd.[journal_code] IS NULL
+            THEN N'LEGACY_UPDATE_OPEN_NOT_CHARGED'
+        WHEN c.[still_current] = 'Y' AND jd.[journal_code] IS NOT NULL
+            THEN N'LEGACY_RECREATE_OPEN_CHARGED'
+        WHEN c.[still_current] <> 'Y'
+            THEN N'NOT_CURRENT_LEGACY_SCHEDULER_SKIPS'
+        ELSE N'NO_MATCHING_JOURNAL_DETAIL'
+    END AS [LegacySchedulerPath]
+FROM [dbo].[contract] AS c
+OUTER APPLY
+(
+    SELECT TOP (1)
+        detail.[journal_detail_code],
+        detail.[journal_code],
+        detail.[journal_detail_date]
+    FROM [dbo].[journal_detail] AS detail
+    WHERE detail.[journal_detail_code] = c.[journal_detail_code]
+    ORDER BY detail.[journal_detail_date] DESC, detail.[journal_detail_id] DESC
+) AS jd
+ORDER BY c.[site_code], c.[vmf_code], c.[contract_code];
+
+/* 9. Active vehicles that cannot be advanced by the daily scheduler. These
+   rows explain the reported "vehicle dispatched but missing from billing"
+   symptom: an open non-hourly contract must have a journal detail row, and
+   its Charged_Until must not lag today once the scheduler has run. */
+SELECT
+    c.[contract_code],
+    c.[vmf_code],
+    c.[site_code],
+    c.[contract_type],
+    c.[start_date],
+    c.[target_return_date],
+    c.[Charged_Until],
+    c.[journal_detail_code],
+    jd.[journal_code],
+    jd.[journal_detail_date],
+    CASE
+        WHEN c.[journal_detail_code] IS NULL OR jd.[journal_detail_code] IS NULL
+            THEN N'MISSING_JOURNAL_DETAIL'
+        WHEN c.[contract_type] = N'C'
+            THEN N'HOURLY_CONTRACT_REVIEW'
+        WHEN c.[Charged_Until] IS NULL OR CONVERT(date, c.[Charged_Until]) < CONVERT(date, GETDATE())
+            THEN N'CHARGED_UNTIL_LAGGING'
+        ELSE N'NO_SCHEDULER_LAG_FLAG'
+    END AS [BillingCompletenessReview]
+FROM [dbo].[contract] AS c
+LEFT JOIN [dbo].[journal_detail] AS jd
+    ON jd.[journal_detail_code] = c.[journal_detail_code]
+WHERE c.[still_current] = N'Y'
+  AND (
+        c.[journal_detail_code] IS NULL
+        OR jd.[journal_detail_code] IS NULL
+        OR (c.[contract_type] <> N'C'
+            AND (c.[Charged_Until] IS NULL OR CONVERT(date, c.[Charged_Until]) < CONVERT(date, GETDATE())))
+      )
+ORDER BY c.[site_code], c.[vmf_code], c.[contract_code];
 
 /*
   Do not use this inventory as proof of side effects. The follow-up test must
