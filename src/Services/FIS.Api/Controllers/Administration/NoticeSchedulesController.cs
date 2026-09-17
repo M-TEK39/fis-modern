@@ -7,7 +7,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/notice-schedules")]
-[Authorize]
+[Authorize(Roles = "User Administration")]
 public class NoticeSchedulesController : BaseApiController
 {
     private readonly INoticeScheduleRepository _noticeScheduleRepository;

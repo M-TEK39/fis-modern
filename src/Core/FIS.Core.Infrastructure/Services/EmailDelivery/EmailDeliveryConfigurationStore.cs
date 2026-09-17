@@ -396,17 +396,69 @@ public sealed class EmailDeliveryConfigurationStore : IDisposable
         var email = _configuration.GetSection("EmailSettings");
         var smtp = delivery.GetSection("Smtp");
         var sendGrid = delivery.GetSection("SendGrid");
+        var legacyProvider = email["Provider"]?.Trim();
+        var legacyOrder = legacyProvider?.ToLowerInvariant() switch
+        {
+            "smtp" => new List<EmailProvider> { EmailProvider.Smtp },
+            "sendgrid" => new List<EmailProvider> { EmailProvider.SendGrid },
+            "graph" or "microsoftgraph" => new List<EmailProvider> { EmailProvider.Graph },
+            _ => new List<EmailProvider>(),
+        };
         var order = NormalizeProviderOrder(
             delivery.GetSection("ProviderOrder").Get<string[]>() ?? []
         );
+        var hasEnvironmentProviderOrder = Enumerable
+            .Range(0, 16)
+            .Any(index =>
+                !string.IsNullOrWhiteSpace(
+                    Environment.GetEnvironmentVariable($"EmailDelivery__ProviderOrder__{index}")
+                )
+            );
+        if (
+            legacyOrder.Count > 0
+            && !hasEnvironmentProviderOrder
+            && (order.Count == 0 || order.SequenceEqual([EmailProvider.Graph]))
+        )
+        {
+            order = legacyOrder;
+        }
         if (order.Count == 0)
         {
-            var legacyProvider = email["Provider"]?.Trim();
-            order =
-                legacyProvider?.Equals("SendGrid", StringComparison.OrdinalIgnoreCase) == true
-                    ? [EmailProvider.SendGrid]
-                    : [EmailProvider.Graph];
+            order = [EmailProvider.Graph];
         }
+
+        // The archived notification service used EmailSettings:SmtpServer,
+        // SmtpPort, Username, Password, and UseSSL. Keep those names as a
+        // read-only bootstrap compatibility path so a client deployment can
+        // move to the provider-neutral EmailDelivery section incrementally.
+        var smtpHost = FirstConfigured(smtp["Host"], email["SmtpHost"], email["SmtpServer"]);
+        var smtpPort = ParsePort(FirstConfigured(smtp["Port"], email["SmtpPort"]));
+        var smtpUsername = FirstConfigured(
+            smtp["Username"],
+            email["SmtpUsername"],
+            email["Username"]
+        );
+        var smtpPassword = FirstConfigured(
+            smtp["Password"],
+            email["SmtpPassword"],
+            email["Password"]
+        );
+        var smtpFromAddress = FirstConfigured(
+            smtp["FromAddress"],
+            email["SmtpFromAddress"],
+            email["FromAddress"]
+        );
+        var smtpFromName = FirstConfigured(
+            smtp["FromName"],
+            email["SmtpFromName"],
+            email["FromName"]
+        );
+        var smtpTlsMode = FirstConfigured(smtp["TlsMode"], email["SmtpTlsMode"])
+            ?? (smtpPort == 465 ? "SslOnConnect" : "StartTls");
+        var smtpAuthentication = FirstConfigured(
+            smtp["Authentication"],
+            email["SmtpAuthentication"]
+        ) ?? (!string.IsNullOrWhiteSpace(smtpUsername) ? "Password" : "None");
 
         return new EffectiveEmailDeliveryConfiguration(
             order,
@@ -423,17 +475,17 @@ public sealed class EmailDeliveryConfigurationStore : IDisposable
                 EmailConfigurationSource.Environment
             ),
             new EffectiveSmtpConfiguration(
-                NullIfWhitespace(smtp["Host"]),
-                ParsePort(smtp["Port"]),
-                ParseSmtpSecurityMode(smtp["TlsMode"]),
-                ParseSmtpAuthentication(smtp["Authentication"]),
-                NullIfWhitespace(smtp["Username"]),
-                NullIfWhitespace(smtp["Password"]),
+                smtpHost,
+                smtpPort,
+                ParseSmtpSecurityMode(smtpTlsMode),
+                ParseSmtpAuthentication(smtpAuthentication),
+                smtpUsername,
+                smtpPassword,
                 NullIfWhitespace(smtp["GoogleOAuthClientId"]),
                 NullIfWhitespace(smtp["GoogleOAuthClientSecret"]),
                 NullIfWhitespace(smtp["GoogleOAuthRefreshToken"]),
-                NullIfWhitespace(smtp["FromAddress"]),
-                NullIfWhitespace(smtp["FromName"]) ?? "Fleet Information System",
+                smtpFromAddress,
+                smtpFromName ?? "Fleet Information System",
                 EmailConfigurationSource.Environment
             ),
             new EffectiveSendGridConfiguration(
@@ -856,6 +908,9 @@ public sealed class EmailDeliveryConfigurationStore : IDisposable
 
     private static string? NullIfWhitespace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string? FirstConfigured(params string?[] values) =>
+        values.Select(NullIfWhitespace).FirstOrDefault(value => value is not null);
 
     private static bool IsDnsHost(string value)
     {

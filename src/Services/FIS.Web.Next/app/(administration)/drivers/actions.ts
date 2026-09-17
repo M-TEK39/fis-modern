@@ -15,7 +15,7 @@ import {
 } from "@/lib/api/reference-data/api-driver-management";
 import {
   actionResultPath,
-  hasVehicleManagementPermission,
+  hasDriverAuthoriserManagementRole,
 } from "@/app/(administration)/drivers/access";
 import { getSession } from "@/lib/auth/session";
 
@@ -138,7 +138,7 @@ async function requireVehicleManagementAccess(returnPath: string) {
   if (session.status !== "authenticated") {
     redirect(`${returnPath}${returnPath.includes("?") ? "&" : "?"}result=unavailable`);
   }
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasDriverAuthoriserManagementRole(session.roles)) {
     redirect(`${returnPath}${returnPath.includes("?") ? "&" : "?"}result=forbidden`);
   }
 }

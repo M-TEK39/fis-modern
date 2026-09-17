@@ -16,11 +16,14 @@ import {
   queryValues,
   sessionMessage,
 } from "@/app/(fleet-operations)/log-books/_page";
-import { LogbookApiError } from "@/lib/api/fleet-operations/api-logbooks";
+import {
+  getLogbookVehicleOptions,
+  LogbookApiError,
+  type LogbookVehicleOption,
+} from "@/lib/api/fleet-operations/api-logbooks";
 import { getSites } from "@/lib/api/reference-data/api-sites";
-import { getVehicleOptions, type VehicleOption } from "@/lib/api/vehicles/api-vehicles";
 
-function filterVehicles(options: readonly VehicleOption[], search: string, mode: string) {
+function filterVehicles(options: readonly LogbookVehicleOption[], search: string, mode: string) {
   const normalized = search.trim().toLocaleLowerCase();
   if (!normalized) return [];
   const isGp = mode === "GP";
@@ -58,7 +61,7 @@ async function LogbookCollectionPageContent({
   const selectedCodeSet = new Set(selectedCodes);
   const message = statusMessage(query);
   try {
-    const [options, sites] = await Promise.all([getVehicleOptions(), getSites()]);
+    const [options, sites] = await Promise.all([getLogbookVehicleOptions(), getSites()]);
     const matches = filterVehicles(options, search, mode);
     const searchParamsForForm = new URLSearchParams({ search, mode });
     selectedCodes.forEach((code) => searchParamsForForm.append("vmfCode", String(code)));
@@ -136,7 +139,13 @@ async function LogbookCollectionPageContent({
               <label className="form-label" htmlFor="collection-date">
                 Handout date
               </label>
-              <input className="form-input" id="collection-date" name="handoutDate" type="date" />
+            <input
+              className="form-input"
+              id="collection-date"
+              name="handoutDate"
+              type="date"
+              required
+            />
             </div>
             <div className="form-field form-group-full">
               <label className="form-label" htmlFor="collection-comment">

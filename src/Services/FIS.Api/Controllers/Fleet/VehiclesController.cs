@@ -1,11 +1,14 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using FIS.Api.Services;
+using FIS.Api.Services.Fleet;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Services;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
@@ -17,7 +20,44 @@ public class VehiclesController : BaseApiController
 {
     private const int DefaultPageSize = 24;
     private const int MaximumPageSize = 100;
-    private const long VehicleManagementPermission = 1;
+    private static readonly string[] VehicleLookupRoles =
+    [
+        "Vehicle Master",
+        "Vehicle Inception Capturer",
+        "Vehicle Inception Authorizer",
+        "Reports",
+        "Management Reports",
+        "Financial Reports",
+        "Financial Data (Own Department)",
+        "Financial Data (All Departments)",
+        "Accidents",
+        "Auction",
+        "Call Centre",
+        "Clearance",
+        "Contracts",
+        "Fines",
+        "Fuelcards",
+        "Licence",
+        "Logbooks",
+        "Logsheets",
+        "Losses",
+        "Monitor",
+        "Private Hire Vehicles",
+        "Taxi information maintenance",
+        "Towing",
+        "Tracking",
+        "Trip Authorities",
+        "TripAuthorities",
+        "Trouble Shooting",
+        "Validation",
+        "Workshop",
+        "Asset Verification",
+        "Lease Vehicle Pending",
+        "Lease Vehicle Capturer",
+        "Lease Vehicle Authorizer",
+        "JobCard Capturer",
+        "JobCard Authorizer",
+    ];
 
     private readonly IVehicleRepository _vehicleRepository;
     private readonly IRecoveredVehicleRepository _recoveredVehicleRepository;
@@ -27,6 +67,8 @@ public class VehiclesController : BaseApiController
     private readonly IContractRepository _contractRepository;
     private readonly IVehicleRemarkRepository _remarkRepository;
     private readonly IVehicleLicenceHistoryRepository _licenceHistory;
+    private readonly LegacyVehicleStatusCompatibilityService _legacyVehicleStatus;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<VehiclesController> _logger;
 
     public VehiclesController(
@@ -38,6 +80,8 @@ public class VehiclesController : BaseApiController
         IContractRepository contractRepository,
         IVehicleRemarkRepository remarkRepository,
         IVehicleLicenceHistoryRepository licenceHistory,
+        LegacyVehicleStatusCompatibilityService legacyVehicleStatus,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<VehiclesController> logger
     )
     {
@@ -49,6 +93,8 @@ public class VehiclesController : BaseApiController
         _contractRepository = contractRepository;
         _remarkRepository = remarkRepository;
         _licenceHistory = licenceHistory;
+        _legacyVehicleStatus = legacyVehicleStatus;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
@@ -58,9 +104,15 @@ public class VehiclesController : BaseApiController
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Vehicle>>> GetVehicles()
     {
+        if (!HasVehicleLookupAccess())
+            return Forbid();
+
         try
         {
-            var vehicles = await _vehicleRepository.GetActiveVehiclesAsync();
+            var vehicles = await _vehicleRepository.GetActiveVehiclesAsync(
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             _logger.LogInformation("Retrieved {Count} active vehicles", vehicles.Count());
             return Ok(vehicles);
         }
@@ -89,7 +141,9 @@ public class VehiclesController : BaseApiController
         {
             var result = await _vehicleRepository.GetSnapshotPageAsync(
                 Math.Max(1, page),
-                Math.Clamp(pageSize, 1, 100)
+                Math.Clamp(pageSize, 1, 100),
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
             );
             return Ok(
                 new
@@ -170,9 +224,16 @@ public class VehiclesController : BaseApiController
     [HttpGet("{vmfCode}")]
     public async Task<ActionResult<Vehicle>> GetVehicle(int vmfCode)
     {
+        if (!HasVehicleLookupAccess())
+            return Forbid();
+
         try
         {
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
             {
@@ -198,9 +259,16 @@ public class VehiclesController : BaseApiController
         [FromQuery] string? searchTerm
     )
     {
+        if (!HasVehicleLookupAccess())
+            return Forbid();
+
         try
         {
-            var vehicles = await _vehicleRepository.SearchVehiclesAsync(searchTerm ?? "");
+            var vehicles = await _vehicleRepository.SearchVehiclesAsync(
+                searchTerm ?? "",
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             _logger.LogInformation(
                 "Found {Count} vehicles matching search term '{SearchTerm}'",
                 vehicles.Count(),
@@ -377,6 +445,11 @@ public class VehiclesController : BaseApiController
 
     private bool HasDemoVehicleRole()
     {
+        if (HasSystemAdministratorRole())
+        {
+            return true;
+        }
+
         if (User.IsInRole("Demo Vehicles"))
         {
             return true;
@@ -402,10 +475,70 @@ public class VehiclesController : BaseApiController
 
     private bool HasVehicleManagementPermission()
     {
-        var accessLevelClaim = User.FindFirst("access_level")?.Value;
-        return long.TryParse(accessLevelClaim, out var accessLevel)
-            && (accessLevel & VehicleManagementPermission) == VehicleManagementPermission;
+        return HasAnyRole("Vehicle Master") || HasSystemAdministratorRole();
     }
+
+    private bool HasVehicleLookupAccess() =>
+        HasSystemAdministratorRole() || HasAnyRole(VehicleLookupRoles);
+
+    private Task<IReadOnlySet<short>?> ResolveAllowedVehicleSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
+
+    private bool HasSystemAdministratorRole() =>
+        HasRoleClaim("SystemAdministrator")
+        || HasRoleClaim("System Administrator");
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        var roleClaims = User
+            .Claims.Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            );
+
+        return roleClaims.Any(role =>
+            expectedRoles.Any(expected =>
+                string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+            )
+        );
+    }
+
+    private bool HasRoleClaim(string expectedRole)
+    {
+        return User.Claims.Any(claim =>
+            (
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            && claim.Value.Split(
+                ',',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+            ).Any(role => string.Equals(role, expectedRole, StringComparison.OrdinalIgnoreCase))
+        );
+    }
+
+    private IReadOnlySet<string> GetCurrentRoleNames() =>
+        User
+            .Claims.Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            )
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Get vehicle by fleet number
@@ -413,9 +546,16 @@ public class VehiclesController : BaseApiController
     [HttpGet("fleet/{fleetNumber}")]
     public async Task<ActionResult<Vehicle>> GetVehicleByFleetNumber(string fleetNumber)
     {
+        if (!HasVehicleLookupAccess())
+            return Forbid();
+
         try
         {
-            var vehicle = await _vehicleRepository.GetByFleetNumberAsync(fleetNumber);
+            var vehicle = await _vehicleRepository.GetByFleetNumberAsync(
+                fleetNumber,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
             {
@@ -449,6 +589,9 @@ public class VehiclesController : BaseApiController
     [HttpGet("db-status")]
     public async Task<IActionResult> GetDatabaseStatus()
     {
+        if (!HasAnyRole("SystemAdministrator", "User Administration"))
+            return Forbid();
+
         try
         {
             var canConnect = await _context.Database.CanConnectAsync();
@@ -475,6 +618,9 @@ public class VehiclesController : BaseApiController
     [HttpGet("service-alerts")]
     public async Task<ActionResult> GetServiceAlerts()
     {
+        if (!HasAnyRole("Vehicle Master", "Workshop"))
+            return Forbid();
+
         try
         {
             var alerts = await _vehicleService.GetVehiclesNeedingServiceAsync();
@@ -491,60 +637,21 @@ public class VehiclesController : BaseApiController
     /// Create a new vehicle
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<Vehicle>> CreateVehicle(
+    public ActionResult<Vehicle> CreateVehicle(
         [FromBody] VehicleCreationApiRequest request
     )
     {
-        try
-        {
-            int currentUserId = GetCurrentUserId();
-
-            var vehicle = new Vehicle
+        // Vehicle capture is a two-step legacy workflow: the capturer writes
+        // pre_vehicle_master through DEV_INS_New_Vehicle_Master, then a
+        // different authorizer promotes it. Never let this convenience route
+        // bypass the database-owned authorization, GG-number, and tariff flow.
+        return Conflict(
+            new
             {
-                fleet_number = request.fleet_number,
-                registration_number = request.registration_number,
-                location_code = request.location_code,
-                model_code = request.model_code,
-                type_code = request.type_code,
-                vehicle_status_code = request.vehicle_status_code,
-                colour = request.colour,
-                chassis_number = request.chassis_number,
-                engine_number_1 = request.engine_number_1,
-                take_on_date = request.take_on_date ?? DateTime.UtcNow,
-                take_on_odo = request.take_on_odo,
-                current_odo = request.current_odo,
-                tare = request.tare,
-                gvm = request.gvm,
-                year_manufactured = request.year_manufactured,
-                purchase_date = request.purchase_date,
-                purchase_amount = request.purchase_amount,
-                ifms_vehicle_register_number = request.ifms_vehicle_register_number,
-                natis_model_number = request.natis_model_number,
-                date_created = DateTime.UtcNow,
-                created_by_user_code = currentUserId,
-                is_deleted = false,
-            };
-
-            var created = await _vehicleRepository.CreateAsync(vehicle, currentUserId);
-            _logger.LogInformation("Created vehicle with vmf_code {VmfCode}", created.vmf_code);
-
-            // Handle tariff recalculation if requested
-            if (request.recalculate_tariff)
-            {
-                _logger.LogInformation(
-                    "Tariff recalculation requested for vehicle {VmfCode}",
-                    created.vmf_code
-                );
-                await _tariffRepository.RecalculateTariffAsync(created.vmf_code);
+                error = "Vehicle capture must use the vehicle inception authorization workflow.",
+                source = "legacy-procedure-required",
             }
-
-            return CreatedAtAction(nameof(GetVehicle), new { vmfCode = created.vmf_code }, created);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error creating vehicle");
-            return StatusCode(500, "An error occurred while creating the vehicle");
-        }
+        );
     }
 
     /// <summary>
@@ -556,43 +663,59 @@ public class VehiclesController : BaseApiController
         [FromBody] VehicleUpdateApiRequest request
     )
     {
+        if (!HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
         try
         {
+            await using var tariffTransaction = request.recalculate_tariff
+                ? await _context.Database.BeginTransactionAsync()
+                : null;
             int currentUserId = GetCurrentUserId();
 
-            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var existing = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (existing == null)
             {
                 return NotFound($"Vehicle with vmf_code {vmfCode} not found");
             }
 
-            // If registration number is changing, save the old one to history
+            var validationError = ValidateVehicleUpdateRequest(request, existing);
+            if (validationError is not null)
+            {
+                return BadRequest(new { message = validationError });
+            }
+
+            if (request.type_code == 2 && request.type_code != existing.type_code)
+            {
+                var activeContract = await _contractRepository.GetActiveContractByVehicleAsync(vmfCode);
+                if (activeContract is not null && activeContract.site_code is not (1619 or 1620))
+                {
+                    return BadRequest(
+                        new
+                        {
+                            message = "The current contract must be closed and a new contract opened for Hire Pool VIP JHB or PTA before changing this vehicle to VIP service.",
+                        }
+                    );
+                }
+            }
+
             if (
-                request.registration_number != null
-                && !string.Equals(
-                    request.registration_number,
-                    existing.registration_number,
-                    StringComparison.OrdinalIgnoreCase
-                )
-                && !string.IsNullOrWhiteSpace(existing.registration_number)
+                request.vehicle_status_code.HasValue
+                && request.vehicle_status_code.Value != existing.vehicle_status_code
             )
             {
-                _context.Registrations.Add(
-                    new FIS.Core.Domain.Entities.Vehicles.Registration
+                return BadRequest(
+                    new
                     {
-                        vmf_code = vmfCode,
-                        RegistrationNumber = existing.registration_number,
-                        RegistrationDate = DateTime.UtcNow,
-                        date_created = DateTime.UtcNow,
-                        created_by_user_code = currentUserId,
-                        is_deleted = false,
+                        message = "Vehicle status is maintained through the Vehicle Status Maintenance workflow.",
+                        source = "vehicle-status-workflow",
                     }
-                );
-                _logger.LogInformation(
-                    "Recording historical registration '{Old}' for vehicle {VmfCode} (replacing with '{New}')",
-                    existing.registration_number,
-                    vmfCode,
-                    request.registration_number
                 );
             }
 
@@ -613,6 +736,26 @@ public class VehiclesController : BaseApiController
             existing.tare = request.tare ?? existing.tare;
             existing.gvm = request.gvm ?? existing.gvm;
             existing.year_manufactured = request.year_manufactured ?? existing.year_manufactured;
+            existing.take_on_date = request.take_on_date ?? existing.take_on_date;
+            existing.odo_update_date = request.odo_update_date ?? existing.odo_update_date;
+            existing.additional_fuel_tank =
+                request.additional_fuel_tank ?? existing.additional_fuel_tank;
+            existing.optional_extras = request.optional_extras ?? existing.optional_extras;
+            existing.purchase_date = request.purchase_date ?? existing.purchase_date;
+            existing.purchase_amount = request.purchase_amount ?? existing.purchase_amount;
+            existing.purchased_from = request.purchased_from ?? existing.purchased_from;
+            existing.previos_gg_number =
+                request.previos_gg_number ?? existing.previos_gg_number;
+            existing.followup_gg_number =
+                request.followup_gg_number ?? existing.followup_gg_number;
+            existing.previos_gg_number_2 =
+                request.previos_gg_number_2 ?? existing.previos_gg_number_2;
+            existing.vs_code = request.vs_code ?? existing.vs_code;
+            existing.LPG = request.lpg ?? existing.LPG;
+            existing.extended_service = request.extended_service ?? existing.extended_service;
+            existing.destroyed_date = request.destroyed_date ?? existing.destroyed_date;
+            existing.destroyed_amount = request.destroyed_amount ?? existing.destroyed_amount;
+            existing.destroyed_receipt = request.destroyed_receipt ?? existing.destroyed_receipt;
             existing.ifms_vehicle_register_number =
                 request.ifms_vehicle_register_number ?? existing.ifms_vehicle_register_number;
             existing.natis_model_number = request.natis_model_number ?? existing.natis_model_number;
@@ -632,10 +775,49 @@ public class VehiclesController : BaseApiController
                 await _tariffRepository.RecalculateTariffAsync(vmfCode);
             }
 
+            if (tariffTransaction is not null)
+                await tariffTransaction.CommitAsync();
+
             return Ok(existing);
+        }
+        catch (NotSupportedException ex)
+        {
+            if (_context.Database.CurrentTransaction is not null)
+                await _context.Database.CurrentTransaction.RollbackAsync();
+            _logger.LogError(ex, "Legacy vehicle tariff workflow is unavailable for {VmfCode}", vmfCode);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The legacy vehicle tariff workflow is unavailable. The vehicle was not recalculated using modern tariff rules.",
+                    source = "legacy-trigger-required",
+                    vmfCode,
+                }
+            );
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(ex, "Vehicle update rejected for duplicate identity {VmfCode}", vmfCode);
+            return Conflict(new { message = ex.Message, vmfCode });
+        }
+        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        {
+            if (_context.Database.CurrentTransaction is not null)
+                await _context.Database.CurrentTransaction.RollbackAsync();
+            _logger.LogWarning(ex, "Vehicle update rejected by a legacy uniqueness constraint {VmfCode}", vmfCode);
+            return Conflict(
+                new
+                {
+                    message = "The vehicle GG, registration, chassis, or engine value is already in use.",
+                    vmfCode,
+                }
+            );
         }
         catch (Exception ex)
         {
+            if (_context.Database.CurrentTransaction is not null)
+                await _context.Database.CurrentTransaction.RollbackAsync();
             _logger.LogError(ex, "Error updating vehicle {VmfCode}", vmfCode);
             return StatusCode(500, "An error occurred while updating the vehicle");
         }
@@ -652,9 +834,18 @@ public class VehiclesController : BaseApiController
         [FromBody] VehicleBarcodeUpdateRequest request
     )
     {
+        if (!HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
         try
         {
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (vehicle == null)
             {
                 return NotFound($"Vehicle with vmf_code {vmfCode} not found");
@@ -678,6 +869,11 @@ public class VehiclesController : BaseApiController
         [FromBody] VehicleBarcodeUpdateByFleetNumberRequest request
     )
     {
+        if (!HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
         if (string.IsNullOrWhiteSpace(request.ggNumber))
         {
             return BadRequest("A GG number is required");
@@ -685,7 +881,11 @@ public class VehiclesController : BaseApiController
 
         try
         {
-            var vehicle = await _vehicleRepository.GetByFleetNumberAsync(request.ggNumber.Trim());
+            var vehicle = await _vehicleRepository.GetByFleetNumberAsync(
+                request.ggNumber.Trim(),
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (vehicle == null)
             {
                 return NotFound($"Vehicle with fleet number {request.ggNumber} not found");
@@ -733,11 +933,23 @@ public class VehiclesController : BaseApiController
         [FromBody] CorrectModelDto request
     )
     {
+        if (
+            !HasSystemAdministratorRole()
+            && !HasAnyRole("Vehicle Inception Capturer", "Vehicle Inception Authorizer")
+        )
+        {
+            return Forbid();
+        }
+
         try
         {
             int currentUserId = GetCurrentUserId();
 
-            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var existing = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (existing == null)
                 return NotFound($"Vehicle with vmf_code {vmfCode} not found");
 
@@ -787,11 +999,23 @@ public class VehiclesController : BaseApiController
     [HttpPatch("{vmfCode}/correct-gg")]
     public async Task<ActionResult> CorrectVehicleGG(int vmfCode, [FromBody] CorrectGGDto request)
     {
+        if (
+            !HasSystemAdministratorRole()
+            && !HasAnyRole("Vehicle Inception Capturer", "Vehicle Inception Authorizer")
+        )
+        {
+            return Forbid();
+        }
+
         try
         {
             int currentUserId = GetCurrentUserId();
 
-            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var existing = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (existing == null)
                 return NotFound($"Vehicle with vmf_code {vmfCode} not found");
 
@@ -842,9 +1066,18 @@ public class VehiclesController : BaseApiController
         string invoiceNumber
     )
     {
+        if (!HasVehicleLookupAccess())
+        {
+            return Forbid();
+        }
+
         try
         {
-            var vehicles = await _vehicleRepository.GetByInvoiceNumberAsync(invoiceNumber);
+            var vehicles = await _vehicleRepository.GetByInvoiceNumberAsync(
+                invoiceNumber,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             var results = vehicles.Select(v => new VehicleSearchResultDto
             {
                 VmfCode = v.vmf_code,
@@ -885,11 +1118,20 @@ public class VehiclesController : BaseApiController
         [FromBody] UpdateInvoiceDto request
     )
     {
+        if (!HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
         try
         {
             int currentUserId = GetCurrentUserId();
 
-            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var existing = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (existing == null)
                 return NotFound($"Vehicle with vmf_code {vmfCode} not found");
 
@@ -921,6 +1163,11 @@ public class VehiclesController : BaseApiController
     [HttpDelete("{vmfCode}")]
     public ActionResult DeleteVehicle(int vmfCode)
     {
+        if (!HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
         _logger.LogWarning(
             "Blocked unsupported Vehicle Master delete request for VMF code {VmfCode}",
             vmfCode
@@ -936,6 +1183,74 @@ public class VehiclesController : BaseApiController
     // ──────────────────────────────────────────────────────────
     // VEHICLE STATUS CHANGE  (with automatic side-effects)
     // ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Return the role- and predecessor-valid next statuses from the legacy
+    /// transition procedure used by MNT_VehicleStatus_Edit.aspx.
+    /// </summary>
+    [HttpGet("{vmfCode:int}/status-options")]
+    public async Task<ActionResult> GetVehicleStatusOptions(int vmfCode)
+    {
+        if (
+            !HasVehicleManagementPermission()
+            || (
+                !HasSystemAdministratorRole()
+                && !HasAnyRole("Acquisition", "Logistics", "TSS", "Workshop")
+            )
+        )
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
+            if (vehicle is null)
+                return NotFound(new { error = $"Vehicle {vmfCode} not found." });
+
+            var transitions = await _legacyVehicleStatus.GetSuccessorsAsync(
+                vehicle.vehicle_status_code,
+                GetCurrentRoleNames(),
+                HttpContext.RequestAborted,
+                HasSystemAdministratorRole()
+            );
+            if (transitions is null)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new
+                    {
+                        error = "The legacy vehicle-status successor procedure is unavailable. No status options were inferred.",
+                    }
+                );
+            }
+
+            return Ok(
+                transitions.Select(transition => new
+                {
+                    code = transition.StatusCode,
+                    description = transition.Description,
+                })
+            );
+        }
+        catch (LegacyVehicleStatusProcedureContractException ex)
+        {
+            _logger.LogError(ex, "Legacy vehicle-status successor procedure contract mismatch for vehicle {VmfCode}", vmfCode);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "The deployed legacy vehicle-status successor procedure is incompatible. No status options were inferred." }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading status options for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, new { error = "Failed to load vehicle status options." });
+        }
+    }
 
     private static string GetVehicleStatusDescription(short code) =>
         code switch
@@ -956,126 +1271,260 @@ public class VehiclesController : BaseApiController
             _ => "Unknown",
         };
 
+    private static string? ValidateVehicleUpdateRequest(
+        VehicleUpdateApiRequest request,
+        Vehicle existing
+    )
+    {
+        // These limits come from the immutable legacy vehicle_master table.
+        // Reject before SQL Server truncation so the user receives a useful
+        // validation response instead of a generic mutation failure.
+        if (request.registration_number is { Length: > 12 })
+            return "Registration number cannot exceed 12 characters.";
+        if (request.fleet_number is { Length: > 20 })
+            return "Fleet number cannot exceed 20 characters.";
+        if (request.engine_number_1 is { Length: > 60 })
+            return "Engine number cannot exceed 60 characters.";
+        if (request.chassis_number is { Length: > 60 })
+            return "Chassis number cannot exceed 60 characters.";
+        if (request.colour is { Length: > 15 })
+            return "Colour cannot exceed 15 characters.";
+        if (request.purchased_from is { Length: > 60 })
+            return "Purchased-from value cannot exceed 60 characters.";
+        if (request.optional_extras is { Length: > 255 })
+            return "Optional extras cannot exceed 255 characters.";
+        if (request.previos_gg_number is { Length: > 8 })
+            return "Previous GG number cannot exceed 8 characters.";
+        if (request.followup_gg_number is { Length: > 8 })
+            return "Follow-up GG number cannot exceed 8 characters.";
+        if (request.previos_gg_number_2 is { Length: > 8 })
+            return "Second previous GG number cannot exceed 8 characters.";
+        if (request.extended_service is { Length: > 1 })
+            return "Extended-service flag cannot exceed 1 character.";
+        if (request.destroyed_receipt is { Length: > 15 })
+            return "Destroyed receipt cannot exceed 15 characters.";
+        if (request.ifms_vehicle_register_number is { Length: > 50 })
+            return "IFMS vehicle register number cannot exceed 50 characters.";
+        if (request.natis_model_number is { Length: > 50 })
+            return "NATIS model number cannot exceed 50 characters.";
+
+        if (
+            request.take_on_odo is < 0
+            || request.current_odo is < 0
+            || request.tare is < 0
+            || request.gvm is < 0
+            || request.additional_fuel_tank is < 0
+            || request.year_manufactured is < 1900
+            || request.purchase_amount is < 0
+            || request.destroyed_amount is < 0
+        )
+        {
+            return "Vehicle measurements and amounts cannot be negative.";
+        }
+
+        if (
+            request.purchase_date.HasValue
+            && request.purchase_date.Value.Date
+                < (request.take_on_date ?? existing.take_on_date).Date
+        )
+        {
+            return "Purchase date cannot be before the take-on date.";
+        }
+
+        var chassis = (request.chassis_number ?? existing.chassis_number)?.Trim();
+        var engine = (request.engine_number_1 ?? existing.engine_number_1)?.Trim();
+        if (
+            chassis is not null
+            && engine is not null
+            && string.Equals(chassis, engine, StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return "Chassis and engine numbers must be different.";
+        }
+
+        return null;
+    }
+
     /// <summary>
-    /// Change a vehicle's status with automatic side-effects.
-    ///
-    /// When status is set to STOLEN (4):
-    ///   1. Any active contract for the vehicle is automatically closed.
-    ///   2. The vehicle is booked under the supplied site_code.
-    ///   3. A VehicleStatusHistory entry is created.
-    ///
-    /// site_code is required when marking a vehicle as Stolen, optional otherwise.
+    /// Change a vehicle's status through the legacy status-history procedure.
+    /// That procedure owns vehicle_master, vehicle_history,
+    /// vehicle_status_history, sold fields, and the transaction boundary.
     /// </summary>
     [HttpPatch("{vmfCode:int}/status")]
     public async Task<ActionResult> ChangeStatus(int vmfCode, [FromBody] ChangeVehicleStatusDto dto)
     {
+        if (
+            !HasVehicleManagementPermission()
+            || (
+                !HasSystemAdministratorRole()
+                && !HasAnyRole("Acquisition", "Logistics", "TSS", "Workshop")
+            )
+        )
+        {
+            return Forbid();
+        }
+
         try
         {
             var currentUserId = GetCurrentUserId();
 
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
                 return NotFound(new { error = $"Vehicle {vmfCode} not found." });
 
-            if (dto.new_status_code == 4 && dto.site_code == null)
+            if (dto.new_status_code == 5 &&
+                (string.IsNullOrWhiteSpace(dto.sold_to)
+                 || !dto.sold_date.HasValue
+                 || !dto.sold_amount.HasValue))
                 return BadRequest(
-                    new { error = "site_code is required when marking a vehicle as Stolen." }
+                    new { error = "sold_to, sold_date, and sold_amount are required when marking a vehicle as Sold." }
                 );
+
+            if (
+                dto.sold_date.HasValue
+                && (dto.sold_date.Value.Date > DateTime.Today
+                    || (vehicle.vehicle_status_date.HasValue
+                        && dto.sold_date.Value.Date < vehicle.vehicle_status_date.Value.Date))
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        error = "The sold date must be between the current status date and today.",
+                    }
+                );
+            }
+
+            if (dto.end_odo is null or < 0)
+            {
+                return BadRequest(new { error = "An end odometer reading is required for a vehicle status change." });
+            }
 
             var previousStatusCode = vehicle.vehicle_status_code;
             var previousStatusDesc = GetVehicleStatusDescription(previousStatusCode);
             var newStatusDesc = GetVehicleStatusDescription(dto.new_status_code);
-            var effectiveDate = dto.effective_date ?? DateTime.UtcNow;
-
-            // ── Actions list returned in response ──────────────────────
-            var actionsPerformed = new List<string>();
-
-            // ── STOLEN-specific side effects ───────────────────────────
-            int? closedContractCode = null;
-            if (dto.new_status_code == 4)
+            var effectiveDate = dto.effective_date ?? DateTime.Today;
+            if (effectiveDate.Date > DateTime.Today)
             {
-                // 1. Close any active contract
-                var activeContract = await _contractRepository.GetActiveContractByVehicleAsync(
-                    vmfCode
+                return BadRequest(new { error = "The effective status date cannot be in the future." });
+            }
+            if (
+                vehicle.vehicle_status_date.HasValue
+                && effectiveDate.Date < vehicle.vehicle_status_date.Value.Date
+            )
+            {
+                return BadRequest(
+                    new
+                    {
+                        error = "The effective status date cannot be before the vehicle's current status date.",
+                        current_status_date = vehicle.vehicle_status_date.Value.Date,
+                    }
                 );
-                if (activeContract != null)
-                {
-                    var closeNotes =
-                        $"Auto-closed: vehicle {vehicle.fleet_number ?? vmfCode.ToString()} reported stolen. {dto.notes}".Trim();
-                    await _contractRepository.EndContractAsync(
-                        activeContract.contract_code,
-                        effectiveDate,
-                        currentUserId,
-                        endOdometer: vehicle.current_odo > 0 ? vehicle.current_odo : null,
-                        notes: closeNotes
-                    );
-
-                    closedContractCode = activeContract.contract_code;
-                    actionsPerformed.Add(
-                        $"Contract {activeContract.contract_code} closed automatically (vehicle reported stolen)."
-                    );
-                }
-
-                // 2. Book vehicle under the specified site
-                vehicle.location_code = dto.site_code!.Value;
-                actionsPerformed.Add($"Vehicle location updated to site {dto.site_code.Value}.");
+            }
+            var allowedTransitions = await _legacyVehicleStatus.GetSuccessorsAsync(
+                previousStatusCode,
+                GetCurrentRoleNames(),
+                HttpContext.RequestAborted,
+                HasSystemAdministratorRole()
+            );
+            if (allowedTransitions is null)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new
+                    {
+                        error = "The legacy vehicle-status successor procedure is unavailable. No direct-DML fallback was run.",
+                    }
+                );
             }
 
-            // ── Update vehicle status ──────────────────────────────────
-            vehicle.vehicle_status_code = dto.new_status_code;
-            vehicle.vehicle_status_date = effectiveDate;
-            vehicle.date_updated = DateTime.UtcNow;
-            vehicle.modified_by_user_code = currentUserId;
-
-            // ── Record status history ──────────────────────────────────
-            var historyEntry = new FIS.Core.Domain.Entities.Vehicles.VehicleStatusHistory
+            if (!allowedTransitions.Any(transition => transition.StatusCode == dto.new_status_code))
             {
-                vmf_code = vmfCode,
-                vehicle_status_code = dto.new_status_code,
-                vehicle_status_description = newStatusDesc,
-                status_start_date = effectiveDate,
-                // status_end_date is non-nullable — use far-future sentinel for "open" status
-                status_end_date = new DateTime(2099, 12, 31),
-                date_created = DateTime.UtcNow,
-                created_by_user_code = currentUserId,
-            };
+                return BadRequest(
+                    new
+                    {
+                        error = "The selected vehicle status is not a permitted successor for the current status or your role.",
+                        current_status_code = previousStatusCode,
+                        new_status_code = dto.new_status_code,
+                    }
+                );
+            }
 
-            _context.VehicleStatusHistories.Add(historyEntry);
-            await _context.SaveChangesAsync();
-
-            actionsPerformed.Add(
-                $"Vehicle status changed from '{previousStatusDesc}' ({previousStatusCode}) to '{newStatusDesc}' ({dto.new_status_code})."
+            var executed = await _legacyVehicleStatus.TryUpdateAsync(
+                new LegacyVehicleStatusRequest(
+                    vmfCode,
+                    HistoryCode: null,
+                    dto.new_status_code,
+                    effectiveDate,
+                    dto.notes,
+                    currentUserId,
+                    dto.end_odo,
+                    dto.sold_to,
+                    dto.sold_date,
+                    dto.sold_amount
+                ),
+                HttpContext.RequestAborted
             );
+            if (executed is null)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new
+                    {
+                        error = "The legacy vehicle-status procedure is unavailable. No direct-DML fallback was run.",
+                    }
+                );
+            }
+
+            var updatedVehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            ) ?? vehicle;
 
             _logger.LogInformation(
-                "Vehicle {VmfCode} status changed to {NewStatus} by user {UserId}. Actions: {Actions}",
+                "Vehicle {VmfCode} status changed to {NewStatus} by user {UserId} through the legacy procedure",
                 vmfCode,
                 newStatusDesc,
-                currentUserId,
-                string.Join(" | ", actionsPerformed)
+                currentUserId
             );
 
             return Ok(
                 new
                 {
                     vmf_code = vmfCode,
-                    fleet_number = vehicle.fleet_number,
-                    registration_number = vehicle.registration_number,
+                    fleet_number = updatedVehicle.fleet_number,
+                    registration_number = updatedVehicle.registration_number,
                     previous_status_code = previousStatusCode,
                     previous_status_description = previousStatusDesc,
                     new_status_code = dto.new_status_code,
                     new_status_description = newStatusDesc,
                     effective_date = effectiveDate,
-                    location_code = vehicle.location_code,
-                    closed_contract_code = closedContractCode,
-                    actions_performed = actionsPerformed,
+                    location_code = updatedVehicle.location_code,
+                    closed_contract_code = (int?)null,
+                    actions_performed = new[]
+                    {
+                        $"Vehicle status changed from '{previousStatusDesc}' ({previousStatusCode}) to '{newStatusDesc}' ({dto.new_status_code}) through the legacy status-history procedure.",
+                    },
                 }
             );
         }
         catch (KeyNotFoundException ex)
         {
             return NotFound(new { error = ex.Message });
+        }
+        catch (LegacyVehicleStatusProcedureContractException ex)
+        {
+            _logger.LogError(ex, "Legacy vehicle-status procedure contract mismatch for vehicle {VmfCode}", vmfCode);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = "The deployed legacy vehicle-status procedure is incompatible. No direct-DML fallback was run." }
+            );
         }
         catch (Exception ex)
         {
@@ -1102,12 +1551,22 @@ public class VehiclesController : BaseApiController
         [FromBody] FIS.Api.DTOs.CaptureLicenceDto dto
     )
     {
+        if (!HasSystemAdministratorRole() && !HasAnyRole("Licence", "Vehicle Master"))
+        {
+            return Forbid();
+        }
+
         try
         {
             var currentUserId = GetCurrentUserId();
 
-            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v =>
-                v.vmf_code == vmfCode && !v.is_deleted
+            // Vehicle Master is served through the compatibility repository;
+            // the restored legacy table does not have the modern audit
+            // columns that an EF projection would select.
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
             );
 
             if (vehicle == null)
@@ -1160,7 +1619,11 @@ public class VehiclesController : BaseApiController
                 currentUserId
             );
 
-            var updatedVehicle = await _vehicleRepository.GetByIdAsync(vmfCode) ?? vehicle;
+            var updatedVehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            ) ?? vehicle;
 
             _logger.LogInformation(
                 "Licence captured for vehicle {VmfCode} by user {UserId}. New due date: {DueDate}",
@@ -1197,10 +1660,19 @@ public class VehiclesController : BaseApiController
     [HttpGet("{vmfCode:int}/licence/history")]
     public async Task<ActionResult> GetLicenceHistory(int vmfCode)
     {
+        if (!HasSystemAdministratorRole() && !HasAnyRole("Licence", "Vehicle Master"))
+        {
+            return Forbid();
+        }
+
         try
         {
             var history = await _licenceHistory.GetByVehicleAsync(vmfCode);
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             return Ok(
                 new
@@ -1268,6 +1740,11 @@ public class VehiclesController : BaseApiController
     [HttpGet("{vmfCode:int}/remarks")]
     public async Task<ActionResult> GetRemarks(int vmfCode)
     {
+        if (!HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
         try
         {
             var remarks = await _remarkRepository.GetByVehicleAsync(vmfCode);
@@ -1286,6 +1763,11 @@ public class VehiclesController : BaseApiController
     [HttpGet("{vmfCode:int}/remarks/active")]
     public async Task<ActionResult> GetActiveRemarks(int vmfCode)
     {
+        if (!HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
         try
         {
             var remarks = await _remarkRepository.GetActiveByVehicleAsync(vmfCode);
@@ -1308,6 +1790,11 @@ public class VehiclesController : BaseApiController
         [FromBody] FIS.Api.DTOs.CreateVehicleRemarkDto dto
     )
     {
+        if (!HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
         try
         {
             var currentUserId = GetCurrentUserId();
@@ -1345,6 +1832,11 @@ public class VehiclesController : BaseApiController
         [FromBody] FIS.Api.DTOs.ResolveVehicleRemarkDto dto
     )
     {
+        if (!HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
         try
         {
             var currentUserId = GetCurrentUserId();
@@ -1386,6 +1878,11 @@ public class VehiclesController : BaseApiController
     [HttpDelete("{vmfCode:int}/remarks/{remarkId:int}")]
     public async Task<ActionResult> DeleteRemark(int vmfCode, int remarkId)
     {
+        if (!HasVehicleManagementPermission())
+        {
+            return Forbid();
+        }
+
         try
         {
             var currentUserId = GetCurrentUserId();
@@ -1478,12 +1975,28 @@ public class VehicleUpdateApiRequest
     public string? registration_number { get; set; }
     public string? engine_number_1 { get; set; }
     public string? chassis_number { get; set; }
+    public DateTime? take_on_date { get; set; }
     public int? take_on_odo { get; set; }
     public int? current_odo { get; set; }
+    public DateTime? odo_update_date { get; set; }
     public int? tare { get; set; }
     public int? gvm { get; set; }
     public short? year_manufactured { get; set; }
     public string? colour { get; set; }
+    public int? additional_fuel_tank { get; set; }
+    public string? optional_extras { get; set; }
+    public DateTime? purchase_date { get; set; }
+    public decimal? purchase_amount { get; set; }
+    public string? purchased_from { get; set; }
+    public string? previos_gg_number { get; set; }
+    public string? followup_gg_number { get; set; }
+    public string? previos_gg_number_2 { get; set; }
+    public byte? vs_code { get; set; }
+    public bool? lpg { get; set; }
+    public string? extended_service { get; set; }
+    public DateTime? destroyed_date { get; set; }
+    public decimal? destroyed_amount { get; set; }
+    public string? destroyed_receipt { get; set; }
 
     [StringLength(50)]
     public string? ifms_vehicle_register_number { get; set; }
@@ -1611,6 +2124,14 @@ public class ChangeVehicleStatusDto
     /// Optional date/time the status change took effect (defaults to now).
     /// </summary>
     public DateTime? effective_date { get; set; }
+
+    /// <summary>End odometer captured by the legacy status-history procedure.</summary>
+    public int? end_odo { get; set; }
+
+    /// <summary>Required by the legacy status procedure when status is Sold (5).</summary>
+    public string? sold_to { get; set; }
+    public DateTime? sold_date { get; set; }
+    public decimal? sold_amount { get; set; }
 
     /// <summary>
     /// Optional notes — appended to the auto-closed contract's closure notes when stolen.

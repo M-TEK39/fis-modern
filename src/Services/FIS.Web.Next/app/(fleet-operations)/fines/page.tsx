@@ -7,14 +7,7 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import RouteLoading from "@/components/app-shell/route-loading";
 import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/auth/session";
-
-const REPORTS_ROLE = "Reports";
-
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
+import { hasFinesAccess } from "@/app/(fleet-operations)/fines/access";
 
 function AccessRestricted() {
   return (
@@ -68,7 +61,7 @@ async function FinesContent() {
     return <ApiUnavailable />;
   }
 
-  if (!hasRole(session.roles, REPORTS_ROLE)) {
+  if (!hasFinesAccess(session.roles)) {
     return <AccessRestricted />;
   }
 

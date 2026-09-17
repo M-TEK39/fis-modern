@@ -1,7 +1,10 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Data.SqlServer;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -91,9 +94,9 @@ public class TripDto
 
     // Computed properties for display
     public string ApproverFullInfo => $"{ApproverName} ({ApproverRank})".Trim();
-    public bool IsExpired => ExpiryDate.HasValue && ExpiryDate.Value < DateTime.Now;
+    public bool IsExpired => ExpiryDate.HasValue && ExpiryDate.Value.Date < DateTime.Today;
     public int DaysUntilExpiry =>
-        ExpiryDate.HasValue ? (int)(ExpiryDate.Value - DateTime.Now).TotalDays : 0;
+        ExpiryDate.HasValue ? (ExpiryDate.Value.Date - DateTime.Today).Days : 0;
 }
 
 public class TripAuthorityVehicleDto
@@ -181,6 +184,11 @@ public class CloseTripDto
     public IReadOnlyList<CloseTripRouteDto> Routes { get; set; } = [];
 }
 
+public sealed class RenewTripDto : CloseTripDto
+{
+    public DateTime NewExpiryDate { get; set; }
+}
+
 public class CloseTripRouteDto
 {
     public int RouteCode { get; set; }
@@ -188,7 +196,7 @@ public class CloseTripRouteDto
 }
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Trip Authorities,TripAuthorities,SystemAdministrator,System Administrator")]
 [Route("api/[controller]")]
 public class TripController : BaseApiController
 {
@@ -197,16 +205,25 @@ public class TripController : BaseApiController
 
     private readonly ITripService _tripService;
     private readonly ITripRepository _tripRepository;
+    private readonly IContractRepository _contractRepository;
+    private readonly ISiteRepository _siteRepository;
+    private readonly FisDbContext _context;
     private readonly ILogger<TripController> _logger;
 
     public TripController(
         ITripService tripService,
         ITripRepository tripRepository,
+        IContractRepository contractRepository,
+        ISiteRepository siteRepository,
+        FisDbContext context,
         ILogger<TripController> logger
     )
     {
         _tripService = tripService;
         _tripRepository = tripRepository;
+        _contractRepository = contractRepository;
+        _siteRepository = siteRepository;
+        _context = context;
         _logger = logger;
     }
 
@@ -215,7 +232,7 @@ public class TripController : BaseApiController
     {
         try
         {
-            var trips = await _tripService.GetAllTripsAsync();
+            var trips = await _tripService.GetAllTripsAsync(await ResolveAllowedSiteCodesAsync());
             return Ok(trips.Select(MapTrip));
         }
         catch (Exception ex)
@@ -230,7 +247,9 @@ public class TripController : BaseApiController
     {
         try
         {
-            var vehicles = await _tripService.GetTripAuthorityVehiclesAsync();
+            var vehicles = await _tripService.GetTripAuthorityVehiclesAsync(
+                await ResolveAllowedSiteCodesAsync()
+            );
             return Ok(
                 vehicles.Select(vehicle => new TripAuthorityVehicleDto
                 {
@@ -288,6 +307,7 @@ public class TripController : BaseApiController
 
         try
         {
+            query = query with { AllowedSiteCodes = await ResolveAllowedSiteCodesAsync() };
             var result = await _tripRepository.GetTripAuthorityInServicePageAsync(query);
             return Ok(MapTripAuthorityVehiclePage(result));
         }
@@ -335,6 +355,7 @@ public class TripController : BaseApiController
 
         try
         {
+            query = query with { AllowedSiteCodes = await ResolveAllowedSiteCodesAsync() };
             var result = await _tripRepository.GetTripAuthorityOutPageAsync(query);
             return Ok(MapTripAuthorityVehiclePage(result));
         }
@@ -350,7 +371,10 @@ public class TripController : BaseApiController
     {
         try
         {
-            var trip = await _tripService.GetTripByIdAsync(id);
+            var trip = await _tripService.GetTripByIdAsync(
+                id,
+                await ResolveAllowedSiteCodesAsync()
+            );
             if (trip == null)
             {
                 return NotFound();
@@ -391,7 +415,10 @@ public class TripController : BaseApiController
     {
         try
         {
-            var details = await _tripService.GetTripAuthorityDetailsAsync(id);
+            var details = await _tripService.GetTripAuthorityDetailsAsync(
+                id,
+                await ResolveAllowedSiteCodesAsync()
+            );
             if (details == null)
             {
                 return NotFound();
@@ -463,7 +490,10 @@ public class TripController : BaseApiController
     {
         try
         {
-            var trips = await _tripService.GetTripsByVehicleAsync(vmfCode);
+            var trips = await _tripService.GetTripsByVehicleAsync(
+                vmfCode,
+                await ResolveAllowedSiteCodesAsync()
+            );
             var tripDtos = trips.Select(t => new TripDto
             {
                 TripAuthorityCode = t.trip_authority_code,
@@ -498,7 +528,10 @@ public class TripController : BaseApiController
     {
         try
         {
-            var trips = await _tripService.GetTripsByDriverAsync(driverId);
+            var trips = await _tripService.GetTripsByDriverAsync(
+                driverId,
+                await ResolveAllowedSiteCodesAsync()
+            );
             var tripDtos = trips.Select(t => new TripDto
             {
                 TripAuthorityCode = t.trip_authority_code,
@@ -536,7 +569,11 @@ public class TripController : BaseApiController
     {
         try
         {
-            var trips = await _tripService.GetTripsByDateRangeAsync(startDate, endDate);
+            var trips = await _tripService.GetTripsByDateRangeAsync(
+                startDate,
+                endDate,
+                await ResolveAllowedSiteCodesAsync()
+            );
             var tripDtos = trips.Select(t => new TripDto
             {
                 TripAuthorityCode = t.trip_authority_code,
@@ -593,6 +630,13 @@ public class TripController : BaseApiController
     {
         try
         {
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            var contract = await _contractRepository.GetByIdAsync(createTripDto.ContractCode);
+            if (contract is null)
+                return BadRequest(new { message = "The selected contract was not found." });
+            if (allowedSites is not null && !allowedSites.Contains(contract.site_code))
+                return Forbid();
+
             var trip = new Trip
             {
                 contract_code = createTripDto.ContractCode,
@@ -606,7 +650,7 @@ public class TripController : BaseApiController
                 issue_date = createTripDto.IssueDate,
                 trip_type_code = createTripDto.TripTypeCode,
                 trip_incident_type_code = createTripDto.TripIncidentTypeCode,
-                user_access_code = createTripDto.UserAccessCode,
+                user_access_code = CurrentUserCode(),
                 locked_for_transfer = createTripDto.LockedForTransfer,
                 Trip_Is_Monthly = createTripDto.TripIsMonthly,
             };
@@ -640,6 +684,14 @@ public class TripController : BaseApiController
                 tripDto
             );
         }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy trip/route accounting workflow is unavailable");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = "The legacy trip/route accounting workflow is unavailable. No trip was written.", source = "legacy-trigger-required" }
+            );
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating trip");
@@ -654,6 +706,13 @@ public class TripController : BaseApiController
     {
         try
         {
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            var contract = await _contractRepository.GetByIdAsync(request.ContractCode);
+            if (contract is null)
+                return BadRequest(new { message = "The selected contract was not found." });
+            if (allowedSites is not null && !allowedSites.Contains(contract.site_code))
+                return Forbid();
+
             var trip = new Trip
             {
                 contract_code = request.ContractCode,
@@ -666,7 +725,7 @@ public class TripController : BaseApiController
                 issue_date = request.IssueDate,
                 trip_type_code = request.TripTypeCode,
                 trip_incident_type_code = request.TripIncidentTypeCode,
-                user_access_code = request.UserAccessCode ?? (short?)GetCurrentUserId(),
+                user_access_code = CurrentUserCode(),
                 locked_for_transfer = false,
                 Trip_Is_Monthly = request.TripIsMonthly,
             };
@@ -721,6 +780,14 @@ public class TripController : BaseApiController
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy trip/route accounting workflow is unavailable for contract {ContractCode}", request.ContractCode);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = "The legacy trip/route accounting workflow is unavailable. No trip was written.", source = "legacy-trigger-required" }
+            );
+        }
         catch (InvalidOperationException ex)
         {
             _logger.LogWarning(
@@ -745,11 +812,15 @@ public class TripController : BaseApiController
     {
         try
         {
-            var existingTrip = await _tripService.GetTripByIdAsync(id);
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            var existingTrip = await _tripService.GetTripByIdAsync(id, allowedSites);
             if (existingTrip == null)
             {
                 return NotFound();
             }
+
+            if (updateTripDto.ContractCode != existingTrip.contract_code)
+                return BadRequest(new { message = "A trip authority cannot be moved to another contract." });
 
             existingTrip.contract_code = updateTripDto.ContractCode;
             existingTrip.approver_name = updateTripDto.ApproverName;
@@ -762,11 +833,9 @@ public class TripController : BaseApiController
             existingTrip.issue_date = updateTripDto.IssueDate;
             existingTrip.trip_type_code = updateTripDto.TripTypeCode;
             existingTrip.trip_incident_type_code = updateTripDto.TripIncidentTypeCode;
-            existingTrip.user_access_code = updateTripDto.UserAccessCode;
-            existingTrip.locked_for_transfer = updateTripDto.LockedForTransfer;
             existingTrip.Trip_Is_Monthly = updateTripDto.TripIsMonthly;
 
-            await _tripService.UpdateTripAsync(existingTrip);
+            await _tripService.UpdateTripAsync(existingTrip, allowedSites);
 
             var tripDto = new TripDto
             {
@@ -791,8 +860,16 @@ public class TripController : BaseApiController
 
             return Ok(tripDto);
         }
-        catch (Exception ex)
+        catch (NotSupportedException ex)
         {
+            _logger.LogError(ex, "Legacy trip/route accounting workflow is unavailable for trip {TripId}", id);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = "The legacy trip/route accounting workflow is unavailable. No trip change was written.", source = "legacy-trigger-required" }
+            );
+        }
+        catch (Exception ex)
+            {
             _logger.LogError(ex, "Error updating trip with id {TripId}", id);
             return StatusCode(500, "Internal server error");
         }
@@ -809,7 +886,8 @@ public class TripController : BaseApiController
             }
 
             var routeUpdates = new List<TripAuthorityRouteUpdate>();
-            var details = await _tripService.GetTripAuthorityDetailsAsync(id);
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            var details = await _tripService.GetTripAuthorityDetailsAsync(id, allowedSites);
             if (details is null)
             {
                 return NotFound();
@@ -838,9 +916,22 @@ public class TripController : BaseApiController
                 );
             }
 
-            await _tripService.CloseTripAsync(id, routeUpdates, closeTripDto.EndOdometer);
-            var trip = await _tripService.GetTripByIdAsync(id);
+            await _tripService.CloseTripAsync(
+                id,
+                routeUpdates,
+                closeTripDto.EndOdometer,
+                allowedSites
+            );
+            var trip = await _tripService.GetTripByIdAsync(id, allowedSites);
             return trip is null ? NotFound() : Ok(MapTrip(trip));
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy trip/route accounting workflow is unavailable for trip {TripId}", id);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = "The legacy trip/route accounting workflow is unavailable. No trip close was written.", source = "legacy-trigger-required" }
+            );
         }
         catch (InvalidOperationException ex)
         {
@@ -863,19 +954,137 @@ public class TripController : BaseApiController
         }
     }
 
+    [HttpPost("{id}/renew")]
+    public async Task<ActionResult<TripDto>> RenewTrip(int id, [FromBody] RenewTripDto request)
+    {
+        try
+        {
+            if (request.NewExpiryDate == default || request.NewExpiryDate.Date <= DateTime.Today)
+            {
+                return BadRequest("A future new expiry date is required.");
+            }
+
+            if (request.EndOdometer is < 0)
+            {
+                return BadRequest("End odometer cannot be negative.");
+            }
+
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            var details = await _tripService.GetTripAuthorityDetailsAsync(id, allowedSites);
+            if (details is null)
+            {
+                return NotFound();
+            }
+
+            var submittedRoutes = (request.Routes ?? [])
+                .GroupBy(route => route.RouteCode)
+                .ToDictionary(group => group.Key, group => group.Single());
+            var routeUpdates = new List<TripAuthorityRouteUpdate>();
+            var previousEndOdometer = (int?)null;
+            foreach (var route in details.Routes)
+            {
+                if (!submittedRoutes.TryGetValue(route.RouteCode, out var submitted))
+                {
+                    if (!route.EndOdometer.HasValue)
+                    {
+                        return BadRequest($"End odometer is required for route {route.RouteCode}.");
+                    }
+
+                    submitted = new CloseTripRouteDto
+                    {
+                        RouteCode = route.RouteCode,
+                        EndOdometer = route.EndOdometer,
+                    };
+                }
+
+                if (submitted.EndOdometer is null or < 0)
+                {
+                    return BadRequest($"Every route must include a valid end odometer.");
+                }
+
+                var startOdometer = route.StartOdometer ?? previousEndOdometer;
+                if (startOdometer.HasValue && submitted.EndOdometer.Value < startOdometer.Value)
+                {
+                    return BadRequest(
+                        $"The end odometer for route {route.RouteCode} must be greater than or equal to {startOdometer.Value}."
+                    );
+                }
+
+                var distance = submitted.EndOdometer.Value - (startOdometer ?? submitted.EndOdometer.Value);
+                if (distance > 25_000)
+                {
+                    return BadRequest($"The distance for route {route.RouteCode} cannot exceed 25000 kilometres.");
+                }
+
+                routeUpdates.Add(
+                    new TripAuthorityRouteUpdate(
+                        route.RouteCode,
+                        submitted.EndOdometer.Value,
+                        distance,
+                        startOdometer
+                    )
+                );
+                previousEndOdometer = submitted.EndOdometer.Value;
+            }
+
+            var renewed = await _tripService.RenewTripAsync(
+                id,
+                request.NewExpiryDate,
+                routeUpdates,
+                request.EndOdometer,
+                allowedSites
+            );
+            return Ok(MapTrip(renewed));
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy trip-renewal workflow is unavailable for trip {TripId}", id);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    message = "The legacy trip-renewal workflow is unavailable. No trip renewal was written.",
+                    source = "legacy-procedure-required",
+                }
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Trip {TripId} could not be renewed", id);
+            return BadRequest(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error renewing trip with id {TripId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteTrip(int id)
     {
         try
         {
-            var existingTrip = await _tripService.GetTripByIdAsync(id);
+            var existingTrip = await _tripService.GetTripByIdAsync(
+                id,
+                await ResolveAllowedSiteCodesAsync()
+            );
             if (existingTrip == null)
             {
                 return NotFound();
             }
 
-            await _tripService.DeleteTripAsync(id);
+            await _tripService.DeleteTripAsync(id, await ResolveAllowedSiteCodesAsync());
             return NoContent();
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogInformation(ex, "Legacy trip delete was requested for trip {TripId}", id);
+            return Conflict(new { error = ex.Message, source = "legacy-workflow-required" });
         }
         catch (Exception ex)
         {
@@ -883,6 +1092,70 @@ public class TripController : BaseApiController
             return StatusCode(500, "Internal server error");
         }
     }
+
+    private short? CurrentUserCode()
+    {
+        var userId = GetCurrentUserId();
+        return userId is > 0 and <= short.MaxValue ? (short)userId : null;
+    }
+
+    private async Task<IReadOnlySet<short>?> ResolveAllowedSiteCodesAsync()
+    {
+        if (HasGlobalTripScope())
+            return null;
+
+        var userId = GetCurrentUserId();
+        var profileSiteCode = await _context.UserAccessOlds.AsNoTracking()
+            .Where(user => user.user_access_code == userId)
+            .Select(user => user.Site_code)
+            .SingleOrDefaultAsync(HttpContext.RequestAborted);
+        if (profileSiteCode is not > 0)
+            return new HashSet<short>();
+
+        var profileSite = await _siteRepository.GetByIdAsync(profileSiteCode.Value);
+        if (profileSite is null)
+            return new HashSet<short>();
+
+        var sites = await _siteRepository.GetActiveSitesAsync();
+        if (
+            HasRole("Vehicle List for All Departments in Province")
+            && profileSite.province_code.HasValue
+        )
+        {
+            sites = sites.Where(site => site.province_code == profileSite.province_code.Value);
+        }
+        else if (
+            HasRole("Vehicle List for All Sites in Department")
+            && profileSite.Depatrment_code.HasValue
+        )
+        {
+            sites = sites.Where(site => site.Depatrment_code == profileSite.Depatrment_code.Value);
+        }
+        else
+        {
+            sites = sites.Where(site => site.Site_code == profileSite.Site_code);
+        }
+
+        return sites.Select(site => site.Site_code).ToHashSet();
+    }
+
+    private bool HasGlobalTripScope() =>
+        HasRole("SystemAdministrator") || HasRole("System Administrator");
+
+    private bool HasRole(string expectedRole) =>
+        User.Claims
+            .Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            )
+            .Any(role => string.Equals(role, expectedRole, StringComparison.OrdinalIgnoreCase));
 
     private static bool TryBuildVehiclePageQuery(
         int page,

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using FIS.Api.Services;
 using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
@@ -13,22 +14,25 @@ namespace FIS.Api.Controllers;
 /// Provides endpoints for managing license types and requirements
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Licence")]
 [Route("api/[controller]")]
 public class LicenseController : BaseApiController
 {
     private readonly ILicenseRepository _licenseRepository;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<LicenseController> _logger;
 
     public LicenseController(
         ILicenseRepository licenseRepository,
         IVehicleRepository vehicleRepository,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<LicenseController> logger
     )
     {
         _licenseRepository = licenseRepository;
         _vehicleRepository = vehicleRepository;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
@@ -69,11 +73,13 @@ public class LicenseController : BaseApiController
 
         var numberType = request.number_type.Trim().ToUpperInvariant();
         var number = request.number.Trim();
+        var allowedSites = await ResolveAllowedVehicleSiteCodesAsync();
+        var currentUserId = GetCurrentUserId();
 
         Vehicle? vehicle = numberType switch
         {
-            "GG" => await _vehicleRepository.GetByFleetNumberAsync(number),
-            "GP" => await _vehicleRepository.GetByRegistrationNumberAsync(number),
+            "GG" => await _vehicleRepository.GetByFleetNumberAsync(number, allowedSites, currentUserId),
+            "GP" => await _vehicleRepository.GetByRegistrationNumberAsync(number, allowedSites, currentUserId),
             _ => null,
         };
 
@@ -135,10 +141,11 @@ public class LicenseController : BaseApiController
 
             var fallbackNumberType = request.numberType.Trim().ToUpperInvariant();
             var fallbackNumber = request.number.Trim();
+            var allowedSites = await ResolveAllowedVehicleSiteCodesAsync();
             var fallbackVehicle = fallbackNumberType switch
             {
-                "GG" => await _vehicleRepository.GetByFleetNumberAsync(fallbackNumber),
-                "GP" => await _vehicleRepository.GetByRegistrationNumberAsync(fallbackNumber),
+                "GG" => await _vehicleRepository.GetByFleetNumberAsync(fallbackNumber, allowedSites, currentUserId),
+                "GP" => await _vehicleRepository.GetByRegistrationNumberAsync(fallbackNumber, allowedSites, currentUserId),
                 _ => null,
             };
 
@@ -152,7 +159,11 @@ public class LicenseController : BaseApiController
             vmfCode = fallbackVehicle.vmf_code;
         }
 
-        var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode.Value);
+        var vehicle = await _vehicleRepository.GetByIdAsync(
+            vmfCode.Value,
+            await ResolveAllowedVehicleSiteCodesAsync(),
+            currentUserId
+        );
         if (vehicle is null)
         {
             return NotFound(
@@ -198,7 +209,11 @@ public class LicenseController : BaseApiController
             );
         }
 
-        var updatedVehicle = await _vehicleRepository.GetByIdAsync(vmfCode.Value) ?? vehicle;
+        var updatedVehicle = await _vehicleRepository.GetByIdAsync(
+            vmfCode.Value,
+            await ResolveAllowedVehicleSiteCodesAsync(),
+            currentUserId
+        ) ?? vehicle;
 
         return Ok(
             new
@@ -436,6 +451,9 @@ public class LicenseController : BaseApiController
             ?? User.FindFirst("preferred_username")?.Value
             ?? "unknown";
     }
+
+    private Task<IReadOnlySet<short>?> ResolveAllowedVehicleSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
 
     private static int? ParseNullableInt(string? value)
     {

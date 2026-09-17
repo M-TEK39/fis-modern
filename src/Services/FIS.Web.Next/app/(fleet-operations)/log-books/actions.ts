@@ -10,6 +10,9 @@ import {
   updateLogbook,
 } from "@/lib/api/fleet-operations/api-logbooks";
 import { getSession } from "@/lib/auth/session";
+import {
+  hasLogbookAccess as hasLogbookRoleAccess,
+} from "@/app/(fleet-operations)/log-books/_page";
 
 class LogbookValidationError extends Error {}
 
@@ -51,6 +54,12 @@ function optionalDate(formData: FormData, key: string, label: string) {
   return date.toISOString();
 }
 
+function requiredDate(formData: FormData, key: string, label: string) {
+  const value = optionalDate(formData, key, label);
+  if (!value) throw new LogbookValidationError(`${label} is required.`);
+  return value;
+}
+
 function returnPath(formData: FormData, fallback: string) {
   const value = text(formData, "returnPath");
   return value.startsWith("/") && !value.startsWith("//") ? value : fallback;
@@ -77,9 +86,7 @@ async function authorizeLogbooks() {
       ok: false as const,
       message: "Your session has expired. Sign in again before continuing.",
     };
-  const allowed = session.roles.some(
-    (role) => role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "") === "logbooks",
-  );
+  const allowed = hasLogbookRoleAccess(session);
   return allowed
     ? { ok: true as const }
     : { ok: false as const, message: "You do not have Logbooks access." };
@@ -89,6 +96,8 @@ function apiErrorMessage(error: unknown) {
   if (error instanceof LogbookApiError) {
     if (error.reason === "unauthorized")
       return "Your session has expired. Sign in again before continuing.";
+    if (error.reason === "forbidden")
+      return "You do not have permission to access this Logbooks record or site.";
     if (error.reason === "unavailable")
       return "The Logbooks service is temporarily unavailable. Please try again.";
     if (error.reason === "not-found") return "The logbook was not found.";
@@ -114,7 +123,7 @@ function getWriteInput(formData: FormData, includeDateCreated = false) {
     vmf_code: vmfCode,
     begin_num: optionalText(formData, "beginNumber", "Begin number", 8),
     end_num: optionalText(formData, "endNumber", "End number", 8),
-    handout_date: optionalDate(formData, "handoutDate", "Handout date"),
+    handout_date: requiredDate(formData, "handoutDate", "Handout date"),
     site_code: optionalInteger(formData, "siteCode", "Site"),
     lb_receiver_name: optionalText(formData, "receiverName", "Receiver name", 25),
     lb_tel_num: optionalText(formData, "telephoneNumber", "Receiver telephone", 20),

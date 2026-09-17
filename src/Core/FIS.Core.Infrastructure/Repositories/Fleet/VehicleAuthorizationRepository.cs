@@ -135,40 +135,89 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public Task<PreVehicleMaster?> GetByIdAsync(int tempVmfCode) =>
+    public Task<PreVehicleMaster?> GetByIdAsync(
+        int tempVmfCode,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) =>
         WithConnectionAsync(async connection =>
         {
             var schema = await GetSchemaAsync(connection, null);
             return (
-                await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)
+                await QueryAsync(
+                    connection,
+                    null,
+                    schema,
+                    tempVmfCode: tempVmfCode,
+                    allowedSiteCodes: allowedSiteCodes,
+                    currentUserId: currentUserId
+                )
             ).SingleOrDefault();
         });
 
-    public Task<PreVehicleMaster?> GetByChassisNumberAsync(string chassisNumber) =>
+    public Task<PreVehicleMaster?> GetByChassisNumberAsync(
+        string chassisNumber,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) =>
         string.IsNullOrWhiteSpace(chassisNumber)
             ? Task.FromResult<PreVehicleMaster?>(null)
             : WithConnectionAsync(async connection =>
             {
                 var schema = await GetSchemaAsync(connection, null);
                 return (
-                    await QueryAsync(connection, null, schema, chassisNumber: chassisNumber.Trim())
+                    await QueryAsync(
+                        connection,
+                        null,
+                        schema,
+                        chassisNumber: chassisNumber.Trim(),
+                        allowedSiteCodes: allowedSiteCodes,
+                        currentUserId: currentUserId
+                    )
                 ).SingleOrDefault();
             });
 
     public Task<VehicleAuthorizationPage> GetPendingAuthorizationsAsync(
         int page = 1,
-        int pageSize = 24
-    ) => GetStatusPageAsync("Awaiting Authorization", page, pageSize, awaiting: true);
+        int pageSize = 24,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) => GetStatusPageAsync(
+        "Awaiting Authorization",
+        page,
+        pageSize,
+        awaiting: true,
+        allowedSiteCodes: allowedSiteCodes,
+        currentUserId: currentUserId
+    );
 
     public Task<VehicleAuthorizationPage> GetAuthorizedVehiclesAsync(
         int page = 1,
-        int pageSize = 24
-    ) => GetStatusPageAsync("Authorized", page, pageSize);
+        int pageSize = 24,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) => GetStatusPageAsync(
+        "Authorized",
+        page,
+        pageSize,
+        allowedSiteCodes: allowedSiteCodes,
+        currentUserId: currentUserId
+    );
 
     public Task<VehicleAuthorizationPage> GetRejectedVehiclesAsync(
         int page = 1,
-        int pageSize = 24
-    ) => GetStatusPageAsync("Rejected", page, pageSize);
+        int pageSize = 24,
+        int? capturedByUserCode = null,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) => GetStatusPageAsync(
+        "Rejected",
+        page,
+        pageSize,
+        capturedByUserCode: capturedByUserCode,
+        allowedSiteCodes: allowedSiteCodes,
+        currentUserId: currentUserId
+    );
 
     public async Task<IEnumerable<PreVehicleMaster>> GetByStatusAsync(string status)
     {
@@ -189,14 +238,25 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         string status,
         int requestedPage,
         int requestedPageSize,
-        bool awaiting = false
+        bool awaiting = false,
+        int? capturedByUserCode = null,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
     ) =>
         await WithConnectionAsync(async connection =>
         {
             var pageSize = Math.Clamp(requestedPageSize, 1, 100);
             var page = Math.Max(1, requestedPage);
             var schema = await GetSchemaAsync(connection, null);
-            var totalRecords = await CountByStatusAsync(connection, null, schema, status);
+            var totalRecords = await CountByStatusAsync(
+                connection,
+                null,
+                schema,
+                status,
+                capturedByUserCode,
+                allowedSiteCodes,
+                currentUserId
+            );
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
             page = Math.Min(page, totalPages);
             var skip = checked((long)(page - 1) * pageSize);
@@ -205,6 +265,9 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 null,
                 schema,
                 status: status,
+                capturedByUserCode: capturedByUserCode,
+                allowedSiteCodes: allowedSiteCodes,
+                currentUserId: currentUserId,
                 skip: skip,
                 take: pageSize,
                 orderBy: GetQueueOrder(schema, awaiting)
@@ -215,7 +278,10 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
 
     public async Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(
         DateTime? startDate = null,
-        DateTime? endDate = null
+        DateTime? endDate = null,
+        int? capturedByUserCode = null,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
     ) =>
         await WithConnectionAsync(async connection =>
         {
@@ -228,6 +294,9 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 null,
                 schema,
                 statuses: historyStatuses,
+                capturedByUserCode: capturedByUserCode,
+                allowedSiteCodes: allowedSiteCodes,
+                currentUserId: currentUserId,
                 startDate: startDate,
                 endDate: endDate
             );
@@ -237,7 +306,13 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
     public async Task<IReadOnlyList<VehicleMaintenanceTypeOption>> GetMaintenanceTypesAsync() =>
         await WithConnectionAsync(async connection =>
         {
-            if (!await ProcedureExistsAsync(connection, null, "DEV_SEL_AllMaintenanceTypes"))
+            if (
+                !await ProcedureMatchesAsync(
+                    connection,
+                    null,
+                    "DEV_SEL_AllMaintenanceTypes"
+                )
+            )
             {
                 return (IReadOnlyList<VehicleMaintenanceTypeOption>)[];
             }
@@ -305,6 +380,15 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                         )
                     ).SingleOrDefault();
 
+                // The legacy capture page deliberately looks up the original
+                // capturer when recalling a rejected/pending row. The user
+                // performing the recall is only the action user; never replace
+                // ownership merely because a new person edits the capture.
+                var capturedByUserId = existing?.captured_by_user_code is > 0
+                    ? existing.captured_by_user_code.Value
+                    : currentUserId;
+                vehicleAuth.captured_by_user_code = ToShortUserCode(capturedByUserId);
+
                 if (
                     existing is not null
                     && string.Equals(
@@ -319,52 +403,37 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                     );
                 }
 
-                var usedLegacyCreationProcedure = await ProcedureMatchesAsync(
-                    connection,
-                    transaction,
-                    "DEV_INS_New_Vehicle_Master",
-                    "@ggNumber",
-                    "@replaced_gg_number",
-                    "@model_code",
-                    "@colour",
-                    "@year_manufactured",
-                    "@chassis_number",
-                    "@engine_number",
-                    "@take_on_odo",
-                    "@take_on_date",
-                    "@location_code",
-                    "@vehicle_status_code",
-                    "@type_code",
-                    "@vs_code",
-                    "@comment",
-                    "@purchase_amount",
-                    "@purchase_from",
-                    "@purchase_date",
-                    "@captured_by_user_code",
-                    "@action_user_access_code",
-                    "@site_code",
-                    "@invoiceNumber",
-                    "@gpNumber"
-                );
+                var legacyCreationProcedure =
+                    await GetVehicleCreationProcedureContractAsync(
+                        connection,
+                        transaction
+                    );
+                var usedLegacyCreationProcedure = legacyCreationProcedure is not null;
 
                 int tempVmfCode;
-                if (usedLegacyCreationProcedure)
+                if (legacyCreationProcedure is not null)
                 {
-                    var ggNumber = FirstNonEmpty(
-                        vehicleAuth.fleet_number,
-                        vehicleAuth.registration_number,
-                        vehicleAuth.gp_number
-                    );
-                    if (string.IsNullOrWhiteSpace(ggNumber))
+                    if (
+                        legacyCreationProcedure.IncludesGgNumber
+                        && string.IsNullOrWhiteSpace(vehicleAuth.fleet_number)
+                    )
+                    {
                         throw new ArgumentException(
-                            "A legacy GG or registration number is required to capture a vehicle inception record."
+                            "A legacy GG number is required to capture this vehicle inception record."
                         );
+                    }
 
                     await ExecuteProcedureAsync(
                         connection,
                         transaction,
                         "DEV_INS_New_Vehicle_Master",
-                        new ProcedureParameter("@ggNumber", DbType.String, ggNumber),
+                        legacyCreationProcedure.IncludesGgNumber
+                            ? new ProcedureParameter(
+                                "@ggNumber",
+                                DbType.String,
+                                vehicleAuth.fleet_number?.Trim().ToUpperInvariant() ?? string.Empty
+                            )
+                            : null,
                         new ProcedureParameter(
                             "@replaced_gg_number",
                             DbType.String,
@@ -410,6 +479,13 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                         new ProcedureParameter("@type_code", DbType.Int16, vehicleAuth.type_code),
                         new ProcedureParameter("@vs_code", DbType.Byte, vehicleAuth.vs_code),
                         new ProcedureParameter("@comment", DbType.String, vehicleAuth.comment),
+                        legacyCreationProcedure.IncludesFleetNotes
+                            ? new ProcedureParameter(
+                                "@fleet_notes",
+                                DbType.String,
+                                vehicleAuth.Fleet_Notes
+                            )
+                            : null,
                         new ProcedureParameter(
                             "@purchase_amount",
                             DbType.Decimal,
@@ -428,7 +504,7 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                         new ProcedureParameter(
                             "@captured_by_user_code",
                             DbType.Int16,
-                            currentUserId
+                            capturedByUserId
                         ),
                         new ProcedureParameter(
                             "@action_user_access_code",
@@ -436,12 +512,34 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                             currentUserId
                         ),
                         new ProcedureParameter("@site_code", DbType.Int16, vehicleAuth.site_code),
-                        new ProcedureParameter(
-                            "@invoiceNumber",
-                            DbType.String,
-                            vehicleAuth.invoice_number
-                        ),
-                        new ProcedureParameter("@gpNumber", DbType.String, vehicleAuth.gp_number)
+                        legacyCreationProcedure.IncludesInvoice
+                            ? new ProcedureParameter(
+                                "@invoiceNumber",
+                                DbType.String,
+                                vehicleAuth.invoice_number
+                            )
+                            : null,
+                        legacyCreationProcedure.IncludesGpNumber
+                            ? new ProcedureParameter(
+                                "@gpNumber",
+                                DbType.String,
+                                vehicleAuth.gp_number
+                            )
+                            : null,
+                        legacyCreationProcedure.IncludesPreviousIdentity
+                            ? new ProcedureParameter(
+                                "@Old_chassis_number",
+                                DbType.String,
+                                null
+                            )
+                            : null,
+                        legacyCreationProcedure.IncludesPreviousIdentity
+                            ? new ProcedureParameter(
+                                "@Old_engine_number",
+                                DbType.String,
+                                null
+                            )
+                            : null
                     );
                     var captured = (
                         await QueryAsync(
@@ -470,6 +568,11 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 }
                 else
                 {
+                    // Explicit compatibility fallback: this is used only when
+                    // the original creation procedure is genuinely absent.
+                    // Keep it parameterized and retain the legacy pre-vehicle
+                    // result shape, while making the missing procedure visible
+                    // to logs rather than silently claiming procedure parity.
                     tempVmfCode = await InsertRowAsync(
                         connection,
                         transaction,
@@ -510,19 +613,13 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
     {
         ArgumentNullException.ThrowIfNull(vehicleAuth);
 
-        await WithConnectionAsync(async connection =>
-        {
-            var schema = await GetSchemaAsync(connection, null);
-            await UpdateRowAsync(
-                connection,
-                null,
-                schema,
-                vehicleAuth.temp_vmf_code,
-                vehicleAuth,
-                currentUserId
-            );
-            return true;
-        });
+        // The legacy capture page posts the same
+        // DEV_INS_New_Vehicle_Master operation for both a new row and a
+        // recalled/rejected row. Reuse the procedure-first path so its status
+        // normalization, duplicate checks, and note side effects are retained;
+        // CreateAsync's direct row update is only reached when the original
+        // procedure is genuinely absent.
+        _ = await CreateAsync(vehicleAuth, currentUserId);
     }
 
     public async Task ApproveAsync(int tempVmfCode, int authorizedByUserId, string? comment = null)
@@ -565,14 +662,27 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                     );
                 }
 
-                if (
-                    await ProcedureExistsAsync(
+                var approvalProcedure = await ProcedureMatchesAsync(
+                    connection,
+                    transaction,
+                    "DEV_INS_VehicleFromPre_Vehicle_Master",
+                    "@ChassisNo",
+                    "@comment",
+                    "@captured_by_user_code"
+                );
+                if (approvalProcedure)
+                {
+                    // Promotion inserts vehicle_master and the legacy trigger
+                    // creates the first fin.vehicle_tariff for eligible new
+                    // vehicles. Do not authorize a vehicle when that
+                    // source-backed tariff trigger is missing or disabled.
+                    await EnsureEnabledTriggerAsync(
                         connection,
                         transaction,
-                        "DEV_INS_VehicleFromPre_Vehicle_Master"
-                    )
-                )
-                {
+                        "dbo",
+                        VehicleTableName,
+                        "TRG_UPSERT_CheckPurchaseAmount"
+                    );
                     // This procedure owns the legacy GG allocation and the
                     // promotion into vehicle_master. Do not replace it on a
                     // client's legacy database.
@@ -591,6 +701,13 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 }
                 else
                 {
+                    await EnsureEnabledTriggerAsync(
+                        connection,
+                        transaction,
+                        "dbo",
+                        VehicleTableName,
+                        "TRG_UPSERT_CheckPurchaseAmount"
+                    );
                     await PromoteWithoutLegacyProcedureAsync(
                         connection,
                         transaction,
@@ -616,6 +733,46 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                         authorizedByUserId
                     );
                 }
+
+                // Promotion procedures allocate the VMF on vehicle_master and
+                // may only copy that value back to pre_vehicle_master as a
+                // side effect. Re-read the authorization row before checking
+                // the tariff so we validate the actual promoted vehicle code.
+                var promotedVehicle = (
+                    await QueryAsync(
+                        connection,
+                        transaction,
+                        schema,
+                        tempVmfCode: tempVmfCode
+                    )
+                ).SingleOrDefault();
+                if (promotedVehicle is null)
+                {
+                    throw new InvalidOperationException(
+                        "Vehicle authorization promotion completed without a readable pre-vehicle row."
+                    );
+                }
+
+                var promotedVmfCode = promotedVehicle.vmf_code;
+                if (promotedVmfCode is not > 0 && !string.IsNullOrWhiteSpace(promotedVehicle.chassis_number))
+                {
+                    await using var vmfCommand = connection.CreateCommand();
+                    vmfCommand.Transaction = transaction;
+                    vmfCommand.CommandText = $"SELECT TOP (1) [vmf_code] FROM [dbo].[{VehicleTableName}] WHERE [chassis_number] = @chassisNumber";
+                    AddParameter(vmfCommand, "@chassisNumber", DbType.String, promotedVehicle.chassis_number.Trim());
+                    var rawVmfCode = await vmfCommand.ExecuteScalarAsync();
+                    if (rawVmfCode is not null and not DBNull)
+                        promotedVmfCode = Convert.ToInt32(rawVmfCode);
+                }
+
+                await EnsureCurrentVehicleTariffAsync(
+                    connection,
+                    transaction,
+                    promotedVmfCode,
+                    promotedVehicle.year_manufactured,
+                    promotedVehicle.type_code,
+                    promotedVehicle.model_code
+                );
                 await transaction.CommitAsync();
                 committed = true;
             }
@@ -684,7 +841,15 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 // database-owned whenever the original procedure exists.
                 var legacyComment =
                     $"[Rejected] {(string.IsNullOrWhiteSpace(comment) ? rejectionReason.Trim() : comment.Trim())}";
-                if (await ProcedureExistsAsync(connection, transaction, "DEV_UPD_Rejected_PreVehicles"))
+                var rejectionProcedure = await ProcedureMatchesAsync(
+                    connection,
+                    transaction,
+                    "DEV_UPD_Rejected_PreVehicles",
+                    "@ChassisNo",
+                    "@comment",
+                    "@captured_by_user_code"
+                );
+                if (rejectionProcedure)
                 {
                     await ExecuteProcedureAsync(
                         connection,
@@ -783,7 +948,16 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             );
             await ExecuteUpdateAsync(connection, null, tempVmfCode, values);
 
-            if (await ProcedureExistsAsync(connection, null, "DEV_INS_PreVehicle_master_Notes"))
+            if (
+                await ProcedureMatchesAsync(
+                    connection,
+                    null,
+                    "DEV_INS_PreVehicle_master_Notes",
+                    "@comment",
+                    "@chassis_number",
+                    "@added_by_user_code"
+                )
+            )
             {
                 await ExecuteProcedureAsync(
                     connection,
@@ -920,7 +1094,10 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         DbConnection connection,
         DbTransaction? transaction,
         VehicleAuthorizationSchema schema,
-        string status
+        string status,
+        int? capturedByUserCode,
+        IReadOnlySet<short>? allowedSiteCodes,
+        int? currentUserId
     )
     {
         var hasStatusColumn = schema.Columns.Contains("Authority_Status");
@@ -940,6 +1117,21 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             conditions.Add("[p].[Authority_Status] = @authorityStatus");
             AddParameter(command, "@authorityStatus", DbType.String, status);
         }
+
+        if (capturedByUserCode.HasValue)
+        {
+            var ownerColumn = schema.Columns.Contains("captured_by_user_code")
+                ? "captured_by_user_code"
+                : schema.Columns.Contains("created_by_user_code")
+                    ? "created_by_user_code"
+                    : null;
+            if (ownerColumn is null)
+                return 0;
+            conditions.Add($"[p].[{ownerColumn}] = @capturedByUserCode");
+            AddParameter(command, "@capturedByUserCode", DbType.Int32, capturedByUserCode.Value);
+        }
+
+        AddScopeConditions(conditions, command, schema.Columns, allowedSiteCodes, currentUserId);
 
         command.CommandText =
             $"SELECT COUNT(1) FROM [dbo].[{PreVehicleTableName}] AS [p] WHERE {string.Join(" AND ", conditions)}";
@@ -973,12 +1165,15 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         string? chassisNumber = null,
         string? status = null,
         IReadOnlyCollection<string>? statuses = null,
+        int? capturedByUserCode = null,
         DateTime? startDate = null,
         DateTime? endDate = null,
         long? skip = null,
         int? take = null,
         string? orderBy = null,
-        bool lockForUpdate = false
+        bool lockForUpdate = false,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
     )
     {
         if (
@@ -1039,6 +1234,21 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             }
         }
 
+        if (capturedByUserCode.HasValue)
+        {
+            var ownerColumn = schema.Columns.Contains("captured_by_user_code")
+                ? "captured_by_user_code"
+                : schema.Columns.Contains("created_by_user_code")
+                    ? "created_by_user_code"
+                    : null;
+            if (ownerColumn is null)
+                return [];
+            conditions.Add($"[p].[{ownerColumn}] = @capturedByUserCode");
+            AddParameter(command, "@capturedByUserCode", DbType.Int32, capturedByUserCode.Value);
+        }
+
+        AddScopeConditions(conditions, command, schema.Columns, allowedSiteCodes, currentUserId);
+
         var dateColumn =
             schema.Columns.Contains("authorization_date") ? "authorization_date"
             : schema.Columns.Contains("date_created") ? "date_created"
@@ -1097,6 +1307,56 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         }
 
         return rows;
+    }
+
+    private static void AddScopeConditions(
+        ICollection<string> conditions,
+        DbCommand command,
+        IReadOnlySet<string> columns,
+        IReadOnlySet<short>? allowedSiteCodes,
+        int? currentUserId
+    )
+    {
+        if (allowedSiteCodes is null)
+        {
+            return;
+        }
+
+        var sites = allowedSiteCodes.Where(site => site > 0).Distinct().ToArray();
+        if (sites.Length == 0)
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        var siteColumn = columns.Contains("site_code") ? "site_code" : null;
+        var ownerColumns = currentUserId is > 0
+            ? new[] { "captured_by_user_code", "created_by_user_code" }
+                .Where(columns.Contains)
+                .ToArray()
+            : [];
+        var siteParameters = sites.Select((_, index) => $"@allowedVehicleSite{index}").ToArray();
+        var predicates = new List<string>();
+        if (siteColumn is not null)
+        {
+            predicates.Add($"[p].[{siteColumn}] IN ({string.Join(", ", siteParameters)})");
+        }
+        predicates.AddRange(ownerColumns.Select(column => $"[p].[{column}] = @allowedVehicleOwner"));
+        if (predicates.Count == 0)
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        conditions.Add("(" + string.Join(" OR ", predicates) + ")");
+        for (var index = 0; index < sites.Length; index++)
+        {
+            AddParameter(command, siteParameters[index], DbType.Int16, sites[index]);
+        }
+        if (ownerColumns.Length > 0)
+        {
+            AddParameter(command, "@allowedVehicleOwner", DbType.Int32, currentUserId);
+        }
     }
 
     private static PreVehicleMaster Map(DbDataReader reader) =>
@@ -1429,7 +1689,14 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
     {
         if (
             string.IsNullOrWhiteSpace(chassisNumber)
-            || !await ProcedureExistsAsync(connection, transaction, "DEV_INS_PreVehicle_master_Notes")
+            || !await ProcedureMatchesAsync(
+                connection,
+                transaction,
+                "DEV_INS_PreVehicle_master_Notes",
+                "@comment",
+                "@chassis_number",
+                "@added_by_user_code"
+            )
         )
         {
             return;
@@ -1460,8 +1727,14 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
     {
         if (
             writeInitialNote
-            &&
-            await ProcedureExistsAsync(connection, transaction, "DEV_INS_PreVehicle_master_Notes")
+            && await ProcedureMatchesAsync(
+                connection,
+                transaction,
+                "DEV_INS_PreVehicle_master_Notes",
+                "@comment",
+                "@chassis_number",
+                "@added_by_user_code"
+            )
             && !string.IsNullOrWhiteSpace(vehicle.comment)
         )
         {
@@ -1476,7 +1749,15 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         }
 
         if (
-            await ProcedureExistsAsync(connection, transaction, "DEV_INS_Vehicle_Damages")
+            await ProcedureMatchesAsync(
+                connection,
+                transaction,
+                "DEV_INS_Vehicle_Damages",
+                "@chassisno",
+                "@comment",
+                "@userid",
+                "@status"
+            )
             && (
                 !string.IsNullOrWhiteSpace(vehicle.damage_status)
                 || !string.IsNullOrWhiteSpace(vehicle.damages_comment)
@@ -1499,7 +1780,13 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         }
 
         if (
-            await ProcedureExistsAsync(connection, transaction, "DEV_INS_temp_fleet_notes")
+            await ProcedureMatchesAsync(
+                connection,
+                transaction,
+                "DEV_INS_temp_fleet_notes",
+                "@chassisno",
+                "@fleet_notes"
+            )
             && !string.IsNullOrWhiteSpace(vehicle.Fleet_Notes)
         )
         {
@@ -1512,7 +1799,15 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             );
         }
 
-        if (await ProcedureExistsAsync(connection, transaction, "DEV_INS_NewVehicle_Extras"))
+        if (
+            await ProcedureMatchesAsync(
+                connection,
+                transaction,
+                "DEV_INS_NewVehicle_Extras",
+                "@chassis_no",
+                "@extra_code"
+            )
+        )
         {
             foreach (var extraCode in vehicle.ExtraCodes.Distinct())
             {
@@ -1528,10 +1823,18 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
 
         if (
             vehicle.MaintenanceTypeCode is > 0
-            && await ProcedureExistsAsync(
+            && await ProcedureMatchesAsync(
                 connection,
                 transaction,
-                "DEV_UPD_VehicleMaintenanceOptions"
+                "DEV_UPD_VehicleMaintenanceOptions",
+                "@vmfCode",
+                "@tempVmfCode",
+                "@maintType",
+                "@startDate",
+                "@period",
+                "@kilos",
+                "@maintValue",
+                "@userCode"
             )
         )
         {
@@ -1847,23 +2150,290 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }
 
-    private static async Task<bool> ProcedureExistsAsync(
+    private static async Task<VehicleCreationProcedureContract?> GetVehicleCreationProcedureContractAsync(
         DbConnection connection,
         DbTransaction? transaction,
-        string procedureName
+        string procedureName = "DEV_INS_New_Vehicle_Master"
     )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
-            SELECT COUNT(1)
-            FROM [INFORMATION_SCHEMA].[ROUTINES]
-            WHERE [ROUTINE_SCHEMA] = 'dbo'
-              AND [ROUTINE_NAME] = @procedureName
-              AND [ROUTINE_TYPE] = 'PROCEDURE'
+            SELECT [parameterObject].[name]
+            FROM [sys].[procedures] AS [procedureObject]
+            INNER JOIN [sys].[schemas] AS [schemaObject]
+                ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
+            LEFT JOIN [sys].[parameters] AS [parameterObject]
+                ON [parameterObject].[object_id] = [procedureObject].[object_id]
+               AND [parameterObject].[parameter_id] > 0
+            WHERE [schemaObject].[name] = N'dbo'
+              AND [procedureObject].[name] = @procedureName
+            ORDER BY [parameterObject].[parameter_id]
             """;
         AddParameter(command, "@procedureName", DbType.String, procedureName);
-        return Convert.ToInt32(await command.ExecuteScalarAsync()) > 0;
+        var actualParameters = new List<string>();
+        var procedureFound = false;
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            procedureFound = true;
+            if (!reader.IsDBNull(0))
+                actualParameters.Add(reader.GetString(0));
+        }
+
+        if (!procedureFound)
+            return null;
+
+        // The active Master-File capture page and its data-access component
+        // both declare this exact legacy signature. @ggNumber is the captured
+        // GG number. Keep the earlier no-GG signatures as explicit compatibility
+        // variants because older restored databases may still expose them.
+        var legacyInvoiceGp = new[]
+        {
+            "@ggNumber",
+            "@replaced_gg_number",
+            "@model_code",
+            "@colour",
+            "@year_manufactured",
+            "@chassis_number",
+            "@engine_number",
+            "@take_on_odo",
+            "@take_on_date",
+            "@location_code",
+            "@vehicle_status_code",
+            "@type_code",
+            "@vs_code",
+            "@comment",
+            "@purchase_amount",
+            "@purchase_from",
+            "@purchase_date",
+            "@captured_by_user_code",
+            "@action_user_access_code",
+            "@site_code",
+            "@invoiceNumber",
+            "@gpNumber",
+        };
+        var invoiceGp = legacyInvoiceGp.Skip(1).ToArray();
+        var invoice = invoiceGp.Take(invoiceGp.Length - 1).ToArray();
+        var baseParameters = invoiceGp.Take(invoiceGp.Length - 2).ToArray();
+        // An older archived variant did not expose @ggNumber and instead
+        // accepted the recalled vehicle's original identity values.
+        var legacyOldIdentity = new[]
+        {
+            "@replaced_gg_number",
+            "@model_code",
+            "@colour",
+            "@year_manufactured",
+            "@chassis_number",
+            "@engine_number",
+            "@take_on_odo",
+            "@take_on_date",
+            "@location_code",
+            "@vehicle_status_code",
+            "@type_code",
+            "@vs_code",
+            "@comment",
+            "@fleet_notes",
+            "@purchase_amount",
+            "@purchase_from",
+            "@purchase_date",
+            "@captured_by_user_code",
+            "@action_user_access_code",
+            "@site_code",
+            "@Old_chassis_number",
+            "@Old_engine_number",
+        };
+
+        bool Matches(IReadOnlyCollection<string> expected) =>
+            actualParameters.Count == expected.Count
+            && actualParameters.ToHashSet(StringComparer.OrdinalIgnoreCase)
+                .SetEquals(expected);
+
+        if (Matches(legacyInvoiceGp))
+            return new VehicleCreationProcedureContract(true, true, true, false);
+        if (Matches(invoiceGp))
+            return new VehicleCreationProcedureContract(false, true, true, false);
+        if (Matches(invoice))
+            return new VehicleCreationProcedureContract(false, true, false, false);
+        if (Matches(baseParameters))
+            return new VehicleCreationProcedureContract(false, false, false, false);
+        if (Matches(legacyOldIdentity))
+            return new VehicleCreationProcedureContract(false, false, false, true, true);
+
+        throw new InvalidOperationException(
+            $"The deployed legacy procedure {procedureName} does not match any archived vehicle-capture parameter contract. No direct-DML fallback was run."
+        );
+    }
+
+    private sealed record VehicleCreationProcedureContract(
+        bool IncludesGgNumber,
+        bool IncludesInvoice,
+        bool IncludesGpNumber,
+        bool IncludesFleetNotes,
+        bool IncludesPreviousIdentity = false
+    );
+
+    private static async Task EnsureEnabledTriggerAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        string schemaName,
+        string tableName,
+        string triggerName
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT [tr].[is_disabled]
+            FROM [sys].[triggers] AS [tr]
+            INNER JOIN [sys].[tables] AS [tb]
+                ON [tb].[object_id] = [tr].[parent_id]
+            INNER JOIN [sys].[schemas] AS [sc]
+                ON [sc].[schema_id] = [tb].[schema_id]
+            WHERE [sc].[name] = @schemaName
+              AND [tb].[name] = @tableName
+              AND [tr].[name] = @triggerName;
+            """;
+        AddParameter(command, "@schemaName", DbType.String, schemaName);
+        AddParameter(command, "@tableName", DbType.String, tableName);
+        AddParameter(command, "@triggerName", DbType.String, triggerName);
+
+        var disabled = await command.ExecuteScalarAsync();
+        if (disabled is null or DBNull || Convert.ToBoolean(disabled))
+        {
+            throw new NotSupportedException(
+                $"The legacy vehicle tariff trigger workflow is unavailable ({schemaName}.{triggerName} on {tableName}); no vehicle promotion fallback was run."
+            );
+        }
+    }
+
+    private static async Task EnsureCurrentVehicleTariffAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        int? vmfCode,
+        short? yearManufactured,
+        short? vehicleTypeCode,
+        short? modelCode
+    )
+    {
+        if (vmfCode is not > 0)
+        {
+            throw new InvalidOperationException(
+                "Vehicle authorization completed without a vehicle master code; no tariff-bearing vehicle was promoted."
+            );
+        }
+
+        if (yearManufactured is not > 0)
+        {
+            throw new InvalidOperationException(
+                $"Vehicle {vmfCode.Value} was promoted without a year manufactured; no legacy tariff can be resolved."
+            );
+        }
+
+        // The legacy tariff function uses dbo.leasetariff for lease contracts.
+        if (vehicleTypeCode == 4)
+        {
+            await using var leaseCommand = connection.CreateCommand();
+            leaseCommand.Transaction = transaction;
+            leaseCommand.CommandText = """
+                IF OBJECT_ID(N'dbo.leasetariff', N'U') IS NULL
+                    SELECT CAST(NULL AS bit);
+                ELSE
+                    SELECT TOP (1) CAST(1 AS bit)
+                    FROM [dbo].[leasetariff] AS [lt]
+                    WHERE [lt].[vmf_code] = @vmfCode
+                      AND [lt].[fixed_tariff] IS NOT NULL
+                      AND [lt].[fixed_tariff] > 0
+                      AND [lt].[start_date] <= CONVERT(smalldatetime, GETDATE())
+                      AND ([lt].[end_date] IS NULL OR [lt].[end_date] = 0 OR [lt].[end_date] >= CONVERT(smalldatetime, GETDATE()))
+                      AND ([lt].[active] = 1 OR [lt].[active] IS NULL);
+                """;
+            AddParameter(leaseCommand, "@vmfCode", DbType.Int32, vmfCode.Value);
+            var hasLeaseTariff = await leaseCommand.ExecuteScalarAsync();
+            if (hasLeaseTariff is null or DBNull || !Convert.ToBoolean(hasLeaseTariff))
+            {
+                throw new InvalidOperationException(
+                    $"Vehicle {vmfCode.Value} was promoted without a current lease tariff. Authorization was not committed."
+                );
+            }
+
+            return;
+        }
+
+        // dbo.GetVehicleTariff checks the class tariff first for 2009-and-
+        // older vehicles. For 2008/2009 records captured after the 2009
+        // tariff cut-over it can then fall through to fin.vehicle_tariff when
+        // no class row exists. Check those two sources in that same order;
+        // do not force every 2008/2009 vehicle into only one tariff system.
+        var canUseLegacyClassTariff = yearManufactured.Value <= 2009 && vehicleTypeCode != 5;
+        if (canUseLegacyClassTariff)
+        {
+            if (modelCode is > 0)
+            {
+                await using var classTariffCommand = connection.CreateCommand();
+                classTariffCommand.Transaction = transaction;
+                classTariffCommand.CommandText = """
+                    IF OBJECT_ID(N'dbo.tariff', N'U') IS NULL
+                        SELECT CAST(NULL AS bit);
+                    ELSE
+                        SELECT TOP (1) CAST(1 AS bit)
+                        FROM [dbo].[tariff] AS [t]
+                        INNER JOIN [dbo].[model] AS [m]
+                            ON [m].[class_code] = [t].[class_code]
+                        WHERE [m].[model_code] = @modelCode
+                          AND [t].[year_manufactured] = @tariffYear
+                          AND [t].[effective_start_date] <= CONVERT(date, GETDATE())
+                          AND ([t].[effective_end_date] IS NULL OR [t].[effective_end_date] >= CONVERT(date, GETDATE()))
+                          AND [t].[monthly_fixed_amount] IS NOT NULL
+                          AND [t].[monthly_odo_amount] IS NOT NULL;
+                    """;
+                AddParameter(classTariffCommand, "@modelCode", DbType.Int16, modelCode.Value);
+                AddParameter(
+                    classTariffCommand,
+                    "@tariffYear",
+                    DbType.Int16,
+                    (short)Math.Max(2002, (int)yearManufactured.Value)
+                );
+                var hasClassTariff = await classTariffCommand.ExecuteScalarAsync();
+                if (hasClassTariff is not null and not DBNull && Convert.ToBoolean(hasClassTariff))
+                {
+                    return;
+                }
+            }
+
+            // Before 1 April 2009 the legacy function has no modern fallback;
+            // keep the historical class-tariff requirement for that period.
+            if (DateTime.Today < new DateTime(2009, 4, 1) || yearManufactured.Value < 2008)
+            {
+                throw new InvalidOperationException(
+                    $"Vehicle {vmfCode.Value} was promoted without a current class tariff. Authorization was not committed."
+                );
+            }
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            IF OBJECT_ID(N'fin.vehicle_tariff', N'U') IS NULL
+                SELECT CAST(NULL AS bit);
+            ELSE
+                SELECT CAST(1 AS bit)
+                FROM [fin].[vehicle_tariff] AS [vt]
+                WHERE [vt].[vmf_code] = @vmfCode
+                  AND [vt].[start_date] <= CONVERT(smalldatetime, GETDATE())
+                  AND ([vt].[end_date] IS NULL OR [vt].[end_date] >= CONVERT(smalldatetime, GETDATE()))
+                  AND [vt].[start_date] >= DATEADD(year, -1, CONVERT(smalldatetime, GETDATE()))
+                  AND [vt].[vehicle_fixed_tariff] IS NOT NULL
+                  AND [vt].[vehicle_kilometer_tariff] IS NOT NULL;
+            """;
+        AddParameter(command, "@vmfCode", DbType.Int32, vmfCode.Value);
+        var hasTariff = await command.ExecuteScalarAsync();
+        if (hasTariff is null or DBNull || !Convert.ToBoolean(hasTariff))
+        {
+            throw new InvalidOperationException(
+                $"Vehicle {vmfCode.Value} was promoted without a current vehicle tariff. Authorization was not committed; capture/release the tariff before assigning the vehicle to a client."
+            );
+        }
     }
 
     private static async Task<bool> ProcedureMatchesAsync(
@@ -1882,38 +2452,44 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
             LEFT JOIN [sys].[parameters] AS [parameterObject]
                 ON [parameterObject].[object_id] = [procedureObject].[object_id]
+               AND [parameterObject].[parameter_id] > 0
             WHERE [schemaObject].[name] = N'dbo'
               AND [procedureObject].[name] = @procedureName
             ORDER BY [parameterObject].[parameter_id]
             """;
         AddParameter(command, "@procedureName", DbType.String, procedureName);
+
         var actualParameters = new List<string>();
         var procedureFound = false;
-        await using var reader = await command.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
+        await using (var reader = await command.ExecuteReaderAsync())
         {
-            procedureFound = true;
-            if (!reader.IsDBNull(0))
-                actualParameters.Add(reader.GetString(0));
+            while (await reader.ReadAsync())
+            {
+                procedureFound = true;
+                if (!reader.IsDBNull(0))
+                {
+                    actualParameters.Add(reader.GetString(0));
+                }
+            }
         }
 
         if (!procedureFound)
             return false;
         if (!actualParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
+        {
             throw new InvalidOperationException(
-                $"The deployed legacy procedure {procedureName} does not match the verified parameter contract. No direct-DML fallback was run."
+                $"The deployed legacy procedure {procedureName} does not match its verified parameter contract. No direct-DML fallback was run."
             );
+        }
+
         return true;
     }
-
-    private static string? FirstNonEmpty(params string?[] values) =>
-        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
     private static async Task ExecuteProcedureAsync(
         DbConnection connection,
         DbTransaction? transaction,
         string procedureName,
-        params ProcedureParameter[] parameters
+        params ProcedureParameter?[] parameters
     )
     {
         await using var command = connection.CreateCommand();
@@ -1922,6 +2498,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         command.CommandText = $"dbo.{procedureName}";
         foreach (var parameter in parameters)
         {
+            if (parameter is null)
+                continue;
             AddParameter(command, parameter.Name, parameter.Type, parameter.Value);
         }
 

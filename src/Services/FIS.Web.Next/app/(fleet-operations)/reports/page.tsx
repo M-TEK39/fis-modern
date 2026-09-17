@@ -4,7 +4,11 @@ import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { AccessRestricted, ReportsFrame } from "@/app/(fleet-operations)/reports/_components";
-import { hasReportsRole } from "@/app/(fleet-operations)/reports/_utils";
+import {
+  hasContractReportsRole,
+  hasReportsRole,
+  hasTariffReportsRole,
+} from "@/app/(fleet-operations)/reports/_utils";
 import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/auth/session";
 
@@ -60,7 +64,10 @@ async function ReportsPageContent() {
         </p>
       </ReportsFrame>
     );
-  if (!hasReportsRole(session.roles))
+  const canOpenReports = hasReportsRole(session.roles);
+  const canOpenContractReports = hasContractReportsRole(session.roles);
+  const canOpenTariffReports = hasTariffReportsRole(session.roles);
+  if (!canOpenContractReports && !canOpenTariffReports)
     return (
       <ReportsFrame
         title="Reports Maintenance Menu"
@@ -82,15 +89,29 @@ async function ReportsPageContent() {
           </Link>
         </MenuSection>
         <MenuSection title="Available Reports">
-          <Link className="vehicle-menu-link" href="/reports/trip-authority">
-            Trip Authority Reports
-          </Link>
-          <Link className="vehicle-menu-link" href="/reports/fis-report">
-            FIS Reports
-          </Link>
+          {canOpenReports ? (
+            <>
+              <Link className="vehicle-menu-link" href="/reports/trip-authority">
+                Trip Authority Reports
+              </Link>
+              <Link className="vehicle-menu-link" href="/reports/fis-report">
+                FIS Reports
+              </Link>
+            </>
+          ) : null}
+          {canOpenTariffReports ? (
+            <Link className="vehicle-menu-link" href="/reports/tariffs">
+              Tariff Reports
+            </Link>
+          ) : null}
         </MenuSection>
         <MenuSection title="Quick Links - Frequently Used Reports">
-          {QUICK_LINKS.map(([label, href]) => (
+          {(canOpenReports
+            ? QUICK_LINKS
+            : QUICK_LINKS.filter(([, href]) =>
+                ["/reports/contracts", "/reports/contract-history"].includes(href),
+              )
+          ).map(([label, href]) => (
             <Link className="vehicle-menu-link" href={href} key={href}>
               {label}
             </Link>
@@ -100,9 +121,11 @@ async function ReportsPageContent() {
           <Link className="button button-secondary" href="/home">
             Home
           </Link>
-          <Link className="button button-secondary" href="/reports/fis-report">
-            FIS Report Menu
-          </Link>
+          {canOpenReports ? (
+            <Link className="button button-secondary" href="/reports/fis-report">
+              FIS Report Menu
+            </Link>
+          ) : null}
         </div>
       </div>
     </ReportsFrame>

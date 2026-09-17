@@ -18,6 +18,7 @@ import {
   hasFinanceRole,
   hasFinancialReportsRole,
   hasHeadOfficeFinanceAccess,
+  hasAdministratorRole,
   hasRole,
 } from "@/app/(fleet-operations)/finance/_utils";
 import {
@@ -53,7 +54,7 @@ async function renderFinancePageContent() {
     if (!(error instanceof FinanceApiError)) throw error;
   }
   const batchRunning = batch?.isActive === true;
-  const administrator = hasRole(session.roles, "Administrator") || hasRole(session.roles, "Admin");
+  const administrator = hasAdministratorRole(session.roles);
   const ownData = administrator || hasRole(session.roles, "Financial Data (Own Department)");
   const financialReports = hasFinancialReportsRole(session.roles);
   const headOffice = hasHeadOfficeFinanceAccess(session.siteCode, session.legacyUsername);

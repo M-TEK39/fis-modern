@@ -356,7 +356,15 @@ export async function updateLogsheet(logCode: number, input: LogsheetWriteInput)
       asString(getValue(payload, "message", "Message")) ?? "The logsheet could not be updated.",
     );
   }
-  return getLogsheet(logCode);
+  const updatedLogCode = isRecord(payload)
+    ? asNumber(getValue(payload, "logCode", "LogCode"))
+    : null;
+  if (updatedLogCode === null)
+    throw new LogsheetApiError(
+      "invalid-response",
+      "The FIS API returned an invalid updated logsheet.",
+    );
+  return getLogsheet(updatedLogCode);
 }
 
 export async function deleteLogsheet(logCode: number) {

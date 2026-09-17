@@ -9,6 +9,9 @@ import AccessRestrictedCard from "@/components/app-shell/access-restricted-card"
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import VehicleAuthorizationClient from "@/app/(fleet-operations)/vehicles/authorize/vehicle-authorization-client";
 import {
+  hasVehicleInceptionAuthorizerRole,
+} from "@/app/(fleet-operations)/vehicles/access";
+import {
   getVehicleAuthorizationQueues,
   VehicleAuthorizationApiError,
 } from "@/lib/api/vehicles/api-vehicle-authorization";
@@ -23,40 +26,8 @@ function getPageValue(query: VehicleAuthorizationSearchParams, key: string) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
 }
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
-const INCEPTION_ROLES = ["vehicle inception capturer", "vehicle inception authorizer"];
-
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function hasExplicitInceptionRole(roles: readonly string[]) {
-  return roles.some((role) => INCEPTION_ROLES.some((candidate) => hasRole([role], candidate)));
-}
-
-function canAuthorize(roles: readonly string[], accessLevel?: string) {
-  if (!hasVehicleManagementPermission(accessLevel)) {
-    return false;
-  }
-
-  return hasRole(roles, "vehicle inception authorizer") || !hasExplicitInceptionRole(roles);
+function canAuthorize(roles: readonly string[]) {
+  return hasVehicleInceptionAuthorizerRole(roles);
 }
 
 function AccessRestricted() {
@@ -116,7 +87,7 @@ async function VehicleAuthorizationPageContent({
     );
   }
 
-  if (!canAuthorize(session.roles, session.accessLevel)) {
+  if (!canAuthorize(session.roles)) {
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />
@@ -168,6 +139,14 @@ async function VehicleAuthorizationPageContent({
       return (
         <main className="page-shell vehicle-page-shell">
           <SessionRecovery returnPath="/vehicles/authorize" />
+        </main>
+      );
+    }
+
+    if (error instanceof VehicleAuthorizationApiError && error.reason === "forbidden") {
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <AccessRestricted />
         </main>
       );
     }

@@ -177,6 +177,7 @@ public class SiteController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<SiteDto>> CreateSite([FromBody] CreateSiteDto dto)
     {
         try
@@ -201,6 +202,7 @@ public class SiteController : BaseApiController
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<SiteDto>> UpdateSite(short id, [FromBody] UpdateSiteDto dto)
     {
         try
@@ -261,6 +263,7 @@ public class SiteController : BaseApiController
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> DeleteSite(short id)
     {
         try

@@ -1,7 +1,13 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
+using FIS.Api.Services;
+using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FIS.Api.Controllers;
 
@@ -12,17 +18,29 @@ namespace FIS.Api.Controllers;
 /// historical registration to find the correct vehicle.
 /// </summary>
 [ApiController]
-[Authorize]
+// Historical GP registrations are consumed by Fines searches and Vehicle
+// Master maintenance. Do not expose fleet registration history to every
+// authenticated account.
+[Authorize(Roles = "Vehicle Master,Fines,Reports")]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class RegistrationController : BaseApiController
 {
     private readonly FisDbContext _context;
+    private readonly IVehicleRepository _vehicleRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<RegistrationController> _logger;
 
-    public RegistrationController(FisDbContext context, ILogger<RegistrationController> logger)
+    public RegistrationController(
+        FisDbContext context,
+        IVehicleRepository vehicleRepository,
+        LegacyVehicleScopeService vehicleScope,
+        ILogger<RegistrationController> logger
+    )
     {
         _context = context;
+        _vehicleRepository = vehicleRepository;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
@@ -52,30 +70,16 @@ public class RegistrationController : BaseApiController
     {
         try
         {
-            var vehicle = await _context
-                .Vehicles.Where(v => v.vmf_code == vmfCode && !v.is_deleted)
-                .Select(v => new
-                {
-                    v.vmf_code,
-                    v.fleet_number,
-                    v.registration_number,
-                })
-                .FirstOrDefaultAsync();
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
                 return NotFound(new { message = $"Vehicle {vmfCode} not found" });
 
-            var history = await _context
-                .Registrations.Where(r => r.vmf_code == vmfCode && !r.is_deleted)
-                .OrderByDescending(r => r.RegistrationDate)
-                .Select(r => new
-                {
-                    registration_id = r.RegistrationID,
-                    registration_number = r.RegistrationNumber,
-                    recorded_date = r.RegistrationDate,
-                    is_current = false,
-                })
-                .ToListAsync();
+            var history = await ReadHistoryAsync(vmfCode, HttpContext.RequestAborted);
 
             return Ok(
                 new
@@ -112,71 +116,42 @@ public class RegistrationController : BaseApiController
 
         try
         {
-            var term = q.Trim().ToUpper();
+            var term = q.Trim().ToUpperInvariant();
 
             // 1. Vehicles whose CURRENT registration matches
-            var currentMatches = await _context
-                .Vehicles.Where(v =>
-                    !v.is_deleted
-                    && v.registration_number != null
-                    && v.registration_number.ToUpper().Contains(term)
+            var currentMatches = (await _vehicleRepository.SearchVehiclesAsync(
+                term,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            ))
+                .Where(vehicle =>
+                    !string.IsNullOrWhiteSpace(vehicle.registration_number)
+                    && vehicle.registration_number.Contains(
+                        term,
+                        StringComparison.OrdinalIgnoreCase
+                    )
                 )
-                .Select(v => new
-                {
-                    vmf_code = v.vmf_code,
-                    fleet_number = v.fleet_number,
-                    current_registration = v.registration_number,
-                    matched_registration = v.registration_number,
-                    is_historical_match = false,
-                })
-                .ToListAsync();
+                .Select(vehicle => new RegistrationSearchResult(
+                    vehicle.vmf_code,
+                    vehicle.fleet_number,
+                    vehicle.registration_number,
+                    vehicle.registration_number,
+                    false,
+                    null
+                ))
+                .ToList();
 
             // 2. Vehicles found via HISTORICAL registrations that aren't already in current matches
             var currentVmfCodes = currentMatches.Select(m => m.vmf_code).ToHashSet();
 
-            var historicalMatches = await _context
-                .Registrations.Where(r =>
-                    !r.is_deleted && r.RegistrationNumber.ToUpper().Contains(term)
-                )
-                .Join(
-                    _context.Vehicles.Where(v => !v.is_deleted),
-                    r => r.vmf_code,
-                    v => v.vmf_code,
-                    (r, v) =>
-                        new
-                        {
-                            vmf_code = v.vmf_code,
-                            fleet_number = v.fleet_number,
-                            current_registration = v.registration_number,
-                            matched_registration = r.RegistrationNumber,
-                            recorded_date = r.RegistrationDate,
-                            is_historical_match = true,
-                        }
-                )
-                .Where(m => !currentVmfCodes.Contains(m.vmf_code))
-                .ToListAsync();
+            var historicalMatches = await ReadHistoricalMatchesAsync(
+                term,
+                currentVmfCodes,
+                HttpContext.RequestAborted
+            );
 
             var results = currentMatches
-                .Select(m => new
-                {
-                    m.vmf_code,
-                    m.fleet_number,
-                    m.current_registration,
-                    matched_registration = (string?)m.matched_registration,
-                    m.is_historical_match,
-                    recorded_date = (DateTime?)null,
-                })
-                .Concat(
-                    historicalMatches.Select(m => new
-                    {
-                        m.vmf_code,
-                        m.fleet_number,
-                        m.current_registration,
-                        matched_registration = (string?)m.matched_registration,
-                        m.is_historical_match,
-                        recorded_date = (DateTime?)m.recorded_date,
-                    })
-                )
+                .Concat(historicalMatches)
                 .OrderBy(m => m.is_historical_match)
                 .ThenBy(m => m.fleet_number)
                 .ToList();
@@ -214,30 +189,35 @@ public class RegistrationController : BaseApiController
         [FromBody] AddRegistrationDto request
     )
     {
+        if (!HasRole("Vehicle Master"))
+            return Forbid();
+
         if (string.IsNullOrWhiteSpace(request.registration_number))
             return BadRequest(new { error = "registration_number is required" });
 
         try
         {
-            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v =>
-                v.vmf_code == vmfCode && !v.is_deleted
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
             );
 
             if (vehicle == null)
                 return NotFound(new { message = $"Vehicle {vmfCode} not found" });
 
-            var entry = new FIS.Core.Domain.Entities.Vehicles.Registration
-            {
-                vmf_code = vmfCode,
-                RegistrationNumber = request.registration_number.Trim(),
-                RegistrationDate = request.effective_date ?? DateTime.UtcNow,
-                date_created = DateTime.UtcNow,
-                created_by_user_code = GetCurrentUserId(),
-                is_deleted = false,
-            };
+            var registrationNumber = request.registration_number.Trim().ToUpperInvariant();
+            if (registrationNumber.Length > 8)
+                return BadRequest(new { error = "registration_number cannot exceed 8 characters" });
 
-            _context.Registrations.Add(entry);
-            await _context.SaveChangesAsync();
+            var recordedDate = request.effective_date ?? DateTime.UtcNow;
+            var registrationId = await InsertHistoricalRegistrationAsync(
+                vmfCode,
+                registrationNumber,
+                recordedDate,
+                GetCurrentUserId(),
+                HttpContext.RequestAborted
+            );
 
             _logger.LogInformation(
                 "Manually added historical registration '{Reg}' for vehicle {VmfCode}",
@@ -249,10 +229,10 @@ public class RegistrationController : BaseApiController
                 new
                 {
                     message = "Historical registration recorded",
-                    registration_id = entry.RegistrationID,
+                    registration_id = registrationId,
                     vmf_code = vmfCode,
-                    registration_number = entry.RegistrationNumber,
-                    recorded_date = entry.RegistrationDate,
+                    registration_number = registrationNumber,
+                    recorded_date = recordedDate,
                 }
             );
         }
@@ -265,6 +245,294 @@ public class RegistrationController : BaseApiController
             );
             return StatusCode(500, new { error = "Failed to add historical registration" });
         }
+    }
+
+    private bool HasRole(string expectedRole) =>
+        User.Claims.Any(claim =>
+            (claim.Type == System.Security.Claims.ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            && claim.Value.Split(
+                ',',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+            ).Any(role => string.Equals(role, expectedRole, StringComparison.OrdinalIgnoreCase))
+        );
+
+    private Task<IReadOnlySet<short>?> ResolveAllowedVehicleSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
+
+    private async Task<HashSet<string>> GetRegistrationColumnsAsync(
+        DbConnection connection,
+        DbTransaction? transaction = null
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction ?? _context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = """
+            SELECT [COLUMN_NAME]
+            FROM [INFORMATION_SCHEMA].[COLUMNS]
+            WHERE [TABLE_SCHEMA] = N'dbo' AND [TABLE_NAME] = N'Registrations'
+            """;
+
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            columns.Add(reader.GetString(0));
+        return columns;
+    }
+
+    private async Task<List<object>> ReadHistoryAsync(int vmfCode, CancellationToken cancellationToken)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync(cancellationToken);
+
+        try
+        {
+            var columns = await GetRegistrationColumnsAsync(connection);
+            if (!RequiredRegistrationColumns.All(column => columns.Contains(column)))
+                return [];
+
+            var deleted = columns.Contains("is_deleted")
+                ? " AND ([r].[is_deleted] = 0 OR [r].[is_deleted] IS NULL)"
+                : string.Empty;
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT [r].[RegistrationID], [r].[RegistrationNumber], [r].[RegistrationDate]
+                FROM [dbo].[Registrations] AS [r]
+                WHERE [r].[vmf_code] = @vmfCode{deleted}
+                ORDER BY [r].[RegistrationDate] DESC, [r].[RegistrationID] DESC
+                """;
+            AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
+            var results = new List<object>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                results.Add(
+                    new
+                    {
+                        registration_id = Convert.ToInt32(reader.GetValue(0)),
+                        registration_number = reader.IsDBNull(1) ? null : reader.GetValue(1).ToString()?.Trim(),
+                        recorded_date = reader.IsDBNull(2) ? (DateTime?)null : Convert.ToDateTime(reader.GetValue(2)),
+                        is_current = false,
+                    }
+                );
+            }
+            return results;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task<List<RegistrationSearchResult>> ReadHistoricalMatchesAsync(
+        string term,
+        IReadOnlySet<int> excludedVmfCodes,
+        CancellationToken cancellationToken
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync(cancellationToken);
+
+        try
+        {
+            var columns = await GetRegistrationColumnsAsync(connection);
+            if (!RequiredRegistrationColumns.All(column => columns.Contains(column)))
+                return [];
+
+            var deleted = columns.Contains("is_deleted")
+                ? " AND ([r].[is_deleted] = 0 OR [r].[is_deleted] IS NULL)"
+                : string.Empty;
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT [r].[vmf_code], [r].[RegistrationNumber], [r].[RegistrationDate]
+                FROM [dbo].[Registrations] AS [r]
+                WHERE LOWER(LTRIM(RTRIM([r].[RegistrationNumber]))) = @registrationNumber{deleted}
+                ORDER BY [r].[RegistrationDate] DESC, [r].[RegistrationID] DESC
+                """;
+            AddParameter(command, "@registrationNumber", DbType.String, term.ToLowerInvariant());
+            var matches = new List<(int VmfCode, string? Registration, DateTime? RecordedDate)>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var vmfCode = Convert.ToInt32(reader.GetValue(0));
+                if (excludedVmfCodes.Contains(vmfCode))
+                    continue;
+                matches.Add(
+                    (
+                        vmfCode,
+                        reader.IsDBNull(1) ? null : reader.GetValue(1).ToString()?.Trim(),
+                        reader.IsDBNull(2) ? null : Convert.ToDateTime(reader.GetValue(2))
+                    )
+                );
+            }
+
+            var results = new List<RegistrationSearchResult>();
+            foreach (var match in matches)
+            {
+                var vehicle = await _vehicleRepository.GetByIdAsync(
+                    match.VmfCode,
+                    await ResolveAllowedVehicleSiteCodesAsync(),
+                    GetCurrentUserId()
+                );
+                if (vehicle is null)
+                    continue;
+
+                results.Add(
+                    new RegistrationSearchResult(
+                        match.VmfCode,
+                        vehicle.fleet_number,
+                        vehicle.registration_number,
+                        match.Registration,
+                        true,
+                        match.RecordedDate
+                    )
+                );
+            }
+            return results;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Insert identifiers are selected only from fixed legacy/optional column allowlists; all submitted values are parameters."
+    )]
+    private async Task<int> InsertHistoricalRegistrationAsync(
+        int vmfCode,
+        string registrationNumber,
+        DateTime recordedDate,
+        int currentUserId,
+        CancellationToken cancellationToken
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync(cancellationToken);
+
+        await using var transaction = await connection.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken
+        );
+        try
+        {
+            var columns = await GetRegistrationColumnsAsync(connection, transaction);
+            if (!RequiredRegistrationColumns.All(column => columns.Contains(column)))
+                throw new NotSupportedException("The legacy Registrations table is unavailable; the historical registration was not saved.");
+
+            var insertColumns = new List<string>(InsertRegistrationColumns);
+            var insertValues = new List<string> { "@registrationId", "@registrationNumber", "@recordedDate", "@vmfCode" };
+            await using var identityCommand = connection.CreateCommand();
+            identityCommand.Transaction = transaction;
+            identityCommand.CommandText = "SELECT COLUMNPROPERTY(OBJECT_ID(N'[dbo].[Registrations]'), N'RegistrationID', 'IsIdentity')";
+            var registrationIdIsIdentity = Convert.ToInt32(
+                await identityCommand.ExecuteScalarAsync(cancellationToken)
+            ) == 1;
+            int? nextId = null;
+            if (!registrationIdIsIdentity)
+            {
+                await using var nextCommand = connection.CreateCommand();
+                nextCommand.Transaction = transaction;
+                nextCommand.CommandText = "SELECT COALESCE(MAX([RegistrationID]), 0) + 1 FROM [dbo].[Registrations] WITH (UPDLOCK, HOLDLOCK)";
+                nextId = Convert.ToInt32(await nextCommand.ExecuteScalarAsync(cancellationToken));
+                if (nextId > short.MaxValue)
+                    throw new InvalidOperationException("The legacy registration identifier range is exhausted.");
+                insertColumns.Insert(0, "RegistrationID");
+            }
+            else
+            {
+                insertValues.RemoveAt(0);
+            }
+            if (columns.Contains("date_created"))
+            {
+                insertColumns.Add("date_created");
+                insertValues.Add("@dateCreated");
+            }
+            if (columns.Contains("created_by_user_code"))
+            {
+                insertColumns.Add("created_by_user_code");
+                insertValues.Add("@createdBy");
+            }
+            if (columns.Contains("is_deleted"))
+            {
+                insertColumns.Add("is_deleted");
+                insertValues.Add("@isDeleted");
+            }
+
+            await using var insertCommand = connection.CreateCommand();
+            insertCommand.Transaction = transaction;
+            insertCommand.CommandText = $"INSERT INTO [dbo].[Registrations] ({string.Join(", ", insertColumns.Select(column => $"[{column}]"))}) VALUES ({string.Join(", ", insertValues)}); SELECT CAST(SCOPE_IDENTITY() AS int);";
+            if (!registrationIdIsIdentity)
+                AddParameter(insertCommand, "@registrationId", DbType.Int16, (short)nextId!.Value);
+            AddParameter(insertCommand, "@registrationNumber", DbType.String, registrationNumber);
+            AddParameter(insertCommand, "@recordedDate", DbType.DateTime2, recordedDate);
+            AddParameter(insertCommand, "@vmfCode", DbType.Int32, vmfCode);
+            if (columns.Contains("date_created"))
+                AddParameter(insertCommand, "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
+            if (columns.Contains("created_by_user_code"))
+                AddParameter(insertCommand, "@createdBy", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+            if (columns.Contains("is_deleted"))
+                AddParameter(insertCommand, "@isDeleted", DbType.Boolean, false);
+            var insertedId = registrationIdIsIdentity
+                ? Convert.ToInt32(await insertCommand.ExecuteScalarAsync(cancellationToken))
+                : (int)nextId!.Value;
+            await transaction.CommitAsync(cancellationToken);
+            return insertedId;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private static readonly string[] RequiredRegistrationColumns =
+    [
+        "RegistrationID",
+        "RegistrationNumber",
+        "RegistrationDate",
+        "vmf_code",
+    ];
+
+    private static readonly string[] InsertRegistrationColumns =
+    [
+        "RegistrationNumber",
+        "RegistrationDate",
+        "vmf_code",
+    ];
+
+    private sealed record RegistrationSearchResult(
+        int vmf_code,
+        string? fleet_number,
+        string? current_registration,
+        string? matched_registration,
+        bool is_historical_match,
+        DateTime? recorded_date
+    );
+
+    private static void AddParameter(DbCommand command, string name, DbType type, object? value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value ?? DBNull.Value;
+        command.Parameters.Add(parameter);
     }
 }
 

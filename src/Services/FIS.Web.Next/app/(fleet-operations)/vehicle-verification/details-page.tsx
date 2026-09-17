@@ -58,7 +58,7 @@ async function AssetVerificationDetailsContent({
         backHref={`/vehicle-verification/${mode}`}
       />
     );
-  if (!hasAssetVerificationAccess(session.roles, session.accessLevel))
+  if (!hasAssetVerificationAccess(session.roles))
     return (
       <ErrorCard
         title="Access restricted"

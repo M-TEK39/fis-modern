@@ -24,6 +24,7 @@ public class LossTypeController : BaseApiController
     }
 
     [HttpGet("page")]
+    [Authorize(Roles = "Validation,Losses,Call Centre")]
     public async Task<ActionResult> GetPage(
         [FromQuery] string? searchTerm = null,
         [FromQuery] int page = 1,
@@ -59,6 +60,7 @@ public class LossTypeController : BaseApiController
     }
 
     [HttpGet]
+    [Authorize(Roles = "Validation,Losses,Call Centre")]
     public async Task<ActionResult<IEnumerable<LossTypeDto>>> GetAll()
     {
         try
@@ -73,6 +75,7 @@ public class LossTypeController : BaseApiController
     }
 
     [HttpGet("{code:int}")]
+    [Authorize(Roles = "Validation,Losses,Call Centre")]
     public async Task<ActionResult<LossTypeDto>> GetByCode(short code)
     {
         try
@@ -90,6 +93,7 @@ public class LossTypeController : BaseApiController
     }
 
     [HttpGet("{code:int}/delete-check")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<LossTypeDeleteCheck>> GetDeleteCheck(short code)
     {
         try
@@ -109,6 +113,7 @@ public class LossTypeController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<LossTypeDto>> Create([FromBody] CreateLossTypeDto request)
     {
         try
@@ -137,6 +142,7 @@ public class LossTypeController : BaseApiController
     }
 
     [HttpPut("{code:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<LossTypeDto>> Update(
         short code,
         [FromBody] UpdateLossTypeDto request
@@ -173,6 +179,7 @@ public class LossTypeController : BaseApiController
     }
 
     [HttpDelete("{code:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> Delete(short code)
     {
         try

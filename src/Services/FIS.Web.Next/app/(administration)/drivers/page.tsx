@@ -8,7 +8,7 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import RouteLoading from "@/components/app-shell/route-loading";
 import DriverManagementSelector from "@/app/(administration)/drivers/driver-management-selector";
 import {
-  hasVehicleManagementPermission,
+  hasDriverAuthoriserManagementRole,
   parsePositiveInteger,
   getQueryValue,
 } from "@/app/(administration)/drivers/access";
@@ -69,7 +69,7 @@ async function DriverManagementContent({ searchParams }: Readonly<{ searchParams
       </main>
     );
   }
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasDriverAuthoriserManagementRole(session.roles)) {
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

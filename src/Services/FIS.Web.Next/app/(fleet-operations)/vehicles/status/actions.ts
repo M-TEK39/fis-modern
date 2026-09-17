@@ -8,9 +8,9 @@ import {
   type VehicleStatusReport,
   type VehicleStatusReportFilters,
 } from "@/lib/api/vehicles/api-vehicle-status";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import { getSession } from "@/lib/auth/session";
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 const REPORTS_ROLE = "Reports";
 const FIRST_REPORT_PAGE = 1;
 const REMARK_CATEGORIES = new Set([
@@ -26,21 +26,6 @@ export type VehicleStatusReportActionResult = {
   message?: string;
   report?: VehicleStatusReport;
 };
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
 
 function hasReportsRole(roles: readonly string[]) {
   return roles.some(
@@ -81,7 +66,7 @@ async function authorizeRemarks() {
   }
 
   const session = await getSession();
-  if (session.status !== "authenticated" || !hasVehicleManagementPermission(session.accessLevel)) {
+  if (session.status !== "authenticated" || !hasVehicleMasterRole(session.roles)) {
     return {
       ok: false as const,
       message: "You do not have permission to manage vehicle status remarks.",

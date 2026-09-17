@@ -1,7 +1,9 @@
+using System.Data;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FIS.Core.Infrastructure.Repositories;
 
@@ -33,11 +35,63 @@ public class LocationRepository : ILocationRepository
 
     public async Task<IEnumerable<Location>> GetAllLocationsAsync()
     {
-        return await _context
-            .Locations.Where(l => l.IsActive)
-            .OrderBy(l => l.LocationName)
-            .ThenBy(l => l.LocationId)
-            .ToListAsync();
+        // dbo.location in the restored legacy database only has
+        // location_code and description. Do not route a vehicle-capture
+        // selector through the expanded EF entity, which projects modern
+        // audit/address columns that do not exist there.
+        return await QueryLegacyLocationsAsync();
+    }
+
+    private async Task<List<Location>> QueryLegacyLocationsAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [location_code], [description]
+                FROM [dbo].[location]
+                ORDER BY [description], [location_code]
+                """;
+
+            var locations = new List<Location>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var locationCode = reader.IsDBNull(0) ? 0 : Convert.ToInt32(reader.GetValue(0));
+                var description = reader.IsDBNull(1) ? string.Empty : reader.GetString(1).Trim();
+                if (locationCode <= 0 || string.IsNullOrWhiteSpace(description))
+                {
+                    continue;
+                }
+
+                locations.Add(
+                    new Location
+                    {
+                        LocationId = locationCode,
+                        LocationName = description,
+                        Description = description,
+                        IsActive = true,
+                    }
+                );
+            }
+
+            return locations;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 
     public async Task<LocationPage> GetPageAsync(int page = 1, int pageSize = 24)

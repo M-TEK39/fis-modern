@@ -60,7 +60,11 @@ export type RenumberedVehicleReportPage = {
 
 export class VehicleApiError extends Error {
   constructor(
-    public readonly reason: "unauthorized" | "unavailable" | "invalid-response",
+    public readonly reason:
+      | "unauthorized"
+      | "forbidden"
+      | "unavailable"
+      | "invalid-response",
     message: string,
   ) {
     super(message);
@@ -212,12 +216,34 @@ async function requestApi(path: string) {
       signal: controller.signal,
     });
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new VehicleApiError("unauthorized", "The FIS access cookie was rejected.");
     }
 
+    if (response.status === 403) {
+      throw new VehicleApiError(
+        "forbidden",
+        "Your account is not assigned the required vehicle lookup role.",
+      );
+    }
+
     if (!response.ok) {
-      throw new VehicleApiError("unavailable", `FIS API returned HTTP ${response.status}.`);
+      let message = `FIS API returned HTTP ${response.status}.`;
+      try {
+        const payload = (await response.json()) as unknown;
+        if (isRecord(payload)) {
+          const detail = getValue(payload, "message", "error", "detail");
+          if (typeof detail === "string" && detail.trim()) {
+            message = detail.trim();
+          }
+        } else if (typeof payload === "string" && payload.trim()) {
+          message = payload.trim();
+        }
+      } catch {
+        // Keep the status-based message when the API has no readable body.
+      }
+
+      throw new VehicleApiError("unavailable", message);
     }
 
     try {
@@ -295,24 +321,40 @@ function toContractSnapshot(value: unknown): ContractSnapshot {
 }
 
 async function getLatestContract(vmfCode: number): Promise<ContractSnapshot> {
-  const payload = await requestApi(
-    `api/contracts?page=1&pageSize=25&vmfCode=${encodeURIComponent(vmfCode)}`,
-  );
-  const contracts = getCollection(payload).filter(isRecord);
-  const latest = contracts.toSorted((left, right) => {
-    const leftCode = asNumber(getValue(left, "contractCode", "contract_id", "contract_code")) ?? 0;
-    const rightCode =
-      asNumber(getValue(right, "contractCode", "contract_id", "contract_code")) ?? 0;
-    return rightCode - leftCode;
-  })[0];
+  try {
+    const payload = await requestApi(
+      `api/contracts?page=1&pageSize=25&vmfCode=${encodeURIComponent(vmfCode)}`,
+    );
+    const contracts = getCollection(payload).filter(isRecord);
+    const latest = contracts.toSorted((left, right) => {
+      const leftCode =
+        asNumber(getValue(left, "contractCode", "contract_id", "contract_code")) ?? 0;
+      const rightCode =
+        asNumber(getValue(right, "contractCode", "contract_id", "contract_code")) ?? 0;
+      return rightCode - leftCode;
+    })[0];
 
-  return latest
-    ? toContractSnapshot(latest)
-    : ({
-        label: "No Contract",
-        badgeClass: "badge",
-        targetReturnDate: null,
-      } satisfies ContractSnapshot);
+    return latest
+      ? toContractSnapshot(latest)
+      : ({
+          label: "No Contract",
+          badgeClass: "badge",
+          targetReturnDate: null,
+        } satisfies ContractSnapshot);
+  } catch (error) {
+    // Contract state is an overview enhancement on the Vehicle Master menu,
+    // not a prerequisite for vehicle capture or maintenance. Preserve session
+    // recovery, but keep Vehicle Master usable when a contract lookup fails.
+    if (error instanceof VehicleApiError && error.reason === "unauthorized") {
+      throw error;
+    }
+
+    return {
+      label: "Contract data unavailable",
+      badgeClass: "badge-warning",
+      targetReturnDate: null,
+    };
+  }
 }
 
 export async function getVehicleSnapshotPage(

@@ -13,8 +13,7 @@ import {
   type FineVehicleOption,
 } from "@/lib/api/fleet-operations/api-fines";
 import { getSession } from "@/lib/auth/session";
-
-const REPORTS_ROLE = "Reports";
+import { hasFinesAccess } from "@/app/(fleet-operations)/fines/access";
 
 export type FineDeleteDetailPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -31,9 +30,7 @@ function getPositiveQueryInt(value: string | undefined) {
 }
 
 function hasReportsRole(roles: readonly string[]) {
-  return roles.some(
-    (role) => role.localeCompare(REPORTS_ROLE, undefined, { sensitivity: "accent" }) === 0,
-  );
+  return hasFinesAccess(roles);
 }
 
 function valueOrDash(value: string | number | null | undefined) {

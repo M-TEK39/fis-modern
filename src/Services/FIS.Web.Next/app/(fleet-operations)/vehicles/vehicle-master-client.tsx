@@ -12,6 +12,7 @@ import type { VehicleSnapshotPage } from "@/lib/api/vehicles/api-vehicles";
 type VehicleMasterClientProps = {
   pageData: VehicleSnapshotPage;
   routePath: "/vehicles" | "/vehicle-orders" | "/Master-File/Vehicle_Master.aspx";
+  snapshotError?: string;
   menu: {
     canCaptureInception: boolean;
     canAuthorizeInception: boolean;
@@ -56,6 +57,7 @@ export default function VehicleMasterClient({
   pageData,
   routePath,
   menu,
+  snapshotError,
 }: VehicleMasterClientProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
@@ -147,6 +149,16 @@ export default function VehicleMasterClient({
           </>
         ) : null}
       </div>
+
+      {snapshotError ? (
+        <div className="notice notice-error" role="alert">
+          <span aria-hidden="true">!</span>
+          <span>
+            The vehicle overview is temporarily unavailable. The maintenance actions remain
+            available. Details: {snapshotError}
+          </span>
+        </div>
+      ) : null}
 
       <section className="vehicle-overview" aria-labelledby="vehicle-overview-title">
         <div className="vehicle-overview-header">

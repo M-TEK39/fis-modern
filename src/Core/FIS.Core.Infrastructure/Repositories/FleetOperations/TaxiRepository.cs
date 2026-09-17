@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
@@ -25,7 +26,66 @@ public sealed class TaxiRepository : ITaxiRepository
     private const string DepartmentTableName = "department";
     private const string SiteTableName = "site";
     private const string VehicleTableName = "vehicle_master";
+    private const string RequisitionProcedureName = "DEV_INS_Requisition";
+    private const string RequisitionNumberTableName = "Req_num";
     private const int MaximumReportPageSize = 100;
+
+    private static readonly string[] RequisitionProcedureParameters =
+    [
+        "@reqnum",
+        "@contractor_id",
+        "@vmf_code",
+        "@reg_num",
+        "@site_code",
+        "@department_code",
+        "@date_required",
+        "@time_required",
+        "@official",
+        "@rank",
+        "@address_1",
+        "@address_2",
+        "@address_3",
+        "@flight",
+        "@instructions",
+        "@destination_1",
+        "@destination_2",
+        "@destination_3",
+        "@user_access_code",
+        "@request_date",
+        "@resp_code",
+        "@object_code",
+        "@fund_code",
+        "@fms_code",
+        "@project",
+        "@trans_man_name",
+        "@trans_man_date",
+        "@trans_man_rank",
+        "@trans_man_tel",
+        "@booking_by",
+        "@driver",
+        "@arrival_time",
+        "@driver_available",
+        "@persal",
+        "@jia_pickup",
+        "@official_tel_num",
+        "@vehicle_type_code",
+    ];
+
+    private static readonly string[] CreateTriggerNames =
+    [
+        "TRG_INS_Taxi_RejectDuplicateRequisition",
+    ];
+
+    private static readonly string[] UpdateTriggerNames =
+    [
+        "TRG_UPD_TaxiJournalDetailRecord",
+        "TRG_UPD_TaxiVIPBillingRecord",
+    ];
+
+    private static readonly string[] DeleteTriggerNames =
+    [
+        "TRG_DEL_Taxis",
+    ];
 
     private static readonly string[] BusinessColumns =
     [
@@ -122,29 +182,38 @@ public sealed class TaxiRepository : ITaxiRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Taxi?> GetByIdAsync(int requestId) =>
+    public async Task<Taxi?> GetByIdAsync(
+        int requestId,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    ) =>
         (
             await QueryAsync(
                 "t.[request_id] = @requestId",
-                command => AddParameter(command, "@requestId", DbType.Int32, requestId)
+                command => AddParameter(command, "@requestId", DbType.Int32, requestId),
+                allowedSiteCodes
             )
         ).SingleOrDefault();
 
-    public async Task<Taxi?> GetLatestByRequisitionAsync(string rekNum)
+    public async Task<Taxi?> GetLatestByRequisitionAsync(
+        string rekNum,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
         var normalized = NormalizeKey(rekNum);
         return (
             await QueryAsync(
                 "UPPER(RTRIM(t.[rek_num])) = @rekNum AND NOT EXISTS ("
                     + "SELECT 1 FROM [dbo].[Taxis] child WHERE child.[parent_taxi_code] = t.[request_id] AND {CHILD_ACTIVE})",
-                command => AddParameter(command, "@rekNum", DbType.String, normalized)
+                command => AddParameter(command, "@rekNum", DbType.String, normalized),
+                allowedSiteCodes
             )
         )
             .OrderByDescending(taxi => taxi.request_id)
             .FirstOrDefault();
     }
 
-    public Task<IEnumerable<Taxi>> GetAllAsync() => QueryAsEnumerableAsync();
+    public Task<IEnumerable<Taxi>> GetAllAsync(IReadOnlySet<short>? allowedSiteCodes = null) =>
+        QueryAsEnumerableAsync(allowedSiteCodes: allowedSiteCodes);
 
     public async Task<TaxiPage> GetPageAsync(TaxiPageQuery query)
     {
@@ -153,6 +222,13 @@ public sealed class TaxiRepository : ITaxiRepository
         var columns = await GetAvailableColumnsAsync(RequiredColumns);
         var searchTerm = query.Search?.Trim() ?? string.Empty;
         var conditions = new List<string> { GetActiveFilter(columns, "t") };
+        var allowedSiteParameters = new List<ReportParameter>();
+        AddAllowedSiteScope(
+            conditions,
+            allowedSiteParameters,
+            query.AllowedSiteCodes,
+            "t.[site_code]"
+        );
 
         if (searchTerm.Length > 0)
         {
@@ -196,6 +272,7 @@ public sealed class TaxiRepository : ITaxiRepository
             """;
         if (searchTerm.Length > 0)
             AddParameter(countCommand, "@search", DbType.String, searchTerm.ToLowerInvariant());
+        AddReportParameters(countCommand, allowedSiteParameters);
         var total = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
 
         var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
@@ -222,6 +299,7 @@ public sealed class TaxiRepository : ITaxiRepository
             """;
         if (searchTerm.Length > 0)
             AddParameter(dataCommand, "@search", DbType.String, searchTerm.ToLowerInvariant());
+        AddReportParameters(dataCommand, allowedSiteParameters);
         AddParameter(dataCommand, "@skip", DbType.Int64, skip);
         AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
 
@@ -316,32 +394,67 @@ public sealed class TaxiRepository : ITaxiRepository
         }
     }
 
-    public Task<IEnumerable<Taxi>> GetBySiteAsync(short siteCode) =>
+    public Task<IEnumerable<Taxi>> GetBySiteAsync(
+        short siteCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    ) =>
         QueryAsEnumerableAsync(
             "t.[site_code] = @siteCode",
-            command => AddParameter(command, "@siteCode", DbType.Int16, siteCode)
+            command => AddParameter(command, "@siteCode", DbType.Int16, siteCode),
+            allowedSiteCodes
         );
 
-    public Task<IEnumerable<Taxi>> GetByDepartmentAsync(short departmentCode) =>
+    public Task<IEnumerable<Taxi>> GetByDepartmentAsync(
+        short departmentCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    ) =>
         QueryAsEnumerableAsync(
             "t.[department_code] = @departmentCode",
-            command => AddParameter(command, "@departmentCode", DbType.Int16, departmentCode)
+            command => AddParameter(command, "@departmentCode", DbType.Int16, departmentCode),
+            allowedSiteCodes
         );
 
-    public Task<IEnumerable<Taxi>> GetByDateAsync(DateTime date) =>
+    public Task<IEnumerable<Taxi>> GetByDateAsync(
+        DateTime date,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    ) =>
         QueryAsEnumerableAsync(
             "t.[date_required] >= @startDate AND t.[date_required] < @endDate",
             command =>
             {
                 AddParameter(command, "@startDate", DbType.DateTime, date.Date);
                 AddParameter(command, "@endDate", DbType.DateTime, date.Date.AddDays(1));
-            }
+            },
+            allowedSiteCodes
         );
 
     public async Task<Taxi> CreateAsync(Taxi taxi, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(taxi);
-        ValidateTaxi(taxi);
+        taxi.user_access_code = ToLegacyShortUserId(currentUserId);
+        ValidateTaxi(taxi, requireRequisitionNumber: false);
+        await EnsureLegacyTriggersAsync(CreateTriggerNames);
+
+        var legacyRequisition = await ExecuteLegacyRequisitionInsertAsync(taxi, currentUserId);
+        if (legacyRequisition is not null)
+        {
+            taxi.rek_num = legacyRequisition;
+            return await GetLatestByRequisitionAsync(legacyRequisition)
+                ?? throw new InvalidOperationException(
+                    $"Taxi requisition {legacyRequisition} could not be read after legacy creation."
+                );
+        }
+
+        // A restored database without the original requisition procedure may still
+        // support a compatibility direct insert, but only when the caller supplied
+        // a concrete requisition number.  Never invent a number in the application;
+        // the legacy procedure owns the sequence and its transaction.
+        if (string.IsNullOrWhiteSpace(taxi.rek_num))
+        {
+            throw new LegacyTaxiWorkflowUnavailableException(
+                $"The legacy requisition procedure {RequisitionProcedureName} is unavailable; a new taxi request cannot generate a safe requisition number."
+            );
+        }
 
         var columns = await GetAvailableColumnsAsync(RequiredColumns);
         var values = BuildValues(taxi, columns, currentUserId, isCreate: true);
@@ -353,9 +466,84 @@ public sealed class TaxiRepository : ITaxiRepository
             );
     }
 
+    public async Task<IReadOnlyList<Taxi>> CreateRecurringAsync(
+        Taxi taxi,
+        DateTime startDate,
+        DateTime endDate,
+        int currentUserId
+    )
+    {
+        ArgumentNullException.ThrowIfNull(taxi);
+        taxi.user_access_code = ToLegacyShortUserId(currentUserId);
+        ValidateTaxi(taxi, requireRequisitionNumber: false);
+
+        var firstDate = startDate.Date;
+        var lastDate = endDate.Date;
+        if (lastDate < firstDate)
+            throw new ArgumentException("The recurring booking end date must be on or after its start date.");
+        if ((lastDate - firstDate).TotalDays > 366)
+            throw new ArgumentException("A recurring taxi booking cannot span more than 367 calendar days.");
+
+        await EnsureLegacyTriggersAsync(CreateTriggerNames);
+        var columns = await GetAvailableColumnsAsync(RequiredColumns);
+        IDbContextTransaction? ownedTransaction = null;
+        if (_context.Database.CurrentTransaction is null)
+        {
+            ownedTransaction = await _context.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable
+            );
+        }
+
+        var insertedIds = new List<int>();
+        var committed = false;
+        try
+        {
+            for (var date = firstDate; date <= lastDate; date = date.AddDays(1))
+            {
+                // Request_GGVIP_Recurring.aspx deliberately skips Saturday and Sunday.
+                if (date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+                    continue;
+
+                var requisition = await AllocateLegacyRequisitionNumberAsync();
+                var values = BuildRecurringValues(taxi, date, requisition, columns, currentUserId);
+                insertedIds.Add(await ExecuteInsertAsync(values));
+            }
+
+            var created = new List<Taxi>(insertedIds.Count);
+            foreach (var requestId in insertedIds)
+            {
+                var row = await GetByIdAsync(requestId)
+                    ?? throw new InvalidOperationException(
+                        $"Recurring taxi request {requestId} could not be read after creation."
+                    );
+                created.Add(row);
+            }
+
+            if (ownedTransaction is not null)
+            {
+                await ownedTransaction.CommitAsync();
+                committed = true;
+            }
+
+            return created;
+        }
+        catch
+        {
+            if (ownedTransaction is not null && !committed)
+                await ownedTransaction.RollbackAsync();
+            throw;
+        }
+        finally
+        {
+            if (ownedTransaction is not null)
+                await ownedTransaction.DisposeAsync();
+        }
+    }
+
     public async Task<Taxi> UpdateAsync(Taxi taxi, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(taxi);
+        await EnsureLegacyTriggersAsync(UpdateTriggerNames);
         var existing =
             await GetByIdAsync(taxi.request_id)
             ?? throw new InvalidOperationException(
@@ -363,7 +551,11 @@ public sealed class TaxiRepository : ITaxiRepository
             );
 
         MergeTaxi(taxi, existing);
-        ValidateTaxi(taxi);
+        // A later edit is attributed to modified_by_user_code. The original
+        // request capturer remains immutable unless a dedicated reassignment
+        // workflow exists; never accept a caller-supplied owner.
+        taxi.user_access_code = existing.user_access_code;
+        ValidateTaxi(taxi, requireRequisitionNumber: true);
         var columns = await GetAvailableColumnsAsync(RequiredColumns);
         var values = BuildValues(taxi, columns, currentUserId, isCreate: false);
         values.RemoveAll(value =>
@@ -395,6 +587,7 @@ public sealed class TaxiRepository : ITaxiRepository
 
     public async Task DeleteAsync(int requestId, int currentUserId)
     {
+        await EnsureLegacyTriggersAsync(DeleteTriggerNames);
         var columns = await GetAvailableColumnsAsync(RequiredColumns);
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
@@ -435,14 +628,291 @@ public sealed class TaxiRepository : ITaxiRepository
         await command.ExecuteNonQueryAsync();
     }
 
+    private async Task EnsureLegacyTriggersAsync(IReadOnlyCollection<string> requiredTriggers)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [tr].[name], [tr].[is_disabled]
+                FROM [sys].[triggers] AS [tr]
+                INNER JOIN [sys].[tables] AS [tb]
+                    ON [tb].[object_id] = [tr].[parent_id]
+                INNER JOIN [sys].[schemas] AS [sc]
+                    ON [sc].[schema_id] = [tb].[schema_id]
+                WHERE [sc].[name] = N'dbo'
+                  AND [tb].[name] = N'Taxis'
+                  AND [tr].[name] IN
+                  (
+                      N'TRG_INS_Taxi_RejectDuplicateRequisition',
+                      N'TRG_UPD_TaxiJournalDetailRecord',
+                      N'TRG_UPD_TaxiVIPBillingRecord',
+                      N'TRG_DEL_Taxis'
+                  );
+                """;
+
+            var enabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0) && !reader.IsDBNull(1) && !reader.GetBoolean(1))
+                    enabled.Add(reader.GetString(0));
+            }
+
+            var missing = requiredTriggers.Where(trigger => !enabled.Contains(trigger)).ToArray();
+            if (missing.Length > 0)
+            {
+                throw new LegacyTaxiWorkflowUnavailableException(
+                    $"The legacy taxi-request trigger workflow is unavailable ({string.Join(", ", missing)}); no direct-DML fallback was run."
+                );
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task<string?> ExecuteLegacyRequisitionInsertAsync(
+        Taxi taxi,
+        int currentUserId
+    )
+    {
+        var actualParameters = await ResolveProcedureParametersAsync(RequisitionProcedureName);
+        if (actualParameters is null)
+            return null;
+
+        if (
+            !actualParameters.SequenceEqual(
+                RequisitionProcedureParameters,
+                StringComparer.OrdinalIgnoreCase
+            )
+        )
+        {
+            throw new LegacyTaxiProcedureContractException(
+                $"The deployed legacy procedure {RequisitionProcedureName} does not match the archived requisition contract. No direct-DML fallback was run."
+            );
+        }
+
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = $"dbo.{RequisitionProcedureName}";
+        command.CommandTimeout = 0;
+
+        var output = command.CreateParameter();
+        output.ParameterName = "@reqnum";
+        output.DbType = DbType.String;
+        output.Direction = ParameterDirection.Output;
+        output.Size = 20;
+        command.Parameters.Add(output);
+
+        AddParameter(command, "@contractor_id", DbType.Int16, taxi.contractor_id);
+        AddParameter(command, "@vmf_code", DbType.String, taxi.vmf_code, 10);
+        AddParameter(command, "@reg_num", DbType.String, taxi.reg_num, 8);
+        AddParameter(command, "@site_code", DbType.Int16, taxi.site_code);
+        AddParameter(command, "@department_code", DbType.Int32, taxi.department_code);
+        AddParameter(command, "@date_required", DbType.DateTime, taxi.date_required);
+        AddParameter(command, "@time_required", DbType.DateTime, taxi.time_required);
+        AddParameter(command, "@official", DbType.String, taxi.official, 50);
+        AddParameter(command, "@rank", DbType.String, taxi.rank, 50);
+        AddParameter(command, "@address_1", DbType.String, taxi.address_1, 50);
+        AddParameter(command, "@address_2", DbType.String, taxi.address_2, 50);
+        AddParameter(command, "@address_3", DbType.String, taxi.address_3, 50);
+        AddParameter(command, "@flight", DbType.String, taxi.flight, 50);
+        AddParameter(command, "@instructions", DbType.String, taxi.instructions, 250);
+        AddParameter(command, "@destination_1", DbType.String, taxi.destination_1, 50);
+        AddParameter(command, "@destination_2", DbType.String, taxi.destination_2, 50);
+        AddParameter(command, "@destination_3", DbType.String, taxi.destination_3, 50);
+        AddParameter(
+            command,
+            "@user_access_code",
+            DbType.Int16,
+            taxi.user_access_code ?? ToLegacyShortUserId(currentUserId)
+        );
+        AddParameter(command, "@request_date", DbType.DateTime, taxi.request_date ?? DateTime.Now);
+        AddParameter(command, "@resp_code", DbType.String, taxi.resp_code, 15);
+        AddParameter(command, "@object_code", DbType.String, taxi.object_code, 15);
+        AddParameter(command, "@fund_code", DbType.String, taxi.fund_code, 15);
+        AddParameter(command, "@fms_code", DbType.String, taxi.fms_code, 15);
+        AddParameter(command, "@project", DbType.String, taxi.project, 15);
+        AddParameter(command, "@trans_man_name", DbType.String, taxi.trans_man_name, 25);
+        AddParameter(command, "@trans_man_date", DbType.DateTime, taxi.trans_man_date);
+        AddParameter(command, "@trans_man_rank", DbType.String, taxi.trans_man_rank, 25);
+        AddParameter(command, "@trans_man_tel", DbType.String, taxi.trans_man_tel, 25);
+        AddParameter(command, "@booking_by", DbType.String, taxi.booking_by, 3);
+        AddParameter(command, "@driver", DbType.String, taxi.driver, 50);
+        AddParameter(command, "@arrival_time", DbType.DateTime, taxi.arrival_time);
+        AddParameter(command, "@driver_available", DbType.Boolean, taxi.driver_available);
+        AddParameter(command, "@persal", DbType.String, taxi.persal, 20);
+        AddParameter(command, "@jia_pickup", DbType.Boolean, taxi.JIA_pickup);
+        AddParameter(command, "@official_tel_num", DbType.String, taxi.official_tel_num, 25);
+        AddParameter(command, "@vehicle_type_code", DbType.Int16, taxi.vehicle_type_code);
+
+        await command.ExecuteNonQueryAsync();
+        var requisition = Convert.ToString(output.Value)?.Trim();
+        if (string.IsNullOrWhiteSpace(requisition))
+        {
+            throw new LegacyTaxiProcedureContractException(
+                $"The legacy requisition procedure {RequisitionProcedureName} completed without returning a requisition number. No direct-DML fallback was run."
+            );
+        }
+
+        return requisition;
+    }
+
+    private async Task<string> AllocateLegacyRequisitionNumberAsync()
+    {
+        await using var scope = await OpenConnectionAsync();
+        await using var select = scope.Connection.CreateCommand();
+        select.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        select.CommandText = $"""
+            SELECT TOP (1) [series], [number]
+            FROM [dbo].[{RequisitionNumberTableName}] WITH (UPDLOCK, HOLDLOCK)
+            """;
+        await using var reader = await select.ExecuteReaderAsync();
+        if (!await reader.ReadAsync() || reader.IsDBNull(0) || reader.IsDBNull(1))
+        {
+            throw new LegacyTaxiRecurringWorkflowUnavailableException(
+                $"The legacy {RequisitionNumberTableName} sequence is unavailable; no recurring taxi requests were written."
+            );
+        }
+
+        var series = Convert.ToString(reader.GetValue(0))?.Trim();
+        var number = Convert.ToDecimal(reader.GetValue(1));
+        if (string.IsNullOrWhiteSpace(series) || number < 0 || number != decimal.Truncate(number))
+        {
+            throw new LegacyTaxiRecurringWorkflowUnavailableException(
+                $"The legacy {RequisitionNumberTableName} sequence contains an invalid value; no recurring taxi requests were written."
+            );
+        }
+
+        var requisition = series + decimal.ToInt64(number).ToString(CultureInfo.InvariantCulture).PadLeft(7, '0');
+        await reader.DisposeAsync();
+
+        await using var update = scope.Connection.CreateCommand();
+        update.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        update.CommandText = $"UPDATE [dbo].[{RequisitionNumberTableName}] SET [number] = @nextNumber";
+        AddParameter(update, "@nextNumber", DbType.Decimal, number + 1m);
+        if (await update.ExecuteNonQueryAsync() != 1)
+        {
+            throw new LegacyTaxiRecurringWorkflowUnavailableException(
+                $"The legacy {RequisitionNumberTableName} sequence could not be advanced; no recurring taxi requests were written."
+            );
+        }
+
+        return requisition;
+    }
+
+    private static List<WriteValue> BuildRecurringValues(
+        Taxi taxi,
+        DateTime date,
+        string requisition,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        int currentUserId
+    )
+    {
+        var values = new List<WriteValue>();
+        AddRequiredValue(values, columns, "rek_num", "@rekNum", DbType.String, requisition);
+        AddValue(values, columns, "reg_num", "@regNum", DbType.String, taxi.reg_num?.Trim().ToUpperInvariant());
+        AddRequiredValue(values, columns, "site_code", "@siteCode", DbType.Int16, taxi.site_code);
+        AddValue(values, columns, "department_code", "@departmentCode", DbType.Int16, taxi.department_code);
+        AddRequiredValue(values, columns, "date_required", "@dateRequired", DbType.DateTime, date);
+        AddRequiredValue(
+            values,
+            columns,
+            "time_required",
+            "@timeRequired",
+            DbType.DateTime,
+            date.Add(taxi.time_required.TimeOfDay)
+        );
+        AddRequiredValue(values, columns, "official", "@official", DbType.String, taxi.official?.Trim() ?? string.Empty);
+        AddValue(values, columns, "rank", "@rank", DbType.String, taxi.rank);
+        AddValue(values, columns, "address_1", "@address1", DbType.String, taxi.address_1);
+        AddValue(values, columns, "address_2", "@address2", DbType.String, taxi.address_2);
+        AddValue(values, columns, "address_3", "@address3", DbType.String, taxi.address_3);
+        AddValue(values, columns, "flight", "@flight", DbType.String, taxi.flight);
+        AddValue(values, columns, "instructions", "@instructions", DbType.String, taxi.instructions);
+        AddValue(values, columns, "destination_1", "@destination1", DbType.String, taxi.destination_1);
+        AddValue(values, columns, "destination_2", "@destination2", DbType.String, taxi.destination_2);
+        AddValue(values, columns, "destination_3", "@destination3", DbType.String, taxi.destination_3);
+        AddValue(
+            values,
+            columns,
+            "user_access_code",
+            "@userAccessCode",
+            DbType.Int16,
+            taxi.user_access_code ?? ToLegacyShortUserId(currentUserId)
+        );
+        AddValue(values, columns, "request_date", "@requestDate", DbType.DateTime, DateTime.Now);
+        AddValue(values, columns, "resp_code", "@respCode", DbType.String, taxi.resp_code);
+        AddValue(values, columns, "object_code", "@objectCode", DbType.String, taxi.object_code);
+        AddValue(values, columns, "fund_code", "@fundCode", DbType.String, taxi.fund_code);
+        AddValue(values, columns, "fms_code", "@fmsCode", DbType.String, taxi.fms_code);
+        AddValue(values, columns, "project", "@project", DbType.String, taxi.project);
+        AddValue(values, columns, "trans_man_name", "@transManName", DbType.String, taxi.trans_man_name);
+        AddValue(values, columns, "trans_man_date", "@transManDate", DbType.DateTime, taxi.trans_man_date);
+        AddValue(values, columns, "trans_man_rank", "@transManRank", DbType.String, taxi.trans_man_rank);
+        AddValue(values, columns, "trans_man_tel", "@transManTel", DbType.String, taxi.trans_man_tel);
+        AddValue(values, columns, "booking_by", "@bookingBy", DbType.String, taxi.booking_by);
+        AddValue(values, columns, "driver", "@driver", DbType.String, taxi.driver);
+        AddValue(values, columns, "arrival_time", "@arrivalTime", DbType.DateTime, taxi.arrival_time);
+        AddValue(values, columns, "driver_available", "@driverAvailable", DbType.Boolean, taxi.driver_available ?? false);
+        AddValue(values, columns, "persal", "@persal", DbType.String, taxi.persal);
+        AddValue(values, columns, "JIA_pickup", "@jiaPickup", DbType.Boolean, taxi.JIA_pickup ?? false);
+        AddValue(values, columns, "official_tel_num", "@officialTelNum", DbType.String, taxi.official_tel_num);
+        return values;
+    }
+
+    private async Task<IReadOnlyList<string>?> ResolveProcedureParametersAsync(string procedureName)
+    {
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = """
+            SELECT [p].[name]
+            FROM [sys].[procedures] AS [sp]
+            INNER JOIN [sys].[schemas] AS [s]
+                ON [s].[schema_id] = [sp].[schema_id]
+            LEFT JOIN [sys].[parameters] AS [p]
+                ON [p].[object_id] = [sp].[object_id]
+               AND [p].[parameter_id] > 0
+            WHERE [s].[name] = N'dbo' AND [sp].[name] = @procedureName
+            ORDER BY [p].[parameter_id]
+            """;
+        AddParameter(command, "@procedureName", DbType.String, procedureName);
+
+        var found = false;
+        var parameters = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            found = true;
+            if (!reader.IsDBNull(0))
+                parameters.Add(reader.GetString(0));
+        }
+
+        return found ? parameters : null;
+    }
+
     private async Task<IEnumerable<Taxi>> QueryAsEnumerableAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null
-    ) => await QueryAsync(predicate, configure);
+        Action<DbCommand>? configure = null,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    ) => await QueryAsync(predicate, configure, allowedSiteCodes);
 
     private async Task<List<Taxi>> QueryAsync(
         string? predicate = null,
-        Action<DbCommand>? configure = null
+        Action<DbCommand>? configure = null,
+        IReadOnlySet<short>? allowedSiteCodes = null
     )
     {
         var columns = await GetAvailableColumnsAsync(RequiredColumns);
@@ -459,6 +929,8 @@ public sealed class TaxiRepository : ITaxiRepository
         var conditions = new List<string> { GetActiveFilter(columns, "t") };
         if (!string.IsNullOrWhiteSpace(effectivePredicate))
             conditions.Add($"({effectivePredicate})");
+        var allowedSiteParameters = new List<ReportParameter>();
+        AddAllowedSiteScope(conditions, allowedSiteParameters, allowedSiteCodes, "t.[site_code]");
 
         command.CommandText = $"""
             SELECT {string.Join(
@@ -474,7 +946,8 @@ public sealed class TaxiRepository : ITaxiRepository
             LEFT JOIN [dbo].[site] s ON s.[Site_code] = t.[site_code]
             WHERE {string.Join(" AND ", conditions)}
             ORDER BY t.[request_id] DESC
-            """;
+        """;
+        AddReportParameters(command, allowedSiteParameters);
         configure?.Invoke(command);
 
         var results = new List<Taxi>();
@@ -493,6 +966,7 @@ public sealed class TaxiRepository : ITaxiRepository
     {
         var conditions = new List<string> { GetActiveFilter(taxiColumns, "t") };
         var parameters = new List<ReportParameter>();
+        AddAllowedSiteScope(conditions, parameters, query.AllowedSiteCodes, "t.[site_code]");
         var search = query.Search?.Trim() ?? string.Empty;
 
         switch (query.ReportKind)
@@ -1073,9 +1547,9 @@ public sealed class TaxiRepository : ITaxiRepository
         target.fund_code ??= source.fund_code;
     }
 
-    private static void ValidateTaxi(Taxi taxi)
+    private static void ValidateTaxi(Taxi taxi, bool requireRequisitionNumber)
     {
-        if (string.IsNullOrWhiteSpace(taxi.rek_num))
+        if (requireRequisitionNumber && string.IsNullOrWhiteSpace(taxi.rek_num))
             throw new ArgumentException("Requisition number is required.", nameof(taxi));
         if (taxi.site_code == 0)
             throw new ArgumentException("Site code is required.", nameof(taxi));
@@ -1083,6 +1557,8 @@ public sealed class TaxiRepository : ITaxiRepository
             throw new ArgumentException("Required date is required.", nameof(taxi));
         if (taxi.time_required == default)
             throw new ArgumentException("Required time is required.", nameof(taxi));
+        if (string.IsNullOrWhiteSpace(taxi.official))
+            throw new ArgumentException("Official/passenger name is required.", nameof(taxi));
     }
 
     private static Taxi MapTaxi(DbDataReader reader)
@@ -1259,11 +1735,46 @@ public sealed class TaxiRepository : ITaxiRepository
             AddParameter(command, parameter.Name, parameter.Type, parameter.Value);
     }
 
-    private static void AddParameter(DbCommand command, string name, DbType type, object? value)
+    private static void AddAllowedSiteScope(
+        ICollection<string> conditions,
+        ICollection<ReportParameter> parameters,
+        IReadOnlySet<short>? allowedSiteCodes,
+        string siteExpression
+    )
+    {
+        if (allowedSiteCodes is null)
+            return;
+
+        var sites = allowedSiteCodes.Where(code => code > 0).Distinct().ToArray();
+        if (sites.Length == 0)
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        var placeholders = sites
+            .Select((_, index) => $"@allowedSite{index}")
+            .ToArray();
+        conditions.Add($"{siteExpression} IN ({string.Join(", ", placeholders)})");
+        for (var index = 0; index < sites.Length; index++)
+        {
+            parameters.Add(new ReportParameter(placeholders[index], DbType.Int16, sites[index]));
+        }
+    }
+
+    private static void AddParameter(
+        DbCommand command,
+        string name,
+        DbType type,
+        object? value,
+        int? size = null
+    )
     {
         var parameter = command.CreateParameter();
         parameter.ParameterName = name;
         parameter.DbType = type;
+        if (size.HasValue)
+            parameter.Size = size.Value;
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
     }
@@ -1361,4 +1872,31 @@ public sealed class TaxiRepository : ITaxiRepository
                 await Connection.CloseAsync();
         }
     }
+}
+
+/// <summary>
+/// Indicates that a taxi-request mutation cannot safely preserve the legacy
+/// journal/reversal/VIP billing trigger chain.
+/// </summary>
+public sealed class LegacyTaxiWorkflowUnavailableException : InvalidOperationException
+{
+    public LegacyTaxiWorkflowUnavailableException(string message)
+        : base(message) { }
+}
+
+/// <summary>
+/// Indicates that the deployed requisition procedure differs from the archived
+/// legacy contract. A procedure with the right name but the wrong signature must
+/// not be replaced with guessed direct DML.
+/// </summary>
+public sealed class LegacyTaxiProcedureContractException : InvalidOperationException
+{
+    public LegacyTaxiProcedureContractException(string message)
+        : base(message) { }
+}
+
+public sealed class LegacyTaxiRecurringWorkflowUnavailableException : InvalidOperationException
+{
+    public LegacyTaxiRecurringWorkflowUnavailableException(string message)
+        : base(message) { }
 }

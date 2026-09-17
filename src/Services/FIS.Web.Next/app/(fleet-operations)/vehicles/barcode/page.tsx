@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import RouteLoading from "@/components/app-shell/route-loading";
 import VehicleBarcodeClient from "@/app/(fleet-operations)/vehicles/barcode/barcode-client";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import {
   searchVehicleBarcodeAction,
   updateVehicleBarcodeAction,
@@ -13,26 +14,9 @@ import {
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { getSession } from "@/lib/auth/session";
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
-
 type VehicleBarcodePageProps = {
   routePath?: "/vehicles/barcode" | "/Master-File/MNT_Barcode_1.aspx";
 };
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
 
 function StatusCard({ title, message }: Readonly<{ title: string; message: string }>) {
   return (
@@ -69,7 +53,7 @@ async function VehicleBarcodePageContent({
     );
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return (
       <main className="page-shell vehicle-page-shell">
         <StatusCard

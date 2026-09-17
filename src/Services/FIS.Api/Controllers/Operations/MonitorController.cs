@@ -24,6 +24,7 @@ public class MonitorController : BaseApiController
     }
 
     [HttpGet]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<IEnumerable<MonitorEntity>>> GetAll()
     {
         try
@@ -38,6 +39,7 @@ public class MonitorController : BaseApiController
     }
 
     [HttpGet("page")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult> GetPage(
         [FromQuery] string? search = null,
         [FromQuery] int page = 1,
@@ -73,6 +75,7 @@ public class MonitorController : BaseApiController
     }
 
     [HttpGet("{id}")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<MonitorEntity>> GetById(short id)
     {
         try
@@ -88,6 +91,7 @@ public class MonitorController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<MonitorEntity>> Create([FromBody] MonitorEntity item)
     {
         try
@@ -105,6 +109,7 @@ public class MonitorController : BaseApiController
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult<MonitorEntity>> Update(short id, [FromBody] MonitorEntity item)
     {
         try
@@ -123,6 +128,7 @@ public class MonitorController : BaseApiController
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Call Centre")]
     public async Task<ActionResult> Delete(short id)
     {
         try
@@ -140,6 +146,7 @@ public class MonitorController : BaseApiController
     #region Specialized Operations
 
     [HttpGet("menu")]
+    [Authorize(Roles = "Call Centre")]
     public ActionResult<MonitorMenuDto> GetMenu() =>
         Ok(
             new MonitorMenuDto
@@ -149,6 +156,7 @@ public class MonitorController : BaseApiController
         );
 
     [HttpPost("capture")]
+    [Authorize(Roles = "Call Centre")]
     public ActionResult<MonitorCaptureResultDto> Capture([FromBody] MonitorCaptureDto request)
     {
         return Ok(
@@ -162,6 +170,7 @@ public class MonitorController : BaseApiController
     }
 
     [HttpPut("edit/{id}")]
+    [Authorize(Roles = "Call Centre")]
     public ActionResult<MonitorEditResultDto> Edit(short id, [FromBody] MonitorEditDto request)
     {
         return Ok(
@@ -179,6 +188,7 @@ public class MonitorController : BaseApiController
     #region Reports
 
     [HttpGet("reports/menu")]
+    [Authorize(Roles = "Reports")]
     public ActionResult<MonitorReportMenuDto> GetReportsMenu() =>
         Ok(
             new MonitorReportMenuDto
@@ -196,6 +206,7 @@ public class MonitorController : BaseApiController
         );
 
     [HttpGet("reports/one-reference-number/{id}")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<MonitorReportDto>> GetReportByReferenceNumber(short id)
     {
         try
@@ -228,6 +239,7 @@ public class MonitorController : BaseApiController
     }
 
     [HttpPost("reports/one-vehicle")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<MonitorReportDto>> GetReportOneVehicle(
         [FromBody] MonitorOneVehicleRequestDto request
     )
@@ -259,10 +271,12 @@ public class MonitorController : BaseApiController
     }
 
     [HttpGet("reports/reprint/{id}")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<MonitorReportDto>> ReprintReport(short id) =>
         await GetReportByReferenceNumber(id);
 
     [HttpPost("reports/dept-site-period")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<MonitorReportDto>> GetReportDeptSitePeriod(
         [FromBody] MonitorDeptSitePeriodRequestDto request
     )
@@ -294,6 +308,7 @@ public class MonitorController : BaseApiController
     }
 
     [HttpPost("reports/clo-inquiry")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<MonitorReportDto>> GetReportCloInquiry(
         [FromBody] MonitorCloInquiryRequestDto request
     )
@@ -333,6 +348,7 @@ public class MonitorController : BaseApiController
     }
 
     [HttpPost("reports/inquiry-statistics")]
+    [Authorize(Roles = "Reports")]
     public async Task<ActionResult<MonitorReportDto>> GetReportInquiryStatistics(
         [FromBody] MonitorStatsRequestDto request
     )

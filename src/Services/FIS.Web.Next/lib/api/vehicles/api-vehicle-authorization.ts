@@ -72,7 +72,7 @@ export type VehicleAuthorizationMutation = {
 
 export class VehicleAuthorizationApiError extends Error {
   constructor(
-    public readonly reason: "unauthorized" | "unavailable" | "invalid-response",
+    public readonly reason: "unauthorized" | "forbidden" | "unavailable" | "invalid-response",
     message: string,
   ) {
     super(message);
@@ -205,8 +205,12 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new VehicleAuthorizationApiError("unauthorized", "The FIS access cookie was rejected.");
+    }
+
+    if (response.status === 403) {
+      throw new VehicleAuthorizationApiError("forbidden", "Your account is not allowed to perform this vehicle authorization action.");
     }
 
     if (!response.ok) {

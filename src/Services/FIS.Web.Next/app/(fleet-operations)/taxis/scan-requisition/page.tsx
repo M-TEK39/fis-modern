@@ -31,6 +31,7 @@ import {
 } from "@/lib/api/fleet-operations/api-taxis";
 import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
 import { getSession } from "@/lib/auth/session";
+import { hasTaxiAccess } from "@/app/(fleet-operations)/taxis/access";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -62,12 +63,7 @@ async function TaxiScanRequisitionPageContent({
         <SessionRecovery returnPath="/taxis/scan-requisition" />
       </main>
     );
-  if (
-    !session.roles.some(
-      (role) =>
-        role.localeCompare("Private Hire Vehicles", undefined, { sensitivity: "accent" }) === 0,
-    )
-  )
+  if (!hasTaxiAccess(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <TaxiRestricted subject="Taxi requisition scanning" />

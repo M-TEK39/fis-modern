@@ -76,6 +76,7 @@ VALUES
     (N'DEV_REP_VehicleContractsAuditTrailReport', N'Audit trail', N'select'),
     (N'DEV_REP_VIPTAXIAuditTrailReport', N'Audit trail', N'select'),
     (N'DEV_REP_IncomeVsExpensesVIPPool', N'Profitability', N'select'),
+    (N'ADM_Contract_JobScheduler', N'Billing scheduler', N'scheduler'),
     (N'DEV_REP_SiteVehicleDetail', N'Wesbank drill-down', N'select'),
     (N'DEV_REP_RegistrationNumberDetail', N'Wesbank drill-down', N'select'),
     (N'DEV_REP_VehicleDetail', N'Wesbank drill-down', N'select'),
@@ -85,7 +86,9 @@ VALUES
     (N'DEV_REP_TotalCostPerProvincePerDepartmentPerSitePerCostType', N'Regional drill-down', N'select');
 
 DECLARE @ExpectedViews TABLE ([ViewName] sysname NOT NULL PRIMARY KEY);
-INSERT INTO @ExpectedViews ([ViewName]) VALUES (N'ReversalTree');
+INSERT INTO @ExpectedViews ([ViewName]) VALUES
+    (N'ReversalTree'),
+    (N'AllContracts');
 
 /* 1. Procedure presence, ownership and freshness. */
 SELECT
@@ -128,6 +131,37 @@ LEFT JOIN [sys].[parameters] AS parameterObject
 LEFT JOIN [sys].[types] AS typeObject
     ON typeObject.[user_type_id] = parameterObject.[user_type_id]
 ORDER BY expected.[ModuleSlice], expected.[ProcedureName], parameterObject.[parameter_id];
+
+/* 2b. The billing-history procedure has a source-backed four-parameter
+   contract. Check names/order without executing the financial query. */
+SELECT
+    N'VEHICLE BILLING HISTORY' AS [EvidenceSlice],
+    expected.[ParameterOrdinal],
+    expected.[ExpectedParameterName],
+    parameterObject.[name] AS [LiveParameterName],
+    CASE
+        WHEN procedureObject.[object_id] IS NULL THEN N'PROCEDURE MISSING'
+        WHEN parameterObject.[parameter_id] IS NULL THEN N'PARAMETER MISSING'
+        WHEN parameterObject.[name] <> expected.[ExpectedParameterName] THEN N'PARAMETER NAME MISMATCH'
+        ELSE N'MATCHED'
+    END AS [VerificationStatus],
+    expected.[SourceEvidence]
+FROM
+(
+    SELECT 1 AS [ParameterOrdinal], N'@depCode' AS [ExpectedParameterName], N'GGFIS_v2.0/Finance/OpenReport.aspx.vb and AReports/VehicleBillingHistoryReport.vb' AS [SourceEvidence]
+    UNION ALL SELECT 2, N'@siteCode', N'GGFIS_v2.0/Finance/OpenReport.aspx.vb and AReports/VehicleBillingHistoryReport.vb'
+    UNION ALL SELECT 3, N'@regCode', N'GGFIS_v2.0/Finance/OpenReport.aspx.vb and AReports/VehicleBillingHistoryReport.vb'
+    UNION ALL SELECT 4, N'@finYear', N'GGFIS_v2.0/Finance/OpenReport.aspx.vb and AReports/VehicleBillingHistoryReport.vb'
+) AS expected
+LEFT JOIN [sys].[schemas] AS schemaObject
+    ON schemaObject.[name] = @SchemaName
+LEFT JOIN [sys].[procedures] AS procedureObject
+    ON procedureObject.[schema_id] = schemaObject.[schema_id]
+   AND procedureObject.[name] = N'DEV_REP_VehicleBillingHistory'
+LEFT JOIN [sys].[parameters] AS parameterObject
+    ON parameterObject.[object_id] = procedureObject.[object_id]
+   AND parameterObject.[parameter_id] = expected.[ParameterOrdinal]
+ORDER BY expected.[ParameterOrdinal];
 
 /* 3. Required view evidence and its dependencies. */
 SELECT
@@ -199,9 +233,29 @@ WHERE tableSchema.[name] = @SchemaName
   AND tableObject.[name] IN
   (
       N'journal_detail', N'journal', N'batch', N'financial_year', N'vehicle_master',
-      N'contract', N'site', N'wesbank_transaction'
+      N'contract', N'site', N'wesbank_transaction', N'Logsheets', N'route_details',
+      N'Taxis', N'Taxi_logs'
   )
 ORDER BY tableObject.[name], triggerObject.[name];
+
+/* 5b. The calculated tariff trigger is in the fin schema and is therefore
+   checked separately from the dbo billing tables above. */
+SELECT
+    tableSchema.[name] AS [TableSchema],
+    tableObject.[name] AS [TableName],
+    triggerObject.[name] AS [TriggerName],
+    triggerObject.[is_disabled],
+    triggerObject.[is_instead_of_trigger],
+    triggerObject.[create_date],
+    triggerObject.[modify_date]
+FROM [sys].[tables] AS tableObject
+INNER JOIN [sys].[schemas] AS tableSchema
+    ON tableSchema.[schema_id] = tableObject.[schema_id]
+LEFT JOIN [sys].[triggers] AS triggerObject
+    ON triggerObject.[parent_id] = tableObject.[object_id]
+WHERE tableSchema.[name] = N'fin'
+  AND tableObject.[name] = N'vehicle_tariff'
+ORDER BY triggerObject.[name];
 
 /* 6. Optional result-column metadata. SQL Server describes metadata without running the procedure. */
 IF @IncludeResultMetadata = 1

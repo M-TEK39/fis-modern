@@ -28,7 +28,7 @@ const REPORTS = [
 
 function hasRole(roles: readonly string[]) {
   return roles.some(
-    (role) => role.localeCompare("Fuelcards", undefined, { sensitivity: "accent" }) === 0,
+    (role) => role.localeCompare("Reports", undefined, { sensitivity: "accent" }) === 0,
   );
 }
 

@@ -8,9 +8,10 @@ import {
   rejectVehicleAuthorization,
   VehicleAuthorizationApiError,
 } from "@/lib/api/vehicles/api-vehicle-authorization";
+import {
+  hasVehicleInceptionAuthorizerRole,
+} from "@/app/(fleet-operations)/vehicles/access";
 import { getSession } from "@/lib/auth/session";
-
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 
 export type VehicleAuthorizationActionState = {
   status: "idle" | "success" | "error";
@@ -22,27 +23,6 @@ const initialStatus: VehicleAuthorizationActionState = { status: "idle" };
 function getText(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
-}
-
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
 }
 
 async function authorizeAction() {
@@ -62,15 +42,7 @@ async function authorizeAction() {
     };
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
-    return {
-      ok: false as const,
-      message: "You do not have permission to authorize captured vehicles.",
-    };
-  }
-
-  const canAuthorize = hasRole(session.roles, "vehicle inception authorizer");
-  if (!canAuthorize) {
+  if (!hasVehicleInceptionAuthorizerRole(session.roles)) {
     return {
       ok: false as const,
       message: "You do not have permission to authorize captured vehicles.",
@@ -87,6 +59,10 @@ function apiErrorMessage(error: VehicleAuthorizationApiError) {
 
   if (error.reason === "unavailable") {
     return "The vehicle authorization service is temporarily unavailable. Please try again.";
+  }
+
+  if (error.reason === "forbidden") {
+    return "You do not have permission to perform this vehicle authorization action.";
   }
 
   return error.message || "The vehicle authorization service returned an unexpected response.";
@@ -119,7 +95,7 @@ export async function vehicleAuthorizationAction(
       message:
         intent === "comment"
           ? "Comment cannot be empty."
-          : "Please supply a comment before continuing.",
+          : "Please supply an authorizer comment before continuing.",
     };
   }
 

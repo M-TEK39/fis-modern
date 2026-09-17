@@ -316,42 +316,16 @@ public sealed class PrivateHireFuelCardRepository : IPrivateHireFuelCardReposito
 
     public async Task DeleteAsync(int privateHireFuelCardId, int currentUserId)
     {
-        var columns = await GetAvailableColumnsAsync(TableName);
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-        if (columns.ContainsKey("is_deleted"))
-        {
-            var assignments = new List<string> { "[is_deleted] = 1" };
-            if (columns.ContainsKey("date_updated"))
-            {
-                assignments.Add("[date_updated] = @dateUpdated");
-                AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-            }
-            if (columns.ContainsKey("modified_by_user_code"))
-            {
-                assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
-                AddParameter(
-                    command,
-                    "@modifiedByUserCode",
-                    DbType.Int32,
-                    currentUserId > 0 ? currentUserId : null
-                );
-            }
-            command.CommandText = $"""
-                UPDATE [dbo].[{TableName}]
-                SET {string.Join(", ", assignments)}
-                WHERE [PHFuel_card_code] = @fuelCardCode
-                  AND {GetActiveFilter("", columns)}
-                """;
-        }
-        else
-        {
-            command.CommandText = $"""
-                DELETE FROM [dbo].[{TableName}]
-                WHERE [PHFuel_card_code] = @fuelCardCode
-                """;
-        }
+        // MNT_fdelh_update.aspx physically deletes the PrivHireFuel_Card row.
+        // Preserve that action even when an expanded database adds an
+        // is_deleted audit column; the legacy delete/audit triggers must fire.
+        command.CommandText = $"""
+            DELETE FROM [dbo].[{TableName}]
+            WHERE [PHFuel_card_code] = @fuelCardCode
+            """;
         AddParameter(command, "@fuelCardCode", DbType.Int32, privateHireFuelCardId);
         await command.ExecuteNonQueryAsync();
     }

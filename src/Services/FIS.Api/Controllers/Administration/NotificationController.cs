@@ -10,7 +10,7 @@ namespace FIS.Api.Controllers;
 /// Provides fleet-specific notifications and bulk email capabilities
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(Roles = "User Administration")]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class NotificationController : ControllerBase

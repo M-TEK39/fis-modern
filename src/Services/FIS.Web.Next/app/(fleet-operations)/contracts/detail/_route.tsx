@@ -517,9 +517,11 @@ function ContractFacts({ contract }: Readonly<{ contract: ContractRecord }>) {
 function HireForm({
   vehicle,
   references,
+  today,
 }: Readonly<{
   vehicle: ContractVehicleSearchResult;
   references: ContractReferenceData;
+  today: string;
 }>) {
   return (
     <form action={hireContractAction} className="vehicle-status-maintenance-panel">
@@ -540,6 +542,19 @@ function HireForm({
             Site
           </label>
           <SiteSelect id="new-contract-site" name="siteCode" required sites={references.sites} />
+        </div>
+        <div className="form-field">
+          <label className="form-label" htmlFor="new-contract-start">
+            Contract start date
+          </label>
+          <input
+            className="form-input"
+            id="new-contract-start"
+            name="startDate"
+            type="date"
+            defaultValue={today}
+            required
+          />
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="new-contract-odo">
@@ -579,6 +594,7 @@ function HireForm({
             id="new-contract-return"
             name="targetReturnDate"
             type="date"
+            required
           />
         </div>
         <div className="form-field">
@@ -840,10 +856,10 @@ function ReassignForm({
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">Reassign active contract</p>
-          <h2>Move contract to another site</h2>
+          <h2>Update site or custodian</h2>
           <p>
             The legacy workflow creates a new effective contract record and closes the previous
-            active record.
+            active record. Select a new site, custodian, or both.
           </p>
         </div>
       </div>
@@ -852,7 +868,18 @@ function ReassignForm({
           <label className="form-label" htmlFor="reassign-site">
             Destination site
           </label>
-          <SiteSelect id="reassign-site" name="newSiteCode" required sites={references.sites} />
+          <SiteSelect id="reassign-site" name="newSiteCode" sites={references.sites} />
+        </div>
+        <div className="form-field">
+          <label className="form-label" htmlFor="reassign-driver">
+            Destination custodian driver
+          </label>
+          <SiteDriverSelect
+            drivers={references.drivers}
+            id="reassign-driver"
+            name="newSiteDriverCode"
+            sites={references.sites}
+          />
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="reassign-start-date">
@@ -1077,7 +1104,7 @@ function ContractVehicleView({
 }: Readonly<{ data: Extract<ContractDetailData, { kind: "ok" }> }>) {
   if (!data.vehicle) return null;
   return data.canCapture ? (
-    <HireForm references={data.references} vehicle={data.vehicle} />
+    <HireForm references={data.references} today={data.today} vehicle={data.vehicle} />
   ) : (
     <p className="muted-copy">You can view this vehicle but do not have capture access.</p>
   );
@@ -1275,7 +1302,7 @@ async function renderContractDetailPageContent({
             </>
           ) : vehicle ? (
             canCapture ? (
-              <HireForm references={references} vehicle={vehicle} />
+              <HireForm references={references} today={today} vehicle={vehicle} />
             ) : (
               <p className="muted-copy">
                 You can view this vehicle but do not have capture access.

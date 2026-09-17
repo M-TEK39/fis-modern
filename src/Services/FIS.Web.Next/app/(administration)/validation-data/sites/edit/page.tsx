@@ -3,8 +3,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
-import { getQueryValue } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole, getQueryValue } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { updateSiteAction } from "@/app/(administration)/validation-data/sites/actions";
 import SiteForm from "@/app/(administration)/validation-data/sites/site-form";
@@ -81,7 +80,7 @@ async function renderSiteEditPage({ searchParams }: SiteEditPageProps) {
         <ErrorCard message="Site maintenance is temporarily unavailable." />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <ErrorCard message="You do not have permission to edit sites." />

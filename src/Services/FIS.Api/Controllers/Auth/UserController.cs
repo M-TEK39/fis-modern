@@ -21,7 +21,7 @@ public class UserDto
 }
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "User Administration")]
 [Route("api/[controller]")]
 public class UserController : BaseApiController
 {

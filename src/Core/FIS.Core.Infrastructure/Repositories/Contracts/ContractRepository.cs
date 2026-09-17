@@ -26,6 +26,15 @@ public class ContractRepository : IContractRepository
     private const string VehicleTableName = "vehicle_master";
     private const string SiteTableName = "site";
 
+    private static readonly string[] DirectInsertTriggerNames =
+    [
+        "TRG_INS_CheckDuplicateContract",
+        "TRG_INS_ContractJournalDetailRecord",
+    ];
+
+    private static readonly string[] DirectUpdateTriggerNames =
+    ["TRG_UPD_ContractJournalDetailRecord"];
+
     private static readonly string[] RequiredContractColumns =
     [
         "contract_code",
@@ -82,6 +91,13 @@ public class ContractRepository : IContractRepository
         "capture_date",
         "modified_date",
         "reassigned_from_contract_code",
+        "backdating_start_date",
+        "backdating_requested_date",
+        "backdating_requested_by_username",
+        "backdating_approved_date",
+        "backdating_approved_by_Username",
+        "backdating_declined_date",
+        "backdating_declined_by_Username",
         "date_created",
         "date_updated",
         "created_by_user_code",
@@ -225,7 +241,8 @@ public class ContractRepository : IContractRepository
     }
 
     public async Task<IEnumerable<ContractVehicleLookup>> SearchVehiclesForContractsAsync(
-        string searchTerm
+        string searchTerm,
+        IReadOnlyCollection<short>? allowedSiteCodes = null
     )
     {
         var availableColumns = await GetAvailableColumnsAsync(
@@ -263,9 +280,11 @@ public class ContractRepository : IContractRepository
                 GetOptionalProjection(availableColumns, "engine_number_1", "v"),
                 GetOptionalProjection(availableColumns, "invoice_number", "v"),
                 GetOptionalProjection(availableColumns, "vehicle_status_code", "v"),
+                GetOptionalProjection(availableColumns, "veh_site_code", "v"),
             };
+            var siteFilter = BuildVehicleSiteFilter(availableColumns, allowedSiteCodes, command);
             command.CommandText =
-                $"SELECT TOP (50) {string.Join(", ", projection)} FROM [dbo].[{VehicleTableName}] AS [v] WHERE {predicate} ORDER BY {orderBy}";
+                $"SELECT TOP (50) {string.Join(", ", projection)} FROM [dbo].[{VehicleTableName}] AS [v] WHERE ({predicate}) AND ({siteFilter}) ORDER BY {orderBy}";
             AddParameter(
                 command,
                 "@searchTerm",
@@ -285,7 +304,8 @@ public class ContractRepository : IContractRepository
                         ReadStringIfAvailable(reader, availableColumns, "chassis_number"),
                         ReadStringIfAvailable(reader, availableColumns, "engine_number_1"),
                         ReadStringIfAvailable(reader, availableColumns, "invoice_number"),
-                        ReadInt16IfAvailable(reader, availableColumns, "vehicle_status_code")
+                        ReadInt16IfAvailable(reader, availableColumns, "vehicle_status_code"),
+                        ReadInt16IfAvailable(reader, availableColumns, "veh_site_code")
                     )
                 );
             }
@@ -299,7 +319,10 @@ public class ContractRepository : IContractRepository
         }
     }
 
-    public async Task<ContractVehicleLookup?> GetVehicleForContractAsync(int vmfCode)
+    public async Task<ContractVehicleLookup?> GetVehicleForContractAsync(
+        int vmfCode,
+        IReadOnlyCollection<short>? allowedSiteCodes = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync(
             VehicleTableName,
@@ -323,9 +346,11 @@ public class ContractRepository : IContractRepository
                 GetOptionalProjection(availableColumns, "engine_number_1", "v"),
                 GetOptionalProjection(availableColumns, "invoice_number", "v"),
                 GetOptionalProjection(availableColumns, "vehicle_status_code", "v"),
+                GetOptionalProjection(availableColumns, "veh_site_code", "v"),
             };
+            var siteFilter = BuildVehicleSiteFilter(availableColumns, allowedSiteCodes, command);
             command.CommandText =
-                $"SELECT TOP (1) {string.Join(", ", projection)} FROM [dbo].[{VehicleTableName}] AS [v] WHERE [v].[vmf_code] = @vmfCode";
+                $"SELECT TOP (1) {string.Join(", ", projection)} FROM [dbo].[{VehicleTableName}] AS [v] WHERE [v].[vmf_code] = @vmfCode AND ({siteFilter})";
             AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
 
             await using var reader = await command.ExecuteReaderAsync();
@@ -339,7 +364,8 @@ public class ContractRepository : IContractRepository
                 ReadStringIfAvailable(reader, availableColumns, "chassis_number"),
                 ReadStringIfAvailable(reader, availableColumns, "engine_number_1"),
                 ReadStringIfAvailable(reader, availableColumns, "invoice_number"),
-                ReadInt16IfAvailable(reader, availableColumns, "vehicle_status_code")
+                ReadInt16IfAvailable(reader, availableColumns, "vehicle_status_code"),
+                ReadInt16IfAvailable(reader, availableColumns, "veh_site_code")
             );
         }
         finally
@@ -347,6 +373,39 @@ public class ContractRepository : IContractRepository
             if (shouldClose)
                 await connection.CloseAsync();
         }
+    }
+
+    private static string BuildVehicleSiteFilter(
+        IReadOnlySet<string> availableColumns,
+        IReadOnlyCollection<short>? allowedSiteCodes,
+        DbCommand command
+    )
+    {
+        if (allowedSiteCodes is null)
+            return "1 = 1";
+
+        var siteCodes = allowedSiteCodes.Distinct().ToArray();
+        if (siteCodes.Length == 0)
+            return "1 = 0";
+
+        var siteColumns = new[] { "veh_site_code", "initial_site_code", "default_site" }
+            .Where(availableColumns.Contains)
+            .Select(column => $"[v].[{column}]")
+            .ToArray();
+        if (siteColumns.Length == 0)
+            return "1 = 0";
+
+        var parameters = siteCodes.Select((siteCode, index) =>
+        {
+            var parameterName = $"@vehicleSiteCode{index}";
+            AddParameter(command, parameterName, DbType.Int16, siteCode);
+            return parameterName;
+        });
+
+        var siteExpression = siteColumns.Length == 1
+            ? siteColumns[0]
+            : $"COALESCE({string.Join(", ", siteColumns)})";
+        return $"{siteExpression} IN ({string.Join(", ", parameters)})";
     }
 
     public async Task<Contract?> GetActiveContractByVehicleAsync(int vmfCode)
@@ -392,9 +451,226 @@ public class ContractRepository : IContractRepository
         }
     }
 
+    /// <summary>
+    /// Executes the legacy ordinary-contract creation workflow. The archived
+    /// procedure deliberately inserts a non-current approval row, initializes
+    /// its contract group, records status history, and lets the database
+    /// journal/trigger chain participate in the same transaction. A direct
+    /// EF/SQL insert would bypass those rules, so absence or drift of the
+    /// procedure is reported instead of approximated.
+    /// </summary>
+    public async Task<Contract> CreateForApprovalAsync(Contract contract, int currentUserId)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+
+        const string procedureName = "DEV_INS_Contract_New_ForApproval";
+        var standardParameters = new[]
+        {
+            "@ContractCode",
+            "@VMFCode",
+            "@SiteCode",
+            "@StartDate",
+            "@StartTime",
+            "@StartOdometer",
+            "@ContractType",
+            "@DriverSAID",
+            "@DriverName",
+            "@Authorisation",
+            "@Notes",
+            "@TargetReturnDate",
+            "@UserID",
+            "@Responsibility",
+            "@Objective",
+            "@Project",
+            "@Fund",
+            "@ReliefForContract",
+            "@contract_status_code",
+            "@contract_status_date",
+            "@vehicle_assessment_code",
+            "@approver_code",
+            "@site_driver_code",
+            "@collector_firstname",
+            "@collector_surname",
+            "@collector_sa_id",
+            "@collector_passportnumber",
+            "@collector_office_number",
+            "@collector_cellphone_number",
+            "@collector_office",
+            "@collector_designation",
+            "@relief_vehicle_option",
+            "@lease_contract_period",
+            "@contract_estimated_overall_km",
+        };
+        var extendedParameters = standardParameters
+            .Concat(
+            [
+                "@contract_backdating_requestedBy",
+                "@contract_backdating_date",
+                "@contract_backdating_start_date",
+            ]
+        )
+            .ToArray();
+
+        var deployedParameters = await GetLegacyProcedureParametersAsync(procedureName);
+        if (deployedParameters is null)
+        {
+            throw new NotSupportedException(
+                $"The legacy contract approval procedure {procedureName} is unavailable; ordinary contract creation cannot be approximated."
+            );
+        }
+
+        var hasExtendedBackdatingContract = deployedParameters.SequenceEqual(
+            extendedParameters,
+            StringComparer.OrdinalIgnoreCase
+        );
+        if (!hasExtendedBackdatingContract && !deployedParameters.SequenceEqual(
+                standardParameters,
+                StringComparer.OrdinalIgnoreCase
+            ))
+        {
+            throw new InvalidOperationException(
+                $"The deployed legacy procedure {procedureName} does not match the archived parameter contract. No direct-DML fallback was run."
+            );
+        }
+
+        if (!hasExtendedBackdatingContract && HasBackdatingRequest(contract))
+        {
+            throw new NotSupportedException(
+                $"The deployed legacy procedure {procedureName} has no backdating parameters; the backdating request was not silently dropped."
+            );
+        }
+
+        // DEV_INS_Contract_New_ForApproval receives the capturer as @UserID.
+        // That value is persisted into user_code by the legacy procedure, so
+        // never allow a posted/domain value to impersonate another capturer.
+        var ownerCode = currentUserId is > 0 and <= short.MaxValue
+            ? (short)currentUserId
+            : throw new UnauthorizedAccessException(
+                "A valid authenticated user is required to capture a contract."
+            );
+        contract.user_code = ownerCode;
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = procedureName;
+            command.CommandTimeout = 180;
+
+            var contractCode = command.CreateParameter();
+            contractCode.ParameterName = "@ContractCode";
+            contractCode.DbType = DbType.Int32;
+            contractCode.Direction = ParameterDirection.Output;
+            command.Parameters.Add(contractCode);
+
+            AddParameter(command, "@VMFCode", DbType.Int32, contract.vmf_code);
+            AddParameter(command, "@SiteCode", DbType.Int16, contract.site_code);
+            AddParameter(command, "@StartDate", DbType.DateTime, contract.start_date);
+            AddParameter(command, "@StartTime", DbType.DateTime, contract.start_time);
+            AddParameter(command, "@StartOdometer", DbType.Int32, contract.start_odometer);
+            AddParameter(command, "@ContractType", DbType.String, contract.contract_type);
+            AddParameter(command, "@DriverSAID", DbType.String, contract.Driver_id);
+            AddParameter(command, "@DriverName", DbType.String, contract.Driver_name);
+            AddParameter(command, "@Authorisation", DbType.String, contract.Authorisation);
+            AddParameter(command, "@Notes", DbType.String, contract.Notes);
+            AddParameter(command, "@TargetReturnDate", DbType.DateTime, contract.target_return_date);
+            AddParameter(
+                command,
+                "@UserID",
+                DbType.Int32,
+                ownerCode
+            );
+            AddParameter(command, "@Responsibility", DbType.String, contract.bas_responsibility_code);
+            AddParameter(command, "@Objective", DbType.String, contract.bas_objective_code);
+            AddParameter(command, "@Project", DbType.String, contract.bas_project_number);
+            AddParameter(command, "@Fund", DbType.String, contract.bas_fund_code);
+            AddParameter(command, "@ReliefForContract", DbType.Int32, contract.relief_for_contract);
+            AddParameter(command, "@contract_status_code", DbType.Int16, contract.contract_status_code ?? 1);
+            AddParameter(
+                command,
+                "@contract_status_date",
+                DbType.DateTime,
+                contract.contract_status_date ?? DateTime.Today
+            );
+            AddParameter(command, "@vehicle_assessment_code", DbType.Int32, contract.vehicle_assessment_code ?? 0);
+            AddParameter(command, "@approver_code", DbType.Int32, contract.approver_code ?? 0);
+            AddParameter(command, "@site_driver_code", DbType.Int32, contract.site_driver_code ?? 0);
+            AddParameter(command, "@collector_firstname", DbType.String, contract.collector_firstname);
+            AddParameter(command, "@collector_surname", DbType.String, contract.collector_surname);
+            AddParameter(command, "@collector_sa_id", DbType.String, contract.collector_sa_id);
+            AddParameter(command, "@collector_passportnumber", DbType.String, contract.collector_passportnumber);
+            AddParameter(command, "@collector_office_number", DbType.String, contract.collector_office_number);
+            AddParameter(command, "@collector_cellphone_number", DbType.String, contract.collector_cellphone_number);
+            AddParameter(command, "@collector_office", DbType.String, contract.collector_office);
+            AddParameter(command, "@collector_designation", DbType.String, contract.collector_designation);
+            AddParameter(command, "@relief_vehicle_option", DbType.Boolean, contract.relief_vehicle_option ?? false);
+            AddParameter(command, "@lease_contract_period", DbType.Byte, contract.lease_contract_period ?? 0);
+            AddParameter(
+                command,
+                "@contract_estimated_overall_km",
+                DbType.Int32,
+                contract.contract_estimated_overall_km ?? 0
+            );
+            if (hasExtendedBackdatingContract)
+            {
+                var hasBackdatingRequest = HasBackdatingRequest(contract);
+                AddParameter(
+                    command,
+                    "@contract_backdating_requestedBy",
+                    DbType.String,
+                    hasBackdatingRequest
+                        ? contract.backdating_requested_by_username
+                            ?? await ResolveLegacyUsernameAsync(currentUserId)
+                        : null
+                );
+                AddParameter(
+                    command,
+                    "@contract_backdating_date",
+                    DbType.DateTime,
+                    contract.backdating_requested_date
+                );
+                AddParameter(
+                    command,
+                    "@contract_backdating_start_date",
+                    DbType.DateTime,
+                    contract.backdating_start_date
+                );
+            }
+
+            await command.ExecuteNonQueryAsync();
+            if (contractCode.Value is null || contractCode.Value == DBNull.Value)
+                throw new InvalidOperationException(
+                    $"The legacy contract approval procedure {procedureName} did not return a contract code."
+                );
+
+            var createdCode = Convert.ToInt32(contractCode.Value);
+            return await GetByIdAsync(createdCode)
+                ?? throw new InvalidOperationException(
+                    $"The legacy contract approval procedure {procedureName} returned contract {createdCode}, but it could not be read back."
+                );
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
     public async Task<Contract> CreateAsync(Contract contract, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(contract);
+
+        // This method is reserved for the modern home-custody compatibility
+        // path. If it has to write the legacy table directly, retain the
+        // duplicate-contract and journal-trigger transaction that the source
+        // database owns; never silently create a non-billable contract row.
+        await EnsureLegacyContractTriggersAsync(DirectInsertTriggerNames);
 
         if (contract.still_current == "Y" && await HasActiveContractAsync(contract.vmf_code))
         {
@@ -457,6 +733,53 @@ public class ContractRepository : IContractRepository
     {
         ArgumentNullException.ThrowIfNull(contract);
 
+        // The legacy ContractProvider sends ordinary modifications through
+        // NEW_DEV_UPD_Contract. Prefer that procedure whenever the connected
+        // database exposes the archived parameter contract so its journal,
+        // reversal/rebill, validation, and transaction behavior remains the
+        // source of truth. A trigger-backed direct update is only the
+        // compatibility fallback when the procedure is genuinely absent.
+        var hasLegacyUpdateProcedure = await IsLegacyProcedureAvailableAsync(
+            "NEW_DEV_UPD_Contract",
+            "@vmfCode",
+            "@sitecode",
+            "@startdate",
+            "@starttime",
+            "@enddate",
+            "@endtime",
+            "@startodometer",
+            "@endodometer",
+            "@stillcurrent",
+            "@contracttype",
+            "@driverid",
+            "@authorisation",
+            "@drivername",
+            "@notes",
+            "@targetreturndate",
+            "@usercode",
+            "@chargedUntil",
+            "@basobjectivecode",
+            "@basresponsibilitycode",
+            "@basProjectNumber",
+            "@reliefForContract",
+            "@lockedForTransfer",
+            "@hoursUsed",
+            "@contractgroupcode"
+        );
+
+        var existing = await GetByIdAsync(contract.contract_code);
+        if (existing == null)
+        {
+            throw new InvalidOperationException(
+                $"Contract with contract_code {contract.contract_code} not found"
+            );
+        }
+
+        // A posted DTO must never replace the persisted capturer. The
+        // manager/approver reassignment endpoint is the only explicit owner
+        // transfer workflow.
+        contract.user_code = existing.user_code;
+
         if (contract.still_current == "Y")
         {
             var active = await GetActiveContractByVehicleAsync(contract.vmf_code);
@@ -468,13 +791,64 @@ public class ContractRepository : IContractRepository
             }
         }
 
-        var existing = await GetByIdAsync(contract.contract_code);
-        if (existing == null)
+        if (hasLegacyUpdateProcedure)
         {
-            throw new InvalidOperationException(
-                $"Contract with contract_code {contract.contract_code} not found"
+            await ExecuteInLegacyTransactionAsync(
+                "FIS_ContractUpdate",
+                async () =>
+                {
+                    await ExecuteLegacyProcedureAsync(
+                        "NEW_DEV_UPD_Contract",
+                        new ProcedureParameter("@vmfCode", DbType.Int32, contract.vmf_code),
+                        new ProcedureParameter("@sitecode", DbType.Int16, contract.site_code),
+                        new ProcedureParameter("@startdate", DbType.DateTime, contract.start_date),
+                        new ProcedureParameter("@starttime", DbType.DateTime, contract.start_time),
+                        new ProcedureParameter("@enddate", DbType.DateTime, contract.end_date),
+                        new ProcedureParameter("@endtime", DbType.DateTime, contract.end_time),
+                        new ProcedureParameter("@startodometer", DbType.Int32, contract.start_odometer),
+                        new ProcedureParameter("@endodometer", DbType.Int32, contract.end_odometer),
+                        new ProcedureParameter("@stillcurrent", DbType.String, contract.still_current),
+                        new ProcedureParameter("@contracttype", DbType.String, contract.contract_type),
+                        new ProcedureParameter("@driverid", DbType.String, contract.Driver_id),
+                        new ProcedureParameter("@authorisation", DbType.String, contract.Authorisation),
+                        new ProcedureParameter("@drivername", DbType.String, contract.Driver_name),
+                        new ProcedureParameter("@notes", DbType.String, contract.Notes),
+                        new ProcedureParameter("@targetreturndate", DbType.DateTime, contract.target_return_date),
+                        new ProcedureParameter("@usercode", DbType.Int32, contract.user_code),
+                        new ProcedureParameter("@chargedUntil", DbType.DateTime, contract.Charged_Until),
+                        new ProcedureParameter("@basobjectivecode", DbType.String, contract.bas_objective_code),
+                        new ProcedureParameter("@basresponsibilitycode", DbType.String, contract.bas_responsibility_code),
+                        new ProcedureParameter("@basProjectNumber", DbType.String, contract.bas_project_number),
+                        new ProcedureParameter("@reliefForContract", DbType.Int32, contract.relief_for_contract),
+                        new ProcedureParameter("@lockedForTransfer", DbType.Boolean, contract.locked_for_transfer),
+                        new ProcedureParameter("@hoursUsed", DbType.Int16, contract.hours_used),
+                        new ProcedureParameter("@contractgroupcode", DbType.Int32, contract.contract_group_code)
+                    );
+                    await RestoreLegacyCapturerAsync(contract.contract_code, existing.user_code);
+                    return true;
+                }
             );
+
+            return;
         }
+
+        await UpdateDirectAsync(contract, currentUserId, existing);
+    }
+
+    /// <summary>
+    /// Applies the explicitly permitted direct-DML compatibility fallback for
+    /// a contract update. Callers must use this only after proving that the
+    /// source operation's stored procedure is genuinely absent. The legacy
+    /// journal trigger is checked before the write so the fallback cannot
+    /// silently bypass billing/reversal protection.
+    /// </summary>
+    private async Task UpdateDirectAsync(
+        Contract contract,
+        int currentUserId,
+        Contract existing
+    )
+    {
+        await EnsureLegacyContractTriggersAsync(DirectUpdateTriggerNames);
 
         var availableColumns = await GetAvailableColumnsAsync(
             ContractTableName,
@@ -519,6 +893,201 @@ public class ContractRepository : IContractRepository
         contract.modified_by_user_code = currentUserId > 0 ? currentUserId : null;
     }
 
+    /// <summary>
+    /// Runs the archived contract-history mutation.  The legacy procedure
+    /// updates the selected contract and any follow-up contract while keeping
+    /// billing/journal state in the database transaction.  A generic UPDATE
+    /// is deliberately not used when the procedure is unavailable because it
+    /// cannot reproduce those linked-row side effects.
+    /// </summary>
+    public async Task<Contract> UpdateHistoryAsync(
+        int contractCode,
+        DateTime startDate,
+        DateTime endDate,
+        int startOdometer,
+        int endOdometer,
+        string fleetNumber
+    )
+    {
+        if (contractCode <= 0)
+            throw new ArgumentException("A valid contract code is required.", nameof(contractCode));
+        if (string.IsNullOrWhiteSpace(fleetNumber))
+            throw new ArgumentException("A fleet number is required.", nameof(fleetNumber));
+        if (endDate.Date < startDate.Date)
+            throw new ArgumentException("The contract end date cannot be before its start date.", nameof(endDate));
+        if (startOdometer < 0 || endOdometer < 0)
+            throw new ArgumentException("Contract odometers cannot be negative.");
+        if (endOdometer < startOdometer)
+            throw new ArgumentException("The contract end odometer cannot be less than its start odometer.");
+
+        var existing = await GetByIdAsync(contractCode)
+            ?? throw new InvalidOperationException(
+                $"Contract with contract_code {contractCode} not found"
+            );
+
+        const string procedureName = "ADM_Change_End_And_Odo_With_FollowUp_Contract";
+        var expectedParameters = new[]
+        {
+            "@contractToUpdate",
+            "@newStartDate",
+            "@newEndDate",
+            "@startOdometer",
+            "@endOdometer",
+            "@FleetNumber",
+        };
+
+        if (!await IsLegacyProcedureAvailableAsync(procedureName, expectedParameters))
+        {
+            throw new NotSupportedException(
+                $"The legacy contract-history procedure {procedureName} is unavailable; no generic contract update was run."
+            );
+        }
+
+        return await ExecuteInLegacyTransactionAsync(
+            "FIS_ContractHistoryBackdating",
+            async () =>
+            {
+                await ExecuteLegacyProcedureAsync(
+                    procedureName,
+                    new ProcedureParameter("@contractToUpdate", DbType.Int32, contractCode),
+                    new ProcedureParameter("@newStartDate", DbType.DateTime, startDate.Date),
+                    new ProcedureParameter("@newEndDate", DbType.DateTime, endDate.Date),
+                    new ProcedureParameter("@startOdometer", DbType.Int32, startOdometer),
+                    new ProcedureParameter("@endOdometer", DbType.Int32, endOdometer),
+                    new ProcedureParameter("@FleetNumber", DbType.String, fleetNumber.Trim())
+                );
+
+                await RestoreLegacyCapturerAsync(contractCode, existing.user_code);
+
+                return await GetByIdAsync(contractCode)
+                    ?? throw new InvalidOperationException(
+                        $"The legacy contract-history procedure {procedureName} completed, but contract {contractCode} could not be read back."
+                    );
+            }
+        );
+    }
+
+    /// <summary>
+    /// Updates a pending contract through the legacy approval-phase procedure.
+    /// The procedure preserves the persisted status/current flags, writes the
+    /// approval history, and owns its transaction and trigger behavior.
+    /// </summary>
+    public async Task<Contract> UpdatePendingForApprovalAsync(Contract contract, int currentUserId)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+        if (contract.contract_code <= 0)
+            throw new ArgumentException("A valid contract code is required.", nameof(contract));
+
+        // Never trust a posted DTO for ownership. Resolve the persisted
+        // capturer before invoking the procedure because @UserID is also
+        // written to user_code by the legacy implementation.
+        var persistedContract = await GetByIdAsync(contract.contract_code)
+            ?? throw new InvalidOperationException(
+                $"Contract with contract_code {contract.contract_code} not found"
+            );
+        contract.user_code = persistedContract.user_code;
+
+        const string procedureName = "DEV_UPD_Contract_New_ApprovalPhase";
+        var expectedParameters = new[]
+        {
+            "@ContractCode",
+            "@VMFCode",
+            "@SiteCode",
+            "@StartDate",
+            "@StartTime",
+            "@StartOdometer",
+            "@ContractType",
+            "@DriverSAID",
+            "@DriverName",
+            "@Authorisation",
+            "@Notes",
+            "@TargetReturnDate",
+            "@UserID",
+            "@Responsibility",
+            "@Objective",
+            "@Project",
+            "@Fund",
+            "@ReliefForContract",
+            "@contract_status_code",
+            "@contract_status_date",
+            "@vehicle_assessment_code",
+            "@approver_code",
+            "@site_driver_code",
+            "@collector_firstname",
+            "@collector_surname",
+            "@collector_sa_id",
+            "@collector_passportnumber",
+            "@collector_office_number",
+            "@collector_cellphone_number",
+            "@collector_office",
+            "@collector_designation",
+            "@relief_vehicle_option",
+            "@lease_contract_period",
+            "@contract_estimated_overall_km",
+        };
+
+        if (!await IsLegacyProcedureAvailableAsync(procedureName, expectedParameters))
+        {
+            throw new NotSupportedException(
+                $"The legacy pending-contract procedure {procedureName} is unavailable; pending contract edits cannot be approximated."
+            );
+        }
+
+        return await ExecuteInLegacyTransactionAsync(
+            "FIS_ContractPendingApproval",
+            async () =>
+            {
+                await ExecuteLegacyProcedureAsync(
+                    procedureName,
+            new ProcedureParameter("@ContractCode", DbType.Int32, contract.contract_code),
+            new ProcedureParameter("@VMFCode", DbType.Int32, contract.vmf_code),
+            new ProcedureParameter("@SiteCode", DbType.Int16, contract.site_code),
+            new ProcedureParameter("@StartDate", DbType.DateTime, contract.start_date),
+            new ProcedureParameter("@StartTime", DbType.DateTime, contract.start_time),
+            new ProcedureParameter("@StartOdometer", DbType.Int32, contract.start_odometer),
+            new ProcedureParameter("@ContractType", DbType.String, contract.contract_type),
+            new ProcedureParameter("@DriverSAID", DbType.String, contract.Driver_id),
+            new ProcedureParameter("@DriverName", DbType.String, contract.Driver_name),
+            new ProcedureParameter("@Authorisation", DbType.String, contract.Authorisation),
+            new ProcedureParameter("@Notes", DbType.String, contract.Notes),
+            new ProcedureParameter("@TargetReturnDate", DbType.DateTime, contract.target_return_date),
+            // The legacy procedure uses @UserID for both its action/status
+            // history actor and the row's user_code. Pass the authenticated
+            // actor so history is truthful, then restore the original owner
+            // immediately after the procedure completes.
+            new ProcedureParameter("@UserID", DbType.Int32, currentUserId),
+            new ProcedureParameter("@Responsibility", DbType.String, contract.bas_responsibility_code),
+            new ProcedureParameter("@Objective", DbType.String, contract.bas_objective_code),
+            new ProcedureParameter("@Project", DbType.String, contract.bas_project_number),
+            new ProcedureParameter("@Fund", DbType.String, contract.bas_fund_code),
+            new ProcedureParameter("@ReliefForContract", DbType.Int32, contract.relief_for_contract),
+            new ProcedureParameter("@contract_status_code", DbType.Int16, contract.contract_status_code ?? 1),
+            new ProcedureParameter("@contract_status_date", DbType.DateTime, contract.contract_status_date ?? DateTime.Today),
+            new ProcedureParameter("@vehicle_assessment_code", DbType.Int32, contract.vehicle_assessment_code ?? 0),
+            new ProcedureParameter("@approver_code", DbType.Int32, contract.approver_code ?? 0),
+            new ProcedureParameter("@site_driver_code", DbType.Int32, contract.site_driver_code ?? 0),
+            new ProcedureParameter("@collector_firstname", DbType.String, contract.collector_firstname),
+            new ProcedureParameter("@collector_surname", DbType.String, contract.collector_surname),
+            new ProcedureParameter("@collector_sa_id", DbType.String, contract.collector_sa_id),
+            new ProcedureParameter("@collector_passportnumber", DbType.String, contract.collector_passportnumber),
+            new ProcedureParameter("@collector_office_number", DbType.String, contract.collector_office_number),
+            new ProcedureParameter("@collector_cellphone_number", DbType.String, contract.collector_cellphone_number),
+            new ProcedureParameter("@collector_office", DbType.String, contract.collector_office),
+            new ProcedureParameter("@collector_designation", DbType.String, contract.collector_designation),
+            new ProcedureParameter("@relief_vehicle_option", DbType.Boolean, contract.relief_vehicle_option ?? false),
+            new ProcedureParameter("@lease_contract_period", DbType.Byte, contract.lease_contract_period ?? 0),
+                    new ProcedureParameter("@contract_estimated_overall_km", DbType.Int32, contract.contract_estimated_overall_km ?? 0)
+                );
+                await RestoreLegacyCapturerAsync(contract.contract_code, contract.user_code);
+
+                return await GetByIdAsync(contract.contract_code)
+                    ?? throw new InvalidOperationException(
+                        $"The legacy pending-contract procedure {procedureName} completed, but the contract could not be read back."
+                    );
+            }
+        );
+    }
+
     public async Task<Contract> ExtendExistingAsync(Contract contract, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(contract);
@@ -527,45 +1096,216 @@ public class ContractRepository : IContractRepository
         if (!contract.target_return_date.HasValue)
             throw new ArgumentException("A target return date is required to extend a contract.", nameof(contract));
 
-        if (
-            await IsLegacyProcedureAvailableAsync(
-                "DEV_UPD_Contract_ExtendExisting",
-                "@ContractCode",
-                "@VMFCode",
-                "@TargetReturnDate",
-                "@contract_estimated_overall_km",
-                "@Notes",
-                "@UserID"
-            )
-        )
-        {
-            await ExecuteLegacyProcedureAsync(
-                "DEV_UPD_Contract_ExtendExisting",
-                new ProcedureParameter("@ContractCode", DbType.Int32, contract.contract_code),
-                new ProcedureParameter("@VMFCode", DbType.Int32, contract.vmf_code),
-                new ProcedureParameter(
-                    "@TargetReturnDate",
-                    DbType.DateTime,
-                    contract.target_return_date.Value
-                ),
-                new ProcedureParameter(
-                    "@contract_estimated_overall_km",
-                    DbType.Int32,
-                    contract.contract_estimated_overall_km
-                ),
-                new ProcedureParameter("@Notes", DbType.String, contract.Notes),
-                new ProcedureParameter("@UserID", DbType.Int32, currentUserId)
+        // Read the persisted row before invoking the legacy procedure.  An
+        // extension changes the target return date (and optional notes/km)
+        // only; it must never close the contract or move its billing cursor.
+        // Keeping this snapshot also prevents a stale caller payload from
+        // becoming the new capturer.
+        var beforeExtension = await GetByIdAsync(contract.contract_code)
+            ?? throw new InvalidOperationException(
+                $"Contract with contract_code {contract.contract_code} not found"
             );
-            return await GetByIdAsync(contract.contract_code)
-                ?? throw new InvalidOperationException(
-                    "The legacy contract-extension procedure removed the selected contract."
-                );
+        if (!string.Equals(beforeExtension.still_current, "Y", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Contract {contract.contract_code} is not currently active and cannot be extended."
+            );
         }
 
-        // Compatibility fallback only where the original extension procedure is genuinely absent.
-        await UpdateAsync(contract, currentUserId);
-        return contract;
+        contract.user_code = beforeExtension.user_code;
+
+        var hasOptionalExtensionChanges =
+            !string.Equals(contract.Notes, beforeExtension.Notes, StringComparison.Ordinal)
+            || contract.contract_estimated_overall_km != beforeExtension.contract_estimated_overall_km;
+        var hasLegacyTargetReturnDateProcedure = false;
+        if (!hasOptionalExtensionChanges)
+        {
+            try
+            {
+                hasLegacyTargetReturnDateProcedure = await IsLegacyProcedureAvailableAsync(
+                    "NEW_DEV_UPD_Contract_TargetReturnDate",
+                    "@contractcode",
+                    "@targetreturndate"
+                );
+            }
+            catch (InvalidOperationException exception)
+                when (exception.Message.Contains("does not match the archived parameter contract", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new NotSupportedException(
+                    "The deployed legacy target-return-date procedure is incompatible; no direct-DML fallback was run.",
+                    exception
+                );
+            }
+        }
+
+        var hasLegacyExtensionProcedure = false;
+        if (!hasLegacyTargetReturnDateProcedure || hasOptionalExtensionChanges)
+        {
+            try
+            {
+                hasLegacyExtensionProcedure = await IsLegacyProcedureAvailableAsync(
+                    "DEV_UPD_Contract_ExtendExisting",
+                    "@ContractCode",
+                    "@VMFCode",
+                    "@TargetReturnDate",
+                    "@contract_estimated_overall_km",
+                    "@Notes",
+                    "@UserID"
+                );
+            }
+            catch (InvalidOperationException exception)
+                when (exception.Message.Contains("does not match the archived parameter contract", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new NotSupportedException(
+                    "The deployed legacy contract-extension procedure is incompatible; no direct-DML fallback was run.",
+                    exception
+                );
+            }
+        }
+
+        // The archived extension procedure and the explicit modern ownership
+        // correction must commit as one unit. If the deployed procedure
+        // unexpectedly changes a billing boundary, roll the whole operation
+        // back before reporting a dependency failure to the caller.
+        var existingTransaction = _context.Database.CurrentTransaction;
+        var ownsTransaction = existingTransaction is null;
+        var extensionTransaction = ownsTransaction
+            ? await _context.Database.BeginTransactionAsync()
+            : null;
+        const string savepointName = "FIS_ContractExtension";
+        if (!ownsTransaction)
+        {
+            await existingTransaction!.CreateSavepointAsync(savepointName);
+        }
+
+        try
+        {
+            if (hasLegacyTargetReturnDateProcedure && !hasOptionalExtensionChanges)
+            {
+                // The archived GGFleet Provider exposes a separate target-date
+                // operation with only these two parameters. Use it first when
+                // this request is a pure target-return-date extension.
+                await ExecuteLegacyProcedureAsync(
+                    "NEW_DEV_UPD_Contract_TargetReturnDate",
+                    new ProcedureParameter("@contractcode", DbType.Int32, contract.contract_code),
+                    new ProcedureParameter("@targetreturndate", DbType.DateTime, contract.target_return_date.Value.Date)
+                );
+                await RestoreLegacyCapturerAsync(contract.contract_code, beforeExtension.user_code);
+            }
+            else if (hasLegacyExtensionProcedure)
+            {
+                await ExecuteLegacyProcedureAsync(
+                    "DEV_UPD_Contract_ExtendExisting",
+                    new ProcedureParameter("@ContractCode", DbType.Int32, contract.contract_code),
+                    new ProcedureParameter("@VMFCode", DbType.Int32, contract.vmf_code),
+                    new ProcedureParameter(
+                        "@TargetReturnDate",
+                        DbType.DateTime,
+                        contract.target_return_date.Value
+                    ),
+                    new ProcedureParameter(
+                        "@contract_estimated_overall_km",
+                        DbType.Int32,
+                        contract.contract_estimated_overall_km
+                    ),
+                    new ProcedureParameter("@Notes", DbType.String, contract.Notes),
+                    // Preserve the legacy procedure's action/audit identity;
+                    // the exact-row correction below prevents that identity
+                    // from replacing the contract's original owner.
+                    new ProcedureParameter("@UserID", DbType.Int32, currentUserId)
+                );
+                await RestoreLegacyCapturerAsync(contract.contract_code, beforeExtension.user_code);
+            }
+            else if (hasLegacyTargetReturnDateProcedure)
+            {
+                // The archived GGFleet Provider exposes a separate target-date
+                // operation with only these two parameters. Do not use it when
+                // the caller is also trying to change notes or estimated km,
+                // because that would silently discard those submitted fields.
+                if (!string.Equals(contract.Notes, beforeExtension.Notes, StringComparison.Ordinal)
+                    || contract.contract_estimated_overall_km != beforeExtension.contract_estimated_overall_km)
+                {
+                    throw new NotSupportedException(
+                        "The legacy target-return-date procedure does not accept notes or estimated-kilometre changes; no submitted contract fields were dropped."
+                    );
+                }
+
+                await ExecuteLegacyProcedureAsync(
+                    "NEW_DEV_UPD_Contract_TargetReturnDate",
+                    new ProcedureParameter("@contractcode", DbType.Int32, contract.contract_code),
+                    new ProcedureParameter("@targetreturndate", DbType.DateTime, contract.target_return_date.Value.Date)
+                );
+                await RestoreLegacyCapturerAsync(contract.contract_code, beforeExtension.user_code);
+            }
+            else
+            {
+                // Extending an active contract is a billing operation in the
+                // legacy system: its procedure preserves Charged_Until,
+                // journal ownership and still_current while applying the new
+                // target return date. A generic EF update cannot reproduce
+                // those trigger/procedure semantics, so fail closed when the
+                // source procedure is not deployed.
+                throw new NotSupportedException(
+                    "The legacy contract-extension procedure is unavailable; active contract extension cannot be approximated with direct DML."
+                );
+            }
+
+            var updated = await GetByIdAsync(contract.contract_code)
+                ?? throw new InvalidOperationException(
+                    "The contract-extension operation removed the selected contract."
+                );
+            EnsureExtensionBillingInvariant(beforeExtension, updated, contract.target_return_date.Value);
+
+            if (extensionTransaction is not null)
+                await extensionTransaction.CommitAsync();
+            return updated;
+        }
+        catch
+        {
+            if (extensionTransaction is not null)
+                await extensionTransaction.RollbackAsync();
+            else if (existingTransaction is not null)
+                await existingTransaction.RollbackToSavepointAsync(savepointName);
+            throw;
+        }
+        finally
+        {
+            if (extensionTransaction is not null)
+                await extensionTransaction.DisposeAsync();
+        }
     }
+
+    private static void EnsureExtensionBillingInvariant(
+        Contract before,
+        Contract after,
+        DateTime expectedTargetReturnDate
+    )
+    {
+        var differences = new List<string>();
+        if (!string.Equals(after.still_current, "Y", StringComparison.OrdinalIgnoreCase))
+            differences.Add("still_current was changed from Y");
+        if (!SameDate(before.end_date, after.end_date))
+            differences.Add("end_date was changed");
+        if (!SameDate(before.Charged_Until, after.Charged_Until))
+            differences.Add("Charged_Until was changed");
+        if (before.journal_detail_code != after.journal_detail_code)
+            differences.Add("journal_detail_code was changed");
+        if (before.user_code != after.user_code)
+            differences.Add("user_code/capturer was changed");
+        if (!SameDate(after.target_return_date, expectedTargetReturnDate))
+            differences.Add("target_return_date was not persisted");
+
+        if (differences.Count > 0)
+        {
+            throw new LegacyContractExtensionBillingInvariantException(
+                $"The contract extension changed billing ownership/state unexpectedly: {string.Join(", ", differences)}. The extension was not accepted as a compatible operation."
+            );
+        }
+    }
+
+    private static bool SameDate(DateTime? left, DateTime? right) =>
+        left.HasValue == right.HasValue
+        && (!left.HasValue || left.Value.Date == right!.Value.Date);
 
     public async Task<Contract> UpdatePendingDecisionAsync(Contract contract, int currentUserId)
     {
@@ -574,6 +1314,14 @@ public class ContractRepository : IContractRepository
             throw new ArgumentException("A valid contract code is required.", nameof(contract));
         if (!contract.contract_status_code.HasValue)
             throw new ArgumentException("A contract status is required.", nameof(contract));
+
+        // Approval decisions must retain the owner captured on the database
+        // row even when a caller sends a stale or substituted user_code.
+        var persistedContract = await GetByIdAsync(contract.contract_code)
+            ?? throw new InvalidOperationException(
+                $"Contract with contract_code {contract.contract_code} not found"
+            );
+        contract.user_code = persistedContract.user_code;
 
         if (
             await IsLegacyProcedureAvailableAsync(
@@ -615,8 +1363,12 @@ public class ContractRepository : IContractRepository
             )
         )
         {
-            await ExecuteLegacyProcedureAsync(
-                "DEV_UPD_Contract_New_ApproveDeclineOrCancel",
+            return await ExecuteInLegacyTransactionAsync(
+                "FIS_ContractPendingDecision",
+                async () =>
+                {
+                    await ExecuteLegacyProcedureAsync(
+                        "DEV_UPD_Contract_New_ApproveDeclineOrCancel",
                 new ProcedureParameter("@ContractCode", DbType.Int32, contract.contract_code),
                 new ProcedureParameter("@VMFCode", DbType.Int32, contract.vmf_code),
                 new ProcedureParameter("@SiteCode", DbType.Int16, contract.site_code),
@@ -633,6 +1385,9 @@ public class ContractRepository : IContractRepository
                     DbType.DateTime,
                     contract.target_return_date
                 ),
+                // The procedure records @UserID in status history and also
+                // temporarily writes it to user_code. Use the real actor for
+                // the history, then restore the original capturer below.
                 new ProcedureParameter("@UserID", DbType.Int32, currentUserId),
                 new ProcedureParameter(
                     "@Responsibility",
@@ -714,21 +1469,25 @@ public class ContractRepository : IContractRepository
                     DbType.Byte,
                     contract.lease_contract_period ?? 0
                 ),
-                new ProcedureParameter(
-                    "@contract_estimated_overall_km",
-                    DbType.Int32,
-                    contract.contract_estimated_overall_km ?? 0
-                )
+                        new ProcedureParameter(
+                            "@contract_estimated_overall_km",
+                            DbType.Int32,
+                            contract.contract_estimated_overall_km ?? 0
+                        )
+                    );
+                    await RestoreLegacyCapturerAsync(contract.contract_code, contract.user_code);
+                    await ApplyBackdatingDecisionAsync(contract, currentUserId);
+                    return await GetByIdAsync(contract.contract_code)
+                        ?? throw new InvalidOperationException(
+                            "The legacy contract decision procedure removed the selected contract."
+                        );
+                }
             );
-            return await GetByIdAsync(contract.contract_code)
-                ?? throw new InvalidOperationException(
-                    "The legacy contract decision procedure removed the selected contract."
-                );
         }
 
-        // Compatibility fallback only when the original procedure is genuinely absent.
-        await UpdateAsync(contract, currentUserId);
-        return contract;
+        throw new NotSupportedException(
+            "The legacy pending-contract decision procedure is unavailable; approval, decline, or cancellation cannot be approximated with direct DML."
+        );
     }
 
     public async Task<Contract> ActivatePendingAsync(
@@ -740,6 +1499,16 @@ public class ContractRepository : IContractRepository
         ArgumentNullException.ThrowIfNull(pendingContract);
         if (pendingContract.contract_code <= 0)
             throw new ArgumentException("A valid pending contract code is required.", nameof(pendingContract));
+
+        var persistedPendingContract = await GetByIdAsync(pendingContract.contract_code)
+            ?? throw new InvalidOperationException(
+                $"Contract with contract_code {pendingContract.contract_code} not found"
+            );
+        pendingContract.user_code = persistedPendingContract.user_code;
+
+        var existingContract = existingContractCode > 0
+            ? await GetByIdAsync(existingContractCode)
+            : null;
 
         if (
             await IsLegacyProcedureAvailableAsync(
@@ -756,8 +1525,12 @@ public class ContractRepository : IContractRepository
             )
         )
         {
-            await ExecuteLegacyProcedureAsync(
-                "DEV_UPD_Contract_NewActivate",
+            return await ExecuteInLegacyTransactionAsync(
+                "FIS_ContractActivation",
+                async () =>
+                {
+                    await ExecuteLegacyProcedureAsync(
+                        "DEV_UPD_Contract_NewActivate",
                 new ProcedureParameter("@ExistingContractCode", DbType.Int32, existingContractCode),
                 new ProcedureParameter(
                     "@PendingContractCode",
@@ -778,12 +1551,22 @@ public class ContractRepository : IContractRepository
                     pendingContract.target_return_date
                 ),
                 new ProcedureParameter("@Notes", DbType.String, pendingContract.Notes),
-                new ProcedureParameter("@UserID", DbType.Int32, currentUserId)
+                        // The v2.1.18 activation procedure pre-creates monthly
+                        // contract segments and applies @UserID to every row
+                        // in the group. Pass the persisted capturer here so an
+                        // approver cannot silently become owner of the whole
+                        // contract chain. The API audit log records the actor.
+                        new ProcedureParameter("@UserID", DbType.Int32, pendingContract.user_code)
+                    );
+                    await RestoreLegacyCapturerAsync(pendingContract.contract_code, pendingContract.user_code);
+                    if (existingContract is not null)
+                        await RestoreLegacyCapturerAsync(existingContract.contract_code, existingContract.user_code);
+                    return await GetByIdAsync(pendingContract.contract_code)
+                        ?? throw new InvalidOperationException(
+                            "The legacy contract activation procedure removed the selected contract."
+                        );
+                }
             );
-            return await GetByIdAsync(pendingContract.contract_code)
-                ?? throw new InvalidOperationException(
-                    "The legacy contract activation procedure removed the selected contract."
-                );
         }
 
         // There is no safe direct-DML activation equivalent: activation closes
@@ -803,48 +1586,31 @@ public class ContractRepository : IContractRepository
         ArgumentNullException.ThrowIfNull(reassignment);
         if (existingContract.contract_code <= 0 || existingContract.vmf_code <= 0)
             throw new ArgumentException("A valid active contract is required.", nameof(existingContract));
+        if (reassignment.user_code is not > 0)
+            throw new ArgumentException(
+                "A valid capturer is required for contract reassignment.",
+                nameof(reassignment)
+            );
 
-        if (
-            !await IsLegacyProcedureAvailableAsync(
-                "DEV_UPD_Contract_ReassignExisting",
-                "@ExistingContractCode",
-                "@VMFCode",
-                "@SiteCode",
-                "@StartDate",
-                "@StartTime",
-                "@StartOdometer",
-                "@DriverSAID",
-                "@DriverName",
-                "@Authorisation",
-                "@Notes",
-                "@UserID",
-                "@Responsibility",
-                "@Objective",
-                "@Project",
-                "@Fund",
-                "@approver_code",
-                "@site_driver_code",
-                "@collector_firstname",
-                "@collector_surname",
-                "@collector_sa_id",
-                "@collector_passportnumber",
-                "@collector_office_number",
-                "@collector_cellphone_number",
-                "@collector_office",
-                "@collector_designation",
-                "@lease_contract_period",
-                "@contract_estimated_overall_km"
-            )
-        )
+        var reassignContractCodeParameter = await ResolveReassignProcedureContractAsync();
+        if (reassignContractCodeParameter is null)
         {
             throw new NotSupportedException(
                 "The legacy contract-reassignment procedure is unavailable; reassignment cannot be approximated."
             );
         }
 
-        await ExecuteLegacyProcedureAsync(
-            "DEV_UPD_Contract_ReassignExisting",
-            new ProcedureParameter("@ExistingContractCode", DbType.Int32, existingContract.contract_code),
+        return await ExecuteInLegacyTransactionAsync(
+            "FIS_ContractReassignment",
+            async () =>
+            {
+                var existingContractCodes = (await GetContractsByVehicleAsync(existingContract.vmf_code))
+                    .Select(contract => contract.contract_code)
+                    .ToHashSet();
+
+                await ExecuteLegacyProcedureAsync(
+                    "DEV_UPD_Contract_ReassignExisting",
+            new ProcedureParameter(reassignContractCodeParameter, DbType.Int32, existingContract.contract_code),
             new ProcedureParameter("@VMFCode", DbType.Int32, existingContract.vmf_code),
             new ProcedureParameter("@SiteCode", DbType.Int16, reassignment.site_code),
             new ProcedureParameter("@StartDate", DbType.DateTime, reassignment.start_date),
@@ -862,6 +1628,10 @@ public class ContractRepository : IContractRepository
                 reassignment.Authorisation
             ),
             new ProcedureParameter("@Notes", DbType.String, reassignment.Notes),
+            // The legacy procedure uses @UserID for both action history and
+            // row ownership. Pass the manager performing the reassignment so
+            // the legacy status history is truthful; the exact owner columns
+            // are corrected after the procedure in this same transaction.
             new ProcedureParameter("@UserID", DbType.Int32, currentUserId),
             new ProcedureParameter(
                 "@Responsibility",
@@ -922,25 +1692,53 @@ public class ContractRepository : IContractRepository
                 DbType.Byte,
                 reassignment.lease_contract_period ?? 0
             ),
-            new ProcedureParameter(
-                "@contract_estimated_overall_km",
-                DbType.Int32,
-                reassignment.contract_estimated_overall_km ?? 0
-            )
-        );
+                    new ProcedureParameter(
+                        "@contract_estimated_overall_km",
+                        DbType.Int32,
+                        reassignment.contract_estimated_overall_km ?? 0
+                    )
+                );
 
-        var reassigned = (await GetContractsByVehicleAsync(existingContract.vmf_code))
-            .Where(contract =>
-                contract.reassigned_from_contract_code == existingContract.contract_code
-                && contract.site_code == reassignment.site_code
-                && contract.start_date.Date == reassignment.start_date.Date
-            )
-            .OrderByDescending(contract => contract.contract_code)
-            .FirstOrDefault();
-        return reassigned
-            ?? throw new InvalidOperationException(
-                "The legacy contract-reassignment procedure completed without a readable replacement contract."
-            );
+                // The procedure temporarily applies the manager's ID to both
+                // rows. Ownership transfer is explicit here, so restore the
+                // original contract's capturer and assign the selected new
+                // owner to the replacement row.
+                await RestoreLegacyCapturerAsync(existingContract.contract_code, existingContract.user_code);
+
+                var contractsAfterReassignment = (await GetContractsByVehicleAsync(existingContract.vmf_code)).ToList();
+                var linkedReplacement = contractsAfterReassignment
+                    .Where(contract =>
+                        contract.reassigned_from_contract_code == existingContract.contract_code
+                        && contract.contract_code != existingContract.contract_code
+                    )
+                    .ToList();
+                var newlyInsertedReplacement = contractsAfterReassignment
+                    .Where(contract => !existingContractCodes.Contains(contract.contract_code))
+                    .Where(contract =>
+                        contract.site_code == reassignment.site_code
+                        && contract.start_date.Date == reassignment.start_date.Date
+                        && contract.start_odometer == reassignment.start_odometer
+                        && string.Equals(contract.still_current, "Y", StringComparison.OrdinalIgnoreCase)
+                    )
+                    .ToList();
+                var candidates = linkedReplacement.Count == 1
+                    ? linkedReplacement
+                    : newlyInsertedReplacement;
+                if (candidates.Count != 1)
+                {
+                    throw new InvalidOperationException(
+                        "The legacy contract-reassignment procedure completed without exactly one readable replacement contract."
+                    );
+                }
+
+                var reassigned = candidates[0];
+                await RestoreLegacyCapturerAsync(reassigned.contract_code, reassignment.user_code);
+                return await GetByIdAsync(reassigned.contract_code)
+                    ?? throw new InvalidOperationException(
+                        "The legacy contract-reassignment procedure completed, but the replacement contract could not be read back."
+                    );
+            }
+        );
     }
 
     public Task DeleteAsync(int contractCode, int currentUserId) =>
@@ -958,22 +1756,217 @@ public class ContractRepository : IContractRepository
         string? notes = null
     )
     {
-        var contract = await GetByIdAsync(contractCode);
-        if (contract == null)
+        var beforeClose = await GetByIdAsync(contractCode);
+        if (beforeClose == null)
             throw new ArgumentException($"Contract {contractCode} not found");
-        if (contract.still_current != "Y")
+        if (!string.Equals(beforeClose.still_current, "Y", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"Contract {contractCode} is not currently active");
 
-        contract.still_current = "N";
-        contract.end_date = endDate.Date;
-        contract.end_time = endDate;
-        contract.contract_status_code = 7;
-        contract.contract_status_date = endDate;
-        if (endOdometer.HasValue)
-            contract.end_odometer = endOdometer.Value;
-        if (!string.IsNullOrWhiteSpace(notes))
-            contract.Notes = notes;
-        await UpdateAsync(contract, currentUserId);
+        // The archived provider closes contracts through
+        // NEW_DEV_UPD_Contract_CLOSE. Prefer that procedure whenever the
+        // restored database exposes the exact legacy contract. Only use the
+        // trigger-backed direct update when the procedure genuinely does not
+        // exist; a present-but-drifted procedure is a hard compatibility
+        // failure rather than permission to guess at billing DML.
+        bool hasLegacyCloseProcedure;
+        try
+        {
+            hasLegacyCloseProcedure = await IsLegacyProcedureAvailableAsync(
+                "NEW_DEV_UPD_Contract_CLOSE",
+                "@contractcode",
+                "@enddate",
+                "@endodometer"
+            );
+        }
+        catch (InvalidOperationException exception)
+            when (exception.Message.Contains("does not match the archived parameter contract", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NotSupportedException(
+                "The legacy contract-closure procedure is incompatible; no direct-DML close fallback was run.",
+                exception
+            );
+        }
+
+        if (!hasLegacyCloseProcedure && !await HasLegacyContractCloseTriggerAsync())
+        {
+            throw new NotSupportedException(
+                "The legacy contract-closure workflow is unavailable; no direct-DML close fallback was run."
+            );
+        }
+
+        var existingTransaction = _context.Database.CurrentTransaction;
+        var ownsTransaction = existingTransaction is null;
+        var closeTransaction = ownsTransaction
+            ? await _context.Database.BeginTransactionAsync()
+            : null;
+        const string savepointName = "FIS_ContractClose";
+        if (!ownsTransaction)
+        {
+            await existingTransaction!.CreateSavepointAsync(savepointName);
+        }
+
+        try
+        {
+            if (hasLegacyCloseProcedure)
+            {
+                await ExecuteLegacyProcedureAsync(
+                    "NEW_DEV_UPD_Contract_CLOSE",
+                    new ProcedureParameter("@contractcode", DbType.Int32, contractCode),
+                    new ProcedureParameter("@enddate", DbType.DateTime, endDate.Date),
+                    new ProcedureParameter("@endodometer", DbType.Int32, endOdometer ?? 0)
+                );
+            }
+            else
+            {
+                var contract = beforeClose;
+                contract.still_current = "N";
+                contract.end_date = endDate.Date;
+                contract.end_time = endDate;
+                contract.contract_status_code = 7;
+                contract.contract_status_date = endDate;
+                if (endOdometer.HasValue)
+                    contract.end_odometer = endOdometer.Value;
+                if (!string.IsNullOrWhiteSpace(notes))
+                    contract.Notes = notes;
+
+                // The dedicated close procedure is absent, so use the
+                // trigger-guarded compatibility write directly. Calling the
+                // general NEW_DEV_UPD_Contract procedure here would silently
+                // substitute a different mutation contract for closure.
+                await UpdateDirectAsync(contract, currentUserId, beforeClose);
+            }
+
+            var afterClose = await GetByIdAsync(contractCode)
+                ?? throw new InvalidOperationException(
+                    $"The legacy contract-close workflow removed contract {contractCode}."
+                );
+            EnsureContractCloseBillingInvariant(beforeClose, afterClose, endDate, endOdometer);
+
+            if (closeTransaction is not null)
+                await closeTransaction.CommitAsync();
+        }
+        catch
+        {
+            if (closeTransaction is not null)
+                await closeTransaction.RollbackAsync();
+            else if (existingTransaction is not null)
+                await existingTransaction.RollbackToSavepointAsync(savepointName);
+            throw;
+        }
+        finally
+        {
+            if (closeTransaction is not null)
+                await closeTransaction.DisposeAsync();
+        }
+    }
+
+    private async Task<bool> HasLegacyContractCloseTriggerAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT 1
+                FROM [sys].[triggers] AS [tr]
+                INNER JOIN [sys].[tables] AS [tb]
+                    ON [tb].[object_id] = [tr].[parent_id]
+                INNER JOIN [sys].[schemas] AS [sc]
+                    ON [sc].[schema_id] = [tb].[schema_id]
+                WHERE [sc].[name] = N'dbo'
+                  AND [tb].[name] = N'contract'
+                  AND [tr].[name] = N'TRG_UPD_ContractJournalDetailRecord'
+                  AND [tr].[is_disabled] = 0;
+                """;
+            return await command.ExecuteScalarAsync() is not null;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task EnsureLegacyContractTriggersAsync(IReadOnlyCollection<string> requiredTriggers)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [tr].[name], [tr].[is_disabled]
+                FROM [sys].[triggers] AS [tr]
+                INNER JOIN [sys].[tables] AS [tb]
+                    ON [tb].[object_id] = [tr].[parent_id]
+                INNER JOIN [sys].[schemas] AS [sc]
+                    ON [sc].[schema_id] = [tb].[schema_id]
+                WHERE [sc].[name] = N'dbo'
+                  AND [tb].[name] = N'contract'
+                  AND [tr].[name] IN
+                  (
+                      N'TRG_INS_CheckDuplicateContract',
+                      N'TRG_INS_ContractJournalDetailRecord',
+                      N'TRG_UPD_ContractJournalDetailRecord'
+                  );
+                """;
+            var enabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (!reader.IsDBNull(0) && !reader.IsDBNull(1) && !reader.GetBoolean(1))
+                    enabled.Add(reader.GetString(0));
+            }
+
+            var missing = requiredTriggers.Where(trigger => !enabled.Contains(trigger)).ToArray();
+            if (missing.Length > 0)
+            {
+                throw new NotSupportedException(
+                    $"The legacy contract-trigger workflow is unavailable ({string.Join(", ", missing)}); no direct-DML fallback was run."
+                );
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private static void EnsureContractCloseBillingInvariant(
+        Contract before,
+        Contract after,
+        DateTime expectedEndDate,
+        int? expectedEndOdometer
+    )
+    {
+        var differences = new List<string>();
+        if (!string.Equals(after.still_current, "N", StringComparison.OrdinalIgnoreCase))
+            differences.Add("still_current was not changed to N");
+        if (!SameDate(after.end_date, expectedEndDate))
+            differences.Add("end_date was not persisted");
+        if (expectedEndOdometer.HasValue && after.end_odometer != expectedEndOdometer)
+            differences.Add("end_odometer was not persisted");
+        if (!SameDate(after.Charged_Until, expectedEndDate))
+            differences.Add("Charged_Until was not aligned to the close date");
+        if (before.user_code != after.user_code)
+            differences.Add("user_code/capturer was changed");
+
+        if (differences.Count > 0)
+        {
+            throw new LegacyContractClosureBillingInvariantException(
+                $"The legacy contract-close workflow did not preserve the billing boundary: {string.Join(", ", differences)}. The close was not accepted."
+            );
+        }
     }
 
     private async Task<(
@@ -1137,6 +2130,24 @@ public class ContractRepository : IContractRepository
         params string[] expectedParameters
     )
     {
+        var actualParameters = await GetLegacyProcedureParametersAsync(procedureName);
+        if (actualParameters is null)
+            return false;
+
+        if (!actualParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The deployed legacy procedure {procedureName} does not match the archived parameter contract. No direct-DML fallback was run."
+            );
+        }
+
+        return true;
+    }
+
+    private async Task<IReadOnlyList<string>?> GetLegacyProcedureParametersAsync(
+        string procedureName
+    )
+    {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)
@@ -1169,17 +2180,193 @@ public class ContractRepository : IContractRepository
                     actualParameters.Add(reader.GetString(0));
             }
 
-            if (!procedureFound)
-                return false;
+            return procedureFound ? actualParameters : null;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
 
-            if (!actualParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
+    private async Task<string?> ResolveLegacyUsernameAsync(int currentUserId)
+    {
+        if (currentUserId <= 0)
+            return null;
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT TOP (1)
+                    COALESCE(
+                        NULLIF(LTRIM(RTRIM([name])), ''),
+                        NULLIF(LTRIM(RTRIM([E_Mail])), ''),
+                        CONVERT(varchar(20), [user_access_code])
+                    )
+                FROM [dbo].[user_access_old1]
+                WHERE [user_access_code] = @userAccessCode
+                """;
+            AddParameter(command, "@userAccessCode", DbType.Int32, currentUserId);
+            var value = await command.ExecuteScalarAsync();
+            return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task ApplyBackdatingDecisionAsync(Contract contract, int currentUserId)
+    {
+        if (!HasBackdatingRequest(contract))
+        {
+            return;
+        }
+
+        const string procedureName = "DEV_UPD_Contract_BackDating_RequestedApproveDecline";
+        var expectedParameters = new[]
+        {
+            "@ContractCode",
+            "@Approved_Date",
+            "@Approved_By_Username",
+            "@Declined_Date",
+            "@Declined_Username",
+        };
+        if (!await IsLegacyProcedureAvailableAsync(procedureName, expectedParameters))
+        {
+            throw new NotSupportedException(
+                $"The legacy backdating decision procedure {procedureName} is unavailable; no approval decision was reported as successful."
+            );
+        }
+
+        var actorUsername =
+            contract.backdating_approved_by_username
+            ?? contract.backdating_declined_by_username
+            ?? await ResolveLegacyUsernameAsync(currentUserId);
+        var isApproval = contract.contract_status_code is 2 or 3;
+        // The legacy data-layer method invokes the backdating procedure after
+        // every approval-phase decision. New decline metadata is supplied for
+        // status 4; statuses 5/6 preserve any existing request audit values
+        // rather than inventing a decline event the archived caller did not
+        // record.
+        var isDeclineForCorrection = contract.contract_status_code is 4;
+
+        await ExecuteLegacyProcedureAsync(
+            procedureName,
+            new ProcedureParameter("@ContractCode", DbType.Int32, contract.contract_code),
+            new ProcedureParameter(
+                "@Approved_Date",
+                DbType.DateTime,
+                isApproval
+                    ? contract.backdating_approved_date
+                        ?? contract.backdating_requested_date
+                        ?? DateTime.Now
+                    : null
+            ),
+            new ProcedureParameter(
+                "@Approved_By_Username",
+                DbType.String,
+                isApproval
+                    ? contract.backdating_approved_by_username ?? actorUsername
+                    : null
+            ),
+            new ProcedureParameter(
+                "@Declined_Date",
+                DbType.DateTime,
+                isDeclineForCorrection
+                    ? contract.backdating_declined_date ?? DateTime.Now
+                    : contract.backdating_declined_date
+            ),
+            new ProcedureParameter(
+                "@Declined_Username",
+                DbType.String,
+                isDeclineForCorrection
+                    ? contract.backdating_declined_by_username ?? actorUsername
+                    : contract.backdating_declined_by_username
+            )
+        );
+    }
+
+    private static bool HasBackdatingRequest(Contract contract) =>
+        IsMeaningfulBackdatingDate(contract.backdating_start_date)
+        || IsMeaningfulBackdatingDate(contract.backdating_requested_date);
+
+    private static bool IsMeaningfulBackdatingDate(DateTime? value) =>
+        value.HasValue && value.Value.Date > new DateTime(1900, 1, 1);
+
+    private async Task<string?> ResolveReassignProcedureContractAsync()
+    {
+        const string procedureName = "DEV_UPD_Contract_ReassignExisting";
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [parameterObject].[name]
+                FROM [sys].[procedures] AS [procedureObject]
+                INNER JOIN [sys].[schemas] AS [schemaObject]
+                    ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
+                INNER JOIN [sys].[parameters] AS [parameterObject]
+                    ON [parameterObject].[object_id] = [procedureObject].[object_id]
+                WHERE [schemaObject].[name] = N'dbo'
+                  AND [procedureObject].[name] = @procedureName
+                  AND [parameterObject].[parameter_id] > 0
+                ORDER BY [parameterObject].[parameter_id]
+                """;
+            AddParameter(command, "@procedureName", DbType.String, procedureName);
+
+            var actual = new List<string>();
+            await using (var reader = await command.ExecuteReaderAsync())
             {
-                throw new InvalidOperationException(
-                    $"The deployed legacy procedure {procedureName} does not match the archived parameter contract. No direct-DML fallback was run."
+                while (await reader.ReadAsync())
+                    actual.Add(reader.GetString(0));
+            }
+
+            if (actual.Count == 0)
+            {
+                await using var existsCommand = connection.CreateCommand();
+                existsCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                existsCommand.CommandText = "SELECT OBJECT_ID(@procedureName, 'P');";
+                AddParameter(existsCommand, "@procedureName", DbType.String, $"dbo.{procedureName}");
+                var objectId = await existsCommand.ExecuteScalarAsync();
+                return objectId is null or DBNull ? null : throw new InvalidOperationException(
+                    $"The deployed legacy procedure {procedureName} exposes no parameters. No direct-DML fallback was run."
                 );
             }
 
-            return true;
+            var currentContract = new[]
+            {
+                "@ExistingContractCode", "@VMFCode", "@SiteCode", "@StartDate", "@StartTime",
+                "@StartOdometer", "@DriverSAID", "@DriverName", "@Authorisation", "@Notes", "@UserID",
+                "@Responsibility", "@Objective", "@Project", "@Fund", "@approver_code", "@site_driver_code",
+                "@collector_firstname", "@collector_surname", "@collector_sa_id", "@collector_passportnumber",
+                "@collector_office_number", "@collector_cellphone_number", "@collector_office",
+                "@collector_designation", "@lease_contract_period", "@contract_estimated_overall_km",
+            };
+            var archivedContract = currentContract.ToArray();
+            archivedContract[0] = "@ContractCode";
+
+            if (actual.SequenceEqual(currentContract, StringComparer.OrdinalIgnoreCase))
+                return "@ExistingContractCode";
+            if (actual.SequenceEqual(archivedContract, StringComparer.OrdinalIgnoreCase))
+                return "@ContractCode";
+
+            throw new InvalidOperationException(
+                $"The deployed legacy procedure {procedureName} does not match either archived parameter contract. No direct-DML fallback was run."
+            );
         }
         finally
         {
@@ -1207,6 +2394,106 @@ public class ContractRepository : IContractRepository
             command.CommandTimeout = 0;
             foreach (var parameter in parameters)
                 AddParameter(command, parameter.Name, parameter.Type, parameter.Value);
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task<T> ExecuteInLegacyTransactionAsync<T>(
+        string savepointName,
+        Func<Task<T>> operation
+    )
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(savepointName);
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var existingTransaction = _context.Database.CurrentTransaction;
+        var ownsTransaction = existingTransaction is null;
+        var transaction = ownsTransaction
+            ? await _context.Database.BeginTransactionAsync()
+            : null;
+
+        if (!ownsTransaction)
+        {
+            await existingTransaction!.CreateSavepointAsync(savepointName);
+        }
+
+        try
+        {
+            var result = await operation();
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync();
+            }
+
+            return result;
+        }
+        catch
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync();
+            }
+            else if (existingTransaction is not null)
+            {
+                await existingTransaction.RollbackToSavepointAsync(savepointName);
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+            {
+                await transaction.DisposeAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Legacy procedures receive one @UserID value and use it both for the
+    /// action audit and for the contract's capturer/user_code. The modern
+    /// workflow keeps those identities separate: the approving or editing
+    /// actor is audited by the API, while the original capturer remains the
+    /// contract owner until an explicit reassignment. Restore only the
+    /// owner column after the procedure has completed its own transaction.
+    /// </summary>
+    private async Task RestoreLegacyCapturerAsync(int contractCode, short? capturerCode)
+    {
+        if (contractCode <= 0)
+            return;
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            // The legacy procedure can receive the action actor as @UserID,
+            // so restore ownership only on the row that was acted on. Do not
+            // broaden this to contract_group_code/parent_contract_code: those
+            // rows are historical or related contracts and may have different
+            // original capturers. Ownership changes between rows are explicit
+            // reassignment workflows, never an approval/extension side effect.
+            command.CommandText = $"""
+                UPDATE [dbo].[{ContractTableName}]
+                SET [user_code] = @capturerCode
+                WHERE [contract_code] = @contractCode
+                """;
+            AddParameter(
+                command,
+                "@capturerCode",
+                DbType.Int16,
+                capturerCode.HasValue ? capturerCode.Value : DBNull.Value
+            );
+            AddParameter(command, "@contractCode", DbType.Int32, contractCode);
             await command.ExecuteNonQueryAsync();
         }
         finally
@@ -1291,6 +2578,28 @@ public class ContractRepository : IContractRepository
         {
             clauses.Add("[c].[site_code] = @siteCode");
             parameters.Add(new QueryParameter("@siteCode", DbType.Int16, query.SiteCode.Value));
+        }
+        if (query.AllowedSiteCodes is { Count: > 0 })
+        {
+            var siteParameters = query
+                .AllowedSiteCodes.Distinct()
+                .Select((siteCode, index) => new QueryParameter($"@allowedSiteCode{index}", DbType.Int16, siteCode))
+                .ToArray();
+            clauses.Add($"[c].[site_code] IN ({string.Join(", ", siteParameters.Select(parameter => parameter.Name))})");
+            parameters.AddRange(siteParameters);
+        }
+        else if (query.AllowedSiteCodes is not null)
+        {
+            clauses.Add("1 = 0");
+        }
+        if (query.OwnerUserCode is > 0)
+        {
+            clauses.Add(
+                availableColumns.Contains("created_by_user_code")
+                    ? "([c].[user_code] = @ownerUserCode OR ([c].[user_code] IS NULL AND [c].[created_by_user_code] = @ownerUserCode))"
+                    : "[c].[user_code] = @ownerUserCode"
+            );
+            parameters.Add(new QueryParameter("@ownerUserCode", DbType.Int32, query.OwnerUserCode.Value));
         }
         if (!string.IsNullOrWhiteSpace(query.StillCurrent))
         {
@@ -1456,6 +2765,41 @@ public class ContractRepository : IContractRepository
                 contractColumns,
                 "reassigned_from_contract_code"
             ),
+            backdating_start_date = ReadDateTimeIfAvailable(
+                reader,
+                contractColumns,
+                "backdating_start_date"
+            ),
+            backdating_requested_date = ReadDateTimeIfAvailable(
+                reader,
+                contractColumns,
+                "backdating_requested_date"
+            ),
+            backdating_requested_by_username = ReadStringIfAvailable(
+                reader,
+                contractColumns,
+                "backdating_requested_by_username"
+            ),
+            backdating_approved_date = ReadDateTimeIfAvailable(
+                reader,
+                contractColumns,
+                "backdating_approved_date"
+            ),
+            backdating_approved_by_username = ReadStringIfAvailable(
+                reader,
+                contractColumns,
+                "backdating_approved_by_Username"
+            ),
+            backdating_declined_date = ReadDateTimeIfAvailable(
+                reader,
+                contractColumns,
+                "backdating_declined_date"
+            ),
+            backdating_declined_by_username = ReadStringIfAvailable(
+                reader,
+                contractColumns,
+                "backdating_declined_by_Username"
+            ),
             date_created = dateCreated,
             date_updated = ReadDateTimeIfAvailable(reader, contractColumns, "date_updated"),
             created_by_user_code = createdBy,
@@ -1547,7 +2891,19 @@ public class ContractRepository : IContractRepository
             new("start_odometer", "@startOdometer", DbType.Int32, contract.start_odometer),
             new("end_odometer", "@endOdometer", DbType.Int32, contract.end_odometer),
             new("still_current", "@stillCurrent", DbType.String, contract.still_current ?? "N"),
-            new("contract_type", "@contractType", DbType.String, contract.contract_type ?? "H"),
+            // The client-era contract table requires a real legacy type. A
+            // missing value must not be filled with modern demo type H because
+            // that can change billing semantics or violate the FK on the
+            // restored database.
+            new(
+                "contract_type",
+                "@contractType",
+                DbType.String,
+                contract.contract_type
+                    ?? throw new InvalidOperationException(
+                        "A legacy contract type is required for direct contract persistence."
+                    )
+            ),
             new("Driver_id", "@driverId", DbType.String, contract.Driver_id),
             new("Authorisation", "@authorisation", DbType.String, contract.Authorisation),
             new("Driver_name", "@driverName", DbType.String, contract.Driver_name),
@@ -1899,4 +3255,26 @@ public class ContractRepository : IContractRepository
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 
     private sealed record ProcedureParameter(string Name, DbType Type, object? Value);
+}
+
+/// <summary>
+/// Raised when an extension procedure or its compatibility fallback changes
+/// fields that define billing/ownership. The caller must not report success for
+/// an extension that also closed or recreated the contract unexpectedly.
+/// </summary>
+public sealed class LegacyContractExtensionBillingInvariantException : InvalidOperationException
+{
+    public LegacyContractExtensionBillingInvariantException(string message)
+        : base(message) { }
+}
+
+/// <summary>
+/// Raised when the legacy contract-close trigger does not leave the closed
+/// row and its billing cursor in a consistent state. The caller must not
+/// report success for a close that could leave revenue under- or over-billed.
+/// </summary>
+public sealed class LegacyContractClosureBillingInvariantException : InvalidOperationException
+{
+    public LegacyContractClosureBillingInvariantException(string message)
+        : base(message) { }
 }

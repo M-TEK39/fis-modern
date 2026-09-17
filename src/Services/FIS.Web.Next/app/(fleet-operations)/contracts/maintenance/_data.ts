@@ -16,6 +16,7 @@ export type ContractMaintenanceData =
       sites: SiteRecord[];
     }
   | { kind: "unauthorized" }
+  | { kind: "forbidden" }
   | { kind: "error" };
 
 export async function loadContractMaintenanceData({
@@ -74,6 +75,8 @@ export async function loadContractMaintenanceData({
       error.reason === "unauthorized"
     )
       return { kind: "unauthorized" };
+    if (error instanceof ContractApiError && error.reason === "forbidden")
+      return { kind: "forbidden" };
     return { kind: "error" };
   }
 }

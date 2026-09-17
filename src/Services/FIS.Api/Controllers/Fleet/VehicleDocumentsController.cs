@@ -1,4 +1,6 @@
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
+using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Vehicles;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -21,7 +23,10 @@ namespace FIS.Api.Controllers;
 ///   Contract | Registration | Insurance | RoadWorthy | Other
 /// </summary>
 [ApiController]
-[Authorize]
+// Vehicle documents are exposed from the Vehicle Master detail workflow. Keep
+// the file and metadata endpoints behind the same legacy entitlement as that
+// workflow; authentication alone must not disclose fleet documents.
+[Authorize(Roles = "Vehicle Master")]
 [Route("api/vehicles/{vmfCode:int}/documents")]
 public class VehicleDocumentsController : BaseApiController
 {
@@ -41,18 +46,21 @@ public class VehicleDocumentsController : BaseApiController
 
     private readonly IVehicleDocumentRepository _repository;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly IConfiguration _config;
     private readonly ILogger<VehicleDocumentsController> _logger;
 
     public VehicleDocumentsController(
         IVehicleDocumentRepository repository,
         IVehicleRepository vehicleRepository,
+        LegacyVehicleScopeService vehicleScope,
         IConfiguration config,
         ILogger<VehicleDocumentsController> logger
     )
     {
         _repository = repository;
         _vehicleRepository = vehicleRepository;
+        _vehicleScope = vehicleScope;
         _config = config;
         _logger = logger;
     }
@@ -66,6 +74,8 @@ public class VehicleDocumentsController : BaseApiController
     {
         try
         {
+            if (await GetAccessibleVehicleAsync(vmfCode) is null)
+                return NotFound(new { error = "Vehicle not found" });
             var docs = await _repository.GetByVehicleAsync(vmfCode, category);
             var result = docs.Select(MapToDto).ToList();
 
@@ -112,7 +122,7 @@ public class VehicleDocumentsController : BaseApiController
         try
         {
             // Validate vehicle exists
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await GetAccessibleVehicleAsync(vmfCode);
             if (vehicle == null)
                 return NotFound(new { error = $"Vehicle {vmfCode} not found" });
 
@@ -210,7 +220,7 @@ public class VehicleDocumentsController : BaseApiController
         try
         {
             var doc = await _repository.GetByIdAsync(documentId);
-            if (doc == null || doc.vmf_code != vmfCode)
+            if (doc == null || doc.vmf_code != vmfCode || await GetAccessibleVehicleAsync(vmfCode) is null)
                 return NotFound(new { error = "Document not found" });
 
             var basePath = _config["DocumentStorage:BasePath"] ?? "uploads/documents";
@@ -246,7 +256,7 @@ public class VehicleDocumentsController : BaseApiController
         try
         {
             var doc = await _repository.GetByIdAsync(documentId);
-            if (doc == null || doc.vmf_code != vmfCode)
+            if (doc == null || doc.vmf_code != vmfCode || await GetAccessibleVehicleAsync(vmfCode) is null)
                 return NotFound(new { error = "Document not found" });
 
             // Remove physical file
@@ -294,6 +304,8 @@ public class VehicleDocumentsController : BaseApiController
     {
         try
         {
+            if (await GetAccessibleVehicleAsync(vmfCode) is null)
+                return NotFound(new { error = "Vehicle not found" });
             var docs = await _repository.GetByReferenceAsync(type, id);
             var filtered = docs.Where(d => d.vmf_code == vmfCode).Select(MapToDto).ToList();
             return Ok(
@@ -312,6 +324,16 @@ public class VehicleDocumentsController : BaseApiController
             return StatusCode(500, new { error = "Failed to retrieve documents" });
         }
     }
+
+    private async Task<Vehicle?> GetAccessibleVehicleAsync(int vmfCode) =>
+        await _vehicleRepository.GetByIdAsync(
+            vmfCode,
+            await ResolveAllowedVehicleSiteCodesAsync(),
+            GetCurrentUserId()
+        );
+
+    private Task<IReadOnlySet<short>?> ResolveAllowedVehicleSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
 
     // ── Mapping ───────────────────────────────────────────────────────────
     private static object MapToDto(VehicleDocument d) =>

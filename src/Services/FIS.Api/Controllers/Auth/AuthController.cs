@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -35,6 +36,7 @@ public class AuthController : ControllerBase
     private readonly IEmailNotificationService _emailNotificationService;
     private readonly IPasswordService _passwordService;
     private readonly LegacyCredentialCompatibilityService _legacyCredentialCompatibility;
+    private readonly LegacyRoleCompatibilityService _legacyRoleCompatibility;
     private readonly LegacyFinanceAccessService _legacyFinanceAccess;
     private readonly ISessionManagementService _sessionManagementService;
 
@@ -46,6 +48,7 @@ public class AuthController : ControllerBase
         IEmailNotificationService emailNotificationService,
         IPasswordService passwordService,
         LegacyCredentialCompatibilityService legacyCredentialCompatibility,
+        LegacyRoleCompatibilityService legacyRoleCompatibility,
         LegacyFinanceAccessService legacyFinanceAccess,
         ISessionManagementService sessionManagementService
     )
@@ -57,6 +60,7 @@ public class AuthController : ControllerBase
         _emailNotificationService = emailNotificationService;
         _passwordService = passwordService;
         _legacyCredentialCompatibility = legacyCredentialCompatibility;
+        _legacyRoleCompatibility = legacyRoleCompatibility;
         _legacyFinanceAccess = legacyFinanceAccess;
         _sessionManagementService = sessionManagementService;
     }
@@ -154,9 +158,7 @@ public class AuthController : ControllerBase
 
             if (profile.UserAccessOld is not null)
             {
-                profile.UserAccessOld.Retry = (short)
-                    Math.Min(short.MaxValue, (profile.UserAccessOld.Retry ?? 0) + 1);
-                _context.UserAccessOlds.Update(profile.UserAccessOld);
+                await PersistLegacyLoginStateAsync(profile.UserAccessCode, successfulLogin: false);
             }
 
             await _context.SaveChangesAsync();
@@ -177,10 +179,7 @@ public class AuthController : ControllerBase
 
         if (profile.UserAccessOld is not null)
         {
-            profile.UserAccessOld.Retry = 0;
-            profile.UserAccessOld.last_log_on = DateTime.UtcNow;
-            profile.UserAccessOld.date_updated = DateTime.UtcNow;
-            _context.UserAccessOlds.Update(profile.UserAccessOld);
+            await PersistLegacyLoginStateAsync(profile.UserAccessCode, successfulLogin: true);
         }
 
         await _context.SaveChangesAsync();
@@ -231,15 +230,12 @@ public class AuthController : ControllerBase
 
         var accessLevel = profile.UserAccessOld?.AccessLevel ?? 0L;
 
-        var namedRoles = await _legacyFinanceAccess.GetLegacyNamedRolesAsync(
+        var grantedRoles = await _legacyRoleCompatibility.ResolveRolesAsync(
             profile.ResolvedUsername,
+            profile.UserAccessOld?.Access_str,
+            accessLevel,
             HttpContext.RequestAborted
         );
-        var grantedRoles = LegacyRoleMap
-            .RolesForAccessLevel(accessLevel)
-            .Concat(namedRoles)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
         _logger.LogInformation(
             "Login: user_access_code={UserAccessCode} access_level={AccessLevel} roles={Roles}",
             profile.UserAccessCode,
@@ -260,9 +256,9 @@ public class AuthController : ControllerBase
             grantedRoles,
             financeProfile?.DepartmentCode,
             financeProfile?.SiteCode,
-            namedRoles.Contains("Financial Data (All Departments)", StringComparer.OrdinalIgnoreCase),
+            grantedRoles.Contains("Financial Data (All Departments)", StringComparer.OrdinalIgnoreCase),
             profile.ResolvedUsername,
-            namedRoles.Contains(
+            grantedRoles.Contains(
                 "Vehicle List for All Departments in Province",
                 StringComparer.OrdinalIgnoreCase
             )
@@ -1531,6 +1527,75 @@ public class AuthController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Persists only the legacy login-state fields. The restored client table has
+    /// enabled audit triggers, so EF Core's generated <c>OUTPUT</c> statement is
+    /// incompatible; its expanded audit-column mappings are also optional.
+    /// </summary>
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review if the query string passed to 'string DbCommand.CommandText' accepts any user input",
+        Justification = "Each branch is a fixed legacy-table update; user access code and timestamp are supplied as parameters."
+    )]
+    private async Task PersistLegacyLoginStateAsync(int userAccessCode, bool successfulLogin)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = successfulLogin
+                ? """
+                    UPDATE [dbo].[user_access_old1]
+                    SET [Retry] = 0,
+                        [last_log_on] = @now
+                    WHERE [user_access_code] = @userAccessCode;
+                    """
+                : """
+                    UPDATE [dbo].[user_access_old1]
+                    SET [Retry] = CASE
+                        WHEN [Retry] IS NULL OR [Retry] < 32767 THEN ISNULL([Retry], 0) + 1
+                        ELSE 32767
+                    END
+                    WHERE [user_access_code] = @userAccessCode;
+                    """;
+
+            var userAccessCodeParameter = command.CreateParameter();
+            userAccessCodeParameter.ParameterName = "@userAccessCode";
+            userAccessCodeParameter.DbType = DbType.Int32;
+            userAccessCodeParameter.Value = userAccessCode;
+            command.Parameters.Add(userAccessCodeParameter);
+
+            if (successfulLogin)
+            {
+                var nowParameter = command.CreateParameter();
+                nowParameter.ParameterName = "@now";
+                nowParameter.DbType = DbType.DateTime;
+                nowParameter.Value = DateTime.UtcNow;
+                command.Parameters.Add(nowParameter);
+            }
+
+            if (await command.ExecuteNonQueryAsync() != 1)
+            {
+                throw new InvalidOperationException(
+                    $"Legacy login-state update did not affect user {userAccessCode}."
+                );
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     private async Task RevokeSessionsAfterCredentialEventAsync(int userAccessCode, string eventName)
     {
         var result = await _sessionManagementService.RevokeUserSessionsAsync(userAccessCode);
@@ -1687,74 +1752,6 @@ public class AuthController : ControllerBase
     private static bool IsMissingSchemaObject(SqlException exception)
     {
         return exception.Number is 207 or 208;
-    }
-
-    /// <summary>
-    /// The original application stored fine-grained named roles in the
-    /// ASP.NET membership tables. Those tables are absent from some expanded
-    /// databases, so role hydration is deliberately optional and never makes
-    /// legacy or modern-only login fail.
-    /// </summary>
-    private async Task<IReadOnlyList<string>> TryGetLegacyNamedRolesAsync(string username)
-    {
-        if (string.IsNullOrWhiteSpace(username))
-        {
-            return [];
-        }
-
-        var connection = _context.Database.GetDbConnection();
-        var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose)
-        {
-            await connection.OpenAsync();
-        }
-
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT r.[RoleName]
-                FROM [dbo].[aspnet_Users] AS u
-                INNER JOIN [dbo].[aspnet_UsersInRoles] AS ur ON ur.[UserId] = u.[UserId]
-                INNER JOIN [dbo].[aspnet_Roles] AS r
-                    ON r.[RoleId] = ur.[RoleId]
-                   AND r.[ApplicationId] = u.[ApplicationId]
-                WHERE LOWER(u.[UserName]) = @username
-                """;
-            var parameter = command.CreateParameter();
-            parameter.ParameterName = "@username";
-            parameter.DbType = DbType.String;
-            parameter.Value = username.Trim().ToLowerInvariant();
-            command.Parameters.Add(parameter);
-
-            var roles = new List<string>();
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-            {
-                var role = reader.IsDBNull(0) ? null : reader.GetString(0).Trim();
-                if (!string.IsNullOrWhiteSpace(role))
-                {
-                    roles.Add(role);
-                }
-            }
-
-            return roles;
-        }
-        catch (SqlException ex) when (IsMissingSchemaObject(ex))
-        {
-            _logger.LogInformation(
-                "Legacy ASP.NET role tables are unavailable; continuing with access-level role claims for {Username}",
-                username
-            );
-            return [];
-        }
-        finally
-        {
-            if (shouldClose)
-            {
-                await connection.CloseAsync();
-            }
-        }
     }
 
     private async Task<ResolvedUserProfile?> ResolveUserProfileAsync(string username)
@@ -2094,68 +2091,15 @@ public class AuthController : ControllerBase
             claims.Add(new Claim("finance_all_department_vehicle_list", "true"));
         }
 
-        // Derive named legacy role claims from the bitmask so pages using IsInRole() work
-        foreach (
-            var role in LegacyRoleMap
-                .RolesForAccessLevel(accessLevel)
-                .Concat(additionalRoles ?? [])
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-        )
+        // Role claims must come from the legacy membership/access catalog
+        // resolver. Do not infer unrelated module permissions from a guessed
+        // modern bit map: legacy AccessLevel values are catalog data.
+        foreach (var role in (additionalRoles ?? []).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             claims.Add(new Claim(ClaimTypes.Role, role));
         }
 
         return claims;
-    }
-
-    // Permission bits retained for compatibility with the legacy role model.
-    private const long BitVehicleManagement = 1;
-    private const long BitContractManagement = 2;
-    private const long BitUserAdministration = 4;
-    private const long BitReports = 8;
-    private const long BitFinancial = 16;
-    private const long BitWorkshop = 32;
-
-    internal static class LegacyRoleMap
-    {
-        // role name (as checked by pages) -> required permission bit
-        private static readonly (string Role, long Bit)[] Map =
-        [
-            ("Vehicle Master", BitVehicleManagement),
-            ("Asset Verification", BitVehicleManagement),
-            ("Accidents", BitVehicleManagement),
-            ("Call Centre", BitVehicleManagement),
-            ("Fines", BitVehicleManagement),
-            ("Licence", BitVehicleManagement),
-            ("Losses", BitVehicleManagement),
-            ("Tracking", BitVehicleManagement),
-            ("Towing", BitVehicleManagement),
-            ("Trip Authorities", BitVehicleManagement),
-            ("Private Hire Vehicles", BitVehicleManagement),
-            ("Taxis", BitVehicleManagement),
-            ("Clearance", BitVehicleManagement),
-            ("Contracts", BitContractManagement),
-            ("User Administration", BitUserAdministration),
-            ("Reports", BitReports),
-            ("Management Reports", BitReports),
-            ("Logbooks", BitReports),
-            ("Logsheets", BitReports),
-            ("Monitor", BitReports),
-            ("Fuelcards", BitFinancial),
-            ("Auction", BitFinancial),
-            ("Financial Data (Own Department)", BitFinancial),
-            ("Financial Reports", BitFinancial),
-            ("Administrator", 32767),
-            ("Workshop", BitWorkshop),
-            ("Trouble Shooting", BitWorkshop),
-        ];
-
-        public static IEnumerable<string> RolesForAccessLevel(long accessLevel)
-        {
-            if (accessLevel <= 0)
-                return Array.Empty<string>();
-            return Map.Where(m => (accessLevel & m.Bit) == m.Bit).Select(m => m.Role);
-        }
     }
 
     private void WriteAuthCookies(

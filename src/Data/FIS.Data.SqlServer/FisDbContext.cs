@@ -823,9 +823,12 @@ public class FisDbContext : DbContext
         // VehicleAssessment indexes — latest assessment per vehicle
         modelBuilder.Entity<VehicleAssessment>(entity =>
         {
-            entity
-                .HasIndex(e => new { e.vmf_code, e.assessment_date })
-                .HasDatabaseName("IX_VehicleAssessment_VmfCode_Date");
+            // Vehicle assessments are read and written through the
+            // procedure-backed compatibility repository. The legacy table has
+            // no guaranteed modern audit/index surface, so do not introduce a
+            // migration-only index here.
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
         });
 
         // Workshop indexes — service request history per vehicle

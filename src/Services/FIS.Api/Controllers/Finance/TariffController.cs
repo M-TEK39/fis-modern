@@ -1,8 +1,8 @@
 using FIS.Core.Application.Services.Billing;
-using FIS.Data.SqlServer;
+using FIS.Api.Services;
+using FIS.Core.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -11,25 +11,37 @@ namespace FIS.Api.Controllers;
 /// Provides access to the comprehensive tariff calculation system
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(
+    Roles =
+        "Contracts,Contract (Load and Manage),Contract (Approver),Financial Reports,Financial Data (Own Department),Financial Data (All Departments),Financial Tariff Parameters,Financial Tariff Parameters (Approver),Vehicle Master"
+)]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class TariffController : BaseApiController
 {
     private readonly ITariffCalculationService _tariffCalculationService;
-    private readonly FisDbContext _context;
+    private readonly IContractRepository _contractRepository;
+    private readonly IVehicleRepository _vehicleRepository;
+    private readonly ITariffRepository _tariffRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<TariffController> _logger;
 
     public TariffController(
         ITariffCalculationService tariffCalculationService,
-        FisDbContext context,
+        IContractRepository contractRepository,
+        IVehicleRepository vehicleRepository,
+        ITariffRepository tariffRepository,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<TariffController> logger
     )
     {
         _tariffCalculationService =
             tariffCalculationService
             ?? throw new ArgumentNullException(nameof(tariffCalculationService));
-        _context = context;
+        _contractRepository = contractRepository;
+        _vehicleRepository = vehicleRepository;
+        _tariffRepository = tariffRepository;
+        _vehicleScope = vehicleScope;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -54,6 +66,11 @@ public class TariffController : BaseApiController
         {
             var date = checkDate ?? DateTime.Now;
             var type = tariffType.ToLower() == "kilos" ? TariffType.Kilos : TariffType.Fixed;
+            var contract = await _contractRepository.GetByIdAsync(contractCode);
+            if (contract is null)
+                return NotFound(new { error = $"Contract {contractCode} not found." });
+            if (!await IsSiteAllowedAsync(contract.site_code))
+                return NotFound(new { error = $"Contract {contractCode} not found." });
 
             _logger.LogInformation(
                 "Getting tariff for contract {ContractCode}, date {Date}, type {Type}",
@@ -101,10 +118,15 @@ public class TariffController : BaseApiController
     {
         try
         {
-            if (!ModelState.IsValid)
+            if (request is null || !ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
+
+            if (!await IsVehicleAllowedAsync(request.VmfCode))
+                return NotFound(new { error = $"Vehicle {request.VmfCode} not found." });
+            if (!await IsSiteAllowedAsync(request.SiteCode))
+                return Forbid();
 
             _logger.LogInformation("Calculating tariff for vehicle {VmfCode}", request.VmfCode);
 
@@ -187,9 +209,11 @@ public class TariffController : BaseApiController
     {
         try
         {
-            var vehicle = await _context
-                .Vehicles.Include(v => v.Model)
-                .FirstOrDefaultAsync(v => v.vmf_code == vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
                 return NotFound(new { error = $"Vehicle {vmfCode} not found" });
@@ -210,18 +234,12 @@ public class TariffController : BaseApiController
             var classCode = vehicle.Model.class_code;
             var today = DateTime.Today;
 
-            // Find the currently effective, approved tariff for this vehicle class
-            var tariff = await _context
-                .Tariffs.Where(t =>
-                    t.class_code == classCode
-                    && t.tariff_approval_status == 2
-                    && // Approved
-                    !t.is_deleted
-                    && t.effective_start_date <= today
-                    && (t.effective_end_date == null || t.effective_end_date >= today)
-                )
-                .OrderByDescending(t => t.effective_start_date)
-                .FirstOrDefaultAsync();
+            // Resolve through the guarded compatibility repository. The
+            // original tariff table predates the expanded audit columns that
+            // EF's static model expects, so a direct DbSet query can fail on
+            // the restored client schema even though the legacy tariff row is
+            // present.
+            var tariff = await _tariffRepository.GetApprovedTariffForClassAsync(classCode, today);
 
             return Ok(
                 new
@@ -263,6 +281,22 @@ public class TariffController : BaseApiController
                 new { error = "Failed to preview tariff", message = ex.Message }
             );
         }
+    }
+
+    private Task<IReadOnlySet<short>?> ResolveAllowedVehicleSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
+
+    private async Task<bool> IsVehicleAllowedAsync(int vmfCode) =>
+        await _vehicleRepository.GetByIdAsync(
+            vmfCode,
+            await ResolveAllowedVehicleSiteCodesAsync(),
+            GetCurrentUserId()
+        ) is not null;
+
+    private async Task<bool> IsSiteAllowedAsync(short siteCode)
+    {
+        var allowed = await ResolveAllowedVehicleSiteCodesAsync();
+        return allowed is null || allowed.Contains(siteCode);
     }
 }
 

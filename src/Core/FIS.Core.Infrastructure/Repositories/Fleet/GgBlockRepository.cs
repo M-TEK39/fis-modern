@@ -133,12 +133,6 @@ public sealed class GgBlockRepository : IGgBlockRepository
         {
             var blockTables = await GetUsableBlockTablesAsync(connection, transaction);
             EnsureBlockTableAvailable(blockTables);
-            var numberColumns = await GetAvailableColumnsAsync(
-                connection,
-                NumberTableName,
-                transaction
-            );
-            EnsureRequiredColumns(numberColumns, RequiredNumberColumns, NumberTableName);
 
             if (
                 await HasOverlappingRangeAsync(
@@ -153,30 +147,103 @@ public sealed class GgBlockRepository : IGgBlockRepository
                 throw new GgBlockRangeConflictException();
             }
 
-            var selectedTable = blockTables[0];
             var now = DateTime.UtcNow;
-            var blockId = await InsertBlockAsync(
+            var normalizedStart = startGgNumber.Trim().ToUpperInvariant();
+            var normalizedEnd = endGgNumber.Trim().ToUpperInvariant();
+            var insertProcedure = await ProcedureMatchesAsync(
                 connection,
                 transaction,
-                selectedTable,
-                startGgNumber.Trim().ToUpperInvariant(),
-                endGgNumber.Trim().ToUpperInvariant(),
-                currentUserId,
-                now
+                "DEV_INS_GGBlocks",
+                "@vch_start_GG",
+                "@vch_end_GG",
+                "@Created_By_User_Code",
+                "@Modified_User_Code"
+            );
+            var generateProcedure = await ProcedureMatchesAsync(
+                connection,
+                transaction,
+                "DEV_GEN_GGBlockNumbers",
+                "@vch_start",
+                "@vch_end",
+                "@user_access_code",
+                "@vch_suffix",
+                "@vch_exlusions"
             );
 
-            await InsertGeneratedNumbersAsync(
-                connection,
-                transaction,
-                numberColumns,
-                blockId,
-                startPrefix,
-                startNumber,
-                endNumber,
-                startSuffix.ToString(),
-                currentUserId,
-                now
-            );
+            short blockId;
+            if (insertProcedure == true && generateProcedure == true)
+            {
+                await ExecuteProcedureAsync(
+                    connection,
+                    transaction,
+                    "DEV_INS_GGBlocks",
+                    new ProcedureParameter("@vch_start_GG", DbType.String, normalizedStart),
+                    new ProcedureParameter("@vch_end_GG", DbType.String, normalizedEnd),
+                    new ProcedureParameter("@Created_By_User_Code", DbType.Int32, currentUserId),
+                    new ProcedureParameter("@Modified_User_Code", DbType.Int32, currentUserId)
+                );
+                await ExecuteProcedureAsync(
+                    connection,
+                    transaction,
+                    "DEV_GEN_GGBlockNumbers",
+                    new ProcedureParameter("@vch_start", DbType.String, normalizedStart),
+                    new ProcedureParameter("@vch_end", DbType.String, normalizedEnd),
+                    new ProcedureParameter("@user_access_code", DbType.Int32, currentUserId),
+                    new ProcedureParameter("@vch_suffix", DbType.String, startSuffix.ToString()),
+                    new ProcedureParameter("@vch_exlusions", DbType.String, null)
+                );
+                blockId = await FindInsertedBlockIdAsync(
+                        connection,
+                        transaction,
+                        blockTables,
+                        normalizedStart,
+                        normalizedEnd
+                    )
+                    ?? throw new InvalidOperationException(
+                        "The legacy GG block procedure completed without a readable block row."
+                    );
+            }
+            else if (insertProcedure is null && generateProcedure is null)
+            {
+                // Explicit compatibility fallback: both original procedures
+                // are absent, so preserve their result shape with the guarded
+                // parameterized table path.
+                var numberColumns = await GetAvailableColumnsAsync(
+                    connection,
+                    NumberTableName,
+                    transaction
+                );
+                EnsureRequiredColumns(numberColumns, RequiredNumberColumns, NumberTableName);
+                var selectedTable = blockTables[0];
+                blockId = await InsertBlockAsync(
+                    connection,
+                    transaction,
+                    selectedTable,
+                    normalizedStart,
+                    normalizedEnd,
+                    currentUserId,
+                    now
+                );
+
+                await InsertGeneratedNumbersAsync(
+                    connection,
+                    transaction,
+                    numberColumns,
+                    blockId,
+                    startPrefix,
+                    startNumber,
+                    endNumber,
+                    startSuffix.ToString(),
+                    currentUserId,
+                    now
+                );
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    "The deployed legacy GG block workflow is incomplete. No direct-DML fallback was run."
+                );
+            }
 
             await transaction.CommitAsync();
 
@@ -184,8 +251,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
                 blockId,
                 currentUserId > 0 ? $"User {currentUserId}" : "Current User",
                 now,
-                startGgNumber.Trim().ToUpperInvariant(),
-                endGgNumber.Trim().ToUpperInvariant()
+                normalizedStart,
+                normalizedEnd
             );
         }
         catch
@@ -517,6 +584,117 @@ public sealed class GgBlockRepository : IGgBlockRepository
         return columns.Contains("name") && columns.Contains("user_access_code") ? columns : null;
     }
 
+    private static async Task<bool?> ProcedureMatchesAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        string procedureName,
+        params string[] expectedParameters
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT [p].[name]
+            FROM [sys].[procedures] AS [sp]
+            INNER JOIN [sys].[schemas] AS [s] ON [s].[schema_id] = [sp].[schema_id]
+            LEFT JOIN [sys].[parameters] AS [p]
+                ON [p].[object_id] = [sp].[object_id]
+               AND [p].[parameter_id] > 0
+            WHERE [s].[name] = N'dbo'
+              AND [sp].[name] = @procedureName
+            ORDER BY [p].[parameter_id]
+            """;
+        AddParameter(command, "@procedureName", DbType.String, procedureName);
+
+        var actualParameters = new List<string>();
+        var procedureExists = false;
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                procedureExists = true;
+                if (!reader.IsDBNull(0))
+                {
+                    actualParameters.Add(reader.GetString(0));
+                }
+            }
+        }
+
+        if (!procedureExists)
+        {
+            return null;
+        }
+
+        if (!actualParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The deployed legacy procedure {procedureName} does not match its verified parameter contract. No direct-DML fallback was run."
+            );
+        }
+
+        return true;
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The procedure name is selected only from fixed legacy compatibility branches; all values are parameters."
+    )]
+    private static async Task ExecuteProcedureAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        string procedureName,
+        params ProcedureParameter[] parameters
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = $"[dbo].[{procedureName}]";
+        foreach (var parameter in parameters)
+        {
+            AddParameter(command, parameter.Name, parameter.Type, parameter.Value);
+        }
+
+        await command.ExecuteNonQueryAsync();
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The table name is selected from fixed compatibility metadata; range values are parameters."
+    )]
+    private static async Task<short?> FindInsertedBlockIdAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        IReadOnlyList<BlockTable> tables,
+        string startGgNumber,
+        string endGgNumber
+    )
+    {
+        foreach (var table in tables)
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = $"""
+                SELECT TOP (1) [Block_ID]
+                FROM [dbo].[{table.Name}]
+                WHERE [Vch_Start_Reg] = @startGgNumber
+                  AND [Vch_End_Reg] = @endGgNumber
+                ORDER BY [Block_ID] DESC
+                """;
+            AddParameter(command, "@startGgNumber", DbType.String, startGgNumber);
+            AddParameter(command, "@endGgNumber", DbType.String, endGgNumber);
+            var value = await command.ExecuteScalarAsync();
+            if (value is not null and not DBNull)
+            {
+                return Convert.ToInt16(value);
+            }
+        }
+
+        return null;
+    }
+
     private static void EnsureBlockTableAvailable(IReadOnlyCollection<BlockTable> tables)
     {
         if (tables.Count == 0)
@@ -590,6 +768,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
 
     private static DateTime? ReadDateTime(DbDataReader reader, string column) =>
         reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
+
+    private sealed record ProcedureParameter(string Name, DbType Type, object? Value);
 
     private sealed record BlockTable(string Name, HashSet<string> Columns);
 

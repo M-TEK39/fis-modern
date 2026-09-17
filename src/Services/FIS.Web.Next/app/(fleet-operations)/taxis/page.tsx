@@ -23,8 +23,10 @@ import {
   TaxiApiError,
 } from "@/lib/api/fleet-operations/api-taxis";
 import { getSession } from "@/lib/auth/session";
-
-const ROLE = "Private Hire Vehicles";
+import {
+  hasRecurringTaxiAccess,
+  hasTaxiAccess,
+} from "@/app/(fleet-operations)/taxis/access";
 
 function requestedPage(value: string | string[] | undefined) {
   const candidate = Number(Array.isArray(value) ? value[0] : value);
@@ -32,7 +34,7 @@ function requestedPage(value: string | string[] | undefined) {
 }
 
 function hasRole(roles: readonly string[]) {
-  return roles.some((role) => role.localeCompare(ROLE, undefined, { sensitivity: "accent" }) === 0);
+  return hasTaxiAccess(roles);
 }
 
 async function TaxisPageContent({
@@ -85,6 +87,11 @@ async function TaxisPageContent({
               <Link className="vehicle-menu-link" href="/taxis/requests?mode=add">
                 1) Enter Taxi Requisition
               </Link>
+              {hasRecurringTaxiAccess(session.roles) ? (
+                <Link className="vehicle-menu-link" href="/taxis/requests?mode=recurring">
+                  1.2) Book Recurring Taxi (weekdays)
+                </Link>
+              ) : null}
               <Link className="vehicle-menu-link" href="/taxis/requests?mode=add&previousBas=1">
                 1.1) Enter Taxi Requisition using Previous Fin Years BAS Codes
               </Link>

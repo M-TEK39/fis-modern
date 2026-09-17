@@ -1,3 +1,4 @@
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -6,24 +7,27 @@ using Microsoft.AspNetCore.Mvc;
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Vehicle Master")]
 [Route("api/[controller]")]
 public class VehiclePhotoController : BaseApiController
 {
     private readonly IVehiclePhotoRepository _repository;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly IConfiguration _config;
     private readonly ILogger<VehiclePhotoController> _logger;
 
     public VehiclePhotoController(
         IVehiclePhotoRepository repository,
         IVehicleRepository vehicleRepository,
+        LegacyVehicleScopeService vehicleScope,
         IConfiguration config,
         ILogger<VehiclePhotoController> logger
     )
     {
         _repository = repository;
         _vehicleRepository = vehicleRepository;
+        _vehicleScope = vehicleScope;
         _config = config;
         _logger = logger;
     }
@@ -33,7 +37,14 @@ public class VehiclePhotoController : BaseApiController
     {
         try
         {
-            return Ok(await _repository.GetAllAsync());
+            var allowedSites = await ResolveAllowedVehicleSiteCodesAsync();
+            var currentUserId = GetCurrentUserId();
+            var allowedVehicleCodes = (await _vehicleRepository.GetActiveVehiclesAsync(
+                allowedSites,
+                currentUserId
+            )).Select(vehicle => vehicle.vmf_code).ToHashSet();
+            return Ok((await _repository.GetAllAsync()).Where(photo =>
+                allowedVehicleCodes.Contains(photo.VehicleMasterCode)));
         }
         catch (Exception ex)
         {
@@ -48,7 +59,9 @@ public class VehiclePhotoController : BaseApiController
         try
         {
             var item = await _repository.GetByIdAsync(id);
-            return item == null ? NotFound() : Ok(item);
+            if (item is null)
+                return NotFound();
+            return await IsVehicleAllowedAsync(item.VehicleMasterCode) ? Ok(item) : NotFound();
         }
         catch (Exception ex)
         {
@@ -62,6 +75,8 @@ public class VehiclePhotoController : BaseApiController
     {
         try
         {
+            if (!await IsVehicleAllowedAsync(vmfCode))
+                return NotFound();
             return Ok(await _repository.GetByVehicleAsync(vmfCode));
         }
         catch (Exception ex)
@@ -95,7 +110,7 @@ public class VehiclePhotoController : BaseApiController
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file provided" });
 
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await GetAccessibleVehicleAsync(vmfCode);
             if (vehicle == null)
                 return NotFound(new { error = $"Vehicle {vmfCode} not found" });
 
@@ -184,7 +199,8 @@ public class VehiclePhotoController : BaseApiController
         try
         {
             var photo = await _repository.GetByIdAsync(id);
-            if (photo == null || string.IsNullOrEmpty(photo.FileUrl))
+            if (photo == null || string.IsNullOrEmpty(photo.FileUrl)
+                || !await IsVehicleAllowedAsync(photo.VehicleMasterCode))
                 return NotFound(new { error = "Photo not found" });
 
             var absPath = ResolveStoredPath(photo.FileUrl);
@@ -219,6 +235,8 @@ public class VehiclePhotoController : BaseApiController
     {
         try
         {
+            if (item is null || !await IsVehicleAllowedAsync(item.VehicleMasterCode))
+                return NotFound();
             var created = await _repository.CreateAsync(item, GetCurrentUserId());
             return CreatedAtAction(
                 nameof(GetById),
@@ -240,6 +258,11 @@ public class VehiclePhotoController : BaseApiController
         {
             if (id != item.VehiclePhotoInfoCode)
                 return BadRequest();
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing is null || !await IsVehicleAllowedAsync(existing.VehicleMasterCode))
+                return NotFound();
+            if (item.VehicleMasterCode != existing.VehicleMasterCode)
+                return BadRequest(new { error = "A photo cannot be moved to another vehicle." });
             return Ok(await _repository.UpdateAsync(item, GetCurrentUserId()));
         }
         catch (Exception ex)
@@ -256,6 +279,8 @@ public class VehiclePhotoController : BaseApiController
         {
             // Also remove physical file if present
             var photo = await _repository.GetByIdAsync(id);
+            if (photo is null || !await IsVehicleAllowedAsync(photo.VehicleMasterCode))
+                return NotFound();
             if (photo != null && !string.IsNullOrEmpty(photo.FileUrl))
             {
                 var absPath = ResolveStoredPath(photo.FileUrl);
@@ -272,6 +297,19 @@ public class VehiclePhotoController : BaseApiController
             return StatusCode(500);
         }
     }
+
+    private async Task<Vehicle?> GetAccessibleVehicleAsync(int vmfCode) =>
+        await _vehicleRepository.GetByIdAsync(
+            vmfCode,
+            await ResolveAllowedVehicleSiteCodesAsync(),
+            GetCurrentUserId()
+        );
+
+    private async Task<bool> IsVehicleAllowedAsync(int vmfCode) =>
+        await GetAccessibleVehicleAsync(vmfCode) is not null;
+
+    private Task<IReadOnlySet<short>?> ResolveAllowedVehicleSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
 
     private string? ResolveStoredPath(string? fileUrl)
     {

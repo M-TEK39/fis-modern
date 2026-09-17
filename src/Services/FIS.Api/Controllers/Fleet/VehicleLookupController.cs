@@ -1,4 +1,5 @@
 using FIS.Core.Application.Interfaces;
+using FIS.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -16,16 +17,57 @@ public class VehicleLookupController : BaseApiController
 {
     private const int DefaultPageSize = 24;
     private const int MaximumPageSize = 100;
+    private static readonly string[] VehicleLookupRoles =
+    [
+        "Vehicle Master",
+        "Vehicle Inception Capturer",
+        "Vehicle Inception Authorizer",
+        "Reports",
+        "Management Reports",
+        "Financial Reports",
+        "Financial Data (Own Department)",
+        "Financial Data (All Departments)",
+        "Accidents",
+        "Auction",
+        "Call Centre",
+        "Clearance",
+        "Contracts",
+        "Fines",
+        "Fuelcards",
+        "Licence",
+        "Logbooks",
+        "Logsheets",
+        "Losses",
+        "Monitor",
+        "Private Hire Vehicles",
+        "Taxi information maintenance",
+        "Towing",
+        "Tracking",
+        "Trip Authorities",
+        "TripAuthorities",
+        "Trouble Shooting",
+        "Validation",
+        "Workshop",
+        "Asset Verification",
+        "Lease Vehicle Pending",
+        "Lease Vehicle Capturer",
+        "Lease Vehicle Authorizer",
+        "JobCard Capturer",
+        "JobCard Authorizer",
+    ];
 
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<VehicleLookupController> _logger;
 
     public VehicleLookupController(
         IVehicleRepository vehicleRepository,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<VehicleLookupController> logger
     )
     {
         _vehicleRepository = vehicleRepository;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
@@ -44,6 +86,9 @@ public class VehicleLookupController : BaseApiController
         [FromQuery] string? mode = null
     )
     {
+        if (!HasVehicleLookupAccess())
+            return Forbid();
+
         var normalizedMode = string.IsNullOrWhiteSpace(mode)
             ? null
             : mode.Trim().ToUpperInvariant();
@@ -64,7 +109,9 @@ public class VehicleLookupController : BaseApiController
                 normalizedKeyword,
                 normalizedMode,
                 Math.Max(1, page),
-                Math.Clamp(pageSize, 1, MaximumPageSize)
+                Math.Clamp(pageSize, 1, MaximumPageSize),
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
             );
 
             return Ok(
@@ -118,6 +165,9 @@ public class VehicleLookupController : BaseApiController
         [FromQuery] int limit = 20
     )
     {
+        if (!HasVehicleLookupAccess())
+            return Forbid();
+
         try
         {
             if (string.IsNullOrWhiteSpace(keyword))
@@ -126,7 +176,11 @@ public class VehicleLookupController : BaseApiController
             }
 
             // Search vehicles using repository
-            var vehicles = await _vehicleRepository.SearchVehiclesAsync(keyword);
+            var vehicles = await _vehicleRepository.SearchVehiclesAsync(
+                keyword,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             // Map to lightweight DTOs
             var results = vehicles
@@ -178,9 +232,16 @@ public class VehicleLookupController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<VehicleSearchResultDto>> GetByVmfCode(int vmfCode)
     {
+        if (!HasVehicleLookupAccess())
+            return Forbid();
+
         try
         {
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (vehicle == null)
             {
                 return NotFound(new { error = "Vehicle not found", vmfCode });
@@ -213,6 +274,31 @@ public class VehicleLookupController : BaseApiController
             );
         }
     }
+
+    private bool HasVehicleLookupAccess()
+    {
+        var roleClaims = User
+            .Claims.Where(claim =>
+                claim.Type == System.Security.Claims.ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            );
+
+        return roleClaims.Any(role =>
+            VehicleLookupRoles.Any(expected =>
+                string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+            )
+        );
+    }
+
+    private Task<IReadOnlySet<short>?> ResolveAllowedVehicleSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
 }
 
 /// <summary>

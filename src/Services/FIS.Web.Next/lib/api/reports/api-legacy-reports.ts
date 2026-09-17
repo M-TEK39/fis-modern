@@ -26,7 +26,11 @@ export type LegacyReportRequestOptions = {
   includeAll?: boolean;
 };
 
-export type LegacyReportApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
+export type LegacyReportApiErrorReason =
+  | "unauthorized"
+  | "forbidden"
+  | "unavailable"
+  | "invalid-response";
 
 export class LegacyReportApiError extends Error {
   constructor(
@@ -105,10 +109,18 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new LegacyReportApiError(
         "unauthorized",
         "The FIS access cookie was rejected.",
+        response.status,
+      );
+    }
+
+    if (response.status === 403) {
+      throw new LegacyReportApiError(
+        "forbidden",
+        "Your account is not assigned the required Reports permission.",
         response.status,
       );
     }

@@ -47,6 +47,18 @@ function valuesFromProfile(profile: UserAdminProfile): EditableValues {
   };
 }
 
+function normalizeAccessLevel(value: number) {
+  return Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+function hasPermissionBit(value: number, permissionBit: number) {
+  if (permissionBit <= 0 || !Number.isSafeInteger(permissionBit)) {
+    return false;
+  }
+
+  return Math.floor(value / permissionBit) % 2 === 1;
+}
+
 function Field({
   id,
   label,
@@ -101,7 +113,7 @@ export default function UserEditForm({
 }>) {
   const initialValues = useMemo(() => valuesFromProfile(profile), [profile]);
   const [values, setValues] = useState(initialValues);
-  const [accessLevel, setAccessLevel] = useState(profile.accessLevel);
+  const [accessLevel, setAccessLevel] = useState(() => normalizeAccessLevel(profile.accessLevel));
   const siteApprovers = useMemo(
     () => approvers.filter((approver) => approver.siteCode === Number(values.siteCode)),
     [approvers, values.siteCode],
@@ -118,15 +130,13 @@ export default function UserEditForm({
 
   function togglePermission(permissionBit: number) {
     setAccessLevel((current) =>
-      (current & permissionBit) === permissionBit
-        ? current & ~permissionBit
-        : current | permissionBit,
+      hasPermissionBit(current, permissionBit) ? current - permissionBit : current + permissionBit,
     );
   }
 
   function resetForm() {
     setValues(initialValues);
-    setAccessLevel(profile.accessLevel);
+    setAccessLevel(normalizeAccessLevel(profile.accessLevel));
   }
 
   return (
@@ -348,7 +358,7 @@ export default function UserEditForm({
                 name="accessLevel"
                 type="checkbox"
                 value={option.permissionBit}
-                checked={(accessLevel & option.permissionBit) === option.permissionBit}
+                checked={hasPermissionBit(accessLevel, option.permissionBit)}
                 onChange={() => togglePermission(option.permissionBit)}
               />
               {option.role}

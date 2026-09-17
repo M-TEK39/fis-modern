@@ -1,4 +1,12 @@
-const FINANCE_ROLES = ["financial reports", "administrator", "admin"] as const;
+const FINANCE_ROLES = [
+  "financial reports",
+  "financial data (own department)",
+  "financial data (all departments)",
+  "administrator",
+  "admin",
+  "systemadministrator",
+  "system administrator",
+] as const;
 
 const FINANCE_ROLE_SET = new Set<string>(FINANCE_ROLES);
 
@@ -8,8 +16,7 @@ export function hasFinanceRole(roles: readonly string[]) {
 
 export function hasFinanceDataMaintenanceRole(roles: readonly string[]) {
   return (
-    hasRole(roles, "Administrator") ||
-    hasRole(roles, "Admin") ||
+    hasAdministratorRole(roles) ||
     hasRole(roles, "Financial Data (Own Department)") ||
     hasRole(roles, "Financial Data (All Departments)")
   );
@@ -17,8 +24,7 @@ export function hasFinanceDataMaintenanceRole(roles: readonly string[]) {
 
 export function hasFinancialReportsRole(roles: readonly string[]) {
   return (
-    hasRole(roles, "Administrator") ||
-    hasRole(roles, "Admin") ||
+    hasAdministratorRole(roles) ||
     hasRole(roles, "Financial Reports")
   );
 }
@@ -28,8 +34,7 @@ export function canMaintainAllFinanceData(
   hasProvinceWideVehicleListRole = false,
 ) {
   return (
-    hasRole(roles, "Administrator") ||
-    hasRole(roles, "Admin") ||
+    hasAdministratorRole(roles) ||
     (hasRole(roles, "Financial Data (All Departments)") && hasProvinceWideVehicleListRole)
   );
 }
@@ -40,8 +45,7 @@ export function canSelectBasCorrectionDepartments(
   legacyUsername: string | undefined,
 ) {
   return (
-    hasRole(roles, "Administrator") ||
-    hasRole(roles, "Admin") ||
+    hasAdministratorRole(roles) ||
     (hasRole(roles, "Financial Data (All Departments)") &&
       hasHeadOfficeFinanceAccess(siteCode, legacyUsername))
   );
@@ -49,8 +53,7 @@ export function canSelectBasCorrectionDepartments(
 
 export function hasBasCorrectionRole(roles: readonly string[]) {
   return (
-    hasRole(roles, "Administrator") ||
-    hasRole(roles, "Admin") ||
+    hasAdministratorRole(roles) ||
     hasRole(roles, "Financial Data (Own Department)") ||
     hasRole(roles, "Financial Data (All Departments)") ||
     hasRole(roles, "Vehicle List for All Sites in Department")
@@ -62,15 +65,22 @@ export function hasRole(roles: readonly string[], role: string) {
   return roles.some((item) => item.trim().toLowerCase() === expected);
 }
 
-export function canSelectAllFinanceDepartments(
-  roles: readonly string[],
-  hasVerifiedAllDepartmentRole = false,
-  accessLevel?: string,
-) {
+export function hasAdministratorRole(roles: readonly string[]) {
   return (
     hasRole(roles, "Administrator") ||
     hasRole(roles, "Admin") ||
-    accessLevel === "32767" ||
+    hasRole(roles, "SystemAdministrator") ||
+    hasRole(roles, "System Administrator")
+  );
+}
+
+export function canSelectAllFinanceDepartments(
+  roles: readonly string[],
+  hasVerifiedAllDepartmentRole = false,
+  _accessLevel?: string,
+) {
+  return (
+    hasAdministratorRole(roles) ||
     (hasRole(roles, "Financial Reports") && hasVerifiedAllDepartmentRole)
   );
 }
@@ -95,7 +105,7 @@ export function hasGeneralFinanceReportsAccess(roles: readonly string[]) {
 }
 
 export function hasAuditTrailReportsAccess(roles: readonly string[]) {
-  return hasRole(roles, "Administrator") || hasRole(roles, "Admin") || hasRole(roles, "Reports");
+  return hasAdministratorRole(roles) || hasRole(roles, "Reports");
 }
 
 export function hasTariffParametersRole(roles: readonly string[]) {

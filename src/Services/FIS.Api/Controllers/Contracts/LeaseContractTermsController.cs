@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -12,14 +13,20 @@ namespace FIS.Api.Controllers;
 public class LeaseContractTermsController : BaseApiController
 {
     private readonly ILeaseContractTermsRepository _repository;
+    private readonly IVehicleRepository _vehicleRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<LeaseContractTermsController> _logger;
 
     public LeaseContractTermsController(
         ILeaseContractTermsRepository repository,
+        IVehicleRepository vehicleRepository,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<LeaseContractTermsController> logger
     )
     {
         _repository = repository;
+        _vehicleRepository = vehicleRepository;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
@@ -31,7 +38,7 @@ public class LeaseContractTermsController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetAllAsync());
+            return Ok(await FilterByScopeAsync(await _repository.GetAllAsync()));
         }
         catch (Exception ex)
         {
@@ -54,13 +61,16 @@ public class LeaseContractTermsController : BaseApiController
 
         try
         {
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
             var result = await _repository.GetPageAsync(
                 new LeaseContractTermsPageQuery(
                     Math.Max(1, page),
                     Math.Clamp(pageSize, 1, 100),
                     search,
                     mode,
-                    status
+                    status,
+                    allowedSites,
+                    GetCurrentUserId()
                 )
             );
 
@@ -91,7 +101,9 @@ public class LeaseContractTermsController : BaseApiController
         try
         {
             var item = await _repository.GetByIdAsync(id);
-            return item == null ? NotFound() : Ok(item);
+            if (item is null)
+                return NotFound();
+            return await IsTermAllowedAsync(item) ? Ok(item) : NotFound();
         }
         catch (Exception ex)
         {
@@ -109,7 +121,9 @@ public class LeaseContractTermsController : BaseApiController
         try
         {
             var item = await _repository.GetByVehicleAsync(vmfCode);
-            return item == null ? NotFound() : Ok(item);
+            if (item is null)
+                return NotFound();
+            return await IsTermAllowedAsync(item) ? Ok(item) : NotFound();
         }
         catch (Exception ex)
         {
@@ -126,7 +140,7 @@ public class LeaseContractTermsController : BaseApiController
 
         try
         {
-            return Ok(await _repository.GetActiveTermsAsync());
+            return Ok(await FilterByScopeAsync(await _repository.GetActiveTermsAsync()));
         }
         catch (Exception ex)
         {
@@ -143,7 +157,13 @@ public class LeaseContractTermsController : BaseApiController
 
         try
         {
-            var created = await _repository.CaptureOrResubmitAsync(item, GetLegacyUsername());
+            if (!await IsNewTermAllowedAsync(item))
+                return Forbid();
+            var created = await _repository.CaptureOrResubmitAsync(
+                item,
+                GetLegacyUsername(),
+                GetCurrentUserId()
+            );
             return CreatedAtAction(
                 nameof(GetById),
                 new { id = created.VehicleContractTermID },
@@ -171,15 +191,23 @@ public class LeaseContractTermsController : BaseApiController
             var existing = await _repository.GetByIdAsync(id);
             if (existing is null)
                 return NotFound();
+            if (!await IsTermAllowedAsync(existing) || !await IsRequestedSiteAllowedAsync(item))
+                return Forbid();
 
             var username = GetLegacyUsername();
+            var currentUserId = GetCurrentUserId();
             if (item.AuthorityStatus == 2)
             {
                 if (!HasLeaseVehicleAuthorizerRole())
                     return Forbid();
+                if (!IsAwaitingAuthorisation(existing))
+                    return Conflict(new { error = "Only lease terms awaiting authorisation can be authorised." });
 
                 var capturedBy = await _repository.GetCapturedByUsernameAsync(existing.vmf_Code);
-                if (string.Equals(capturedBy, username, StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrWhiteSpace(capturedBy))
+                    return Conflict(new { error = "The original lease-term capturer could not be resolved; authorisation is blocked until the legacy user record is available." });
+                if (existing.CreatedBy == currentUserId
+                    || string.Equals(capturedBy, username, StringComparison.OrdinalIgnoreCase))
                     return Conflict(
                         new { error = "You cannot authorise lease contract terms that you captured yourself." }
                     );
@@ -187,16 +215,28 @@ public class LeaseContractTermsController : BaseApiController
                 var comment = item.authority_comment?.Trim();
                 if (string.IsNullOrWhiteSpace(comment))
                     return BadRequest(new { error = "An authorisation comment is required." });
-                return Ok(await _repository.AuthorizeAsync(existing, comment, username));
+                return Ok(
+                    await _repository.AuthorizeAsync(
+                        existing,
+                        comment,
+                        username,
+                        currentUserId
+                    )
+                );
             }
 
             if (item.AuthorityStatus == 4)
             {
                 if (!HasLeaseVehicleAuthorizerRole())
                     return Forbid();
+                if (!IsAwaitingAuthorisation(existing))
+                    return Conflict(new { error = "Only lease terms awaiting authorisation can be rejected." });
 
                 var capturedBy = await _repository.GetCapturedByUsernameAsync(existing.vmf_Code);
-                if (string.Equals(capturedBy, username, StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrWhiteSpace(capturedBy))
+                    return Conflict(new { error = "The original lease-term capturer could not be resolved; rejection is blocked until the legacy user record is available." });
+                if (existing.CreatedBy == currentUserId
+                    || string.Equals(capturedBy, username, StringComparison.OrdinalIgnoreCase))
                     return Conflict(
                         new { error = "You cannot reject lease contract terms that you captured yourself." }
                     );
@@ -204,15 +244,30 @@ public class LeaseContractTermsController : BaseApiController
                 var comment = item.rejection_reason?.Trim() ?? item.authority_comment?.Trim();
                 if (string.IsNullOrWhiteSpace(comment))
                     return BadRequest(new { error = "A rejection comment is required." });
-                return Ok(await _repository.RejectAsync(existing, comment, username));
+                return Ok(
+                    await _repository.RejectAsync(
+                        existing,
+                        comment,
+                        username,
+                        currentUserId
+                    )
+                );
             }
 
             if (!HasLeaseVehicleCapturerRole())
             {
                 return Forbid();
             }
+            if (existing.AuthorityStatus == 2 || existing.Rejected == 4)
+                return Conflict(new { error = "Authorised lease terms are immutable; use the legacy recall workflow before resubmitting." });
 
-            return Ok(await _repository.CaptureOrResubmitAsync(item, username));
+            return Ok(
+                await _repository.CaptureOrResubmitAsync(
+                    item,
+                    username,
+                    currentUserId
+                )
+            );
         }
         catch (Exception ex)
         {
@@ -245,6 +300,8 @@ public class LeaseContractTermsController : BaseApiController
             var existing = await _repository.GetByIdAsync(id);
             if (existing is null)
                 return NotFound();
+            if (!await IsTermAllowedAsync(existing))
+                return NotFound();
 
             return Ok(await _repository.RecallAsync(existing));
         }
@@ -268,6 +325,70 @@ public class LeaseContractTermsController : BaseApiController
     private bool HasLeaseVehicleCapturerRole() => HasRole("Lease Vehicle Capturer");
 
     private bool HasLeaseVehicleAuthorizerRole() => HasRole("Lease Vehicle Authorizer");
+
+    private Task<IReadOnlySet<short>?> ResolveAllowedSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
+
+    private async Task<bool> IsNewTermAllowedAsync(LeaseContractTerms terms)
+    {
+        var allowedSites = await ResolveAllowedSiteCodesAsync();
+        if (allowedSites is null)
+            return true;
+        if (terms.lease_site_code is > 0 && allowedSites.Contains(terms.lease_site_code.Value))
+            return true;
+        return await _vehicleRepository.GetByIdAsync(
+                terms.vmf_Code,
+                allowedSites,
+                GetCurrentUserId()
+            )
+            is not null;
+    }
+
+    private async Task<bool> IsRequestedSiteAllowedAsync(LeaseContractTerms terms)
+    {
+        var allowedSites = await ResolveAllowedSiteCodesAsync();
+        return allowedSites is null
+            || terms.lease_site_code is not > 0
+            || allowedSites.Contains(terms.lease_site_code.Value);
+    }
+
+    private async Task<bool> IsTermAllowedAsync(LeaseContractTerms terms)
+    {
+        var allowedSites = await ResolveAllowedSiteCodesAsync();
+        if (allowedSites is null)
+            return true;
+        if (terms.lease_site_code is > 0 && allowedSites.Contains(terms.lease_site_code.Value))
+            return true;
+        if (terms.CreatedBy == GetCurrentUserId() || terms.created_by_user_code == GetCurrentUserId())
+            return true;
+        return await _vehicleRepository.GetByIdAsync(
+                terms.vmf_Code,
+                allowedSites,
+                GetCurrentUserId()
+            )
+            is not null;
+    }
+
+    private async Task<IReadOnlyList<LeaseContractTerms>> FilterByScopeAsync(
+        IEnumerable<LeaseContractTerms> terms
+    )
+    {
+        var values = terms.ToList();
+        var allowedSites = await ResolveAllowedSiteCodesAsync();
+        if (allowedSites is null)
+            return values;
+
+        var filtered = new List<LeaseContractTerms>(values.Count);
+        foreach (var term in values)
+        {
+            if (await IsTermAllowedAsync(term))
+                filtered.Add(term);
+        }
+        return filtered;
+    }
+
+    private static bool IsAwaitingAuthorisation(LeaseContractTerms terms) =>
+        terms.AuthorityStatus == 1 && (terms.Rejected is null or 3);
 
     private string GetLegacyUsername()
     {

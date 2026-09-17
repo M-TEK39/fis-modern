@@ -171,6 +171,16 @@ public sealed class VehicleRepository : IVehicleRepository
         "model_description",
     ];
 
+    // Master-File edits are direct legacy table writes. These triggers are the
+    // database-owned audit and revenue-protection boundary for that path. A
+    // disabled trigger is a compatibility failure; an absent trigger is
+    // treated as the explicit expanded-schema fallback below.
+    private static readonly string[] LegacyUpdateTriggerNames =
+    [
+        "TRG_Audit_Vehicle_Master_Update",
+        "trg_upd_checkvehiclejournalrecords",
+    ];
+
     private static readonly IReadOnlyDictionary<string, PropertyInfo> VehicleProperties =
         typeof(Vehicle)
             .GetProperties(BindingFlags.Instance | BindingFlags.Public)
@@ -193,19 +203,32 @@ public sealed class VehicleRepository : IVehicleRepository
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public async Task<Vehicle?> GetByIdAsync(int vmfCode)
+    public async Task<Vehicle?> GetByIdAsync(
+        int vmfCode,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
+        var scope = BuildVehicleScope(availableColumns, allowedSiteCodes, currentUserId);
         return (
             await QueryAsync(
-                $"WHERE [v].[vmf_code] = @vmfCode AND {GetActiveFilter("v", availableColumns)}",
-                command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode),
+                $"WHERE [v].[vmf_code] = @vmfCode AND {GetActiveFilter("v", availableColumns)} AND {scope.Predicate}",
+                command =>
+                {
+                    AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
+                    scope.AddParameters(command);
+                },
                 availableColumns
             )
         ).SingleOrDefault();
     }
 
-    public async Task<Vehicle?> GetByFleetNumberAsync(string fleetNumber)
+    public async Task<Vehicle?> GetByFleetNumberAsync(
+        string fleetNumber,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    )
     {
         if (string.IsNullOrWhiteSpace(fleetNumber))
         {
@@ -213,16 +236,25 @@ public sealed class VehicleRepository : IVehicleRepository
         }
 
         var availableColumns = await GetAvailableColumnsAsync();
+        var scope = BuildVehicleScope(availableColumns, allowedSiteCodes, currentUserId);
         return (
             await QueryAsync(
-                $"WHERE [v].[fleet_number] = @fleetNumber AND {GetActiveFilter("v", availableColumns)}",
-                command => AddParameter(command, "@fleetNumber", DbType.String, fleetNumber),
+                $"WHERE [v].[fleet_number] = @fleetNumber AND {GetActiveFilter("v", availableColumns)} AND {scope.Predicate}",
+                command =>
+                {
+                    AddParameter(command, "@fleetNumber", DbType.String, fleetNumber);
+                    scope.AddParameters(command);
+                },
                 availableColumns
             )
         ).SingleOrDefault();
     }
 
-    public async Task<Vehicle?> GetByRegistrationNumberAsync(string registrationNumber)
+    public async Task<Vehicle?> GetByRegistrationNumberAsync(
+        string registrationNumber,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    )
     {
         if (string.IsNullOrWhiteSpace(registrationNumber))
         {
@@ -230,34 +262,49 @@ public sealed class VehicleRepository : IVehicleRepository
         }
 
         var availableColumns = await GetAvailableColumnsAsync();
+        var scope = BuildVehicleScope(availableColumns, allowedSiteCodes, currentUserId);
         return (
             await QueryAsync(
-                $"WHERE [v].[registration_number] = @registrationNumber AND {GetActiveFilter("v", availableColumns)}",
+                $"WHERE [v].[registration_number] = @registrationNumber AND {GetActiveFilter("v", availableColumns)} AND {scope.Predicate}",
                 command =>
-                    AddParameter(command, "@registrationNumber", DbType.String, registrationNumber),
+                {
+                    AddParameter(command, "@registrationNumber", DbType.String, registrationNumber);
+                    scope.AddParameters(command);
+                },
                 availableColumns
             )
         ).SingleOrDefault();
     }
 
-    public async Task<IEnumerable<Vehicle>> GetActiveVehiclesAsync()
+    public async Task<IEnumerable<Vehicle>> GetActiveVehiclesAsync(
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    )
     {
         var availableColumns = await GetAvailableColumnsAsync();
+        var scope = BuildVehicleScope(availableColumns, allowedSiteCodes, currentUserId);
         return await QueryAsync(
-            $"WHERE [v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)} ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]",
+            $"WHERE [v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)} AND {scope.Predicate} ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]",
+            command => scope.AddParameters(command),
             knownColumns: availableColumns
         );
     }
 
-    public async Task<VehicleMasterSnapshotPage> GetSnapshotPageAsync(int page, int pageSize)
+    public async Task<VehicleMasterSnapshotPage> GetSnapshotPageAsync(
+        int page,
+        int pageSize,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    )
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
         var availableColumns = await GetAvailableColumnsAsync();
+        var scope = BuildVehicleScope(availableColumns, allowedSiteCodes, currentUserId);
         var activePredicate =
-            $"[v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)}";
-        var totalRecords = await CountActiveVehiclesAsync(availableColumns);
+            $"[v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)} AND {scope.Predicate}";
+        var totalRecords = await CountActiveVehiclesAsync(availableColumns, scope);
         var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
         page = Math.Min(page, totalPages);
         var skip = (long)(page - 1) * pageSize;
@@ -267,6 +314,7 @@ public sealed class VehicleRepository : IVehicleRepository
             {
                 AddParameter(command, "@skip", DbType.Int64, skip);
                 AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+                scope.AddParameters(command);
             },
             availableColumns
         );
@@ -397,7 +445,9 @@ public sealed class VehicleRepository : IVehicleRepository
         string? keyword,
         string? searchMode,
         int page,
-        int pageSize
+        int pageSize,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
     )
     {
         page = Math.Max(1, page);
@@ -424,8 +474,9 @@ public sealed class VehicleRepository : IVehicleRepository
             var statusColumns = await GetTableColumnsAsync(VehicleStatusTableName);
             var sourceColumns = await GetTableColumnsAsync(VehicleSourceTableName);
 
-            var whereClause = BuildVehicleLookupWhereClause(vehicleColumns, searchMode);
-            var total = await CountVehicleLookupRowsAsync(whereClause, keyword);
+            var scope = BuildVehicleScope(vehicleColumns, allowedSiteCodes, currentUserId);
+            var whereClause = BuildVehicleLookupWhereClause(vehicleColumns, searchMode, scope);
+            var total = await CountVehicleLookupRowsAsync(whereClause, keyword, scope);
             var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
             page = Math.Min(page, totalPages);
             var skip = (long)(page - 1) * pageSize;
@@ -491,6 +542,7 @@ public sealed class VehicleRepository : IVehicleRepository
             AddParameter(command, "@keyword", DbType.String, BuildLikeParameter(keyword));
             AddParameter(command, "@skip", DbType.Int64, skip);
             AddParameter(command, "@pageSize", DbType.Int32, pageSize);
+            scope.AddParameters(command);
 
             var items = new List<VehicleLookupPageItem>();
             await using var reader = await command.ExecuteReaderAsync();
@@ -524,40 +576,76 @@ public sealed class VehicleRepository : IVehicleRepository
         }
     }
 
-    public async Task<IEnumerable<Vehicle>> GetAvailableVehiclesAsync() =>
-        await GetActiveVehiclesAsync();
+    public async Task<IEnumerable<Vehicle>> GetAvailableVehiclesAsync(
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) => await GetActiveVehiclesAsync(allowedSiteCodes, currentUserId);
 
-    public async Task<IEnumerable<Vehicle>> GetAllAsync() =>
-        await QueryAsync("ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]");
-
-    public async Task<IEnumerable<Vehicle>> SearchVehiclesAsync(string searchTerm)
+    public async Task<IEnumerable<Vehicle>> GetAllAsync(
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    )
     {
-        if (string.IsNullOrWhiteSpace(searchTerm))
-        {
-            return await GetActiveVehiclesAsync();
-        }
-
         var availableColumns = await GetAvailableColumnsAsync();
-        var term = $"%{searchTerm.Trim().ToLowerInvariant()}%";
+        var scope = BuildVehicleScope(availableColumns, allowedSiteCodes, currentUserId);
         return await QueryAsync(
-            "WHERE ("
-                + string.Join(
-                    " OR ",
-                    [
-                        "LOWER(COALESCE([v].[fleet_number], '')) LIKE @searchTerm",
-                        "LOWER(COALESCE([v].[registration_number], '')) LIKE @searchTerm",
-                        "LOWER(COALESCE([v].[chassis_number], '')) LIKE @searchTerm",
-                        "LOWER(COALESCE([v].[engine_number_1], '')) LIKE @searchTerm",
-                        "LOWER(COALESCE([v].[invoice_number], '')) LIKE @searchTerm",
-                    ]
-                )
-                + ") ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]",
-            command => AddParameter(command, "@searchTerm", DbType.String, term),
+            $"WHERE {scope.Predicate} ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]",
+            command => scope.AddParameters(command),
             availableColumns
         );
     }
 
-    public async Task<IEnumerable<Vehicle>> GetByInvoiceNumberAsync(string invoiceNumber)
+    public async Task<IEnumerable<Vehicle>> SearchVehiclesAsync(
+        string searchTerm,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    )
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
+            return await GetActiveVehiclesAsync(allowedSiteCodes, currentUserId);
+        }
+
+        var availableColumns = await GetAvailableColumnsAsync();
+        var scope = BuildVehicleScope(availableColumns, allowedSiteCodes, currentUserId);
+        var term = $"%{searchTerm.Trim().ToLowerInvariant()}%";
+        var searchColumns = new[]
+        {
+            "fleet_number",
+            "registration_number",
+            "chassis_number",
+            "engine_number_1",
+            "invoice_number",
+        };
+        var predicates = searchColumns
+            .Where(availableColumns.Contains)
+            .Select(column =>
+                $"LOWER(COALESCE([v].[{column}], '')) LIKE @searchTerm"
+            )
+            .ToArray();
+        if (predicates.Length == 0)
+        {
+            return [];
+        }
+
+        return await QueryAsync(
+            "WHERE ("
+                + string.Join(" OR ", predicates)
+                + $") AND {scope.Predicate} ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]",
+            command =>
+            {
+                AddParameter(command, "@searchTerm", DbType.String, term);
+                scope.AddParameters(command);
+            },
+            availableColumns
+        );
+    }
+
+    public async Task<IEnumerable<Vehicle>> GetByInvoiceNumberAsync(
+        string invoiceNumber,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    )
     {
         if (string.IsNullOrWhiteSpace(invoiceNumber))
         {
@@ -565,9 +653,20 @@ public sealed class VehicleRepository : IVehicleRepository
         }
 
         var availableColumns = await GetAvailableColumnsAsync();
+        if (!availableColumns.Contains("invoice_number"))
+        {
+            return [];
+        }
+
+        var scope = BuildVehicleScope(availableColumns, allowedSiteCodes, currentUserId);
+
         return await QueryAsync(
-            $"WHERE [v].[invoice_number] = @invoiceNumber AND {GetActiveFilter("v", availableColumns)} ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]",
-            command => AddParameter(command, "@invoiceNumber", DbType.String, invoiceNumber),
+            $"WHERE [v].[invoice_number] = @invoiceNumber AND {GetActiveFilter("v", availableColumns)} AND {scope.Predicate} ORDER BY COALESCE([v].[fleet_number], ''), [v].[vmf_code]",
+            command =>
+            {
+                AddParameter(command, "@invoiceNumber", DbType.String, invoiceNumber);
+                scope.AddParameters(command);
+            },
             availableColumns
         );
     }
@@ -634,6 +733,8 @@ public sealed class VehicleRepository : IVehicleRepository
             return;
         }
 
+        var historyChanges = GetHistoryChanges(existing, vehicle);
+
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)
@@ -641,18 +742,35 @@ public sealed class VehicleRepository : IVehicleRepository
             await connection.OpenAsync();
         }
 
+        DbTransaction? transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        DbTransaction? ownedTransaction = null;
+        var committed = false;
         try
         {
+            if (transaction is null)
+            {
+                ownedTransaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+                transaction = ownedTransaction;
+            }
+
+            var changesTariffInputs = existing.model_code != vehicle.model_code
+                || existing.year_manufactured != vehicle.year_manufactured;
+            await EnsureLegacyUpdateTriggersAsync(
+                connection,
+                transaction,
+                changesTariffInputs
+            );
+
             await EnsureIdentityValuesUniqueAsync(
                 connection,
-                _context.Database.CurrentTransaction?.GetDbTransaction(),
+                transaction,
                 availableColumns,
                 existing,
                 vehicle
             );
 
             await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.Transaction = transaction;
             command.CommandText = $"""
                 UPDATE [dbo].[{VehicleTableName}]
                 SET {string.Join(
@@ -664,14 +782,296 @@ public sealed class VehicleRepository : IVehicleRepository
             AddParameters(command, values);
             AddParameter(command, "@vmfCode", DbType.Int32, vehicle.vmf_code);
             await command.ExecuteNonQueryAsync();
+
+            var historyColumns = await GetTableColumnsAsync("vehicle_history", transaction);
+            await AppendLegacyVehicleHistoryAsync(
+                connection,
+                transaction,
+                historyColumns,
+                vehicle.vmf_code,
+                currentUserId,
+                historyChanges
+            );
+
+            var preVehicleColumns = await GetTableColumnsAsync("pre_vehicle_master", transaction);
+            await SynchronizePendingVehicleAsync(
+                connection,
+                transaction,
+                preVehicleColumns,
+                existing,
+                vehicle
+            );
+
+            if (ownedTransaction is not null)
+            {
+                await ownedTransaction.CommitAsync();
+                committed = true;
+            }
+        }
+        catch
+        {
+            if (ownedTransaction is not null && !committed)
+            {
+                await ownedTransaction.RollbackAsync();
+            }
+
+            throw;
         }
         finally
         {
+            if (ownedTransaction is not null)
+            {
+                await ownedTransaction.DisposeAsync();
+            }
             if (shouldClose)
             {
                 await connection.CloseAsync();
             }
         }
+    }
+
+    private static IReadOnlyList<HistoryChange> GetHistoryChanges(
+        Vehicle existing,
+        Vehicle updated
+    )
+    {
+        var changes = new List<HistoryChange>();
+        AddHistoryChange(
+            changes,
+            "hist_registration_number",
+            DbType.String,
+            existing.registration_number,
+            updated.registration_number
+        );
+        AddHistoryChange(
+            changes,
+            "hist_fleet_number",
+            DbType.String,
+            existing.fleet_number,
+            updated.fleet_number
+        );
+        AddHistoryChange(
+            changes,
+            "hist_colour",
+            DbType.String,
+            existing.colour,
+            updated.colour
+        );
+        AddHistoryChange(
+            changes,
+            "hist_engine_number",
+            DbType.String,
+            existing.engine_number_1,
+            updated.engine_number_1
+        );
+        AddHistoryChange(
+            changes,
+            "hist_type",
+            DbType.Int16,
+            existing.type_code,
+            updated.type_code
+        );
+        return changes;
+    }
+
+    private static void AddHistoryChange(
+        ICollection<HistoryChange> changes,
+        string historyColumn,
+        DbType type,
+        object? original,
+        object? updated
+    )
+    {
+        if (original is string || updated is string)
+        {
+            if (
+                string.Equals(
+                    original?.ToString() ?? string.Empty,
+                    updated?.ToString() ?? string.Empty,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                return;
+            }
+        }
+        else if (Equals(original, updated))
+        {
+            return;
+        }
+
+        changes.Add(new HistoryChange(historyColumn, type, original));
+    }
+
+    private static async Task AppendLegacyVehicleHistoryAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        IReadOnlySet<string> historyColumns,
+        int vmfCode,
+        int currentUserId,
+        IReadOnlyList<HistoryChange> changes
+    )
+    {
+        if (
+            changes.Count == 0
+            || !historyColumns.Contains("hist_vmf_code")
+            || !historyColumns.Contains("hist_date_changed")
+        )
+        {
+            return;
+        }
+
+        foreach (var change in changes)
+        {
+            if (!historyColumns.Contains(change.Column))
+            {
+                continue;
+            }
+
+            var columns = new List<string> { "hist_vmf_code", change.Column, "hist_date_changed" };
+            var parameters = new List<string> { "@vmfCode", "@historyValue", "@dateChanged" };
+            if (historyColumns.Contains("hist_user_access_code"))
+            {
+                columns.Add("hist_user_access_code");
+                parameters.Add("@userAccessCode");
+            }
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = $"INSERT INTO [dbo].[vehicle_history] ({string.Join(", ", columns.Select(column => $"[{column}]"))}) VALUES ({string.Join(", ", parameters)})";
+            AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
+            AddParameter(command, "@historyValue", change.Type, change.Value);
+            AddParameter(command, "@dateChanged", DbType.DateTime, DateTime.Now);
+            if (historyColumns.Contains("hist_user_access_code"))
+            {
+                AddParameter(
+                    command,
+                    "@userAccessCode",
+                    DbType.Int16,
+                    currentUserId is > 0 and <= short.MaxValue ? (short)currentUserId : null
+                );
+            }
+
+            await command.ExecuteNonQueryAsync();
+        }
+    }
+
+    private static async Task SynchronizePendingVehicleAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        IReadOnlySet<string> preVehicleColumns,
+        Vehicle existing,
+        Vehicle updated
+    )
+    {
+        if (!preVehicleColumns.Contains("chassis_number"))
+        {
+            return;
+        }
+
+        var assignments = new List<string>();
+        if (
+            !string.Equals(
+                existing.fleet_number,
+                updated.fleet_number,
+                StringComparison.OrdinalIgnoreCase
+            )
+            && preVehicleColumns.Contains("fleet_number")
+        )
+        {
+            assignments.Add("[fleet_number] = @fleetNumber");
+        }
+
+        if (
+            !string.Equals(
+                existing.chassis_number,
+                updated.chassis_number,
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+        {
+            assignments.Add("[chassis_number] = @chassisNumber");
+        }
+
+        if (
+            preVehicleColumns.Contains("engine_number")
+            && !string.Equals(
+                existing.engine_number_1,
+                updated.engine_number_1,
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+        {
+            assignments.Add("[engine_number] = @engineNumber");
+        }
+        if (
+            preVehicleColumns.Contains("registration_number")
+            && !string.Equals(
+                existing.registration_number,
+                updated.registration_number,
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+        {
+            assignments.Add("[registration_number] = @registrationNumber");
+        }
+
+        if (assignments.Count == 0)
+        {
+            return;
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        var identityPredicates = new List<string>();
+        if (preVehicleColumns.Contains("fleet_number") && !string.IsNullOrWhiteSpace(existing.fleet_number))
+        {
+            identityPredicates.Add("[fleet_number] = @oldFleetNumber");
+            AddParameter(command, "@oldFleetNumber", DbType.String, existing.fleet_number);
+        }
+        if (!string.IsNullOrWhiteSpace(existing.chassis_number))
+        {
+            identityPredicates.Add("[chassis_number] = @oldChassisNumber");
+            AddParameter(command, "@oldChassisNumber", DbType.String, existing.chassis_number);
+        }
+        if (
+            preVehicleColumns.Contains("registration_number")
+            && !string.IsNullOrWhiteSpace(existing.registration_number)
+        )
+        {
+            identityPredicates.Add("[registration_number] = @oldRegistrationNumber");
+            AddParameter(
+                command,
+                "@oldRegistrationNumber",
+                DbType.String,
+                existing.registration_number
+            );
+        }
+
+        if (identityPredicates.Count == 0)
+        {
+            return;
+        }
+
+        command.CommandText = $"UPDATE [dbo].[pre_vehicle_master] SET {string.Join(", ", assignments)} WHERE {string.Join(" OR ", identityPredicates)}";
+        if (assignments.Contains("[fleet_number] = @fleetNumber"))
+        {
+            AddParameter(command, "@fleetNumber", DbType.String, updated.fleet_number);
+        }
+        if (assignments.Contains("[chassis_number] = @chassisNumber"))
+        {
+            AddParameter(command, "@chassisNumber", DbType.String, updated.chassis_number);
+        }
+        if (assignments.Contains("[engine_number] = @engineNumber"))
+        {
+            AddParameter(command, "@engineNumber", DbType.String, updated.engine_number_1);
+        }
+        if (assignments.Contains("[registration_number] = @registrationNumber"))
+        {
+            AddParameter(command, "@registrationNumber", DbType.String, updated.registration_number);
+        }
+
+        await command.ExecuteNonQueryAsync();
     }
 
     private static async Task EnsureIdentityValuesUniqueAsync(
@@ -739,6 +1139,57 @@ public sealed class VehicleRepository : IVehicleRepository
         {
             throw new InvalidOperationException(
                 $"{label} already exists for vehicle {Convert.ToString(duplicateFleetNumber, CultureInfo.InvariantCulture)}."
+            );
+        }
+    }
+
+    private static async Task EnsureLegacyUpdateTriggersAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        bool requiresTariffProtection
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT [tr].[name], [tr].[is_disabled]
+            FROM [sys].[triggers] AS [tr]
+            INNER JOIN [sys].[tables] AS [tb] ON [tb].[object_id] = [tr].[parent_id]
+            INNER JOIN [sys].[schemas] AS [sc] ON [sc].[schema_id] = [tb].[schema_id]
+            WHERE [sc].[name] = N'dbo'
+              AND [tb].[name] = N'vehicle_master'
+              AND [tr].[name] IN (N'TRG_Audit_Vehicle_Master_Update', N'trg_upd_checkvehiclejournalrecords');
+            """;
+
+        var disabled = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            if (!reader.IsDBNull(0))
+            {
+                var name = reader.GetString(0);
+                if (!reader.IsDBNull(1) && reader.GetBoolean(1))
+                {
+                    disabled.Add(name);
+                }
+            }
+        }
+
+        // A disabled legacy trigger is never safe to bypass. If the trigger
+        // object genuinely does not exist (an expanded compatibility schema),
+        // the parameterized update below is the explicit fallback. Audit is
+        // expected for every legacy write; the journal-protection trigger is
+        // checked only when model/year tariff inputs change.
+        var required = requiresTariffProtection
+            ? LegacyUpdateTriggerNames
+            : [LegacyUpdateTriggerNames[0]];
+        var disabledRequired = required
+            .Where(disabled.Contains)
+            .ToArray();
+        if (disabledRequired.Length > 0)
+        {
+            throw new NotSupportedException(
+                $"The legacy vehicle_master update workflow is disabled ({string.Join(", ", disabledRequired)}); no direct-DML fallback was run."
             );
         }
     }
@@ -858,6 +1309,16 @@ public sealed class VehicleRepository : IVehicleRepository
 
         try
         {
+            // Licence capture is a dedicated direct update, but it still
+            // targets vehicle_master. Preserve the legacy audit trigger
+            // boundary rather than allowing this narrow endpoint to bypass
+            // the database-owned history/audit behavior.
+            await EnsureLegacyUpdateTriggersAsync(
+                connection,
+                _context.Database.CurrentTransaction?.GetDbTransaction(),
+                requiresTariffProtection: false
+            );
+
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = $"""
@@ -997,10 +1458,11 @@ public sealed class VehicleRepository : IVehicleRepository
         var availableColumns = knownColumns ?? await GetAvailableColumnsAsync();
         var modelColumns = await GetTableColumnsAsync(ModelTableName);
         var hasModel = RequiredModelColumns.All(modelColumns.Contains);
+        var hasModelClassCode = hasModel && modelColumns.Contains("class_code");
         var projection = LegacyColumns
             .Concat(OptionalColumns)
             .Select(column => GetColumnProjection("v", column, availableColumns))
-            .Concat(GetModelProjection(hasModel))
+            .Concat(GetModelProjection(hasModel, hasModelClassCode))
             .ToArray();
         var modelJoin = hasModel
             ? $"LEFT JOIN [dbo].[{ModelTableName}] AS [m] ON [m].[model_code] = [v].[model_code]"
@@ -1050,7 +1512,10 @@ public sealed class VehicleRepository : IVehicleRepository
         }
     }
 
-    private async Task<int> CountActiveVehiclesAsync(IReadOnlySet<string> availableColumns)
+    private async Task<int> CountActiveVehiclesAsync(
+        IReadOnlySet<string> availableColumns,
+        VehicleScope scope
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -1064,12 +1529,13 @@ public sealed class VehicleRepository : IVehicleRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var activePredicate =
-                $"[v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)}";
+                $"[v].[vehicle_status_code] > 0 AND {GetActiveFilter("v", availableColumns)} AND {scope.Predicate}";
             command.CommandText = $"""
                 SELECT COUNT(*)
                 FROM [dbo].[{VehicleTableName}] AS [v]
                 WHERE {activePredicate}
                 """;
+            scope.AddParameters(command);
 
             return Convert.ToInt32(
                 await command.ExecuteScalarAsync(),
@@ -1085,7 +1551,11 @@ public sealed class VehicleRepository : IVehicleRepository
         }
     }
 
-    private async Task<int> CountVehicleLookupRowsAsync(string whereClause, string keyword)
+    private async Task<int> CountVehicleLookupRowsAsync(
+        string whereClause,
+        string keyword,
+        VehicleScope scope
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -1104,6 +1574,7 @@ public sealed class VehicleRepository : IVehicleRepository
                 WHERE {whereClause}
                 """;
             AddParameter(command, "@keyword", DbType.String, BuildLikeParameter(keyword));
+            scope.AddParameters(command);
 
             return Convert.ToInt32(
                 await command.ExecuteScalarAsync(),
@@ -1121,7 +1592,8 @@ public sealed class VehicleRepository : IVehicleRepository
 
     private static string BuildVehicleLookupWhereClause(
         IReadOnlySet<string> availableColumns,
-        string? searchMode
+        string? searchMode,
+        VehicleScope scope
     )
     {
         var normalizedSearchMode = string.IsNullOrWhiteSpace(searchMode)
@@ -1136,11 +1608,83 @@ public sealed class VehicleRepository : IVehicleRepository
             _ => throw new ArgumentException("Search mode must be GG or GP.", nameof(searchMode)),
         };
 
-        return $"{GetActiveFilter("v", availableColumns)} AND ({searchPredicate})";
+        return $"{GetActiveFilter("v", availableColumns)} AND {scope.Predicate} AND ({searchPredicate})";
     }
 
     private static string BuildLikeParameter(string keyword) =>
         $"%{keyword.ToLowerInvariant().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_").Replace("[", "\\[")}%";
+
+    private static VehicleScope BuildVehicleScope(
+        IReadOnlySet<string> availableColumns,
+        IReadOnlySet<short>? allowedSiteCodes,
+        int? currentUserId = null
+    )
+    {
+        // A null set is the explicit unrestricted scope used by system-level
+        // services. A non-null empty set must never become an omitted WHERE
+        // clause: it represents a user whose profile could not resolve to an
+        // allowed site.
+        if (allowedSiteCodes is null)
+        {
+            return new VehicleScope("1 = 1", static _ => { });
+        }
+
+        var siteCodes = allowedSiteCodes.Where(code => code > 0).Distinct().ToArray();
+        if (siteCodes.Length == 0)
+        {
+            return new VehicleScope("1 = 0", static _ => { });
+        }
+
+        var siteColumns = new[] { "veh_site_code", "initial_site_code", "default_site" }
+            .Where(availableColumns.Contains)
+            .ToArray();
+        var siteParameters = siteCodes
+            .Select((_, index) => $"@vehicleSite{index}")
+            .ToArray();
+        var predicates = siteColumns.Length == 0
+            ? []
+            : siteColumns
+                .Select(column => $"[v].[{column}] IN ({string.Join(", ", siteParameters)})")
+                .ToList();
+        var ownerColumns = currentUserId is > 0
+            ? new[] { "user_access_code", "created_by_user_code" }
+                .Where(availableColumns.Contains)
+                .ToArray()
+            : [];
+        if (ownerColumns.Length > 0)
+        {
+            predicates.AddRange(ownerColumns.Select(column => $"[v].[{column}] = @vehicleOwnerUser"));
+        }
+        // A vehicle may retain an older master site while it is dispatched
+        // under an active contract at an allowed site. Keep the lookup useful
+        // for that business flow without broadening it to inactive contracts.
+        predicates.Add(
+            $"EXISTS (SELECT 1 FROM [dbo].[contract] AS [scope_contract] WHERE [scope_contract].[vmf_code] = [v].[vmf_code] AND [scope_contract].[still_current] = 'Y' AND [scope_contract].[site_code] IN ({string.Join(", ", siteParameters)}))"
+        );
+        if (predicates.Count == 0)
+        {
+            return new VehicleScope("1 = 0", static _ => { });
+        }
+
+        var predicate = "(" + string.Join(" OR ", predicates) + ")";
+
+        return new VehicleScope(
+            predicate,
+            command =>
+            {
+                for (var index = 0; index < siteCodes.Length; index++)
+                {
+                    AddParameter(command, siteParameters[index], DbType.Int16, siteCodes[index]);
+                }
+                if (ownerColumns.Length > 0)
+                {
+                    AddParameter(command, "@vehicleOwnerUser", DbType.Int32, currentUserId);
+                }
+            }
+        );
+    }
+
+    private sealed record VehicleScope(string Predicate, Action<DbCommand> AddParameters);
 
     private static string GetLookupActiveFilter(
         string alias,
@@ -1164,7 +1708,10 @@ public sealed class VehicleRepository : IVehicleRepository
         return columns;
     }
 
-    private async Task<HashSet<string>> GetTableColumnsAsync(string tableName)
+    private async Task<HashSet<string>> GetTableColumnsAsync(
+        string tableName,
+        DbTransaction? transaction = null
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -1176,7 +1723,7 @@ public sealed class VehicleRepository : IVehicleRepository
         try
         {
             await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.Transaction = transaction ?? _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = """
                 SELECT [COLUMN_NAME]
                 FROM [INFORMATION_SCHEMA].[COLUMNS]
@@ -1234,6 +1781,7 @@ public sealed class VehicleRepository : IVehicleRepository
             {
                 model_code = modelCode.Value,
                 make_code = makeCode.Value,
+                class_code = ReadInt16(reader, "model_class_code") ?? 0,
                 model_description = ReadString(reader, "model_description") ?? string.Empty,
             };
         }
@@ -1334,7 +1882,7 @@ public sealed class VehicleRepository : IVehicleRepository
             ? $"[{alias}].[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
 
-    private static IEnumerable<string> GetModelProjection(bool hasModel)
+    private static IEnumerable<string> GetModelProjection(bool hasModel, bool hasClassCode)
     {
         if (hasModel)
         {
@@ -1342,6 +1890,9 @@ public sealed class VehicleRepository : IVehicleRepository
             [
                 "[m].[model_code] AS [model_model_code]",
                 "[m].[make_code] AS [model_make_code]",
+                hasClassCode
+                    ? "[m].[class_code] AS [model_class_code]"
+                    : "CAST(NULL AS smallint) AS [model_class_code]",
                 "[m].[model_description] AS [model_description]",
             ];
         }
@@ -1350,6 +1901,7 @@ public sealed class VehicleRepository : IVehicleRepository
         [
             "CAST(NULL AS smallint) AS [model_model_code]",
             "CAST(NULL AS smallint) AS [model_make_code]",
+            "CAST(NULL AS smallint) AS [model_class_code]",
             "CAST(NULL AS varchar(100)) AS [model_description]",
         ];
     }
@@ -1507,4 +2059,6 @@ public sealed class VehicleRepository : IVehicleRepository
     }
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
+
+    private sealed record HistoryChange(string Column, DbType Type, object? Value);
 }

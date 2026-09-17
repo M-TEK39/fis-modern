@@ -37,6 +37,17 @@ export type UserAdminProfilePage = {
   totalPages: number;
 };
 
+export type UserApproverChoice = {
+  userAccessCode: number;
+  userName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  telephone: string | null;
+  positionName: string | null;
+  siteCode: number | null;
+  userActive: boolean;
+};
+
 export const DEFAULT_USER_ADMIN_PAGE_SIZE = 24;
 
 export type UserAdminApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
@@ -326,6 +337,41 @@ export async function getUserAdminUserChoices() {
       (left.lastName ?? "").localeCompare(right.lastName ?? "") ||
       left.userAccessCode - right.userAccessCode,
   );
+}
+
+export async function getUserApproverChoices(): Promise<UserApproverChoice[]> {
+  const response = await requestApi("api/userprofile/approver-choices");
+  return getCollection(await readJson(response))
+    .map((value): UserApproverChoice | null => {
+      if (!isRecord(value)) {
+        return null;
+      }
+
+      const userAccessCode = asNumber(
+        getValue(value, "userAccessCode", "UserAccessCode", "user_access_code"),
+      );
+      if (userAccessCode === null) {
+        return null;
+      }
+
+      return {
+        userAccessCode,
+        userName: asString(getValue(value, "userName", "UserName", "name")),
+        firstName: asString(getValue(value, "firstName", "FirstName")),
+        lastName: asString(getValue(value, "lastName", "LastName")),
+        telephone: asString(getValue(value, "telephone", "Telephone")),
+        positionName: asString(getValue(value, "positionName", "PositionName")),
+        siteCode: asNumber(getValue(value, "siteCode", "SiteCode", "Site_code")),
+        userActive: true,
+      };
+    })
+    .filter((choice): choice is UserApproverChoice => choice !== null)
+    .sort(
+      (left, right) =>
+        (left.userName ?? "").localeCompare(right.userName ?? "") ||
+        (left.lastName ?? "").localeCompare(right.lastName ?? "") ||
+        left.userAccessCode - right.userAccessCode,
+    );
 }
 
 export async function getUserAdminSites(): Promise<UserAdminSite[]> {

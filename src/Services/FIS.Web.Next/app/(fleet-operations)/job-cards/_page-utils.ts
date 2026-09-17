@@ -28,19 +28,8 @@ export function hasJobCardRole(roles: readonly string[], kind: "capturer" | "aut
   });
 }
 
-export function hasLegacyJobCardAccess(
-  session: Extract<SessionState, { status: "authenticated" }>,
-) {
-  const accessLevel = Number(session.accessLevel);
-  return Number.isInteger(accessLevel) && (accessLevel & (1 | 32)) !== 0;
-}
-
 export function canUseJobCardArea(session: Extract<SessionState, { status: "authenticated" }>) {
-  return (
-    hasLegacyJobCardAccess(session) ||
-    hasJobCardRole(session.roles, "capturer") ||
-    hasJobCardRole(session.roles, "authorizer")
-  );
+  return hasJobCardRole(session.roles, "capturer") || hasJobCardRole(session.roles, "authorizer");
 }
 
 export function queryValue(value: string | string[] | undefined) {

@@ -90,8 +90,66 @@ public sealed class SiteRepository : ISiteRepository
         ).SingleOrDefault();
     }
 
-    public async Task<IEnumerable<Site>> GetActiveSitesAsync() =>
-        await QueryAsync("[site_active] = 1");
+    public async Task<IEnumerable<Site>> GetActiveSitesAsync()
+    {
+        try
+        {
+            return await QueryAsync("[site_active] = 1");
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("missing stable legacy columns", StringComparison.OrdinalIgnoreCase))
+        {
+            // Vehicle inception only needs the site selector. Preserve that
+            // legacy surface even when a restored database predates one of the
+            // later site-maintenance columns used by the full repository.
+            return await QueryVehicleSelectorSitesAsync();
+        }
+    }
+
+    private async Task<List<Site>> QueryVehicleSelectorSitesAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [Site_code], [description]
+                FROM [dbo].[site]
+                WHERE [site_active] = 1
+                ORDER BY [description], [Site_code]
+                """;
+
+            var sites = new List<Site>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var siteCode = reader.IsDBNull(0) ? (short)0 : Convert.ToInt16(reader.GetValue(0));
+                var description = reader.IsDBNull(1) ? string.Empty : reader.GetString(1).Trim();
+                if (siteCode <= 0 || string.IsNullOrWhiteSpace(description))
+                {
+                    continue;
+                }
+
+                sites.Add(new Site { Site_code = siteCode, description = description, site_active = true });
+            }
+
+            return sites;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
 
     [SuppressMessage(
         "Security",

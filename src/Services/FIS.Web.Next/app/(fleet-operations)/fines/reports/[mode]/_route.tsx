@@ -20,8 +20,7 @@ import {
   type FineVehicleOption,
 } from "@/lib/api/fleet-operations/api-fines";
 import { getSession } from "@/lib/auth/session";
-
-const REPORTS_ROLE = "Reports";
+import { hasFinesAccess } from "@/app/(fleet-operations)/fines/access";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export type FineReportPageProps = {
@@ -57,12 +56,6 @@ function reportPageHref(
 
 function validDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : "";
-}
-
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
 }
 
 function valueOrDash(value: string | number | null | undefined) {
@@ -540,7 +533,7 @@ async function renderFineReportPageContent({
         <ApiUnavailable path={routePath} />
       </main>
     );
-  if (!hasRole(session.roles, REPORTS_ROLE))
+  if (!hasFinesAccess(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-status-card" role="alert">

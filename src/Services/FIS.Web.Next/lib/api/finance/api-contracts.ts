@@ -66,6 +66,13 @@ export type ContractRecord = {
   createdByUserCode: number | null;
   modifiedByUserCode: number | null;
   isDeleted: boolean;
+  backdatingStartDate: string | null;
+  backdatingRequestedDate: string | null;
+  backdatingRequestedByUsername: string | null;
+  backdatingApprovedDate: string | null;
+  backdatingApprovedByUsername: string | null;
+  backdatingDeclinedDate: string | null;
+  backdatingDeclinedByUsername: string | null;
 };
 
 export type ContractPage = {
@@ -95,13 +102,16 @@ export type ReliefVehicleSearchResult = {
 export type HireContractRequest = {
   VmfCode: number;
   SiteCode: number;
+  StartDate?: string | null;
   StartOdometer: number | null;
   DriverId: string | null;
   SiteDriverCode: number | null;
   UserCode: number | null;
+  ContractType?: string | null;
   Authorisation: string | null;
   Notes: string | null;
   TargetReturnDate: string | null;
+  BackdatingStartDate?: string | null;
 };
 
 export type EditContractRequest = {
@@ -133,7 +143,8 @@ export type ContractHistoryBackdatingRequest = {
 };
 
 export type ContractReassignRequest = {
-  NewSiteCode: number;
+  NewSiteCode: number | null;
+  NewSiteDriverCode: number | null;
   StartDate: string | null;
   StartOdometer: number | null;
   Reason: string;
@@ -147,7 +158,7 @@ export type ReliefVehicleRequest = {
 };
 
 export type ContractApiErrorReason =
-  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+  "unauthorized" | "forbidden" | "unavailable" | "invalid-response" | "not-found";
 
 export class ContractApiError extends Error {
   constructor(
@@ -301,6 +312,19 @@ function mapContract(value: unknown): ContractRecord | null {
     createdByUserCode: asNumber(getValue(value, "createdByUserCode", "created_by_user_code")),
     modifiedByUserCode: asNumber(getValue(value, "modifiedByUserCode", "modified_by_user_code")),
     isDeleted: asBoolean(getValue(value, "isDeleted", "is_deleted")),
+    backdatingStartDate: asString(getValue(value, "backdatingStartDate", "backdating_start_date")),
+    backdatingRequestedDate: asString(getValue(value, "backdatingRequestedDate", "backdating_requested_date")),
+    backdatingRequestedByUsername: asString(
+      getValue(value, "backdatingRequestedByUsername", "backdating_requested_by_username"),
+    ),
+    backdatingApprovedDate: asString(getValue(value, "backdatingApprovedDate", "backdating_approved_date")),
+    backdatingApprovedByUsername: asString(
+      getValue(value, "backdatingApprovedByUsername", "backdating_approved_by_Username"),
+    ),
+    backdatingDeclinedDate: asString(getValue(value, "backdatingDeclinedDate", "backdating_declined_date")),
+    backdatingDeclinedByUsername: asString(
+      getValue(value, "backdatingDeclinedByUsername", "backdating_declined_by_Username"),
+    ),
   };
 }
 
@@ -353,8 +377,14 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new ContractApiError("unauthorized", "The FIS access cookie was rejected.");
+    }
+    if (response.status === 403) {
+      throw new ContractApiError(
+        "forbidden",
+        "You do not have permission to access this contract operation.",
+      );
     }
     if (response.status === 404) {
       throw new ContractApiError("not-found", "The requested contract was not found.");

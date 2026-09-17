@@ -27,6 +27,7 @@ public class LicenseFeeController : BaseApiController
     }
 
     [HttpGet("page")]
+    [Authorize(Roles = "Validation,Licence")]
     public async Task<ActionResult> GetPage(
         [FromQuery] string? searchTerm = null,
         [FromQuery] int page = 1,
@@ -62,6 +63,7 @@ public class LicenseFeeController : BaseApiController
     }
 
     [HttpGet]
+    [Authorize(Roles = "Validation,Licence")]
     public async Task<ActionResult<IEnumerable<LicenseFeeDto>>> GetAll()
     {
         try
@@ -76,6 +78,7 @@ public class LicenseFeeController : BaseApiController
     }
 
     [HttpGet("{code:int}")]
+    [Authorize(Roles = "Validation,Licence")]
     public async Task<ActionResult<LicenseFeeDto>> GetByCode(short code)
     {
         try
@@ -93,6 +96,7 @@ public class LicenseFeeController : BaseApiController
     }
 
     [HttpGet("{code:int}/delete-check")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<LicenseFeeDeleteCheck>> GetDeleteCheck(short code)
     {
         try
@@ -112,6 +116,7 @@ public class LicenseFeeController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<LicenseFeeDto>> Create([FromBody] CreateLicenseFeeDto request)
     {
         try
@@ -144,6 +149,7 @@ public class LicenseFeeController : BaseApiController
     }
 
     [HttpPut("{code:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<LicenseFeeDto>> Update(
         short code,
         [FromBody] UpdateLicenseFeeDto request
@@ -181,6 +187,7 @@ public class LicenseFeeController : BaseApiController
     }
 
     [HttpDelete("{code:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> Delete(short code)
     {
         try

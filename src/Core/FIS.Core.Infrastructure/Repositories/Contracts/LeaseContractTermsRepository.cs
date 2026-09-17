@@ -98,7 +98,24 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
                 "SELECT TOP (1) NULLIF(LTRIM(RTRIM(CONVERT(varchar(200), [CreatedBy]))), '') FROM [dbo].[LeaseContractTerms] WHERE [vmf_Code] = @vmfCode";
             AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
             var value = await command.ExecuteScalarAsync();
-            return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
+            if (value is null or DBNull)
+                return null;
+
+            var capturedBy = Convert.ToString(value)?.Trim();
+            if (!int.TryParse(capturedBy, out var userAccessCode) || userAccessCode <= 0)
+                return capturedBy;
+
+            // Do not return the numeric ID as if it were a username. The
+            // controller treats an unresolved capturer as a hard stop so a
+            // self-approval cannot slip through during a partial restore.
+            return await ResolveLegacyUserNameAsync(connection, userAccessCode);
+        }
+        catch (DbException)
+        {
+            // CreatedBy is an optional expanded/legacy column. If the legacy
+            // lookup tables are unavailable, return no identity so the caller
+            // can fail closed on an unresolved self-approval.
+            return null;
         }
         finally
         {
@@ -210,87 +227,100 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
 
     public async Task<LeaseContractTerms> CaptureOrResubmitAsync(
         LeaseContractTerms terms,
-        string username
+        string username,
+        int currentUserId = 0
     )
     {
         ArgumentNullException.ThrowIfNull(terms);
         ValidateVehicleCode(terms);
         var comment = FirstNonEmpty(terms.authority_comment, terms.lease_notes, terms.Comments) ?? string.Empty;
 
-        if (
-            await IsLegacyProcedureAvailableAsync(
-                "DEV_UPD_LeaseContractTerms",
-                "@vmf_code",
-                "@AgreedTerms",
-                "@AgreedOverallKilo",
-                "@AgreedKilos",
-                "@AppliedInterest",
-                "@FixedMonthlyAmount",
-                "@ExcessKilos",
-                "@ReliefVehicle",
-                "@site_code",
-                "@Comments",
-                "@userName",
-                "@StartDate",
-                "@EndDate"
-            )
-        )
+        var actualParameters = await GetLegacyProcedureParametersAsync("DEV_UPD_LeaseContractTerms");
+        if (actualParameters is null)
         {
-            await ExecuteLegacyProcedureAsync(
-                "DEV_UPD_LeaseContractTerms",
-                new ProcedureParameter("@vmf_code", DbType.Int32, terms.vmf_Code),
-                new ProcedureParameter("@AgreedTerms", DbType.Int32, terms.AgreedTerms),
-                new ProcedureParameter(
-                    "@AgreedOverallKilo",
-                    DbType.Int32,
-                    terms.AgreedOverallKilo
-                ),
-                new ProcedureParameter("@AgreedKilos", DbType.Int64, terms.AgreedKilos),
-                new ProcedureParameter(
-                    "@AppliedInterest",
-                    DbType.Decimal,
-                    terms.AppliedInterest
-                ),
-                new ProcedureParameter(
-                    "@FixedMonthlyAmount",
-                    DbType.Decimal,
-                    terms.FixedMonthlyAmount
-                ),
-                new ProcedureParameter(
-                    "@ExcessKilos",
-                    DbType.Decimal,
-                    terms.ExcessKilosTarrif
-                ),
-                new ProcedureParameter(
-                    "@ReliefVehicle",
-                    DbType.Boolean,
-                    terms.RelieveVehicle ?? false
-                ),
-                new ProcedureParameter("@site_code", DbType.Int16, terms.lease_site_code),
-                new ProcedureParameter("@Comments", DbType.String, comment),
-                new ProcedureParameter("@userName", DbType.String, username),
-                new ProcedureParameter("@StartDate", DbType.Date, terms.StartDate),
-                new ProcedureParameter("@EndDate", DbType.Date, terms.EndDate)
+            throw new NotSupportedException(
+                "The legacy lease-contract-term capture procedure is unavailable; capture cannot be approximated."
             );
-
-            var updated =
-                await GetByVehicleAsync(terms.vmf_Code)
-                ?? throw new InvalidOperationException(
-                    "The legacy lease-contract-term capture procedure completed without a readable term."
-                );
-            await InsertLegacyCommentAsync(updated, comment, username);
-            return await GetByIdAsync(updated.VehicleContractTermID) ?? updated;
         }
 
-        throw new NotSupportedException(
-            "The legacy lease-contract-term capture procedure is unavailable; capture cannot be approximated."
+        var withAgreedKilos = new[]
+        {
+            "@vmf_Code", "@AgreedTerms", "@AgreedOverallKilo", "@AgreedKilos",
+            "@AppliedInterest", "@FixedMonthlyAmount", "@ExcessKilos", "@RelieveVehicle",
+            "@site_code", "@Comments", "@CreatedBy", "@UpdatedBy", "@AuthorisedBy",
+        };
+        var withoutAgreedKilos = withAgreedKilos
+            .Where(parameter => !string.Equals(parameter, "@AgreedKilos", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var includesAgreedKilos = actualParameters.SequenceEqual(
+            withAgreedKilos,
+            StringComparer.OrdinalIgnoreCase
         );
+        if (!includesAgreedKilos && !actualParameters.SequenceEqual(
+                withoutAgreedKilos,
+                StringComparer.OrdinalIgnoreCase
+            ))
+        {
+            throw new InvalidOperationException(
+                "The deployed legacy lease-contract-term capture procedure does not match its archived parameter contract. No direct-DML fallback was run."
+            );
+        }
+
+        if (!includesAgreedKilos && terms.AgreedKilos.HasValue)
+        {
+            throw new NotSupportedException(
+                "The deployed legacy lease-contract-term procedure has no AgreedKilos parameter; the supplied value was not silently dropped."
+            );
+        }
+
+        var existing = await GetByVehicleAsync(terms.vmf_Code);
+        var actorCode = await ResolveLegacyUserCodeAsync(username, currentUserId);
+        if (actorCode <= 0)
+        {
+            throw new UnauthorizedAccessException(
+                "The authenticated user could not be resolved to a legacy user access code for the lease workflow."
+            );
+        }
+
+        var parameters = new List<ProcedureParameter>
+        {
+            new("@vmf_Code", DbType.Int32, terms.vmf_Code),
+            new("@AgreedTerms", DbType.Int32, terms.AgreedTerms),
+            new("@AgreedOverallKilo", DbType.Int32, terms.AgreedOverallKilo),
+        };
+        if (includesAgreedKilos)
+            parameters.Add(new ProcedureParameter("@AgreedKilos", DbType.Int64, terms.AgreedKilos));
+        parameters.AddRange(
+        [
+            new("@AppliedInterest", DbType.Decimal, terms.AppliedInterest),
+            new("@FixedMonthlyAmount", DbType.Decimal, terms.FixedMonthlyAmount),
+            new("@ExcessKilos", DbType.Decimal, terms.ExcessKilosTarrif),
+            new("@RelieveVehicle", DbType.Boolean, terms.RelieveVehicle ?? false),
+            new("@site_code", DbType.Int16, terms.lease_site_code),
+            new("@Comments", DbType.String, comment),
+            // The archived procedure stores IDs, not display names. Its
+            // AuthorisedBy field is also populated during capture, so pass
+            // the authenticated actor consistently for all three audit slots.
+            new("@CreatedBy", DbType.Int32, existing?.CreatedBy ?? actorCode),
+            new("@UpdatedBy", DbType.Int32, actorCode),
+            new("@AuthorisedBy", DbType.Int32, actorCode),
+        ]);
+
+        await ExecuteLegacyProcedureAsync("DEV_UPD_LeaseContractTerms", parameters.ToArray());
+
+        var updated = await GetByVehicleAsync(terms.vmf_Code)
+            ?? throw new InvalidOperationException(
+                "The legacy lease-contract-term capture procedure completed without a readable term."
+            );
+        await InsertLegacyCommentAsync(updated, comment, username);
+        return await GetByIdAsync(updated.VehicleContractTermID) ?? updated;
     }
 
     public async Task<LeaseContractTerms> AuthorizeAsync(
         LeaseContractTerms terms,
         string comment,
-        string username
+        string username,
+        int currentUserId = 0
     )
     {
         ArgumentNullException.ThrowIfNull(terms);
@@ -298,25 +328,27 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         if (string.IsNullOrWhiteSpace(comment))
             throw new ArgumentException("A comment is required to authorise lease contract terms.", nameof(comment));
 
-        if (
-            !await IsLegacyProcedureAvailableAsync(
+        if (!await IsLegacyProcedureAvailableAsync(
                 "DEV_UPD_LeaseContractTermsAuthorisation",
                 "@vmf_Code",
                 "@Comments",
                 "@AuthorisedBy"
-            )
-        )
+            ))
         {
             throw new NotSupportedException(
                 "The legacy lease-contract-term authorisation procedure is unavailable; authorisation cannot be approximated."
             );
         }
 
+        var actorCode = await ResolveLegacyUserCodeAsync(username, currentUserId);
+        if (actorCode <= 0)
+            throw new UnauthorizedAccessException("The authenticated user could not be resolved to a legacy user access code.");
+
         await ExecuteLegacyProcedureAsync(
             "DEV_UPD_LeaseContractTermsAuthorisation",
             new ProcedureParameter("@vmf_Code", DbType.Int32, terms.vmf_Code),
             new ProcedureParameter("@Comments", DbType.String, comment.Trim()),
-            new ProcedureParameter("@AuthorisedBy", DbType.String, username)
+            new ProcedureParameter("@AuthorisedBy", DbType.Int32, actorCode)
         );
         var updated =
             await GetByVehicleAsync(terms.vmf_Code)
@@ -330,7 +362,8 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
     public async Task<LeaseContractTerms> RejectAsync(
         LeaseContractTerms terms,
         string comment,
-        string username
+        string username,
+        int currentUserId = 0
     )
     {
         ArgumentNullException.ThrowIfNull(terms);
@@ -338,25 +371,29 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         if (string.IsNullOrWhiteSpace(comment))
             throw new ArgumentException("A comment is required to reject lease contract terms.", nameof(comment));
 
-        if (
-            !await IsLegacyProcedureAvailableAsync(
+        if (!await IsLegacyProcedureAvailableAsync(
                 "DEV_UPD_LeaseContractTermsRejection",
                 "@vmf_code",
                 "@Comments",
-                "@UpdatedBy"
-            )
-        )
+                "@UpdatedBy",
+                "@Rejected"
+            ))
         {
             throw new NotSupportedException(
                 "The legacy lease-contract-term rejection procedure is unavailable; rejection cannot be approximated."
             );
         }
 
+        var actorCode = await ResolveLegacyUserCodeAsync(username, currentUserId);
+        if (actorCode <= 0)
+            throw new UnauthorizedAccessException("The authenticated user could not be resolved to a legacy user access code.");
+
         await ExecuteLegacyProcedureAsync(
             "DEV_UPD_LeaseContractTermsRejection",
             new ProcedureParameter("@vmf_code", DbType.Int32, terms.vmf_Code),
             new ProcedureParameter("@Comments", DbType.String, comment.Trim()),
-            new ProcedureParameter("@UpdatedBy", DbType.String, username)
+            new ProcedureParameter("@UpdatedBy", DbType.Int32, actorCode),
+            new ProcedureParameter("@Rejected", DbType.Boolean, true)
         );
         var updated =
             await GetByVehicleAsync(terms.vmf_Code)
@@ -468,26 +505,30 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         string username
     )
     {
-        if (
-            !await IsLegacyProcedureAvailableAsync(
-                "DEV_INS_LeaseContractTermsComments",
-                "@comment",
-                "@CommentDate",
-                "@user_name",
-                "@vmf_code",
-                "@vehicle_contract_termID",
-                "@Status",
-                "@CommentCode"
-            )
-        )
+        var expectedParameters = new[]
+        {
+            "@comment",
+            "@CommentDate",
+            "@user_name",
+            "@vmf_code",
+            "@vehicle_contract_termID",
+            "@Status",
+            "@CommentCode",
+        };
+        // The archived SQL names this procedure DEV_INS_Comments. A later
+        // application build used the more descriptive alias; accept that
+        // alias only when it is actually deployed, while preferring the
+        // verified legacy object.
+        var procedureName = await ResolveCommentProcedureAsync(expectedParameters);
+        if (procedureName is null)
         {
             throw new NotSupportedException(
-                "The legacy lease-contract-term comment procedure is unavailable; the workflow action cannot be completed without its audit comment."
+                "The legacy lease-contract-term comment procedure DEV_INS_Comments is unavailable; the workflow action cannot be completed without its audit comment."
             );
         }
 
         await ExecuteLegacyProcedureAsync(
-            "DEV_INS_LeaseContractTermsComments",
+            procedureName,
             new ProcedureParameter("@comment", DbType.String, comment),
             new ProcedureParameter("@CommentDate", DbType.DateTime, DateTime.Now),
             new ProcedureParameter("@user_name", DbType.String, username),
@@ -500,6 +541,28 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
             new ProcedureParameter("@Status", DbType.Int32, terms.Rejected ?? 0),
             new ProcedureParameter("@CommentCode", DbType.Int32, 0, ParameterDirection.Output)
         );
+    }
+
+    private async Task<string?> ResolveCommentProcedureAsync(
+        IReadOnlyList<string> expectedParameters
+    )
+    {
+        foreach (var procedureName in new[] { "DEV_INS_Comments", "DEV_INS_LeaseContractTermsComments" })
+        {
+            var actualParameters = await GetLegacyProcedureParametersAsync(procedureName);
+            if (actualParameters is null)
+                continue;
+            if (!actualParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"The deployed legacy procedure {procedureName} does not match the archived comment parameter contract. No direct-DML fallback was run."
+                );
+            }
+
+            return procedureName;
+        }
+
+        return null;
     }
 
     private async Task<string?> FindVehicleRegistrationNumberAsync(int vmfCode)
@@ -523,6 +586,74 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         {
             if (shouldClose)
                 await connection.CloseAsync();
+        }
+    }
+
+    private async Task<int> ResolveLegacyUserCodeAsync(string username, int currentUserId)
+    {
+        if (currentUserId > 0)
+            return currentUserId;
+        if (int.TryParse(username, out var numericUserCode) && numericUserCode > 0)
+            return numericUserCode;
+        if (string.IsNullOrWhiteSpace(username))
+            return 0;
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT TOP (1) [user_access_code]
+                FROM [dbo].[user_access_old1]
+                WHERE LOWER(LTRIM(RTRIM(COALESCE([name], '')))) = LOWER(LTRIM(RTRIM(@username)))
+                   OR LOWER(LTRIM(RTRIM(COALESCE([E_Mail], '')))) = LOWER(LTRIM(RTRIM(@username)))
+                ORDER BY [user_access_code]
+                """;
+            AddParameter(command, "@username", DbType.String, username.Trim());
+            var value = await command.ExecuteScalarAsync();
+            return value is null or DBNull ? 0 : Convert.ToInt32(value);
+        }
+        catch (DbException)
+        {
+            return 0;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task<string?> ResolveLegacyUserNameAsync(
+        DbConnection connection,
+        int userAccessCode
+    )
+    {
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT TOP (1)
+                    COALESCE(
+                        NULLIF(LTRIM(RTRIM([name])), ''),
+                        NULLIF(LTRIM(RTRIM([E_Mail])), '')
+                    )
+                FROM [dbo].[user_access_old1]
+                WHERE [user_access_code] = @userAccessCode
+                """;
+            AddParameter(command, "@userAccessCode", DbType.Int32, userAccessCode);
+            var value = await command.ExecuteScalarAsync();
+            return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
+        }
+        catch (DbException)
+        {
+            return null;
         }
     }
 
@@ -569,6 +700,52 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
                     $"The deployed legacy procedure {procedureName} does not match the verified parameter contract. No direct-DML fallback was run."
                 );
             return true;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task<IReadOnlyList<string>?> GetLegacyProcedureParametersAsync(
+        string procedureName
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [parameterObject].[name]
+                FROM [sys].[procedures] AS [procedureObject]
+                INNER JOIN [sys].[schemas] AS [schemaObject]
+                    ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
+                LEFT JOIN [sys].[parameters] AS [parameterObject]
+                    ON [parameterObject].[object_id] = [procedureObject].[object_id]
+                   AND [parameterObject].[parameter_id] > 0
+                WHERE [schemaObject].[name] = N'dbo'
+                  AND [procedureObject].[name] = @procedureName
+                ORDER BY [parameterObject].[parameter_id]
+                """;
+            AddParameter(command, "@procedureName", DbType.String, procedureName);
+
+            var found = false;
+            var parameters = new List<string>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                found = true;
+                if (!reader.IsDBNull(0))
+                    parameters.Add(reader.GetString(0));
+            }
+
+            return found ? parameters : null;
         }
         finally
         {
@@ -845,6 +1022,59 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
     )
     {
         var predicates = new List<string>();
+        var allowedSiteCodes = query.AllowedSiteCodes?.Where(code => code > 0).Distinct().ToArray();
+        var scopeNeedsVehicleJoin = false;
+        if (allowedSiteCodes is not null)
+        {
+            if (allowedSiteCodes.Length == 0)
+            {
+                predicates.Add("1 = 0");
+            }
+            else
+            {
+                var scopeSiteParameters = allowedSiteCodes
+                    .Select((_, index) => $"@scopeSite{index}")
+                    .ToArray();
+                var scopePredicates = new List<string>();
+                foreach (var column in new[] { "lease_site_code", "site_code" }
+                    .Where(availableColumns.Contains))
+                {
+                    scopePredicates.Add(
+                        $"[l].[{column}] IN ({string.Join(", ", scopeSiteParameters)})"
+                    );
+                }
+
+                foreach (var column in new[] { "veh_site_code", "initial_site_code", "default_site" }
+                    .Where(vehicleColumns.Contains))
+                {
+                    scopeNeedsVehicleJoin = true;
+                    scopePredicates.Add(
+                        $"[v].[{column}] IN ({string.Join(", ", scopeSiteParameters)})"
+                    );
+                }
+
+                if (vehicleColumns.Contains("vmf_code"))
+                {
+                    scopeNeedsVehicleJoin = true;
+                    scopePredicates.Add(
+                        $"EXISTS (SELECT 1 FROM [dbo].[contract] AS [scope_contract] WHERE [scope_contract].[vmf_code] = [l].[vmf_Code] AND [scope_contract].[still_current] = 'Y' AND [scope_contract].[site_code] IN ({string.Join(", ", scopeSiteParameters)}))"
+                    );
+                }
+
+                if (query.CurrentUserId is > 0)
+                {
+                    foreach (var column in new[] { "CreatedBy", "created_by_user_code" }
+                        .Where(availableColumns.Contains))
+                    {
+                        scopePredicates.Add($"TRY_CONVERT(int, [l].[{column}]) = @scopeUser");
+                    }
+                }
+
+                predicates.Add(scopePredicates.Count == 0
+                    ? "1 = 0"
+                    : $"({string.Join(" OR ", scopePredicates)})");
+            }
+        }
         var statusPredicate = GetStatusPredicate(query.Status, availableColumns);
         if (statusPredicate is not null)
         {
@@ -857,7 +1087,9 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
             return new LeaseContractTermsPageFilter(
                 predicates.Count == 0 ? null : string.Join(" AND ", predicates),
                 null,
-                false
+                scopeNeedsVehicleJoin,
+                allowedSiteCodes,
+                query.CurrentUserId
             );
         }
 
@@ -871,7 +1103,13 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         )
         {
             predicates.Add("1 = 0");
-            return new LeaseContractTermsPageFilter(string.Join(" AND ", predicates), null, false);
+            return new LeaseContractTermsPageFilter(
+                string.Join(" AND ", predicates),
+                null,
+                scopeNeedsVehicleJoin,
+                allowedSiteCodes,
+                query.CurrentUserId
+            );
         }
 
         predicates.Add(
@@ -880,7 +1118,9 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         return new LeaseContractTermsPageFilter(
             string.Join(" AND ", predicates),
             $"%{search.ToLowerInvariant()}%",
-            true
+            true,
+            allowedSiteCodes,
+            query.CurrentUserId
         );
     }
 
@@ -923,6 +1163,15 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
 
     private static void AddFilterParameters(DbCommand command, LeaseContractTermsPageFilter filter)
     {
+        if (filter.AllowedSiteCodes is not null)
+        {
+            for (var index = 0; index < filter.AllowedSiteCodes.Count; index++)
+            {
+                AddParameter(command, $"@scopeSite{index}", DbType.Int16, filter.AllowedSiteCodes[index]);
+            }
+            if (filter.CurrentUserId is > 0)
+                AddParameter(command, "@scopeUser", DbType.Int32, filter.CurrentUserId.Value);
+        }
         if (filter.SearchTerm is not null)
         {
             AddParameter(command, "@vehicleSearch", DbType.String, filter.SearchTerm);
@@ -1527,7 +1776,9 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
     private sealed record LeaseContractTermsPageFilter(
         string? Predicate,
         string? SearchTerm,
-        bool IncludeVehicleJoin
+        bool IncludeVehicleJoin,
+        IReadOnlyList<short>? AllowedSiteCodes = null,
+        int? CurrentUserId = null
     );
 
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);

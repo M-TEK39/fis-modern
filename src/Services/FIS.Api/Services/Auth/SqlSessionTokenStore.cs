@@ -102,6 +102,11 @@ public class SqlSessionTokenStore : ISessionTokenStore
             MarkSqlStoreUnavailable(exception);
             return _legacyFallback.IssueTokens(claimList, rememberMe);
         }
+        catch (DbUpdateException exception) when (IsMissingObject(exception))
+        {
+            MarkSqlStoreUnavailable(exception);
+            return _legacyFallback.IssueTokens(claimList, rememberMe);
+        }
 
         return (
             accessToken,
@@ -350,6 +355,92 @@ public class SqlSessionTokenStore : ISessionTokenStore
         db.SaveChanges();
     }
 
+    public void RevokeByUserAccessCode(int userAccessCode)
+    {
+        if (userAccessCode <= 0)
+        {
+            return;
+        }
+
+        // Always clear the compatibility store as well. A process may have
+        // issued legacy fallback tokens before the optional durable table was
+        // discovered, and those tokens must not survive a role/profile change.
+        _legacyFallback.RevokeByUserAccessCode(userAccessCode);
+
+        if (!IsSqlStoreAvailable())
+        {
+            return;
+        }
+
+        using var scope = _services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
+        var connection = db.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+
+        try
+        {
+            if (shouldClose)
+            {
+                connection.Open();
+            }
+
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                DELETE [session_token]
+                FROM [dbo].[fis_session_tokens] AS [session_token]
+                WHERE EXISTS
+                (
+                    SELECT 1
+                    FROM OPENJSON(
+                        CASE WHEN ISJSON([session_token].[claims_json]) = 1
+                             THEN [session_token].[claims_json]
+                             ELSE N'[]' END
+                    ) AS [claim]
+                    WHERE JSON_VALUE([claim].[value], '$.Type') = @claimType
+                      AND TRY_CONVERT(
+                          int,
+                          JSON_VALUE([claim].[value], '$.Value')
+                      ) = @userAccessCode
+                )
+                """;
+
+            var claimType = command.CreateParameter();
+            claimType.ParameterName = "@claimType";
+            claimType.Value = "user_access_code";
+            command.Parameters.Add(claimType);
+
+            var userCode = command.CreateParameter();
+            userCode.ParameterName = "@userAccessCode";
+            userCode.Value = userAccessCode;
+            command.Parameters.Add(userCode);
+
+            command.ExecuteNonQuery();
+        }
+        catch (SqlException exception) when (IsMissingObject(exception))
+        {
+            MarkSqlStoreUnavailable(exception);
+        }
+        catch (Exception exception)
+        {
+            // Entitlement changes must not fail merely because the optional
+            // session table is temporarily unavailable. The durable service
+            // reports the capability separately; this path still clears any
+            // process-local compatibility sessions.
+            _logger.LogWarning(
+                exception,
+                "Could not revoke durable sessions for user {UserAccessCode} after a profile change.",
+                userAccessCode
+            );
+        }
+        finally
+        {
+            if (shouldClose && connection.State != ConnectionState.Closed)
+            {
+                connection.Close();
+            }
+        }
+    }
+
     private static string SerializeClaims(IEnumerable<Claim> claims)
     {
         var array = claims
@@ -432,7 +523,7 @@ public class SqlSessionTokenStore : ISessionTokenStore
         }
     }
 
-    private void MarkSqlStoreUnavailable(SqlException exception)
+    private void MarkSqlStoreUnavailable(Exception exception)
     {
         Volatile.Write(ref _sqlTableState, -1);
         _logger.LogWarning(
@@ -441,7 +532,15 @@ public class SqlSessionTokenStore : ISessionTokenStore
         );
     }
 
-    private static bool IsMissingObject(SqlException exception) => exception.Number == 208;
+    // The session table is optional during rollout. Some restored legacy
+    // databases contain an older table with the same name but without the
+    // modern audit columns; EF then surfaces a 207 inside DbUpdateException.
+    // Treat both forms as unavailable and use the process-local compatibility
+    // session store instead of rejecting otherwise valid legacy credentials.
+    private static bool IsMissingObject(SqlException exception) => exception.Number is 207 or 208;
+
+    private static bool IsMissingObject(DbUpdateException exception) =>
+        exception.InnerException is SqlException sqlException && IsMissingObject(sqlException);
 
     private sealed record SerializedClaim(
         string Type,

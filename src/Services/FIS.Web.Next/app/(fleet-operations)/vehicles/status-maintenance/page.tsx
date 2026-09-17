@@ -9,18 +9,20 @@ import RouteLoading from "@/components/app-shell/route-loading";
 import AccessRestrictedCard from "@/components/app-shell/access-restricted-card";
 import StatusMaintenanceClient from "@/app/(fleet-operations)/vehicles/status-maintenance/status-maintenance-client";
 import {
+  hasVehicleMasterRole,
+  hasVehicleStatusRole,
+} from "@/app/(fleet-operations)/vehicles/access";
+import {
   getSitesForVehicleStatus,
   getVehicleForStatus,
+  getVehicleStatusOptions,
   searchVehiclesForStatus,
-  VEHICLE_STATUS_OPTIONS,
   VehicleStatusApiError,
   type VehicleStatusSite,
+  type VehicleStatusOption,
   type VehicleStatusVehicle,
 } from "@/lib/api/vehicles/api-vehicle-status";
 import { getSession } from "@/lib/auth/session";
-
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
-const VEHICLE_STATUS_ROLES = ["Acquisition", "Logistics", "TSS", "Workshop"];
 
 type StatusMaintenancePageProps = {
   searchParams: Promise<{
@@ -35,29 +37,6 @@ type StatusMaintenancePageProps = {
 
 function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function hasVehicleStatusRole(roles: readonly string[]) {
-  return VEHICLE_STATUS_ROLES.some((role) =>
-    roles.some(
-      (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-    ),
-  );
 }
 
 function safeReturnUrl(value: string | undefined) {
@@ -152,10 +131,7 @@ async function renderStatusMaintenancePageContent({ searchParams }: StatusMainte
     );
   }
 
-  if (
-    !hasVehicleManagementPermission(session.accessLevel) ||
-    !hasVehicleStatusRole(session.roles)
-  ) {
+  if (!hasVehicleMasterRole(session.roles) || !hasVehicleStatusRole(session.roles)) {
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />
@@ -172,6 +148,7 @@ async function renderStatusMaintenancePageContent({ searchParams }: StatusMainte
 
   let selectedVehicle: VehicleStatusVehicle | null = null;
   let sites: VehicleStatusSite[] = [];
+  let statusOptions: VehicleStatusOption[] = [];
 
   try {
     selectedVehicle = await resolveInitialVehicle(vmfCode, ggNumber);
@@ -184,12 +161,21 @@ async function renderStatusMaintenancePageContent({ searchParams }: StatusMainte
           error instanceof Error ? error.message : "unknown error",
         );
       }
+      statusOptions = await getVehicleStatusOptions(selectedVehicle.vmfCode);
     }
   } catch (error) {
     if (error instanceof VehicleStatusApiError && error.reason === "unauthorized") {
       return (
         <main className="page-shell vehicle-page-shell">
           <SessionRecovery returnPath="/vehicles/status-maintenance" />
+        </main>
+      );
+    }
+
+    if (error instanceof VehicleStatusApiError && error.reason === "forbidden") {
+      return (
+        <main className="page-shell vehicle-page-shell">
+          <AccessRestricted />
         </main>
       );
     }
@@ -228,7 +214,7 @@ async function renderStatusMaintenancePageContent({ searchParams }: StatusMainte
           initialSites={sites}
           initialUpdated={updated}
           initialReturnUrl={returnUrl}
-          statusOptions={VEHICLE_STATUS_OPTIONS}
+          statusOptions={statusOptions}
         />
 
         <div className="vehicle-footer-actions">

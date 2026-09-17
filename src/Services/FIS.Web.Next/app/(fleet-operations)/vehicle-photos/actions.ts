@@ -43,7 +43,7 @@ async function authorize() {
       message: "Your session has expired. Sign in again before continuing.",
     };
   }
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleManagementPermission(session.roles)) {
     return {
       ok: false as const,
       message: "You do not have permission to maintain vehicle photos.",

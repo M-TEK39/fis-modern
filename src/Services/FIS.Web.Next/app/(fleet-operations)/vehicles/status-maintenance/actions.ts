@@ -1,7 +1,6 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { after } from "next/server";
 
 import {
   changeVehicleStatusAgainstApi,
@@ -9,12 +8,13 @@ import {
   VehicleStatusApiError,
   type VehicleStatusVehicle,
 } from "@/lib/api/vehicles/api-vehicle-status";
+import {
+  hasVehicleMasterRole,
+  hasVehicleStatusRole,
+} from "@/app/(fleet-operations)/vehicles/access";
 import { getSession } from "@/lib/auth/session";
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
-const VEHICLE_STATUS_ROLES = ["Acquisition", "Logistics", "TSS", "Workshop"];
 const SOLD_STATUS_CODE = 5;
-const STOLEN_STATUS_CODE = 4;
 
 export type VehicleStatusActionState = {
   status: "idle" | "success" | "error";
@@ -61,27 +61,6 @@ function getInteger(
   return parsed;
 }
 
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
-
 async function authorizeStatusMaintenance() {
   const session = await getSession();
 
@@ -99,14 +78,14 @@ async function authorizeStatusMaintenance() {
     };
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return {
       ok: false as const,
       message: "You do not have permission to maintain vehicle statuses.",
     };
   }
 
-  if (!VEHICLE_STATUS_ROLES.some((role) => hasRole(session.roles, role))) {
+  if (!hasVehicleStatusRole(session.roles)) {
     return {
       ok: false as const,
       message: "Your account does not have the required access level to edit vehicle statuses.",
@@ -119,6 +98,10 @@ async function authorizeStatusMaintenance() {
 function searchErrorMessage(error: VehicleStatusApiError) {
   if (error.reason === "unauthorized") {
     return "Your session has expired. Sign in again before searching.";
+  }
+
+  if (error.reason === "forbidden") {
+    return "You do not have permission to search vehicle statuses.";
   }
 
   if (error.reason === "unavailable") {
@@ -135,6 +118,10 @@ function statusErrorMessage(error: VehicleStatusApiError) {
 
   if (error.reason === "not-found") {
     return "The vehicle could not be found. Search again and choose another record.";
+  }
+
+  if (error.reason === "forbidden") {
+    return "You do not have permission to change vehicle statuses.";
   }
 
   if (error.reason === "unavailable") {
@@ -218,12 +205,12 @@ export async function changeVehicleStatusAction(
     const currentStatusCode = getInteger(formData, "currentStatusCode", "Current status");
     const newStatusCode = getInteger(formData, "newStatusCode", "Next status");
     const effectiveDate = getText(formData, "effectiveDate");
-    const endOdometer = getInteger(formData, "endOdometer", "Odometer", false);
+    const currentStatusDate = getText(formData, "currentStatusDate");
+    const endOdometer = getInteger(formData, "endOdometer", "Odometer");
     const soldAmount = getText(formData, "soldAmount");
     const soldDate = getText(formData, "soldDate");
     const soldTo = getText(formData, "soldTo");
     const comments = getText(formData, "comments");
-    const siteCode = getInteger(formData, "siteCode", "Book Under Site", false);
 
     if (vmfCode <= 0 || currentStatusCode < 0 || newStatusCode < 1 || newStatusCode > 12) {
       throw new VehicleStatusValidationError("The selected vehicle status is invalid.");
@@ -243,17 +230,21 @@ export async function changeVehicleStatusAction(
     if (Number.isNaN(parsedEffectiveDate.getTime()) || parsedEffectiveDate > new Date()) {
       throw new VehicleStatusValidationError("Effective From date cannot be in the future.");
     }
+    if (
+      currentStatusDate &&
+      /^\d{4}-\d{2}-\d{2}$/.test(currentStatusDate) &&
+      parsedEffectiveDate < new Date(`${currentStatusDate}T00:00:00Z`)
+    ) {
+      throw new VehicleStatusValidationError(
+        "Effective From date cannot be before the vehicle's current status date.",
+      );
+    }
 
     if (endOdometer !== null && endOdometer < 0) {
       throw new VehicleStatusValidationError("Odometer cannot be negative.");
     }
 
-    if (newStatusCode === STOLEN_STATUS_CODE && (siteCode === null || siteCode <= 0)) {
-      throw new VehicleStatusValidationError(
-        "Book Under Site is required when marking a vehicle as Stolen.",
-      );
-    }
-
+    let parsedSoldAmount: number | null = null;
     if (newStatusCode === SOLD_STATUS_CODE) {
       if (!soldAmount || !soldDate || !soldTo) {
         throw new VehicleStatusValidationError(
@@ -261,26 +252,36 @@ export async function changeVehicleStatusAction(
         );
       }
 
-      throw new VehicleStatusValidationError(
-        "Sold status is not available until the C# status API can persist Sold Amount, Sold Date, and Sold To.",
-      );
+      parsedSoldAmount = Number(soldAmount);
+      if (!Number.isFinite(parsedSoldAmount) || parsedSoldAmount < 0) {
+        throw new VehicleStatusValidationError("Sold Amount must be a valid non-negative amount.");
+      }
+      const parsedSoldDate = new Date(`${soldDate}T00:00:00Z`);
+      if (Number.isNaN(parsedSoldDate.getTime()) || parsedSoldDate > new Date()) {
+        throw new VehicleStatusValidationError("Sold Date cannot be in the future.");
+      }
+      if (
+        currentStatusDate &&
+        /^\d{4}-\d{2}-\d{2}$/.test(currentStatusDate) &&
+        parsedSoldDate < new Date(`${currentStatusDate}T00:00:00Z`)
+      ) {
+        throw new VehicleStatusValidationError(
+          "Sold Date cannot be before the vehicle's current status date.",
+        );
+      }
     }
 
     await changeVehicleStatusAgainstApi(
       vmfCode,
       newStatusCode,
-      newStatusCode === STOLEN_STATUS_CODE ? siteCode : null,
+      null,
       effectiveDate,
       comments,
+      endOdometer,
+      newStatusCode === SOLD_STATUS_CODE ? soldTo : null,
+      newStatusCode === SOLD_STATUS_CODE ? soldDate : null,
+      parsedSoldAmount,
     );
-
-    if (endOdometer !== null || comments) {
-      after(() => {
-        console.warn(
-          "Vehicle status API does not persist the status-maintenance odometer/comments fields; status update completed.",
-        );
-      });
-    }
 
     redirectUrl = buildRedirectUrl(vmfCode, getSafeReturnUrl(formData));
   } catch (error) {

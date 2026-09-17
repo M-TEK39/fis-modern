@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { updateLicenseFeeAction } from "@/app/(administration)/validation-data/license-fees/actions";
 import LicenseFeeForm from "@/app/(administration)/validation-data/license-fees/license-fee-form";
@@ -49,7 +49,7 @@ async function LicenseFeeEditPageContent({ searchParams }: LicenseFeeEditPagePro
         <ErrorCard message="Licence fee maintenance is temporarily unavailable." />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <ErrorCard message="You do not have permission to edit licence fees." />

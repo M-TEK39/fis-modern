@@ -207,7 +207,31 @@ public class JournalDetailService : IJournalDetailService
                 );
             }
 
-            // Create reversal entry (opposite debit/credit)
+            if (await _journalDetailRepository.TryGenerateReversalAsync(journalDetailCode))
+            {
+                var legacyReversal = (
+                    await _journalDetailRepository.GetReversalsForJournalAsync(journalDetailCode)
+                )
+                    .OrderByDescending(item => item.journal_detail_id)
+                    .FirstOrDefault();
+                if (legacyReversal is null)
+                {
+                    throw new InvalidOperationException(
+                        "The legacy journal reversal procedure completed without creating a readable reversal entry."
+                    );
+                }
+
+                _logger.LogInformation(
+                    "Legacy journal reversal created: {ReversalCode} for original {OriginalCode}",
+                    legacyReversal.journal_detail_code,
+                    journalDetailCode
+                );
+                return legacyReversal;
+            }
+
+            // Compatibility fallback only when the archived reversal
+            // procedure is genuinely absent. Create a parameterized
+            // offsetting entry with the same legacy result shape.
             var reversal = new JournalDetail
             {
                 journal_detail_code = Guid.NewGuid(),
@@ -293,8 +317,11 @@ public class JournalDetailService : IJournalDetailService
                 "FIXED"
             );
 
-            // Calculate quantity (number of days)
-            int quantity = (endDate - startDate).Days;
+            // Helper.DateDiff(DateInterval.Day, ...) in the archived
+            // JournalDetail implementation is inclusive (DATEDIFF + 1).
+            // Excluding the end date creates a one-day revenue gap in every
+            // fixed-contract journal amount.
+            int quantity = (endDate.Date - startDate.Date).Days + 1;
             if (quantity < 0)
                 quantity = 0;
 

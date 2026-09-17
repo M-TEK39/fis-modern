@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import LoginForm from "@/app/(auth)/login/login-form";
 import { getSession } from "@/lib/auth/session";
+import { getMicrosoftSignInStatus } from "@/lib/auth/api-auth";
 
 function LoginFallback() {
   return (
@@ -32,17 +33,14 @@ function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function isEnabled(value: string | undefined) {
-  const normalized = value?.trim().toLowerCase();
-  return Boolean(normalized && !["0", "false", "no", "off"].includes(normalized));
-}
-
 async function LoginContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   await connection();
-  const [query, session] = await Promise.all([searchParams, getSession()]);
-  const microsoftSignInUrl =
-    process.env.MICROSOFT_SIGN_IN_URL?.trim() || "/api/auth/microsoft/sign-in";
-  const microsoftSignInEnabled = isEnabled(process.env.MICROSOFT_SIGN_IN_ENABLED);
+  const [query, session, microsoftSignInEnabled] = await Promise.all([
+    searchParams,
+    getSession(),
+    getMicrosoftSignInStatus(),
+  ]);
+  const microsoftSignInUrl = "/api/auth/microsoft/sign-in";
   const microsoftSignInFailed = getQueryValue(query.error) === "microsoft-sign-in";
 
   return (

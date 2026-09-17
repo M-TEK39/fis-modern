@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { createDriverLicenceAction } from "@/app/(administration)/validation-data/driver-licenses/actions";
 import DriverLicenceForm from "@/app/(administration)/validation-data/driver-licenses/driver-licence-form";
@@ -52,7 +52,7 @@ async function DriverLicenceAddPageContent() {
         <ErrorCard message="Driver licence maintenance is temporarily unavailable." />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <ErrorCard message="You do not have permission to add driver licences." />

@@ -2,7 +2,7 @@ import { connection } from "next/server";
 import { redirect } from "next/navigation";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
-import { hasRole, hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasRole } from "@/app/(administration)/drivers/access";
 import type { SessionState } from "@/lib/auth/api-auth";
 import { getSession } from "@/lib/auth/session";
 
@@ -54,9 +54,7 @@ export function hasTripAuthorityAccess(
   session: Extract<SessionState, { status: "authenticated" }>,
 ) {
   return (
-    hasRole(session.roles, "TripAuthorities") ||
-    hasRole(session.roles, "Trip Authorities") ||
-    hasVehicleManagementPermission(session.accessLevel)
+    hasRole(session.roles, "TripAuthorities") || hasRole(session.roles, "Trip Authorities")
   );
 }
 

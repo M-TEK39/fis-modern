@@ -332,7 +332,7 @@ async function renderNoticeManagementContent({
         />
       </main>
     );
-  if (!hasNoticeManagementPermission(session.accessLevel))
+  if (!hasNoticeManagementPermission(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <StatusCard

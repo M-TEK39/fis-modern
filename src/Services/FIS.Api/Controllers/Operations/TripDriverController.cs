@@ -1,3 +1,4 @@
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Drivers;
@@ -10,19 +11,29 @@ namespace FIS.Api.Controllers;
 /// API Controller for trip driver assignment operations
 /// </summary>
 [ApiController]
-[Authorize]
+// Trip drivers are embedded in Trip Authorities. The legacy menu exposes
+// that module only to its entitlement (or the separate driver-management
+// administrators); do not leave this compatibility controller open to every
+// authenticated user.
+[Authorize(Roles = "Trip Authorities,TripAuthorities,Driver and Authoriser Management,SystemAdministrator,System Administrator")]
 [Route("api/[controller]")]
 public class TripDriverController : BaseApiController
 {
     private readonly ITripDriverRepository _tripDriverRepository;
+    private readonly ITripRepository _tripRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<TripDriverController> _logger;
 
     public TripDriverController(
         ITripDriverRepository tripDriverRepository,
+        ITripRepository tripRepository,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<TripDriverController> logger
     )
     {
         _tripDriverRepository = tripDriverRepository;
+        _tripRepository = tripRepository;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
@@ -36,7 +47,11 @@ public class TripDriverController : BaseApiController
         {
             int currentUserId = GetCurrentUserId();
 
-            var tripDrivers = await _tripDriverRepository.GetActiveDriversAsync();
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            var tripDrivers = FilterByAllowedSites(
+                await _tripDriverRepository.GetActiveDriversAsync(),
+                allowedSites
+            ).ToList();
             _logger.LogInformation("Retrieved {Count} active trip drivers", tripDrivers.Count());
             return Ok(tripDrivers);
         }
@@ -67,6 +82,11 @@ public class TripDriverController : BaseApiController
                 return NotFound($"Trip driver with code {tripDriverCode} not found");
             }
 
+            if (!await IsSiteAllowedAsync(tripDriver.site_code))
+            {
+                return NotFound($"Trip driver with code {tripDriverCode} not found");
+            }
+
             _logger.LogInformation(
                 "Retrieved trip driver {TripDriverCode}: {DriverName}",
                 tripDriverCode,
@@ -90,6 +110,11 @@ public class TripDriverController : BaseApiController
         try
         {
             int currentUserId = GetCurrentUserId();
+
+            if (!await IsSiteAllowedAsync(siteCode))
+            {
+                return Forbid();
+            }
 
             var tripDrivers = await _tripDriverRepository.GetBySiteAsync(siteCode);
             _logger.LogInformation(
@@ -116,7 +141,10 @@ public class TripDriverController : BaseApiController
         {
             int currentUserId = GetCurrentUserId();
 
-            var primaryDrivers = await _tripDriverRepository.GetPrimaryDriversAsync();
+            var primaryDrivers = FilterByAllowedSites(
+                await _tripDriverRepository.GetPrimaryDriversAsync(),
+                await ResolveAllowedSiteCodesAsync()
+            ).ToList();
             _logger.LogInformation("Found {Count} primary drivers", primaryDrivers.Count());
             return Ok(primaryDrivers);
         }
@@ -139,7 +167,10 @@ public class TripDriverController : BaseApiController
         {
             int currentUserId = GetCurrentUserId();
 
-            var tripDrivers = await _tripDriverRepository.SearchDriversAsync(searchTerm ?? "");
+            var tripDrivers = FilterByAllowedSites(
+                await _tripDriverRepository.SearchDriversAsync(searchTerm ?? ""),
+                await ResolveAllowedSiteCodesAsync()
+            ).ToList();
             _logger.LogInformation(
                 "Found {Count} trip drivers matching search term '{SearchTerm}'",
                 tripDrivers.Count(),
@@ -167,6 +198,32 @@ public class TripDriverController : BaseApiController
         try
         {
             int currentUserId = GetCurrentUserId();
+
+            if (tripDriver is null || tripDriver.trip_authority_code <= 0)
+            {
+                return BadRequest("A valid trip authority is required.");
+            }
+
+            if (!await IsSiteAllowedAsync(tripDriver.site_code))
+            {
+                return Forbid();
+            }
+
+            var authority = await _tripRepository.GetByIdAsync(
+                tripDriver.trip_authority_code,
+                await ResolveAllowedSiteCodesAsync()
+            );
+            if (authority is null)
+            {
+                return NotFound($"Trip authority {tripDriver.trip_authority_code} not found");
+            }
+
+            if (authority.Contract?.site_code is short authoritySite
+                && tripDriver.site_code.HasValue
+                && tripDriver.site_code.Value != authoritySite)
+            {
+                return BadRequest("A trip driver must belong to the same site as its trip authority.");
+            }
 
             var createdTripDriver = await _tripDriverRepository.CreateAsync(
                 tripDriver,
@@ -208,6 +265,11 @@ public class TripDriverController : BaseApiController
         {
             int currentUserId = GetCurrentUserId();
 
+            if (tripDriver is null)
+            {
+                return BadRequest("Trip driver data is required");
+            }
+
             if (tripDriverCode != tripDriver.trip_driver_code)
             {
                 return BadRequest("Trip driver code mismatch");
@@ -221,6 +283,16 @@ public class TripDriverController : BaseApiController
                     tripDriverCode
                 );
                 return NotFound($"Trip driver with code {tripDriverCode} not found");
+            }
+
+            if (!await IsSiteAllowedAsync(existingTripDriver.site_code))
+            {
+                return NotFound($"Trip driver with code {tripDriverCode} not found");
+            }
+
+            if (tripDriver.site_code != existingTripDriver.site_code)
+            {
+                return BadRequest("A trip driver cannot be moved to another site by editing the assignment.");
             }
 
             await _tripDriverRepository.UpdateAsync(tripDriver, currentUserId);
@@ -259,6 +331,11 @@ public class TripDriverController : BaseApiController
                 return NotFound($"Trip driver with code {tripDriverCode} not found");
             }
 
+            if (!await IsSiteAllowedAsync(existingTripDriver.site_code))
+            {
+                return NotFound($"Trip driver with code {tripDriverCode} not found");
+            }
+
             await _tripDriverRepository.DeleteAsync(tripDriverCode, currentUserId);
             _logger.LogInformation(
                 "Deleted trip driver {TripDriverCode}: {DriverName}",
@@ -274,4 +351,24 @@ public class TripDriverController : BaseApiController
             return StatusCode(500, "An error occurred while deleting the trip driver");
         }
     }
+
+    private Task<IReadOnlySet<short>?> ResolveAllowedSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
+
+    private async Task<bool> IsSiteAllowedAsync(int? siteCode)
+    {
+        var allowedSites = await ResolveAllowedSiteCodesAsync();
+        return allowedSites is null
+            || siteCode is > 0 and <= short.MaxValue
+                && allowedSites.Contains((short)siteCode.Value);
+    }
+
+    private static IEnumerable<TripDriver> FilterByAllowedSites(
+        IEnumerable<TripDriver> drivers,
+        IReadOnlySet<short>? allowedSites
+    ) => allowedSites is null
+        ? drivers
+        : drivers.Where(driver =>
+            driver.site_code is > 0 and <= short.MaxValue
+                && allowedSites.Contains((short)driver.site_code.Value));
 }

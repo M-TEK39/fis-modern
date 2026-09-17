@@ -15,11 +15,11 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_URLS=http://+:8080
+      # appsettings.Production.json defines a localhost development endpoint;
+      # override it explicitly so Kestrel listens on the container network.
+      - Kestrel__Endpoints__Http__Url=http://+:8080
       - TZ=Africa/Johannesburg
       - ApiSettings__WebBaseUrl=https://${SERVER_HOSTNAME:-${SERVER_IP:-localhost}}
-      - AzureAd__TenantId=${AzureAd__TenantId:-}
-      - AzureAd__ClientId=${AzureAd__ClientId:-}
-      - AzureAd__ClientSecret=${AzureAd__ClientSecret:-}
       - AzureAd__CallbackPath=/signin-microsoft
       - Cors__Origins__0=https://localhost
       - Cors__Origins__1=https://${SERVER_IP:-localhost}
@@ -30,8 +30,12 @@ services:
       - fis-uploads:/app/uploads
     restart: unless-stopped
     healthcheck:
-      # The web tier must not start until the API can reach its SQL dependency.
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
+      # Keep Docker's service-health gate about API process liveness. The
+      # external SQL Server is deliberately not a container dependency: a
+      # restored client database may be slow or temporarily unreachable while
+      # the API still needs to expose authentication and compatibility errors.
+      # `/health/ready` remains available for operators and monitoring.
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/live"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -49,8 +53,6 @@ services:
       - NODE_ENV=production
       - NEXT_TELEMETRY_DISABLED=1
       - API_BASE_URL=http://fis-api:8080
-      - MICROSOFT_SIGN_IN_ENABLED=${AzureAd__ClientId:-}
-      - MICROSOFT_SIGN_IN_URL=/api/auth/microsoft/sign-in
       - PORT=3000
       - HOSTNAME=0.0.0.0
       - TZ=Africa/Johannesburg

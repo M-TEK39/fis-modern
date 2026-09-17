@@ -26,11 +26,12 @@ namespace FIS.Core.Infrastructure.Repositories;
 )]
 internal sealed class LegacyJobCardRepository : IJobCardRepository
 {
-    private const string TableName = "JobCard";
+    private const string DefaultTableName = "Jobcards";
     private const string VehicleTableName = "vehicle_master";
     private const string ExtraCodeTableName = "extra_codes";
 
     private readonly FisDbContext _context;
+    private string? _resolvedTableName;
 
     public LegacyJobCardRepository(FisDbContext context)
     {
@@ -106,6 +107,8 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             conditions.Add($"({searchPredicate})");
         }
 
+        AddAllowedVehicleCondition(conditions, query.AllowedVmfCodes, "j");
+
         var whereClause = string.Join(" AND ", conditions.DefaultIfEmpty("1 = 1"));
         var orderBy = $"{DateExpression(columns)} DESC, {IdExpression(columns)} DESC";
         var vehicleJoin = vehicleColumns.ContainsKey("vmf_code")
@@ -123,11 +126,18 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             countCommand.Transaction = CurrentTransaction;
             countCommand.CommandText = $"""
                 SELECT COUNT(DISTINCT {IdExpression(columns)})
-                FROM [dbo].[{TableName}] j
+                FROM [dbo].[{CurrentTableName}] j
                 {vehicleJoin}
                 WHERE {whereClause}
                 """;
-            AddPageParameters(countCommand, statusCodes, searchTerm, searchId, query.JobCardId);
+            AddPageParameters(
+                countCommand,
+                statusCodes,
+                searchTerm,
+                searchId,
+                query.JobCardId,
+                query.AllowedVmfCodes
+            );
             totalRecords = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
         }
 
@@ -139,14 +149,21 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         dataCommand.CommandText = $"""
             SELECT
                 {BuildProjection(columns, vehicleProjectionColumns, extraColumns)}
-            FROM [dbo].[{TableName}] j
+            FROM [dbo].[{CurrentTableName}] j
             {vehicleJoin}
             {extraJoin}
             WHERE {whereClause}
             ORDER BY {orderBy}
             OFFSET @skip ROWS FETCH NEXT @pageSize ROWS ONLY
             """;
-        AddPageParameters(dataCommand, statusCodes, searchTerm, searchId, query.JobCardId);
+        AddPageParameters(
+            dataCommand,
+            statusCodes,
+            searchTerm,
+            searchId,
+            query.JobCardId,
+            query.AllowedVmfCodes
+        );
         AddParameter(dataCommand, "@skip", DbType.Int64, skip);
         AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
 
@@ -174,6 +191,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
 
         if (columns.ContainsKey("is_deleted"))
             conditions.Add("ISNULL(j.[is_deleted], 0) = 0");
+        AddAllowedVehicleCondition(conditions, query.AllowedVmfCodes, "j");
 
         var whereClause = string.Join(" AND ", conditions);
         var vehicleJoin = vehicleColumns.ContainsKey("vmf_code")
@@ -191,9 +209,10 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             countCommand.Transaction = CurrentTransaction;
             countCommand.CommandText = $"""
                 SELECT COUNT(DISTINCT {IdExpression(columns)})
-                FROM [dbo].[{TableName}] j
+                FROM [dbo].[{CurrentTableName}] j
                 WHERE {whereClause}
                 """;
+            AddAllowedVehicleParameters(countCommand, query.AllowedVmfCodes, "j");
             totalRecords = Convert.ToInt32(await countCommand.ExecuteScalarAsync());
         }
 
@@ -205,7 +224,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         dataCommand.CommandText = $"""
             SELECT
                 {BuildProjection(columns, vehicleProjectionColumns, extraColumns)}
-            FROM [dbo].[{TableName}] j
+            FROM [dbo].[{CurrentTableName}] j
             {vehicleJoin}
             {extraJoin}
             WHERE {whereClause}
@@ -214,6 +233,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             """;
         AddParameter(dataCommand, "@skip", DbType.Int64, skip);
         AddParameter(dataCommand, "@pageSize", DbType.Int32, pageSize);
+        AddAllowedVehicleParameters(dataCommand, query.AllowedVmfCodes, "j");
 
         var items = new List<JobCard>();
         await using var reader = await dataCommand.ExecuteReaderAsync();
@@ -301,7 +321,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
                     "other_cost",
                     "decimal(18, 2)"
                 )}), CAST(0 AS decimal(18, 2))) AS [total_other]
-                FROM [dbo].[{TableName}] j
+                FROM [dbo].[{CurrentTableName}] j
                 WHERE {whereClause}
                 """;
             AddRepairCostParameters(summaryCommand, query, vmfCodes);
@@ -328,7 +348,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         dataCommand.CommandText = $"""
             SELECT
                 {BuildProjection(columns, vehicleProjectionColumns, extraColumns)}
-            FROM [dbo].[{TableName}] j
+            FROM [dbo].[{CurrentTableName}] j
             {vehicleJoin}
             {extraJoin}
             WHERE {whereClause}
@@ -467,7 +487,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             await using var command = scope.Connection.CreateCommand();
             command.Transaction = CurrentTransaction;
             command.CommandText =
-                $"INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(x => $"[{x.Column}]"))}) OUTPUT INSERTED.[job_card_id] VALUES ({string.Join(", ", values.Select(x => x.Parameter))})";
+                $"INSERT INTO [dbo].[{CurrentTableName}] ({string.Join(", ", values.Select(x => $"[{x.Column}]"))}) OUTPUT INSERTED.[job_card_id] VALUES ({string.Join(", ", values.Select(x => x.Parameter))})";
             AddParameters(command, values);
             var id = Convert.ToInt32(await command.ExecuteScalarAsync());
             return await GetByIdAsync(id)
@@ -490,8 +510,10 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         var mutationProcedure = await GetJobCardMutationProcedureAsync(columns);
         if (mutationProcedure is not null)
         {
-            await ExecuteLegacyProcedureAsync(
+            await ExecuteLegacyProcedurePreservingCapturerAsync(
                 mutationProcedure.Name,
+                jobCard.job_card_id,
+                existing.created_by_user_code,
                 new ProcedureParameter("@VmfCode", DbType.Int32, existing.vmf_code),
                 new ProcedureParameter("@extra_code", DbType.Int16, existing.extra_code),
                 new ProcedureParameter(
@@ -674,14 +696,14 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         if (columns.ContainsKey("is_deleted"))
         {
             command.CommandText =
-                $"UPDATE [dbo].[{TableName}] SET [is_deleted] = 1, [date_updated] = @dateUpdated, [modified_by_user_code] = @modifiedBy WHERE [job_card_id] = @jobCardId";
+                $"UPDATE [dbo].[{CurrentTableName}] SET [is_deleted] = 1, [date_updated] = @dateUpdated, [modified_by_user_code] = @modifiedBy WHERE [job_card_id] = @jobCardId";
             AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
             AddParameter(command, "@modifiedBy", DbType.Int32, UserIdOrNull(currentUserId));
         }
         else
         {
             command.CommandText =
-                $"DELETE FROM [dbo].[{TableName}] WHERE [{GetIdColumn(columns)}] = @jobCardId";
+                $"DELETE FROM [dbo].[{CurrentTableName}] WHERE [{GetIdColumn(columns)}] = @jobCardId";
         }
 
         AddParameter(command, "@jobCardId", DbType.Int32, jobCardId);
@@ -791,6 +813,8 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         string? cancelReason
     )
     {
+        var existing = await GetByIdAsync(jobCardId)
+            ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
         if (
             await IsLegacyProcedureAvailableAsync(
                 "DEV_UPD_JobcardCancelRequest",
@@ -807,8 +831,10 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
                 );
             }
 
-            await ExecuteLegacyProcedureAsync(
+            await ExecuteLegacyProcedurePreservingCapturerAsync(
                 "DEV_UPD_JobcardCancelRequest",
+                jobCardId,
+                existing.created_by_user_code,
                 new ProcedureParameter("@jcnumber", DbType.String, jobCardNumber),
                 new ProcedureParameter("@userid", DbType.Int32, currentUserId)
             );
@@ -825,7 +851,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             7,
             null,
             cancelReason is null ? null : $"Canceled: {cancelReason}",
-            currentUserId
+            existing.created_by_user_code
         );
     }
 
@@ -862,8 +888,10 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             var existing =
                 await GetByIdAsync(jobCardId)
                 ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
-            await ExecuteLegacyProcedureAsync(
+            await ExecuteLegacyProcedurePreservingCapturerAsync(
                 mutationProcedure.Name,
+                jobCardId,
+                existing.created_by_user_code,
                 new ProcedureParameter("@VmfCode", DbType.Int32, existing.vmf_code),
                 new ProcedureParameter("@extra_code", DbType.Int16, existing.extra_code),
                 new ProcedureParameter(
@@ -1342,7 +1370,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             // This fallback keeps the archived procedure's initial workflow
             // state (unassigned, status 1) while using its current column names.
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}]
+                INSERT INTO [dbo].[{CurrentTableName}]
                     ([Counter], [year], [Number], [vmf_code], [extra_code], [Status_date], [captured_by], [Status_code], [priority], [reviewed_by_Authoriser])
                 OUTPUT INSERTED.[JobCard_code]
                 VALUES
@@ -1353,11 +1381,11 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         else
         {
             command.CommandText = $"""
-                INSERT INTO [dbo].[{TableName}]
+                INSERT INTO [dbo].[{CurrentTableName}]
                     ([jc_counter], [year], [jc_number], [vmf_code], [extra_code], [jcs_comment], [jcs_date], [captured_by], [status_code], [priority], [reviewed_by_Authorizer])
                 OUTPUT INSERTED.[jc_code]
                 VALUES
-                    ((SELECT ISNULL(MAX([jc_counter]), 0) + 1 FROM [dbo].[{TableName}]), CONVERT(nchar(10), YEAR(GETDATE())), 'Not Assigned', @vmfCode, @extraCode, @jcsComment, CONVERT(varchar(10), GETDATE(), 111), @capturedBy, 1, @priority, 'N')
+                    ((SELECT ISNULL(MAX([jc_counter]), 0) + 1 FROM [dbo].[{CurrentTableName}]), CONVERT(nchar(10), YEAR(GETDATE())), 'Not Assigned', @vmfCode, @extraCode, @jcsComment, CONVERT(varchar(10), GETDATE(), 111), @capturedBy, 1, @priority, 'N')
                 """;
             AddParameter(
                 command,
@@ -1392,7 +1420,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         var columns = await GetAvailableColumnsAsync();
         var idColumn = GetIdColumn(columns);
         command.CommandText =
-            $"SELECT TOP (1) [{idColumn}] FROM [dbo].[{TableName}] WHERE [vmf_code] = @vmfCode AND [extra_code] = @extraCode AND [captured_by] = @capturedBy ORDER BY [{idColumn}] DESC";
+            $"SELECT TOP (1) [{idColumn}] FROM [dbo].[{CurrentTableName}] WHERE [vmf_code] = @vmfCode AND [extra_code] = @extraCode AND [captured_by] = @capturedBy ORDER BY [{idColumn}] DESC";
         AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
         AddParameter(command, "@extraCode", DbType.Int32, extraCode);
         AddParameter(command, "@capturedBy", DbType.Int32, currentUserId);
@@ -1456,7 +1484,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
         command.CommandText =
-            $"SELECT [{numberColumn}] FROM [dbo].[{TableName}] WHERE {IdExpression(columns)} = @jobCardId";
+            $"SELECT [{numberColumn}] FROM [dbo].[{CurrentTableName}] WHERE {IdExpression(columns)} = @jobCardId";
         AddParameter(command, "@jobCardId", DbType.Int32, jobCardId);
         var value = await command.ExecuteScalarAsync();
         return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
@@ -1639,6 +1667,67 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         await command.ExecuteNonQueryAsync();
     }
 
+    private async Task ExecuteLegacyProcedurePreservingCapturerAsync(
+        string procedureName,
+        int jobCardId,
+        int? originalCapturer,
+        params ProcedureParameter[] parameters
+    )
+    {
+        var existingTransaction = _context.Database.CurrentTransaction;
+        var ownsTransaction = existingTransaction is null;
+        var transaction = ownsTransaction
+            ? await _context.Database.BeginTransactionAsync()
+            : null;
+        const string savepointName = "FIS_JobCardCapturer";
+        if (!ownsTransaction)
+            await existingTransaction!.CreateSavepointAsync(savepointName);
+        try
+        {
+            await ExecuteLegacyProcedureAsync(procedureName, parameters);
+            await RestoreLegacyCapturerAsync(jobCardId, originalCapturer);
+            if (transaction is not null)
+                await transaction.CommitAsync();
+        }
+        catch
+        {
+            if (transaction is not null)
+                await transaction.RollbackAsync();
+            else if (existingTransaction is not null)
+                await existingTransaction.RollbackToSavepointAsync(savepointName);
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+                await transaction.DisposeAsync();
+        }
+    }
+
+    private async Task RestoreLegacyCapturerAsync(int jobCardId, int? originalCapturer)
+    {
+        if (originalCapturer is not > 0)
+            return;
+
+        var columns = await GetAvailableColumnsAsync();
+        var ownerColumns = new[] { "captured_by", "created_by_user_code" }
+            .Where(columns.ContainsKey)
+            .ToArray();
+        if (ownerColumns.Length == 0)
+            return;
+
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandText = $"UPDATE [dbo].[{CurrentTableName}] SET {string.Join(
+            ", ",
+            ownerColumns.Select(column => $"[{column}] = @originalCapturer")
+        )} WHERE [{GetIdColumn(columns)}] = @jobCardId";
+        AddParameter(command, "@originalCapturer", DbType.Int32, originalCapturer.Value);
+        AddParameter(command, "@jobCardId", DbType.Int32, jobCardId);
+        await command.ExecuteNonQueryAsync();
+    }
+
     private async Task<List<JobCard>> QueryAsync(
         Action<DbCommand>? configure = null,
         Func<IReadOnlyDictionary<string, ColumnInfo>, string?>? predicateFactory = null
@@ -1669,7 +1758,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         command.CommandText = $"""
             SELECT
                 {BuildProjection(columns, vehicleProjectionColumns, extraColumns)}
-            FROM [dbo].[{TableName}] j
+            FROM [dbo].[{CurrentTableName}] j
             {vehicleJoin}
             {extraJoin}
             WHERE {string.Join(" AND ", conditions.DefaultIfEmpty("1 = 1"))}
@@ -1689,7 +1778,8 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         IReadOnlyList<int> statusCodes,
         string searchTerm,
         int? searchId,
-        int? jobCardId
+        int? jobCardId,
+        IReadOnlyCollection<int>? allowedVmfCodes
     )
     {
         for (var index = 0; index < statusCodes.Count; index++)
@@ -1706,6 +1796,33 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             AddParameter(command, "@searchId", DbType.Int32, searchId.Value);
         if (jobCardId.HasValue)
             AddParameter(command, "@jobCardId", DbType.Int32, jobCardId.Value);
+        AddAllowedVehicleParameters(command, allowedVmfCodes, "j");
+    }
+
+    private static void AddAllowedVehicleCondition(
+        ICollection<string> conditions,
+        IReadOnlyCollection<int>? allowedVmfCodes,
+        string alias
+    )
+    {
+        if (allowedVmfCodes is null)
+            return;
+        var codes = allowedVmfCodes.Where(code => code > 0).Distinct().ToArray();
+        conditions.Add(codes.Length == 0
+            ? "1 = 0"
+            : $"[{alias}].[vmf_code] IN ({string.Join(", ", codes.Select((_, index) => $"@allowedVmf{index}"))})");
+    }
+
+    private static void AddAllowedVehicleParameters(
+        DbCommand command,
+        IReadOnlyCollection<int>? allowedVmfCodes,
+        string _
+    )
+    {
+        if (allowedVmfCodes is null)
+            return;
+        foreach (var (code, index) in allowedVmfCodes.Where(code => code > 0).Distinct().Select((code, index) => (code, index)))
+            AddParameter(command, $"@allowedVmf{index}", DbType.Int32, code);
     }
 
     private static void AddRepairCostParameters(
@@ -1748,7 +1865,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         command.Transaction = CurrentTransaction;
         var idColumn = GetIdColumn(columns);
         command.CommandText =
-            $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [{idColumn}] = @jobCardId";
+            $"UPDATE [dbo].[{CurrentTableName}] SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))} WHERE [{idColumn}] = @jobCardId";
         AddParameters(command, values);
         AddParameter(command, "@jobCardId", DbType.Int32, jobCardId);
         if (await command.ExecuteNonQueryAsync() == 0)
@@ -1756,10 +1873,11 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
     }
 
     private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync(
-        string tableName = TableName
+        string? tableName = null
     )
     {
         await using var scope = await OpenConnectionAsync();
+        tableName ??= await ResolveTableNameAsync(scope.Connection);
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
         command.CommandText =
@@ -1772,7 +1890,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         while (await reader.ReadAsync())
             columns[reader.GetString(0)] = new ColumnInfo(reader.GetString(0), reader.GetString(1));
         if (
-            tableName.Equals(TableName, StringComparison.OrdinalIgnoreCase)
+            tableName.Equals(CurrentTableName, StringComparison.OrdinalIgnoreCase)
             && (
                 !columns.ContainsKey("vmf_code")
                 || !columns.ContainsKey("extra_code")
@@ -1783,6 +1901,32 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
                 "The Jobcards compatibility table is missing required workflow columns."
             );
         return columns;
+    }
+
+    private string CurrentTableName => _resolvedTableName ?? DefaultTableName;
+
+    private async Task<string> ResolveTableNameAsync(DbConnection connection)
+    {
+        if (_resolvedTableName is not null)
+            return _resolvedTableName;
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        command.CommandText = """
+            SELECT TOP (1) [TABLE_NAME]
+            FROM [INFORMATION_SCHEMA].[TABLES]
+            WHERE [TABLE_SCHEMA] = N'dbo'
+              AND [TABLE_NAME] IN (N'Jobcards', N'JobCard')
+            ORDER BY CASE WHEN [TABLE_NAME] = N'Jobcards' THEN 0 ELSE 1 END
+            """;
+        var value = await command.ExecuteScalarAsync();
+        if (value is null or DBNull)
+            throw new InvalidOperationException(
+                "Neither the legacy dbo.Jobcards nor dbo.JobCard table is available."
+            );
+
+        _resolvedTableName = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)!;
+        return _resolvedTableName;
     }
 
     private static string BuildProjection(
@@ -1907,7 +2051,9 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
 
     private static string CapturedByExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         columns.ContainsKey("created_by_user_code")
-            ? "j.[created_by_user_code]"
+            ? columns.ContainsKey("captured_by")
+                ? "COALESCE(j.[created_by_user_code], j.[captured_by])"
+                : "j.[created_by_user_code]"
             : OptionalExpression(columns, "captured_by", "int");
 
     private static string ModifiedByExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>

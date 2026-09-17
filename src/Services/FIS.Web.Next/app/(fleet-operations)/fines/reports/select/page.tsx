@@ -6,14 +6,7 @@ import { Suspense } from "react";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import RouteLoading from "@/components/app-shell/route-loading";
 import { getSession } from "@/lib/auth/session";
-
-const REPORTS_ROLE = "Reports";
-
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
+import { hasFinesAccess } from "@/app/(fleet-operations)/fines/access";
 
 async function FinesReportSelectionContent() {
   await connection();
@@ -28,7 +21,7 @@ async function FinesReportSelectionContent() {
         <h2>Fines report selection could not be opened.</h2>
       </section>
     );
-  if (!hasRole(session.roles, REPORTS_ROLE))
+  if (!hasFinesAccess(session.roles))
     return (
       <section className="vehicle-status-card" role="alert">
         <p className="eyebrow">Access restricted</p>

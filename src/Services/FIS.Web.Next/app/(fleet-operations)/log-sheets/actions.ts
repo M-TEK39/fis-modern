@@ -58,6 +58,21 @@ function returnPath(formData: FormData, fallback: string) {
   return value.startsWith("/") && !value.startsWith("//") ? value : fallback;
 }
 
+function normalizedRole(role: string) {
+  return role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function hasSystemAdministratorRole(roles: readonly string[]) {
+  return roles.some((role) => {
+    const normalized = normalizedRole(role);
+    return (
+      normalized === "admin" ||
+      normalized === "administrator" ||
+      normalized === "systemadministrator"
+    );
+  });
+}
+
 function redirectWithMessage(
   path: string,
   key: "saved" | "updated" | "deleted" | "error",
@@ -79,22 +94,39 @@ async function authorizeLogsheetEntry() {
       ok: false as const,
       message: "Your session has expired. Sign in again before continuing.",
     };
-  const hasReportsRole = session.roles.some(
-    (role) => role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "") === "reports",
-  );
-  if (!hasReportsRole)
-    return { ok: false as const, message: "You do not have permission to change logsheets." };
+  const hasLogsheetRole = session.roles.some((role) => {
+    const normalized = role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+    return normalized === "logsheets" || normalized === "reports";
+  });
+  if (!hasLogsheetRole && !hasSystemAdministratorRole(session.roles))
+    return { ok: false as const, message: "You do not have permission to use Log Sheets." };
   return { ok: true as const, session };
 }
 
-async function authorizeLogsheetManagement() {
+async function authorizeLogsheetEdit() {
   const access = await authorizeLogsheetEntry();
   if (!access.ok) return access;
 
+  if (hasSystemAdministratorRole(access.session.roles)) return { ok: true as const };
+  const code = Number(access.session.userAccessCode);
+  return (
+    access.session.roles.some((role) => normalizedRole(role) === "logsheets")
+    || access.session.roles.some((role) => normalizedRole(role) === "reports")
+    || [279, 47, 38].includes(code)
+  )
+    ? { ok: true as const }
+    : { ok: false as const, message: "You do not have permission to edit Log Sheets." };
+}
+
+async function authorizeLogsheetDelete() {
+  const access = await authorizeLogsheetEntry();
+  if (!access.ok) return access;
+
+  if (hasSystemAdministratorRole(access.session.roles)) return { ok: true as const };
   const code = Number(access.session.userAccessCode);
   return [279, 47, 38].includes(code)
     ? { ok: true as const }
-    : { ok: false as const, message: "You do not have permission to change logsheets." };
+    : { ok: false as const, message: "You do not have permission to delete Log Sheets." };
 }
 
 function apiErrorMessage(error: unknown) {
@@ -170,7 +202,7 @@ export async function createLogsheetAction(formData: FormData) {
 export async function updateLogsheetAction(formData: FormData) {
   const logCode = requiredInteger(formData, "logsheetId", "Logsheet");
   const path = returnPath(formData, "/log-sheets/edit");
-  const access = await authorizeLogsheetManagement();
+  const access = await authorizeLogsheetEdit();
   if (!access.ok) redirectWithMessage(path, "error", access.message);
   try {
     await updateLogsheet(logCode, writeInput(formData));
@@ -188,7 +220,7 @@ export async function updateLogsheetAction(formData: FormData) {
 export async function deleteLogsheetAction(formData: FormData) {
   const logCode = requiredInteger(formData, "logsheetId", "Logsheet");
   const path = returnPath(formData, "/log-sheets/delete");
-  const access = await authorizeLogsheetManagement();
+  const access = await authorizeLogsheetDelete();
   if (!access.ok) redirectWithMessage(path, "error", access.message);
   try {
     await deleteLogsheet(logCode);

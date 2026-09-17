@@ -435,6 +435,7 @@ public class DepartmentController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<DepartmentDto>> CreateDepartment(
         [FromBody] CreateDepartmentDto createDepartmentDto
     )
@@ -544,6 +545,7 @@ public class DepartmentController : BaseApiController
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<DepartmentDto>> UpdateDepartment(
         int id,
         [FromBody] UpdateDepartmentDto updateDepartmentDto
@@ -660,6 +662,7 @@ public class DepartmentController : BaseApiController
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> DeleteDepartment(int id)
     {
         try

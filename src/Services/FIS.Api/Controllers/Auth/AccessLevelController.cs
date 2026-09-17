@@ -10,7 +10,7 @@ namespace FIS.Api.Controllers;
 /// Handles CRUD operations for module-based access levels and user permission checking
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(Roles = "User Administration")]
 [Route("api/accesslevel")]
 public class AccessLevelController : BaseApiController
 {

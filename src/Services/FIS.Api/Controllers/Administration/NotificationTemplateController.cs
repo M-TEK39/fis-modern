@@ -7,7 +7,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/notification-template")]
-[Authorize]
+[Authorize(Roles = "User Administration")]
 public class NotificationTemplateController : BaseApiController
 {
     private readonly INotificationTemplateRepository _repository;

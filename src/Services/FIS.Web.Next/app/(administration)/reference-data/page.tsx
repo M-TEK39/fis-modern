@@ -19,7 +19,7 @@ import {
 } from "@/app/(administration)/reference-data/actions";
 import ReferenceDataClient from "@/app/(administration)/reference-data/reference-data-client";
 import RouteLoading from "@/components/app-shell/route-loading";
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   DEFAULT_REFERENCE_DATA_PAGE_SIZE,
@@ -93,7 +93,7 @@ async function ReferenceDataContent({ searchParams }: Readonly<{ searchParams: S
         <ApiUnavailable tab="types" />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

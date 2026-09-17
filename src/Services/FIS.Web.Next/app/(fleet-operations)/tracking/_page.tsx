@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import type { SessionState } from "@/lib/auth/api-auth";
 import { getSession } from "@/lib/auth/session";
 
@@ -34,7 +34,7 @@ export function accessRestricted(message: string) {
 }
 
 export function hasTrackingAccess(session: Extract<SessionState, { status: "authenticated" }>) {
-  return hasVehicleManagementPermission(session.accessLevel);
+  return hasLegacyRole(session.roles, "Tracking");
 }
 
 export function queryValue(value: string | string[] | undefined) {

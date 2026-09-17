@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Losses")]
 [Route("api/[controller]")]
 public class LossController : BaseApiController
 {

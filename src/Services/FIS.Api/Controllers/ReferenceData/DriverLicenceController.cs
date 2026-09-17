@@ -135,6 +135,7 @@ public class DriverLicenceController : BaseApiController
     /// Create new driver licence type
     /// </summary>
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<DriverLicenceTypeDto>> Create(
         [FromBody] CreateDriverLicenceTypeDto request
     )
@@ -166,6 +167,7 @@ public class DriverLicenceController : BaseApiController
     /// Update existing driver licence type
     /// </summary>
     [HttpPut("{code}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<DriverLicenceTypeDto>> Update(
         short code,
         [FromBody] UpdateDriverLicenceTypeDto request
@@ -204,6 +206,7 @@ public class DriverLicenceController : BaseApiController
     /// Delete driver licence type
     /// </summary>
     [HttpDelete("{code}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> Delete(short code)
     {
         try

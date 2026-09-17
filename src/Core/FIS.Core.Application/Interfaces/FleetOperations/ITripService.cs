@@ -32,7 +32,7 @@ public interface ITripService
     /// Legacy: Trip authority modification
     /// Validates that trip is not locked for transfer
     /// </summary>
-    Task UpdateTripAsync(Trip trip);
+    Task UpdateTripAsync(Trip trip, IReadOnlySet<short>? allowedSiteCodes = null);
 
     /// <summary>
     /// Close a trip authority and persist its route end odometer readings.
@@ -40,45 +40,64 @@ public interface ITripService
     Task CloseTripAsync(
         int tripAuthorityCode,
         IReadOnlyList<TripAuthorityRouteUpdate> routes,
-        int? endOdometer = null
+        int? endOdometer = null,
+        IReadOnlySet<short>? allowedSiteCodes = null
     );
 
     /// <summary>
     /// Get trip authority by ID
     /// </summary>
-    Task<Trip?> GetTripByIdAsync(int tripAuthorityCode);
+    Task<Trip?> GetTripByIdAsync(
+        int tripAuthorityCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    );
 
     /// <summary>
     /// Get the complete persisted trip authority record and its related legacy
     /// rows. Related tables are negotiated at runtime because older client
     /// databases do not contain every later table or column.
     /// </summary>
-    Task<TripAuthorityDetails?> GetTripAuthorityDetailsAsync(int tripAuthorityCode);
+    Task<TripAuthorityDetails?> GetTripAuthorityDetailsAsync(
+        int tripAuthorityCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    );
 
     /// <summary>
     /// Get all trip authorities with their contract vehicle context.
     /// </summary>
-    Task<IEnumerable<Trip>> GetAllTripsAsync();
+    Task<IEnumerable<Trip>> GetAllTripsAsync(IReadOnlySet<short>? allowedSiteCodes = null);
 
     /// <summary>
     /// Get active-contract vehicles used by the Trip Authority filter.
     /// </summary>
-    Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync();
+    Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync(
+        IReadOnlySet<short>? allowedSiteCodes = null
+    );
 
     /// <summary>
     /// Get all trips for a vehicle (via contract)
     /// </summary>
-    Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode);
+    Task<IEnumerable<Trip>> GetTripsByVehicleAsync(
+        int vmfCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    );
 
     /// <summary>
     /// Get all trips for a driver
     /// </summary>
-    Task<IEnumerable<Trip>> GetTripsByDriverAsync(string driverId);
+    Task<IEnumerable<Trip>> GetTripsByDriverAsync(
+        string driverId,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    );
 
     /// <summary>
     /// Get trips by date range
     /// </summary>
-    Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(DateTime startDate, DateTime endDate);
+    Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(
+        DateTime startDate,
+        DateTime endDate,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    );
 
     /// <summary>
     /// Check if a contract has open trip authorities
@@ -132,13 +151,28 @@ public interface ITripService
     /// Delete trip authority
     /// Validates that trip can be deleted (not locked, no associated records)
     /// </summary>
-    Task DeleteTripAsync(int tripAuthorityCode);
+    Task DeleteTripAsync(
+        int tripAuthorityCode,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    );
 
     /// <summary>
     /// Extend trip expiry date
-    /// Legacy: Trip extension functionality
+    /// Legacy: DEV_UPD_TripXMLForRenewalOfTrip creates a new authority and
+    /// updates the existing authority/routes in one database-owned workflow.
     /// </summary>
     Task ExtendTripExpiryAsync(int tripAuthorityCode, DateTime newExpiryDate);
+
+    /// <summary>
+    /// Renew an open trip authority and return the newly created authority.
+    /// </summary>
+    Task<Trip> RenewTripAsync(
+        int tripAuthorityCode,
+        DateTime newExpiryDate,
+        IReadOnlyList<TripAuthorityRouteUpdate> routes,
+        int? endOdometer = null,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    );
 
     /// <summary>
     /// Calculate trip duration in days

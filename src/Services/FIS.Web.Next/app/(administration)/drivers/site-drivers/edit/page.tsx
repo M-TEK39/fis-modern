@@ -10,7 +10,7 @@ import { saveSiteDriverAction } from "@/app/(administration)/drivers/actions";
 import {
   contextPath,
   getQueryValue,
-  hasVehicleManagementPermission,
+  hasDriverAuthoriserManagementRole,
   parsePositiveInteger,
 } from "@/app/(administration)/drivers/access";
 import {
@@ -335,7 +335,7 @@ async function renderSiteDriverEdit({ searchParams }: Readonly<{ searchParams: S
         </section>
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasDriverAuthoriserManagementRole(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-status-card" role="alert">

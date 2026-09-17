@@ -10,6 +10,7 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import RouteLoading from "@/components/app-shell/route-loading";
 import { createGgBlockAction } from "@/app/(fleet-operations)/vehicles/gg-block-numbers/actions";
 import GgBlockForm from "@/app/(fleet-operations)/vehicles/gg-block-numbers/gg-block-form";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import {
   GgBlockApiError,
   getGgBlockHistory,
@@ -17,7 +18,6 @@ import {
 } from "@/lib/api/vehicles/api-gg-blocks";
 import { getSession } from "@/lib/auth/session";
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 const PAGE_SIZE = 24;
 
 type GgBlockNumbersPageProps = {
@@ -27,21 +27,6 @@ type GgBlockNumbersPageProps = {
 
 function getQueryValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
-}
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
 }
 
 function StatusCard({ title, message }: Readonly<{ title: string; message: string }>) {
@@ -203,7 +188,7 @@ async function GgBlockNumbersPageContent({
     );
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return (
       <main className="page-shell vehicle-page-shell">
         <StatusCard

@@ -11,6 +11,7 @@ import { connection } from "next/server";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import {
   cancelTaxiRequestAction,
+  saveRecurringTaxiRequestAction,
   saveTaxiRequestAction,
 } from "@/app/(fleet-operations)/taxis/actions";
 import {
@@ -38,6 +39,7 @@ import {
 import { getDepartments } from "@/lib/api/reference-data/api-departments";
 import { getSites } from "@/lib/api/reference-data/api-sites";
 import { getSession } from "@/lib/auth/session";
+import { hasRecurringTaxiAccess, hasTaxiAccess } from "@/app/(fleet-operations)/taxis/access";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -391,7 +393,8 @@ const TaxiRequestForm = renderTaxiRequestForm;
 function renderTaxiRequestForm({
   taxi,
   lookups,
-}: Readonly<{ taxi?: TaxiRecord; lookups: TaxiRequestLookups }>) {
+  recurring = false,
+}: Readonly<{ taxi?: TaxiRecord; lookups: TaxiRequestLookups; recurring?: boolean }>) {
   const isEdit = Boolean(taxi);
   const contractorValue = numberValue(taxi?.contractorId);
   const departmentValue = numberValue(taxi?.departmentCode);
@@ -406,29 +409,50 @@ function renderTaxiRequestForm({
   const canSave = lookups.sites.length > 0;
 
   return (
-    <form className="vehicle-status-maintenance-panel" action={saveTaxiRequestAction}>
+    <form
+      className="vehicle-status-maintenance-panel"
+      action={recurring ? saveRecurringTaxiRequestAction : saveTaxiRequestAction}
+    >
       <input type="hidden" name="requestId" value={taxi?.requestId ?? ""} />
-      <input type="hidden" name="returnPath" value="/taxis/requests" />
+      <input
+        type="hidden"
+        name="returnPath"
+        value={recurring ? "/taxis/requests?mode=recurring" : "/taxis/requests"}
+      />
       <div className="vehicle-form-section-header">
         <div>
-          <p className="eyebrow">{taxi ? "Edit requisition" : "New requisition"}</p>
-          <h2>{taxi ? `Request ${taxi.rekNum}` : "Government Motor Transport"}</h2>
+          <p className="eyebrow">
+            {taxi ? "Edit requisition" : recurring ? "Recurring booking" : "New requisition"}
+          </p>
+          <h2>
+            {taxi
+              ? `Request ${taxi.rekNum}`
+              : recurring
+                ? "Government Motor Transport — recurring"
+                : "Government Motor Transport"}
+          </h2>
         </div>
         <span className="muted-copy">Fields marked required are needed to save.</span>
       </div>
       <div className="form-grid">
         <div className="form-field">
           <label className="form-label" htmlFor="taxi-rek">
-            Requisition number *
+            Requisition number{taxi ? " *" : " (generated)"}
           </label>
           <input
             className="form-input"
             id="taxi-rek"
             name="rekNum"
-            required
             maxLength={50}
             defaultValue={taxi?.rekNum ?? ""}
+            readOnly={Boolean(taxi)}
+            aria-describedby="taxi-rek-help"
           />
+          {!taxi ? (
+            <span className="field-help" id="taxi-rek-help">
+              Leave blank; the legacy requisition procedure assigns the next number.
+            </span>
+          ) : null}
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="taxi-official">
@@ -443,6 +467,20 @@ function renderTaxiRequestForm({
             defaultValue={taxi?.official ?? ""}
           />
         </div>
+        {recurring ? (
+          <div className="form-field">
+            <label className="form-label" htmlFor="taxi-recurring-end-date">
+              Recurring end date *
+            </label>
+            <input
+              className="form-input"
+              id="taxi-recurring-end-date"
+              name="recurringEndDate"
+              type="date"
+              required
+            />
+          </div>
+        ) : null}
         <LookupSelect
           id="taxi-contractor"
           label="Provider / contractor"
@@ -627,7 +665,7 @@ function renderTaxiRequestForm({
       </div>
       <div className="button-row">
         <button className="button button-primary" type="submit" disabled={!canSave}>
-          {taxi ? "Save changes" : "Enter requisition"}
+          {taxi ? "Save changes" : recurring ? "Book recurring taxis" : "Enter requisition"}
         </button>
         <Link className="button button-secondary" href="/taxis">
           Menu
@@ -704,12 +742,7 @@ async function renderTaxiRequestsPageContent({
         <SessionRecovery returnPath={routePath} />
       </main>
     );
-  if (
-    !session.roles.some(
-      (role) =>
-        role.localeCompare("Private Hire Vehicles", undefined, { sensitivity: "accent" }) === 0,
-    )
-  )
+  if (!hasTaxiAccess(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <TaxiRestricted subject="Taxi requisitions" />
@@ -718,6 +751,12 @@ async function renderTaxiRequestsPageContent({
 
   const query = await searchParams;
   const mode = forcedMode ?? (queryValue(query.mode) || "add");
+  if (mode === "recurring" && !hasRecurringTaxiAccess(session.roles))
+    return (
+      <main className="page-shell vehicle-page-shell">
+        <TaxiRestricted subject="Recurring taxi bookings" />
+      </main>
+    );
   const requestId = Number(queryValue(query.requestId));
   const rekNum = queryValue(query.rekNum);
   try {
@@ -863,15 +902,29 @@ async function renderTaxiRequestsPageContent({
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card">
           <TaxiHeader
-            title={mode === "edit" ? "Edit Taxi Requisition" : "Enter Taxi Requisition"}
-            description="Capture the taxi requisition using the existing FIS business fields."
+            title={
+              mode === "edit"
+                ? "Edit Taxi Requisition"
+                : mode === "recurring"
+                  ? "Book Recurring Taxi"
+                  : "Enter Taxi Requisition"
+            }
+            description={
+              mode === "recurring"
+                ? "Create weekday taxi requisitions for a date range using the legacy sequence."
+                : "Capture the taxi requisition using the existing FIS business fields."
+            }
           />
           <TaxiNotice query={query} />
           {mode === "edit" ? <RequestSearch mode="edit" query={query} /> : null}
           <TaxiLookupFallbackNotice
             warnings={currentLookupWarnings(mode === "edit" ? taxi : undefined, lookups)}
           />
-          <TaxiRequestForm taxi={mode === "edit" ? taxi : undefined} lookups={lookups} />
+          <TaxiRequestForm
+            taxi={mode === "edit" ? taxi : undefined}
+            lookups={lookups}
+            recurring={mode === "recurring"}
+          />
         </section>
       </main>
     );

@@ -9,7 +9,11 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasGeneralFinanceReportsAccess, hasRole } from "@/app/(fleet-operations)/finance/_utils";
+import {
+  hasAdministratorRole,
+  hasGeneralFinanceReportsAccess,
+  hasRole,
+} from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions, siteOptions } from "@/app/(fleet-operations)/finance/_location-options";
 import { RegionalFinanceView } from "@/app/(fleet-operations)/finance/regional/[action]/regional-finance-view";
 import { DepartmentApiError, getDepartments } from "@/lib/api/reference-data/api-departments";
@@ -150,8 +154,7 @@ async function renderRegionalFinanceActionContent({ params, searchParams }: Page
   if (
     assetReport &&
     !hasRole(session.roles, "Reports") &&
-    !hasRole(session.roles, "Administrator") &&
-    !hasRole(session.roles, "Admin")
+    !hasAdministratorRole(session.roles)
   )
     return (
       <FinanceFrame title={titleFor(action)} description="Regional finance reporting.">

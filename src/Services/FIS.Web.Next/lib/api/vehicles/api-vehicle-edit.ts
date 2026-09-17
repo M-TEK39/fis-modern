@@ -93,7 +93,11 @@ export type VehicleUpdateRequest = {
 };
 
 export type VehicleEditApiErrorReason =
-  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+  | "unauthorized"
+  | "forbidden"
+  | "unavailable"
+  | "invalid-response"
+  | "not-found";
 
 export class VehicleEditApiError extends Error {
   constructor(
@@ -171,8 +175,15 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new VehicleEditApiError("unauthorized", "The FIS access cookie was rejected.");
+    }
+
+    if (response.status === 403) {
+      throw new VehicleEditApiError(
+        "forbidden",
+        "Your account is not assigned the required Vehicle Master role.",
+      );
     }
 
     if (response.status === 404) {

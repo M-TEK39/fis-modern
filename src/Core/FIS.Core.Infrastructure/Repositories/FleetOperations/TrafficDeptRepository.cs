@@ -276,7 +276,10 @@ public class TrafficDeptRepository : ITrafficDeptRepository
             "Traf_cell",
             "@trafCell",
             DbType.String,
-            dept.Traf_cell ?? existing.Traf_cell
+            // MNT_Traffic_update.aspx writes the submitted cell value on MOD,
+            // including an empty value. Preserve an explicitly cleared field;
+            // only the common legacy columns are required on every shape.
+            dept.Traf_cell
         );
 
         var now = DateTime.UtcNow;

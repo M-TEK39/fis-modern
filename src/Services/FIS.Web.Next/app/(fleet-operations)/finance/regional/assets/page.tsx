@@ -12,7 +12,7 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasRole } from "@/app/(fleet-operations)/finance/_utils";
+import { hasAdministratorRole, hasRole } from "@/app/(fleet-operations)/finance/_utils";
 import { getSession } from "@/lib/auth/session";
 
 async function RegionalAssetMenuContent() {
@@ -27,8 +27,7 @@ async function RegionalAssetMenuContent() {
     );
   if (
     !hasRole(session.roles, "Reports") &&
-    !hasRole(session.roles, "Administrator") &&
-    !hasRole(session.roles, "Admin")
+    !hasAdministratorRole(session.roles)
   )
     return (
       <FinanceFrame title="Asset List Reports" description="New and in-service vehicle reports.">

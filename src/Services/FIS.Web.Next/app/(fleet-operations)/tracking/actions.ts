@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import {
   createTracking,
   TrackingApiError,
@@ -74,7 +74,7 @@ export async function saveTrackingAction(formData: FormData) {
       "error",
       "Your session has expired. Sign in again before continuing.",
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Tracking"))
     redirectWithMessage(path, "error", "You do not have permission to maintain Tracking records.");
 
   try {

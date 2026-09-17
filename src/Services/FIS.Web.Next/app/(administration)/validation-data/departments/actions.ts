@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import {
   createDepartment,
   DepartmentApiError,
@@ -169,7 +169,7 @@ async function authorizeDepartmentMaintenance() {
       message: "Your session has expired. Sign in again before continuing.",
     };
   }
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasLegacyRole(session.roles, "Validation")) {
     return { ok: false as const, message: "You do not have permission to maintain departments." };
   }
   return { ok: true as const };

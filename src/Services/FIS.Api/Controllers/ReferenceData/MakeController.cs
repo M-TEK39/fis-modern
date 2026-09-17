@@ -196,6 +196,7 @@ public class MakeController : BaseApiController
     /// Create a new make
     /// </summary>
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<MakeResponseDto>> CreateMake(
         [FromBody] CreateMakeDto createMakeDto
     )
@@ -243,6 +244,7 @@ public class MakeController : BaseApiController
     /// Update an existing make
     /// </summary>
     [HttpPut("{makeCode}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<MakeResponseDto>> UpdateMake(
         short makeCode,
         [FromBody] Make make
@@ -289,6 +291,7 @@ public class MakeController : BaseApiController
     /// Delete a make
     /// </summary>
     [HttpDelete("{makeCode}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> DeleteMake(short makeCode)
     {
         try

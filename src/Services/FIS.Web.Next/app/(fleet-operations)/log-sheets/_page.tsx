@@ -37,13 +37,40 @@ function normalizedRole(role: string) {
   return role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export function hasLogsheetAccess(session: Extract<SessionState, { status: "authenticated" }>) {
-  return session.roles.some((role) => normalizedRole(role) === "reports");
+function hasSystemAdministratorRole(roles: readonly string[]) {
+  return roles.some((role) => {
+    const normalized = normalizedRole(role);
+    return (
+      normalized === "admin" ||
+      normalized === "administrator" ||
+      normalized === "systemadministrator"
+    );
+  });
 }
 
-export function hasLogsheetManagerAccess(
+export function hasLogsheetAccess(session: Extract<SessionState, { status: "authenticated" }>) {
+  return hasSystemAdministratorRole(session.roles) || session.roles.some((role) => {
+    const normalized = normalizedRole(role);
+    return normalized === "logsheets" || normalized === "reports";
+  });
+}
+
+export function hasLogsheetEditAccess(
   session: Extract<SessionState, { status: "authenticated" }>,
 ) {
+  if (hasSystemAdministratorRole(session.roles)) return true;
+  const code = Number(session.userAccessCode);
+  return (
+    session.roles.some((role) => normalizedRole(role) === "logsheets")
+    || session.roles.some((role) => normalizedRole(role) === "reports")
+    || (Number.isInteger(code) && [279, 47, 38].includes(code))
+  );
+}
+
+export function hasLogsheetDeleteAccess(
+  session: Extract<SessionState, { status: "authenticated" }>,
+) {
+  if (hasSystemAdministratorRole(session.roles)) return true;
   const code = Number(session.userAccessCode);
   return Number.isInteger(code) && [279, 47, 38].includes(code);
 }

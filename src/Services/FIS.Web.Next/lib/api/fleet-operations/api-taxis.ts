@@ -64,9 +64,11 @@ export type TaxiRecord = {
 
 export type TaxiInput = Omit<
   TaxiRecord,
-  "requestId" | "dateCreated" | "dateUpdated" | "departmentName" | "siteName"
+  "requestId" | "rekNum" | "dateCreated" | "dateUpdated" | "departmentName" | "siteName"
 > & {
   requestId?: number;
+  /** The legacy requisition procedure owns numbering for new requests. */
+  rekNum: string | null;
 };
 
 export type TaxiLogReference = {
@@ -528,6 +530,33 @@ export async function createTaxi(input: TaxiInput) {
       "The FIS API returned an invalid created taxi requisition.",
     );
   return taxi;
+}
+
+export async function createRecurringTaxi(
+  input: TaxiInput,
+  startDate: string,
+  endDate: string,
+) {
+  const rows = getCollection(
+    await readJson(
+      await requestApi("api/Taxi/recurring", {
+        method: "POST",
+        body: JSON.stringify({
+          taxi: taxiPayload(input),
+          startDate,
+          endDate,
+        }),
+      }),
+    ),
+  )
+    .map(mapTaxi)
+    .filter((row): row is TaxiRecord => row !== null);
+  if (rows.length === 0)
+    throw new TaxiApiError(
+      "invalid-response",
+      "The FIS API returned no created recurring taxi requisitions.",
+    );
+  return rows;
 }
 
 export async function updateTaxi(requestId: number, input: TaxiInput) {

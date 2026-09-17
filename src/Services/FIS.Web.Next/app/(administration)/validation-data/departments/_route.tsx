@@ -8,7 +8,7 @@ import { Suspense } from "react";
 import { logoutAction } from "@/app/(auth)/actions/auth";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import ApiUnavailableCard from "@/components/app-shell/api-unavailable-card";
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import {
   DepartmentApiError,
   DEFAULT_DEPARTMENT_PAGE_SIZE,
@@ -301,7 +301,7 @@ async function renderDepartmentListPageContent({
         <ApiUnavailable routePath={routePath} />
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

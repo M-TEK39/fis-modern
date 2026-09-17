@@ -243,6 +243,7 @@ public class ModelController : BaseApiController
     /// Create a new model
     /// </summary>
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<ModelResponseDto>> CreateModel(
         [FromBody] CreateModelDto createDto
     )
@@ -312,6 +313,7 @@ public class ModelController : BaseApiController
     /// Update an existing model
     /// </summary>
     [HttpPut("{modelCode}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<ModelResponseDto>> UpdateModel(
         short modelCode,
         [FromBody] UpdateModelDto updateDto
@@ -387,6 +389,7 @@ public class ModelController : BaseApiController
     /// Updates only the model's licence fee without rewriting unrelated legacy fields.
     /// </summary>
     [HttpPatch("{modelCode}/licence-fee")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<ModelResponseDto>> UpdateModelLicenceFee(
         short modelCode,
         [FromBody] UpdateModelLicenceFeeDto updateDto
@@ -427,6 +430,7 @@ public class ModelController : BaseApiController
     /// Delete a model
     /// </summary>
     [HttpDelete("{modelCode}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> DeleteModel(short modelCode)
     {
         try

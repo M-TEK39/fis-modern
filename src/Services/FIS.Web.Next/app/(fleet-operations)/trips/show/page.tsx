@@ -462,6 +462,8 @@ function resultMessage(result: string) {
   switch (result) {
     case "closed":
       return { tone: "success", text: "Trip authority closed successfully." } as const;
+    case "renewed":
+      return { tone: "success", text: "Trip authority renewed successfully." } as const;
     case "forbidden":
       return {
         tone: "error",

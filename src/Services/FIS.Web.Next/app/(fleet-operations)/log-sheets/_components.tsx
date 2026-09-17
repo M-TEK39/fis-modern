@@ -39,7 +39,10 @@ export function LogsheetShell({
   );
 }
 
-export function LogsheetMenu({ canManage }: Readonly<{ canManage: boolean }>) {
+export function LogsheetMenu({
+  canEdit,
+  canDelete,
+}: Readonly<{ canEdit: boolean; canDelete: boolean }>) {
   return (
     <MenuSection title="Logsheet Maintenance Menu">
       <Link className="vehicle-menu-link" href="/log-sheets/help">
@@ -48,11 +51,15 @@ export function LogsheetMenu({ canManage }: Readonly<{ canManage: boolean }>) {
       <Link className="vehicle-menu-link" href="/log-sheets/enter">
         1) Enter a Logsheet
       </Link>
-      {canManage ? (
+      {canEdit ? (
         <>
           <Link className="vehicle-menu-link" href="/log-sheets/edit">
             2) Edit a Logsheet
           </Link>
+        </>
+      ) : null}
+      {canDelete ? (
+        <>
           <Link className="vehicle-menu-link" href="/log-sheets/delete">
             3) Delete a Logsheet
           </Link>
@@ -64,7 +71,7 @@ export function LogsheetMenu({ canManage }: Readonly<{ canManage: boolean }>) {
       <Link className="vehicle-menu-link" href="/log-sheets/reports/total-km">
         5) Report: Total Km per Class Code
       </Link>
-      {canManage ? (
+      {canEdit ? (
         <Link className="vehicle-menu-link" href="/log-sheets/edit">
           8) Edit Logsheets
         </Link>

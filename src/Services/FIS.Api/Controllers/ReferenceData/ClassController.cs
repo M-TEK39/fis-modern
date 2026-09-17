@@ -117,6 +117,7 @@ public class ClassController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<ClassResponseDto>> Create([FromBody] CreateClassDto dto)
     {
         try
@@ -146,6 +147,7 @@ public class ClassController : BaseApiController
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<ClassResponseDto>> Update(
         short id,
         [FromBody] UpdateClassDto dto
@@ -178,6 +180,7 @@ public class ClassController : BaseApiController
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Validation")]
     public async Task<IActionResult> Delete(short id)
     {
         try

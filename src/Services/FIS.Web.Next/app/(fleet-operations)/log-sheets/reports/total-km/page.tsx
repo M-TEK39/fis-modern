@@ -35,7 +35,7 @@ async function renderLogsheetTotalKmReportPageContent({
   if (session.status !== "authenticated")
     return accessRestricted("Your session could not be loaded.");
   if (!hasLogsheetAccess(session))
-    return accessRestricted("Your profile does not include Reports access.");
+    return accessRestricted("Your profile does not include Log Sheets access.");
 
   const query = await searchParams;
   const startPeriod = queryValue(query.startPeriod);

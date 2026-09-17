@@ -230,6 +230,7 @@ namespace FIS.Api.Controllers
         /// <param name="createFuelTypeDto">The fuel type data to create</param>
         /// <returns>The created fuel type</returns>
         [HttpPost]
+        [Authorize(Roles = "Validation")]
         public async Task<ActionResult<FuelTypeResponseDto>> CreateFuelType(
             CreateFuelTypeDto createFuelTypeDto
         )
@@ -306,6 +307,7 @@ namespace FIS.Api.Controllers
         /// <param name="updateDto">The fuel type data to update</param>
         /// <returns>The updated fuel type</returns>
         [HttpPut("{id}")]
+        [Authorize(Roles = "Validation")]
         public async Task<ActionResult<FuelTypeResponseDto>> UpdateFuelType(
             short id,
             UpdateFuelTypeDto updateDto
@@ -403,6 +405,7 @@ namespace FIS.Api.Controllers
         /// <param name="id">The fuel type code</param>
         /// <returns>No content if successful</returns>
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Validation")]
         public async Task<IActionResult> DeleteFuelType(short id)
         {
             try

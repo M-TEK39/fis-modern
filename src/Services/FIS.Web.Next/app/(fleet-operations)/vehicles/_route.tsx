@@ -9,10 +9,18 @@ import ModulePageHeader from "@/components/app-shell/module-page-header";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import RouteLoading from "@/components/app-shell/route-loading";
 import VehicleMasterClient from "@/app/(fleet-operations)/vehicles/vehicle-master-client";
-import { getVehicleSnapshotPage, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
+import {
+  hasVehicleInceptionAuthorizerRole,
+  hasVehicleInceptionCapturerRole,
+  hasVehicleMasterRole,
+  hasRole,
+} from "@/app/(fleet-operations)/vehicles/access";
+import {
+  getVehicleSnapshotPage,
+  VehicleApiError,
+  type VehicleSnapshotPage,
+} from "@/lib/api/vehicles/api-vehicles";
 import { getSession } from "@/lib/auth/session";
-
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 
 export type VehicleMasterPageProps = {
   searchParams: Promise<{ page?: string | string[] }>;
@@ -20,27 +28,6 @@ export type VehicleMasterPageProps = {
   pageTitle?: string;
   pageDescription?: string;
 };
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
-
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
 
 function AccessRestricted() {
   return (
@@ -96,7 +83,7 @@ async function renderVehicleMasterContent({ searchParams, routePath }: VehicleMa
     return <ApiUnavailable />;
   }
 
-  if (!hasVehicleManagementPermission(session.accessLevel)) {
+  if (!hasVehicleMasterRole(session.roles)) {
     return <AccessRestricted />;
   }
 
@@ -105,7 +92,8 @@ async function renderVehicleMasterContent({ searchParams, routePath }: VehicleMa
   const requestedPage = Number.parseInt(pageValue ?? "1", 10);
   const page = Number.isFinite(requestedPage) ? requestedPage : 1;
 
-  let pageData;
+  let pageData: VehicleSnapshotPage;
+  let snapshotError: string | undefined;
   try {
     pageData = await getVehicleSnapshotPage(page);
   } catch (error) {
@@ -113,16 +101,32 @@ async function renderVehicleMasterContent({ searchParams, routePath }: VehicleMa
       return <SessionRecovery returnPath={currentRoute} />;
     }
 
+    if (error instanceof VehicleApiError && error.reason === "forbidden") {
+      return <AccessRestricted />;
+    }
+
     console.error(
       "FIS vehicle master request failed",
       error instanceof Error ? error.message : "unknown error",
     );
-    return <ApiUnavailable />;
+    // The legacy Vehicle Master menu itself is not dependent on the optional
+    // overview snapshot. Keep Add/Edit and the maintenance entry points usable
+    // when a restored database has a snapshot/report compatibility problem;
+    // show the operator the bounded failure on the overview instead of hiding
+    // the entire module behind a generic API-unavailable page.
+    pageData = {
+      rows: [],
+      contractsByVmf: {},
+      page: 1,
+      pageSize: 24,
+      totalRecords: 0,
+      totalPages: 1,
+    };
+    snapshotError = error instanceof VehicleApiError ? error.message : undefined;
   }
 
-  const canCaptureInception = hasRole(session.roles, "vehicle inception capturer");
-  const canAuthorizeInception = hasRole(session.roles, "vehicle inception authorizer");
-  const hasInceptionRole = canCaptureInception || canAuthorizeInception;
+  const canCaptureInception = hasVehicleInceptionCapturerRole(session.roles);
+  const canAuthorizeInception = hasVehicleInceptionAuthorizerRole(session.roles);
 
   return (
     <>
@@ -130,11 +134,12 @@ async function renderVehicleMasterContent({ searchParams, routePath }: VehicleMa
         pageData={pageData}
         routePath={currentRoute}
         menu={{
-          canCaptureInception: hasInceptionRole ? canCaptureInception : true,
-          canAuthorizeInception: hasInceptionRole ? canAuthorizeInception : true,
+          canCaptureInception,
+          canAuthorizeInception,
           canMaintainVehicleMaster: true,
           canViewDemoVehicles: hasRole(session.roles, "demo vehicles"),
         }}
+        snapshotError={snapshotError}
       />
       <div className="vehicle-footer-actions">
         <Link className="button button-secondary" href="/home">

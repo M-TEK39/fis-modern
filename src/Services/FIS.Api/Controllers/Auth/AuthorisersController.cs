@@ -17,7 +17,7 @@ namespace FIS.Api.Controllers;
 /// columns before building SQL so either database can remain operational.
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Driver and Authoriser Management")]
 [Route("api/authorisers")]
 [SuppressMessage(
     "Security",

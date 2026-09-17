@@ -2,13 +2,18 @@ using System.Globalization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Operations;
+using FIS.Core.Infrastructure.Repositories;
+using FIS.Data.SqlServer;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Private Hire Vehicles,Taxi information maintenance,SystemAdministrator,System Administrator")]
 [Route("api/[controller]")]
 public class TaxiLogController : BaseApiController
 {
@@ -23,6 +28,8 @@ public class TaxiLogController : BaseApiController
     private readonly IModelRepository _modelRepository;
     private readonly IClassRepository _classRepository;
     private readonly ITaxiWhiteLogRepository _taxiWhiteLogRepository;
+    private readonly ISiteRepository _siteRepository;
+    private readonly FisDbContext _context;
     private readonly ILogger<TaxiLogController> _logger;
 
     public TaxiLogController(
@@ -35,6 +42,8 @@ public class TaxiLogController : BaseApiController
         IModelRepository modelRepository,
         IClassRepository classRepository,
         ITaxiWhiteLogRepository taxiWhiteLogRepository,
+        ISiteRepository siteRepository,
+        FisDbContext context,
         ILogger<TaxiLogController> logger
     )
     {
@@ -47,6 +56,8 @@ public class TaxiLogController : BaseApiController
         _modelRepository = modelRepository;
         _classRepository = classRepository;
         _taxiWhiteLogRepository = taxiWhiteLogRepository;
+        _siteRepository = siteRepository;
+        _context = context;
         _logger = logger;
     }
 
@@ -121,7 +132,10 @@ public class TaxiLogController : BaseApiController
                 return BadRequest("Requisition number required.");
             }
 
-            var request = await _taxiRepository.GetLatestByRequisitionAsync(normalizedRekNum);
+            var request = await _taxiRepository.GetLatestByRequisitionAsync(
+                normalizedRekNum,
+                await ResolveAllowedSiteCodesAsync()
+            );
             if (request == null)
             {
                 return NotFound($"Requisition number {normalizedRekNum} not found.");
@@ -163,6 +177,8 @@ public class TaxiLogController : BaseApiController
     {
         try
         {
+            if (request is null)
+                return BadRequest("Taxi log data is required.");
             var normalizedRekNum = NormalizeKey(request.rek_num);
             var validationError = ValidateSaveRequest(request);
             if (validationError != null)
@@ -170,10 +186,26 @@ public class TaxiLogController : BaseApiController
                 return BadRequest(validationError);
             }
 
-            var taxiRequest = await ResolveTaxiRequestAsync(request.request_id, normalizedRekNum);
+            var taxiRequest = await ResolveTaxiRequestAsync(
+                request.request_id,
+                normalizedRekNum,
+                await ResolveAllowedSiteCodesAsync()
+            );
             if (taxiRequest == null)
             {
                 return NotFound($"Requisition number {normalizedRekNum} not found.");
+            }
+
+            if (
+                request.request_id is > 0
+                && !string.Equals(
+                    taxiRequest.rek_num?.Trim(),
+                    normalizedRekNum,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                return Conflict("The request identifier does not belong to the selected requisition.");
             }
 
             if (!string.IsNullOrWhiteSpace(taxiRequest.cancelled))
@@ -191,14 +223,59 @@ public class TaxiLogController : BaseApiController
                 );
             }
 
-            var prepared = await PrepareSaveAsync(taxiRequest, request, existingLog);
-            if (!prepared.Success)
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                return prepared.Result!;
-            }
+                // PrepareSaveAsync updates the taxi request before writing the
+                // log. Keep both mutations in one transaction so a rejected
+                // legacy journal/VIP trigger cannot leave a half-updated taxi
+                // request that no longer matches its billable log.
+                var prepared = await PrepareSaveAsync(taxiRequest, request, existingLog);
+                if (!prepared.Success)
+                {
+                    await transaction.RollbackAsync();
+                    return prepared.Result!;
+                }
 
-            var created = await _taxiLogRepository.CreateAsync(prepared.Log!, GetCurrentUserId());
-            return Ok(await BuildLookupResponseAsync(prepared.TaxiRequest!, created));
+                var created = await _taxiLogRepository.CreateAsync(prepared.Log!, GetCurrentUserId());
+                var response = await BuildLookupResponseAsync(prepared.TaxiRequest!, created);
+                await transaction.CommitAsync();
+                return Ok(response);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+        catch (LegacyTaxiLogWorkflowUnavailableException ex)
+        {
+            _logger.LogWarning(ex, "Taxi log create is unavailable without the legacy accounting trigger workflow");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The legacy taxi-log accounting workflow is unavailable. No unbilled taxi log was written.",
+                    source = "legacy-trigger-required",
+                }
+            );
+        }
+        catch (LegacyTaxiWorkflowUnavailableException ex)
+        {
+            _logger.LogWarning(ex, "Taxi log create is unavailable without the legacy taxi-request trigger workflow");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The legacy taxi-request accounting workflow is unavailable. No taxi log was written.",
+                    source = "legacy-trigger-required",
+                }
+            );
+        }
+        catch (SqlException ex) when (IsLegacyTaxiLogBusinessRule(ex))
+        {
+            _logger.LogInformation(ex, "Legacy taxi-log create rule rejected requisition {RekNum}", request.rek_num);
+            return Conflict(new { error = "The legacy database rejected this taxi log. Check the dates, odometers, contract, tariff, and requisition." });
         }
         catch (Exception ex)
         {
@@ -219,6 +296,8 @@ public class TaxiLogController : BaseApiController
     {
         try
         {
+            if (request is null)
+                return BadRequest("Taxi log data is required.");
             var normalizedRekNum = NormalizeKey(request.rek_num);
             var validationError = ValidateSaveRequest(request);
             if (validationError != null)
@@ -232,10 +311,38 @@ public class TaxiLogController : BaseApiController
                 return NotFound($"Taxi log {logId} not found.");
             }
 
-            var taxiRequest = await ResolveTaxiRequestAsync(request.request_id, normalizedRekNum);
+            var taxiRequest = await ResolveTaxiRequestAsync(
+                request.request_id,
+                normalizedRekNum,
+                await ResolveAllowedSiteCodesAsync()
+            );
             if (taxiRequest == null)
             {
                 return NotFound($"Requisition number {normalizedRekNum} not found.");
+            }
+
+            if (
+                request.request_id is > 0
+                && !string.Equals(
+                    taxiRequest.rek_num?.Trim(),
+                    normalizedRekNum,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                return Conflict("The request identifier does not belong to the selected requisition.");
+            }
+
+            if (!string.Equals(existingLog.rek_num?.Trim(), normalizedRekNum, StringComparison.OrdinalIgnoreCase))
+            {
+                return Conflict("The taxi log does not belong to the selected requisition.");
+            }
+            if (
+                existingLog.request_id is > 0
+                && existingLog.request_id != taxiRequest.request_id
+            )
+            {
+                return Conflict("The taxi log is linked to a different taxi requisition.");
             }
 
             if (!string.IsNullOrWhiteSpace(taxiRequest.cancelled))
@@ -243,14 +350,55 @@ public class TaxiLogController : BaseApiController
                 return BadRequest($"Requisition number {normalizedRekNum} has been cancelled.");
             }
 
-            var prepared = await PrepareSaveAsync(taxiRequest, request, existingLog);
-            if (!prepared.Success)
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                return prepared.Result!;
-            }
+                var prepared = await PrepareSaveAsync(taxiRequest, request, existingLog);
+                if (!prepared.Success)
+                {
+                    await transaction.RollbackAsync();
+                    return prepared.Result!;
+                }
 
-            var updated = await _taxiLogRepository.UpdateAsync(prepared.Log!, GetCurrentUserId());
-            return Ok(await BuildLookupResponseAsync(prepared.TaxiRequest!, updated));
+                var updated = await _taxiLogRepository.UpdateAsync(prepared.Log!, GetCurrentUserId());
+                var response = await BuildLookupResponseAsync(prepared.TaxiRequest!, updated);
+                await transaction.CommitAsync();
+                return Ok(response);
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+        catch (LegacyTaxiLogWorkflowUnavailableException ex)
+        {
+            _logger.LogWarning(ex, "Taxi log update is unavailable without the legacy accounting trigger workflow");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The legacy taxi-log accounting workflow is unavailable. No unbilled taxi log change was written.",
+                    source = "legacy-trigger-required",
+                }
+            );
+        }
+        catch (LegacyTaxiWorkflowUnavailableException ex)
+        {
+            _logger.LogWarning(ex, "Taxi log update is unavailable without the legacy taxi-request trigger workflow");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The legacy taxi-request accounting workflow is unavailable. No taxi log change was written.",
+                    source = "legacy-trigger-required",
+                }
+            );
+        }
+        catch (SqlException ex) when (IsLegacyTaxiLogBusinessRule(ex))
+        {
+            _logger.LogInformation(ex, "Legacy taxi-log update rule rejected log {LogId}", logId);
+            return Conflict(new { error = "The legacy database rejected this taxi-log change. A posted log may require a new rebill record." });
         }
         catch (Exception ex)
         {
@@ -259,14 +407,95 @@ public class TaxiLogController : BaseApiController
         }
     }
 
-    private async Task<Taxi?> ResolveTaxiRequestAsync(int? requestId, string normalizedRekNum)
+    private async Task<Taxi?> ResolveTaxiRequestAsync(
+        int? requestId,
+        string normalizedRekNum,
+        IReadOnlySet<short>? allowedSiteCodes
+    )
     {
         if (requestId is > 0)
         {
-            return await _taxiRepository.GetByIdAsync(requestId.Value);
+            return await _taxiRepository.GetByIdAsync(requestId.Value, allowedSiteCodes);
         }
 
-        return await _taxiRepository.GetLatestByRequisitionAsync(normalizedRekNum);
+        return await _taxiRepository.GetLatestByRequisitionAsync(
+            normalizedRekNum,
+            allowedSiteCodes
+        );
+    }
+
+    private async Task<IReadOnlySet<short>?> ResolveAllowedSiteCodesAsync()
+    {
+        if (HasGlobalTaxiLogScope())
+            return null;
+
+        var userId = GetCurrentUserId();
+        var profileSiteCode = await _context.UserAccessOlds.AsNoTracking()
+            .Where(user => user.user_access_code == userId)
+            .Select(user => user.Site_code)
+            .SingleOrDefaultAsync(HttpContext.RequestAborted);
+        if (profileSiteCode is not > 0)
+            return new HashSet<short>();
+
+        var profileSite = await _siteRepository.GetByIdAsync(profileSiteCode.Value);
+        if (profileSite is null)
+            return new HashSet<short>();
+
+        var sites = await _siteRepository.GetActiveSitesAsync();
+        if (
+            HasTaxiLogRole("Vehicle List for All Departments in Province")
+            && profileSite.province_code.HasValue
+        )
+        {
+            sites = sites.Where(site => site.province_code == profileSite.province_code.Value);
+        }
+        else if (
+            HasTaxiLogRole("Vehicle List for All Sites in Department")
+            && profileSite.Depatrment_code.HasValue
+        )
+        {
+            sites = sites.Where(site => site.Depatrment_code == profileSite.Depatrment_code.Value);
+        }
+        else
+        {
+            sites = sites.Where(site => site.Site_code == profileSite.Site_code);
+        }
+
+        return sites.Select(site => site.Site_code).ToHashSet();
+    }
+
+    private bool HasGlobalTaxiLogScope() =>
+        HasTaxiLogRole("SystemAdministrator") || HasTaxiLogRole("System Administrator");
+
+    private bool HasTaxiLogRole(string expectedRole) =>
+        User.Claims
+            .Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            )
+            .Any(role => string.Equals(role, expectedRole, StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsLegacyTaxiLogBusinessRule(SqlException exception)
+    {
+        if (exception.Number != 50000)
+            return false;
+
+        var message = exception.Message;
+        return message.Contains("TRG_INS_TaxiLogJournalDetailRecord", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("TRG_UPD_TaxiLogJournalDetailRecord", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("TRG_UPD_TaxiLogJounalDetailRecord", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("TRG_INS_TaxiLog_RejectDuplicateRequsition", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("TRG_INS_UPD_TaxiLog_CheckVIPContract", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("TRG_UPD_TaxiLogVIPBillingRecord", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("Log for requisition number", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("already has a taxi log", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<PrepareTaxiLogResult> PrepareSaveAsync(
@@ -452,15 +681,29 @@ public class TaxiLogController : BaseApiController
             return null;
         }
 
-        return await _vehicleRepository.GetByIdAsync(vmfCode);
+        return await _vehicleRepository.GetByIdAsync(
+            vmfCode,
+            await ResolveAllowedSiteCodesAsync(),
+            GetCurrentUserId()
+        );
     }
 
     private async Task<Vehicle?> FindVehicleByRegistrationAsync(string registration)
     {
         var normalized = NormalizeKey(registration);
 
-        return await _vehicleRepository.GetByFleetNumberAsync(normalized)
-            ?? await _vehicleRepository.GetByRegistrationNumberAsync(normalized);
+        var allowedSites = await ResolveAllowedSiteCodesAsync();
+        var currentUserId = GetCurrentUserId();
+        return await _vehicleRepository.GetByFleetNumberAsync(
+                normalized,
+                allowedSites,
+                currentUserId
+            )
+            ?? await _vehicleRepository.GetByRegistrationNumberAsync(
+                normalized,
+                allowedSites,
+                currentUserId
+            );
     }
 
     private async Task<short?> ResolveVehicleClassCodeAsync(short modelCode)

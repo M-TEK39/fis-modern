@@ -1,23 +1,27 @@
-export const VEHICLE_MANAGEMENT_PERMISSION = 1;
+export function hasVehicleManagementPermission(
+  roles: readonly string[],
+  expectedRole: "Vehicle Master" | "Validation" = "Vehicle Master",
+) {
+  return hasRole(roles, expectedRole);
+}
 
-export function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
+export function hasLegacyRole(roles: readonly string[], role: string) {
+  return hasRole(roles, role);
+}
 
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
+export function hasDriverAuthoriserManagementRole(roles: readonly string[]) {
+  return hasSystemAdministratorRole(roles) || hasRole(roles, "Driver and Authoriser Management");
 }
 
 export function hasRole(roles: readonly string[], role: string) {
   return roles.some(
     (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
+  );
+}
+
+function hasSystemAdministratorRole(roles: readonly string[]) {
+  return roles.some((candidate) =>
+    ["systemadministrator", "system administrator"].includes(candidate.trim().toLowerCase()),
   );
 }
 

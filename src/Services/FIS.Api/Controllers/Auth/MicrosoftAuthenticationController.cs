@@ -16,6 +16,7 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
     private readonly ILogger<MicrosoftAuthenticationController> _logger;
     private readonly ISessionTokenStore _sessionTokenStore;
     private readonly MicrosoftIdentityCompatibilityService _identityCompatibility;
+    private readonly LegacyRoleCompatibilityService _legacyRoleCompatibility;
     private readonly LegacyFinanceAccessService _legacyFinanceAccess;
 
     public MicrosoftAuthenticationController(
@@ -23,6 +24,7 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
         ILogger<MicrosoftAuthenticationController> logger,
         ISessionTokenStore sessionTokenStore,
         MicrosoftIdentityCompatibilityService identityCompatibility,
+        LegacyRoleCompatibilityService legacyRoleCompatibility,
         LegacyFinanceAccessService legacyFinanceAccess
     )
     {
@@ -30,6 +32,7 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
         _logger = logger;
         _sessionTokenStore = sessionTokenStore;
         _identityCompatibility = identityCompatibility;
+        _legacyRoleCompatibility = legacyRoleCompatibility;
         _legacyFinanceAccess = legacyFinanceAccess;
     }
 
@@ -61,6 +64,15 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
         );
     }
 
+    /// <summary>
+    /// Public, non-secret capability check used by the login page. The
+    /// frontend must not infer Microsoft availability from a browser-side
+    /// environment flag because the API owns the Azure credential binding.
+    /// </summary>
+    [HttpGet("status")]
+    [AllowAnonymous]
+    public IActionResult Status() => Ok(new { enabled = IsMicrosoftIdentityConfigured() });
+
     [HttpGet("complete")]
     [Authorize(AuthenticationSchemes = MicrosoftAuthenticationDefaults.CookieScheme)]
     public async Task<IActionResult> Complete(
@@ -89,23 +101,25 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
                 resolvedUser.UserAccessCode,
                 cancellationToken
             );
-            var namedRoles = await _legacyFinanceAccess.GetLegacyNamedRolesAsync(
+            var grantedRoles = await _legacyRoleCompatibility.ResolveRolesAsync(
                 resolvedUser.Username,
+                resolvedUser.AccessString,
+                resolvedUser.AccessLevel,
                 cancellationToken
             );
             var claims = AuthController.BuildAuthClaims(
                 resolvedUser.UserAccessCode,
                 resolvedUser.Email,
                 resolvedUser.AccessLevel,
-                additionalRoles: namedRoles,
+                additionalRoles: grantedRoles,
                 departmentCode: financeProfile?.DepartmentCode,
                 siteCode: financeProfile?.SiteCode,
-                hasAllDepartmentFinanceDataRole: namedRoles.Contains(
+                hasAllDepartmentFinanceDataRole: grantedRoles.Contains(
                     "Financial Data (All Departments)",
                     StringComparer.OrdinalIgnoreCase
                 ),
                 legacyUsername: resolvedUser.Username,
-                hasProvinceWideVehicleListRole: namedRoles.Contains(
+                hasProvinceWideVehicleListRole: grantedRoles.Contains(
                     "Vehicle List for All Departments in Province",
                     StringComparer.OrdinalIgnoreCase
                 )
@@ -147,13 +161,35 @@ public sealed class MicrosoftAuthenticationController : ControllerBase
         if (
             Uri.TryCreate(configuredBaseUrl, UriKind.Absolute, out var baseUri)
             && (baseUri.Scheme == Uri.UriSchemeHttp || baseUri.Scheme == Uri.UriSchemeHttps)
+            && (
+                !IsLoopbackHost(baseUri.Host)
+                || IsLoopbackHost(Request.Host.Host)
+            )
         )
         {
             return $"{configuredBaseUrl}{path}";
         }
 
+        // Compose may intentionally leave SERVER_IP/SERVER_HOSTNAME unset in
+        // a test deployment, which produces an https://localhost base URL.
+        // Behind nginx, the forwarded request host is the public FIS origin;
+        // use it instead of redirecting a client browser to its own localhost.
+        if (Request.Host is { Host: var requestHost } && !string.IsNullOrWhiteSpace(requestHost))
+        {
+            var requestScheme = Request.Scheme is "http" or "https" ? Request.Scheme : "https";
+            var requestOrigin = new UriBuilder(requestScheme, requestHost).Uri.GetLeftPart(
+                UriPartial.Authority
+            );
+            return $"{requestOrigin}{path}";
+        }
+
         return path;
     }
+
+    private static bool IsLoopbackHost(string host) =>
+        host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        || host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
+        || host.Equals("::1", StringComparison.OrdinalIgnoreCase);
 
     private static string GetSafeReturnUrl(string? returnUrl)
     {

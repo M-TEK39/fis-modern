@@ -133,6 +133,9 @@ public class JobCardRepository : IJobCardRepository
         if (query.JobCardId.HasValue)
             filtered = filtered.Where(jc => jc.job_card_id == query.JobCardId.Value);
 
+        if (query.AllowedVmfCodes is not null)
+            filtered = filtered.Where(jc => query.AllowedVmfCodes.Contains(jc.vmf_code));
+
         if (searchTerm.Length > 0)
         {
             var searchId = int.TryParse(searchTerm, out var parsedSearchId)
@@ -191,8 +194,11 @@ public class JobCardRepository : IJobCardRepository
                 && jc.priority == "H"
                 && jc.assigned_to == null
                 && jc.status_code != 5
-                && jc.status_code != 7
+            && jc.status_code != 7
             );
+
+        if (query.AllowedVmfCodes is not null)
+            filtered = filtered.Where(jc => query.AllowedVmfCodes.Contains(jc.vmf_code));
 
         var totalRecords = await filtered.CountAsync();
         var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
@@ -765,11 +771,14 @@ public class JobCardRepository : IJobCardRepository
             AddParameter(command, "@table", DbType.String, "job_cards");
 
             var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-                columns.Add(reader.GetString(0));
+            await using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                    columns.Add(reader.GetString(0));
+            }
 
-            _modernSchemaAvailable = ModernRequiredColumns.All(columns.Contains);
+            _modernSchemaAvailable = ModernRequiredColumns.All(columns.Contains)
+                && !await HasLegacyJobCardWorkflowAsync(connection);
             return _modernSchemaAvailable.Value;
         }
         finally
@@ -777,6 +786,38 @@ public class JobCardRepository : IJobCardRepository
             if (shouldClose)
                 await connection.CloseAsync();
         }
+    }
+
+    private async Task<bool> HasLegacyJobCardWorkflowAsync(DbConnection connection)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = """
+            SELECT CASE WHEN EXISTS
+            (
+                SELECT 1
+                FROM [sys].[procedures] AS [p]
+                INNER JOIN [sys].[schemas] AS [s]
+                    ON [s].[schema_id] = [p].[schema_id]
+                WHERE [s].[name] = N'dbo'
+                  AND [p].[name] IN
+                  (
+                      N'DEV_INS_NewJobCards',
+                      N'DEV_UPD_JobCard',
+                      N'DEV_UPD_Jobcards',
+                      N'DEV_UPD_JobcardAuthorisersUpdates',
+                      N'DEV_UPD_JobcardAuthorizersUpdates'
+                  )
+                  AND EXISTS
+                  (
+                      SELECT 1
+                      FROM [INFORMATION_SCHEMA].[TABLES] AS [legacyTable]
+                      WHERE [legacyTable].[TABLE_SCHEMA] = N'dbo'
+                        AND [legacyTable].[TABLE_NAME] IN (N'Jobcards', N'JobCard')
+                  )
+            ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END
+            """;
+        return Convert.ToBoolean(await command.ExecuteScalarAsync());
     }
 
     private static void AddParameter(DbCommand command, string name, DbType type, object value)

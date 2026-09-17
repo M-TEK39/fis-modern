@@ -136,7 +136,12 @@ export type FineReportRequestOptions = {
   pageSize?: number;
 };
 
-export type FineApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type FineApiErrorReason =
+  | "unauthorized"
+  | "forbidden"
+  | "unavailable"
+  | "invalid-response"
+  | "not-found";
 
 export class FineApiError extends Error {
   constructor(
@@ -272,8 +277,12 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new FineApiError("unauthorized", "The FIS access cookie was rejected.");
+    }
+
+    if (response.status === 403) {
+      throw new FineApiError("forbidden", "Your account is not assigned the Reports role.");
     }
 
     if (response.status === 404) {
@@ -583,11 +592,32 @@ export async function searchFineVehicles(searchType: FineSearchType, searchTerm:
     return [];
   }
 
-  const path =
-    searchType === "GP"
-      ? `api/registration/search?q=${encodeURIComponent(normalized)}`
-      : `api/vehicles/search?searchTerm=${encodeURIComponent(normalized)}`;
-  const vehicles = getCollection(await readJson(await requestApi(path)))
+  const currentVehiclePath = `api/vehicles/search?searchTerm=${encodeURIComponent(normalized)}`;
+  let payload: unknown;
+  if (searchType === "GP") {
+    try {
+      // Prefer the legacy registration-history lookup so an old GP number
+      // still resolves to its current vehicle when the Registrations table is
+      // available. Older restored databases may not have that optional table;
+      // current vehicle_master registration remains a valid legacy fallback.
+      payload = await readJson(
+        await requestApi(`api/registration/search?q=${encodeURIComponent(normalized)}`),
+      );
+    } catch (error) {
+      if (error instanceof FineApiError && error.reason === "unauthorized") {
+        throw error;
+      }
+      // Registration history is an optional enhancement. The legacy Fines
+      // page is protected by Reports, not Licence, so a 403 from the history
+      // endpoint must still fall back to the current vehicle registration
+      // search instead of turning the entire Fines page into an access error.
+      payload = await readJson(await requestApi(currentVehiclePath));
+    }
+  } else {
+    payload = await readJson(await requestApi(currentVehiclePath));
+  }
+
+  const vehicles = getCollection(payload)
     .map(mapVehicle)
     .filter((vehicle): vehicle is FineVehicleOption => vehicle !== null);
 

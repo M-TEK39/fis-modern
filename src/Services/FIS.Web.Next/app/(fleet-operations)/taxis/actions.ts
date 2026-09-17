@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import {
   createTaxi,
+  createRecurringTaxi,
   createTaxiWhiteLog,
   deleteTaxiScanDoc,
   getTaxi,
@@ -17,8 +18,7 @@ import {
   type TaxiLogInput,
 } from "@/lib/api/fleet-operations/api-taxis";
 import { getSession } from "@/lib/auth/session";
-
-const TAXI_ROLE = "Private Hire Vehicles";
+import { hasRecurringTaxiAccess, hasTaxiAccess } from "@/app/(fleet-operations)/taxis/access";
 
 class TaxiValidationError extends Error {}
 
@@ -81,14 +81,20 @@ async function authorizeTaxi() {
   const session = await getSession();
   if (session.status !== "authenticated")
     return "Your session has expired. Sign in again before continuing.";
-  if (
-    !session.roles.some(
-      (role) => role.localeCompare(TAXI_ROLE, undefined, { sensitivity: "accent" }) === 0,
-    )
-  )
+  if (!hasTaxiAccess(session.roles))
     return "You do not have permission to use Taxi Maintenance.";
   return null;
 }
+
+async function authorizeRecurringTaxi() {
+  const session = await getSession();
+  if (session.status !== "authenticated")
+    return "Your session has expired. Sign in again before continuing.";
+  if (!hasRecurringTaxiAccess(session.roles))
+    return "You do not have permission to book recurring taxis.";
+  return null;
+}
+
 
 function apiErrorMessage(error: unknown, subject: string) {
   if (error instanceof TaxiApiError) {
@@ -153,13 +159,14 @@ async function taxiInput(
     integer: true,
     min: 0,
   });
-  if (!rekNum) throw new TaxiValidationError("Requisition number is required.");
+  if (existing && !rekNum)
+    throw new TaxiValidationError("Requisition number is required when editing a request.");
   if (!official) throw new TaxiValidationError("Official/passenger name is required.");
   await validateProviderClass(contractorId, vehicleTypeCode);
 
   const input: TaxiInput = {
     requestId: existing?.requestId,
-    rekNum,
+    rekNum: rekNum || null,
     contractorId,
     vmfCode: text(formData, "vmfCode") || null,
     departmentCode: number(formData, "departmentCode", "Department code", {
@@ -235,6 +242,33 @@ export async function saveTaxiRequestAction(formData: FormData) {
     if (error instanceof Error && !(error instanceof TaxiApiError))
       redirectWithMessage(returnPath, "error", error.message);
     redirectWithMessage(returnPath, "error", apiErrorMessage(error, "requisition"));
+  }
+}
+
+export async function saveRecurringTaxiRequestAction(formData: FormData) {
+  const returnPath = safeReturnPath(formData, "/taxis/requests?mode=recurring");
+  const accessError = await authorizeRecurringTaxi();
+  if (accessError) redirectWithMessage(returnPath, "error", accessError);
+  try {
+    const input = await taxiInput(formData);
+    const startDate = dateOnly(formData, "dateRequired", "Recurring start date", true);
+    const endDate = dateOnly(formData, "recurringEndDate", "Recurring end date", true);
+    if (!startDate || !endDate)
+      throw new TaxiValidationError("Both recurring booking dates are required.");
+    if (Date.parse(startDate) > Date.parse(endDate))
+      throw new TaxiValidationError("The recurring end date must be on or after the start date.");
+    const saved = (await createRecurringTaxi(input, startDate, endDate))[0];
+    revalidatePath("/taxis");
+    revalidatePath("/taxis/requests");
+    redirectWithMessage(
+      returnPath,
+      "saved",
+      `Recurring taxi requests were created starting with requisition ${saved.rekNum}.`,
+    );
+  } catch (error) {
+    if (error instanceof Error && !(error instanceof TaxiApiError))
+      redirectWithMessage(returnPath, "error", error.message);
+    redirectWithMessage(returnPath, "error", apiErrorMessage(error, "recurring requisition"));
   }
 }
 

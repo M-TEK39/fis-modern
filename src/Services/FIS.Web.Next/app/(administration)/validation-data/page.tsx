@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import ModulePageHeader from "@/components/app-shell/module-page-header";
-import { hasVehicleManagementPermission } from "@/app/(administration)/drivers/access";
+import { hasLegacyRole } from "@/app/(administration)/drivers/access";
 import RouteLoading from "@/components/app-shell/route-loading";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { MenuSection } from "@/components/ui/menu-section";
@@ -56,7 +56,7 @@ async function ValidationDataPageContent() {
         </section>
       </main>
     );
-  if (!hasVehicleManagementPermission(session.accessLevel))
+  if (!hasLegacyRole(session.roles, "Validation"))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

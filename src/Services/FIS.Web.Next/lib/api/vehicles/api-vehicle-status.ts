@@ -68,8 +68,13 @@ export type VehicleStatusChangeResult = {
   actionsPerformed: string[];
 };
 
+export type VehicleStatusTransition = {
+  code: number;
+  description: string;
+};
+
 export type VehicleStatusApiErrorReason =
-  "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+  "unauthorized" | "forbidden" | "unavailable" | "invalid-response" | "not-found";
 
 export class VehicleStatusApiError extends Error {
   constructor(
@@ -220,8 +225,15 @@ async function requestApi(path: string, init: RequestInit = {}) {
       signal: controller.signal,
     });
 
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       throw new VehicleStatusApiError("unauthorized", "The FIS access cookie was rejected.");
+    }
+
+    if (response.status === 403) {
+      throw new VehicleStatusApiError(
+        "forbidden",
+        "You do not have permission to perform this vehicle-status operation.",
+      );
     }
 
     if (response.status === 404) {
@@ -468,6 +480,24 @@ export async function getVehicleForStatus(vmfCode: number) {
   return vehicle;
 }
 
+export async function getVehicleStatusOptions(
+  vmfCode: number,
+): Promise<VehicleStatusTransition[]> {
+  const payload = await readJson(
+    await requestApi(`api/vehicles/${encodeURIComponent(vmfCode)}/status-options`),
+  );
+  const values = getCollection(payload);
+  const options = values.flatMap((value) => {
+    if (!isRecord(value)) return [];
+    const code = asNumber(getValue(value, "code", "status_code", "vehicle_status_code"));
+    const description = asString(getValue(value, "description", "status_description"));
+    return code !== null && Number.isSafeInteger(code) && code >= 0 && description
+      ? [{ code, description } satisfies VehicleStatusTransition]
+      : [];
+  });
+  return options;
+}
+
 export async function getSitesForVehicleStatus() {
   const response = await requestApi("api/site");
   return getCollection(await readJson(response))
@@ -613,6 +643,10 @@ export async function changeVehicleStatusAgainstApi(
   siteCode: number | null,
   effectiveDate: string,
   notes: string,
+  endOdometer: number | null = null,
+  soldTo: string | null = null,
+  soldDate: string | null = null,
+  soldAmount: number | null = null,
 ) {
   const response = await requestApi(`api/vehicles/${encodeURIComponent(vmfCode)}/status`, {
     method: "PATCH",
@@ -621,6 +655,10 @@ export async function changeVehicleStatusAgainstApi(
       site_code: siteCode,
       effective_date: `${effectiveDate}T00:00:00.000Z`,
       notes: notes || null,
+      end_odo: endOdometer,
+      sold_to: soldTo,
+      sold_date: soldDate,
+      sold_amount: soldAmount,
     }),
   });
 

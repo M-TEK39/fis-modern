@@ -99,6 +99,7 @@ public class StatusController : BaseApiController
     }
 
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<StatusDto>> Create([FromBody] CreateStatusDto dto)
     {
         try
@@ -127,6 +128,7 @@ public class StatusController : BaseApiController
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> Update(int id, [FromBody] UpdateStatusDto dto)
     {
         try
@@ -155,6 +157,7 @@ public class StatusController : BaseApiController
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> Delete(int id)
     {
         try

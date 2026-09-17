@@ -13,9 +13,9 @@ import {
   updateVehicleInvoiceAgainstApi,
   VehicleEditApiError,
 } from "@/lib/api/vehicles/api-vehicle-edit";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import { getSession } from "@/lib/auth/session";
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
 const ALLOWED_DOCUMENT_MIME_TYPES = new Set(["image/jpeg", "image/png", "application/pdf"]);
 
@@ -41,18 +41,11 @@ async function authorizeVehicleDetail() {
     };
   }
 
-  try {
-    if (
-      (BigInt(session.accessLevel ?? "0") & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) !==
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    ) {
-      return {
-        ok: false as const,
-        message: "You do not have permission to maintain Vehicle Master records.",
-      };
-    }
-  } catch {
-    return { ok: false as const, message: "Your Vehicle Master permission could not be verified." };
+  if (!hasVehicleMasterRole(session.roles)) {
+    return {
+      ok: false as const,
+      message: "You do not have permission to maintain Vehicle Master records.",
+    };
   }
 
   return { ok: true as const };

@@ -8,8 +8,7 @@ import { Suspense } from "react";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import HelpEntriesSection from "@/components/ui/help-entries-section";
 import { getSession } from "@/lib/auth/session";
-
-const REPORTS_ROLE = "Reports";
+import { hasFinesAccess } from "@/app/(fleet-operations)/fines/access";
 
 type HelpEntry = {
   term: string;
@@ -57,12 +56,6 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
     description: "The name and ID number of the responsible person at the department.",
   },
 ];
-
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
 
 function HelpFallback() {
   return (
@@ -125,7 +118,7 @@ async function FinesHelpContent() {
     return <ApiUnavailable />;
   }
 
-  if (!hasRole(session.roles, REPORTS_ROLE)) {
+  if (!hasFinesAccess(session.roles)) {
     return <AccessRestricted />;
   }
 

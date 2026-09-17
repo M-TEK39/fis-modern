@@ -5,31 +5,11 @@ import { Suspense } from "react";
 import RouteLoading from "@/components/app-shell/route-loading";
 
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
+import {
+  hasVehicleInceptionAuthorizerRole,
+  hasVehicleInceptionCapturerRole,
+} from "@/app/(fleet-operations)/vehicles/access";
 import { getSession } from "@/lib/auth/session";
-
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
-const INCEPTION_ROLES = ["vehicle inception capturer", "vehicle inception authorizer"];
-
-function hasRole(roles: readonly string[], role: string) {
-  return roles.some(
-    (candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0,
-  );
-}
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
 
 function EntryUnavailable() {
   return (
@@ -69,20 +49,14 @@ async function PreCaptureNewVehicleEntryContent() {
     return <EntryUnavailable />;
   }
 
-  const hasAuthorizerRole = hasRole(session.roles, "vehicle inception authorizer");
-  const hasCapturerRole = hasRole(session.roles, "vehicle inception capturer");
-  const hasExplicitInceptionRole = session.roles.some((role) =>
-    INCEPTION_ROLES.some((candidate) => hasRole([role], candidate)),
-  );
+  const hasAuthorizerRole = hasVehicleInceptionAuthorizerRole(session.roles);
+  const hasCapturerRole = hasVehicleInceptionCapturerRole(session.roles);
 
-  if (
-    hasAuthorizerRole ||
-    (!hasExplicitInceptionRole && hasVehicleManagementPermission(session.accessLevel))
-  ) {
+  if (hasAuthorizerRole) {
     redirect("/vehicles/authorize");
   }
 
-  if (hasCapturerRole || !hasExplicitInceptionRole) {
+  if (hasCapturerRole) {
     redirect("/vehicles/create");
   }
 

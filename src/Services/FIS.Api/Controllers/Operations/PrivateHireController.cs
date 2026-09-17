@@ -10,7 +10,7 @@ namespace FIS.Api.Controllers;
 /// API Controller for private hire vehicle operations
 /// </summary>
 [ApiController]
-[Authorize]
+[Authorize(Roles = "Private Hire Vehicles,SystemAdministrator,System Administrator")]
 [Route("api/[controller]")]
 public class PrivateHireController : BaseApiController
 {

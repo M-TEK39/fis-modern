@@ -7,9 +7,10 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Security.Claims;
 using System.Threading;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using FIS.Api.Services.Finance;
 using FIS.Core.Application.Interfaces;
-using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -35,6 +36,8 @@ public class FinanceController : BaseApiController
 
     private readonly IJournalDetailService _journalService;
     private readonly LegacyFinanceReportExecutionService _legacyFinanceReportExecutionService;
+    private readonly LegacyBasCompatibilityService _legacyBasCompatibilityService;
+    private readonly LegacyWesbankCompatibilityService _legacyWesbankCompatibilityService;
     private readonly FisDbContext _context;
     private readonly ILogger<FinanceController> _logger;
     private static readonly ConcurrentDictionary<Guid, ExportTaskState> ExportTasks = new();
@@ -47,12 +50,16 @@ public class FinanceController : BaseApiController
     public FinanceController(
         IJournalDetailService journalService,
         LegacyFinanceReportExecutionService legacyFinanceReportExecutionService,
+        LegacyBasCompatibilityService legacyBasCompatibilityService,
+        LegacyWesbankCompatibilityService legacyWesbankCompatibilityService,
         FisDbContext context,
         ILogger<FinanceController> logger
     )
     {
         _journalService = journalService;
         _legacyFinanceReportExecutionService = legacyFinanceReportExecutionService;
+        _legacyBasCompatibilityService = legacyBasCompatibilityService;
+        _legacyWesbankCompatibilityService = legacyWesbankCompatibilityService;
         _context = context;
         _logger = logger;
     }
@@ -342,6 +349,7 @@ public class FinanceController : BaseApiController
     #region BAS Operations
 
     [HttpPost("bas/import")]
+    [LegacyFinanceDataAccess]
     [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult<BasImportResultDto>> ImportBas([FromBody] BasImportDto request)
     {
@@ -369,13 +377,14 @@ public class FinanceController : BaseApiController
                 return Forbid();
             }
 
-            var decoded = DecodeFileData(request.FileData);
-            var lines = decoded
-                .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
-                .Where(l => !string.IsNullOrWhiteSpace(l))
-                .ToList();
+            var fileBytes = DecodeFileBytes(request.FileData);
+            var documents = ReadBasImportDocuments(fileBytes, out var documentError);
+            if (documentError is not null)
+            {
+                return BadRequest(new BasImportResultDto { Success = false, Message = documentError });
+            }
 
-            if (lines.Count == 0)
+            if (documents.Count == 0)
             {
                 return Ok(
                     new BasImportResultDto
@@ -387,116 +396,447 @@ public class FinanceController : BaseApiController
                 );
             }
 
-            var userCode = GetCurrentUserId();
-            var now = DateTime.UtcNow;
-            var imported = 0;
             var errors = new List<string>();
-
-            foreach (var rawLine in lines)
+            List<BasImportRow> parsedRows;
+            var legacyDocuments = documents.Where(LooksLikeLegacyBasDocument).ToList();
+            if (legacyDocuments.Count > 0)
             {
-                var cols = rawLine.Split(',');
-                if (cols.Length < 4)
+                if (legacyDocuments.Count != documents.Count)
                 {
-                    errors.Add($"Skipped invalid row: '{rawLine}'");
-                    continue;
+                    return BadRequest(
+                        new BasImportResultDto
+                        {
+                            Success = false,
+                            Message = "A BAS archive must contain only legacy BAS report files; mixed CSV and BAS document formats are not supported in one import.",
+                        }
+                    );
                 }
 
-                var segmentNumber = cols[0].Trim();
-                var segmentName = cols[1].Trim();
-                var groupCodeText = cols[2].Trim();
-                var departmentCodeText = cols[3].Trim();
-                var siteCodeText = cols.Length >= 5 ? cols[4].Trim() : string.Empty;
-
-                if (
-                    string.IsNullOrWhiteSpace(segmentNumber)
-                    || !int.TryParse(groupCodeText, out var segmentGroupCode)
-                    || !short.TryParse(departmentCodeText, out var departmentCode)
-                )
+                var parserDepartmentCode = request.DepartmentCode
+                    ?? financeAccess.Profile?.DepartmentCode
+                    ?? 0;
+                parsedRows = new List<BasImportRow>();
+                foreach (var document in legacyDocuments)
                 {
-                    errors.Add($"Skipped invalid row: '{rawLine}'");
-                    continue;
-                }
+                    if (
+                        !TryParseLegacyBasDocument(
+                            document,
+                            parserDepartmentCode,
+                            request.EndDate,
+                            out var documentRows,
+                            out var parseError
+                        )
+                    )
+                    {
+                        return BadRequest(
+                            new BasImportResultDto
+                            {
+                                Success = false,
+                                Message = parseError,
+                            }
+                        );
+                    }
 
-                short? siteCode = null;
-                if (
-                    !string.IsNullOrWhiteSpace(siteCodeText)
-                    && short.TryParse(siteCodeText, out var parsedSite)
-                )
-                {
-                    siteCode = parsedSite;
+                    parsedRows.AddRange(documentRows);
                 }
-
-                if (
-                    !financeAccess.CanMaintainAllFinanceData
-                    && (
-                        financeAccess.Profile is null
-                        || departmentCode != financeAccess.Profile.DepartmentCode
-                        || (
-                            siteCode.HasValue
-                            && !await IsSiteInProfileDepartmentAsync(
-                                siteCode.Value,
-                                financeAccess.Profile.DepartmentCode,
-                                HttpContext.RequestAborted
-                            )
+            }
+            else
+            {
+                parsedRows = new List<BasImportRow>();
+                foreach (
+                    var rawLine in documents.SelectMany(document =>
+                        document.Split(
+                            new[] { "\r\n", "\n" },
+                            StringSplitOptions.RemoveEmptyEntries
                         )
                     )
                 )
                 {
-                    return Forbid();
-                }
+                    var cols = ParseCsvLine(rawLine);
+                    if (cols.Count < 4)
+                    {
+                        errors.Add($"Skipped invalid row: '{rawLine}'");
+                        continue;
+                    }
 
-                var existing = await _context.BasSegments.FirstOrDefaultAsync(s =>
-                    !s.is_deleted
-                    && s.segment_number == segmentNumber
-                    && s.segment_group_code == segmentGroupCode
-                    && s.department_code == departmentCode
-                    && s.site_code == siteCode
-                );
+                    var segmentNumber = cols[0].Trim();
+                    var segmentName = cols[1].Trim();
+                    var groupCodeText = cols[2].Trim();
+                    var departmentCodeText = cols[3].Trim();
+                    var siteCodeText = cols.Count >= 5 ? cols[4].Trim() : string.Empty;
 
-                if (existing is null)
-                {
-                    _context.BasSegments.Add(
-                        new FIS.Core.Domain.Entities.ReferenceData.BasSegment
-                        {
-                            segment_number = segmentNumber,
-                            segment_name = string.IsNullOrWhiteSpace(segmentName)
-                                ? null
-                                : segmentName,
-                            segment_group_code = segmentGroupCode,
-                            department_code = departmentCode,
-                            site_code = siteCode,
-                            date_created = now,
-                            date_updated = now,
-                            created_by_user_code = userCode,
-                            modified_by_user_code = userCode,
-                            is_deleted = false,
-                        }
+                    if (
+                        string.Equals(segmentNumber, "segmentnumber", StringComparison.OrdinalIgnoreCase)
+                    )
+                    {
+                        continue;
+                    }
+
+                    if (
+                        !int.TryParse(
+                            segmentNumber,
+                            NumberStyles.Integer,
+                            CultureInfo.InvariantCulture,
+                            out var segmentNumberValue
+                        )
+                        || segmentNumberValue < 0
+                        || segmentNumber.Length > 8
+                        || !int.TryParse(
+                            groupCodeText,
+                            NumberStyles.Integer,
+                            CultureInfo.InvariantCulture,
+                            out var segmentGroupCode
+                        )
+                        || segmentGroupCode <= 0
+                        || !short.TryParse(
+                            departmentCodeText,
+                            NumberStyles.Integer,
+                            CultureInfo.InvariantCulture,
+                            out var departmentCode
+                        )
+                    )
+                    {
+                        errors.Add($"Skipped invalid row: '{rawLine}'");
+                        continue;
+                    }
+
+                    short? siteCode = null;
+                    if (
+                        !string.IsNullOrWhiteSpace(siteCodeText)
+                        && short.TryParse(siteCodeText, out var parsedSite)
+                    )
+                    {
+                        siteCode = parsedSite;
+                    }
+
+                    parsedRows.Add(
+                        new BasImportRow(
+                            segmentNumber,
+                            segmentName,
+                            segmentGroupCode,
+                            departmentCode,
+                            siteCode
+                        )
                     );
-                    imported++;
-                }
-                else
-                {
-                    existing.segment_name = string.IsNullOrWhiteSpace(segmentName)
-                        ? existing.segment_name
-                        : segmentName;
-                    existing.date_updated = now;
-                    existing.modified_by_user_code = userCode;
-                    imported++;
                 }
             }
 
-            await _context.SaveChangesAsync();
+            if (parsedRows.Count == 0)
+            {
+                return Ok(
+                    new BasImportResultDto
+                    {
+                        Success = errors.Count == 0,
+                        RecordsImported = 0,
+                        Errors = errors,
+                        Message = errors.Count == 0
+                            ? "No BAS rows found in import file."
+                            : "No valid BAS rows were found in import file.",
+                    }
+                );
+            }
+
+            var targetDepartmentCode = request.DepartmentCode
+                ?? (parsedRows.Select(row => row.DepartmentCode).Distinct().Count() == 1
+                    ? parsedRows[0].DepartmentCode
+                    : 0);
+            if (targetDepartmentCode <= 0 || targetDepartmentCode > short.MaxValue)
+            {
+                return BadRequest(
+                    new BasImportResultDto
+                    {
+                        Success = false,
+                        Errors = errors,
+                        Message = "Select one target department before importing BAS codes.",
+                    }
+                );
+            }
+
+            if (
+                !financeAccess.CanMaintainAllFinanceData
+                && (
+                    financeAccess.Profile is null
+                    || targetDepartmentCode != financeAccess.Profile.DepartmentCode
+                )
+            )
+            {
+                return Forbid();
+            }
+
+            var groups = parsedRows
+                .GroupBy(row =>
+                {
+                    var number = row.SegmentNumber;
+                    return new
+                    {
+                        row.SegmentGroupCode,
+                        InstallationCode = number.Length >= 3 ? number[^3..] : string.Empty,
+                    };
+                })
+                .Select(group =>
+                    new BasImportGroup(
+                        group.Key.SegmentGroupCode,
+                        group.Key.InstallationCode,
+                        group.ToList()
+                    )
+                )
+                .ToList();
+            if (groups.Any(group =>
+                    group.InstallationCode.Length != 3
+                    || !group.InstallationCode.All(char.IsDigit)))
+            {
+                return BadRequest(
+                    new BasImportResultDto
+                    {
+                        Success = false,
+                        Errors = errors,
+                        Message = "Each BAS segment number must end with a three-digit installation code.",
+                    }
+                );
+            }
+
+            // Validate every group before issuing any mutation. The legacy
+            // pages displayed a confirmation when the BAS installation link
+            // did not match; do not silently import into a different department.
+            var validatedGroups = new List<BasImportExecutionGroup>();
+            var confirmationCodes = new HashSet<int>();
+            foreach (var group in groups)
+            {
+                var validation = await _legacyBasCompatibilityService.TryValidateImportAsync(
+                    targetDepartmentCode,
+                    group.InstallationCode,
+                    HttpContext.RequestAborted
+                );
+                if (validation is null)
+                {
+                    return StatusCode(
+                        StatusCodes.Status503ServiceUnavailable,
+                        new BasImportResultDto
+                        {
+                            Success = false,
+                            Errors = errors,
+                            Message = "The legacy BAS validation procedure is unavailable for this database; no BAS rows were written.",
+                        }
+                    );
+                }
+
+                if (validation.ActionCode is not (4 or 5 or 6))
+                {
+                    return Conflict(
+                        new BasImportResultDto
+                        {
+                            Success = false,
+                            RequiresConfirmation = false,
+                            ActionCode = validation.ActionCode,
+                            Errors = errors,
+                            Message = DescribeBasValidation(validation),
+                        }
+                    );
+                }
+
+                var executionDepartmentCode = targetDepartmentCode;
+                if (validation.ActionCode == 4)
+                {
+                    if (
+                        validation.DocumentDepartmentCode <= 0
+                        || validation.DocumentDepartmentCode > short.MaxValue
+                    )
+                    {
+                        return Conflict(
+                            new BasImportResultDto
+                            {
+                                Success = false,
+                                ActionCode = validation.ActionCode,
+                                Errors = errors,
+                                Message = "The legacy BAS validation did not return the document department required for confirmation; no rows were written.",
+                            }
+                        );
+                    }
+
+                    executionDepartmentCode = validation.DocumentDepartmentCode;
+                }
+
+                if (validation.ActionCode is 4 or 5)
+                {
+                    confirmationCodes.Add(validation.ActionCode);
+                }
+
+                validatedGroups.Add(
+                    new BasImportExecutionGroup(
+                        group,
+                        validation.ActionCode,
+                        executionDepartmentCode
+                    )
+                );
+            }
+
+            if (confirmationCodes.Count > 0)
+            {
+                if (confirmationCodes.Count != 1 || !request.ConfirmationActionCode.HasValue)
+                {
+                    return Conflict(
+                        new BasImportResultDto
+                        {
+                            Success = false,
+                            RequiresConfirmation = true,
+                            ActionCode = confirmationCodes.Count == 1
+                                ? confirmationCodes.Single()
+                                : null,
+                            Errors = errors,
+                            Message = "The legacy BAS validation requires an explicit confirmation. Re-submit the same document with its returned confirmation action code; no rows were written.",
+                        }
+                    );
+                }
+
+                if (!confirmationCodes.Contains(request.ConfirmationActionCode.Value))
+                {
+                    return BadRequest(
+                        new BasImportResultDto
+                        {
+                            Success = false,
+                            RequiresConfirmation = true,
+                            ActionCode = confirmationCodes.Single(),
+                            Errors = errors,
+                            Message = "The BAS confirmation action code does not match the current legacy validation result. Re-submit the document and confirm the current action.",
+                        }
+                    );
+                }
+            }
+            else if (request.ConfirmationActionCode.HasValue)
+            {
+                return BadRequest(
+                    new BasImportResultDto
+                    {
+                        Success = false,
+                        Message = "A BAS confirmation action code is only valid when legacy validation requests confirmation.",
+                    }
+                );
+            }
+
+            var effectiveDepartmentCodes = validatedGroups
+                .Select(group => group.DepartmentCode)
+                .Distinct()
+                .ToList();
+            if (effectiveDepartmentCodes.Count != 1)
+            {
+                return Conflict(
+                    new BasImportResultDto
+                    {
+                        Success = false,
+                        Errors = errors,
+                        Message = "The BAS document contains installation links for more than one department. Legacy FIS requires one department per import; no rows were written.",
+                    }
+                );
+            }
+
+            var effectiveDepartmentCode = effectiveDepartmentCodes[0];
+            if (
+                !financeAccess.CanMaintainAllFinanceData
+                && (
+                    financeAccess.Profile is null
+                    || effectiveDepartmentCode != financeAccess.Profile.DepartmentCode
+                )
+            )
+            {
+                return Forbid();
+            }
+
+            var startDate = request.StartDate?.Date ?? DateTime.Today;
+            var endDate = request.EndDate?.Date ?? GetDefaultBasEndDate(startDate);
+            if (endDate < startDate)
+            {
+                return BadRequest(
+                    new BasImportResultDto
+                    {
+                        Success = false,
+                        Errors = errors,
+                        Message = "The BAS end date cannot be before the start date.",
+                    }
+                );
+            }
+
+            var inserted = 0;
+            var updated = 0;
+            var deleted = 0;
+            foreach (var executionGroup in validatedGroups)
+            {
+                var group = executionGroup.Group;
+                var document = new XElement(
+                    "root",
+                    group.Rows.Select(row =>
+                        new XElement(
+                            "segment",
+                            new XAttribute("segment_number", row.SegmentNumber),
+                            new XAttribute("segment_name", row.SegmentName ?? string.Empty),
+                            new XAttribute("segment_group_code", row.SegmentGroupCode),
+                            new XAttribute("department_code", executionGroup.DepartmentCode),
+                            new XAttribute(
+                                "segment_start_date",
+                                startDate.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)
+                            ),
+                            new XAttribute(
+                                "segment_end_date",
+                                endDate.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)
+                            ),
+                            new XAttribute("segment_active", "1")
+                        )
+                    )
+                ).ToString(SaveOptions.DisableFormatting);
+                var result = await _legacyBasCompatibilityService.TryImportAsync(
+                    document,
+                    executionGroup.DepartmentCode,
+                    group.InstallationCode,
+                    executionGroup.ActionCode,
+                    group.SegmentGroupCode,
+                    HttpContext.RequestAborted
+                );
+                if (result is null)
+                {
+                    return StatusCode(
+                        StatusCodes.Status503ServiceUnavailable,
+                        new BasImportResultDto
+                        {
+                            Success = false,
+                            RecordsImported = inserted + updated,
+                            RecordsInserted = inserted,
+                            RecordsUpdated = updated,
+                            RecordsDeleted = deleted,
+                            Errors = errors,
+                            Message = "The legacy BAS import procedure is unavailable for this database; no direct-DML fallback was used.",
+                        }
+                    );
+                }
+
+                inserted += result.Inserted;
+                updated += result.Updated;
+                deleted += result.Deleted;
+            }
 
             return Ok(
                 new BasImportResultDto
                 {
                     Success = true,
-                    RecordsImported = imported,
+                    RecordsImported = inserted + updated,
+                    RecordsInserted = inserted,
+                    RecordsUpdated = updated,
+                    RecordsDeleted = deleted,
                     Errors = errors,
                     Message =
                         errors.Count == 0
-                            ? $"Imported/updated {imported} BAS segment row(s)."
-                            : $"Imported/updated {imported} BAS segment row(s) with {errors.Count} warning(s).",
+                            ? $"Imported/updated {inserted + updated} BAS segment row(s)."
+                            : $"Imported/updated {inserted + updated} BAS segment row(s) with {errors.Count} warning(s).",
+                }
+            );
+        }
+        catch (LegacyBasProcedureContractException ex)
+        {
+            _logger.LogError(ex, "Legacy BAS procedure contract mismatch");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new BasImportResultDto
+                {
+                    Success = false,
+                    Message = $"The deployed legacy BAS procedure {ex.ProcedureName} does not match the archived contract; no direct-DML fallback was used.",
                 }
             );
         }
@@ -516,6 +856,7 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas")]
+    [LegacyFinanceDataAccess]
     [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult<object>> GetBasOverview()
     {
@@ -546,6 +887,7 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/segments")]
+    [LegacyFinanceDataAccess]
     [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult<IEnumerable<BasSegmentDto>>> GetBasSegments(
         [FromQuery] int? departmentCode,
@@ -638,6 +980,7 @@ public class FinanceController : BaseApiController
     /// The original collection endpoint remains for legacy consumers.
     /// </summary>
     [HttpGet("bas/segments/page")]
+    [LegacyFinanceDataAccess]
     [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult> GetBasSegmentsPage(
         [FromQuery] int? departmentCode,
@@ -733,6 +1076,7 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("bas/segments/activate")]
+    [LegacyFinanceDataAccess]
     [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult> ActivateBasSegments([FromBody] ActivateSegmentsDto request)
     {
@@ -744,46 +1088,64 @@ public class FinanceController : BaseApiController
         try
         {
             var financeAccess = GetFinanceAccess();
-            if (!financeAccess.CanMaintainAllFinanceData)
+            var departmentCode = request.DepartmentCode
+                ?? financeAccess.Profile?.DepartmentCode;
+            if (departmentCode is null or <= 0 or > short.MaxValue)
             {
-                if (financeAccess.Profile is null)
-                {
-                    return Forbid();
-                }
+                return BadRequest(new { error = "Select a valid department before updating the BAS list." });
+            }
 
-                var containsAnotherDepartment = await _context.BasSegments.AnyAsync(segment =>
-                    request.SegmentCodes.Contains(segment.segment_code)
-                    && segment.department_code != financeAccess.Profile.DepartmentCode
+            if (
+                !financeAccess.CanMaintainAllFinanceData
+                && (
+                    financeAccess.Profile is null
+                    || departmentCode.Value != financeAccess.Profile.DepartmentCode
+                )
+            )
+            {
+                return Forbid();
+            }
+
+            var document = new XElement(
+                "root",
+                request.SegmentCodes
+                    .Distinct()
+                    .Select(segmentCode =>
+                        new XElement(
+                            "segment",
+                            new XAttribute("segment_code", segmentCode)
+                        )
+                    )
+            ).ToString(SaveOptions.DisableFormatting);
+            var result = await _legacyBasCompatibilityService.TryActivateAsync(
+                document,
+                departmentCode.Value,
+                HttpContext.RequestAborted
+            );
+            if (result is null)
+            {
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new { error = "The legacy BAS activation procedure is unavailable for this database; no direct-DML fallback was used." }
                 );
-                if (containsAnotherDepartment)
-                {
-                    return Forbid();
-                }
             }
-
-            var userCode = GetCurrentUserId();
-            var now = DateTime.UtcNow;
-
-            var segments = await _context
-                .BasSegments.Where(s => request.SegmentCodes.Contains(s.segment_code))
-                .ToListAsync();
-
-            foreach (var seg in segments)
-            {
-                seg.is_deleted = false;
-                seg.date_updated = now;
-                seg.modified_by_user_code = userCode;
-            }
-
-            await _context.SaveChangesAsync();
 
             return Ok(
                 new
                 {
-                    message = $"Activated {segments.Count} segment(s).",
+                    message = $"Updated {result.Updated} segment(s) in the legacy BAS list.",
                     requested = request.SegmentCodes.Count,
-                    updated = segments.Count,
+                    updated = result.Updated,
+                    departmentCode = result.DepartmentCode,
                 }
+            );
+        }
+        catch (LegacyBasProcedureContractException ex)
+        {
+            _logger.LogError(ex, "Legacy BAS activation procedure contract mismatch");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { error = $"The deployed legacy BAS procedure {ex.ProcedureName} does not match the archived contract; no direct-DML fallback was used." }
             );
         }
         catch (Exception ex)
@@ -1265,6 +1627,7 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/departments-without-bas")]
+    [LegacyFinanceDataAccess]
     [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult<IEnumerable<FinanceDepartmentDto>>> GetDepartmentsWithoutBas()
     {
@@ -1296,6 +1659,7 @@ public class FinanceController : BaseApiController
     }
 
     [HttpGet("bas/departments-without-bas/page")]
+    [LegacyFinanceDataAccess]
     [ServiceFilter(typeof(LegacyFinanceDataAuthorizationFilter))]
     public async Task<ActionResult> GetDepartmentsWithoutBasPage(
         [FromQuery] int page = 1,
@@ -1576,13 +1940,27 @@ public class FinanceController : BaseApiController
             );
         }
 
-        var lines = await BuildExportLinesAsync(
-            prepare.StartDate,
-            prepare.EndDate,
-            request.DepartmentCode,
-            includeCustomerColumn: false,
-            reverseBatch: request.ReverseBatch
-        );
+        List<string> lines;
+        try
+        {
+            lines = await BuildExportLinesAsync(
+                prepare.StartDate,
+                prepare.EndDate,
+                request.DepartmentCode,
+                includeCustomerColumn: false,
+                reverseBatch: request.ReverseBatch
+            );
+        }
+        catch (LegacyFinanceProcedureContractException ex)
+        {
+            _logger.LogError(ex, "Legacy Pastel CSV procedure contract is incompatible.");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The legacy Pastel CSV procedure has an incompatible parameter contract.", source = "legacy-procedure-required" });
+        }
+        catch (LegacyFinanceProcedureUnavailableException ex)
+        {
+            _logger.LogError(ex, "Legacy Pastel CSV procedure is unavailable.");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The legacy Pastel CSV procedure is unavailable on this database.", source = "legacy-procedure-required" });
+        }
 
         if (!request.SkipPosting)
         {
@@ -1659,13 +2037,27 @@ public class FinanceController : BaseApiController
             );
         }
 
-        var lines = await BuildExportLinesAsync(
-            prepare.StartDate,
-            prepare.EndDate,
-            request.DepartmentCode,
-            includeCustomerColumn: true,
-            reverseBatch: request.ReverseBatch
-        );
+        List<string> lines;
+        try
+        {
+            lines = await BuildExportLinesAsync(
+                prepare.StartDate,
+                prepare.EndDate,
+                request.DepartmentCode,
+                includeCustomerColumn: true,
+                reverseBatch: request.ReverseBatch
+            );
+        }
+        catch (LegacyFinanceProcedureContractException ex)
+        {
+            _logger.LogError(ex, "Legacy Pastel customer CSV procedure contract is incompatible.");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The legacy Pastel customer CSV procedure has an incompatible parameter contract.", source = "legacy-procedure-required" });
+        }
+        catch (LegacyFinanceProcedureUnavailableException ex)
+        {
+            _logger.LogError(ex, "Legacy Pastel customer CSV procedure is unavailable.");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = "The legacy Pastel customer CSV procedure is unavailable on this database.", source = "legacy-procedure-required" });
+        }
 
         if (!request.SkipPosting)
         {
@@ -2646,67 +3038,78 @@ public class FinanceController : BaseApiController
             return BadRequest(new { error = "No file uploaded." });
         }
 
-        var imported = 0;
-        var failed = 0;
-
-        await using var stream = file.OpenReadStream();
-        using var reader = new StreamReader(stream);
-
-        var header = await reader.ReadLineAsync();
-        if (string.IsNullOrWhiteSpace(header))
+        if (!string.Equals(Path.GetExtension(file.FileName), ".csv", StringComparison.OrdinalIgnoreCase))
         {
-            return BadRequest(new { error = "Uploaded file is empty." });
+            return BadRequest(new { error = "Only CSV files can be uploaded." });
         }
 
-        var headerColumns = ParseCsvLine(header);
-        var vmfIndex = FindHeaderIndex(headerColumns, "vmf_code", "vmf", "vehicle_code");
-        var siteIndex = FindHeaderIndex(headerColumns, "site_code", "site");
-        var fuelCardIndex = FindHeaderIndex(headerColumns, "fuel_card_code", "fuel_card");
-        var fileDateIndex = FindHeaderIndex(headerColumns, "file_date", "transaction_date", "date");
-
-        while (!reader.EndOfStream)
+        try
         {
-            var line = await reader.ReadLineAsync();
-            if (string.IsNullOrWhiteSpace(line))
+            await using var stream = file.OpenReadStream();
+            var result = await _legacyWesbankCompatibilityService.TryImportAsync(
+                stream,
+                HttpContext.RequestAborted
+            );
+            if (result is null)
             {
-                continue;
+                return StatusCode(
+                    StatusCodes.Status503ServiceUnavailable,
+                    new
+                    {
+                        error = "The legacy Standard Bank import procedure is not deployed. No direct-DML fallback was run.",
+                    }
+                );
             }
 
-            try
-            {
-                var columns = ParseCsvLine(line);
-                var tx = new WesbankTransaction
+            var countMismatch = result.RecordsAdded != result.RecordsSubmitted;
+            return Ok(
+                new ImportResultDto
                 {
-                    vmf_code = ParseNullableInt(columns, vmfIndex),
-                    site_code = ParseNullableInt(columns, siteIndex),
-                    fuel_card_code = ParseNullableInt(columns, fuelCardIndex),
-                    file_date = ParseNullableDate(columns, fileDateIndex) ?? DateTime.Today,
-                    date_created = DateTime.UtcNow,
-                    is_deleted = false,
-                };
-
-                _context.WesbankTransactions.Add(tx);
-                imported++;
-            }
-            catch
-            {
-                failed++;
-            }
+                    Success = !countMismatch,
+                    RecordsImported = result.RecordsAdded,
+                    RecordsSubmitted = result.RecordsSubmitted,
+                    RecordsFailed = countMismatch
+                        ? Math.Max(0, result.RecordsSubmitted - result.RecordsAdded)
+                        : 0,
+                    Message = countMismatch
+                        ? $"The legacy procedure completed but reported {result.RecordsAdded} newly stored row(s) for {result.RecordsSubmitted} source row(s)."
+                        : $"Completed all records import. A total of {result.RecordsAdded} transactions were imported through the legacy procedure.",
+                }
+            );
         }
-
-        if (imported > 0)
+        catch (LegacyWesbankImportFormatException ex)
         {
-            await _context.SaveChangesAsync();
+            return BadRequest(new { error = ex.Message });
         }
-
-        return Ok(
-            new ImportResultDto
-            {
-                Success = imported > 0 && failed == 0,
-                RecordsImported = imported,
-                RecordsFailed = failed,
-            }
-        );
+        catch (LegacyWesbankBatchRunningException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+        catch (LegacyWesbankDependencyException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
+        catch (LegacyWesbankProcedureContractException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = ex.Message });
+        }
+        catch (SqlException ex) when (ex.Number is 207 or 208 or 2812)
+        {
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The legacy Standard Bank import dependencies are unavailable or incompatible. No direct-DML fallback was run.",
+                }
+            );
+        }
+        catch (SqlException ex) when (
+            ex.Number == 50000
+            && ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return Conflict(new { error = "The legacy Standard Bank import was rejected because the transaction file has already been imported." });
+        }
     }
 
     #endregion
@@ -3096,16 +3499,83 @@ public class FinanceController : BaseApiController
         return ExportPreparationResult.Ok(startDate, endDate, resolvedBatchCode);
     }
 
-    private static string DecodeFileData(string input)
+    private static byte[] DecodeFileBytes(string input)
     {
         try
         {
-            var bytes = Convert.FromBase64String(input);
-            return System.Text.Encoding.UTF8.GetString(bytes);
+            return Convert.FromBase64String(input);
         }
         catch
         {
-            return input;
+            return System.Text.Encoding.UTF8.GetBytes(input);
+        }
+    }
+
+    private static IReadOnlyList<string> ReadBasImportDocuments(
+        byte[] bytes,
+        out string? error
+    )
+    {
+        error = null;
+        if (bytes.Length < 2 || bytes[0] != 0x50 || bytes[1] != 0x4B)
+        {
+            return new[] { System.Text.Encoding.UTF8.GetString(bytes) };
+        }
+
+        const int maximumEntries = 64;
+        const long maximumExpandedBytes = 100L * 1024 * 1024;
+        try
+        {
+            using var stream = new MemoryStream(bytes, writable: false);
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+            var entries = archive.Entries
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.Name))
+                .ToList();
+            if (entries.Count == 0)
+            {
+                error = "The BAS ZIP archive does not contain any report files.";
+                return Array.Empty<string>();
+            }
+
+            if (entries.Count > maximumEntries)
+            {
+                error = $"The BAS ZIP archive contains more than {maximumEntries} report files.";
+                return Array.Empty<string>();
+            }
+
+            var documents = new List<string>(entries.Count);
+            long expandedBytes = 0;
+            foreach (var entry in entries)
+            {
+                if (entry.Length > maximumExpandedBytes - expandedBytes)
+                {
+                    error = "The BAS ZIP archive expands beyond the supported size limit.";
+                    return Array.Empty<string>();
+                }
+
+                using var entryStream = entry.Open();
+                using var reader = new StreamReader(
+                    entryStream,
+                    System.Text.Encoding.UTF8,
+                    detectEncodingFromByteOrderMarks: true
+                );
+                var document = reader.ReadToEnd();
+                expandedBytes += System.Text.Encoding.UTF8.GetByteCount(document);
+                if (expandedBytes > maximumExpandedBytes)
+                {
+                    error = "The BAS ZIP archive expands beyond the supported size limit.";
+                    return Array.Empty<string>();
+                }
+
+                documents.Add(document);
+            }
+
+            return documents;
+        }
+        catch (InvalidDataException)
+        {
+            error = "The BAS upload is not a valid ZIP archive.";
+            return Array.Empty<string>();
         }
     }
 
@@ -3161,73 +3631,67 @@ public class FinanceController : BaseApiController
         bool reverseBatch
     )
     {
-        var query = (await _journalService.GetAllJournalDetailsAsync()).Where(jd =>
-            !jd.is_deleted
-            && jd.journal_detail_date.Date >= startDate
-            && jd.journal_detail_date.Date <= endDate
+        // FinanceMain.aspx -> DownloadReport.aspx executes one of these
+        // database-owned procedures. Their joins apply PastelCustomer and
+        // PastelGL mappings, exclude suspense/GGMT rows, aggregate reversals,
+        // and may create missing customer mappings as part of the legacy
+        // transaction. A journal_detail projection cannot reproduce those
+        // accounting semantics, so it is deliberately not used here.
+        var procedureKey = includeCustomerColumn ? "pastel-csv-customer" : "pastel-csv";
+        var batchDate = startDate.Date;
+        var report = await _legacyFinanceReportExecutionService.TryExecuteAsync(
+            new LegacyFinanceProcedureRequest(
+                procedureKey,
+                includeCustomerColumn
+                    ? "Pastel CSV Interface with Customer"
+                    : "Pastel CSV Interface",
+                new Dictionary<string, object?> { ["@BatchDate"] = batchDate }
+            ),
+            HttpContext.RequestAborted
         );
 
-        if (departmentCode.HasValue)
+        if (report is null)
         {
-            var dept = (short)departmentCode.Value;
-            query = query.Where(jd => jd.department_code == dept);
-        }
-
-        var rows = query
-            .OrderBy(jd => jd.journal_detail_date)
-            .ThenBy(jd => jd.journal_detail_id)
-            .Select(jd => new
-            {
-                jd.journal_detail_id,
-                jd.journal_detail_date,
-                jd.department_code,
-                jd.site_code,
-                jd.vmf_code,
-                jd.journal_detail_amount,
-                jd.journal_detail_description,
-            })
-            .Take(100000)
-            .ToList();
-
-        var lines = new List<string>();
-        if (includeCustomerColumn)
-        {
-            lines.Add(
-                "TransactionDate,JournalDetailId,DepartmentCode,SiteCode,VehicleCode,Amount,Customer,Description"
-            );
-        }
-        else
-        {
-            lines.Add(
-                "TransactionDate,JournalDetailId,DepartmentCode,SiteCode,VehicleCode,Amount,Description"
+            throw new LegacyFinanceProcedureUnavailableException(
+                includeCustomerColumn
+                    ? "DEV_REP_ExportPastelCSVWithClientName"
+                    : "DEV_REP_ExportPastelCSV"
             );
         }
 
+        var expectedColumns = includeCustomerColumn
+            ? new[] { "Trans Date", "Account", "AccountName", "Trans Code", "GL Contra Code", "Reference", "Description", "Amount Excl" }
+            : new[] { "Trans Date", "Account", "Trans Code", "GL Contra Code", "Reference", "Description", "Amount Excl" };
+        var rows = report.DataRows;
+        var columns = rows.Count == 0
+            ? expectedColumns
+            : expectedColumns.Where(column => rows[0].ContainsKey(column))
+                .Concat(rows[0].Keys.Where(column => !expectedColumns.Contains(column, StringComparer.OrdinalIgnoreCase)))
+                .ToArray();
+
+        var lines = new List<string> { string.Join(",", columns.Select(EscapeCsv)) };
         foreach (var row in rows)
         {
-            var description = (row.journal_detail_description ?? string.Empty).Replace(
-                "\"",
-                "\"\""
-            );
-            var exportAmount = reverseBatch
-                ? (row.journal_detail_amount * -1m)
-                : row.journal_detail_amount;
-            var amount = exportAmount.ToString("0.00", CultureInfo.InvariantCulture);
-            var baseColumns =
-                $"{row.journal_detail_date:yyyy-MM-dd},{row.journal_detail_id},{row.department_code},{row.site_code},{row.vmf_code},{amount}";
-
-            if (includeCustomerColumn)
+            var values = columns.Select(column =>
             {
-                var customer = $"D{row.department_code}";
-                lines.Add($"{baseColumns},{customer},\"{description}\"");
-            }
-            else
-            {
-                lines.Add($"{baseColumns},\"{description}\"");
-            }
+                row.TryGetValue(column, out var value);
+                if (reverseBatch && string.Equals(column, "Amount Excl", StringComparison.OrdinalIgnoreCase)
+                    && value is not null && decimal.TryParse(Convert.ToString(value, CultureInfo.InvariantCulture), NumberStyles.Any, CultureInfo.InvariantCulture, out var amount))
+                {
+                    value = -amount;
+                }
+                return EscapeCsv(value);
+            });
+            lines.Add(string.Join(",", values));
         }
 
         return lines;
+    }
+
+    private static string EscapeCsv(object? value)
+    {
+        var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+        return $"\"{text.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
     }
 
     private async Task<byte[]> BuildMultiSystemExportZipAsync(
@@ -3352,7 +3816,10 @@ public class FinanceController : BaseApiController
                 $"EXEC DEV_UPD_VerifySegmentJournalDetailMapsForExport @BatchDate={sqlBatchDate}, @FinancialSystem={financialSystemCode}"
             );
 
-            var unpostedCount = await GetUnpostedJournalDetailCountAsync(financialSystemCode);
+            var unpostedCount = await GetUnpostedJournalDetailCountAsync(
+                batchDate,
+                financialSystemCode
+            );
 
             if (unpostedCount == 0)
             {
@@ -3394,7 +3861,10 @@ public class FinanceController : BaseApiController
         }
     }
 
-    private async Task<int> GetUnpostedJournalDetailCountAsync(byte financialSystemCode)
+    private async Task<int> GetUnpostedJournalDetailCountAsync(
+        DateTime batchDate,
+        byte financialSystemCode
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -3415,6 +3885,12 @@ public class FinanceController : BaseApiController
             financialSystemParameter.DbType = DbType.Byte;
             financialSystemParameter.Value = financialSystemCode;
             command.Parameters.Add(financialSystemParameter);
+
+            var batchDateParameter = command.CreateParameter();
+            batchDateParameter.ParameterName = "@BatchDate";
+            batchDateParameter.DbType = DbType.DateTime;
+            batchDateParameter.Value = batchDate.Date;
+            command.Parameters.Add(batchDateParameter);
 
             var scalar = await command.ExecuteScalarAsync();
             if (scalar is null || scalar is DBNull)
@@ -3749,6 +4225,200 @@ public class FinanceController : BaseApiController
         Compatible,
     }
 
+    private sealed record BasImportRow(
+        string SegmentNumber,
+        string SegmentName,
+        int SegmentGroupCode,
+        short DepartmentCode,
+        short? SiteCode
+    );
+
+    private sealed record BasImportGroup(
+        int SegmentGroupCode,
+        string InstallationCode,
+        IReadOnlyList<BasImportRow> Rows
+    );
+
+    private sealed record BasImportExecutionGroup(
+        BasImportGroup Group,
+        int ActionCode,
+        int DepartmentCode
+    );
+
+    private static bool LooksLikeLegacyBasDocument(string value)
+    {
+        var firstLine = value.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None).FirstOrDefault();
+        return firstLine is not null
+            && Regex.IsMatch(firstLine, @"^\s*BAS\b", RegexOptions.IgnoreCase);
+    }
+
+    private static bool TryParseLegacyBasDocument(
+        string value,
+        int targetDepartmentCode,
+        DateTime? requestedEndDate,
+        out List<BasImportRow> rows,
+        out string error
+    )
+    {
+        rows = new List<BasImportRow>();
+        error = "The BAS document could not be parsed.";
+        if (targetDepartmentCode <= 0 || targetDepartmentCode > short.MaxValue)
+        {
+            error = "Select a valid target department before importing BAS codes.";
+            return false;
+        }
+
+        using var reader = new StringReader(value);
+        var firstLine = reader.ReadLine();
+        if (firstLine is null || !Regex.IsMatch(firstLine, @"^\s*BAS\b", RegexOptions.IgnoreCase))
+        {
+            error = "Invalid BAS document supplied.";
+            return false;
+        }
+
+        for (var index = 0; index < 13; index++)
+        {
+            if (reader.ReadLine() is null)
+            {
+                error = "The BAS document ended before its effective date.";
+                return false;
+            }
+        }
+
+        var effectiveLine = reader.ReadLine();
+        var effectiveDateMatch = effectiveLine is null
+            ? null
+            : Regex.Match(effectiveLine, @"(?<date>\d{1,4}[/\\]\d{1,2}[/\\]\d{2,4})\s*$");
+        if (
+            effectiveDateMatch is null
+            || !TryParseLegacyDate(effectiveDateMatch.Groups["date"].Value, out _)
+        )
+        {
+            error = "The BAS document has an invalid effective date.";
+            return false;
+        }
+
+        for (var index = 0; index < 16; index++)
+        {
+            if (reader.ReadLine() is null)
+            {
+                error = "The BAS document ended before its segment type.";
+                return false;
+            }
+        }
+
+        var segmentTypeLine = reader.ReadLine();
+        var segmentTypeTokens = segmentTypeLine is null
+            ? Array.Empty<string>()
+            : Regex.Split(segmentTypeLine.Trim(), @"\s+");
+        if (segmentTypeTokens.Length < 3)
+        {
+            error = "The BAS document does not identify a segment type.";
+            return false;
+        }
+
+        var segmentGroupCode = segmentTypeTokens[2].Trim().ToUpperInvariant() switch
+        {
+            "FUND" => 1,
+            "OBJECTIVE" => 2,
+            "RESPONSIBILITY" => 3,
+            "PROJECT" => 7,
+            "ASSETS" => 56,
+            "REGIONAL" => 62,
+            "INFRASTRUCTURE" => 88,
+            "ITEM" => 0,
+            _ => -1,
+        };
+        if (segmentGroupCode == 0)
+        {
+            error = "ITEM BAS files are configured through the BAS interface and cannot be imported here.";
+            return false;
+        }
+
+        if (segmentGroupCode < 0)
+        {
+            error = $"The BAS document segment type '{segmentTypeTokens[2]}' is not supported.";
+            return false;
+        }
+
+        for (var index = 0; index < 5; index++)
+        {
+            if (reader.ReadLine() is null)
+            {
+                error = "The BAS document ended before its segment rows.";
+                return false;
+            }
+        }
+
+        var endDate = requestedEndDate?.Date ?? GetDefaultBasEndDate(DateTime.Today);
+        var rowPattern = new Regex(
+            @"^\s*\d+\s+(?<number>\d{4,8})\s+(?<name>.*?)\s+(?<date>\d{1,4}[/\\]\d{1,2}[/\\]\d{2,4})\s+(?:IN)?ACTIVE\s+(?<posted>[YN])\s*$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+        );
+        while (reader.ReadLine() is { } line)
+        {
+            var match = rowPattern.Match(line);
+            if (!match.Success || !string.Equals(match.Groups["posted"].Value, "Y", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (
+                !TryParseLegacyDate(match.Groups["date"].Value, out var segmentDate)
+                || segmentDate.Date > endDate
+            )
+            {
+                error = "A BAS segment effective date is later than the selected end date.";
+                return false;
+            }
+
+            rows.Add(
+                new BasImportRow(
+                    match.Groups["number"].Value,
+                    match.Groups["name"].Value.Trim(),
+                    segmentGroupCode,
+                    checked((short)targetDepartmentCode),
+                    null
+                )
+            );
+        }
+
+        if (rows.Count == 0)
+        {
+            error = "No active BAS segment rows were found in the document.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryParseLegacyDate(string value, out DateTime date)
+    {
+        var normalized = value.Replace('\\', '/');
+        return DateTime.TryParseExact(
+            normalized,
+            new[] { "d/M/yyyy", "dd/MM/yyyy", "d/MM/yyyy", "dd/M/yyyy", "d/M/yy", "dd/MM/yy" },
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out date
+        );
+    }
+
+    private static DateTime GetDefaultBasEndDate(DateTime startDate)
+    {
+        var fiscalEndYear = startDate.Month <= 3 ? startDate.Year : startDate.Year + 1;
+        return new DateTime(fiscalEndYear, 3, 31);
+    }
+
+    private static string DescribeBasValidation(LegacyBasImportValidation validation) =>
+        validation.ActionCode switch
+        {
+            3 => "The BAS installation code is not configured for the selected department. Ask Finance or Helpdesk to configure it before importing.",
+            4 => $"The BAS document belongs to {validation.DocumentDepartmentName ?? "another department"}. Legacy FIS requires explicit confirmation before importing it.",
+            5 => "The BAS document's department is not installed in FIS. Legacy FIS requires explicit confirmation before configuring the installation link.",
+            _ => $"The legacy BAS validation returned action code {validation.ActionCode}; no rows were written.",
+        };
+
     private static List<string> ParseCsvLine(string line)
     {
         var values = new List<string>();
@@ -3784,77 +4454,6 @@ public class FinanceController : BaseApiController
 
         values.Add(current.ToString().Trim());
         return values;
-    }
-
-    private static int FindHeaderIndex(List<string> headers, params string[] aliases)
-    {
-        for (var i = 0; i < headers.Count; i++)
-        {
-            var normalized = headers[i].Trim().ToLowerInvariant().Replace(" ", "_");
-            if (aliases.Any(alias => normalized == alias))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    private static int? ParseNullableInt(List<string> columns, int index)
-    {
-        if (index < 0 || index >= columns.Count)
-        {
-            return null;
-        }
-
-        return int.TryParse(
-            columns[index],
-            NumberStyles.Integer,
-            CultureInfo.InvariantCulture,
-            out var value
-        )
-            ? value
-            : null;
-    }
-
-    private static DateTime? ParseNullableDate(List<string> columns, int index)
-    {
-        if (index < 0 || index >= columns.Count)
-        {
-            return null;
-        }
-
-        var raw = columns[index];
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return null;
-        }
-
-        if (
-            DateTime.TryParse(
-                raw,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeLocal,
-                out var parsed
-            )
-        )
-        {
-            return parsed.Date;
-        }
-
-        if (
-            DateTime.TryParse(
-                raw,
-                CultureInfo.GetCultureInfo("en-ZA"),
-                DateTimeStyles.AssumeLocal,
-                out parsed
-            )
-        )
-        {
-            return parsed.Date;
-        }
-
-        return null;
     }
 
     private async Task<DataSet> BuildCloseKiloGapsDataSetAsync(
@@ -4270,12 +4869,25 @@ public class BasImportDto
     [Required]
     public string FileData { get; set; } = "";
     public int? DepartmentCode { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    /// <summary>
+    /// The action code returned by DEV_SEL_ValidateBasImport when the legacy
+    /// workflow requires an explicit Continue confirmation (4 or 5). The
+    /// server re-runs validation and never trusts this value on its own.
+    /// </summary>
+    public int? ConfirmationActionCode { get; set; }
 }
 
 public class BasImportResultDto
 {
     public bool Success { get; set; }
     public int RecordsImported { get; set; }
+    public int RecordsInserted { get; set; }
+    public int RecordsUpdated { get; set; }
+    public int RecordsDeleted { get; set; }
+    public bool RequiresConfirmation { get; set; }
+    public int? ActionCode { get; set; }
     public List<string> Errors { get; set; } = new();
     public string Message { get; set; } = "";
 }
@@ -4294,6 +4906,7 @@ public class ActivateSegmentsDto
 {
     [Required]
     public List<int> SegmentCodes { get; set; } = new();
+    public int? DepartmentCode { get; set; }
 }
 
 public class InvalidJournalDto
@@ -4439,8 +5052,10 @@ public class StandardBankImportDto
 public class ImportResultDto
 {
     public bool Success { get; set; }
+    public int RecordsSubmitted { get; set; }
     public int RecordsImported { get; set; }
     public int RecordsFailed { get; set; }
+    public string Message { get; set; } = "";
     public List<string> Errors { get; set; } = new();
 }
 

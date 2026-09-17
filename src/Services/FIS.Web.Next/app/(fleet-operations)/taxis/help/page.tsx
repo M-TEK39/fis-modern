@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import { TaxiRestricted } from "@/app/(fleet-operations)/taxis/_components";
 import { getSession } from "@/lib/auth/session";
+import { hasTaxiAccess } from "@/app/(fleet-operations)/taxis/access";
 
 function HelpFallback() {
   return (
@@ -22,12 +23,7 @@ async function TaxiHelpContent() {
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired" || session.status === "unavailable")
     return <SessionRecovery returnPath="/taxis/help" />;
-  if (
-    !session.roles.some(
-      (role) =>
-        role.localeCompare("Private Hire Vehicles", undefined, { sensitivity: "accent" }) === 0,
-    )
-  )
+  if (!hasTaxiAccess(session.roles))
     return <TaxiRestricted subject="Taxi help" />;
 
   return (

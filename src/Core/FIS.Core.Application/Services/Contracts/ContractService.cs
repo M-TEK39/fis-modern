@@ -1,4 +1,5 @@
 using FIS.Core.Application.Interfaces;
+using FIS.Core.Application.Services.Billing;
 using FIS.Core.Application.Services.Validation;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Financial;
@@ -19,6 +20,7 @@ public class ContractService : IContractService
     private readonly ISiteRepository _siteRepository;
     private readonly IContractValidationService _validationService;
     private readonly IJournalDetailService _journalDetailService;
+    private readonly ITariffCalculationService _tariffCalculationService;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly ILogger<ContractService> _logger;
 
@@ -28,6 +30,7 @@ public class ContractService : IContractService
         ISiteRepository siteRepository,
         IContractValidationService validationService,
         IJournalDetailService journalDetailService,
+        ITariffCalculationService tariffCalculationService,
         ICurrentUserContext currentUserContext,
         ILogger<ContractService> logger
     )
@@ -41,6 +44,8 @@ public class ContractService : IContractService
             validationService ?? throw new ArgumentNullException(nameof(validationService));
         _journalDetailService =
             journalDetailService ?? throw new ArgumentNullException(nameof(journalDetailService));
+        _tariffCalculationService =
+            tariffCalculationService ?? throw new ArgumentNullException(nameof(tariffCalculationService));
         _currentUserContext =
             currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -70,17 +75,22 @@ public class ContractService : IContractService
                 return ContractOperationResult.ValidationFailed(validationResult);
             }
 
-            // Set default values for new contract
+            // The validation service uses the legacy capture input flag. The
+            // approval procedure itself owns the persisted pending-row status
+            // (`still_current = 'N'`, status 1), contract group, status
+            // history, and journal-trigger transaction.
             contract.still_current = "Y";
             contract.start_time = contract.start_date;
             contract.end_odometer = 0;
             contract.locked_for_transfer = false;
-            // Initialise Charged_Until to start_date so the monthly billing job
-            // knows the correct starting point for this contract's first billing run.
-            contract.Charged_Until = contract.start_date;
+            // Charged_Until is intentionally left to the legacy procedure;
+            // it derives the billing boundary from the target-return period.
 
-            // Create contract
-            var createdContract = await _contractRepository.CreateAsync(
+            // Create contract through the archived approval procedure. This
+            // intentionally fails when the client database does not expose a
+            // compatible procedure; a direct-DML fallback would lose legacy
+            // transaction, trigger, and status-history behavior.
+            var createdContract = await _contractRepository.CreateForApprovalAsync(
                 contract,
                 _currentUserContext.GetCurrentUserIdOrDefault()
             );
@@ -91,62 +101,25 @@ public class ContractService : IContractService
                 createdContract.vmf_code
             );
 
-            // Create journal detail entry (Legacy: JournalDetailProvider.AddJournalDetail)
-            try
-            {
-                var site = await _siteRepository.GetByIdAsync(createdContract.site_code);
-                var departmentCode = site?.Depatrment_code ?? 150; // Default to 150 if not found
-
-                // Calculate journal amount
-                var journalAmount = await _journalDetailService.CalculateJournalAmountAsync(
-                    createdContract.start_date,
-                    createdContract.end_date ?? DateTime.Now.AddMonths(1),
-                    createdContract.start_odometer,
-                    0, // End odometer not set yet
-                    createdContract.vmf_code,
-                    createdContract.site_code,
-                    departmentCode,
-                    createdContract.contract_type ?? "H",
-                    DateTime.Now
-                );
-
-                // Create journal detail
-                var daysQuantity = createdContract.end_date.HasValue
-                    ? (int)(createdContract.end_date.Value - createdContract.start_date).TotalDays
-                    : 30; // Default to 30 days if no end date
-
-                var journalDetail = new JournalDetail
-                {
-                    vmf_code = createdContract.vmf_code,
-                    site_code = createdContract.site_code,
-                    department_code = departmentCode,
-                    journal_detail_quantity = daysQuantity,
-                    journal_detail_amount = journalAmount,
-                    journal_detail_description =
-                        $"Contract {createdContract.contract_code} - Initial billing",
-                    journal_detail_isdebit = true,
-                    journal_detail_type_code = 1,
-                };
-
-                await _journalDetailService.CreateJournalDetailAsync(journalDetail);
-
-                _logger.LogInformation(
-                    "Journal detail created for contract {ContractCode}, Amount: {Amount}",
-                    createdContract.contract_code,
-                    journalAmount
-                );
-            }
-            catch (Exception journalEx)
-            {
-                _logger.LogError(
-                    journalEx,
-                    "Error creating journal detail for contract {ContractCode}. Contract created but journal failed.",
-                    createdContract.contract_code
-                );
-                // Contract is still created - journal failure doesn't roll back contract
-            }
+            // The legacy approval procedure's contract insert fires the
+            // database journal trigger. The application-level journal
+            // approximation is intentionally not run here, because it would
+            // duplicate or diverge from the database-owned transaction.
 
             return ContractOperationResult.Success(createdContract);
+        }
+        catch (Exception ex)
+            when (
+                ex is NotSupportedException
+                || (
+                    ex is InvalidOperationException
+                    && ex.Message.Contains("legacy", StringComparison.OrdinalIgnoreCase)
+                    && ex.Message.Contains("procedure", StringComparison.OrdinalIgnoreCase)
+                )
+            )
+        {
+            _logger.LogError(ex, "Legacy contract creation workflow unavailable for vehicle: {VmfCode}", contract.vmf_code);
+            throw;
         }
         catch (Exception ex)
         {
@@ -215,6 +188,16 @@ public class ContractService : IContractService
             return ContractOperationResult.Success(contract);
         }
         catch (Exception ex)
+            when (
+                (ex is NotSupportedException
+                    && ex.Message.Contains("contract-closure", StringComparison.OrdinalIgnoreCase))
+                || ex.Message.Contains("billing boundary", StringComparison.OrdinalIgnoreCase)
+            )
+        {
+            _logger.LogError(ex, "Legacy contract closure workflow unavailable for contract: {ContractCode}", contractCode);
+            throw;
+        }
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Error closing contract: {ContractCode}", contractCode);
             return ContractOperationResult.Failed($"Error closing contract: {ex.Message}");
@@ -261,72 +244,10 @@ public class ContractService : IContractService
                     "Contract modification requires rebill: {ContractCode}",
                     contract.contract_code
                 );
-
-                // Rebill logic: Generate reversal + create new journal (Legacy: RebillContract)
-                try
-                {
-                    // Get existing journal entries for this vehicle
-                    var existingJournals =
-                        await _journalDetailService.GetJournalDetailsByVehicleAsync(
-                            contract.vmf_code
-                        );
-                    var latestJournal = existingJournals.FirstOrDefault();
-
-                    if (latestJournal != null)
-                    {
-                        // Generate reversal for old entry
-                        await _journalDetailService.GenerateReversalAsync(
-                            latestJournal.journal_detail_code
-                        );
-                        _logger.LogInformation(
-                            "Generated reversal for journal {JournalCode}",
-                            latestJournal.journal_detail_code
-                        );
-                    }
-
-                    // Create new journal entry with updated values
-                    var site = await _siteRepository.GetByIdAsync(contract.site_code);
-                    var departmentCode = site?.Depatrment_code ?? 150;
-
-                    var newJournalAmount = await _journalDetailService.CalculateJournalAmountAsync(
-                        contract.start_date,
-                        contract.end_date ?? DateTime.Now.AddMonths(1),
-                        contract.start_odometer,
-                        contract.end_odometer ?? 0,
-                        contract.vmf_code,
-                        contract.site_code,
-                        departmentCode,
-                        contract.contract_type ?? "H",
-                        DateTime.Now
-                    );
-
-                    var newJournal = new JournalDetail
-                    {
-                        vmf_code = contract.vmf_code,
-                        site_code = contract.site_code,
-                        department_code = departmentCode,
-                        journal_detail_amount = newJournalAmount,
-                        journal_detail_description =
-                            $"Contract {contract.contract_code} - Rebilled",
-                        journal_detail_rebill_code =
-                            latestJournal?.journal_detail_code ?? Guid.NewGuid(),
-                    };
-
-                    await _journalDetailService.CreateJournalDetailAsync(newJournal);
-                    _logger.LogInformation(
-                        "Created rebill journal for contract {ContractCode}",
-                        contract.contract_code
-                    );
-                }
-                catch (Exception journalEx)
-                {
-                    _logger.LogError(
-                        journalEx,
-                        "Error processing journal rebill for contract {ContractCode}",
-                        contract.contract_code
-                    );
-                }
-
+                // Contract UPDATE is intentionally the only application write.
+                // The legacy instead-of-update trigger owns reversal/rebill
+                // creation and its transaction boundary; creating journal rows
+                // here would double-bill or bypass posted-journal rules.
                 await _contractRepository.UpdateAsync(
                     contract,
                     _currentUserContext.GetCurrentUserIdOrDefault()
@@ -339,53 +260,9 @@ public class ContractService : IContractService
                     contract.contract_code
                 );
 
-                // Update journal detail (Legacy: JournalDetailProvider.UpdateJournalDetail)
-                try
-                {
-                    var existingJournals =
-                        await _journalDetailService.GetJournalDetailsByVehicleAsync(
-                            contract.vmf_code
-                        );
-                    var latestJournal = existingJournals.FirstOrDefault();
-
-                    if (latestJournal != null)
-                    {
-                        // Recalculate amount
-                        var site = await _siteRepository.GetByIdAsync(contract.site_code);
-                        var departmentCode = site?.Depatrment_code ?? 150;
-
-                        latestJournal.journal_detail_amount =
-                            await _journalDetailService.CalculateJournalAmountAsync(
-                                contract.start_date,
-                                contract.end_date ?? DateTime.Now.AddMonths(1),
-                                contract.start_odometer,
-                                contract.end_odometer ?? 0,
-                                contract.vmf_code,
-                                contract.site_code,
-                                departmentCode,
-                                contract.contract_type ?? "H",
-                                DateTime.Now
-                            );
-
-                        latestJournal.journal_detail_description =
-                            $"Contract {contract.contract_code} - Updated";
-
-                        await _journalDetailService.UpdateJournalDetailAsync(latestJournal);
-                        _logger.LogInformation(
-                            "Updated journal for contract {ContractCode}",
-                            contract.contract_code
-                        );
-                    }
-                }
-                catch (Exception journalEx)
-                {
-                    _logger.LogError(
-                        journalEx,
-                        "Error updating journal for contract {ContractCode}",
-                        contract.contract_code
-                    );
-                }
-
+                // The legacy instead-of-update trigger recalculates the
+                // journal detail or creates the required reversal/rebill.
+                // Do not update journal_detail separately from the contract.
                 await _contractRepository.UpdateAsync(
                     contract,
                     _currentUserContext.GetCurrentUserIdOrDefault()
@@ -397,35 +274,13 @@ public class ContractService : IContractService
                     "Contract modification requires reversal: {ContractCode}",
                     contract.contract_code
                 );
-
-                // Generate reversals (Legacy: JournalDetailProvider.GenerateReversals)
-                try
-                {
-                    var existingJournals =
-                        await _journalDetailService.GetJournalDetailsByVehicleAsync(
-                            contract.vmf_code
-                        );
-                    var latestJournal = existingJournals.FirstOrDefault();
-
-                    if (latestJournal != null)
-                    {
-                        await _journalDetailService.GenerateReversalAsync(
-                            latestJournal.journal_detail_code
-                        );
-                        _logger.LogInformation(
-                            "Generated reversal for journal {JournalCode}",
-                            latestJournal.journal_detail_code
-                        );
-                    }
-                }
-                catch (Exception journalEx)
-                {
-                    _logger.LogError(
-                        journalEx,
-                        "Error generating reversal for contract {ContractCode}",
-                        contract.contract_code
-                    );
-                }
+                // The archived contract trigger creates reversal/rebill rows
+                // while applying the contract update. There is no verified
+                // standalone reversal procedure, so do not manufacture a
+                // journal row through the modern repository.
+                throw new NotSupportedException(
+                    "The legacy contract reversal workflow requires a trigger-owned contract update; no standalone reversal procedure is available."
+                );
             }
 
             _logger.LogInformation(
@@ -477,7 +332,7 @@ public class ContractService : IContractService
                 return ContractOperationResult.ValidationFailed(validationResult);
             }
 
-            await _contractRepository.UpdateAsync(
+            await _contractRepository.ExtendExistingAsync(
                 contract,
                 _currentUserContext.GetCurrentUserIdOrDefault()
             );
@@ -582,6 +437,11 @@ public class ContractService : IContractService
             // Close contract with current date and odometer
             var vehicle = await _vehicleRepository.GetByIdAsync(contract.vmf_code);
             int currentOdometer = vehicle?.current_odo ?? contract.start_odometer;
+            var wasActive = string.Equals(
+                contract.still_current,
+                "Y",
+                StringComparison.OrdinalIgnoreCase
+            );
 
             contract.end_date = DateTime.Now;
             contract.end_time = DateTime.Now;
@@ -589,14 +449,41 @@ public class ContractService : IContractService
             contract.still_current = "N";
             contract.Notes = $"CANCELLED: {cancellationReason ?? "No reason provided"}";
 
-            await _contractRepository.UpdateAsync(
-                contract,
-                _currentUserContext.GetCurrentUserIdOrDefault()
-            );
+            var resolvedUserId = _currentUserContext.GetCurrentUserIdOrDefault();
+            if (!wasActive)
+            {
+                // The legacy Cancel Loaded Contract button is a pending-row
+                // decision (status 6), not an active billing close. Keep that
+                // path on the approval/decision procedure and reserve the
+                // trigger-owned close below for genuinely active contracts.
+                contract.contract_status_code = 6;
+                contract.contract_status_date = DateTime.Now;
+                await _contractRepository.UpdatePendingDecisionAsync(contract, resolvedUserId);
+            }
+            else
+            {
+                await _contractRepository.EndContractAsync(
+                    contractCode,
+                    contract.end_date ?? DateTime.Now,
+                    resolvedUserId,
+                    currentOdometer,
+                    contract.Notes
+                );
+            }
 
             _logger.LogInformation("Contract cancelled successfully: {ContractCode}", contractCode);
 
             return ContractOperationResult.Success(contract);
+        }
+        catch (Exception ex)
+            when (
+                (ex is NotSupportedException
+                    && ex.Message.Contains("contract-closure", StringComparison.OrdinalIgnoreCase))
+                || ex.Message.Contains("billing boundary", StringComparison.OrdinalIgnoreCase)
+            )
+        {
+            _logger.LogError(ex, "Legacy contract cancellation workflow unavailable for contract: {ContractCode}", contractCode);
+            throw;
         }
         catch (Exception ex)
         {
@@ -616,6 +503,16 @@ public class ContractService : IContractService
     {
         try
         {
+            // The archived capture workflow records the operator who submits
+            // the new contract as its owner. UserCode/CreatedByUserId are
+            // transport fields, not an impersonation mechanism; derive the
+            // ownership values from the signed-in context before the legacy
+            // procedure is called.
+            var currentUserId = _currentUserContext.GetCurrentUserIdOrDefault();
+            var currentOwnerCode = currentUserId is > 0 and <= short.MaxValue
+                ? (short)currentUserId
+                : (short?)null;
+
             var vehicle = await _vehicleRepository.GetByIdAsync(request.VmfCode);
             if (vehicle == null)
             {
@@ -630,31 +527,108 @@ public class ContractService : IContractService
                 return null;
             }
 
+            // The legacy capture page lets the operator choose the ordinary
+            // start date with its datepicker. A backdating request replaces
+            // that date; otherwise preserve the selected date and only fall
+            // back to today for older API callers that omit it.
+            var contractStartDate = request.BackdatingStartDate?.Date
+                ?? request.StartDate?.Date
+                ?? DateTime.Today;
+            var configuredContractType = string.IsNullOrWhiteSpace(request.ContractType)
+                ? await _tariffCalculationService.GetConfiguredContractTypeAsync(
+                    request.VmfCode,
+                    DateTime.Today
+                )
+                : request.ContractType.Trim().ToUpperInvariant();
+            var isGfleetZeroBill = site.Depatrment_code == 147
+                && !request.BackdatingStartDate.HasValue;
+            if (string.IsNullOrWhiteSpace(configuredContractType))
+            {
+                if (!isGfleetZeroBill)
+                {
+                    throw new NotSupportedException(
+                        "The legacy contract-type mapping is unavailable. Supply an explicit legacy contract type (A, B, C, F, or L) or restore the configured-tariff database object before opening this contract."
+                    );
+                }
+
+                // Internal GFleet custody is always represented by the legacy
+                // permanent code; its department/site rule makes the bill
+                // zero. This is not a generic client-contract default.
+                configuredContractType = "A";
+            }
+            if (
+                configuredContractType is not null
+                && configuredContractType is not ("A" or "B" or "C" or "F" or "H" or "L")
+            )
+            {
+                throw new ArgumentException(
+                    $"The legacy contract-type mapping returned unsupported type '{configuredContractType}'."
+                );
+            }
             var contract = new Contract
             {
                 vmf_code = request.VmfCode,
                 site_code = request.SiteCode,
-                start_date = DateTime.Now,
-                start_time = DateTime.Now,
+                start_date = contractStartDate,
+                start_time = contractStartDate,
                 start_odometer = request.StartOdometer ?? vehicle.current_odo,
                 still_current = "Y",
                 Driver_id = request.DriverId,
                 Driver_name = request.DriverName,
                 site_driver_code = request.SiteDriverCode,
-                user_code = request.UserCode,
+                user_code = currentOwnerCode,
                 Authorisation = request.Authorisation,
                 Notes = request.Notes,
                 target_return_date = request.TargetReturnDate,
-                contract_type = "H", // H = Hire
+                contract_type = configuredContractType,
                 end_odometer = 0,
                 locked_for_transfer = false,
-                contract_status_code = 0, // 0 = Draft (not yet submitted for approval)
-                created_by_user_code = request.CreatedByUserId,
+                // Legacy DEV_INS_Contract_New_ForApproval normalises ordinary
+                // captures to status 1 and accepts status 8 only for the
+                // Department-147 g-FleeT ZERO Bill workflow.
+                contract_status_code = isGfleetZeroBill ? (short)8 : (short)1,
+                created_by_user_code = currentUserId > 0 ? currentUserId : null,
                 date_created = DateTime.Now,
+                backdating_start_date = request.BackdatingStartDate,
+                backdating_requested_date = request.BackdatingRequestedDate,
             };
 
             var result = await AddContractAsync(contract);
-            return result.IsSuccess ? result.Contract : null;
+            if (!result.IsSuccess || result.Contract is null)
+            {
+                return null;
+            }
+
+            if (!isGfleetZeroBill)
+            {
+                return result.Contract;
+            }
+
+            // Legacy g-FleeT ZERO Bill capture inserts the status-8 row and
+            // immediately runs the same activation procedure used by the
+            // approve-and-activate action. Keep that database-owned close /
+            // activate transaction instead of approximating it in EF.
+            var existingContract = await _contractRepository.GetActiveContractByVehicleAsync(
+                request.VmfCode
+            );
+            return await _contractRepository.ActivatePendingAsync(
+                result.Contract,
+                existingContract?.contract_code ?? 0,
+                currentUserId
+            );
+        }
+        catch (Exception ex)
+            when (
+                ex is NotSupportedException
+                || (
+                    ex is InvalidOperationException
+                    && ex.Message.Contains("legacy", StringComparison.OrdinalIgnoreCase)
+                    && ex.Message.Contains("procedure", StringComparison.OrdinalIgnoreCase)
+                )
+            )
+        {
+            _logger.LogError(ex, "Legacy contract creation workflow unavailable for vehicle: {VmfCode}", request.VmfCode);
+            throw;
         }
         catch (Exception ex)
         {
@@ -669,7 +643,8 @@ public class ContractService : IContractService
     public async Task<bool> EndContractByVmfCodeAsync(
         int vmfCode,
         int? endOdometer = null,
-        string? notes = null
+        string? notes = null,
+        int currentUserId = 0
     )
     {
         try
@@ -689,9 +664,20 @@ public class ContractService : IContractService
                 activeContract.contract_code,
                 DateTime.Now,
                 finalOdometer,
-                notes
+                notes,
+                currentUserId
             );
             return result.IsSuccess;
+        }
+        catch (Exception ex)
+            when (
+                (ex is NotSupportedException
+                    && ex.Message.Contains("contract-closure", StringComparison.OrdinalIgnoreCase))
+                || ex.Message.Contains("billing boundary", StringComparison.OrdinalIgnoreCase)
+            )
+        {
+            _logger.LogError(ex, "Legacy contract closure workflow unavailable for vehicle: {VmfCode}", vmfCode);
+            throw;
         }
         catch (Exception ex)
         {

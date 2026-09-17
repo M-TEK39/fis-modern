@@ -43,7 +43,6 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
         "engine_number_1",
         "chassis_number",
         "year_manufactured",
-        "invoice_number",
         "vs_code",
     ];
 
@@ -232,7 +231,7 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
                 [v].[engine_number_1] AS [engine_number_1],
                 [v].[year_manufactured] AS [year_manufactured],
                 [v].[take_on_date] AS [take_on_date],
-                [v].[invoice_number] AS [invoice_number],
+                {GetVehicleColumnProjection("v", "invoice_number", vehicleColumns, "varchar(100)")} AS [invoice_number],
                 {dateCreated} AS [date_created],
                 [v].[current_odo] AS [current_odo]
             FROM [dbo].[{VehicleTableName}] AS [v]
@@ -349,20 +348,22 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            conditions.Add(
-                "("
-                    + string.Join(
-                        " OR ",
-                        [
-                            "LOWER(COALESCE([v].[fleet_number], '')) LIKE @search",
-                            "LOWER(COALESCE([v].[registration_number], '')) LIKE @search",
-                            "LOWER(COALESCE([v].[chassis_number], '')) LIKE @search",
-                            "LOWER(COALESCE([v].[engine_number_1], '')) LIKE @search",
-                            "LOWER(COALESCE([v].[invoice_number], '')) LIKE @search",
-                        ]
-                    )
-                    + ")"
-            );
+            var searchColumns = new[]
+            {
+                "fleet_number",
+                "registration_number",
+                "chassis_number",
+                "engine_number_1",
+                "invoice_number",
+            };
+            var searchPredicates = searchColumns
+                .Where(vehicleColumns.Contains)
+                .Select(column => $"LOWER(COALESCE([v].[{column}], '')) LIKE @search")
+                .ToArray();
+            if (searchPredicates.Length > 0)
+            {
+                conditions.Add("(" + string.Join(" OR ", searchPredicates) + ")");
+            }
             AddParameter(
                 command,
                 "@search",
@@ -598,6 +599,15 @@ public sealed class VehicleStatusReportRepository : IVehicleStatusReportReposito
             ? $"({prefix}[is_deleted] = 0 OR {prefix}[is_deleted] IS NULL)"
             : "1 = 1";
     }
+
+    private static string GetVehicleColumnProjection(
+        string alias,
+        string column,
+        IReadOnlySet<string> columns,
+        string sqlType
+    ) => columns.Contains(column)
+        ? $"[{alias}].[{column}]"
+        : $"CAST(NULL AS {sqlType})";
 
     private static string GetDateExpression(
         string alias,

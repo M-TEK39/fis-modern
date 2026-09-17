@@ -166,6 +166,31 @@ public class Contract
     [NotMapped]
     public int? reassigned_from_contract_code { get; set; }
 
+    // Backdating fields are present on later legacy contract schemas and are
+    // deliberately read/written through the compatibility repository rather
+    // than EF's static model. They allow an approval decision to preserve the
+    // original request and its approver/decliner audit identity.
+    [NotMapped]
+    public DateTime? backdating_start_date { get; set; }
+
+    [NotMapped]
+    public DateTime? backdating_requested_date { get; set; }
+
+    [NotMapped]
+    public string? backdating_requested_by_username { get; set; }
+
+    [NotMapped]
+    public DateTime? backdating_approved_date { get; set; }
+
+    [NotMapped]
+    public string? backdating_approved_by_username { get; set; }
+
+    [NotMapped]
+    public DateTime? backdating_declined_date { get; set; }
+
+    [NotMapped]
+    public string? backdating_declined_by_username { get; set; }
+
     // Navigation properties (using legacy foreign key names)
     [ForeignKey("vmf_code")]
     public virtual Vehicle? Vehicle { get; set; }

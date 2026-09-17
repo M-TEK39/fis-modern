@@ -7,33 +7,18 @@ import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import StatusCardView from "@/components/app-shell/status-card";
 import RouteLoading from "@/components/app-shell/route-loading";
 import VehicleStatusReportClient from "@/app/(fleet-operations)/vehicles/status/vehicle-status-report-client";
+import { hasVehicleMasterRole } from "@/app/(fleet-operations)/vehicles/access";
 import {
   getVehicleStatusReport,
   VehicleStatusApiError,
 } from "@/lib/api/vehicles/api-vehicle-status";
 import { getSession } from "@/lib/auth/session";
 
-const VEHICLE_MANAGEMENT_PERMISSION = 1;
 const REPORTS_ROLE = "Reports";
 
 type VehicleStatusReportPageProps = {
   routePath?: "/vehicles/status" | "/Vehicles/VehicleStatus.aspx";
 };
-
-function hasVehicleManagementPermission(accessLevel?: string) {
-  if (!accessLevel) {
-    return false;
-  }
-
-  try {
-    return (
-      (BigInt(accessLevel) & BigInt(VEHICLE_MANAGEMENT_PERMISSION)) ===
-      BigInt(VEHICLE_MANAGEMENT_PERMISSION)
-    );
-  } catch {
-    return false;
-  }
-}
 
 function hasReportsRole(roles: readonly string[]) {
   return roles.some(
@@ -146,7 +131,7 @@ async function VehicleStatusReportPageContent({
         </header>
         <Suspense fallback={<RouteLoading />}>
           <VehicleStatusReportContent
-            canManageRemarks={hasVehicleManagementPermission(session.accessLevel)}
+            canManageRemarks={hasVehicleMasterRole(session.roles)}
             routePath={routePath}
           />
         </Suspense>

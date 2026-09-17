@@ -23,4 +23,5 @@ public interface ISessionTokenStore
     );
     void RevokeByAccessToken(string accessToken);
     void RevokeByRefreshToken(string refreshToken);
+    void RevokeByUserAccessCode(int userAccessCode);
 }

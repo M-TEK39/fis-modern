@@ -175,6 +175,7 @@ namespace FIS.Api.Controllers
         /// <param name="createMaintenanceTriggerDto">The maintenance trigger data to create</param>
         /// <returns>The created maintenance trigger</returns>
         [HttpPost]
+        [Authorize(Roles = "Validation")]
         public async Task<ActionResult<MaintenanceTriggerEntity>> CreateMaintenanceTrigger(
             CreateMaintenanceTriggerDto createMaintenanceTriggerDto
         )
@@ -221,6 +222,7 @@ namespace FIS.Api.Controllers
         /// <param name="trigger">The maintenance trigger data to update</param>
         /// <returns>The updated maintenance trigger</returns>
         [HttpPut("{id}")]
+        [Authorize(Roles = "Validation")]
         public async Task<ActionResult<MaintenanceTriggerEntity>> UpdateMaintenanceTrigger(
             short id,
             MaintenanceTriggerEntity trigger
@@ -267,6 +269,7 @@ namespace FIS.Api.Controllers
         /// <param name="id">The maintenance trigger code</param>
         /// <returns>No content if successful</returns>
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Validation")]
         public async Task<IActionResult> DeleteMaintenanceTrigger(short id)
         {
             try

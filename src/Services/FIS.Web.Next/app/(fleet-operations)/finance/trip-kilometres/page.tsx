@@ -7,7 +7,10 @@ import {
   FinanceRestricted,
   FinanceUnavailable,
 } from "@/app/(fleet-operations)/finance/_components";
-import { hasRole } from "@/app/(fleet-operations)/finance/_utils";
+import {
+  hasAdministratorRole,
+  hasRole,
+} from "@/app/(fleet-operations)/finance/_utils";
 import { departmentOptions, siteOptions } from "@/app/(fleet-operations)/finance/_location-options";
 import { DepartmentApiError, getDepartments } from "@/lib/api/reference-data/api-departments";
 import { SiteApiError, getSites } from "@/lib/api/reference-data/api-sites";
@@ -91,8 +94,7 @@ export default async function TripKilometresPage({
   const profileDepartmentCode = positiveInteger(session.departmentCode ?? "");
   const profileSiteCode = positiveInteger(session.siteCode ?? "");
   const canSelectProvinceDepartments =
-    hasRole(session.roles, "Administrator") ||
-    hasRole(session.roles, "Admin") ||
+    hasAdministratorRole(session.roles) ||
     hasRole(session.roles, "Vehicle List for All Departments in Province");
   let departments = [] as ReturnType<typeof departmentOptions>;
   let sites = [] as ReturnType<typeof siteOptions>;

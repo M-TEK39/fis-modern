@@ -39,7 +39,6 @@ import {
 } from "@/lib/api/fleet-operations/api-third-party";
 import { getSession } from "@/lib/auth/session";
 
-const CONTRACT_MANAGEMENT_PERMISSION = BigInt(2);
 const THIRD_PARTY_ROLE = "Third Party Rental";
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 type Tab = "suppliers" | "projects" | "allocation";
@@ -140,19 +139,10 @@ function selectedTab(value: string | undefined): Tab {
   return value === "projects" || value === "allocation" ? value : "suppliers";
 }
 
-function hasThirdPartyAccess(accessLevel: string | undefined, roles: readonly string[]) {
-  const hasRole = roles.some(
+function hasThirdPartyAccess(roles: readonly string[]) {
+  return roles.some(
     (role) => role.localeCompare(THIRD_PARTY_ROLE, undefined, { sensitivity: "accent" }) === 0,
   );
-  if (hasRole) return true;
-  if (!accessLevel) return false;
-  try {
-    return (
-      (BigInt(accessLevel) & CONTRACT_MANAGEMENT_PERMISSION) === CONTRACT_MANAGEMENT_PERMISSION
-    );
-  } catch {
-    return false;
-  }
 }
 
 function valueOrDash(value: string | number | null | undefined) {
@@ -1264,7 +1254,7 @@ async function renderThirdPartyPageContent({
         <ApiUnavailable routePath={routePath} />
       </main>
     );
-  if (!hasThirdPartyAccess(session.accessLevel, session.roles))
+  if (!hasThirdPartyAccess(session.roles))
     return (
       <main className="page-shell vehicle-page-shell">
         <AccessRestricted />

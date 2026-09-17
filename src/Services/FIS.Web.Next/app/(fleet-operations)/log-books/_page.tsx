@@ -35,7 +35,10 @@ export function accessRestricted(message: string) {
 export function hasLogbookAccess(session: Extract<SessionState, { status: "authenticated" }>) {
   return session.roles.some(
     (role) => role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "") === "logbooks",
-  );
+  ) || session.roles.some((role) => {
+    const normalized = role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+    return normalized === "systemadministrator";
+  });
 }
 
 export function queryValue(value: string | string[] | undefined) {

@@ -227,6 +227,7 @@ public class LocationController : BaseApiController
     /// Create a new location
     /// </summary>
     [HttpPost]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<Location>> CreateLocation([FromBody] Location location)
     {
         try
@@ -269,6 +270,7 @@ public class LocationController : BaseApiController
     /// Update an existing location
     /// </summary>
     [HttpPut("{locationId}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult<Location>> UpdateLocation(
         int locationId,
         [FromBody] Location location
@@ -328,6 +330,7 @@ public class LocationController : BaseApiController
     /// Delete a location (soft delete - marks as inactive)
     /// </summary>
     [HttpDelete("{locationId}")]
+    [Authorize(Roles = "Validation")]
     public async Task<ActionResult> DeleteLocation(int locationId)
     {
         try
