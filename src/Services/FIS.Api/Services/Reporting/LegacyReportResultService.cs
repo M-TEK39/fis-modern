@@ -748,7 +748,16 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
     private static string GetStoredProcedureName(LegacyReportDefinition definition) =>
         definition.StoredProcedureName
-        ?? $"dbo.DEV_REP_{definition.StoredProcedureItem}";
+        ?? definition.StoredProcedureItem switch
+        {
+            // The legacy Reports.aspx item is GetAllVehicleWithNoTariffs, but
+            // User_Profile.Getlistofcontractswithnotariffs executes the
+            // archived Dev_Rep_Permanentcontractswithouttariffs procedure.
+            // Keep the item key for navigation/fallbacks while invoking the
+            // actual database object when it exists.
+            "GetAllVehicleWithNoTariffs" => "dbo.Dev_Rep_Permanentcontractswithouttariffs",
+            _ => $"dbo.DEV_REP_{definition.StoredProcedureItem}",
+        };
 
     private static async Task<LegacyReportResultDto> ReadDynamicResultAsync(
         System.Data.Common.DbDataReader reader,
@@ -1277,6 +1286,15 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 "GetAllVehicleWithNoTariffs",
                 BuildVehiclesNoTariffAsync,
                 BuildStoredProcedureParameters: _ => Array.Empty<LegacyStoredProcedureParameter>()
+            ),
+
+            ["nom-vehicles-without-tariff"] = new(
+                "nom-vehicles-without-tariff",
+                "NOM Vehicles Without Tariffs",
+                "ShowReportWithLineNumbers.aspx?Item=NOMVehiclesWithoutTariffs",
+                "NOMVehiclesWithoutTariffs",
+                BuildNomVehiclesWithoutTariffAsync,
+                "The legacy NOM report procedure is authoritative. If it is absent, no different table projection is substituted because its lease, contract, contact, and province joins are part of the report contract."
             ),
 
             ["wesbank"] = new(
@@ -3596,7 +3614,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
     private async Task<HashSet<string>> GetReportTableColumnsAsync(
         string tableName,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        string schemaName = "dbo"
     )
     {
         var connection = _context.Database.GetDbConnection();
@@ -3616,7 +3635,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 WHERE [TABLE_SCHEMA] = @schema
                   AND [TABLE_NAME] = @table
                 """;
-            AddReportParameter(command, "@schema", DbType.String, "dbo");
+            AddReportParameter(command, "@schema", DbType.String, schemaName);
             AddReportParameter(command, "@table", DbType.String, tableName);
 
             var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -7378,66 +7397,141 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         CancellationToken cancellationToken
     )
     {
-        var max = Math.Clamp(GetInt(filters, "max") ?? 300, 1, 5000);
-        var activeTariffVmfCodes = await _context
-            .VehicleTariffs.AsNoTracking()
-            .Where(tariff =>
-                !tariff.is_deleted && (tariff.end_date == null || tariff.end_date >= DateTime.Today)
-            )
-            .Select(tariff => tariff.vmf_code)
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-        var query =
-            from vehicle in _context.Vehicles.AsNoTracking()
-            join status in _context.VehicleStatuses.AsNoTracking()
-                on vehicle.vehicle_status_code equals status.vehicle_status_code
-                into statuses
-            from status in statuses.DefaultIfEmpty()
-            where
-                !vehicle.is_deleted
-                && (vehicle.vehicle_status_code == 1 || vehicle.vehicle_status_code == 2)
-                && !activeTariffVmfCodes.Contains(vehicle.vmf_code)
-            orderby vehicle.fleet_number, vehicle.registration_number
-            select new
-            {
-                vehicle.vmf_code,
-                vehicle.fleet_number,
-                vehicle.registration_number,
-                vehicle.year_manufactured,
-                vehicle.current_odo,
-                vehicle.location_code,
-                Status = status != null ? status.status_description : null,
-                vehicle.take_on_date,
-            };
-
-        var page = await MaterializeDatabasePageAsync(
-            query,
-            rows =>
-                rows.OrderBy(row => row.fleet_number)
-                    .ThenBy(row => row.registration_number)
-                    .ThenBy(row => row.vmf_code),
-            filters,
+        // The archived report procedure is preferred. This fallback is only
+        // reached when that object is genuinely absent, so negotiate the
+        // legacy columns instead of querying VehicleTariffs through EF (whose
+        // expanded audit projection is not present on the original database).
+        var vehicleColumns = await GetReportTableColumnsAsync("vehicle_master", cancellationToken);
+        var statusColumns = await GetReportTableColumnsAsync("vehicle_status", cancellationToken);
+        var tariffColumns = await GetReportTableColumnsAsync(
+            "vehicle_tariff",
             cancellationToken,
-            Math.Clamp(GetInt(filters, "max") ?? 300, 1, 5000)
+            "fin"
         );
+        var requiredVehicleColumns = new[]
+        {
+            "vmf_code",
+            "fleet_number",
+            "registration_number",
+            "year_manufactured",
+            "current_odo",
+            "location_code",
+            "vehicle_status_code",
+            "take_on_date",
+        };
+        if (
+            requiredVehicleColumns.Any(column => !vehicleColumns.Contains(column))
+            || !new[] { "vmf_code", "end_date" }.All(tariffColumns.Contains)
+        )
+        {
+            return CreateDynamicResult(
+                "Vehicles with Expired or No Tariffs",
+                "ShowReport.aspx?Item=GetAllVehicleWithNoTariffs",
+                true,
+                "The legacy report procedure is unavailable and the compatible vehicle/tariff tables are not available for a safe fallback.",
+                Array.Empty<object>(),
+                Column("VMF Code", _ => null),
+                Column("GG Number", _ => null),
+                Column("GP Number", _ => null),
+                Column("Year Manufactured", _ => null),
+                Column("Current ODO", _ => null),
+                Column("Location Code", _ => null),
+                Column("Status", _ => null),
+                Column("Take On Date", _ => null)
+            );
+        }
 
-        return CreateDatabasePagedResult(
+        var vehicleDeletedPredicate = vehicleColumns.Contains("is_deleted")
+            ? "AND COALESCE([v].[is_deleted], 0) = 0"
+            : string.Empty;
+        var tariffDeletedPredicate = tariffColumns.Contains("is_deleted")
+            ? "AND COALESCE([tariff].[is_deleted], 0) = 0"
+            : string.Empty;
+        var statusJoin = statusColumns.Contains("vehicle_status_code")
+            && statusColumns.Contains("status_description")
+            ? "LEFT JOIN [dbo].[vehicle_status] AS [status] ON [status].[vehicle_status_code] = [v].[vehicle_status_code]"
+            : string.Empty;
+        var statusProjection = statusJoin
+            .Length > 0
+                ? "[status].[status_description]"
+                : "CAST(NULL AS varchar(255))";
+        var sql = $"""
+            SELECT
+                [v].[vmf_code] AS [VMF Code],
+                [v].[fleet_number] AS [GG Number],
+                [v].[registration_number] AS [GP Number],
+                [v].[year_manufactured] AS [Year Manufactured],
+                [v].[current_odo] AS [Current ODO],
+                [v].[location_code] AS [Location Code],
+                {statusProjection} AS [Status],
+                [v].[take_on_date] AS [Take On Date]
+            FROM [dbo].[vehicle_master] AS [v]
+            {statusJoin}
+            WHERE [v].[vehicle_status_code] IN (1, 2)
+              {vehicleDeletedPredicate}
+              AND NOT EXISTS
+              (
+                  SELECT 1
+                  FROM [fin].[vehicle_tariff] AS [tariff]
+                  WHERE [tariff].[vmf_code] = [v].[vmf_code]
+                    AND ([tariff].[end_date] IS NULL OR [tariff].[end_date] >= CONVERT(date, GETDATE()))
+                    {tariffDeletedPredicate}
+              )
+            ORDER BY [v].[fleet_number], [v].[registration_number], [v].[vmf_code]
+            """;
+        var result = await ExecutePagedRawReportQueryAsync(
+            "vehicles-no-tariff",
             "Vehicles with Expired or No Tariffs",
             "ShowReport.aspx?Item=GetAllVehicleWithNoTariffs",
-            false,
-            null,
-            page.Rows,
-            page.TotalCount,
-            page.PageWindow,
-            Column("VMF Code", row => row.vmf_code),
-            Column("GG Number", row => row.fleet_number),
-            Column("GP Number", row => row.registration_number),
-            Column("Year Manufactured", row => row.year_manufactured),
-            Column("Current ODO", row => row.current_odo),
-            Column("Location Code", row => row.location_code),
-            Column("Status", row => row.Status),
-            Column("Take On Date", row => row.take_on_date)
+            sql,
+            [],
+            filters,
+            cancellationToken
+        );
+        result.IsApproximate = true;
+        result.ApproximationReason =
+            "The legacy report procedure was unavailable; the compatibility fallback preserves the vehicle status and current fin.vehicle_tariff absence filters without using EF optional columns.";
+        return result;
+    }
+
+    private static Task<LegacyReportResultDto> BuildNomVehiclesWithoutTariffAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    )
+    {
+        // The archived RPTtariffs.aspx path executes
+        // DEV_REP_NOMVehiclesWithoutTariffs. There is no safe table-only
+        // substitute for its lease-source, contract, location, and contact
+        // joins, so keep the missing-procedure state explicit instead of
+        // returning the different permanent-contract tariff report here.
+        return Task.FromResult(
+            CreateDynamicResult(
+                "NOM Vehicles Without Tariffs",
+                "ShowReportWithLineNumbers.aspx?Item=NOMVehiclesWithoutTariffs",
+                true,
+                "The legacy procedure dbo.DEV_REP_NOMVehiclesWithoutTariffs is unavailable; no different table projection was substituted.",
+                Array.Empty<object>(),
+                Column("Vehicle Counter", _ => null),
+                Column("GG Number", _ => null),
+                Column("Registration Number", _ => null),
+                Column("Hired From", _ => null),
+                Column("Vehicle Status", _ => null),
+                Column("Location", _ => null),
+                Column("Year Model", _ => null),
+                Column("Model Description", _ => null),
+                Column("Make", _ => null),
+                Column("Class Description", _ => null),
+                Column("Purchase Amount", _ => null),
+                Column("Contract Type", _ => null),
+                Column("Contract Start Date", _ => null),
+                Column("Contract End Date", _ => null),
+                Column("Dispatched Date", _ => null),
+                Column("Estimated Return Date", _ => null),
+                Column("Department", _ => null),
+                Column("Site", _ => null),
+                Column("Site Contact Details", _ => null),
+                Column("Province", _ => null)
+            )
         );
     }
 

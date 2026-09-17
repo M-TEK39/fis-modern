@@ -12,16 +12,22 @@ public interface ILeaseContractTermsRepository
     Task<IEnumerable<LeaseContractTerms>> GetActiveTermsAsync();
     Task<LeaseContractTerms> CreateAsync(LeaseContractTerms terms, int currentUserId);
     Task<LeaseContractTerms> UpdateAsync(LeaseContractTerms terms, int currentUserId);
-    Task<LeaseContractTerms> CaptureOrResubmitAsync(LeaseContractTerms terms, string username);
+    Task<LeaseContractTerms> CaptureOrResubmitAsync(
+        LeaseContractTerms terms,
+        string username,
+        int currentUserId = 0
+    );
     Task<LeaseContractTerms> AuthorizeAsync(
         LeaseContractTerms terms,
         string comment,
-        string username
+        string username,
+        int currentUserId = 0
     );
     Task<LeaseContractTerms> RejectAsync(
         LeaseContractTerms terms,
         string comment,
-        string username
+        string username,
+        int currentUserId = 0
     );
     Task<LeaseContractTerms> RecallAsync(LeaseContractTerms terms);
     Task DeleteAsync(int termId, int currentUserId);
@@ -32,7 +38,9 @@ public sealed record LeaseContractTermsPageQuery(
     int PageSize = 24,
     string? Search = null,
     string? Mode = null,
-    string? Status = null
+    string? Status = null,
+    IReadOnlySet<short>? AllowedSiteCodes = null,
+    int? CurrentUserId = null
 );
 
 public sealed record LeaseContractTermsPage(

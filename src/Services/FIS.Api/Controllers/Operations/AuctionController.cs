@@ -9,7 +9,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Reports")]
+[Authorize(Roles = "Auction,Reports,SystemAdministrator,System Administrator")]
 public class AuctionController : BaseApiController
 {
     private const int DefaultPageSize = 24;
@@ -344,7 +344,7 @@ public class AuctionController : BaseApiController
     private static int NormalizeReportPageSize(int pageSize) =>
         Math.Clamp(pageSize, 1, MaximumPageSize);
 
-    private bool HasReportsRole() => HasAnyRole("Reports");
+    private bool HasReportsRole() => HasAnyRole("Auction", "Reports");
 
     private bool HasAnyRole(params string[] expectedRoles)
     {

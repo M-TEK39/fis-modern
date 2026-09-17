@@ -113,6 +113,10 @@ export type CloseTripAuthorityRequest = {
   routes: Array<{ routeCode: number; endOdometer: number }>;
 };
 
+export type RenewTripAuthorityRequest = CloseTripAuthorityRequest & {
+  newExpiryDate: string;
+};
+
 export type CreateTripAuthorityRequest = {
   contractCode: number;
   approverName: string;
@@ -578,6 +582,30 @@ export async function closeTripAuthority(tripId: number, request: CloseTripAutho
     throw new TripAuthorityApiError(
       "invalid-response",
       "The FIS API returned an invalid closed trip authority.",
+    );
+  }
+
+  return trip;
+}
+
+export async function renewTripAuthority(tripId: number, request: RenewTripAuthorityRequest) {
+  const payload = await requestApi(`api/Trip/${encodeURIComponent(tripId)}/renew`, {
+    method: "POST",
+    body: JSON.stringify({
+      NewExpiryDate: request.newExpiryDate,
+      EndOdometer: request.endOdometer,
+      Routes: request.routes.map((route) => ({
+        RouteCode: route.routeCode,
+        EndOdometer: route.endOdometer,
+      })),
+    }),
+  });
+
+  const trip = mapTrip(payload);
+  if (!trip) {
+    throw new TripAuthorityApiError(
+      "invalid-response",
+      "The FIS API returned an invalid renewed trip authority.",
     );
   }
 

@@ -4,7 +4,11 @@ import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import { AccessRestricted, ReportsFrame } from "@/app/(fleet-operations)/reports/_components";
-import { hasContractReportsRole, hasReportsRole } from "@/app/(fleet-operations)/reports/_utils";
+import {
+  hasContractReportsRole,
+  hasReportsRole,
+  hasTariffReportsRole,
+} from "@/app/(fleet-operations)/reports/_utils";
 import { MenuSection } from "@/components/ui/menu-section";
 import { getSession } from "@/lib/auth/session";
 
@@ -62,7 +66,8 @@ async function ReportsPageContent() {
     );
   const canOpenReports = hasReportsRole(session.roles);
   const canOpenContractReports = hasContractReportsRole(session.roles);
-  if (!canOpenContractReports)
+  const canOpenTariffReports = hasTariffReportsRole(session.roles);
+  if (!canOpenContractReports && !canOpenTariffReports)
     return (
       <ReportsFrame
         title="Reports Maintenance Menu"
@@ -93,6 +98,11 @@ async function ReportsPageContent() {
                 FIS Reports
               </Link>
             </>
+          ) : null}
+          {canOpenTariffReports ? (
+            <Link className="vehicle-menu-link" href="/reports/tariffs">
+              Tariff Reports
+            </Link>
           ) : null}
         </MenuSection>
         <MenuSection title="Quick Links - Frequently Used Reports">

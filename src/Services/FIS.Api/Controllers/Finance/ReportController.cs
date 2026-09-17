@@ -20,7 +20,7 @@ namespace FIS.Api.Controllers;
 /// Provides vehicle, financial, maintenance, and trip reports with export capabilities
 /// </summary>
 [ApiController]
-[Authorize(Roles = "Reports,Management Reports,Financial Reports,Vehicle Master,Workshop,Losses,Private Hire Vehicles,Trip Authorities,TripAuthorities,Lease Vehicle Pending,Contracts,SystemAdministrator,System Administrator")]
+[Authorize(Roles = "Reports,Management Reports,Financial Reports,Vehicle Master,Workshop,Losses,Fines,Private Hire Vehicles,Trip Authorities,TripAuthorities,Lease Vehicle Pending,Contracts,Validation,SystemAdministrator,System Administrator")]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class ReportController : BaseApiController
@@ -3506,6 +3506,20 @@ public class ReportController : BaseApiController
 
     private bool HasDynamicReportAccess(string reportKey)
     {
+        if (IsTariffReportKey(reportKey))
+        {
+            // The legacy Validation/RPTtariffs.aspx menu is protected by the
+            // Validation role, while the broader FIS Reports menu remains
+            // protected by Reports. Keep both entry points valid without
+            // granting Validation access to unrelated report families.
+            return HasAnyRole("Validation", "Reports");
+        }
+
+        if (IsFineReportKey(reportKey))
+        {
+            return HasAnyRole("Fines", "Reports");
+        }
+
         if (IsWorkshopReportKey(reportKey))
         {
             return HasAnyRole("Workshop", "Reports");
@@ -3554,6 +3568,12 @@ public class ReportController : BaseApiController
     private static bool IsTaxiReportKey(string reportKey) =>
         reportKey.Equals("taxis", StringComparison.OrdinalIgnoreCase)
         || reportKey.StartsWith("taxis-", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsTariffReportKey(string reportKey) =>
+        reportKey.Equals("tariffs", StringComparison.OrdinalIgnoreCase)
+        || reportKey.StartsWith("tariffs-", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("nom-vehicles-without-tariffs", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("nom-vehicles-without-tariff", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsContractReportKey(string reportKey) =>
         reportKey.Equals("contracts", StringComparison.OrdinalIgnoreCase)

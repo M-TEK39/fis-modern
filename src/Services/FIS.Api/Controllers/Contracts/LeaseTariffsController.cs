@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using Microsoft.AspNetCore.Authorization;
@@ -12,24 +13,46 @@ namespace FIS.Api.Controllers;
 public sealed class LeaseTariffsController : BaseApiController
 {
     private readonly ILeaseTariffRepository _repository;
+    private readonly IVehicleRepository _vehicleRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<LeaseTariffsController> _logger;
 
     public LeaseTariffsController(
         ILeaseTariffRepository repository,
+        IVehicleRepository vehicleRepository,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<LeaseTariffsController> logger
     )
     {
         _repository = repository;
+        _vehicleRepository = vehicleRepository;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
     [HttpGet]
     public async Task<ActionResult<List<LeaseTariff>>> GetAll() =>
-        await ExecuteAsync(() => _repository.GetAllAsync(), "lease tariffs");
+        await ExecuteAsync(
+            async () =>
+            {
+                var tariffs = await _repository.GetAllAsync();
+                var accessibleVehicles = await GetAccessibleVehicleCodesAsync(includeInactive: true);
+                return tariffs.Where(tariff => accessibleVehicles.Contains(tariff.vmf_code)).ToList();
+            },
+            "lease tariffs"
+        );
 
     [HttpGet("vehicle/{vmfCode:int}")]
     public async Task<ActionResult<List<LeaseTariff>>> GetByVehicle(int vmfCode) =>
-        await ExecuteAsync(() => _repository.GetByVehicleAsync(vmfCode), "vehicle lease tariffs");
+        await ExecuteAsync(
+            async () =>
+            {
+                if (!await IsVehicleAllowedAsync(vmfCode))
+                    throw new KeyNotFoundException();
+                return await _repository.GetByVehicleAsync(vmfCode);
+            },
+            "vehicle lease tariffs"
+        );
 
     [HttpGet("vehicle/{vmfCode:int}/latest")]
     public async Task<ActionResult<LeaseTariff>> GetLatestByVehicle(int vmfCode)
@@ -37,6 +60,8 @@ public sealed class LeaseTariffsController : BaseApiController
         try
         {
             var tariffs = await _repository.GetByVehicleAsync(vmfCode);
+            if (!await IsVehicleAllowedAsync(vmfCode))
+                return NotFound();
             var latest = tariffs
                 .OrderByDescending(t => t.end_date)
                 .ThenByDescending(t => t.lease_tariff_code)
@@ -60,7 +85,9 @@ public sealed class LeaseTariffsController : BaseApiController
         try
         {
             var tariff = await _repository.GetByIdAsync(id);
-            return tariff is null ? NotFound() : Ok(tariff);
+            return tariff is null || !await IsVehicleAllowedAsync(tariff.vmf_code)
+                ? NotFound()
+                : Ok(tariff);
         }
         catch (Exception ex)
         {
@@ -77,6 +104,8 @@ public sealed class LeaseTariffsController : BaseApiController
 
         try
         {
+            if (tariff is null || !await IsVehicleAllowedAsync(tariff.vmf_code))
+                return Forbid();
             var created = await _repository.CreateAsync(tariff, GetCurrentUserId());
             return CreatedAtAction(
                 nameof(GetById),
@@ -107,6 +136,9 @@ public sealed class LeaseTariffsController : BaseApiController
 
         try
         {
+            var accessibleVehicles = await GetAccessibleVehicleCodesAsync(includeInactive: true);
+            if (rows is null || rows.Any(row => !accessibleVehicles.Contains(row.VmfCode)))
+                return Forbid();
             return Ok(await _repository.ImportAsync(rows, GetCurrentUserId()));
         }
         catch (ArgumentException ex)
@@ -133,6 +165,12 @@ public sealed class LeaseTariffsController : BaseApiController
 
         try
         {
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing is null || !await IsVehicleAllowedAsync(existing.vmf_code))
+                return NotFound();
+            if (tariff.vmf_code != 0 && tariff.vmf_code != existing.vmf_code)
+                return BadRequest(new { error = "A lease tariff cannot be moved to another vehicle." });
+            tariff.vmf_code = existing.vmf_code;
             return Ok(await _repository.UpdateAsync(tariff, GetCurrentUserId()));
         }
         catch (ArgumentException ex)
@@ -170,11 +208,40 @@ public sealed class LeaseTariffsController : BaseApiController
         {
             return Ok(await operation());
         }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving {Resource}", resource);
             return StatusCode(500, new { error = $"Failed to retrieve {resource}" });
         }
+    }
+
+    private async Task<HashSet<int>> GetAccessibleVehicleCodesAsync(bool includeInactive = false)
+    {
+        var allowedSites = await _vehicleScope.ResolveAllowedSiteCodesAsync(
+            User,
+            HttpContext.RequestAborted
+        );
+        var vehicles = includeInactive
+            ? await _vehicleRepository.GetAllAsync(allowedSites, GetCurrentUserId())
+            : await _vehicleRepository.GetActiveVehiclesAsync(allowedSites, GetCurrentUserId());
+        return vehicles.Select(vehicle => vehicle.vmf_code).ToHashSet();
+    }
+
+    private async Task<bool> IsVehicleAllowedAsync(int vmfCode)
+    {
+        var allowedSites = await _vehicleScope.ResolveAllowedSiteCodesAsync(
+            User,
+            HttpContext.RequestAborted
+        );
+        return await _vehicleRepository.GetByIdAsync(
+            vmfCode,
+            allowedSites,
+            GetCurrentUserId()
+        ) is not null;
     }
 
     private bool HasVehicleMasterRole() => HasRole("Vehicle Master");

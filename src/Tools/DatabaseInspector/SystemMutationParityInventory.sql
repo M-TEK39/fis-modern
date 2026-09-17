@@ -33,7 +33,9 @@ VALUES
     (N'Contracts', N'Approve or decline a backdating request', N'contract', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', NULL),
     (N'Contracts', N'Activate a contract', N'contract', N'DEV_UPD_Contract_NewActivate', N'TRG_UPD_ContractJournalDetailRecord'),
     (N'Contracts', N'Extend a contract', N'contract', N'DEV_UPD_Contract_ExtendExisting', N'TRG_Audit_Contract_Update'),
-    (N'Contracts', N'Close an active contract and finalize its billing boundary', N'contract', NULL, N'TRG_UPD_ContractJournalDetailRecord'),
+    (N'Contracts', N'Extend only the target return date', N'contract', N'NEW_DEV_UPD_Contract_TargetReturnDate', N'TRG_Audit_Contract_Update'),
+    (N'Contracts', N'Backdate contract history and update any follow-up contract', N'contract', N'ADM_Change_End_And_Odo_With_FollowUp_Contract', NULL),
+    (N'Contracts', N'Close an active contract and finalize its billing boundary', N'contract', N'NEW_DEV_UPD_Contract_CLOSE', N'TRG_UPD_ContractJournalDetailRecord'),
     (N'Contracts', N'Reassign a contract', N'contract', N'DEV_UPD_Contract_ReassignExisting', N'TRG_INS_UpdateContractChargedUntil'),
     (N'Contracts', N'Run the legacy daily contract billing scheduler', N'contract', N'ADM_Contract_JobScheduler', N'TRG_INS_UpdateContractChargedUntil'),
     (N'Contracts', N'Write contract status history', N'contract_status_history', N'DEV_UPD_ContractStatusHistory', NULL),
@@ -42,6 +44,8 @@ VALUES
     (N'Vehicle Master', N'Capture a pre-vehicle', N'pre_vehicle_master', N'DEV_INS_New_Vehicle_Master', N'TRG_Audit_Pre_Vehicle_Master_Insert'),
     (N'Vehicle Master', N'Authorise a pre-vehicle', N'pre_vehicle_master', N'DEV_INS_VehicleFromPre_Vehicle_Master', N'TRG_Audit_Pre_Vehicle_Master_Update'),
     (N'Vehicle Master', N'Authorise a pre-vehicle and generate the calculated vehicle tariff', N'vehicle_master', NULL, N'TRG_UPSERT_CheckPurchaseAmount'),
+    (N'Vehicle Master', N'List active permanent contracts without assigned tariffs', N'contract', N'Dev_Rep_Permanentcontractswithouttariffs', NULL),
+    (N'Vehicle Master', N'List NOM lease vehicles without assigned tariffs', N'vehicle_master', N'DEV_REP_NOMVehiclesWithoutTariffs', NULL),
     (N'Vehicle Master', N'Reject a pre-vehicle', N'pre_vehicle_master', N'DEV_UPD_Rejected_PreVehicles', N'TRG_Audit_Pre_Vehicle_Master_Update'),
     (N'Vehicle Master', N'Print and clear a pre-vehicle authorisation listing', N'pre_vehicle_master', N'DEV_CLR_NewVehicleFromAuthList', NULL),
     (N'Vehicle Master', N'Capture vehicle notes, extras, damages, and maintenance settings', N'pre_vehicle_master', N'DEV_INS_PreVehicle_master_Notes', N'TRG_Audit_Pre_Vehicle_Master_Update'),
@@ -50,6 +54,8 @@ VALUES
     (N'Vehicle Master', N'Capture vehicle notes, extras, damages, and maintenance settings', N'Vehicle_Damages', N'DEV_INS_Vehicle_Damages', NULL),
     (N'Vehicle Master', N'Capture vehicle notes, extras, damages, and maintenance settings', N'vehicle_master', N'DEV_UPD_VehicleMaintenanceOptions', N'TRG_Audit_Vehicle_Master_Update'),
     (N'Vehicle Master', N'Authorise a pre-vehicle maintenance plan', N'Vehicle_Maintenance', N'DEV_UPD_MaintenanceVmfCode', NULL),
+    (N'Vehicle Master', N'Edit vehicle master fields and append vehicle history', N'vehicle_master', NULL, N'TRG_Audit_Vehicle_Master_Update'),
+    (N'Vehicle Master', N'Prevent model/year changes that would invalidate posted vehicle journals', N'vehicle_master', NULL, N'trg_upd_checkvehiclejournalrecords'),
     (N'Vehicle Master', N'Edit or delete vehicle master', N'vehicle_master', NULL, N'TRG_Audit_Vehicle_Master_Delete'),
     (N'Vehicle Master', N'Edit or delete vehicle master', N'vehicle_master', NULL, N'trg_del_preventvehicledeletion'),
     (N'Drivers', N'Create a site driver', N'site_drivers', N'DEV_INS_SiteDrivers', NULL),
@@ -71,6 +77,8 @@ VALUES
     (N'Taxi Logs', N'Create a taxi log and reject duplicate requisitions', N'Taxi_logs', NULL, N'TRG_INS_TaxiLog_RejectDuplicateRequsition'),
     (N'Taxi Logs', N'Create or update a VIP taxi log within a contract', N'Taxi_logs', NULL, N'TRG_INS_UPD_TaxiLog_CheckVIPContract'),
     (N'Taxi Logs', N'Update a taxi log and reverse/rebill posted journal detail', N'Taxi_logs', NULL, N'TRG_UPD_TaxiLogJournalDetailRecord'),
+    (N'Taxi Logs', N'Update a taxi log and create the rebill journal detail', N'Taxi_logs', NULL, N'TRG_INS_TaxiLogJournalDetailRecord'),
+    (N'Taxi Logs', N'Update a taxi log and create the rebill VIP billing record', N'Taxi_logs', NULL, N'TRG_INS_VIPBillingRecord'),
     (N'Taxi Logs', N'Update VIP billing derived from a taxi log', N'Taxi_logs', NULL, N'TRG_UPD_TaxiLogVIPBillingRecord'),
     -- Request_GGVIP_33[2].aspx uses DEV_INS_Requisition: it allocates the
     -- requisition sequence and inserts Taxis in one transaction. DEV_INS_Taxi
@@ -111,10 +119,11 @@ VALUES
     (N'Lease Contract Terms', N'Reject lease contract terms', N'LeaseContractTerms', N'DEV_UPD_LeaseContractTermsRejection', NULL),
     (N'Lease Contract Terms', N'Recall a lease contract term', N'LeaseContractTerms', N'DEV_UPD_LeaseContractTermsRecall', NULL),
     (N'Lease Contract Terms', N'Change recalled lease contract-term status', N'LeaseContractTerms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', NULL),
-    (N'Lease Contract Terms', N'Write a lease contract-term comment', N'LeaseContractTermsComment', N'DEV_INS_LeaseContractTermsComments', NULL),
+    (N'Lease Contract Terms', N'Write a lease contract-term comment (descriptive alias)', N'LeaseContractTermsComment', N'DEV_INS_LeaseContractTermsComments', NULL),
     (N'Lease Contract Terms', N'Write a lease contract-term comment (archived procedure name)', N'LeaseContractTermsComment', N'DEV_INS_Comments', NULL),
     (N'Finance Journals', N'Create a batch or close kilometre gaps', N'journal_detail', N'DEV_INS_Batch', N'TRG_UPD_AllocationExceptionJournalDetailRecord'),
     (N'Finance Journals', N'Create a batch or close kilometre gaps', N'journal_detail', N'DEV_INS_CloseKiloGapsFromXML', N'trg_upd_checkvehiclejournalrecords'),
+    (N'Finance Journals', N'Reverse a standalone journal detail', N'journal_detail', N'NEW_DEV_UPD_JournalDetailReversal', NULL),
     (N'Finance Batch', N'Read or change a batch workflow parameter', NULL, N'DEV_SEL_ParameterValue', NULL),
     (N'Finance Batch', N'Read or change a batch workflow parameter', NULL, N'DEV_UPD_ParameterValue', NULL),
     (N'Finance Batch', N'Start a batch and take the site offline', NULL, N'ADM_TriggerBatchJob', NULL),
@@ -129,6 +138,16 @@ VALUES
     (N'Finance Tariff Parameters', N'Initiate, update, approve, or reject fiscal tariff parameters', N'fin', N'TariffParameter', N'DEV_UPD_TariffParameter', NULL),
     (N'Finance Tariff Parameters', N'Update a maintenance value for a fiscal tariff parameter', N'fin', N'MaintenanceValue', N'DEV_UPD_MaintenanceValue', NULL),
     (N'Finance Tariff Parameters', N'Update an overhead for a fiscal tariff parameter', N'fin', N'Overhead', N'DEV_UPD_Overhead', NULL);
+
+/* Function/view dependencies used to choose a billable contract type and to
+   validate the effective tariff before a contract is captured. */
+INSERT INTO @MutationTargets
+    ([Module], [ModernMutation], [SchemaName], [TableName], [LegacyProcedure], [LegacyTrigger])
+VALUES
+    (N'Contracts', N'Resolve the configured billable contract type and tariff validity', N'fin', N'GetVehicleConfiguredTariff', NULL, NULL),
+    (N'Contracts', N'Fallback contract-type mapping when the configured tariff function is absent', N'dbo', N'ContractTypeGroupMapping', NULL, NULL),
+    (N'Contracts', N'Fallback contract-type mapping when the configured tariff function is absent', N'dbo', N'Contract_Type_Group_Mapping', NULL, NULL),
+    (N'Contracts', N'Fallback contract-type mapping when the configured tariff function is absent', N'dbo', N'Contract_Type_Map', NULL, NULL);
 
 DECLARE @ExpectedProcedureParameters TABLE
 (
@@ -189,6 +208,25 @@ VALUES
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 4, N'@contract_estimated_overall_km', N'GGMT.Database/v2.1.08 DEV_UPD_Contract_ExtendExisting'),
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 5, N'@Notes', N'GGMT.Database/v2.1.08 DEV_UPD_Contract_ExtendExisting'),
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 6, N'@UserID', N'GGMT.Database/v2.1.08 DEV_UPD_Contract_ExtendExisting'),
+    (N'Contracts', N'NEW_DEV_UPD_Contract_TargetReturnDate', 1, N'@contractcode', N'GGFleet/Provider/ContractProvider.cs ExtendContractTargetReturnDate'),
+    (N'Contracts', N'NEW_DEV_UPD_Contract_TargetReturnDate', 2, N'@targetreturndate', N'GGFleet/Provider/ContractProvider.cs ExtendContractTargetReturnDate'),
+    (N'Contracts', N'DEV_INS_Contract_New_ForApproval', 35, N'@contract_backdating_requestedBy', N'GGFIS_DataAccessLayer/Contract.vb InsertNewContract'),
+    (N'Contracts', N'DEV_INS_Contract_New_ForApproval', 36, N'@contract_backdating_date', N'GGFIS_DataAccessLayer/Contract.vb InsertNewContract'),
+    (N'Contracts', N'DEV_INS_Contract_New_ForApproval', 37, N'@contract_backdating_start_date', N'GGFIS_DataAccessLayer/Contract.vb InsertNewContract'),
+    (N'Contracts', N'NEW_DEV_UPD_Contract_CLOSE', 1, N'@contractcode', N'GGFleet/Provider/ContractProvider.cs CloseContract'),
+    (N'Contracts', N'NEW_DEV_UPD_Contract_CLOSE', 2, N'@enddate', N'GGFleet/Provider/ContractProvider.cs CloseContract'),
+    (N'Contracts', N'NEW_DEV_UPD_Contract_CLOSE', 3, N'@endodometer', N'GGFleet/Provider/ContractProvider.cs CloseContract'),
+    (N'Contracts', N'ADM_Change_End_And_Odo_With_FollowUp_Contract', 1, N'@contractToUpdate', N'GGFIS_DataAccessLayer/Contract.vb Contract.Update'),
+    (N'Contracts', N'ADM_Change_End_And_Odo_With_FollowUp_Contract', 2, N'@newStartDate', N'GGFIS_DataAccessLayer/Contract.vb Contract.Update'),
+    (N'Contracts', N'ADM_Change_End_And_Odo_With_FollowUp_Contract', 3, N'@newEndDate', N'GGFIS_DataAccessLayer/Contract.vb Contract.Update'),
+    (N'Contracts', N'ADM_Change_End_And_Odo_With_FollowUp_Contract', 4, N'@startOdometer', N'GGFIS_DataAccessLayer/Contract.vb Contract.Update'),
+    (N'Contracts', N'ADM_Change_End_And_Odo_With_FollowUp_Contract', 5, N'@endOdometer', N'GGFIS_DataAccessLayer/Contract.vb Contract.Update'),
+    (N'Contracts', N'ADM_Change_End_And_Odo_With_FollowUp_Contract', 6, N'@FleetNumber', N'GGFIS_DataAccessLayer/Contract.vb Contract.Update'),
+    (N'Contracts', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', 1, N'@ContractCode', N'GGFIS_DataAccessLayer/Contract.vb ApproveBackdatedAndNewContractDeclineOrCancel'),
+    (N'Contracts', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', 2, N'@Approved_Date', N'GGFIS_DataAccessLayer/Contract.vb ApproveBackdatedAndNewContractDeclineOrCancel'),
+    (N'Contracts', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', 3, N'@Approved_By_Username', N'GGFIS_DataAccessLayer/Contract.vb ApproveBackdatedAndNewContractDeclineOrCancel'),
+    (N'Contracts', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', 4, N'@Declined_Date', N'GGFIS_DataAccessLayer/Contract.vb ApproveBackdatedAndNewContractDeclineOrCancel'),
+    (N'Contracts', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', 5, N'@Declined_Username', N'GGFIS_DataAccessLayer/Contract.vb ApproveBackdatedAndNewContractDeclineOrCancel'),
     (N'Drivers', N'DEV_INS_SiteDrivers', 1, N'@SiteDriverCode', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
     (N'Drivers', N'DEV_INS_SiteDrivers', 2, N'@SiteCode', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
     (N'Drivers', N'DEV_INS_SiteDrivers', 3, N'@DriverLicenceTypeID', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
@@ -261,6 +299,9 @@ VALUES
     (N'Taxi Requests', N'DEV_INS_Requisition', 37, N'@vehicle_type_code', N'GGFIS_v2.0/Taxis/Request_GGVIP_33[2].aspx'),
     (N'Trips and Routes', N'DEV_UPD_TripXMLForClosingOfTrip', 1, N'@Trip', N'GGFIS_DataAccessLayer/Trips.vb CloseTrip'),
     (N'Trips and Routes', N'DEV_UPD_TripXMLForClosingOfTrip', 2, N'@XmlDocument', N'GGFIS_DataAccessLayer/Trips.vb CloseTrip'),
+    (N'Trips and Routes', N'DEV_UPD_TripXMLForRenewalOfTrip', 1, N'@IncommingTrip', N'GGFIS_DataAccessLayer/Trips.vb RenewTrip'),
+    (N'Trips and Routes', N'DEV_UPD_TripXMLForRenewalOfTrip', 2, N'@XmlDocument', N'GGFIS_DataAccessLayer/Trips.vb RenewTrip'),
+    (N'Trips and Routes', N'DEV_UPD_TripXMLForRenewalOfTrip', 3, N'@Tript', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_TripXMLForRenewalOfTrip'),
     (N'Finance Tariff Parameters', N'DEV_UPD_TariffParameter', 1, N'@TariffParameterID', N'GGFIS_DataAccessLayer/Finance.vb TariffParameter_ApprovedYear'),
     (N'Finance Tariff Parameters', N'DEV_UPD_TariffParameter', 2, N'@TariffParameterYear', N'GGFIS_DataAccessLayer/Finance.vb TariffParameter_ApprovedYear'),
     (N'Finance Tariff Parameters', N'DEV_UPD_TariffParameter', 3, N'@AnnualInterestRatePercentage', N'GGFIS_DataAccessLayer/Finance.vb TariffParameter_ApprovedYear'),
@@ -285,6 +326,10 @@ VALUES
     (N'Finance Batch', N'ADM_TriggerRollbackJob', 4, N'@StepId', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb RollbackBatch'),
     (N'Finance Batch', N'ADM_CheckJobStatus', 1, N'@JobName', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb GetJobDuration'),
     (N'Finance Batch', N'ADM_CheckRecordedLogs', 1, N'@LogJob', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb GetLatestLogs');
+INSERT INTO @ExpectedProcedureParameters
+    ([Module], [LegacyProcedure], [ParameterOrdinal], [ParameterName], [SourceEvidence])
+VALUES
+    (N'Finance Journals', N'NEW_DEV_UPD_JournalDetailReversal', 1, N'@journalDetailCode', N'GGFleet/Provider/JournalDetailProvider.cs GenerateReversals');
 
 UPDATE @ExpectedProcedureParameters
 SET [SchemaName] = N'fin'

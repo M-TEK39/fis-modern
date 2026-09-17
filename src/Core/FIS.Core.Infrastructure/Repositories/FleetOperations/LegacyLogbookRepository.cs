@@ -218,6 +218,15 @@ internal sealed class LegacyLogbookRepository : ILogbookRepository
     public async Task<Logbook> UpdateAsync(Logbook logbook, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(logbook);
+        var existing = await GetByIdAsync(logbook.logbookcode)
+            ?? throw new KeyNotFoundException(
+                $"Logbook not found with code: {logbook.logbookcode}"
+            );
+        if (logbook.vmf_code != existing.vmf_code)
+            throw new InvalidOperationException(
+                "The vehicle for an existing logbook cannot be changed."
+            );
+
         var columns = await GetAvailableColumnsAsync();
         var values = new List<WriteValue>();
 

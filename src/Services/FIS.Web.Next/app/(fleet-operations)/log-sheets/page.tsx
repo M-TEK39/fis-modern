@@ -13,7 +13,8 @@ import {
   accessRestricted,
   getLogsheetSession,
   hasLogsheetAccess,
-  hasLogsheetManagerAccess,
+  hasLogsheetDeleteAccess,
+  hasLogsheetEditAccess,
   sessionMessage,
 } from "@/app/(fleet-operations)/log-sheets/_page";
 import {
@@ -53,7 +54,10 @@ async function LogsheetMenuPageContent({ searchParams }: Readonly<{ searchParams
         title="Logsheet Maintenance"
         description="Capture and manage monthly vehicle usage logs."
       >
-        <LogsheetMenu canManage={hasLogsheetManagerAccess(session)} />
+        <LogsheetMenu
+          canEdit={hasLogsheetEditAccess(session)}
+          canDelete={hasLogsheetDeleteAccess(session)}
+        />
         <div className="button-row">
           <Link className="button button-secondary" href="/manuals">
             User manuals
@@ -117,7 +121,10 @@ async function LogsheetMenuPageContent({ searchParams }: Readonly<{ searchParams
         title="Logsheet Maintenance"
         description="Capture and manage monthly vehicle usage logs."
       >
-        <LogsheetMenu canManage={hasLogsheetManagerAccess(session)} />
+        <LogsheetMenu
+          canEdit={hasLogsheetEditAccess(session)}
+          canDelete={hasLogsheetDeleteAccess(session)}
+        />
         <section className="vehicle-status-card" role="alert">
           <h2>
             {error instanceof LogsheetApiError

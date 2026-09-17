@@ -25,6 +25,18 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
     private const string LegacyCreateProcedure = "DEV_INS_LeaseTariff";
     private const string LegacyExtendProcedure = "DEV_UPD_LeaseTariffData";
 
+    private static readonly string[] LegacyCreateProcedureParameters =
+    [
+        "@vmf_code",
+        "@start_date",
+        "@end_date",
+        "@fixed_tariff",
+        "@excess_kilo_tariff",
+    ];
+
+    private static readonly string[] LegacyExtendProcedureParameters =
+    ["@leaseCode", "@newEndDate", "@typeUpdate"];
+
     private static readonly string[] RequiredColumns =
     [
         "lease_tariff_code",
@@ -90,8 +102,14 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
         ArgumentNullException.ThrowIfNull(leaseTariff);
         Validate(leaseTariff);
 
-        if (await StoredProcedureExistsAsync(LegacyCreateProcedure))
+        var createProcedureParameters = await ResolveProcedureParametersAsync(LegacyCreateProcedure);
+        if (createProcedureParameters is not null)
         {
+            EnsureProcedureContract(
+                LegacyCreateProcedure,
+                createProcedureParameters,
+                LegacyCreateProcedureParameters
+            );
             await ExecuteLegacyCreateAsync(leaseTariff);
             return await FindLegacyCreatedTariffAsync(leaseTariff)
                 ?? throw new InvalidOperationException(
@@ -101,6 +119,7 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
 
         // Compatibility fallback for deployments where the restored legacy procedure is
         // genuinely absent. Never retry this direct write after a procedure failure.
+        await EnsureLegacyLeaseTariffTriggerAsync("TRG_Audit_LeaseTariff_Insert");
         var columns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
         var values = BuildWriteValues(leaseTariff, columns).ToList();
@@ -132,8 +151,14 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
                 $"LeaseTariff with lease_tariff_code {leaseTariff.lease_tariff_code} not found"
             );
 
-        if (await StoredProcedureExistsAsync(LegacyExtendProcedure))
+        var extendProcedureParameters = await ResolveProcedureParametersAsync(LegacyExtendProcedure);
+        if (extendProcedureParameters is not null)
         {
+            EnsureProcedureContract(
+                LegacyExtendProcedure,
+                extendProcedureParameters,
+                LegacyExtendProcedureParameters
+            );
             if (leaseTariff.end_date < existing.start_date)
                 throw new ArgumentException(
                     "The tariff end date cannot be earlier than its start date.",
@@ -151,6 +176,7 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
 
         // Compatibility fallback for deployments where the restored legacy procedure is
         // genuinely absent. Never retry this direct write after a procedure failure.
+        await EnsureLegacyLeaseTariffTriggerAsync("TRG_Audit_LeaseTariff_Update");
         Validate(leaseTariff);
         var columns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
@@ -330,6 +356,11 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
                 }
                 else
                 {
+                    await EnsureLegacyLeaseTariffTriggerAsync(
+                        connection,
+                        transaction,
+                        "TRG_Audit_LeaseTariff_Insert"
+                    );
                     var tariffColumns = await GetAvailableColumnsAsync(connection, transaction);
                     foreach (var row in validRows)
                     {
@@ -510,7 +541,7 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
         return Convert.ToInt32(await command.ExecuteScalarAsync()) == 1;
     }
 
-    private async Task<bool> StoredProcedureExistsAsync(string procedureName)
+    private async Task<IReadOnlyList<string>?> ResolveProcedureParametersAsync(string procedureName)
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -522,23 +553,104 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandText = """
-                SELECT CASE WHEN EXISTS
-                (
-                    SELECT 1
-                    FROM [sys].[procedures] AS [procedureObject]
-                    INNER JOIN [sys].[schemas] AS [schemaObject]
-                        ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
-                    WHERE [schemaObject].[name] = N'dbo'
-                      AND [procedureObject].[name] = @procedureName
-                ) THEN 1 ELSE 0 END
+                SELECT [parameterObject].[name]
+                FROM [sys].[procedures] AS [procedureObject]
+                INNER JOIN [sys].[schemas] AS [schemaObject]
+                    ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
+                LEFT JOIN [sys].[parameters] AS [parameterObject]
+                    ON [parameterObject].[object_id] = [procedureObject].[object_id]
+                   AND [parameterObject].[parameter_id] > 0
+                WHERE [schemaObject].[name] = N'dbo'
+                  AND [procedureObject].[name] = @procedureName
+                ORDER BY [parameterObject].[parameter_id]
                 """;
             AddParameter(command, "@procedureName", DbType.String, procedureName);
-            return Convert.ToInt32(await command.ExecuteScalarAsync()) == 1;
+            var parameters = new List<string>();
+            await using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    if (!reader.IsDBNull(0))
+                        parameters.Add(reader.GetString(0));
+                }
+            }
+
+            await using var existsCommand = connection.CreateCommand();
+            existsCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            existsCommand.CommandText = "SELECT OBJECT_ID(@procedureName, 'P');";
+            AddParameter(existsCommand, "@procedureName", DbType.String, $"dbo.{procedureName}");
+            return await existsCommand.ExecuteScalarAsync() is null or DBNull ? null : parameters;
         }
         finally
         {
             if (shouldClose)
                 await connection.CloseAsync();
+        }
+    }
+
+    private static void EnsureProcedureContract(
+        string procedureName,
+        IReadOnlyList<string> actual,
+        IReadOnlyList<string> expected
+    )
+    {
+        if (!actual.SequenceEqual(expected, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The deployed legacy procedure {procedureName} has an incompatible parameter contract; no direct LeaseTariff fallback was run."
+            );
+        }
+    }
+
+    private Task EnsureLegacyLeaseTariffTriggerAsync(string triggerName) =>
+        EnsureLegacyLeaseTariffTriggerAsync(
+            _context.Database.GetDbConnection(),
+            _context.Database.CurrentTransaction?.GetDbTransaction(),
+            triggerName
+        );
+
+    private static async Task EnsureLegacyLeaseTariffTriggerAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        string triggerName
+    )
+    {
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+                SELECT COUNT(1)
+                FROM [sys].[triggers] AS [tr]
+                INNER JOIN [sys].[tables] AS [tb]
+                    ON [tb].[object_id] = [tr].[parent_id]
+                INNER JOIN [sys].[schemas] AS [sc]
+                    ON [sc].[schema_id] = [tb].[schema_id]
+                WHERE [sc].[name] = N'dbo'
+                  AND [tb].[name] = N'LeaseTariff'
+                  AND [tr].[name] = @triggerName
+                  AND [tr].[is_disabled] = 0
+                """;
+            AddParameter(command, "@triggerName", DbType.String, triggerName);
+            if (Convert.ToInt32(await command.ExecuteScalarAsync()) != 1)
+            {
+                throw new NotSupportedException(
+                    $"The legacy dbo.{triggerName} trigger is unavailable or disabled; no direct LeaseTariff fallback was run."
+                );
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
         }
     }
 
@@ -554,7 +666,7 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandType = CommandType.StoredProcedure;
-            command.CommandText = LegacyCreateProcedure;
+            command.CommandText = $"[dbo].[{LegacyCreateProcedure}]";
             AddParameter(command, "@vmf_code", DbType.Int32, leaseTariff.vmf_code);
             AddParameter(command, "@start_date", DbType.DateTime2, leaseTariff.start_date);
             AddParameter(command, "@end_date", DbType.DateTime2, leaseTariff.end_date);
@@ -586,7 +698,7 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             command.CommandType = CommandType.StoredProcedure;
-            command.CommandText = LegacyExtendProcedure;
+            command.CommandText = $"[dbo].[{LegacyExtendProcedure}]";
             AddParameter(command, "@leaseCode", DbType.Int32, leaseTariffCode);
             AddParameter(command, "@newEndDate", DbType.DateTime2, newEndDate);
             AddParameter(command, "@typeUpdate", DbType.String, "D");

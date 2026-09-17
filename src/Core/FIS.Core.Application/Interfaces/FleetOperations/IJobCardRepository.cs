@@ -68,7 +68,8 @@ public sealed record JobCardPageQuery(
     string? SearchTerm = null,
     string SearchType = "GG",
     IReadOnlyCollection<int>? StatusCodes = null,
-    int? JobCardId = null
+    int? JobCardId = null,
+    IReadOnlyCollection<int>? AllowedVmfCodes = null
 );
 
 public sealed record JobCardPage(
@@ -81,7 +82,11 @@ public sealed record JobCardPage(
     public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
 }
 
-public sealed record PriorityUnassignedJobCardPageQuery(int Page = 1, int PageSize = 24);
+public sealed record PriorityUnassignedJobCardPageQuery(
+    int Page = 1,
+    int PageSize = 24,
+    IReadOnlyCollection<int>? AllowedVmfCodes = null
+);
 
 public sealed record RepairCostReportPageQuery(
     int Page = 1,

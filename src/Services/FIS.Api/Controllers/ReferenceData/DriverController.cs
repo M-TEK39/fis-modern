@@ -462,6 +462,8 @@ public class DriverController : BaseApiController
     {
         var southAfricanId = NormalizeIdentity(candidate.DriverSAId);
         var passportNumber = NormalizeIdentity(candidate.DriverPassportNumber);
+        var personalNumber = NormalizeIdentity(candidate.DriverPersonalNumber);
+        var contractNumber = NormalizeIdentity(candidate.DriverContractNumber);
         var licenceNumber = NormalizeIdentity(candidate.DriverLicenceNumber);
         var existingDrivers = await _driverRepository.GetAllDriversAsync();
         var duplicate = existingDrivers.FirstOrDefault(driver =>
@@ -469,6 +471,8 @@ public class DriverController : BaseApiController
             && (
                 MatchesIdentity(driver.driver_SA_id, southAfricanId)
                 || MatchesIdentity(driver.driver_passportnumber, passportNumber)
+                || MatchesIdentity(driver.driver_persalnumber, personalNumber)
+                || MatchesIdentity(driver.driver_contractnumber, contractNumber)
                 || MatchesIdentity(driver.driver_licence_number, licenceNumber)
             )
         );

@@ -1,7 +1,5 @@
 using FIS.Core.Application.Interfaces;
-using FIS.Data.SqlServer;
 using Hangfire;
-using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Services;
 
@@ -21,17 +19,17 @@ public class ContractExpiryReminderJob
     // Days before expiry at which reminders are sent (mirrors legacy behaviour: 3 months → 7 days)
     private static readonly int[] ReminderMilestones = { 90, 60, 30, 14, 7 };
 
-    private readonly FisDbContext _context;
+    private readonly IContractRepository _contractRepository;
     private readonly IEmailNotificationService _emailNotification;
     private readonly ILogger<ContractExpiryReminderJob> _logger;
 
     public ContractExpiryReminderJob(
-        FisDbContext context,
+        IContractRepository contractRepository,
         IEmailNotificationService emailNotification,
         ILogger<ContractExpiryReminderJob> logger
     )
     {
-        _context = context;
+        _contractRepository = contractRepository;
         _emailNotification = emailNotification;
         _logger = logger;
     }
@@ -52,12 +50,14 @@ public class ContractExpiryReminderJob
             errors = 0;
 
         // Load active contracts that have a target return date
-        var contracts = await _context
-            .Contracts.Where(c =>
-                !c.is_deleted && c.still_current == "Y" && c.target_return_date.HasValue
-            )
-            .Select(c => new { c.contract_code, c.target_return_date })
-            .ToListAsync();
+        // ContractRepository negotiates the original legacy projection and
+        // optional audit columns at runtime. Do not use the EF Contracts
+        // DbSet here: the restored client table predates those optional
+        // columns, and a static projection would stop every reminder run.
+        var contracts = (await _contractRepository.GetActiveContractsAsync())
+            .Where(contract => contract.target_return_date.HasValue)
+            .Select(contract => new { contract.contract_code, contract.target_return_date })
+            .ToList();
 
         foreach (var c in contracts)
         {

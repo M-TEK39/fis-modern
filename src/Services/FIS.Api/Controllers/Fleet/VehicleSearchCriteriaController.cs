@@ -1,4 +1,5 @@
 using FIS.Core.Application.Interfaces;
+using FIS.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,14 +12,17 @@ namespace FIS.Api.Controllers;
 public class VehicleSearchCriteriaController : BaseApiController
 {
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<VehicleSearchCriteriaController> _logger;
 
     public VehicleSearchCriteriaController(
         IVehicleRepository vehicleRepository,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<VehicleSearchCriteriaController> logger
     )
     {
         _vehicleRepository = vehicleRepository;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
@@ -34,7 +38,10 @@ public class VehicleSearchCriteriaController : BaseApiController
 
         try
         {
-            var vehicles = await _vehicleRepository.GetActiveVehiclesAsync();
+            var vehicles = await _vehicleRepository.GetActiveVehiclesAsync(
+                await _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted),
+                GetCurrentUserId()
+            );
 
             var keywords = vehicles
                 .SelectMany(v => new[] { v.fleet_number, v.registration_number })

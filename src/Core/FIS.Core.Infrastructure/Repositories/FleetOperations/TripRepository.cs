@@ -910,6 +910,63 @@ public sealed class TripRepository : ITripRepository
             allowedSiteCodes: allowedSiteCodes
         );
 
+    public async Task<bool> HasOpenTripAuthoritiesAsync(int contractCode)
+    {
+        var hasLegacyProcedure = await IsLegacyProcedureAvailableAsync(
+            "NEW_DEV_VAL_OpenTripAuthority",
+            "@contract_code"
+        );
+
+        if (!hasLegacyProcedure)
+        {
+            var now = DateTime.Now;
+            var trips = await GetTripsByContractAsync(contractCode);
+            return trips.Any(trip => trip.expiry_date.HasValue && trip.expiry_date.Value.Date >= now.Date);
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "NEW_DEV_VAL_OpenTripAuthority";
+            command.CommandTimeout = 0;
+            AddParameter(command, "@contract_code", DbType.Int32, contractCode);
+
+            var now = DateTime.Now;
+            await using var reader = await command.ExecuteReaderAsync();
+            var expiryOrdinal = reader.GetOrdinal("expiry_date");
+            while (await reader.ReadAsync())
+            {
+                if (
+                    !reader.IsDBNull(expiryOrdinal)
+                    && Convert.ToDateTime(reader.GetValue(expiryOrdinal), CultureInfo.InvariantCulture)
+                        .Date
+                        >= now.Date
+                )
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IEnumerable<Trip>> GetTripsByVehicleAsync(
         int vmfCode,
         IReadOnlySet<short>? allowedSiteCodes = null
@@ -980,6 +1037,27 @@ public sealed class TripRepository : ITripRepository
     public async Task<Trip> CreateAsync(Trip trip, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(trip);
+
+        // The archived create flow is DEV_INS_TripXML and requires drivers,
+        // passengers, and routes. The scalar-only endpoint cannot produce
+        // that document, so never let it bypass the procedure on a client
+        // database that still exposes the legacy workflow. The full
+        // CreateAuthorityAsync path performs the procedure-first mutation;
+        // this method remains its explicit fallback when the procedure is
+        // genuinely absent.
+        if (
+            await IsLegacyProcedureAvailableAsync(
+                "DEV_INS_TripXML",
+                "@Trip",
+                "@XmlDocument"
+            )
+        )
+        {
+            throw new NotSupportedException(
+                "The legacy trip-authority procedure requires the complete driver, passenger, and route workflow. Use the full trip-authority capture path."
+            );
+        }
+
         await EnsureLegacyTriggersAsync(TableName, TripMutationTriggerNames);
 
         var availableColumns = await GetAvailableColumnsAsync();
@@ -1040,6 +1118,59 @@ public sealed class TripRepository : ITripRepository
         ArgumentNullException.ThrowIfNull(drivers);
         ArgumentNullException.ThrowIfNull(passengers);
         ArgumentNullException.ThrowIfNull(routes);
+
+        if (
+            await IsLegacyProcedureAvailableAsync(
+                "DEV_INS_TripXML",
+                "@Trip",
+                "@XmlDocument"
+            )
+        )
+        {
+            var xml = BuildLegacyCreateTripXml(trip, drivers, passengers, routes, currentUserId);
+            var connection = _context.Database.GetDbConnection();
+            var shouldClose = connection.State != ConnectionState.Open;
+            if (shouldClose)
+            {
+                await connection.OpenAsync();
+            }
+
+            try
+            {
+                await using var command = connection.CreateCommand();
+                command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                command.CommandType = CommandType.StoredProcedure;
+                command.CommandText = "DEV_INS_TripXML";
+                command.CommandTimeout = 0;
+
+                var output = command.CreateParameter();
+                output.ParameterName = "@Trip";
+                output.DbType = DbType.Int32;
+                output.Direction = ParameterDirection.Output;
+                command.Parameters.Add(output);
+                AddParameter(command, "@XmlDocument", DbType.String, xml);
+                await command.ExecuteNonQueryAsync();
+
+                if (output.Value is null or DBNull || Convert.ToInt32(output.Value) <= 0)
+                {
+                    throw new InvalidOperationException(
+                        "The legacy DEV_INS_TripXML procedure completed without returning the created trip authority code."
+                    );
+                }
+
+                return await GetByIdAsync(Convert.ToInt32(output.Value))
+                    ?? throw new InvalidOperationException(
+                        "The legacy DEV_INS_TripXML procedure created a trip that could not be read back."
+                    );
+            }
+            finally
+            {
+                if (shouldClose)
+                {
+                    await connection.CloseAsync();
+                }
+            }
+        }
 
         var driverTable = await ResolveTripDriverTableAsync();
         if (driverTable is null)
@@ -1138,13 +1269,63 @@ public sealed class TripRepository : ITripRepository
     public async Task UpdateAsync(Trip trip, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(trip);
-        await EnsureLegacyTriggersAsync(TableName, TripMutationTriggerNames);
 
         var existing =
             await GetByIdAsync(trip.trip_authority_code)
             ?? throw new InvalidOperationException(
                 $"Trip with trip_authority_code {trip.trip_authority_code} not found"
             );
+
+        // A posted DTO is not an ownership-transfer mechanism. Preserve the
+        // original capturer unless a dedicated reassignment workflow is used.
+        trip.user_access_code = existing.user_access_code;
+
+        // The archived SaveToDB path always submits the complete trip XML to
+        // DEV_UPD_TripXML. That procedure replaces driver/passenger rows,
+        // updates route rows by RouteDBId, and commits the scalar update in
+        // one transaction. Prefer it whenever the exact procedure exists.
+        if (
+            await IsLegacyProcedureAvailableAsync(
+                "DEV_UPD_TripXML",
+                "@Trip",
+                "@XmlDocument"
+            )
+        )
+        {
+            var details = await GetDetailsAsync(trip.trip_authority_code)
+                ?? throw new InvalidOperationException(
+                    $"Trip with trip_authority_code {trip.trip_authority_code} and its related records could not be read."
+                );
+            trip.Contract ??= existing.Contract;
+            var xml = BuildLegacyUpdateTripXml(trip, details, currentUserId);
+            await ExecuteInLegacyTransactionAsync(
+                "FIS_TripUpdate",
+                async () =>
+                {
+                    await ExecuteLegacyProcedureAsync(
+                        "DEV_UPD_TripXML",
+                        new ProcedureParameter("@Trip", DbType.Int32, trip.trip_authority_code),
+                        new ProcedureParameter("@XmlDocument", DbType.String, xml)
+                    );
+
+                    // DEV_UPD_TripXML uses XML UserID for both the edit actor
+                    // and trip_authorities.user_access_code. Keep the actor in
+                    // route/audit fields, then restore the original owner in
+                    // the same transaction.
+                    await RestoreTripOwnerAsync(
+                        trip.trip_authority_code,
+                        existing.user_access_code,
+                        currentUserId
+                    );
+                    return true;
+                }
+            );
+            return;
+        }
+
+        // Compatibility fallback only where DEV_UPD_TripXML is genuinely
+        // absent. Keep the legacy trigger required for this reduced path.
+        await EnsureLegacyTriggersAsync(TableName, TripMutationTriggerNames);
         var availableColumns = await GetAvailableColumnsAsync();
         var now = DateTime.UtcNow;
         trip.date_created = existing.date_created;
@@ -1197,6 +1378,153 @@ public sealed class TripRepository : ITripRepository
         }
     }
 
+    public async Task<Trip> RenewAsync(
+        int tripId,
+        DateTime newExpiryDate,
+        IReadOnlyList<TripAuthorityRouteUpdate> routes,
+        int? endOdometer,
+        int currentUserId,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(routes);
+
+        var details = await GetDetailsAsync(tripId, allowedSiteCodes)
+            ?? throw new InvalidOperationException(
+                $"Trip with trip_authority_code {tripId} and its related records could not be read."
+            );
+        if (details.Trip.Contract is null)
+        {
+            throw new InvalidOperationException(
+                "The legacy trip-renewal workflow requires the linked contract and site context."
+            );
+        }
+
+        var expectedParameters = new[] { "@IncommingTrip", "@XmlDocument", "@Tript" };
+        if (
+            !await IsLegacyProcedureAvailableAsync(
+                "DEV_UPD_TripXMLForRenewalOfTrip",
+                expectedParameters
+            )
+        )
+        {
+            throw new NotSupportedException(
+                "The legacy trip-renewal procedure is unavailable; renewal cannot be approximated with direct DML."
+            );
+        }
+
+        if (routes.Count != details.Routes.Count)
+        {
+            throw new InvalidOperationException(
+                "The legacy trip-renewal procedure requires a complete set of route updates."
+            );
+        }
+
+        var submittedRoutes = routes.ToDictionary(route => route.RouteCode);
+        var orderedRoutes = new List<TripAuthorityRouteUpdate>(details.Routes.Count);
+        foreach (var route in details.Routes)
+        {
+            if (!submittedRoutes.TryGetValue(route.RouteCode, out var submitted))
+            {
+                throw new InvalidOperationException(
+                    $"Route {route.RouteCode} does not belong to trip {tripId}."
+                );
+            }
+
+            orderedRoutes.Add(submitted);
+        }
+
+        var trip = details.Trip;
+        var owner = trip.user_access_code;
+        var resolvedEndOdometer = endOdometer ?? trip.end_odo_meter ?? orderedRoutes.Max(route => route.EndOdometer);
+        trip.expiry_date = newExpiryDate;
+        trip.end_odo_meter = resolvedEndOdometer;
+
+        var drivers = details.Drivers
+            .Select(driver => new TripAuthorityDriverInput(
+                driver.Name,
+                driver.IdentityNumber,
+                driver.IsPrimary,
+                driver.SiteCode,
+                driver.LicenceTypeCode,
+                driver.PassportNumber,
+                driver.PersalNumber,
+                driver.ContractNumber,
+                driver.LicenceNumber,
+                driver.LicenceIssueDate,
+                driver.LicenceLastVerifiedDate,
+                driver.HasPdp,
+                driver.PdpExpiryDate,
+                driver.LicenceExpiryDate,
+                driver.IsActive
+            ))
+            .ToArray();
+        var passengers = details.Passengers
+            .Select(passenger => new TripAuthorityPassengerInput(passenger.Name ?? string.Empty))
+            .ToArray();
+        var renewalRoutes = details.Routes
+            .Select(route =>
+            {
+                var submitted = submittedRoutes[route.RouteCode];
+                return new TripAuthorityRouteInput(
+                    route.StartDate ?? trip.issue_date,
+                    route.EndDate ?? newExpiryDate,
+                    route.StartLocation,
+                    route.EndLocation,
+                    route.EstimatedDistance,
+                    route.ResponsibilityCode ?? string.Empty,
+                    route.ObjectiveCode ?? string.Empty,
+                    route.ProjectNumber ?? string.Empty,
+                    route.FundCode ?? string.Empty,
+                    submitted.StartOdometer ?? route.StartOdometer
+                );
+            })
+            .ToArray();
+        var routeCodes = details.Routes.Select(route => route.RouteCode).ToArray();
+        var routeEndOdometers = orderedRoutes
+            .Select(route => (int?)route.EndOdometer)
+            .ToArray();
+        var routeDistances = orderedRoutes
+            .Select(route => (int?)route.Distance)
+            .ToArray();
+        var xml = BuildLegacyCreateTripXml(
+            trip,
+            drivers,
+            passengers,
+            renewalRoutes,
+            currentUserId,
+            routeCodes,
+            routeEndOdometers,
+            routeDistances,
+            tripId,
+            resolvedEndOdometer
+        );
+
+        return await ExecuteInLegacyTransactionAsync(
+            "FIS_TripRenewal",
+            async () =>
+            {
+                var renewedTripId = await ExecuteLegacyRenewalProcedureAsync(
+                    tripId,
+                    xml
+                );
+
+                // The archived procedure uses @UserID for both the action
+                // actor and user_access_code. Restore ownership for both the
+                // closed source authority and the newly issued authority in
+                // the same transaction; an approver cannot become owner as a
+                // side effect of renewing a trip.
+                await RestoreTripOwnerAsync(tripId, owner);
+                await RestoreTripOwnerAsync(renewedTripId, owner);
+
+                return await GetByIdAsync(renewedTripId, allowedSiteCodes)
+                    ?? throw new InvalidOperationException(
+                        "The legacy trip-renewal procedure completed, but the new trip authority could not be read back."
+                    );
+            }
+        );
+    }
+
     public async Task CloseAsync(
         int tripId,
         IReadOnlyList<TripAuthorityRouteUpdate> routes,
@@ -1205,6 +1533,7 @@ public sealed class TripRepository : ITripRepository
     )
     {
         await EnsureLegacyTriggersAsync(RouteDetailTableName, RouteUpdateTriggerNames);
+        await EnsureLegacyTriggersAsync(TableName, TripMutationTriggerNames);
         var routeColumns = await GetTableColumnsAsync(RouteDetailTableName);
         if (routes.Count > 0)
         {
@@ -1230,6 +1559,8 @@ public sealed class TripRepository : ITripRepository
             )
         )
         {
+            var existingTripForClose = await GetByIdAsync(tripId)
+                ?? throw new InvalidOperationException($"Trip {tripId} not found");
             var existingRoutes = await GetRouteDetailsAsync(tripId);
             if (existingRoutes.Count != routes.Count)
             {
@@ -1246,15 +1577,33 @@ public sealed class TripRepository : ITripRepository
                 endOdometer,
                 currentUserId
             );
-            await ExecuteLegacyProcedureAsync(
-                "DEV_UPD_TripXMLForClosingOfTrip",
-                new ProcedureParameter("@Trip", DbType.Int32, tripId),
-                new ProcedureParameter("@XmlDocument", DbType.String, xml)
+            await ExecuteInLegacyTransactionAsync(
+                "FIS_TripClose",
+                async () =>
+                {
+                    await ExecuteLegacyProcedureAsync(
+                        "DEV_UPD_TripXMLForClosingOfTrip",
+                        new ProcedureParameter("@Trip", DbType.Int32, tripId),
+                        new ProcedureParameter("@XmlDocument", DbType.String, xml)
+                    );
+
+                    // The archived close procedure uses XML @UserID for both
+                    // the action actor and trip_authorities.user_access_code.
+                    // Restore the original capturer in the same transaction;
+                    // closing a trip is not an ownership-transfer workflow.
+                    await RestoreTripOwnerAsync(tripId, existingTripForClose.user_access_code);
+                    return true;
+                }
             );
             return;
         }
 
         // Compatibility fallback only where DEV_UPD_TripXMLForClosingOfTrip is genuinely absent.
+        var existingTrip = await GetByIdAsync(tripId)
+            ?? throw new InvalidOperationException($"Trip {tripId} not found");
+        // It must not call UpdateAsync below: when DEV_UPD_TripXML exists that
+        // would replay every route through the XML update procedure after the
+        // route-close writes, creating duplicate journal/rebill side effects.
         var existingTransaction = _context.Database.CurrentTransaction;
         var transaction = existingTransaction is null
             ? await _context.Database.BeginTransactionAsync()
@@ -1319,15 +1668,53 @@ public sealed class TripRepository : ITripRepository
                 }
             }
 
-            var trip =
-                await GetByIdAsync(tripId)
-                ?? throw new InvalidOperationException($"Trip {tripId} not found");
-            if (endOdometer.HasValue)
+            var tripColumns = await GetAvailableColumnsAsync();
+            var tripUpdates = new List<string> { "[end_odo_meter] = @endOdometer" };
+            await using (var tripCommand = _context.Database.GetDbConnection().CreateCommand())
             {
-                trip.end_odo_meter = endOdometer;
+                tripCommand.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                AddParameter(
+                    tripCommand,
+                    "@endOdometer",
+                    DbType.Int32,
+                    endOdometer ?? existingTrip.end_odo_meter ?? 0
+                );
+
+                if (tripColumns.Contains("user_access_code"))
+                {
+                    tripUpdates.Add("[user_access_code] = @userAccessCode");
+                    AddParameter(
+                        tripCommand,
+                        "@userAccessCode",
+                        DbType.Int16,
+                        existingTrip.user_access_code
+                    );
+                }
+                if (tripColumns.Contains("date_updated"))
+                {
+                    tripUpdates.Add("[date_updated] = @dateUpdated");
+                    AddParameter(tripCommand, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
+                }
+                if (tripColumns.Contains("modified_by_user_code"))
+                {
+                    tripUpdates.Add("[modified_by_user_code] = @modifiedByUserCode");
+                    AddParameter(
+                        tripCommand,
+                        "@modifiedByUserCode",
+                        DbType.Int32,
+                        currentUserId > 0 ? currentUserId : null
+                    );
+                }
+
+                tripCommand.CommandText =
+                    $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", tripUpdates)} WHERE [trip_authority_code] = @tripId";
+                AddParameter(tripCommand, "@tripId", DbType.Int32, tripId);
+                if (await tripCommand.ExecuteNonQueryAsync() != 1)
+                {
+                    throw new InvalidOperationException($"Trip {tripId} was not found while closing it.");
+                }
             }
 
-            await UpdateAsync(trip, currentUserId);
             if (transaction is not null)
             {
                 await transaction.CommitAsync();
@@ -1353,58 +1740,21 @@ public sealed class TripRepository : ITripRepository
 
     public async Task DeleteAsync(int tripId, int currentUserId)
     {
-        var availableColumns = await GetAvailableColumnsAsync();
-        var connection = _context.Database.GetDbConnection();
-        var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose)
-        {
-            await connection.OpenAsync();
-        }
+        _ = currentUserId;
+        var existing = await GetByIdAsync(tripId)
+            ?? throw new KeyNotFoundException($"Trip {tripId} not found");
+        var routes = await GetRouteDetailsAsync(tripId);
 
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            if (availableColumns.Contains("is_deleted"))
-            {
-                var updates = new List<string> { "[is_deleted] = @isDeleted" };
-                AddParameter(command, "@isDeleted", DbType.Boolean, true);
-                if (availableColumns.Contains("date_updated"))
-                {
-                    updates.Add("[date_updated] = @dateUpdated");
-                    AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
-                }
-
-                if (availableColumns.Contains("modified_by_user_code"))
-                {
-                    updates.Add("[modified_by_user_code] = @modifiedByUserCode");
-                    AddParameter(
-                        command,
-                        "@modifiedByUserCode",
-                        DbType.Int32,
-                        currentUserId > 0 ? currentUserId : null
-                    );
-                }
-
-                command.CommandText =
-                    $"UPDATE [dbo].[{TableName}] SET {string.Join(", ", updates)} WHERE [trip_authority_code] = @tripId";
-            }
-            else
-            {
-                command.CommandText =
-                    $"DELETE FROM [dbo].[{TableName}] WHERE [trip_authority_code] = @tripId";
-            }
-
-            AddParameter(command, "@tripId", DbType.Int32, tripId);
-            await command.ExecuteNonQueryAsync();
-        }
-        finally
-        {
-            if (shouldClose)
-            {
-                await connection.CloseAsync();
-            }
-        }
+        // The legacy Trips menu has no arbitrary single-row delete action.
+        // Its administrative cleanup procedure deletes only authorities that
+        // have no route rows, and also preserves records already represented
+        // in audit_trips. A universal modern DELETE would bypass those rules,
+        // the trip-authority delete trigger, and route-cascade semantics.
+        throw new NotSupportedException(
+            routes.Count == 0
+                ? $"Trip {existing.trip_authority_code} has no user-facing legacy delete workflow; use the administrative ADM_DEL_TripsWithoutRoutes procedure."
+                : $"Trip {existing.trip_authority_code} has persisted routes and cannot be deleted through the legacy FIS workflow."
+        );
     }
 
     private static string BuildLegacyCloseTripXml(
@@ -1486,6 +1836,354 @@ public sealed class TripRepository : ITripRepository
 
         xml.Append("</Trips></Root>");
         return xml.ToString();
+    }
+
+    private static string BuildLegacyCreateTripXml(
+        Trip trip,
+        IReadOnlyList<TripAuthorityDriverInput> drivers,
+        IReadOnlyList<TripAuthorityPassengerInput> passengers,
+        IReadOnlyList<TripAuthorityRouteInput> routes,
+        int currentUserId,
+        IReadOnlyList<int>? routeCodes = null,
+        IReadOnlyList<int?>? routeEndOdometers = null,
+        IReadOnlyList<int?>? routeDistances = null,
+        int? tripAuthorityCode = null,
+        int? tripEndOdometer = null
+    )
+    {
+        var contract = trip.Contract
+            ?? throw new InvalidOperationException(
+                "A resolved contract is required to build the legacy trip-authority XML document."
+            );
+        var legacyEmptyDate = new DateTime(1900, 1, 1);
+        var xml = new StringBuilder();
+        xml.Append("<ROOT><Trip")
+            .Append(" ApproverName=\"").Append(EscapeXml(trip.approver_name ?? string.Empty)).Append("\"")
+            .Append(" ApproverRank=\"").Append(EscapeXml(trip.approver_rank ?? string.Empty)).Append("\"")
+            .Append(" ApproverTelephone=\"").Append(EscapeXml(trip.approver_tel ?? string.Empty)).Append("\"")
+            .Append(" IssueDate=\"").Append(FormatXmlDate(trip.issue_date)).Append("\"")
+            .Append(" ExpiryDate=\"").Append(FormatXmlDate(trip.expiry_date ?? trip.issue_date)).Append("\"")
+            .Append(" TripReason=\"").Append(EscapeXml(trip.trip_reason ?? string.Empty)).Append("\"")
+            .Append(" TripRequestNumber=\"").Append(EscapeXml(trip.trip_request_number ?? string.Empty)).Append("\"")
+            .Append(" TripAuthorityNumber=\"")
+            .Append(tripAuthorityCode?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)
+            .Append("\"")
+            .Append(" TripTypeName=\"\"")
+            .Append(" IncidentTypeName=\"\"")
+            .Append(" TripType=\"").Append(trip.trip_type_code.ToString(CultureInfo.InvariantCulture)).Append("\"")
+            .Append(" IncidentType=\"").Append(trip.trip_incident_type_code.ToString(CultureInfo.InvariantCulture)).Append("\"")
+            .Append(" IsMonthly=\"").Append(trip.Trip_Is_Monthly ? "1" : "0").Append("\"")
+            .Append(" UserId=\"").Append(currentUserId.ToString(CultureInfo.InvariantCulture)).Append("\"")
+            .Append(tripEndOdometer.HasValue
+                ? $" EndODOMeter=\"{tripEndOdometer.Value.ToString(CultureInfo.InvariantCulture)}\""
+                : string.Empty)
+            .Append(" LockedForTransfer=\"").Append(trip.locked_for_transfer ? "1" : "0").Append("\">");
+
+        xml.Append("<Contract")
+            .Append(" ContractCode=\"").Append(trip.contract_code.ToString(CultureInfo.InvariantCulture)).Append("\"")
+            .Append(" vmfCode=\"").Append(contract.vmf_code.ToString(CultureInfo.InvariantCulture)).Append("\"")
+            .Append(" SiteCode=\"").Append(contract.site_code.ToString(CultureInfo.InvariantCulture)).Append("\"")
+            .Append(" StartDate=\"").Append(FormatXmlDate(legacyEmptyDate)).Append("\"")
+            .Append(" EndDate=\"").Append(FormatXmlDate(legacyEmptyDate)).Append("\"")
+            .Append(" StartODOMeter=\"").Append(contract.start_odometer.ToString(CultureInfo.InvariantCulture)).Append("\"")
+            .Append(" EndODOMeter=\"0\" IsCurrent=\"True\" ContractType=\"\" ChargedUntil=\"")
+            .Append(FormatXmlDate(legacyEmptyDate)).Append("\" Responsibility=\"\" Objective=\"\" />");
+
+        foreach (var driver in drivers)
+        {
+            xml.Append("<Driver")
+                // DEV_INS/UPD_TripXML does not consume DriverDBId. The
+                // archived page supplied a site-driver id, which is not part
+                // of the modern trip-driver input contract; do not mislabel a
+                // site code as a driver id.
+                .Append(" DriverDBId=\"\"")
+                .Append(" DriverName=\"").Append(EscapeXml(driver.Name ?? string.Empty)).Append("\"")
+                .Append(" DriverSAID=\"").Append(EscapeXml(driver.IdentityNumber ?? string.Empty)).Append("\"")
+                .Append(" DriverIsPrimary=\"").Append(driver.IsPrimary ? "True" : "False").Append("\"")
+                .Append(" DriverLicenseTypeId=\"").Append(driver.LicenceTypeCode?.ToString(CultureInfo.InvariantCulture) ?? "").Append("\"")
+                .Append(" DriverPassportNumber=\"").Append(EscapeXml(driver.PassportNumber ?? string.Empty)).Append("\"")
+                .Append(" DriverPersalNumber=\"").Append(EscapeXml(driver.PersalNumber ?? string.Empty)).Append("\"")
+                .Append(" DriverContractNo=\"").Append(EscapeXml(driver.ContractNumber ?? string.Empty)).Append("\"")
+                .Append(" DriverLicenceNumber=\"").Append(EscapeXml(driver.LicenceNumber ?? string.Empty)).Append("\"")
+                .Append(" DriverLicenceIssueDate=\"").Append(FormatXmlDate(driver.LicenceIssueDate ?? legacyEmptyDate)).Append("\"")
+                .Append(" DriverLicenceLastVerifiedDate=\"").Append(FormatXmlDate(driver.LicenceLastVerifiedDate ?? legacyEmptyDate)).Append("\"")
+                .Append(" DriverHasPDP=\"").Append(driver.HasPdp ? "YES" : "NO").Append("\"")
+                .Append(" DriverPDPExpiryDate=\"").Append(FormatXmlDate(driver.PdpExpiryDate ?? legacyEmptyDate)).Append("\"")
+                .Append(" DriverLicenseExpiryDate=\"").Append(FormatXmlDate(driver.LicenceExpiryDate ?? legacyEmptyDate)).Append("\"")
+                .Append(" DriverIsActive=\"").Append(driver.IsActive ? "YES" : "NO").Append("\">")
+                // The archived DEV_INS/UPD_TripXML OpenXML contract reads
+                // SiteCode from ./Contract/@SiteCode relative to each Driver
+                // node. Keep the trip-level Contract node for the authority
+                // insert and also emit this child node so the legacy
+                // procedure persists the validated driver site instead of
+                // silently inserting NULL.
+                .Append("<Contract SiteCode=\"")
+                .Append((driver.SiteCode ?? contract.site_code).ToString(CultureInfo.InvariantCulture))
+                .Append("\" />");
+            xml.Append("</Driver>");
+        }
+
+        foreach (var passenger in passengers)
+        {
+            xml.Append("<Passenger PassengerDBId=\"\" PassengerName=\"")
+                .Append(EscapeXml(passenger.Name))
+                .Append("\" PersalNumber=\"\" />");
+        }
+
+        for (var index = 0; index < routes.Count; index++)
+        {
+            var route = routes[index];
+            var routeCode = routeCodes is not null && index < routeCodes.Count
+                ? routeCodes[index].ToString(CultureInfo.InvariantCulture)
+                : string.Empty;
+            var endOdometer = routeEndOdometers is not null && index < routeEndOdometers.Count
+                ? routeEndOdometers[index]?.ToString(CultureInfo.InvariantCulture) ?? string.Empty
+                : string.Empty;
+            var distance = routeDistances is not null && index < routeDistances.Count
+                ? routeDistances[index]?.ToString(CultureInfo.InvariantCulture) ?? "0"
+                : "0";
+            xml.Append("<RouteItem RouteDBId=\"").Append(routeCode).Append("\"")
+                .Append(" StartDate=\"").Append(FormatXmlDate(route.StartDate)).Append("\"")
+                .Append(" EndDate=\"").Append(FormatXmlDate(route.EndDate)).Append("\"")
+                .Append(" StartODOMeter=\"").Append(route.StartOdometer?.ToString(CultureInfo.InvariantCulture) ?? "0").Append("\"")
+                .Append(" EndODOMeter=\"").Append(endOdometer).Append("\"")
+                .Append(" Responsibility=\"").Append(EscapeXml(route.ResponsibilityCode ?? string.Empty)).Append("\"")
+                .Append(" Objective=\"").Append(EscapeXml(route.ObjectiveCode ?? string.Empty)).Append("\"")
+                .Append(" StartLocationName=\"").Append(EscapeXml(route.StartLocation ?? string.Empty)).Append("\"")
+                .Append(" EndLocationName=\"").Append(EscapeXml(route.EndLocation ?? string.Empty)).Append("\"")
+                .Append(" EstimatedDistance=\"").Append(route.EstimatedDistance?.ToString(CultureInfo.InvariantCulture) ?? "0").Append("\"")
+                .Append(" Distance=\"").Append(distance).Append("\" EditedBy=\"").Append(currentUserId.ToString(CultureInfo.InvariantCulture)).Append("\"")
+                .Append(" ProjectNumber=\"").Append(EscapeXml(route.ProjectNumber ?? string.Empty)).Append("\"")
+                .Append(" Fund=\"").Append(EscapeXml(route.FundCode ?? string.Empty)).Append("\" />");
+        }
+
+        xml.Append("</Trip></ROOT>");
+        return xml.ToString();
+    }
+
+    private static string BuildLegacyUpdateTripXml(
+        Trip trip,
+        TripAuthorityDetails details,
+        int currentUserId
+    )
+    {
+        var drivers = details.Drivers
+            .Select(driver => new TripAuthorityDriverInput(
+                driver.Name,
+                driver.IdentityNumber,
+                driver.IsPrimary,
+                driver.SiteCode,
+                driver.LicenceTypeCode,
+                driver.PassportNumber,
+                driver.PersalNumber,
+                driver.ContractNumber,
+                driver.LicenceNumber,
+                driver.LicenceIssueDate,
+                driver.LicenceLastVerifiedDate,
+                driver.HasPdp,
+                driver.PdpExpiryDate,
+                driver.LicenceExpiryDate,
+                driver.IsActive
+            ))
+            .ToArray();
+        var passengers = details.Passengers
+            .Select(passenger => new TripAuthorityPassengerInput(passenger.Name ?? string.Empty))
+            .ToArray();
+        var legacyEmptyDate = new DateTime(1900, 1, 1);
+        var routes = details.Routes
+            .Select(route => new TripAuthorityRouteInput(
+                route.StartDate ?? legacyEmptyDate,
+                route.EndDate ?? legacyEmptyDate,
+                route.StartLocation,
+                route.EndLocation,
+                route.EstimatedDistance,
+                route.ResponsibilityCode ?? string.Empty,
+                route.ObjectiveCode ?? string.Empty,
+                route.ProjectNumber ?? string.Empty,
+                route.FundCode ?? string.Empty,
+                route.StartOdometer
+            ))
+            .ToArray();
+        var routeCodes = details.Routes.Select(route => route.RouteCode).ToArray();
+        var routeEndOdometers = details.Routes.Select(route => route.EndOdometer).ToArray();
+        var routeDistances = details.Routes.Select(route => route.Distance).ToArray();
+
+        return BuildLegacyCreateTripXml(
+            trip,
+            drivers,
+            passengers,
+            routes,
+            // The legacy procedure writes UserID to user_access_code. Pass the
+            // authenticated actor so route-side modified_by_user_code and the
+            // audit trigger identify the editor; the surrounding transaction
+            // restores the original authority owner after the procedure.
+            currentUserId,
+            routeCodes,
+            routeEndOdometers,
+            routeDistances,
+            trip.trip_authority_code
+        );
+    }
+
+    private async Task<int> ExecuteLegacyRenewalProcedureAsync(
+        int tripId,
+        string xml
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = "DEV_UPD_TripXMLForRenewalOfTrip";
+            command.CommandTimeout = 0;
+
+            AddParameter(command, "@IncommingTrip", DbType.Int32, tripId);
+            AddParameter(command, "@XmlDocument", DbType.String, xml);
+            var output = command.CreateParameter();
+            output.ParameterName = "@Tript";
+            output.DbType = DbType.String;
+            output.Size = 150;
+            output.Direction = ParameterDirection.Output;
+            command.Parameters.Add(output);
+
+            await command.ExecuteNonQueryAsync();
+            var raw = output.Value is null or DBNull
+                ? null
+                : Convert.ToString(output.Value, CultureInfo.InvariantCulture);
+            if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var renewedTripId)
+                || renewedTripId <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"The legacy trip-renewal procedure completed without returning a new trip authority code for trip {tripId}."
+                );
+            }
+
+            return renewedTripId;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task RestoreTripOwnerAsync(
+        int tripId,
+        short? owner,
+        int? modifiedByUserId = null
+    )
+    {
+        if (tripId <= 0)
+        {
+            return;
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            var columns = await GetTableColumnsAsync(TableName);
+            var assignments = new List<string> { "[user_access_code] = @owner" };
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var actorUserId = modifiedByUserId.GetValueOrDefault();
+            if (actorUserId > 0 && columns.Contains("modified_by_user_code"))
+            {
+                assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
+                AddParameter(
+                    command,
+                    "@modifiedByUserCode",
+                    DbType.Int32,
+                    actorUserId
+                );
+            }
+            if (actorUserId > 0 && columns.Contains("date_updated"))
+            {
+                assignments.Add("[date_updated] = @dateUpdated");
+                AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
+            }
+            command.CommandText = $"""
+                UPDATE [dbo].[{TableName}]
+                SET {string.Join(", ", assignments)}
+                WHERE [trip_authority_code] = @tripId
+                """;
+            AddParameter(command, "@owner", DbType.Int16, owner);
+            AddParameter(command, "@tripId", DbType.Int32, tripId);
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<T> ExecuteInLegacyTransactionAsync<T>(
+        string savepointName,
+        Func<Task<T>> operation
+    )
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(savepointName);
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var existingTransaction = _context.Database.CurrentTransaction;
+        var ownsTransaction = existingTransaction is null;
+        var transaction = ownsTransaction
+            ? await _context.Database.BeginTransactionAsync()
+            : null;
+
+        if (!ownsTransaction)
+        {
+            await existingTransaction!.CreateSavepointAsync(savepointName);
+        }
+
+        try
+        {
+            var result = await operation();
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync();
+            }
+
+            return result;
+        }
+        catch
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync();
+            }
+            else if (existingTransaction is not null)
+            {
+                await existingTransaction.RollbackToSavepointAsync(savepointName);
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+            {
+                await transaction.DisposeAsync();
+            }
+        }
     }
 
     private async Task<bool> IsLegacyProcedureAvailableAsync(

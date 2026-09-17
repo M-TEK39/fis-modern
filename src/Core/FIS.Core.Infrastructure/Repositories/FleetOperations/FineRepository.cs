@@ -382,6 +382,12 @@ public class FineRepository : IFineRepository
         {
             throw new InvalidOperationException($"Fine with Fine_code {fine.Fine_code} not found");
         }
+        if (fine.vmf_code != existing.vmf_code)
+        {
+            throw new InvalidOperationException(
+                "The vehicle for an existing fine cannot be changed."
+            );
+        }
 
         var availableColumns = await GetAvailableColumnsAsync();
         var values = BuildCommonWriteValues(fine);

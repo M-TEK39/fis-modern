@@ -361,6 +361,7 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
 
     private async Task UpdateVehicleOdometerAsync(Logsheet logsheet)
     {
+        await EnsureVehicleMasterAuditTriggerAsync();
         await using var scope = await OpenConnectionAsync();
         await using var command = scope.Connection.CreateCommand();
         command.Transaction = CurrentTransaction;
@@ -382,9 +383,54 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
         await command.ExecuteNonQueryAsync();
     }
 
+    private async Task EnsureVehicleMasterAuditTriggerAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = CurrentTransaction;
+            command.CommandText = """
+                SELECT [tr].[is_disabled]
+                FROM [sys].[triggers] AS [tr]
+                INNER JOIN [sys].[tables] AS [tb]
+                    ON [tb].[object_id] = [tr].[parent_id]
+                INNER JOIN [sys].[schemas] AS [sc]
+                    ON [sc].[schema_id] = [tb].[schema_id]
+                WHERE [sc].[name] = N'dbo'
+                  AND [tb].[name] = N'vehicle_master'
+                  AND [tr].[name] = N'TRG_Audit_Vehicle_Master_Update'
+                """;
+            var value = await command.ExecuteScalarAsync();
+            if (value is not null and not DBNull && Convert.ToBoolean(value))
+            {
+                throw new NotSupportedException(
+                    "The legacy vehicle_master audit trigger is disabled; the logsheet odometer update was not applied."
+                );
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
     public async Task<Logsheet> UpdateAsync(Logsheet logsheet, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(logsheet);
+        var existing = await GetByIdAsync(logsheet.log_code)
+            ?? throw new KeyNotFoundException($"Logsheet not found with code: {logsheet.log_code}");
+        if (logsheet.vmf_code != existing.vmf_code)
+        {
+            throw new InvalidOperationException(
+                "The vehicle for an existing logsheet cannot be changed."
+            );
+        }
         await EnsureLegacyTriggersAsync(
             "TRG_UPD_LogsheetJournalDetailRecord",
             "TRG_INS_UPD_Logsheet_Check_Overlap",
@@ -475,7 +521,13 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
             false
         );
         await ExecuteUpdateAsync(logsheet.log_code, values);
-        return await GetByIdAsync(logsheet.log_code)
+        // TRG_UPD_LogsheetJournalDetailRecord is an INSTEAD OF UPDATE trigger.
+        // Once a logsheet has been charged it keeps the original row unchanged,
+        // creates a reversal/re-bill journal pair, and inserts the edited row as
+        // a child (parent_log_code = the edited row). Return that current leaf
+        // so callers continue editing/reporting the row that now represents the
+        // transaction, while preserving the original row for audit history.
+        return await GetLatestVersionAsync(logsheet.log_code)
             ?? throw new KeyNotFoundException($"Logsheet not found with code: {logsheet.log_code}");
     }
 
@@ -552,6 +604,22 @@ internal sealed class LegacyLogsheetRepository : ILogsheetRepository
         AddParameter(command, "@logCode", DbType.Int32, logCode);
         if (await command.ExecuteNonQueryAsync() == 0)
             throw new KeyNotFoundException($"Logsheet not found with code: {logCode}");
+    }
+
+    private async Task<Logsheet?> GetLatestVersionAsync(int logCode)
+    {
+        var columns = await GetAvailableColumnsAsync();
+        if (!columns.ContainsKey("parent_log_code"))
+            return await GetByIdAsync(logCode);
+
+        var child = (
+            await QueryAsync(
+                "l.[parent_log_code] = @parentLogCode",
+                command => AddParameter(command, "@parentLogCode", DbType.Int32, logCode)
+            )
+        ).OrderByDescending(item => item.log_code).FirstOrDefault();
+
+        return child ?? await GetByIdAsync(logCode);
     }
 
     private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync()

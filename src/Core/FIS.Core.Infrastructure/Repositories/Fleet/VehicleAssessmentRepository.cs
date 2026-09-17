@@ -151,6 +151,16 @@ public class VehicleAssessmentRepository : IVehicleAssessmentRepository
     {
         if (assessment == null)
             throw new ArgumentNullException(nameof(assessment));
+
+        var existing = await GetByIdAsync(assessment.vehicle_assessment_code)
+            ?? throw new KeyNotFoundException(
+                $"Vehicle assessment with code {assessment.vehicle_assessment_code} was not found."
+            );
+        if (assessment.vmf_code is > 0 && assessment.vmf_code != existing.vmf_code)
+            throw new InvalidOperationException(
+                "The vehicle for an existing assessment cannot be changed."
+            );
+        assessment.vmf_code = existing.vmf_code;
         ValidateAssessment(assessment, requireVehicleCode: false);
         var procedure = await ResolveProcedureAsync("DEV_UPD_Vehicle_Assessment");
         if (procedure is not null)

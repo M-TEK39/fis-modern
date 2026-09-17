@@ -517,9 +517,11 @@ function ContractFacts({ contract }: Readonly<{ contract: ContractRecord }>) {
 function HireForm({
   vehicle,
   references,
+  today,
 }: Readonly<{
   vehicle: ContractVehicleSearchResult;
   references: ContractReferenceData;
+  today: string;
 }>) {
   return (
     <form action={hireContractAction} className="vehicle-status-maintenance-panel">
@@ -540,6 +542,19 @@ function HireForm({
             Site
           </label>
           <SiteSelect id="new-contract-site" name="siteCode" required sites={references.sites} />
+        </div>
+        <div className="form-field">
+          <label className="form-label" htmlFor="new-contract-start">
+            Contract start date
+          </label>
+          <input
+            className="form-input"
+            id="new-contract-start"
+            name="startDate"
+            type="date"
+            defaultValue={today}
+            required
+          />
         </div>
         <div className="form-field">
           <label className="form-label" htmlFor="new-contract-odo">
@@ -579,6 +594,7 @@ function HireForm({
             id="new-contract-return"
             name="targetReturnDate"
             type="date"
+            required
           />
         </div>
         <div className="form-field">
@@ -1088,7 +1104,7 @@ function ContractVehicleView({
 }: Readonly<{ data: Extract<ContractDetailData, { kind: "ok" }> }>) {
   if (!data.vehicle) return null;
   return data.canCapture ? (
-    <HireForm references={data.references} vehicle={data.vehicle} />
+    <HireForm references={data.references} today={data.today} vehicle={data.vehicle} />
   ) : (
     <p className="muted-copy">You can view this vehicle but do not have capture access.</p>
   );
@@ -1286,7 +1302,7 @@ async function renderContractDetailPageContent({
             </>
           ) : vehicle ? (
             canCapture ? (
-              <HireForm references={references} vehicle={vehicle} />
+              <HireForm references={references} today={today} vehicle={vehicle} />
             ) : (
               <p className="muted-copy">
                 You can view this vehicle but do not have capture access.

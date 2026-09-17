@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using FIS.Api.Services;
 using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Operations;
@@ -21,16 +22,22 @@ public class JobCardController : BaseApiController
 
     private readonly IJobCardRepository _repository;
     private readonly IContractRepository _contractRepository;
+    private readonly IVehicleRepository _vehicleRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<JobCardController> _logger;
 
     public JobCardController(
         IJobCardRepository repository,
         IContractRepository contractRepository,
+        IVehicleRepository vehicleRepository,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<JobCardController> logger
     )
     {
         _repository = repository;
         _contractRepository = contractRepository;
+        _vehicleRepository = vehicleRepository;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
@@ -48,7 +55,9 @@ public class JobCardController : BaseApiController
         try
         {
             _logger.LogInformation("Getting all job cards");
-            var jobCards = await _repository.GetAllAsync();
+            var allowedVehicles = await GetAccessibleVmfCodesAsync();
+            var jobCards = (await _repository.GetAllAsync())
+                .Where(jobCard => allowedVehicles.Contains(jobCard.vmf_code));
             var dtos = jobCards.Select(MapToDto);
             return Ok(dtos);
         }
@@ -99,7 +108,8 @@ public class JobCardController : BaseApiController
                     search,
                     normalizedSearchType,
                     parsedStatusCodes,
-                    jobCardId
+                    jobCardId,
+                    await GetAccessibleVmfCodesAsync()
                 )
             );
 
@@ -146,6 +156,8 @@ public class JobCardController : BaseApiController
                 _logger.LogWarning("Job card not found with ID: {JobCardId}", id);
                 return NotFound(new { error = $"Job card not found with ID: {id}" });
             }
+            if (!await IsVehicleAllowedAsync(jobCard.vmf_code))
+                return NotFound(new { error = $"Job card not found with ID: {id}" });
 
             return Ok(MapToDto(jobCard));
         }
@@ -174,7 +186,9 @@ public class JobCardController : BaseApiController
         try
         {
             _logger.LogInformation("Getting job cards for GG number: {GGNumber}", ggNumber);
-            var jobCards = await _repository.GetByGGNumberAsync(ggNumber);
+            var allowedVehicles = await GetAccessibleVmfCodesAsync();
+            var jobCards = (await _repository.GetByGGNumberAsync(ggNumber))
+                .Where(jobCard => allowedVehicles.Contains(jobCard.vmf_code));
             var dtos = jobCards.Select(MapToDto);
             return Ok(dtos);
         }
@@ -200,7 +214,9 @@ public class JobCardController : BaseApiController
         try
         {
             _logger.LogInformation("Getting priority unassigned job cards");
-            var jobCards = await _repository.GetPriorityUnassignedAsync();
+            var allowedVehicles = await GetAccessibleVmfCodesAsync();
+            var jobCards = (await _repository.GetPriorityUnassignedAsync())
+                .Where(jobCard => allowedVehicles.Contains(jobCard.vmf_code));
             var dtos = jobCards.Select(MapToDto);
             return Ok(dtos);
         }
@@ -233,7 +249,8 @@ public class JobCardController : BaseApiController
             var result = await _repository.GetPriorityUnassignedPageAsync(
                 new PriorityUnassignedJobCardPageQuery(
                     Math.Max(1, page),
-                    Math.Clamp(pageSize, 1, 100)
+                    Math.Clamp(pageSize, 1, 100),
+                    await GetAccessibleVmfCodesAsync()
                 )
             );
 
@@ -274,8 +291,14 @@ public class JobCardController : BaseApiController
         {
             if (!HasJobCardCapturerRole())
                 return Forbid();
+            if (createDto is null)
+                return BadRequest(new { error = "Job card data is required." });
+            if (createDto.vmf_code <= 0 || createDto.extra_code <= 0)
+                return BadRequest(new { error = "A valid vehicle and extra code are required." });
 
             int currentUserId = GetCurrentUserId();
+            if (!await IsVehicleAllowedAsync(createDto.vmf_code))
+                return Forbid();
             _logger.LogInformation(
                 "Creating new job card for vehicle {VmfCode}, extra {ExtraCode} by user {UserId}",
                 createDto.vmf_code,
@@ -329,6 +352,8 @@ public class JobCardController : BaseApiController
         {
             if (!HasJobCardCapturerRole())
                 return Forbid();
+            if (updateDto is null)
+                return BadRequest(new { error = "Job card data is required." });
 
             int currentUserId = GetCurrentUserId();
             _logger.LogInformation(
@@ -343,6 +368,8 @@ public class JobCardController : BaseApiController
                 _logger.LogWarning("Job card not found with ID: {JobCardId}", id);
                 return NotFound(new { error = $"Job card not found with ID: {id}" });
             }
+            if (!await IsVehicleAllowedAsync(existingJobCard.vmf_code))
+                return NotFound(new { error = $"Job card not found with ID: {id}" });
 
             if (
                 !string.IsNullOrWhiteSpace(updateDto.damages)
@@ -421,6 +448,8 @@ public class JobCardController : BaseApiController
                 _logger.LogWarning("Job card not found with ID: {JobCardId}", id);
                 return NotFound(new { error = $"Job card not found with ID: {id}" });
             }
+            if (!await IsVehicleAllowedAsync(jobCard.vmf_code))
+                return NotFound(new { error = $"Job card not found with ID: {id}" });
 
             // Prevent self-approval
             var selfApprovalCheck = ValidateSelfApprovalPrevention(jobCard, currentUserId);
@@ -496,6 +525,8 @@ public class JobCardController : BaseApiController
                 _logger.LogWarning("Job card not found with ID: {JobCardId}", id);
                 return NotFound(new { error = $"Job card not found with ID: {id}" });
             }
+            if (!await IsVehicleAllowedAsync(jobCard.vmf_code))
+                return NotFound(new { error = $"Job card not found with ID: {id}" });
 
             // Prevent self-review/decline
             var selfApprovalCheck = ValidateSelfApprovalPrevention(jobCard, currentUserId);
@@ -559,6 +590,12 @@ public class JobCardController : BaseApiController
                 id
             );
 
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing is null)
+                return NotFound(new { error = $"Job card not found with ID: {id}" });
+            if (!await IsVehicleAllowedAsync(existing.vmf_code))
+                return NotFound(new { error = $"Job card not found with ID: {id}" });
+
             var canceled = await _repository.CancelAsync(
                 id,
                 currentUserId,
@@ -611,6 +648,11 @@ public class JobCardController : BaseApiController
                 return Forbid();
 
             int currentUserId = GetCurrentUserId();
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing is null)
+                return NotFound(new { error = $"Job card not found with ID: {id}" });
+            if (!await IsVehicleAllowedAsync(existing.vmf_code))
+                return NotFound(new { error = $"Job card not found with ID: {id}" });
             _logger.LogInformation("User {UserId} closing job card {JobCardId}", currentUserId, id);
 
             if (
@@ -680,6 +722,11 @@ public class JobCardController : BaseApiController
                 return Forbid();
 
             int currentUserId = GetCurrentUserId();
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing is null)
+                return NotFound(new { error = $"Job card not found with ID: {id}" });
+            if (!await IsVehicleAllowedAsync(existing.vmf_code))
+                return NotFound(new { error = $"Job card not found with ID: {id}" });
             _logger.LogInformation(
                 "User {UserId} deleting job card {JobCardId}",
                 currentUserId,
@@ -756,7 +803,10 @@ public class JobCardController : BaseApiController
 
         try
         {
-            var results = (await _repository.GetByStatusAsync(5)).AsEnumerable();
+            var allowedVehicles = await GetAccessibleVmfCodesAsync();
+            var results = (await _repository.GetByStatusAsync(5))
+                .Where(jobCard => allowedVehicles.Contains(jobCard.vmf_code))
+                .AsEnumerable();
 
             if (vmfCode.HasValue)
                 results = results.Where(j => j.vmf_code == vmfCode.Value);
@@ -850,12 +900,14 @@ public class JobCardController : BaseApiController
 
         try
         {
-            IReadOnlyCollection<int>? vehiclesAtSite = null;
+            var accessibleVehicles = await GetAccessibleVmfCodesAsync();
+            IReadOnlyCollection<int>? vehiclesAtSite = accessibleVehicles;
             if (siteCode.HasValue)
             {
                 vehiclesAtSite = (await _contractRepository.GetAllAsync())
                     .Where(c => c.site_code == siteCode.Value)
                     .Select(c => c.vmf_code)
+                    .Where(accessibleVehicles.Contains)
                     .Distinct()
                     .ToArray();
             }
@@ -978,6 +1030,31 @@ public class JobCardController : BaseApiController
     private bool HasJobCardAuthorizerRole() => HasAnyRole(JobCardAuthorizerRole);
 
     private bool HasJobCardAccess() => HasJobCardCapturerRole() || HasJobCardAuthorizerRole();
+
+    private async Task<bool> IsVehicleAllowedAsync(int vmfCode)
+    {
+        var allowedSites = await _vehicleScope.ResolveAllowedSiteCodesAsync(
+            User,
+            HttpContext.RequestAborted
+        );
+        return await _vehicleRepository.GetByIdAsync(
+            vmfCode,
+            allowedSites,
+            GetCurrentUserId()
+        ) is not null;
+    }
+
+    private async Task<HashSet<int>> GetAccessibleVmfCodesAsync()
+    {
+        var allowedSites = await _vehicleScope.ResolveAllowedSiteCodesAsync(
+            User,
+            HttpContext.RequestAborted
+        );
+        return (await _vehicleRepository.GetAllAsync(
+            allowedSites,
+            GetCurrentUserId()
+        )).Select(vehicle => vehicle.vmf_code).ToHashSet();
+    }
 
     private bool HasAnyRole(params string[] expectedRoles)
     {

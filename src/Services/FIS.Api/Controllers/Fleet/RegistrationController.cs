@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
@@ -27,16 +28,19 @@ public class RegistrationController : BaseApiController
 {
     private readonly FisDbContext _context;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<RegistrationController> _logger;
 
     public RegistrationController(
         FisDbContext context,
         IVehicleRepository vehicleRepository,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<RegistrationController> logger
     )
     {
         _context = context;
         _vehicleRepository = vehicleRepository;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
@@ -66,7 +70,11 @@ public class RegistrationController : BaseApiController
     {
         try
         {
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
                 return NotFound(new { message = $"Vehicle {vmfCode} not found" });
@@ -111,7 +119,11 @@ public class RegistrationController : BaseApiController
             var term = q.Trim().ToUpperInvariant();
 
             // 1. Vehicles whose CURRENT registration matches
-            var currentMatches = (await _vehicleRepository.SearchVehiclesAsync(term))
+            var currentMatches = (await _vehicleRepository.SearchVehiclesAsync(
+                term,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            ))
                 .Where(vehicle =>
                     !string.IsNullOrWhiteSpace(vehicle.registration_number)
                     && vehicle.registration_number.Contains(
@@ -185,7 +197,11 @@ public class RegistrationController : BaseApiController
 
         try
         {
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
                 return NotFound(new { message = $"Vehicle {vmfCode} not found" });
@@ -241,6 +257,9 @@ public class RegistrationController : BaseApiController
                 StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
             ).Any(role => string.Equals(role, expectedRole, StringComparison.OrdinalIgnoreCase))
         );
+
+    private Task<IReadOnlySet<short>?> ResolveAllowedVehicleSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
 
     private async Task<HashSet<string>> GetRegistrationColumnsAsync(
         DbConnection connection,
@@ -356,7 +375,11 @@ public class RegistrationController : BaseApiController
             var results = new List<RegistrationSearchResult>();
             foreach (var match in matches)
             {
-                var vehicle = await _vehicleRepository.GetByIdAsync(match.VmfCode);
+                var vehicle = await _vehicleRepository.GetByIdAsync(
+                    match.VmfCode,
+                    await ResolveAllowedVehicleSiteCodesAsync(),
+                    GetCurrentUserId()
+                );
                 if (vehicle is null)
                     continue;
 

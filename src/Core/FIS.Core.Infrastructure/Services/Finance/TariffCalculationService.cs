@@ -1,3 +1,6 @@
+using System.Data;
+using System.Data.Common;
+using System.Globalization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Services.Billing;
 using FIS.Core.Domain.Entities.Financial;
@@ -45,6 +48,22 @@ public class TariffCalculationService : ITariffCalculationService
         TariffType tariffType
     )
     {
+        // The legacy billing function is the source of truth for this
+        // contract-code overload. It contains the special internal-site,
+        // cancelled-contract, lease, fiscal-year, and incomplete-tariff rules
+        // that cannot be safely reconstructed from a partial EF projection.
+        // Only use the existing compatibility calculation when the function
+        // is genuinely absent from the connected database.
+        var legacyResult = await TryGetLegacyVehicleTariffAsync(
+            contractCode,
+            checkDate,
+            tariffType
+        );
+        if (legacyResult is not null)
+        {
+            return legacyResult;
+        }
+
         var contract = await _contractRepository.GetByIdAsync(contractCode);
         if (contract is null || contract.Vehicle is null || contract.is_deleted)
         {
@@ -66,6 +85,190 @@ public class TariffCalculationService : ITariffCalculationService
             checkDate,
             tariffType
         );
+    }
+
+    public async Task<string?> GetConfiguredContractTypeAsync(int vmfCode, DateTime checkDate)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            var hasConfiguredTariffFunction = false;
+            await using (var existsCommand = connection.CreateCommand())
+            {
+                existsCommand.CommandText = """
+                    SELECT CASE WHEN EXISTS
+                    (
+                        SELECT 1
+                        FROM [sys].[objects] AS [o]
+                        INNER JOIN [sys].[schemas] AS [s] ON [s].[schema_id] = [o].[schema_id]
+                        WHERE [s].[name] = N'fin'
+                          AND [o].[name] = N'GetVehicleConfiguredTariff'
+                          AND [o].[type] IN (N'IF', N'TF')
+                    ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END
+                    """;
+                hasConfiguredTariffFunction = Convert.ToBoolean(
+                    await existsCommand.ExecuteScalarAsync()
+                );
+            }
+
+            if (hasConfiguredTariffFunction)
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText = """
+                SELECT TOP (1) [configured].[contract_type]
+                FROM [fin].[GetVehicleConfiguredTariff](@vmfCode, @checkDate) AS [configured]
+                WHERE [configured].[contract_type] IS NOT NULL
+                ORDER BY [configured].[have_valid_tariff] DESC, [configured].[contract_type]
+                """;
+                AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
+                AddParameter(command, "@checkDate", DbType.DateTime2, checkDate.Date);
+                var value = await command.ExecuteScalarAsync();
+                var configured = value is null or DBNull
+                    ? null
+                    : Convert.ToString(value, CultureInfo.InvariantCulture)?.Trim().ToUpperInvariant();
+                if (!string.IsNullOrWhiteSpace(configured))
+                {
+                    return configured;
+                }
+            }
+
+            // Very old restored databases may have the mapping tables but not
+            // the table-valued helper. Resolve the same vehicle-source/type
+            // mapping directly from those legacy tables rather than inventing
+            // a modern-only H contract type.
+            await using (var mappingExistsCommand = connection.CreateCommand())
+            {
+                mappingExistsCommand.CommandText = """
+                    SELECT CASE WHEN OBJECT_ID(N'dbo.vehicle_master', N'U') IS NOT NULL
+                                      AND OBJECT_ID(N'dbo.Contract_Type_Group_Mapping', N'U') IS NOT NULL
+                                      AND OBJECT_ID(N'dbo.Contract_Type_Map', N'U') IS NOT NULL
+                                 THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END
+                    """;
+                if (!Convert.ToBoolean(await mappingExistsCommand.ExecuteScalarAsync()))
+                {
+                    return null;
+                }
+            }
+
+            await using var mappingCommand = connection.CreateCommand();
+            mappingCommand.CommandText = """
+                SELECT TOP (1) [ctm].[contract_type]
+                FROM [dbo].[vehicle_master] AS [vm]
+                INNER JOIN [dbo].[Contract_Type_Group_Mapping] AS [ctgm]
+                    ON [ctgm].[type_code] = [vm].[type_code]
+                   AND ([vm].[vs_code] IS NULL OR [ctgm].[vs_code] = [vm].[vs_code])
+                INNER JOIN [dbo].[Contract_Type_Map] AS [ctm]
+                    ON [ctm].[ctg_code] = [ctgm].[ctg_code]
+                WHERE [vm].[vmf_code] = @vmfCode
+                  AND [ctm].[contract_type] IN (N'A', N'B', N'C', N'L')
+                ORDER BY [ctgm].[ctg_code], [ctm].[contract_type]
+                """;
+            AddParameter(mappingCommand, "@vmfCode", DbType.Int32, vmfCode);
+            var mapped = await mappingCommand.ExecuteScalarAsync();
+            return mapped is null or DBNull
+                ? null
+                : Convert.ToString(mapped, CultureInfo.InvariantCulture)?.Trim().ToUpperInvariant();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<TariffResult?> TryGetLegacyVehicleTariffAsync(
+        int contractCode,
+        DateTime checkDate,
+        TariffType tariffType
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using (var existsCommand = connection.CreateCommand())
+            {
+                existsCommand.CommandText = "SELECT OBJECT_ID(N'dbo.GetVehicleTariff', N'FN')";
+                var objectId = await existsCommand.ExecuteScalarAsync();
+                if (objectId is null or DBNull)
+                {
+                    return null;
+                }
+            }
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT dbo.GetVehicleTariff(@contractCode, @checkDate, @tariffType)";
+            AddParameter(command, "@contractCode", DbType.Int32, contractCode);
+            AddParameter(command, "@checkDate", DbType.DateTime2, checkDate);
+            AddParameter(
+                command,
+                "@tariffType",
+                DbType.String,
+                tariffType == TariffType.Kilos ? "kilos" : "fixed"
+            );
+
+            var raw = await command.ExecuteScalarAsync();
+            if (raw is null or DBNull)
+            {
+                return TariffResult.Error(
+                    TariffStatus.NoMatch,
+                    "The legacy vehicle-tariff function returned no value."
+                );
+            }
+
+            var amount = Convert.ToDecimal(raw, CultureInfo.InvariantCulture);
+            return amount switch
+            {
+                -1m => TariffResult.Error(
+                    TariffStatus.YearNotFound,
+                    "The legacy tariff function could not resolve the vehicle year."
+                ),
+                -2m => TariffResult.Error(
+                    TariffStatus.NoMatch,
+                    "The legacy tariff function found no effective tariff."
+                ),
+                -3m => TariffResult.Error(
+                    TariffStatus.Incomplete,
+                    "The legacy tariff function found an incomplete vehicle tariff."
+                ),
+                0m => TariffResult.Success(0m, TariffSource.SpecialRule),
+                _ => TariffResult.Success(amount, TariffSource.Legacy),
+            };
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static void AddParameter(
+        DbCommand command,
+        string name,
+        DbType type,
+        object value
+    )
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
     }
 
     public async Task<TariffResult> GetVehicleTariffAsync(
@@ -411,16 +614,21 @@ public class TariffCalculationService : ITariffCalculationService
             ContractBillings = new List<ContractBilling>(),
         };
 
-        var contracts = await _context
-            .Contracts.Where(c =>
-                !c.is_deleted && c.site_code == siteCode && c.still_current == "Y"
+        // Do not use the EF contract set here: its static model includes
+        // expanded audit columns that are absent on the original client
+        // schema. The compatibility repository selects only columns proven to
+        // exist and still supplies the vehicle/site projections needed by the
+        // tariff calculation.
+        var contracts = (await _contractRepository.GetActiveContractsAsync())
+            .Where(contract => contract.site_code == siteCode)
+            .Where(contract => (contract.Site?.Depatrment_code ?? 0) == departmentCode)
+            .Where(contract =>
+                contract.start_date.Date <= billingPeriodEnd.Date
+                && (!contract.end_date.HasValue || contract.end_date.Value.Date >= billingPeriodStart.Date)
             )
-            .Include(c => c.Vehicle)
-            .ToListAsync();
+            .ToList();
 
-        foreach (
-            var contract in contracts.Where(c => (c.Site?.Depatrment_code ?? 0) == departmentCode)
-        )
+        foreach (var contract in contracts)
         {
             var fixedResult = await GetVehicleTariffAsync(
                 contract.contract_code,
@@ -432,7 +640,13 @@ public class TariffCalculationService : ITariffCalculationService
                 billingPeriodEnd,
                 TariffType.Kilos
             );
-            var quantityDays = Math.Max(0, (billingPeriodEnd.Date - billingPeriodStart.Date).Days);
+            // Legacy journal calculations treat both period boundaries as
+            // billable dates (DATEDIFF + 1). Excluding the final day causes a
+            // one-day revenue gap in otherwise complete monthly reports.
+            var quantityDays = Math.Max(
+                0,
+                (billingPeriodEnd.Date - billingPeriodStart.Date).Days + 1
+            );
 
             var fixedAmount = Math.Round(quantityDays * fixedResult.Amount, 2);
             var variableAmount = 0m;

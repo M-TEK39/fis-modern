@@ -4,9 +4,15 @@ export function hasReportsRole(roles: readonly string[]) {
   return roles.some(
     (role) =>
       role.trim().toLowerCase() === "reports" ||
+      role.trim().toLowerCase() === "systemadministrator" ||
+      role.trim().toLowerCase() === "system administrator" ||
       role.trim().toLowerCase() === "administrator" ||
       role.trim().toLowerCase() === "admin",
   );
+}
+
+export function hasTariffReportsRole(roles: readonly string[]) {
+  return hasReportsRole(roles) || roles.some((role) => role.trim().toLowerCase() === "validation");
 }
 
 export function hasContractReportsRole(roles: readonly string[]) {

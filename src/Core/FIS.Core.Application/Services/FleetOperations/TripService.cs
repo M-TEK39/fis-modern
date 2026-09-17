@@ -14,6 +14,7 @@ public class TripService : ITripService
     private readonly ITripRepository _tripRepository;
     private readonly IContractRepository _contractRepository;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly IDriverRepository _driverRepository;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly ILogger<TripService> _logger;
 
@@ -21,6 +22,7 @@ public class TripService : ITripService
         ITripRepository tripRepository,
         IContractRepository contractRepository,
         IVehicleRepository vehicleRepository,
+        IDriverRepository driverRepository,
         ICurrentUserContext currentUserContext,
         ILogger<TripService> logger
     )
@@ -30,6 +32,8 @@ public class TripService : ITripService
             contractRepository ?? throw new ArgumentNullException(nameof(contractRepository));
         _vehicleRepository =
             vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
+        _driverRepository =
+            driverRepository ?? throw new ArgumentNullException(nameof(driverRepository));
         _currentUserContext =
             currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -163,6 +167,48 @@ public class TripService : ITripService
             await _contractRepository.GetByIdAsync(trip.contract_code)
             ?? throw new InvalidOperationException($"Contract {trip.contract_code} was not found");
 
+        // Legacy CreateTrip binds the driver selector to the selected
+        // contract site. Do the same check at the service boundary so a
+        // crafted API payload cannot assign a Johannesburg driver to a Cape
+        // Town vehicle (or omit the site and let the procedure infer one).
+        var invalidDriver = drivers.FirstOrDefault(driver =>
+            driver.SiteCode is not > 0 || driver.SiteCode != contract.site_code
+        );
+        if (invalidDriver is not null)
+        {
+            throw new ArgumentException(
+                $"Driver '{invalidDriver.Name}' belongs to site {invalidDriver.SiteCode?.ToString() ?? "unknown"} and cannot be assigned to contract site {contract.site_code}.",
+                nameof(drivers)
+            );
+        }
+
+        var existingDrivers = (await _driverRepository.GetAllDriversAsync()).ToList();
+        foreach (var driver in drivers)
+        {
+            var identities = DriverIdentityValues(driver).Where(value => value is not null).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (identities.Count == 0)
+                continue;
+
+            var matchingDriver = existingDrivers.FirstOrDefault(candidate =>
+                DriverIdentityValues(candidate).Any(value =>
+                    value is not null && identities.Contains(value)
+                )
+            );
+            if (matchingDriver is not null && matchingDriver.site_code != contract.site_code)
+            {
+                throw new ArgumentException(
+                    $"Driver '{driver.Name}' already belongs to site {matchingDriver.site_code} and cannot be assigned to contract site {contract.site_code}.",
+                    nameof(drivers)
+                );
+            }
+        }
+
+        // The legacy DEV_INS_TripXML procedure reads the vehicle/site/start
+        // odometer from the Contract XML node. Keep that resolved contract on
+        // the aggregate so the repository cannot silently emit an incomplete
+        // legacy document when the procedure is present.
+        trip.Contract = contract;
+
         if (!await ValidateTripCreationAsync(trip))
         {
             throw new InvalidOperationException("Trip validation failed");
@@ -206,6 +252,33 @@ public class TripService : ITripService
         return createdTrip;
     }
 
+    private static IEnumerable<string?> DriverIdentityValues(TripAuthorityDriverInput driver) =>
+        new[]
+        {
+            driver.IdentityNumber,
+            driver.PassportNumber,
+            driver.PersalNumber,
+            driver.ContractNumber,
+            driver.LicenceNumber,
+        }
+        .Select(NormalizeDriverIdentity)
+        .Where(value => value is not null);
+
+    private static IEnumerable<string?> DriverIdentityValues(Driver driver) =>
+        new[]
+        {
+            driver.driver_SA_id,
+            driver.driver_passportnumber,
+            driver.driver_persalnumber,
+            driver.driver_contractnumber,
+            driver.driver_licence_number,
+        }.Select(NormalizeDriverIdentity);
+
+    private static string? NormalizeDriverIdentity(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim().Replace(" ", string.Empty).ToUpperInvariant();
+
     /// <summary>
     /// Update an existing trip authority
     /// Legacy: Trip authority modification
@@ -247,6 +320,8 @@ public class TripService : ITripService
             // The audit actor is carried by modified_by_user_code in the
             // repository; user_access_code remains the legacy owner.
             trip.user_access_code = existingTrip.user_access_code;
+            trip.Contract = existingTrip.Contract
+                ?? await _contractRepository.GetByIdAsync(trip.contract_code);
 
             await _tripRepository.UpdateAsync(
                 trip,
@@ -447,12 +522,7 @@ public class TripService : ITripService
                 contractCode
             );
 
-            var trips = await _tripRepository.GetTripsByContractAsync(contractCode);
-
-            // Check if any trips have expiry_date > DateTime.Now
-            var hasOpenTrips = trips.Any(t =>
-                t.expiry_date.HasValue && t.expiry_date.Value > DateTime.Now
-            );
+            var hasOpenTrips = await _tripRepository.HasOpenTripAuthoritiesAsync(contractCode);
 
             _logger.LogInformation(
                 "Contract {ContractCode} has open trips: {HasOpenTrips}",
@@ -483,8 +553,9 @@ public class TripService : ITripService
         {
             var trips = await _tripRepository.GetTripsByContractAsync(contractCode);
 
-            // Filter for open trips (expiry_date > DateTime.Now)
-            return trips.Where(t => t.expiry_date.HasValue && t.expiry_date.Value > DateTime.Now);
+            // Trip expiry is captured as a calendar date, so the selected
+            // expiry day remains open until that day ends.
+            return trips.Where(t => t.expiry_date.HasValue && t.expiry_date.Value.Date >= DateTime.Today);
         }
         catch (Exception ex)
         {
@@ -508,7 +579,7 @@ public class TripService : ITripService
             return false; // No expiry date means never expires
         }
 
-        return trip.expiry_date.Value < DateTime.Now;
+        return trip.expiry_date.Value.Date < DateTime.Today;
     }
 
     /// <summary>
@@ -523,7 +594,7 @@ public class TripService : ITripService
 
             // Filter for expired trips
             return allTrips.Where(t =>
-                t.expiry_date.HasValue && t.expiry_date.Value < DateTime.Now
+                t.expiry_date.HasValue && t.expiry_date.Value.Date < DateTime.Today
             );
         }
         catch (Exception ex)
@@ -594,7 +665,7 @@ public class TripService : ITripService
             }
 
             // 5. Validate expiry date if provided
-            if (trip.expiry_date.HasValue && trip.expiry_date.Value < DateTime.Now)
+            if (trip.expiry_date.HasValue && trip.expiry_date.Value.Date < DateTime.Today)
             {
                 _logger.LogWarning("Trip expiry date is in the past");
                 return false;
@@ -762,9 +833,45 @@ public class TripService : ITripService
 
     /// <summary>
     /// Extend trip expiry date
-    /// Legacy: Trip extension functionality
+    /// Legacy: DEV_UPD_TripXMLForRenewalOfTrip creates a new authority and
+    /// updates the existing authority/routes in one database-owned workflow.
     /// </summary>
     public async Task ExtendTripExpiryAsync(int tripAuthorityCode, DateTime newExpiryDate)
+    {
+        var details = await _tripRepository.GetDetailsAsync(tripAuthorityCode);
+        if (details is null)
+            throw new InvalidOperationException($"Trip {tripAuthorityCode} not found");
+
+        var routes = details.Routes
+            .Select(route =>
+            {
+                if (!route.EndOdometer.HasValue)
+                {
+                    throw new InvalidOperationException(
+                        $"End odometer is required for route {route.RouteCode} when renewing a trip authority."
+                    );
+                }
+
+                var start = route.StartOdometer ?? 0;
+                return new TripAuthorityRouteUpdate(
+                    route.RouteCode,
+                    route.EndOdometer.Value,
+                    Math.Max(0, route.EndOdometer.Value - start),
+                    route.StartOdometer
+                );
+            })
+            .ToArray();
+
+        await RenewTripAsync(tripAuthorityCode, newExpiryDate, routes);
+    }
+
+    public async Task<Trip> RenewTripAsync(
+        int tripAuthorityCode,
+        DateTime newExpiryDate,
+        IReadOnlyList<TripAuthorityRouteUpdate> routes,
+        int? endOdometer = null,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    )
     {
         try
         {
@@ -774,11 +881,14 @@ public class TripService : ITripService
                 newExpiryDate
             );
 
-            var trip = await _tripRepository.GetByIdAsync(tripAuthorityCode);
-            if (trip == null)
+            ArgumentNullException.ThrowIfNull(routes);
+            var details = await _tripRepository.GetDetailsAsync(tripAuthorityCode, allowedSiteCodes);
+            if (details is null)
             {
                 throw new InvalidOperationException($"Trip {tripAuthorityCode} not found");
             }
+
+            var trip = details.Trip;
 
             // Check if trip is locked
             if (trip.locked_for_transfer)
@@ -789,7 +899,7 @@ public class TripService : ITripService
             }
 
             // Validate new expiry date is in the future
-            if (newExpiryDate < DateTime.Now)
+            if (newExpiryDate.Date <= DateTime.Today)
             {
                 throw new ArgumentException(
                     "New expiry date must be in the future",
@@ -798,7 +908,7 @@ public class TripService : ITripService
             }
 
             // Validate new expiry date is after current expiry date (if set)
-            if (trip.expiry_date.HasValue && newExpiryDate < trip.expiry_date.Value)
+            if (trip.expiry_date.HasValue && newExpiryDate.Date <= trip.expiry_date.Value.Date)
             {
                 throw new ArgumentException(
                     "New expiry date must be after current expiry date",
@@ -806,10 +916,81 @@ public class TripService : ITripService
                 );
             }
 
-            trip.expiry_date = newExpiryDate;
-            await _tripRepository.UpdateAsync(
-                trip,
-                _currentUserContext.GetCurrentUserIdOrDefault()
+            if (details.Routes.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "A trip authority must have at least one persisted route before it can be renewed."
+                );
+            }
+
+            var submittedRoutes = routes.ToDictionary(route => route.RouteCode);
+            var renewalRoutes = new List<TripAuthorityRouteUpdate>(details.Routes.Count);
+            var previousEndOdometer = (int?)null;
+            foreach (var route in details.Routes)
+            {
+                if (!submittedRoutes.TryGetValue(route.RouteCode, out var submitted))
+                {
+                    // Existing callers that only extend the expiry may reuse
+                    // the persisted route readings. The explicit API renewal
+                    // route can submit corrected end odometers.
+                    if (!route.EndOdometer.HasValue)
+                    {
+                        throw new InvalidOperationException(
+                            $"End odometer is required for route {route.RouteCode} when renewing a trip authority."
+                        );
+                    }
+
+                    submitted = new TripAuthorityRouteUpdate(
+                        route.RouteCode,
+                        route.EndOdometer.Value,
+                        route.Distance ?? 0,
+                        route.StartOdometer
+                    );
+                }
+
+                var startOdometer = submitted.StartOdometer ?? route.StartOdometer ?? previousEndOdometer;
+                if (startOdometer.HasValue && submitted.EndOdometer < startOdometer.Value)
+                {
+                    throw new InvalidOperationException(
+                        $"The end odometer for route {route.RouteCode} must be greater than or equal to {startOdometer.Value}."
+                    );
+                }
+
+                var distance = (long)submitted.EndOdometer - (startOdometer ?? submitted.EndOdometer);
+                if (distance < 0 || distance > 25_000)
+                {
+                    throw new InvalidOperationException(
+                        $"The distance for route {route.RouteCode} must be between 0 and 25000 kilometres."
+                    );
+                }
+
+                renewalRoutes.Add(
+                    new TripAuthorityRouteUpdate(
+                        route.RouteCode,
+                        submitted.EndOdometer,
+                        (int)distance,
+                        startOdometer
+                    )
+                );
+                previousEndOdometer = submitted.EndOdometer;
+            }
+
+            var maximumRouteEnd = renewalRoutes.Max(route => route.EndOdometer);
+            var resolvedEndOdometer = endOdometer ?? Math.Max(trip.end_odo_meter ?? 0, maximumRouteEnd);
+            if (resolvedEndOdometer < maximumRouteEnd)
+            {
+                throw new InvalidOperationException(
+                    "Trip end odometer cannot be less than the final route end odometer."
+                );
+            }
+
+            var renewed = await _tripRepository.RenewAsync(
+                tripAuthorityCode,
+                newExpiryDate,
+                renewalRoutes,
+                resolvedEndOdometer,
+                _currentUserContext.GetCurrentUserIdOrDefault(),
+                allowedSiteCodes
             );
 
             _logger.LogInformation(
@@ -817,6 +998,7 @@ public class TripService : ITripService
                 tripAuthorityCode,
                 newExpiryDate
             );
+            return renewed;
         }
         catch (Exception ex)
         {

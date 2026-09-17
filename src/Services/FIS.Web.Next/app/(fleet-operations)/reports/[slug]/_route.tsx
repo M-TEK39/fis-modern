@@ -15,6 +15,7 @@ import {
 import {
   hasContractReportsRole,
   hasReportsRole,
+  hasTariffReportsRole,
   queryValue,
   REPORT_MENU_ENTRIES,
 } from "@/app/(fleet-operations)/reports/_utils";
@@ -1098,6 +1099,11 @@ async function renderReportsRoutePageContent({
   const hasRouteAccess =
     slug === "contracts" || slug === "contract-history"
       ? hasContractReportsRole(session.roles)
+      : slug === "tariffs"
+        || slug.startsWith("tariffs-")
+        || slug === "nom-vehicles-without-tariff"
+        || slug === "nom-vehicles-without-tariffs"
+        ? hasTariffReportsRole(session.roles)
       : hasReportsRole(session.roles);
   if (!hasRouteAccess)
     return (

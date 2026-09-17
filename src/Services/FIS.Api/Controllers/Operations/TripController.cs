@@ -94,9 +94,9 @@ public class TripDto
 
     // Computed properties for display
     public string ApproverFullInfo => $"{ApproverName} ({ApproverRank})".Trim();
-    public bool IsExpired => ExpiryDate.HasValue && ExpiryDate.Value < DateTime.Now;
+    public bool IsExpired => ExpiryDate.HasValue && ExpiryDate.Value.Date < DateTime.Today;
     public int DaysUntilExpiry =>
-        ExpiryDate.HasValue ? (int)(ExpiryDate.Value - DateTime.Now).TotalDays : 0;
+        ExpiryDate.HasValue ? (ExpiryDate.Value.Date - DateTime.Today).Days : 0;
 }
 
 public class TripAuthorityVehicleDto
@@ -182,6 +182,11 @@ public class CloseTripDto
 {
     public int? EndOdometer { get; set; }
     public IReadOnlyList<CloseTripRouteDto> Routes { get; set; } = [];
+}
+
+public sealed class RenewTripDto : CloseTripDto
+{
+    public DateTime NewExpiryDate { get; set; }
 }
 
 public class CloseTripRouteDto
@@ -949,6 +954,116 @@ public class TripController : BaseApiController
         }
     }
 
+    [HttpPost("{id}/renew")]
+    public async Task<ActionResult<TripDto>> RenewTrip(int id, [FromBody] RenewTripDto request)
+    {
+        try
+        {
+            if (request.NewExpiryDate == default || request.NewExpiryDate.Date <= DateTime.Today)
+            {
+                return BadRequest("A future new expiry date is required.");
+            }
+
+            if (request.EndOdometer is < 0)
+            {
+                return BadRequest("End odometer cannot be negative.");
+            }
+
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            var details = await _tripService.GetTripAuthorityDetailsAsync(id, allowedSites);
+            if (details is null)
+            {
+                return NotFound();
+            }
+
+            var submittedRoutes = (request.Routes ?? [])
+                .GroupBy(route => route.RouteCode)
+                .ToDictionary(group => group.Key, group => group.Single());
+            var routeUpdates = new List<TripAuthorityRouteUpdate>();
+            var previousEndOdometer = (int?)null;
+            foreach (var route in details.Routes)
+            {
+                if (!submittedRoutes.TryGetValue(route.RouteCode, out var submitted))
+                {
+                    if (!route.EndOdometer.HasValue)
+                    {
+                        return BadRequest($"End odometer is required for route {route.RouteCode}.");
+                    }
+
+                    submitted = new CloseTripRouteDto
+                    {
+                        RouteCode = route.RouteCode,
+                        EndOdometer = route.EndOdometer,
+                    };
+                }
+
+                if (submitted.EndOdometer is null or < 0)
+                {
+                    return BadRequest($"Every route must include a valid end odometer.");
+                }
+
+                var startOdometer = route.StartOdometer ?? previousEndOdometer;
+                if (startOdometer.HasValue && submitted.EndOdometer.Value < startOdometer.Value)
+                {
+                    return BadRequest(
+                        $"The end odometer for route {route.RouteCode} must be greater than or equal to {startOdometer.Value}."
+                    );
+                }
+
+                var distance = submitted.EndOdometer.Value - (startOdometer ?? submitted.EndOdometer.Value);
+                if (distance > 25_000)
+                {
+                    return BadRequest($"The distance for route {route.RouteCode} cannot exceed 25000 kilometres.");
+                }
+
+                routeUpdates.Add(
+                    new TripAuthorityRouteUpdate(
+                        route.RouteCode,
+                        submitted.EndOdometer.Value,
+                        distance,
+                        startOdometer
+                    )
+                );
+                previousEndOdometer = submitted.EndOdometer.Value;
+            }
+
+            var renewed = await _tripService.RenewTripAsync(
+                id,
+                request.NewExpiryDate,
+                routeUpdates,
+                request.EndOdometer,
+                allowedSites
+            );
+            return Ok(MapTrip(renewed));
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy trip-renewal workflow is unavailable for trip {TripId}", id);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    message = "The legacy trip-renewal workflow is unavailable. No trip renewal was written.",
+                    source = "legacy-procedure-required",
+                }
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Trip {TripId} could not be renewed", id);
+            return BadRequest(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error renewing trip with id {TripId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteTrip(int id)
     {
@@ -965,6 +1080,11 @@ public class TripController : BaseApiController
 
             await _tripService.DeleteTripAsync(id, await ResolveAllowedSiteCodesAsync());
             return NoContent();
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogInformation(ex, "Legacy trip delete was requested for trip {TripId}", id);
+            return Conflict(new { error = ex.Message, source = "legacy-workflow-required" });
         }
         catch (Exception ex)
         {

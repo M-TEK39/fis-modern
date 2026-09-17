@@ -279,6 +279,44 @@ public class ContractsController : BaseApiController
 
     private bool CanCaptureContract() => HasContractAdminRole() || HasContractLoadAndManageRole();
 
+    private static void MarkBackdatingDecision(
+        Contract contract,
+        bool approved,
+        string? actorUsername,
+        DateTime? approvalDateOverride = null
+    )
+    {
+        if (!HasBackdatingRequest(contract))
+        {
+            return;
+        }
+
+        if (approved)
+        {
+            // The normal legacy approval records the request date. The
+            // repository preserves it and supplies the current date only when
+            // no request date was stored.
+            contract.backdating_approved_date ??= approvalDateOverride ?? contract.backdating_requested_date;
+            contract.backdating_approved_by_username ??= actorUsername;
+        }
+        else
+        {
+            contract.backdating_declined_date ??= DateTime.Now;
+            contract.backdating_declined_by_username ??= actorUsername;
+        }
+    }
+
+    private string? GetLegacyActorUsername() =>
+        User.FindFirst("legacy_username")?.Value?.Trim()
+        ?? User.FindFirst(ClaimTypes.Name)?.Value?.Trim();
+
+    private static bool HasBackdatingRequest(Contract contract) =>
+        IsMeaningfulBackdatingDate(contract.backdating_start_date)
+        || IsMeaningfulBackdatingDate(contract.backdating_requested_date);
+
+    private static bool IsMeaningfulBackdatingDate(DateTime? value) =>
+        value.HasValue && value.Value.Date > new DateTime(1900, 1, 1);
+
     private bool CanManageActiveContract() => HasContractAdminRole() || HasContractApproverRole();
 
     private bool CanCloseActiveContract() =>
@@ -393,12 +431,14 @@ public class ContractsController : BaseApiController
 
     private static bool IsContractOwner(Contract contract, int currentUserId)
     {
-        if (contract.created_by_user_code.HasValue)
-        {
-            return contract.created_by_user_code.Value == currentUserId;
-        }
+        // The legacy contract table's user_code is the capturer/owner used by
+        // the original screens and procedures. Optional modern audit fields
+        // describe who created a compatibility row, but must not supersede the
+        // legacy owner after an approval, extension, or explicit reassignment.
+        if (contract.user_code.HasValue)
+            return contract.user_code.Value == currentUserId;
 
-        return contract.user_code.HasValue && contract.user_code.Value == currentUserId;
+        return contract.created_by_user_code == currentUserId;
     }
 
     private ActionResult? RequireActiveContract(Contract contract)
@@ -414,7 +454,8 @@ public class ContractsController : BaseApiController
 
     private async Task<string?> GetMissingTariffMessageAsync(
         int vmfCode,
-        DateTime? effectiveDate = null
+        DateTime? effectiveDate = null,
+        short? siteCode = null
     )
     {
         var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
@@ -431,7 +472,32 @@ public class ContractsController : BaseApiController
             return "This vehicle cannot be contracted because its model configuration is missing.";
         }
 
+        // The archived scalar tariff function returns zero for GFleet's own
+        // department/sites (147, 1621, and 1622). These are intentionally
+        // non-revenue custody contracts, so requiring a client tariff here
+        // would block the legacy status-8 zero-bill flow.
+        if (siteCode is > 0 && await IsGfleetInternalSiteAsync(siteCode.Value))
+        {
+            return null;
+        }
+
         var checkDate = (effectiveDate ?? DateTime.Today).Date;
+        var legacyConfiguredTariff = await TryGetLegacyConfiguredTariffAsync(
+            vmfCode,
+            checkDate
+        );
+        if (legacyConfiguredTariff.HasValue)
+        {
+            if (legacyConfiguredTariff.Value.IsValid)
+            {
+                return null;
+            }
+
+            return string.IsNullOrWhiteSpace(legacyConfiguredTariff.Value.ErrorReason)
+                ? $"No valid vehicle tariff is configured for VMF {vmfCode}. Capture/release the current tariff before opening or submitting this contract."
+                : $"No valid vehicle tariff is configured for VMF {vmfCode}: {legacyConfiguredTariff.Value.ErrorReason}";
+        }
+
         var usesModernVehicleTariff =
             vehicle.year_manufactured >= 2008
             && checkDate >= new DateTime(2009, 4, 1)
@@ -494,6 +560,77 @@ public class ContractsController : BaseApiController
         return hasApprovedTariff
             ? null
             : $"No approved tariff is captured for vehicle class {model.class_code}. Capture the tariff before opening or submitting this contract.";
+    }
+
+    private async Task<(bool IsValid, string? ErrorReason)?> TryGetLegacyConfiguredTariffAsync(
+        int vmfCode,
+        DateTime checkDate
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(HttpContext.RequestAborted);
+        }
+
+        try
+        {
+            await using (var existsCommand = connection.CreateCommand())
+            {
+                existsCommand.CommandText = """
+                    SELECT CASE WHEN EXISTS
+                    (
+                        SELECT 1
+                        FROM [sys].[objects] AS [o]
+                        INNER JOIN [sys].[schemas] AS [s] ON [s].[schema_id] = [o].[schema_id]
+                        WHERE [s].[name] = N'fin'
+                          AND [o].[name] = N'GetVehicleConfiguredTariff'
+                          AND [o].[type] IN (N'IF', N'TF')
+                    ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END
+                    """;
+                if (!Convert.ToBoolean(await existsCommand.ExecuteScalarAsync(HttpContext.RequestAborted)))
+                {
+                    return null;
+                }
+            }
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT TOP (1)
+                    [configured].[have_valid_tariff],
+                    [configured].[tariff_error_reason]
+                FROM [fin].[GetVehicleConfiguredTariff](@vmfCode, @checkDate) AS [configured]
+                ORDER BY [configured].[have_valid_tariff] DESC, [configured].[contract_type]
+                """;
+            var vmfParameter = command.CreateParameter();
+            vmfParameter.ParameterName = "@vmfCode";
+            vmfParameter.DbType = DbType.Int32;
+            vmfParameter.Value = vmfCode;
+            command.Parameters.Add(vmfParameter);
+            var dateParameter = command.CreateParameter();
+            dateParameter.ParameterName = "@checkDate";
+            dateParameter.DbType = DbType.DateTime2;
+            dateParameter.Value = checkDate;
+            command.Parameters.Add(dateParameter);
+
+            await using var reader = await command.ExecuteReaderAsync(HttpContext.RequestAborted);
+            if (!await reader.ReadAsync(HttpContext.RequestAborted))
+            {
+                return (false, "The legacy configured-tariff mapping returned no row.");
+            }
+
+            var isValid = !reader.IsDBNull(0) && Convert.ToBoolean(reader.GetValue(0));
+            var reason = reader.IsDBNull(1) ? null : reader.GetString(1).Trim();
+            return (isValid, reason);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 
     private async Task<short?> ResolveGfleetDepartmentCodeAsync()
@@ -668,7 +805,12 @@ public class ContractsController : BaseApiController
             user_code = currentUserId is > 0 and <= short.MaxValue
                 ? (short)currentUserId
                 : null,
-            contract_type = null,
+            // The legacy contract table requires a one-character contract
+            // type. Internal GFleet custody is zero-rated by the legacy
+            // tariff function for department 147, so use the valid permanent
+            // code instead of emitting NULL (or modern-only H) into the
+            // client schema.
+            contract_type = "A",
             Driver_id = ResolveDriverIdentity(selectedDriver, null),
             Driver_name = ResolveDriverName(selectedDriver),
             site_driver_code = selectedDriver.site_driver_code,
@@ -721,6 +863,27 @@ public class ContractsController : BaseApiController
             if (await RequireContractSiteScopeAsync(request.SiteCode) is { } scopeFailure)
                 return scopeFailure;
 
+            if (!request.TargetReturnDate.HasValue)
+            {
+                return BadRequest(new { error = "A target return date is required for a new contract." });
+            }
+
+            if (request.BackdatingStartDate.HasValue)
+            {
+                if (request.BackdatingStartDate.Value.Date > DateTime.Today)
+                    return BadRequest(new { error = "A backdating start date cannot be in the future." });
+                if (request.TargetReturnDate.HasValue
+                    && request.TargetReturnDate.Value.Date < request.BackdatingStartDate.Value.Date)
+                    return BadRequest(new { error = "The target return date cannot be before the backdating start date." });
+            }
+
+            if (request.StartDate.HasValue
+                && request.TargetReturnDate.HasValue
+                && request.TargetReturnDate.Value.Date < request.StartDate.Value.Date)
+            {
+                return BadRequest(new { error = "The target return date cannot be before the contract start date." });
+            }
+
             int currentUserId = GetCurrentUserId();
             var driverSiteValidation = await ValidateDriverSiteAlignmentAsync(
                 request.SiteCode,
@@ -738,7 +901,10 @@ public class ContractsController : BaseApiController
                 );
             }
 
-            var missingTariffMessage = await GetMissingTariffMessageAsync(request.VmfCode);
+            var missingTariffMessage = await GetMissingTariffMessageAsync(
+                request.VmfCode,
+                siteCode: request.SiteCode
+            );
             if (missingTariffMessage != null)
             {
                 return BadRequest(new { error = missingTariffMessage, vmfCode = request.VmfCode });
@@ -750,10 +916,12 @@ public class ContractsController : BaseApiController
             {
                 VmfCode = request.VmfCode,
                 SiteCode = request.SiteCode,
+                StartDate = request.StartDate,
                 StartOdometer = request.StartOdometer,
                 DriverId = ResolveDriverIdentity(selectedDriver, request.DriverId),
                 DriverName = ResolveDriverName(selectedDriver),
                 SiteDriverCode = selectedDriver?.site_driver_code,
+                ContractType = NormalizeOptionalText(request.ContractType),
                 // The authenticated capturer owns the new contract. Ignore a
                 // caller-supplied user code; ownership can only change via the
                 // explicit manager/admin reassignment workflow.
@@ -764,6 +932,10 @@ public class ContractsController : BaseApiController
                 Notes = request.Notes,
                 TargetReturnDate = request.TargetReturnDate,
                 CreatedByUserId = currentUserId,
+                BackdatingStartDate = request.BackdatingStartDate,
+                BackdatingRequestedDate = request.BackdatingStartDate.HasValue
+                    ? DateTime.Today
+                    : null,
             };
 
             var contract = await _contractService.HireVehicleAsync(hireRequest);
@@ -1155,6 +1327,14 @@ public class ContractsController : BaseApiController
             ModifiedByUserCode = contract.modified_by_user_code,
             IsDeleted = contract.is_deleted,
 
+            BackdatingStartDate = contract.backdating_start_date,
+            BackdatingRequestedDate = contract.backdating_requested_date,
+            BackdatingRequestedByUsername = contract.backdating_requested_by_username,
+            BackdatingApprovedDate = contract.backdating_approved_date,
+            BackdatingApprovedByUsername = contract.backdating_approved_by_username,
+            BackdatingDeclinedDate = contract.backdating_declined_date,
+            BackdatingDeclinedByUsername = contract.backdating_declined_by_username,
+
             // Include nested data without circular references
             VehicleFleetNumber = contract.Vehicle?.fleet_number,
             VehicleRegistrationNumber = contract.Vehicle?.registration_number,
@@ -1392,7 +1572,12 @@ public class ContractsController : BaseApiController
         try
         {
             var currentUserId = GetCurrentUserId();
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var allowedSiteCodes = await ResolveAllowedContractSiteCodesAsync();
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                allowedSiteCodes?.ToHashSet(),
+                currentUserId
+            );
 
             if (vehicle == null)
             {
@@ -1466,36 +1651,57 @@ public class ContractsController : BaseApiController
                 }
             }
 
-            await UpdateVehicleSiteAsync(vehicle, targetSite.Site_code, currentUserId);
+            var ambientTransaction = _context.Database.CurrentTransaction;
+            var ownsAssignmentTransaction = ambientTransaction is null;
+            await using var assignmentTransaction = ownsAssignmentTransaction
+                ? await _context.Database.BeginTransactionAsync(
+                    IsolationLevel.ReadCommitted,
+                    HttpContext.RequestAborted
+                )
+                : null;
 
-            Contract? homeCustodyContract = null;
-            if (request.CreateHomeCustodyContract)
+            try
             {
-                var siteDriverCode = request.SiteDriverCode.GetValueOrDefault();
+                await UpdateVehicleSiteAsync(vehicle, targetSite.Site_code, currentUserId);
 
-                homeCustodyContract = await CreateHomeCustodyContractAsync(
-                    vehicle,
-                    targetSite.Site_code,
-                    siteDriverCode,
-                    DateTime.UtcNow.Date,
-                    Math.Max(vehicle.current_odo, 0),
-                    currentUserId,
-                    request.Notes,
-                    sourceContractCode: 0
+                Contract? homeCustodyContract = null;
+                if (request.CreateHomeCustodyContract)
+                {
+                    var siteDriverCode = request.SiteDriverCode.GetValueOrDefault();
+
+                    homeCustodyContract = await CreateHomeCustodyContractAsync(
+                        vehicle,
+                        targetSite.Site_code,
+                        siteDriverCode,
+                        DateTime.UtcNow.Date,
+                        Math.Max(vehicle.current_odo, 0),
+                        currentUserId,
+                        request.Notes,
+                        sourceContractCode: 0
+                    );
+                }
+
+                if (assignmentTransaction is not null)
+                    await assignmentTransaction.CommitAsync(HttpContext.RequestAborted);
+
+                return Ok(
+                    new
+                    {
+                        message = request.CreateHomeCustodyContract
+                            ? "Vehicle site updated and GFleet custody contract opened."
+                            : "Vehicle site updated successfully.",
+                        vmfCode,
+                        siteCode = targetSite.Site_code,
+                        homeCustodyContractCode = homeCustodyContract?.contract_code,
+                    }
                 );
             }
-
-            return Ok(
-                new
-                {
-                    message = request.CreateHomeCustodyContract
-                        ? "Vehicle site updated and GFleet custody contract opened."
-                        : "Vehicle site updated successfully.",
-                    vmfCode,
-                    siteCode = targetSite.Site_code,
-                    homeCustodyContractCode = homeCustodyContract?.contract_code,
-                }
-            );
+            catch
+            {
+                if (assignmentTransaction is not null)
+                    await assignmentTransaction.RollbackAsync(HttpContext.RequestAborted);
+                throw;
+            }
         }
         catch (Exception ex)
         {
@@ -1571,7 +1777,10 @@ public class ContractsController : BaseApiController
             );
         }
         catch (NotSupportedException ex)
-            when (ex.Message.Contains("contract-extension", StringComparison.OrdinalIgnoreCase))
+            when (
+                ex.Message.Contains("contract-extension", StringComparison.OrdinalIgnoreCase)
+                || ex.Message.Contains("target-return-date", StringComparison.OrdinalIgnoreCase)
+            )
         {
             _logger.LogError(ex, "Legacy contract extension procedure is unavailable or incompatible for {ContractCode}", contractCode);
             return StatusCode(
@@ -2016,7 +2225,12 @@ public class ContractsController : BaseApiController
             };
 
             // Check if vehicle exists
-            var vehicle = await _vehicleRepository.GetByIdAsync(request.VmfCode);
+            var allowedSiteCodes = await ResolveAllowedContractSiteCodesAsync();
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                request.VmfCode,
+                allowedSiteCodes?.ToHashSet(),
+                GetCurrentUserId()
+            );
             if (vehicle == null)
             {
                 result.IsValid = false;
@@ -2102,7 +2316,10 @@ public class ContractsController : BaseApiController
                     }
                 );
 
-            var missingTariffMessage = await GetMissingTariffMessageAsync(contract.vmf_code);
+            var missingTariffMessage = await GetMissingTariffMessageAsync(
+                contract.vmf_code,
+                siteCode: contract.site_code
+            );
             if (missingTariffMessage != null)
             {
                 return BadRequest(
@@ -2204,6 +2421,7 @@ public class ContractsController : BaseApiController
             // Update contract status to approved (status code 2 = Approved)
             contract.contract_status_code = 2; // Approved
             contract.contract_status_date = DateTime.Now;
+            MarkBackdatingDecision(contract, true, GetLegacyActorUsername());
 
             if (!string.IsNullOrEmpty(request?.ApprovalNotes))
                 contract.Notes = $"{contract.Notes}\nApproval: {request.ApprovalNotes}";
@@ -2278,6 +2496,12 @@ public class ContractsController : BaseApiController
                     ?.contract_code ?? 0;
             contract.contract_status_code = 2; // Approved
             contract.contract_status_date = DateTime.Now;
+            MarkBackdatingDecision(
+                contract,
+                true,
+                GetLegacyActorUsername(),
+                DateTime.Now
+            );
 
             if (!string.IsNullOrEmpty(request?.ApprovalNotes))
                 contract.Notes = $"{contract.Notes}\nApproved & Activated: {request.ApprovalNotes}";
@@ -2365,6 +2589,7 @@ public class ContractsController : BaseApiController
             // Update contract status to correction required (status code 4 = Needs Correction)
             contract.contract_status_code = 4; // Needs correction
             contract.contract_status_date = DateTime.Now;
+            MarkBackdatingDecision(contract, false, GetLegacyActorUsername());
             contract.Notes = $"{contract.Notes}\nCorrection Required: {request.DeclineReason}";
 
             await _contractRepository.UpdatePendingDecisionAsync(contract, currentUserId);
@@ -2824,46 +3049,72 @@ public class ContractsController : BaseApiController
                     new { error = "End odometer cannot be less than the start odometer." }
                 );
 
+            var endDate = request.EndDate ?? contract.end_date;
+            if (!endDate.HasValue)
+                return BadRequest(new { error = "End date is required for contract history backdating." });
+
+            var startOdometer = request.StartOdometer ?? contract.start_odometer;
+            var endOdometer = request.EndOdometer ?? contract.end_odometer;
+            if (!endOdometer.HasValue)
+                return BadRequest(new { error = "End odometer is required for contract history backdating." });
+            if (endDate.Value.Date < request.StartDate.Date)
+                return BadRequest(new { error = "End date cannot be before the start date." });
+            if (startOdometer < 0)
+                return BadRequest(new { error = "Start odometer cannot be negative." });
+            if (endOdometer.Value < 0)
+                return BadRequest(new { error = "End odometer cannot be negative." });
+            if (endOdometer.Value < startOdometer)
+                return BadRequest(new { error = "End odometer cannot be less than the start odometer." });
+
+            var fleetNumber = contract.Vehicle?.fleet_number;
+            if (string.IsNullOrWhiteSpace(fleetNumber))
+                return BadRequest(new { error = "The selected vehicle has no fleet number for history backdating." });
+
             var currentUserId = GetCurrentUserId();
             var previousStartDate = contract.start_date;
             var previousEndDate = contract.end_date;
             var previousStartOdometer = contract.start_odometer;
             var previousEndOdometer = contract.end_odometer;
 
-            contract.start_date = request.StartDate.Date;
-            if (request.EndDate.HasValue)
-            {
-                contract.end_date = request.EndDate.Value.Date;
-            }
-            if (request.StartOdometer.HasValue)
-            {
-                contract.start_odometer = request.StartOdometer.Value;
-            }
-            if (request.EndOdometer.HasValue)
-            {
-                contract.end_odometer = request.EndOdometer.Value;
-            }
-
-            await _contractRepository.UpdateAsync(contract, currentUserId);
+            var updated = await _contractRepository.UpdateHistoryAsync(
+                contractId,
+                request.StartDate.Date,
+                endDate.Value.Date,
+                startOdometer,
+                endOdometer.Value,
+                fleetNumber
+            );
             await _auditLog.LogAsync(
                 contractId,
                 "HistoryBackdated",
                 currentUserId,
-                notes: $"Start date {previousStartDate:yyyy-MM-dd} -> {contract.start_date:yyyy-MM-dd}; "
-                    + $"end date {previousEndDate:yyyy-MM-dd} -> {contract.end_date:yyyy-MM-dd}; "
-                    + $"start odometer {previousStartOdometer} -> {contract.start_odometer}; "
-                    + $"end odometer {previousEndOdometer?.ToString() ?? "-"} -> {contract.end_odometer?.ToString() ?? "-"}"
+                notes: $"Start date {previousStartDate:yyyy-MM-dd} -> {updated.start_date:yyyy-MM-dd}; "
+                    + $"end date {previousEndDate?.ToString("yyyy-MM-dd") ?? "-"} -> {updated.end_date?.ToString("yyyy-MM-dd") ?? "-"}; "
+                    + $"start odometer {previousStartOdometer} -> {updated.start_odometer}; "
+                    + $"end odometer {previousEndOdometer?.ToString() ?? "-"} -> {updated.end_odometer?.ToString() ?? "-"}"
             );
 
             return Ok(
                 new
                 {
                     message = "Contract history updated successfully.",
-                    contractCode = contract.contract_code,
-                    startDate = contract.start_date,
-                    endDate = contract.end_date,
-                    startOdometer = contract.start_odometer,
-                    endOdometer = contract.end_odometer,
+                    contractCode = updated.contract_code,
+                    startDate = updated.start_date,
+                    endDate = updated.end_date,
+                    startOdometer = updated.start_odometer,
+                    endOdometer = updated.end_odometer,
+                }
+            );
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy contract-history procedure is unavailable for {ContractId}", contractId);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The legacy contract-history procedure is unavailable. No generic contract update was run.",
+                    source = "legacy-procedure-required",
                 }
             );
         }
@@ -3275,13 +3526,16 @@ public class HireContractDto
 
     [Required]
     public short SiteCode { get; set; }
+    public DateTime? StartDate { get; set; }
     public int? StartOdometer { get; set; }
     public string? DriverId { get; set; }
     public int? SiteDriverCode { get; set; }
     public short? UserCode { get; set; }
+    public string? ContractType { get; set; }
     public string? Authorisation { get; set; }
     public string? Notes { get; set; }
     public DateTime? TargetReturnDate { get; set; }
+    public DateTime? BackdatingStartDate { get; set; }
 }
 
 public class ReturnContractDto
@@ -3499,6 +3753,13 @@ public class ContractResponseDto
     public int? CreatedByUserCode { get; set; }
     public int? ModifiedByUserCode { get; set; }
     public bool IsDeleted { get; set; }
+    public DateTime? BackdatingStartDate { get; set; }
+    public DateTime? BackdatingRequestedDate { get; set; }
+    public string? BackdatingRequestedByUsername { get; set; }
+    public DateTime? BackdatingApprovedDate { get; set; }
+    public string? BackdatingApprovedByUsername { get; set; }
+    public DateTime? BackdatingDeclinedDate { get; set; }
+    public string? BackdatingDeclinedByUsername { get; set; }
 
     // Navigation properties - flattened to prevent circular references
     public string? VehicleFleetNumber { get; set; }

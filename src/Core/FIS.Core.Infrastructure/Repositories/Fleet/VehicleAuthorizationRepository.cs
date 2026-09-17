@@ -135,41 +135,89 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public Task<PreVehicleMaster?> GetByIdAsync(int tempVmfCode) =>
+    public Task<PreVehicleMaster?> GetByIdAsync(
+        int tempVmfCode,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) =>
         WithConnectionAsync(async connection =>
         {
             var schema = await GetSchemaAsync(connection, null);
             return (
-                await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)
+                await QueryAsync(
+                    connection,
+                    null,
+                    schema,
+                    tempVmfCode: tempVmfCode,
+                    allowedSiteCodes: allowedSiteCodes,
+                    currentUserId: currentUserId
+                )
             ).SingleOrDefault();
         });
 
-    public Task<PreVehicleMaster?> GetByChassisNumberAsync(string chassisNumber) =>
+    public Task<PreVehicleMaster?> GetByChassisNumberAsync(
+        string chassisNumber,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) =>
         string.IsNullOrWhiteSpace(chassisNumber)
             ? Task.FromResult<PreVehicleMaster?>(null)
             : WithConnectionAsync(async connection =>
             {
                 var schema = await GetSchemaAsync(connection, null);
                 return (
-                    await QueryAsync(connection, null, schema, chassisNumber: chassisNumber.Trim())
+                    await QueryAsync(
+                        connection,
+                        null,
+                        schema,
+                        chassisNumber: chassisNumber.Trim(),
+                        allowedSiteCodes: allowedSiteCodes,
+                        currentUserId: currentUserId
+                    )
                 ).SingleOrDefault();
             });
 
     public Task<VehicleAuthorizationPage> GetPendingAuthorizationsAsync(
         int page = 1,
-        int pageSize = 24
-    ) => GetStatusPageAsync("Awaiting Authorization", page, pageSize, awaiting: true);
+        int pageSize = 24,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) => GetStatusPageAsync(
+        "Awaiting Authorization",
+        page,
+        pageSize,
+        awaiting: true,
+        allowedSiteCodes: allowedSiteCodes,
+        currentUserId: currentUserId
+    );
 
     public Task<VehicleAuthorizationPage> GetAuthorizedVehiclesAsync(
         int page = 1,
-        int pageSize = 24
-    ) => GetStatusPageAsync("Authorized", page, pageSize);
+        int pageSize = 24,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) => GetStatusPageAsync(
+        "Authorized",
+        page,
+        pageSize,
+        allowedSiteCodes: allowedSiteCodes,
+        currentUserId: currentUserId
+    );
 
     public Task<VehicleAuthorizationPage> GetRejectedVehiclesAsync(
         int page = 1,
         int pageSize = 24,
-        int? capturedByUserCode = null
-    ) => GetStatusPageAsync("Rejected", page, pageSize, capturedByUserCode: capturedByUserCode);
+        int? capturedByUserCode = null,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) => GetStatusPageAsync(
+        "Rejected",
+        page,
+        pageSize,
+        capturedByUserCode: capturedByUserCode,
+        allowedSiteCodes: allowedSiteCodes,
+        currentUserId: currentUserId
+    );
 
     public async Task<IEnumerable<PreVehicleMaster>> GetByStatusAsync(string status)
     {
@@ -191,7 +239,9 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         int requestedPage,
         int requestedPageSize,
         bool awaiting = false,
-        int? capturedByUserCode = null
+        int? capturedByUserCode = null,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
     ) =>
         await WithConnectionAsync(async connection =>
         {
@@ -203,7 +253,9 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 null,
                 schema,
                 status,
-                capturedByUserCode
+                capturedByUserCode,
+                allowedSiteCodes,
+                currentUserId
             );
             var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
             page = Math.Min(page, totalPages);
@@ -214,6 +266,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 schema,
                 status: status,
                 capturedByUserCode: capturedByUserCode,
+                allowedSiteCodes: allowedSiteCodes,
+                currentUserId: currentUserId,
                 skip: skip,
                 take: pageSize,
                 orderBy: GetQueueOrder(schema, awaiting)
@@ -225,7 +279,9 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
     public async Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(
         DateTime? startDate = null,
         DateTime? endDate = null,
-        int? capturedByUserCode = null
+        int? capturedByUserCode = null,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
     ) =>
         await WithConnectionAsync(async connection =>
         {
@@ -239,6 +295,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 schema,
                 statuses: historyStatuses,
                 capturedByUserCode: capturedByUserCode,
+                allowedSiteCodes: allowedSiteCodes,
+                currentUserId: currentUserId,
                 startDate: startDate,
                 endDate: endDate
             );
@@ -1037,7 +1095,9 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         DbTransaction? transaction,
         VehicleAuthorizationSchema schema,
         string status,
-        int? capturedByUserCode
+        int? capturedByUserCode,
+        IReadOnlySet<short>? allowedSiteCodes,
+        int? currentUserId
     )
     {
         var hasStatusColumn = schema.Columns.Contains("Authority_Status");
@@ -1070,6 +1130,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             conditions.Add($"[p].[{ownerColumn}] = @capturedByUserCode");
             AddParameter(command, "@capturedByUserCode", DbType.Int32, capturedByUserCode.Value);
         }
+
+        AddScopeConditions(conditions, command, schema.Columns, allowedSiteCodes, currentUserId);
 
         command.CommandText =
             $"SELECT COUNT(1) FROM [dbo].[{PreVehicleTableName}] AS [p] WHERE {string.Join(" AND ", conditions)}";
@@ -1109,7 +1171,9 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         long? skip = null,
         int? take = null,
         string? orderBy = null,
-        bool lockForUpdate = false
+        bool lockForUpdate = false,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
     )
     {
         if (
@@ -1183,6 +1247,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             AddParameter(command, "@capturedByUserCode", DbType.Int32, capturedByUserCode.Value);
         }
 
+        AddScopeConditions(conditions, command, schema.Columns, allowedSiteCodes, currentUserId);
+
         var dateColumn =
             schema.Columns.Contains("authorization_date") ? "authorization_date"
             : schema.Columns.Contains("date_created") ? "date_created"
@@ -1241,6 +1307,56 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         }
 
         return rows;
+    }
+
+    private static void AddScopeConditions(
+        ICollection<string> conditions,
+        DbCommand command,
+        IReadOnlySet<string> columns,
+        IReadOnlySet<short>? allowedSiteCodes,
+        int? currentUserId
+    )
+    {
+        if (allowedSiteCodes is null)
+        {
+            return;
+        }
+
+        var sites = allowedSiteCodes.Where(site => site > 0).Distinct().ToArray();
+        if (sites.Length == 0)
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        var siteColumn = columns.Contains("site_code") ? "site_code" : null;
+        var ownerColumns = currentUserId is > 0
+            ? new[] { "captured_by_user_code", "created_by_user_code" }
+                .Where(columns.Contains)
+                .ToArray()
+            : [];
+        var siteParameters = sites.Select((_, index) => $"@allowedVehicleSite{index}").ToArray();
+        var predicates = new List<string>();
+        if (siteColumn is not null)
+        {
+            predicates.Add($"[p].[{siteColumn}] IN ({string.Join(", ", siteParameters)})");
+        }
+        predicates.AddRange(ownerColumns.Select(column => $"[p].[{column}] = @allowedVehicleOwner"));
+        if (predicates.Count == 0)
+        {
+            conditions.Add("1 = 0");
+            return;
+        }
+
+        conditions.Add("(" + string.Join(" OR ", predicates) + ")");
+        for (var index = 0; index < sites.Length; index++)
+        {
+            AddParameter(command, siteParameters[index], DbType.Int16, sites[index]);
+        }
+        if (ownerColumns.Length > 0)
+        {
+            AddParameter(command, "@allowedVehicleOwner", DbType.Int32, currentUserId);
+        }
     }
 
     private static PreVehicleMaster Map(DbDataReader reader) =>
@@ -2207,6 +2323,13 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             );
         }
 
+        if (yearManufactured is not > 0)
+        {
+            throw new InvalidOperationException(
+                $"Vehicle {vmfCode.Value} was promoted without a year manufactured; no legacy tariff can be resolved."
+            );
+        }
+
         // The legacy tariff function uses dbo.leasetariff for lease contracts.
         if (vehicleTypeCode == 4)
         {
@@ -2237,49 +2360,55 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             return;
         }
 
-        var useLegacyClassTariff = yearManufactured is > 0 and <= 2009 && vehicleTypeCode != 5;
-        if (useLegacyClassTariff)
+        // dbo.GetVehicleTariff checks the class tariff first for 2009-and-
+        // older vehicles. For 2008/2009 records captured after the 2009
+        // tariff cut-over it can then fall through to fin.vehicle_tariff when
+        // no class row exists. Check those two sources in that same order;
+        // do not force every 2008/2009 vehicle into only one tariff system.
+        var canUseLegacyClassTariff = yearManufactured.Value <= 2009 && vehicleTypeCode != 5;
+        if (canUseLegacyClassTariff)
         {
-            if (modelCode is not > 0)
+            if (modelCode is > 0)
             {
-                throw new InvalidOperationException(
-                    $"Vehicle {vmfCode.Value} was promoted without a model/class mapping; no legacy tariff can be resolved."
+                await using var classTariffCommand = connection.CreateCommand();
+                classTariffCommand.Transaction = transaction;
+                classTariffCommand.CommandText = """
+                    IF OBJECT_ID(N'dbo.tariff', N'U') IS NULL
+                        SELECT CAST(NULL AS bit);
+                    ELSE
+                        SELECT TOP (1) CAST(1 AS bit)
+                        FROM [dbo].[tariff] AS [t]
+                        INNER JOIN [dbo].[model] AS [m]
+                            ON [m].[class_code] = [t].[class_code]
+                        WHERE [m].[model_code] = @modelCode
+                          AND [t].[year_manufactured] = @tariffYear
+                          AND [t].[effective_start_date] <= CONVERT(date, GETDATE())
+                          AND ([t].[effective_end_date] IS NULL OR [t].[effective_end_date] >= CONVERT(date, GETDATE()))
+                          AND [t].[monthly_fixed_amount] IS NOT NULL
+                          AND [t].[monthly_odo_amount] IS NOT NULL;
+                    """;
+                AddParameter(classTariffCommand, "@modelCode", DbType.Int16, modelCode.Value);
+                AddParameter(
+                    classTariffCommand,
+                    "@tariffYear",
+                    DbType.Int16,
+                    (short)Math.Max(2002, (int)yearManufactured.Value)
                 );
+                var hasClassTariff = await classTariffCommand.ExecuteScalarAsync();
+                if (hasClassTariff is not null and not DBNull && Convert.ToBoolean(hasClassTariff))
+                {
+                    return;
+                }
             }
 
-            await using var classTariffCommand = connection.CreateCommand();
-            classTariffCommand.Transaction = transaction;
-            classTariffCommand.CommandText = """
-                IF OBJECT_ID(N'dbo.tariff', N'U') IS NULL
-                    SELECT CAST(NULL AS bit);
-                ELSE
-                    SELECT TOP (1) CAST(1 AS bit)
-                    FROM [dbo].[tariff] AS [t]
-                    INNER JOIN [dbo].[model] AS [m]
-                        ON [m].[class_code] = [t].[class_code]
-                    WHERE [m].[model_code] = @modelCode
-                      AND [t].[year_manufactured] = @tariffYear
-                      AND [t].[effective_start_date] <= CONVERT(date, GETDATE())
-                      AND ([t].[effective_end_date] IS NULL OR [t].[effective_end_date] >= CONVERT(date, GETDATE()))
-                      AND [t].[monthly_fixed_amount] IS NOT NULL
-                      AND [t].[monthly_odo_amount] IS NOT NULL;
-                """;
-            AddParameter(classTariffCommand, "@modelCode", DbType.Int16, modelCode.Value);
-            AddParameter(
-                classTariffCommand,
-                "@tariffYear",
-                DbType.Int16,
-                (short)Math.Max(2002, (int)yearManufactured!.Value)
-            );
-            var hasClassTariff = await classTariffCommand.ExecuteScalarAsync();
-            if (hasClassTariff is null or DBNull || !Convert.ToBoolean(hasClassTariff))
+            // Before 1 April 2009 the legacy function has no modern fallback;
+            // keep the historical class-tariff requirement for that period.
+            if (DateTime.Today < new DateTime(2009, 4, 1) || yearManufactured.Value < 2008)
             {
                 throw new InvalidOperationException(
                     $"Vehicle {vmfCode.Value} was promoted without a current class tariff. Authorization was not committed."
                 );
             }
-
-            return;
         }
 
         await using var command = connection.CreateCommand();

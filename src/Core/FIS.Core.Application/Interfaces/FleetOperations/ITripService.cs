@@ -158,9 +158,21 @@ public interface ITripService
 
     /// <summary>
     /// Extend trip expiry date
-    /// Legacy: Trip extension functionality
+    /// Legacy: DEV_UPD_TripXMLForRenewalOfTrip creates a new authority and
+    /// updates the existing authority/routes in one database-owned workflow.
     /// </summary>
     Task ExtendTripExpiryAsync(int tripAuthorityCode, DateTime newExpiryDate);
+
+    /// <summary>
+    /// Renew an open trip authority and return the newly created authority.
+    /// </summary>
+    Task<Trip> RenewTripAsync(
+        int tripAuthorityCode,
+        DateTime newExpiryDate,
+        IReadOnlyList<TripAuthorityRouteUpdate> routes,
+        int? endOdometer = null,
+        IReadOnlySet<short>? allowedSiteCodes = null
+    );
 
     /// <summary>
     /// Calculate trip duration in days

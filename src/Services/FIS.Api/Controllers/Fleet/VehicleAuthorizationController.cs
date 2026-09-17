@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Vehicles;
 using Microsoft.AspNetCore.Authorization;
@@ -17,14 +18,17 @@ public class VehicleAuthorizationController : BaseApiController
 {
 
     private readonly IVehicleAuthorizationRepository _repository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<VehicleAuthorizationController> _logger;
 
     public VehicleAuthorizationController(
         IVehicleAuthorizationRepository repository,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<VehicleAuthorizationController> logger
     )
     {
         _repository = repository;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
@@ -39,8 +43,8 @@ public class VehicleAuthorizationController : BaseApiController
     {
         // Check if current user is the vehicle capturer
         if (
-            preVehicle.created_by_user_code.HasValue
-            && preVehicle.created_by_user_code.Value == currentUserId
+            preVehicle.created_by_user_code == currentUserId
+            || preVehicle.captured_by_user_code == currentUserId
         )
         {
             _logger.LogWarning(
@@ -80,7 +84,9 @@ public class VehicleAuthorizationController : BaseApiController
             _logger.LogInformation("Fetching vehicles awaiting authorization");
             var result = await _repository.GetPendingAuthorizationsAsync(
                 Math.Max(1, page),
-                Math.Clamp(pageSize, 1, 100)
+                Math.Clamp(pageSize, 1, 100),
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
             );
             return Ok(ToPageResponse(result));
         }
@@ -108,7 +114,9 @@ public class VehicleAuthorizationController : BaseApiController
             _logger.LogInformation("Fetching authorized vehicles");
             var result = await _repository.GetAuthorizedVehiclesAsync(
                 Math.Max(1, page),
-                Math.Clamp(pageSize, 1, 100)
+                Math.Clamp(pageSize, 1, 100),
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
             );
             return Ok(ToPageResponse(result));
         }
@@ -140,7 +148,9 @@ public class VehicleAuthorizationController : BaseApiController
             var result = await _repository.GetRejectedVehiclesAsync(
                 Math.Max(1, page),
                 Math.Clamp(pageSize, 1, 100),
-                capturedByUserCode
+                capturedByUserCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
             );
             return Ok(ToPageResponse(result));
         }
@@ -176,7 +186,9 @@ public class VehicleAuthorizationController : BaseApiController
             var vehicles = await _repository.GetAuthorizationHistoryAsync(
                 startDate,
                 endDate,
-                capturedByUserCode
+                capturedByUserCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
             );
             var dtos = vehicles.Select(MapToDto);
             return Ok(dtos);
@@ -228,7 +240,11 @@ public class VehicleAuthorizationController : BaseApiController
                 "Fetching vehicle authorization for chassis {ChassisNumber}",
                 chassisNumber
             );
-            var vehicle = await _repository.GetByChassisNumberAsync(chassisNumber);
+            var vehicle = await _repository.GetByChassisNumberAsync(
+                chassisNumber,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
                 return NotFound(
@@ -266,7 +282,11 @@ public class VehicleAuthorizationController : BaseApiController
         try
         {
             _logger.LogInformation("Fetching vehicle authorization {Id}", id);
-            var vehicle = await _repository.GetByIdAsync(id);
+            var vehicle = await _repository.GetByIdAsync(
+                id,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
                 return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
@@ -303,22 +323,24 @@ public class VehicleAuthorizationController : BaseApiController
                 return BadRequest(new { message = "Authorizer comment must be 255 characters or fewer." });
 
             var userId = GetCurrentUserId();
+            var existing = await _repository.GetByIdAsync(
+                id,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                userId
+            );
+            if (existing is null)
+                return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
             _logger.LogInformation(
                 "User {UserId} approving vehicle authorization {Id}",
                 userId,
                 id
             );
 
-            // Fetch vehicle to validate self-approval prevention
-            var preVehicle = await _repository.GetByIdAsync(id);
-            if (preVehicle == null)
-                return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
-
-            if (!CanViewPreVehicle(preVehicle))
+            if (!CanViewPreVehicle(existing))
                 return Forbid();
 
             // Prevent self-approval
-            var selfApprovalCheck = ValidateSelfApprovalPrevention(preVehicle, userId);
+            var selfApprovalCheck = ValidateSelfApprovalPrevention(existing, userId);
             if (selfApprovalCheck != null)
                 return selfApprovalCheck;
 
@@ -394,7 +416,11 @@ public class VehicleAuthorizationController : BaseApiController
             );
 
             // Fetch vehicle to validate self-approval prevention
-            var preVehicle = await _repository.GetByIdAsync(id);
+            var preVehicle = await _repository.GetByIdAsync(
+                id,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (preVehicle == null)
                 return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
 
@@ -446,6 +472,14 @@ public class VehicleAuthorizationController : BaseApiController
                 return BadRequest(new { message = "Comment cannot be empty" });
 
             var userId = GetCurrentUserId();
+            if (await _repository.GetByIdAsync(
+                    id,
+                    await ResolveAllowedVehicleSiteCodesAsync(),
+                    userId
+                ) is null)
+            {
+                return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
+            }
             _logger.LogInformation(
                 "User {UserId} adding comment to vehicle authorization {Id}",
                 userId,
@@ -490,6 +524,16 @@ public class VehicleAuthorizationController : BaseApiController
             if (validationError is not null)
             {
                 return BadRequest(new { message = validationError });
+            }
+
+            if (!dto.SiteCode.HasValue || dto.SiteCode.Value <= 0)
+            {
+                return BadRequest(new { message = "A vehicle site is required." });
+            }
+
+            if (!await IsVehicleSiteAllowedAsync(dto.SiteCode.Value))
+            {
+                return Forbid();
             }
 
             var userId = GetCurrentUserId();
@@ -605,11 +649,18 @@ public class VehicleAuthorizationController : BaseApiController
             var userId = GetCurrentUserId();
             _logger.LogInformation("User {UserId} updating vehicle authorization {Id}", userId, id);
 
-            var existing = await _repository.GetByIdAsync(id);
+            var existing = await _repository.GetByIdAsync(
+                id,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (existing == null)
                 return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
 
             if (!CanViewPreVehicle(existing))
+                return Forbid();
+
+            if (dto.SiteCode.HasValue && !await IsVehicleSiteAllowedAsync(dto.SiteCode.Value))
                 return Forbid();
 
             if (existing.Authority_Status == "Authorized")
@@ -699,7 +750,11 @@ public class VehicleAuthorizationController : BaseApiController
             var userId = GetCurrentUserId();
             _logger.LogInformation("User {UserId} deleting vehicle authorization {Id}", userId, id);
 
-            var existing = await _repository.GetByIdAsync(id);
+            var existing = await _repository.GetByIdAsync(
+                id,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (existing is null)
                 return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
             if (!CanViewPreVehicle(existing))
@@ -816,6 +871,18 @@ public class VehicleAuthorizationController : BaseApiController
         return vehicle.captured_by_user_code == currentUserId
             || vehicle.created_by_user_code == currentUserId;
     }
+
+    private async Task<bool> IsVehicleSiteAllowedAsync(short siteCode)
+    {
+        var allowedSites = await _vehicleScope.ResolveAllowedSiteCodesAsync(
+            User,
+            HttpContext.RequestAborted
+        );
+        return allowedSites is null || allowedSites.Contains(siteCode);
+    }
+
+    private Task<IReadOnlySet<short>?> ResolveAllowedVehicleSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
 
     private bool HasSystemAdministratorRole() =>
         HasRoleClaim("SystemAdministrator")

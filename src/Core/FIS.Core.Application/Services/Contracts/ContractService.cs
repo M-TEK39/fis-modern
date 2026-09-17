@@ -1,4 +1,5 @@
 using FIS.Core.Application.Interfaces;
+using FIS.Core.Application.Services.Billing;
 using FIS.Core.Application.Services.Validation;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Financial;
@@ -19,6 +20,7 @@ public class ContractService : IContractService
     private readonly ISiteRepository _siteRepository;
     private readonly IContractValidationService _validationService;
     private readonly IJournalDetailService _journalDetailService;
+    private readonly ITariffCalculationService _tariffCalculationService;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly ILogger<ContractService> _logger;
 
@@ -28,6 +30,7 @@ public class ContractService : IContractService
         ISiteRepository siteRepository,
         IContractValidationService validationService,
         IJournalDetailService journalDetailService,
+        ITariffCalculationService tariffCalculationService,
         ICurrentUserContext currentUserContext,
         ILogger<ContractService> logger
     )
@@ -41,6 +44,8 @@ public class ContractService : IContractService
             validationService ?? throw new ArgumentNullException(nameof(validationService));
         _journalDetailService =
             journalDetailService ?? throw new ArgumentNullException(nameof(journalDetailService));
+        _tariffCalculationService =
+            tariffCalculationService ?? throw new ArgumentNullException(nameof(tariffCalculationService));
         _currentUserContext =
             currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -498,6 +503,16 @@ public class ContractService : IContractService
     {
         try
         {
+            // The archived capture workflow records the operator who submits
+            // the new contract as its owner. UserCode/CreatedByUserId are
+            // transport fields, not an impersonation mechanism; derive the
+            // ownership values from the signed-in context before the legacy
+            // procedure is called.
+            var currentUserId = _currentUserContext.GetCurrentUserIdOrDefault();
+            var currentOwnerCode = currentUserId is > 0 and <= short.MaxValue
+                ? (short)currentUserId
+                : (short?)null;
+
             var vehicle = await _vehicleRepository.GetByIdAsync(request.VmfCode);
             if (vehicle == null)
             {
@@ -512,31 +527,95 @@ public class ContractService : IContractService
                 return null;
             }
 
+            // The legacy capture page lets the operator choose the ordinary
+            // start date with its datepicker. A backdating request replaces
+            // that date; otherwise preserve the selected date and only fall
+            // back to today for older API callers that omit it.
+            var contractStartDate = request.BackdatingStartDate?.Date
+                ?? request.StartDate?.Date
+                ?? DateTime.Today;
+            var configuredContractType = string.IsNullOrWhiteSpace(request.ContractType)
+                ? await _tariffCalculationService.GetConfiguredContractTypeAsync(
+                    request.VmfCode,
+                    DateTime.Today
+                )
+                : request.ContractType.Trim().ToUpperInvariant();
+            var isGfleetZeroBill = site.Depatrment_code == 147
+                && !request.BackdatingStartDate.HasValue;
+            if (string.IsNullOrWhiteSpace(configuredContractType))
+            {
+                if (!isGfleetZeroBill)
+                {
+                    throw new NotSupportedException(
+                        "The legacy contract-type mapping is unavailable. Supply an explicit legacy contract type (A, B, C, F, or L) or restore the configured-tariff database object before opening this contract."
+                    );
+                }
+
+                // Internal GFleet custody is always represented by the legacy
+                // permanent code; its department/site rule makes the bill
+                // zero. This is not a generic client-contract default.
+                configuredContractType = "A";
+            }
+            if (
+                configuredContractType is not null
+                && configuredContractType is not ("A" or "B" or "C" or "F" or "H" or "L")
+            )
+            {
+                throw new ArgumentException(
+                    $"The legacy contract-type mapping returned unsupported type '{configuredContractType}'."
+                );
+            }
             var contract = new Contract
             {
                 vmf_code = request.VmfCode,
                 site_code = request.SiteCode,
-                start_date = DateTime.Now,
-                start_time = DateTime.Now,
+                start_date = contractStartDate,
+                start_time = contractStartDate,
                 start_odometer = request.StartOdometer ?? vehicle.current_odo,
                 still_current = "Y",
                 Driver_id = request.DriverId,
                 Driver_name = request.DriverName,
                 site_driver_code = request.SiteDriverCode,
-                user_code = request.UserCode,
+                user_code = currentOwnerCode,
                 Authorisation = request.Authorisation,
                 Notes = request.Notes,
                 target_return_date = request.TargetReturnDate,
-                contract_type = "H", // H = Hire
+                contract_type = configuredContractType,
                 end_odometer = 0,
                 locked_for_transfer = false,
-                contract_status_code = 0, // 0 = Draft (not yet submitted for approval)
-                created_by_user_code = request.CreatedByUserId,
+                // Legacy DEV_INS_Contract_New_ForApproval normalises ordinary
+                // captures to status 1 and accepts status 8 only for the
+                // Department-147 g-FleeT ZERO Bill workflow.
+                contract_status_code = isGfleetZeroBill ? (short)8 : (short)1,
+                created_by_user_code = currentUserId > 0 ? currentUserId : null,
                 date_created = DateTime.Now,
+                backdating_start_date = request.BackdatingStartDate,
+                backdating_requested_date = request.BackdatingRequestedDate,
             };
 
             var result = await AddContractAsync(contract);
-            return result.IsSuccess ? result.Contract : null;
+            if (!result.IsSuccess || result.Contract is null)
+            {
+                return null;
+            }
+
+            if (!isGfleetZeroBill)
+            {
+                return result.Contract;
+            }
+
+            // Legacy g-FleeT ZERO Bill capture inserts the status-8 row and
+            // immediately runs the same activation procedure used by the
+            // approve-and-activate action. Keep that database-owned close /
+            // activate transaction instead of approximating it in EF.
+            var existingContract = await _contractRepository.GetActiveContractByVehicleAsync(
+                request.VmfCode
+            );
+            return await _contractRepository.ActivatePendingAsync(
+                result.Contract,
+                existingContract?.contract_code ?? 0,
+                currentUserId
+            );
         }
         catch (Exception ex)
             when (

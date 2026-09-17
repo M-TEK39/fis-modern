@@ -1,4 +1,5 @@
 using FIS.Core.Application.Interfaces;
+using FIS.Core.Application.Services.Billing;
 using FIS.Core.Domain.Entities;
 using Microsoft.Extensions.Logging;
 
@@ -15,7 +16,7 @@ public class ContractValidationService : IContractValidationService
     private readonly IVehicleRepository _vehicleRepository;
     private readonly IModelRepository _modelRepository;
     private readonly ISiteRepository _siteRepository;
-    private readonly ITariffRepository _tariffRepository;
+    private readonly ITariffCalculationService _tariffCalculationService;
     private readonly ITripRepository _tripRepository;
     private readonly ILogger<ContractValidationService> _logger;
 
@@ -24,7 +25,7 @@ public class ContractValidationService : IContractValidationService
         IVehicleRepository vehicleRepository,
         IModelRepository modelRepository,
         ISiteRepository siteRepository,
-        ITariffRepository tariffRepository,
+        ITariffCalculationService tariffCalculationService,
         ITripRepository tripRepository,
         ILogger<ContractValidationService> logger
     )
@@ -36,8 +37,9 @@ public class ContractValidationService : IContractValidationService
         _modelRepository =
             modelRepository ?? throw new ArgumentNullException(nameof(modelRepository));
         _siteRepository = siteRepository ?? throw new ArgumentNullException(nameof(siteRepository));
-        _tariffRepository =
-            tariffRepository ?? throw new ArgumentNullException(nameof(tariffRepository));
+        _tariffCalculationService =
+            tariffCalculationService
+            ?? throw new ArgumentNullException(nameof(tariffCalculationService));
         _tripRepository = tripRepository ?? throw new ArgumentNullException(nameof(tripRepository));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -156,19 +158,7 @@ public class ContractValidationService : IContractValidationService
                 return ContractValidationResult.Failed($"Contract {contractCode} not found");
             }
 
-            // Get all trips for this contract
-            var trips = await _tripRepository.GetTripsByVehicleAsync(contract.vmf_code);
-
-            // Check for any trips with expiry dates in the future
-            var openTripAuthorities = trips
-                .Where(t =>
-                    t.contract_code == contractCode
-                    && t.expiry_date.HasValue
-                    && t.expiry_date.Value > DateTime.Now
-                )
-                .ToList();
-
-            if (openTripAuthorities.Any())
+            if (await _tripRepository.HasOpenTripAuthoritiesAsync(contractCode))
             {
                 return ContractValidationResult.Failed(
                     "The contract has an open trip authority and cannot be closed"
@@ -468,7 +458,10 @@ public class ContractValidationService : IContractValidationService
     /// </summary>
     public Task<ContractValidationResult> ValidateTargetReturnDateAsync(DateTime targetReturnDate)
     {
-        if (targetReturnDate < DateTime.Now)
+        // Date capture is day-based in the legacy UI. Comparing a midnight
+        // date picker value with DateTime.Now incorrectly rejects a target
+        // return date selected as “today”.
+        if (targetReturnDate.Date < DateTime.Today)
         {
             return Task.FromResult(
                 ContractValidationResult.Failed(
@@ -517,14 +510,23 @@ public class ContractValidationService : IContractValidationService
                 result.AddErrors(regValidation.Errors);
 
             // 2. Ensure the vehicle has an approved effective tariff before contract capture
-            var tariffValidation = await ValidateVehicleTariffAsync(vehicle, contract.start_date);
+            var tariffValidation = await ValidateVehicleTariffAsync(contract, vehicle);
             if (!tariffValidation.IsValid)
                 result.AddErrors(tariffValidation.Errors);
 
-            // 3. Check for duplicate contracts
-            var duplicateValidation = await ValidateDuplicateContractAsync(contract.vmf_code);
-            if (!duplicateValidation.IsValid)
-                result.AddErrors(duplicateValidation.Errors);
+            // 3. Check for duplicate contracts. The archived
+            // DEV_INS_Contract_New_ForApproval procedure deliberately allows
+            // a pending row while an active predecessor exists (the
+            // predecessor is closed only when the approved row is activated).
+            // Enforce the one-active-contract invariant in the activation and
+            // direct active-custody paths, but do not block the legacy pending
+            // capture workflow before its approver can review it.
+            if (contract.contract_status_code is not (1 or 8))
+            {
+                var duplicateValidation = await ValidateDuplicateContractAsync(contract.vmf_code);
+                if (!duplicateValidation.IsValid)
+                    result.AddErrors(duplicateValidation.Errors);
+            }
 
             // 4. Validate site code
             var siteValidation = await ValidateSiteCodeAsync(contract.site_code);
@@ -584,27 +586,33 @@ public class ContractValidationService : IContractValidationService
     }
 
     private async Task<ContractValidationResult> ValidateVehicleTariffAsync(
-        Vehicle vehicle,
-        DateTime? effectiveDate
+        Contract contract,
+        Vehicle vehicle
     )
     {
-        var model = await _modelRepository.GetByIdAsync(vehicle.model_code);
-        if (model == null)
-        {
-            return ContractValidationResult.Failed(
-                "This vehicle cannot be contracted because its model configuration is missing."
-            );
-        }
-
-        var approvedTariff = await _tariffRepository.GetApprovedTariffForClassAsync(
-            model.class_code,
-            (effectiveDate ?? DateTime.Today).Date
+        var site = await _siteRepository.GetByIdAsync(contract.site_code);
+        var effectiveDate = contract.start_date == default
+            ? DateTime.Today
+            : contract.start_date.Date;
+        var result = await _tariffCalculationService.GetVehicleTariffAsync(
+            effectiveDate,
+            contract.end_date ?? effectiveDate,
+            contract.start_odometer,
+            contract.end_odometer ?? contract.start_odometer,
+            vehicle.vmf_code,
+            contract.site_code,
+            site?.Depatrment_code ?? 0,
+            contract.contract_type ?? "A",
+            effectiveDate,
+            TariffType.Fixed
         );
 
-        return approvedTariff != null
+        return result.Status == TariffStatus.Valid
             ? ContractValidationResult.Success()
             : ContractValidationResult.Failed(
-                $"No approved tariff is captured for vehicle class {model.class_code}. Capture the tariff before opening or submitting this contract."
+                string.IsNullOrWhiteSpace(result.Message)
+                    ? $"No effective tariff is captured for vehicle {vehicle.vmf_code}. Capture the tariff before opening or submitting this contract."
+                    : result.Message
             );
     }
 

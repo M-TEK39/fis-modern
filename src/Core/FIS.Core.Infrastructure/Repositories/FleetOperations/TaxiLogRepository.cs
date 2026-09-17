@@ -21,7 +21,7 @@ namespace FIS.Core.Infrastructure.Repositories;
 public sealed class TaxiLogRepository : ITaxiLogRepository
 {
     private const string TableName = "Taxi_logs";
-
+    private const string ChangeTableName = "Taxi_Log_changes";
     private static readonly string[] InsertTriggerNames =
     [
         "TRG_INS_TaxiLogJournalDetailRecord",
@@ -32,6 +32,10 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
 
     private static readonly string[] UpdateTriggerNames =
     [
+        // Invoiced edits are implemented by the legacy update trigger as a
+        // child/reversal/rebill insert. Keep the insert-side accounting
+        // triggers enabled as part of the same workflow; otherwise the update
+        // can succeed while the rebill has no journal/VIP billing record.
         "TRG_INS_TaxiLogJournalDetailRecord",
         "TRG_INS_VIPBillingRecord",
         "TRG_UPD_TaxiLogJournalDetailRecord",
@@ -145,17 +149,19 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
         ArgumentNullException.ThrowIfNull(log);
         ValidateLog(log);
         await EnsureLegacyTriggersAsync(InsertTriggerNames);
+        log.userid = ToLegacyShortUserId(currentUserId);
+        log.enter_date = DateTime.Today;
         var columns = await GetAvailableColumnsAsync(RequiredColumns);
         var now = DateTime.UtcNow;
         log.date_created = now;
         log.created_by_user_code = UserIdOrNull(currentUserId);
         log.is_deleted = false;
-        // The archived Web Forms taxi-log pages issue a parameterized-equivalent
-        // INSERT into Taxi_logs themselves (the stored DEV_INS_TaxiLog wrapper
-        // predates request_id and is not their active path). Keep that direct
-        // insert, but only after proving the source-backed accounting triggers
-        // are enabled so a local/partial schema cannot report an unbilled log
-        // as successful.
+
+        // Taxi_log_2.aspx is the active legacy user path: it writes Taxi_logs
+        // directly so request_id links the log to the selected taxi request.
+        // DEV_INS_TaxiLog is an internal rebill wrapper used by the update
+        // trigger; routing a new user capture through it would omit the
+        // request link and change the accounting flow.
         var values = BuildValues(log, columns, currentUserId, includeAudit: true);
         log.log_id = await ExecuteInsertAsync(values);
         return await GetByIdAsync(log.log_id)
@@ -172,9 +178,55 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
             await GetByIdAsync(log.log_id)
             ?? throw new InvalidOperationException($"Taxi log {log.log_id} not found");
         MergeLog(log, existing);
+
+        // The modern taxi-log form is the active legacy driver journey path.
+        // Legacy Edit_Taxi_log_2.aspx switches a row to that tariff mode by
+        // clearing the opposing user journey, rather than leaving two
+        // competing journey descriptions on the same billable log.
+        log.user_start_odo = null;
+        log.user_end_odo = null;
+        log.user_start_date = null;
+        log.user_end_date = null;
+        log.user_start_time = null;
+        log.user_end_time = null;
+
+        log.changed = IsInvoiced(existing) ? "1" : null;
+        log.userid = ToLegacyShortUserId(currentUserId);
+        log.enter_date = DateTime.Today;
+
+        // A log that has already been batched gets a pre-edit revenue
+        // snapshot in the legacy Taxi_Log_changes table for rebilling/audit.
+        // The table is optional in modern-expanded databases, so this is a
+        // guarded compatibility write rather than a schema requirement.
+        if (IsInvoiced(existing))
+            await CaptureInvoicedChangeAsync(existing);
+
         ValidateLog(log);
         var columns = await GetAvailableColumnsAsync(RequiredColumns);
         var values = BuildValues(log, columns, currentUserId, includeAudit: false);
+        SetNullableValue(values, columns, "user_start_odo", "@userStartOdo", DbType.Decimal, null);
+        SetNullableValue(values, columns, "user_end_odo", "@userEndOdo", DbType.Decimal, null);
+        SetNullableValue(values, columns, "user_start_date", "@userStartDate", DbType.DateTime2, null);
+        SetNullableValue(values, columns, "user_end_date", "@userEndDate", DbType.DateTime2, null);
+        SetNullableValue(values, columns, "user_start_time", "@userStartTime", DbType.DateTime2, null);
+        SetNullableValue(values, columns, "user_end_time", "@userEndTime", DbType.DateTime2, null);
+        SetNullableValue(values, columns, "changed", "@changed", DbType.String, log.changed);
+        SetNullableValue(
+            values,
+            columns,
+            "quoted_tariff",
+            "@quotedTariff",
+            DbType.Single,
+            log.quoted_tariff
+        );
+        SetNullableValue(
+            values,
+            columns,
+            "taxi_log_note_code",
+            "@taxiLogNoteCode",
+            DbType.Int16,
+            log.taxi_log_note_code
+        );
         AddValue(
             values,
             columns,
@@ -192,11 +244,57 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
             UserIdOrNull(currentUserId)
         );
         await ExecuteUpdateAsync(log.log_id, values, columns);
-        return await GetByIdAsync(log.log_id)
+
+        // TRG_UPD_TaxiLogJournalDetailRecord leaves an invoiced source row
+        // untouched and creates a new rebill child. Return the latest leaf
+        // for the requisition so callers receive the row that now carries the
+        // edited kilometre/date values rather than the old posted snapshot.
+        var requisition = log.rek_num ?? existing.rek_num;
+        return requisition is not null
+            ? await GetLatestByRequisitionAsync(requisition)
+            ?? await GetByIdAsync(log.log_id)
             ?? throw new InvalidOperationException(
                 $"Taxi log {log.log_id} could not be read after update."
-            );
+            )
+            : await GetByIdAsync(log.log_id)
+                ?? throw new InvalidOperationException(
+                    $"Taxi log {log.log_id} could not be read after update."
+                );
     }
+
+    private async Task CaptureInvoicedChangeAsync(TaxiLog existing)
+    {
+        var columns = await GetAvailableColumnsAsync(ChangeTableName, []);
+        var requiredColumns = new[] { "rek_num", "days", "hours", "km", "date_changed" };
+        if (requiredColumns.Any(column => !columns.ContainsKey(column)))
+            return;
+
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = $"""
+            INSERT INTO [dbo].[{ChangeTableName}]
+                ([rek_num], [days], [hours], [km], [date_changed])
+            VALUES (@rekNum, @days, @hours, @km, @dateChanged)
+            """;
+        AddParameter(command, "@rekNum", DbType.String, existing.rek_num?.Trim());
+        AddParameter(command, "@days", DbType.Int16, existing.days);
+        AddParameter(command, "@hours", DbType.Double, existing.hours);
+        AddParameter(command, "@km", DbType.Decimal, existing.distance);
+        AddParameter(command, "@dateChanged", DbType.DateTime, DateTime.Now);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static bool IsInvoiced(TaxiLog log) =>
+        // Edit_Taxi_log_1.aspx uses the presence of batch_num as the posted
+        // flag before writing Taxi_Log_changes. Some restored databases do
+        // not populate invoiced_date until a later finance step, so checking
+        // only that date would skip the legacy snapshot/rebill path.
+        log.batch_num.HasValue
+        || (
+            log.invoiced_date.HasValue
+            && log.invoiced_date.Value.Date > new DateTime(1900, 1, 1)
+        );
 
     private async Task<List<TaxiLog>> QueryAsync(
         string? predicate = null,
@@ -240,6 +338,11 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
 
     private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync(
         IReadOnlyCollection<string> requiredColumns
+    ) => await GetAvailableColumnsAsync(TableName, requiredColumns);
+
+    private async Task<Dictionary<string, ColumnInfo>> GetAvailableColumnsAsync(
+        string tableName,
+        IReadOnlyCollection<string> requiredColumns
     )
     {
         await using var scope = await OpenConnectionAsync();
@@ -251,7 +354,7 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
             WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table
             """;
         AddParameter(command, "@schema", DbType.String, "dbo");
-        AddParameter(command, "@table", DbType.String, TableName);
+        AddParameter(command, "@table", DbType.String, tableName);
 
         var columns = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
         await using var reader = await command.ExecuteReaderAsync();
@@ -259,7 +362,7 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
             columns[reader.GetString(0)] = new ColumnInfo(reader.GetString(0), reader.GetString(1));
         foreach (var required in requiredColumns.Where(column => !columns.ContainsKey(column)))
             throw new InvalidOperationException(
-                $"The required {TableName} compatibility column {required} is not available."
+                $"The required {tableName} compatibility column {required} is not available."
             );
         return columns;
     }
@@ -657,6 +760,22 @@ public sealed class TaxiLogRepository : ITaxiLogRepository
     {
         if (columns.ContainsKey(column) && value is not null)
             values.Add(new WriteValue(column, parameter, type, value));
+    }
+
+    private static void SetNullableValue(
+        ICollection<WriteValue> values,
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        string column,
+        string parameter,
+        DbType type,
+        object? value
+    )
+    {
+        if (!columns.ContainsKey(column))
+            return;
+        if (values is List<WriteValue> list)
+            list.RemoveAll(item => item.Column.Equals(column, StringComparison.OrdinalIgnoreCase));
+        values.Add(new WriteValue(column, parameter, type, value));
     }
 
     private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)

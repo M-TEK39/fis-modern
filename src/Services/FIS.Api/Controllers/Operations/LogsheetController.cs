@@ -13,6 +13,12 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 public class LogsheetController : BaseApiController
 {
+    // Log_menu.aspx exposes edit/delete only to these legacy operator
+    // profiles. Modern editing is deliberately broader because correcting
+    // daily kilometre captures is an operational requirement; destructive
+    // deletion remains restricted to these profiles and administrators.
+    private static readonly int[] LegacyLogsheetManagerUserCodes = [279, 47, 38];
+
     private readonly ILogsheetRepository _repository;
     private readonly IContractRepository _contractRepository;
     private readonly ISiteRepository _siteRepository;
@@ -230,6 +236,11 @@ public class LogsheetController : BaseApiController
             _logger.LogInformation(ex, "Legacy logsheet creation rule rejected the request");
             return LegacyLogsheetConflict();
         }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy logsheet insert workflow is unavailable");
+            return LegacyLogsheetUnavailable();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
@@ -240,7 +251,7 @@ public class LogsheetController : BaseApiController
     [HttpPut("{id}")]
     public async Task<ActionResult<Logsheet>> Update(int id, [FromBody] Logsheet item)
     {
-        if (!HasLogsheetAccess() || !CanManageLegacyLogsheets())
+        if (!HasLogsheetAccess() || !CanEditLegacyLogsheets())
             return Forbid();
 
         try
@@ -252,6 +263,12 @@ public class LogsheetController : BaseApiController
                 return NotFound();
             if (!await IsSiteAllowedAsync(existing.site_code))
                 return Forbid();
+            if (item.vmf_code != existing.vmf_code)
+            {
+                return BadRequest(
+                    new { error = "The vehicle for an existing logsheet cannot be changed." }
+                );
+            }
             var contractFailure = await ApplyLegacySelectedContractAsync(
                 item,
                 item.contract_code
@@ -265,6 +282,11 @@ public class LogsheetController : BaseApiController
             _logger.LogInformation(ex, "Legacy logsheet update rule rejected logsheet {LogCode}", id);
             return LegacyLogsheetConflict();
         }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy logsheet update workflow is unavailable for {LogCode}", id);
+            return LegacyLogsheetUnavailable();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error");
@@ -275,7 +297,7 @@ public class LogsheetController : BaseApiController
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(int id)
     {
-        if (!HasLogsheetAccess() || !CanManageLegacyLogsheets())
+        if (!HasLogsheetAccess() || !CanDeleteLegacyLogsheets())
             return Forbid();
 
         try
@@ -292,6 +314,11 @@ public class LogsheetController : BaseApiController
         {
             _logger.LogInformation(ex, "Legacy logsheet delete rule rejected logsheet {LogCode}", id);
             return LegacyLogsheetConflict();
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy logsheet delete workflow is unavailable for {LogCode}", id);
+            return LegacyLogsheetUnavailable();
         }
         catch (Exception ex)
         {
@@ -397,6 +424,11 @@ public class LogsheetController : BaseApiController
             _logger.LogInformation(ex, "Legacy logsheet creation rule rejected the entry request");
             return LegacyLogsheetConflict();
         }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy logsheet insert workflow is unavailable");
+            return LegacyLogsheetUnavailable();
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating logsheet entry");
@@ -413,7 +445,7 @@ public class LogsheetController : BaseApiController
         [FromBody] LogsheetEntryDto request
     )
     {
-        if (!HasLogsheetAccess() || !CanManageLegacyLogsheets())
+        if (!HasLogsheetAccess() || !CanEditLegacyLogsheets())
             return Forbid();
 
         try
@@ -427,8 +459,13 @@ public class LogsheetController : BaseApiController
                 return NotFound(new { message = $"Logsheet entry with code {id} not found" });
             if (!await IsSiteAllowedAsync(existing.site_code))
                 return Forbid();
+            if (request.VmfCode != existing.vmf_code)
+            {
+                return BadRequest(
+                    new { message = "The vehicle for an existing logsheet cannot be changed." }
+                );
+            }
 
-            existing.vmf_code = request.VmfCode;
             existing.start_odo = request.StartOdometer;
             existing.end_odo = request.EndOdometer;
             existing.month = request.Month;
@@ -449,7 +486,11 @@ public class LogsheetController : BaseApiController
             var result = new LogsheetEntryResultDto
             {
                 Success = true,
-                LogCode = id,
+                // A posted legacy row is kept immutable by the INSTEAD OF
+                // UPDATE trigger; the edited values are stored in a new child
+                // logsheet. Return that leaf code so the caller does not keep
+                // reopening the superseded parent row.
+                LogCode = updated.log_code,
                 Message = "Logsheet entry updated successfully",
             };
             return Ok(result);
@@ -458,6 +499,11 @@ public class LogsheetController : BaseApiController
         {
             _logger.LogInformation(ex, "Legacy logsheet update rule rejected logsheet {LogCode}", id);
             return LegacyLogsheetConflict();
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy logsheet update workflow is unavailable for {LogCode}", id);
+            return LegacyLogsheetUnavailable();
         }
         catch (Exception ex)
         {
@@ -472,7 +518,7 @@ public class LogsheetController : BaseApiController
     [HttpDelete("entry/{id}")]
     public async Task<ActionResult> DeleteEntry(int id)
     {
-        if (!HasLogsheetAccess() || !CanManageLegacyLogsheets())
+        if (!HasLogsheetAccess() || !CanDeleteLegacyLogsheets())
             return Forbid();
 
         try
@@ -490,6 +536,11 @@ public class LogsheetController : BaseApiController
         {
             _logger.LogInformation(ex, "Legacy logsheet delete rule rejected logsheet {LogCode}", id);
             return LegacyLogsheetConflict();
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy logsheet delete workflow is unavailable for {LogCode}", id);
+            return LegacyLogsheetUnavailable();
         }
         catch (Exception ex)
         {
@@ -584,12 +635,17 @@ public class LogsheetController : BaseApiController
         return null;
     }
 
-    // The legacy edit/delete pages do not use a fixed user-code allow-list;
-    // access follows the Logsheets/Reports module entitlement. Keep the
-    // server-side site scope checks on each record, but do not introduce a
-    // modern-only set of three users that prevents authorised operators from
-    // correcting captured odometer values.
-    private bool CanManageLegacyLogsheets() => HasLogsheetAccess();
+    private bool CanEditLegacyLogsheets() =>
+        HasGlobalLogsheetScope()
+        || HasRole("Logsheets")
+        // RPT_Editlogsform.aspx is exposed from the Reports branch of the
+        // legacy menu and does not use the three-user restriction applied to
+        // the older Log_Edit1.aspx path.
+        || HasRole("Reports")
+        || LegacyLogsheetManagerUserCodes.Contains(GetCurrentUserId());
+
+    private bool CanDeleteLegacyLogsheets() =>
+        HasGlobalLogsheetScope() || LegacyLogsheetManagerUserCodes.Contains(GetCurrentUserId());
 
     private async Task<IReadOnlySet<short>?> ResolveAllowedSiteCodesAsync()
     {
@@ -669,6 +725,16 @@ public class LogsheetController : BaseApiController
             new
             {
                 error = "The legacy database rejected this logsheet. Check the vehicle contract, site, date, requisition, and odometer range before retrying.",
+            }
+        );
+
+    private ObjectResult LegacyLogsheetUnavailable() =>
+        StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            new
+            {
+                error = "The legacy logsheet procedure or trigger workflow is unavailable. No direct-DML fallback was run.",
+                source = "legacy-procedure-required",
             }
         );
 

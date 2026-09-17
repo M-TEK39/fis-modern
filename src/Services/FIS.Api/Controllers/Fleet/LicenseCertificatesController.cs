@@ -1,4 +1,5 @@
 using System.Globalization;
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Operations;
 using Microsoft.AspNetCore.Authorization;
@@ -28,18 +29,21 @@ public sealed class LicenseCertificatesController : BaseApiController
 
     private readonly ILicenseCertificateRepository _repository;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly IConfiguration _configuration;
     private readonly ILogger<LicenseCertificatesController> _logger;
 
     public LicenseCertificatesController(
         ILicenseCertificateRepository repository,
         IVehicleRepository vehicleRepository,
+        LegacyVehicleScopeService vehicleScope,
         IConfiguration configuration,
         ILogger<LicenseCertificatesController> logger
     )
     {
         _repository = repository;
         _vehicleRepository = vehicleRepository;
+        _vehicleScope = vehicleScope;
         _configuration = configuration;
         _logger = logger;
     }
@@ -67,15 +71,17 @@ public sealed class LicenseCertificatesController : BaseApiController
     {
         try
         {
-            var result = await _repository.GetPageAsync(
-                Math.Max(1, page),
-                Math.Clamp(pageSize, 1, MaximumPageSize)
-            );
+            var allowedSites = await ResolveAllowedVehicleSiteCodesAsync();
+            var result = allowedSites is null
+                ? await _repository.GetPageAsync(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, MaximumPageSize)
+                )
+                : await GetAccessibleCertificatePageAsync(page, pageSize, allowedSites);
             return Ok(
                 new
                 {
-                    items = result
-                        .Items.Select(item =>
+                    items = result.Items.Select(item =>
                             MapDocument(item.Document, item.FleetNumber, item.RegistrationNumber)
                         )
                         .ToList(),
@@ -98,6 +104,8 @@ public sealed class LicenseCertificatesController : BaseApiController
     {
         try
         {
+            if (await GetAccessibleVehicleAsync(vmfCode) is null)
+                return NotFound(new { error = "Vehicle not found" });
             var documents = await _repository.GetByVehicleAsync(vmfCode);
             return Ok(await AddVehicleDetailsAsync(documents));
         }
@@ -128,7 +136,10 @@ public sealed class LicenseCertificatesController : BaseApiController
             if (location is not null && locationCode is null)
                 return BadRequest(new { error = "Location must be jhb or pta." });
 
-            var vehicles = (await _vehicleRepository.GetActiveVehiclesAsync())
+            var vehicles = (await _vehicleRepository.GetActiveVehiclesAsync(
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            ))
                 .Where(vehicle =>
                     !locationCode.HasValue || vehicle.location_code == locationCode.Value
                 )
@@ -190,18 +201,17 @@ public sealed class LicenseCertificatesController : BaseApiController
             if (location is not null && locationCode is null)
                 return BadRequest(new { error = "Location must be jhb or pta." });
 
-            var result = await _repository.GetMissingPageAsync(
+            var result = await GetAccessibleMissingCertificatePageAsync(
                 locationCode,
-                Math.Max(1, page),
-                Math.Clamp(pageSize, 1, MaximumPageSize)
+                page,
+                pageSize
             );
             var numberOffset = checked((result.Page - 1) * result.PageSize);
             return Ok(
                 new
                 {
                     location = normalizedLocation is "jhb" or "pta" ? normalizedLocation : "all",
-                    vehicles = result
-                        .Items.Select(
+                    vehicles = result.Items.Select(
                             (vehicle, index) =>
                                 new
                                 {
@@ -255,7 +265,7 @@ public sealed class LicenseCertificatesController : BaseApiController
                     new { error = "Only JPG, PNG, or GIF image scans are accepted." }
                 );
 
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await GetAccessibleVehicleAsync(vmfCode);
             if (vehicle is null)
                 return NotFound(new { error = $"Vehicle {vmfCode} not found" });
             if (await _repository.HasAnyForVehicleAsync(vmfCode))
@@ -392,6 +402,8 @@ public sealed class LicenseCertificatesController : BaseApiController
     )
     {
         var document = await _repository.GetByKeyAsync(source, vmfCode, documentKey);
+        if (document is not null && await GetAccessibleVehicleAsync(vmfCode) is null)
+            document = null;
         return document is null
             ? NotFound(new { error = "Licence certificate not found" })
             : Ok(await MapDocumentAsync(document));
@@ -405,6 +417,8 @@ public sealed class LicenseCertificatesController : BaseApiController
     )
     {
         var document = await _repository.GetByKeyAsync(source, vmfCode, documentKey);
+        if (document is not null && await GetAccessibleVehicleAsync(vmfCode) is null)
+            document = null;
         if (document is null)
             return NotFound(new { error = "Licence certificate not found" });
         var path = ResolveDocumentPath(document);
@@ -423,6 +437,8 @@ public sealed class LicenseCertificatesController : BaseApiController
         try
         {
             var document = await _repository.GetByKeyAsync(source, vmfCode, documentKey);
+            if (document is not null && await GetAccessibleVehicleAsync(vmfCode) is null)
+                document = null;
             if (document is null)
                 return NotFound(new { error = "Licence certificate not found" });
             await _repository.DeleteAsync(source, vmfCode, documentKey, GetCurrentUserId());
@@ -443,14 +459,96 @@ public sealed class LicenseCertificatesController : BaseApiController
         }
     }
 
+    private async Task<IReadOnlySet<short>?> ResolveAllowedVehicleSiteCodesAsync() =>
+        await _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
+
+    private async Task<FIS.Core.Domain.Entities.Vehicle?> GetAccessibleVehicleAsync(int vmfCode) =>
+        await _vehicleRepository.GetByIdAsync(
+            vmfCode,
+            await ResolveAllowedVehicleSiteCodesAsync(),
+            GetCurrentUserId()
+        );
+
+    private async Task<LicenseCertificatePage> GetAccessibleCertificatePageAsync(
+        int page,
+        int pageSize,
+        IReadOnlySet<short> allowedSiteCodes
+    )
+    {
+        var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
+        var vehicles = (await _vehicleRepository.GetActiveVehiclesAsync(
+            allowedSiteCodes,
+            GetCurrentUserId()
+        )).ToDictionary(vehicle => vehicle.vmf_code);
+        var items = (await _repository.GetAllAsync())
+            .Where(document => vehicles.ContainsKey(document.vmf_code))
+            .Select(document => new LicenseCertificatePageItem(
+                document,
+                vehicles[document.vmf_code].fleet_number,
+                vehicles[document.vmf_code].registration_number
+            ))
+            .OrderBy(item => item.FleetNumber ?? string.Empty)
+            .ThenBy(item => item.Document.vmf_code)
+            .ThenByDescending(item => item.Document.period_begin ?? DateTime.MinValue)
+            .ToList();
+        var totalPages = Math.Max(1, (int)Math.Ceiling(items.Count / (double)normalizedPageSize));
+        var normalizedPage = Math.Min(Math.Max(1, page), totalPages);
+        return new LicenseCertificatePage(
+            items.Skip((normalizedPage - 1) * normalizedPageSize).Take(normalizedPageSize).ToList(),
+            normalizedPage,
+            normalizedPageSize,
+            items.Count
+        );
+    }
+
+    private async Task<MissingLicenseCertificatePage> GetAccessibleMissingCertificatePageAsync(
+        short? locationCode,
+        int page,
+        int pageSize
+    )
+    {
+        var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
+        var vehicles = (await _vehicleRepository.GetActiveVehiclesAsync(
+            await ResolveAllowedVehicleSiteCodesAsync(),
+            GetCurrentUserId()
+        ))
+            .Where(vehicle => !locationCode.HasValue || vehicle.location_code == locationCode.Value)
+            .ToList();
+        var certificateVehicleCodes = (await _repository.GetAllAsync())
+            .Select(document => document.vmf_code)
+            .ToHashSet();
+        var items = vehicles
+            .Where(vehicle => !certificateVehicleCodes.Contains(vehicle.vmf_code))
+            .OrderBy(vehicle => vehicle.fleet_number)
+            .Select(vehicle => new MissingLicenseCertificatePageItem(
+                vehicle.vmf_code,
+                vehicle.fleet_number,
+                vehicle.registration_number,
+                vehicle.location_code
+            ))
+            .ToList();
+        var totalPages = Math.Max(1, (int)Math.Ceiling(items.Count / (double)normalizedPageSize));
+        var normalizedPage = Math.Min(Math.Max(1, page), totalPages);
+        return new MissingLicenseCertificatePage(
+            items.Skip((normalizedPage - 1) * normalizedPageSize).Take(normalizedPageSize).ToList(),
+            normalizedPage,
+            normalizedPageSize,
+            items.Count
+        );
+    }
+
     private async Task<IReadOnlyList<object>> AddVehicleDetailsAsync(
         IEnumerable<LicenseCertificateDocument> documents
     )
     {
-        var vehicles = (await _vehicleRepository.GetAllAsync()).ToDictionary(vehicle =>
+        var vehicles = (await _vehicleRepository.GetActiveVehiclesAsync(
+            await ResolveAllowedVehicleSiteCodesAsync(),
+            GetCurrentUserId()
+        )).ToDictionary(vehicle =>
             vehicle.vmf_code
         );
         return documents
+            .Where(document => vehicles.ContainsKey(document.vmf_code))
             .Select(document =>
                 MapDocument(document, vehicles.GetValueOrDefault(document.vmf_code))
             )
@@ -458,7 +556,7 @@ public sealed class LicenseCertificatesController : BaseApiController
     }
 
     private async Task<object> MapDocumentAsync(LicenseCertificateDocument document) =>
-        MapDocument(document, await _vehicleRepository.GetByIdAsync(document.vmf_code));
+        MapDocument(document, await GetAccessibleVehicleAsync(document.vmf_code));
 
     private object MapDocument(
         LicenseCertificateDocument document,

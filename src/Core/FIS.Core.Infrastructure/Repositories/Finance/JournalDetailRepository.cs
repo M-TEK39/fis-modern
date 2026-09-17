@@ -199,6 +199,46 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
             command => AddParameter(command, "@journalDetailCode", DbType.Guid, journalDetailCode)
         );
 
+    public async Task<bool> TryGenerateReversalAsync(Guid journalDetailCode)
+    {
+        if (journalDetailCode == Guid.Empty)
+            throw new ArgumentException("A journal detail code is required.", nameof(journalDetailCode));
+
+        const string procedureName = "NEW_DEV_UPD_JournalDetailReversal";
+        var procedureParameters = await ResolveProcedureParametersAsync(procedureName);
+        if (procedureParameters is null)
+        {
+            // Explicit compatibility fallback: the archived procedure is not
+            // deployed on this database, so the application service may use
+            // its parameterized reversal projection.
+            return false;
+        }
+
+        var expectedParameters = new[] { "@journalDetailCode" };
+        if (!procedureParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The deployed legacy procedure {procedureName} does not match the archived parameter contract. No direct-DML reversal fallback was run."
+            );
+        }
+
+        var scope = await OpenConnectionAsync();
+        try
+        {
+            await using var command = scope.Connection.CreateCommand();
+            command.Transaction = CurrentTransaction;
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = $"[dbo].[{procedureName}]";
+            AddParameter(command, "@journalDetailCode", DbType.Guid, journalDetailCode);
+            await command.ExecuteNonQueryAsync();
+            return true;
+        }
+        finally
+        {
+            await CloseConnectionAsync(scope);
+        }
+    }
+
     public async Task<JournalDetail> CreateAsync(JournalDetail journalDetail, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(journalDetail);
@@ -388,6 +428,46 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
 
             _columns = columns;
             return columns;
+        }
+        finally
+        {
+            await CloseConnectionAsync(scope);
+        }
+    }
+
+    private async Task<IReadOnlyList<string>?> ResolveProcedureParametersAsync(
+        string procedureName
+    )
+    {
+        var scope = await OpenConnectionAsync();
+        try
+        {
+            await using var command = scope.Connection.CreateCommand();
+            command.Transaction = CurrentTransaction;
+            command.CommandText = """
+                SELECT [p].[name]
+                FROM [sys].[procedures] AS [sp]
+                INNER JOIN [sys].[schemas] AS [s] ON [s].[schema_id] = [sp].[schema_id]
+                LEFT JOIN [sys].[parameters] AS [p]
+                    ON [p].[object_id] = [sp].[object_id]
+                   AND [p].[parameter_id] > 0
+                WHERE [s].[name] = N'dbo'
+                  AND [sp].[name] = @procedureName
+                ORDER BY [p].[parameter_id]
+                """;
+            AddParameter(command, "@procedureName", DbType.String, procedureName);
+
+            var found = false;
+            var parameters = new List<string>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                found = true;
+                if (!reader.IsDBNull(0))
+                    parameters.Add(reader.GetString(0));
+            }
+
+            return found ? parameters : null;
         }
         finally
         {

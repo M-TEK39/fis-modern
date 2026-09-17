@@ -132,6 +132,8 @@ public class TaxiController : BaseApiController
         {
             if (item is null)
                 return BadRequest(new { error = "Taxi request data is required." });
+            if (await ValidateLocationAsync(item.site_code, item.department_code) is { } locationError)
+                return BadRequest(new { error = locationError });
             if (!await IsSiteAllowedAsync(item.site_code))
                 return Forbid();
             var created = await _repository.CreateAsync(item, GetCurrentUserId());
@@ -177,6 +179,8 @@ public class TaxiController : BaseApiController
 
         try
         {
+            if (await ValidateLocationAsync(request.Taxi.site_code, request.Taxi.department_code) is { } locationError)
+                return BadRequest(new { error = locationError });
             if (!await IsSiteAllowedAsync(request.Taxi.site_code))
                 return Forbid();
             var created = await _repository.CreateRecurringAsync(
@@ -227,6 +231,8 @@ public class TaxiController : BaseApiController
             var existing = await _repository.GetByIdAsync(id, allowedSites);
             if (existing is null)
                 return NotFound();
+            if (await ValidateLocationAsync(item.site_code, item.department_code) is { } locationError)
+                return BadRequest(new { error = locationError });
             if (!await IsSiteAllowedAsync(item.site_code))
                 return Forbid();
             return Ok(await _repository.UpdateAsync(item, GetCurrentUserId()));
@@ -402,6 +408,26 @@ public class TaxiController : BaseApiController
     {
         var allowed = await ResolveAllowedSiteCodesAsync();
         return allowed is null || allowed.Contains(siteCode);
+    }
+
+    private async Task<string?> ValidateLocationAsync(short siteCode, short? departmentCode)
+    {
+        if (siteCode <= 0)
+            return "A valid site is required.";
+
+        var site = await _siteRepository.GetByIdAsync(siteCode);
+        if (site is null)
+            return "The selected site does not exist.";
+        if (!site.site_active)
+            return "The selected site is not active.";
+        if (departmentCode is > 0
+            && site.Depatrment_code is > 0
+            && site.Depatrment_code.Value != departmentCode.Value)
+        {
+            return "The selected site does not belong to the selected department.";
+        }
+
+        return null;
     }
 
     private async Task<bool> IsVehicleAllowedAsync(int vmfCode)

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using FIS.Api.Services;
 using FIS.Api.Services.Fleet;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Services;
@@ -67,6 +68,7 @@ public class VehiclesController : BaseApiController
     private readonly IVehicleRemarkRepository _remarkRepository;
     private readonly IVehicleLicenceHistoryRepository _licenceHistory;
     private readonly LegacyVehicleStatusCompatibilityService _legacyVehicleStatus;
+    private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<VehiclesController> _logger;
 
     public VehiclesController(
@@ -79,6 +81,7 @@ public class VehiclesController : BaseApiController
         IVehicleRemarkRepository remarkRepository,
         IVehicleLicenceHistoryRepository licenceHistory,
         LegacyVehicleStatusCompatibilityService legacyVehicleStatus,
+        LegacyVehicleScopeService vehicleScope,
         ILogger<VehiclesController> logger
     )
     {
@@ -91,6 +94,7 @@ public class VehiclesController : BaseApiController
         _remarkRepository = remarkRepository;
         _licenceHistory = licenceHistory;
         _legacyVehicleStatus = legacyVehicleStatus;
+        _vehicleScope = vehicleScope;
         _logger = logger;
     }
 
@@ -105,7 +109,10 @@ public class VehiclesController : BaseApiController
 
         try
         {
-            var vehicles = await _vehicleRepository.GetActiveVehiclesAsync();
+            var vehicles = await _vehicleRepository.GetActiveVehiclesAsync(
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             _logger.LogInformation("Retrieved {Count} active vehicles", vehicles.Count());
             return Ok(vehicles);
         }
@@ -134,7 +141,9 @@ public class VehiclesController : BaseApiController
         {
             var result = await _vehicleRepository.GetSnapshotPageAsync(
                 Math.Max(1, page),
-                Math.Clamp(pageSize, 1, 100)
+                Math.Clamp(pageSize, 1, 100),
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
             );
             return Ok(
                 new
@@ -220,7 +229,11 @@ public class VehiclesController : BaseApiController
 
         try
         {
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
             {
@@ -251,7 +264,11 @@ public class VehiclesController : BaseApiController
 
         try
         {
-            var vehicles = await _vehicleRepository.SearchVehiclesAsync(searchTerm ?? "");
+            var vehicles = await _vehicleRepository.SearchVehiclesAsync(
+                searchTerm ?? "",
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             _logger.LogInformation(
                 "Found {Count} vehicles matching search term '{SearchTerm}'",
                 vehicles.Count(),
@@ -464,6 +481,9 @@ public class VehiclesController : BaseApiController
     private bool HasVehicleLookupAccess() =>
         HasSystemAdministratorRole() || HasAnyRole(VehicleLookupRoles);
 
+    private Task<IReadOnlySet<short>?> ResolveAllowedVehicleSiteCodesAsync() =>
+        _vehicleScope.ResolveAllowedSiteCodesAsync(User, HttpContext.RequestAborted);
+
     private bool HasSystemAdministratorRole() =>
         HasRoleClaim("SystemAdministrator")
         || HasRoleClaim("System Administrator");
@@ -531,7 +551,11 @@ public class VehiclesController : BaseApiController
 
         try
         {
-            var vehicle = await _vehicleRepository.GetByFleetNumberAsync(fleetNumber);
+            var vehicle = await _vehicleRepository.GetByFleetNumberAsync(
+                fleetNumber,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
             {
@@ -651,7 +675,11 @@ public class VehiclesController : BaseApiController
                 : null;
             int currentUserId = GetCurrentUserId();
 
-            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var existing = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (existing == null)
             {
                 return NotFound($"Vehicle with vmf_code {vmfCode} not found");
@@ -813,7 +841,11 @@ public class VehiclesController : BaseApiController
 
         try
         {
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (vehicle == null)
             {
                 return NotFound($"Vehicle with vmf_code {vmfCode} not found");
@@ -849,7 +881,11 @@ public class VehiclesController : BaseApiController
 
         try
         {
-            var vehicle = await _vehicleRepository.GetByFleetNumberAsync(request.ggNumber.Trim());
+            var vehicle = await _vehicleRepository.GetByFleetNumberAsync(
+                request.ggNumber.Trim(),
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (vehicle == null)
             {
                 return NotFound($"Vehicle with fleet number {request.ggNumber} not found");
@@ -909,7 +945,11 @@ public class VehiclesController : BaseApiController
         {
             int currentUserId = GetCurrentUserId();
 
-            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var existing = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (existing == null)
                 return NotFound($"Vehicle with vmf_code {vmfCode} not found");
 
@@ -971,7 +1011,11 @@ public class VehiclesController : BaseApiController
         {
             int currentUserId = GetCurrentUserId();
 
-            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var existing = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (existing == null)
                 return NotFound($"Vehicle with vmf_code {vmfCode} not found");
 
@@ -1029,7 +1073,11 @@ public class VehiclesController : BaseApiController
 
         try
         {
-            var vehicles = await _vehicleRepository.GetByInvoiceNumberAsync(invoiceNumber);
+            var vehicles = await _vehicleRepository.GetByInvoiceNumberAsync(
+                invoiceNumber,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             var results = vehicles.Select(v => new VehicleSearchResultDto
             {
                 VmfCode = v.vmf_code,
@@ -1079,7 +1127,11 @@ public class VehiclesController : BaseApiController
         {
             int currentUserId = GetCurrentUserId();
 
-            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var existing = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (existing == null)
                 return NotFound($"Vehicle with vmf_code {vmfCode} not found");
 
@@ -1152,7 +1204,11 @@ public class VehiclesController : BaseApiController
 
         try
         {
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
             if (vehicle is null)
                 return NotFound(new { error = $"Vehicle {vmfCode} not found." });
 
@@ -1312,7 +1368,11 @@ public class VehiclesController : BaseApiController
         {
             var currentUserId = GetCurrentUserId();
 
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
                 return NotFound(new { error = $"Vehicle {vmfCode} not found." });
@@ -1421,7 +1481,11 @@ public class VehiclesController : BaseApiController
                 );
             }
 
-            var updatedVehicle = await _vehicleRepository.GetByIdAsync(vmfCode) ?? vehicle;
+            var updatedVehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            ) ?? vehicle;
 
             _logger.LogInformation(
                 "Vehicle {VmfCode} status changed to {NewStatus} by user {UserId} through the legacy procedure",
@@ -1499,7 +1563,11 @@ public class VehiclesController : BaseApiController
             // Vehicle Master is served through the compatibility repository;
             // the restored legacy table does not have the modern audit
             // columns that an EF projection would select.
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             if (vehicle == null)
                 return NotFound(new { error = $"Vehicle {vmfCode} not found." });
@@ -1551,7 +1619,11 @@ public class VehiclesController : BaseApiController
                 currentUserId
             );
 
-            var updatedVehicle = await _vehicleRepository.GetByIdAsync(vmfCode) ?? vehicle;
+            var updatedVehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            ) ?? vehicle;
 
             _logger.LogInformation(
                 "Licence captured for vehicle {VmfCode} by user {UserId}. New due date: {DueDate}",
@@ -1596,7 +1668,11 @@ public class VehiclesController : BaseApiController
         try
         {
             var history = await _licenceHistory.GetByVehicleAsync(vmfCode);
-            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(
+                vmfCode,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
 
             return Ok(
                 new

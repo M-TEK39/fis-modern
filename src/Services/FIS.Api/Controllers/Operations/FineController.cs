@@ -19,6 +19,7 @@ public class FineController : BaseApiController
 
     private readonly IFineRepository _repository;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly IContractRepository _contractRepository;
     private readonly ISiteRepository _siteRepository;
     private readonly ITrafficDeptRepository _trafficDeptRepository;
     private readonly FisDbContext _context;
@@ -27,6 +28,7 @@ public class FineController : BaseApiController
     public FineController(
         IFineRepository repository,
         IVehicleRepository vehicleRepository,
+        IContractRepository contractRepository,
         ISiteRepository siteRepository,
         ITrafficDeptRepository trafficDeptRepository,
         FisDbContext context,
@@ -35,6 +37,7 @@ public class FineController : BaseApiController
     {
         _repository = repository;
         _vehicleRepository = vehicleRepository;
+        _contractRepository = contractRepository;
         _siteRepository = siteRepository;
         _trafficDeptRepository = trafficDeptRepository;
         _context = context;
@@ -162,7 +165,7 @@ public class FineController : BaseApiController
             return Forbid();
         try
         {
-            if (await ValidateMutationAsync(item) is { } validationError)
+            if (await ValidateMutationAsync(item, allowRequestedSiteForNewFine: true) is { } validationError)
                 return BadRequest(new { error = validationError });
 
             var created = await _repository.CreateAsync(item, GetCurrentUserId());
@@ -191,16 +194,25 @@ public class FineController : BaseApiController
             return Forbid();
         try
         {
-            if (id != item.Fine_code)
+            if (item is null || id != item.Fine_code)
                 return BadRequest();
-            if (await ValidateMutationAsync(item) is { } validationError)
-                return BadRequest(new { error = validationError });
 
             var existing = await _repository.GetByIdAsync(id);
             if (existing is null)
                 return NotFound();
             if (!await IsSiteAllowedAsync(existing.Site_code))
                 return Forbid();
+
+            // The legacy edit form carries the original vehicle code in a
+            // hidden field and MNT_fine_update.aspx writes that persisted code
+            // back on every MOD action. A fine is not reassigned by editing
+            // its details; do not let an API caller move it to another
+            // vehicle (and potentially another site's scope).
+            if (item.vmf_code != existing.vmf_code)
+                return BadRequest(new { error = "The vehicle for an existing fine cannot be changed." });
+
+            if (await ValidateMutationAsync(item, existing.Site_code) is { } validationError)
+                return BadRequest(new { error = validationError });
 
             return Ok(await _repository.UpdateAsync(item, GetCurrentUserId()));
         }
@@ -252,11 +264,12 @@ public class FineController : BaseApiController
         }
     }
 
-    // Both legacy Fines menu pages are guarded by the Reports role. The main
-    // navigation entry is separately labelled Fines, but the legacy page
-    // itself—not the menu visibility—was the server-side authority.
+    // The legacy Fines maintenance page itself is guarded by the Reports role;
+    // restored Main.aspx also grants the dedicated Fines role to its operators.
+    // Accept both names so a restored user's menu entitlement and API access
+    // cannot disagree.
     private bool HasFinesMaintenanceAccess() =>
-        HasAnyRole("Reports", "SystemAdministrator", "System Administrator");
+        HasAnyRole("Fines", "Reports", "SystemAdministrator", "System Administrator");
 
     /// <summary>
     /// The legacy capture page only allowed a fine to be submitted after a
@@ -264,7 +277,11 @@ public class FineController : BaseApiController
     /// those business references server-side as well; dropdowns are not an
     /// authorization or integrity boundary for direct API callers.
     /// </summary>
-    private async Task<string?> ValidateMutationAsync(Fine item)
+    private async Task<string?> ValidateMutationAsync(
+        Fine item,
+        short? existingSiteCode = null,
+        bool allowRequestedSiteForNewFine = false
+    )
     {
         if (item is null)
             return "Fine data is required.";
@@ -294,6 +311,8 @@ public class FineController : BaseApiController
         var vehicle = await _vehicleRepository.GetByIdAsync(item.vmf_code.Value);
         if (vehicle is null)
             return "The selected vehicle does not exist.";
+        if (!await IsVehicleAllowedAsync(vehicle, existingSiteCode, allowRequestedSiteForNewFine ? item.Site_code : null))
+            return "You do not have permission to maintain fines for the selected vehicle.";
 
         var site = await _siteRepository.GetByIdAsync(item.Site_code.Value);
         if (site is null)
@@ -372,6 +391,37 @@ public class FineController : BaseApiController
     {
         var allowedSites = await ResolveAllowedSiteCodesAsync();
         return allowedSites is null || (siteCode.HasValue && allowedSites.Contains(siteCode.Value));
+    }
+
+    private async Task<bool> IsVehicleAllowedAsync(
+        Vehicle vehicle,
+        short? historicalSiteCode,
+        short? requestedSiteForNewFine = null
+    )
+    {
+        var allowedSites = await ResolveAllowedSiteCodesAsync();
+        if (allowedSites is null)
+            return true;
+
+        if (vehicle.veh_site_code.HasValue && allowedSites.Contains(vehicle.veh_site_code.Value))
+            return true;
+
+        var activeContract = await _contractRepository.GetActiveContractByVehicleAsync(vehicle.vmf_code);
+        if (activeContract is not null && allowedSites.Contains(activeContract.site_code))
+            return true;
+
+        // The legacy capture page resolves the vehicle independently and
+        // persists the selected fine Site_code. A vehicle without a current
+        // site or active contract can therefore still receive a new fine at an
+        // otherwise-authorized site; keep that capture path available without
+        // allowing a caller to choose an out-of-scope site.
+        if (requestedSiteForNewFine.HasValue && allowedSites.Contains(requestedSiteForNewFine.Value))
+            return true;
+
+        // A historical fine may remain visible/editable after a vehicle has
+        // left its active contract. Keep the persisted fine site as the
+        // compatibility scope in that case.
+        return historicalSiteCode.HasValue && allowedSites.Contains(historicalSiteCode.Value);
     }
 
     private static IEnumerable<Fine> FilterByAllowedSites(

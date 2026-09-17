@@ -190,6 +190,11 @@ public class LogbookController : BaseApiController
             var existing = await _repository.GetByIdAsync(id);
             if (existing == null)
                 return NotFound();
+            // The legacy maintenance edit keeps the original vehicle code in
+            // a hidden field and MNT_logbkj_update.aspx writes that same code
+            // back. Editing a handout must not move it to another vehicle.
+            if (item.vmf_code != existing.vmf_code)
+                return BadRequest(new { message = "The vehicle for an existing logbook cannot be changed." });
             if (await _vehicleRepository.GetByIdAsync(vmfCode) is null)
                 return BadRequest(new { message = "The selected vehicle was not found." });
             if (!await IsVehicleAllowedAsync(vmfCode))

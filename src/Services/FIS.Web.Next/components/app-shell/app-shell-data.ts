@@ -59,7 +59,7 @@ const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
       {
         label: "Reports",
         href: "/reports",
-        roles: ["Reports", "Management Reports"],
+        roles: ["Reports", "Management Reports", "Validation"],
       },
       {
         label: "Taxis",

@@ -15,6 +15,7 @@ import {
   filterVehicles,
   getLogsheetSession,
   hasLogsheetAccess,
+  hasLogsheetEditAccess,
   queryValue,
   sessionMessage,
   statusMessage,
@@ -55,7 +56,7 @@ async function renderLogsheetEditPageContent({
     return accessRestricted("Your session could not be loaded.");
   if (!hasLogsheetAccess(session))
     return accessRestricted("Your profile does not include Log Sheets access.");
-  if (!session.userAccessCode || ![279, 47, 38].includes(Number(session.userAccessCode)))
+  if (!hasLogsheetEditAccess(session))
     return accessRestricted("Your profile cannot edit logsheets.");
 
   const query = await searchParams;

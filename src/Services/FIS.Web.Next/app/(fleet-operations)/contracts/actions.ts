@@ -210,6 +210,7 @@ function buildHireRequest(formData: FormData): HireContractRequest {
   return {
     VmfCode: getRequiredInteger(formData, "vmfCode", "Vehicle"),
     SiteCode: getRequiredInteger(formData, "siteCode", "Site"),
+    StartDate: getOptionalDate(formData, "startDate", "Start date"),
     StartOdometer: startOdometer,
     DriverId: getOptionalText(formData, "driverId", "Driver ID", 60),
     SiteDriverCode: getInteger(formData, "siteDriverCode", "Site driver"),

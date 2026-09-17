@@ -158,7 +158,7 @@ public class TrafficDeptController : BaseApiController
             return Forbid();
         try
         {
-            if (id != item.Traffic_dept_code)
+            if (item is null || id != item.Traffic_dept_code)
                 return BadRequest();
             var name = item.Traf_name?.Trim() ?? string.Empty;
             if (ValidateName(name) is { } validationError)
@@ -196,7 +196,7 @@ public class TrafficDeptController : BaseApiController
     }
 
     private bool HasReportsRole() =>
-        HasAnyRole("Reports", "SystemAdministrator", "System Administrator");
+        HasAnyRole("Fines", "Reports", "SystemAdministrator", "System Administrator");
 
     private static string? ValidateName(string? name)
     {

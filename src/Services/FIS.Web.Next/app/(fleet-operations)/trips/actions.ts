@@ -7,6 +7,7 @@ import { hasTripAuthorityAccess } from "@/app/(fleet-operations)/trips/_page";
 import {
   closeTripAuthority,
   createTripAuthority,
+  renewTripAuthority,
   TripAuthorityApiError,
   type CreateTripAuthorityRequest,
 } from "@/lib/api/fleet-operations/api-trip-authorities";
@@ -293,13 +294,34 @@ export async function closeTripAuthorityAction(formData: FormData) {
   const endOdometer = endOdometerText ? nonNegativeInteger(endOdometerText) : null;
   if (endOdometerText && endOdometer === null) redirect(resultPath(tripId, "validation"));
 
+  const validRoutes = routes.filter(
+    (route): route is { routeCode: number; endOdometer: number } => route !== null,
+  );
+
+  if (intent === "renew") {
+    // ShowTrip.aspx's SaveAndRenewTripDetail sends the complete route document
+    // to DEV_UPD_TripXMLForRenewalOfTrip. Do not close the source authority
+    // first and then create an unrelated trip.
+    const newExpiry = new Date();
+    newExpiry.setDate(newExpiry.getDate() + 30);
+    let renewed: Awaited<ReturnType<typeof renewTripAuthority>>;
+    try {
+      renewed = await renewTripAuthority(tripId, {
+        newExpiryDate: newExpiry.toISOString().slice(0, 10),
+        endOdometer,
+        routes: validRoutes,
+      });
+    } catch (error) {
+      redirect(resultPath(tripId, apiResult(error)));
+    }
+    revalidatePath("/trip-authorities");
+    revalidatePath("/trips");
+    revalidatePath(RETURN_PATH);
+    redirect(`${RETURN_PATH}?tripId=${renewed.tripId}&result=renewed`);
+  }
+
   try {
-    await closeTripAuthority(tripId, {
-      endOdometer,
-      routes: routes.filter(
-        (route): route is { routeCode: number; endOdometer: number } => route !== null,
-      ),
-    });
+    await closeTripAuthority(tripId, { endOdometer, routes: validRoutes });
   } catch (error) {
     redirect(resultPath(tripId, apiResult(error)));
   }
@@ -307,16 +329,6 @@ export async function closeTripAuthorityAction(formData: FormData) {
   revalidatePath("/trip-authorities");
   revalidatePath("/trips");
   revalidatePath(RETURN_PATH);
-
-  if (intent === "renew") {
-    const params = new URLSearchParams({
-      mode: "Renew",
-      contractCode: textValue(formData, "contractCode"),
-    });
-    const vmfCode = positiveInteger(textValue(formData, "vmfCode"));
-    if (vmfCode !== null) params.set("vmfCode", String(vmfCode));
-    redirect(`/trips/create?${params.toString()}`);
-  }
 
   redirect(resultPath(tripId, "closed"));
 }

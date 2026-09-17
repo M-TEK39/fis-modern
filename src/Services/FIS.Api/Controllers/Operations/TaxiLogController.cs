@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace FIS.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Private Hire Vehicles,SystemAdministrator,System Administrator")]
+[Authorize(Roles = "Private Hire Vehicles,Taxi information maintenance,SystemAdministrator,System Administrator")]
 [Route("api/[controller]")]
 public class TaxiLogController : BaseApiController
 {
@@ -336,6 +336,13 @@ public class TaxiLogController : BaseApiController
             if (!string.Equals(existingLog.rek_num?.Trim(), normalizedRekNum, StringComparison.OrdinalIgnoreCase))
             {
                 return Conflict("The taxi log does not belong to the selected requisition.");
+            }
+            if (
+                existingLog.request_id is > 0
+                && existingLog.request_id != taxiRequest.request_id
+            )
+            {
+                return Conflict("The taxi log is linked to a different taxi requisition.");
             }
 
             if (!string.IsNullOrWhiteSpace(taxiRequest.cancelled))
@@ -674,15 +681,29 @@ public class TaxiLogController : BaseApiController
             return null;
         }
 
-        return await _vehicleRepository.GetByIdAsync(vmfCode);
+        return await _vehicleRepository.GetByIdAsync(
+            vmfCode,
+            await ResolveAllowedSiteCodesAsync(),
+            GetCurrentUserId()
+        );
     }
 
     private async Task<Vehicle?> FindVehicleByRegistrationAsync(string registration)
     {
         var normalized = NormalizeKey(registration);
 
-        return await _vehicleRepository.GetByFleetNumberAsync(normalized)
-            ?? await _vehicleRepository.GetByRegistrationNumberAsync(normalized);
+        var allowedSites = await ResolveAllowedSiteCodesAsync();
+        var currentUserId = GetCurrentUserId();
+        return await _vehicleRepository.GetByFleetNumberAsync(
+                normalized,
+                allowedSites,
+                currentUserId
+            )
+            ?? await _vehicleRepository.GetByRegistrationNumberAsync(
+                normalized,
+                allowedSites,
+                currentUserId
+            );
     }
 
     private async Task<short?> ResolveVehicleClassCodeAsync(short modelCode)

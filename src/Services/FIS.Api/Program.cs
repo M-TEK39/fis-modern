@@ -257,6 +257,7 @@ builder.Services.AddSingleton<ISystemConfigurationAuditSink, SystemConfiguration
 builder.Services.AddSingleton<ISystemConfigurationService, SystemConfigurationService>();
 builder.Services.AddScoped<LegacyCredentialCompatibilityService>();
 builder.Services.AddScoped<LegacyFinanceAccessService>();
+builder.Services.AddScoped<LegacyVehicleScopeService>();
 builder.Services.AddScoped<LegacyRoleCompatibilityService>();
 builder.Services.AddScoped<LegacyFinanceReportExecutionService>();
 builder.Services.AddScoped<LegacyBasCompatibilityService>();

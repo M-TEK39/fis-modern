@@ -34,6 +34,14 @@ public interface ITariffCalculationService
     );
 
     /// <summary>
+    /// Reads the contract type selected by the legacy configured-tariff
+    /// mapping for a vehicle. Returns null when the legacy function is not
+    /// deployed or has no configured row, allowing expanded databases to use
+    /// their compatibility default without changing the client schema.
+    /// </summary>
+    Task<string?> GetConfiguredContractTypeAsync(int vmfCode, DateTime checkDate);
+
+    /// <summary>
     /// Overload accepting full contract details for tariff calculation.
     /// Used when contract object is already loaded.
     /// </summary>
