@@ -486,7 +486,24 @@ public class FisDbContext : DbContext
                 .HasDatabaseName("IX_FuelCard_Code_Unique");
         });
 
-        modelBuilder.Entity<TripDriver>(entity => entity.HasKey(e => e.trip_driver_code));
+        // trip_drivers is the archived table. Optional audit columns and the
+        // insert-only site_driver_code lookup are not on that schema; the
+        // repository negotiates them. Ignoring them here keeps leftover EF
+        // diagnostics from projecting columns the client database does not
+        // have. The table name on the entity remains trip_driver for the
+        // expanded shape; production reads/writes do not use this mapping.
+        modelBuilder.Entity<TripDriver>(entity =>
+        {
+            entity.HasKey(e => e.trip_driver_code);
+            entity.Ignore(e => e.site_driver_code);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
         modelBuilder.Entity<PrivateHire>(entity => entity.HasKey(e => e.PHV_code));
         modelBuilder.Entity<Driver>(entity => entity.HasKey(e => e.site_driver_code));
         modelBuilder.Entity<Trip>(entity => entity.HasKey(e => e.trip_authority_code));

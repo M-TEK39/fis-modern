@@ -4,8 +4,11 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace FIS.Core.Domain.Entities.Drivers;
 
 /// <summary>
-/// TripDriver Entity - Legacy compatibility for trip_driver table
-/// Maps to the actual legacy trip_driver schema from Database.cs
+/// Trip-driver assignment. The archived client table is trip_drivers and has
+/// no modern audit columns. Persistence goes through TripDriverRepository
+/// (procedure-first, then a guarded dynamic fallback) rather than this EF
+/// mapping. site_driver_code is the insert-time lookup key required by
+/// DEV_INS_TripDrivers; it is not a trip_drivers column.
 /// </summary>
 [Table("trip_driver")]
 public class TripDriver
@@ -63,7 +66,16 @@ public class TripDriver
     [Column("driver_active")]
     public bool driver_active { get; set; }
 
-    // Global audit fields (AI_CODING_RULES.md - Section 4.5)
+    /// <summary>
+    /// Site-driver primary key used by DEV_INS_TripDrivers. Not stored on
+    /// trip_drivers; the procedure copies identity and licence fields from
+    /// site_drivers.
+    /// </summary>
+    [NotMapped]
+    public int site_driver_code { get; set; }
+
+    // Optional expanded audit fields. The original trip_drivers table does
+    // not contain them; TripDriverRepository projects them only when present.
     [Column("date_created")]
     public DateTime date_created { get; set; }
 
