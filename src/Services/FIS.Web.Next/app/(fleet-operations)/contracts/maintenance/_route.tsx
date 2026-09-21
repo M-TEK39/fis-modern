@@ -14,7 +14,7 @@ import {
   canCloseActiveContract,
   canEditContract,
   canManageActiveContract,
-  canReviewContract,
+  canReviewContractDecision,
   canSubmitContract,
   hasContractAccess,
   type ContractSession,
@@ -450,7 +450,8 @@ function ContractTable({
                   {contract.contractStatusCode === 1 && canSubmitContract(contract, session) ? (
                     <ContractActionForm action="recall" contract={contract} label="Recall" />
                   ) : null}
-                  {contract.contractStatusCode === 1 && canReviewContract(contract, session) ? (
+                  {contract.contractStatusCode === 1 &&
+                  canReviewContractDecision(contract, session) ? (
                     <Link
                       className="button button-primary button-small"
                       href={detailHref(contract)}
@@ -458,7 +459,8 @@ function ContractTable({
                       Review
                     </Link>
                   ) : null}
-                  {contract.contractStatusCode === 2 && canReviewContract(contract, session) ? (
+                  {contract.contractStatusCode === 2 &&
+                  canReviewContractDecision(contract, session) ? (
                     <ContractActionForm
                       action="approve-activate"
                       contract={contract}

@@ -15,9 +15,10 @@ import {
   canCloseActiveContract,
   canEditContract,
   canManageActiveContract,
-  canReviewContract,
+  canReviewContractDecision,
   canSubmitContract,
   hasContractAccess,
+  hasContractBackdatingApproverRole,
   type ContractSession,
 } from "@/app/(fleet-operations)/contracts/access";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
@@ -245,12 +246,12 @@ function getDetailActionState(
   const isActive =
     status === 3 || (status === null && contract.stillCurrent?.toUpperCase() === "Y");
   return {
-    canActivate: (status === 1 || status === 2) && canReviewContract(contract, session),
+    canActivate: (status === 1 || status === 2) && canReviewContractDecision(contract, session),
     canCancelClose: isActive && canCloseActiveContract(session.roles),
     canEdit: (status === 0 || status === 4) && canEditContract(contract, session),
     canManage: isActive && canManageActiveContract(session.roles),
     canRecall: status === 1 && canSubmitContract(contract, session),
-    canReview: status === 1 && canReviewContract(contract, session),
+    canReview: status === 1 && canReviewContractDecision(contract, session),
     canSubmit: (status === 0 || status === 4) && canSubmitContract(contract, session),
     isActive,
     status,
@@ -326,7 +327,7 @@ function WorkflowActionForms({
         buttonClassName="button button-primary"
         contract={contract}
         returnPath={returnPath}
-        show={state.canReview}
+        show={state.status === 1 && state.canActivate}
       >
         Approve and activate
       </ActionForm>
@@ -414,12 +415,17 @@ function ReviewActionForm({
 
 function DetailActions({
   contract,
+  routePath = "/contracts/detail",
   session,
 }: Readonly<{
   contract: ContractRecord;
+  routePath?: string;
   session: ContractSession;
 }>) {
-  const returnPath = `/contracts/detail?contractId=${contract.contractCode}`;
+  const returnPath =
+    routePath === "/contracts/backdating-approval"
+      ? `/contracts/backdating-approval/detail?contractId=${contract.contractCode}`
+      : `/contracts/detail?contractId=${contract.contractCode}`;
   const state = getDetailActionState(contract, session);
   return (
     <section className="vehicle-status-maintenance-panel" aria-labelledby="contract-actions-title">
@@ -1187,12 +1193,21 @@ async function renderContractDetailPageContent({
         <ApiUnavailable />
       </main>
     );
-  if (!hasContractAccess(session.accessLevel, session.roles))
+  const hasRouteAccess =
+    routePath === "/contracts/backdating-approval"
+      ? hasContractAccess(session.accessLevel, session.roles) &&
+        hasContractBackdatingApproverRole(session.roles)
+      : hasContractAccess(session.accessLevel, session.roles);
+  if (!hasRouteAccess)
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-status-card" role="alert">
           <p className="eyebrow">Access restricted</p>
-          <h2>You do not have permission to maintain vehicle contracts.</h2>
+          <h2>
+            {routePath === "/contracts/backdating-approval"
+              ? "You do not have permission to approve backdated contracts."
+              : "You do not have permission to maintain vehicle contracts."}
+          </h2>
         </section>
       </main>
     );
@@ -1287,7 +1302,7 @@ async function renderContractDetailPageContent({
           ) : null}
           {contract ? (
             <>
-              <DetailActions contract={contract} session={session} />
+              <DetailActions contract={contract} routePath={routePath} session={session} />
               <ContractFacts contract={contract} />
               {canEdit ? (
                 <EditForm contract={contract} references={references} today={today} />

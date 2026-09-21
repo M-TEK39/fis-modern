@@ -3,7 +3,10 @@ import { connection } from "next/server";
 
 import { StreamedRoute } from "@/components/app-shell/streamed-route";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
-import { hasContractBackdatingApproverRole } from "@/app/(fleet-operations)/contracts/access";
+import {
+  hasContractAccess,
+  hasContractBackdatingApproverRole,
+} from "@/app/(fleet-operations)/contracts/access";
 import { getSession } from "@/lib/auth/session";
 
 import { loadBackdatingApprovalData } from "./_data";
@@ -33,7 +36,10 @@ async function BackdatingApprovalPageContent({
         <BackdatingApprovalUnavailable />
       </main>
     );
-  if (!hasContractBackdatingApproverRole(session.roles))
+  if (
+    !hasContractAccess(session.accessLevel, session.roles) ||
+    !hasContractBackdatingApproverRole(session.roles)
+  )
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-status-card" role="alert">
