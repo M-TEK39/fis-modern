@@ -281,7 +281,7 @@ async function renderAuthoriserEdit({ searchParams }: Readonly<{ searchParams: S
   try {
     const [departments, sites, ranks, authoriser] = await Promise.all([
       getDriverManagementDepartments(),
-      getDriverManagementSites(),
+      getDriverManagementSites(departmentCode),
       getDriverManagementRanks(),
       authoriserCode ? getDriverManagementAuthoriser(authoriserCode) : Promise.resolve(null),
     ]);

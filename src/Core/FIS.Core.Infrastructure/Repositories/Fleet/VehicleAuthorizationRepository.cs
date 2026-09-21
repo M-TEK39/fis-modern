@@ -27,6 +27,7 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
     private const string VehicleTableName = "vehicle_master";
     private const string ModelTableName = "model";
     private const string GgNumberTableName = "block_gg_numbers";
+    private const string ExtraCodeTableName = "extra_codes";
 
     private static readonly string[] SelectedColumns =
     [
@@ -166,16 +167,62 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             : WithConnectionAsync(async connection =>
             {
                 var schema = await GetSchemaAsync(connection, null);
-                return (
+                var trimmedChassis = chassisNumber.Trim();
+                if (
+                    await TryConfirmChassisFromDetailsProcedureAsync(
+                        connection,
+                        trimmedChassis
+                    ) == false
+                )
+                {
+                    return null;
+                }
+
+                var vehicle = (
                     await QueryAsync(
                         connection,
                         null,
                         schema,
-                        chassisNumber: chassisNumber.Trim(),
+                        chassisNumber: trimmedChassis,
                         allowedSiteCodes: allowedSiteCodes,
                         currentUserId: currentUserId
                     )
                 ).SingleOrDefault();
+                await OverlayCaptureExtrasAsync(connection, vehicle);
+                return vehicle;
+            });
+
+    public Task<IReadOnlyList<PreVehicleMaster>> SearchPreVehiclesAsync(
+        string chassisNo,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) =>
+        string.IsNullOrWhiteSpace(chassisNo)
+            ? Task.FromResult<IReadOnlyList<PreVehicleMaster>>([])
+            : WithConnectionAsync(async connection =>
+            {
+                var schema = await GetSchemaAsync(connection, null);
+                var trimmed = chassisNo.Trim();
+                var overlay = await TryLoadFilterPreVehiclesAsync(
+                    connection,
+                    schema,
+                    trimmed,
+                    allowedSiteCodes
+                );
+                if (overlay is not null)
+                {
+                    return overlay;
+                }
+
+                return (IReadOnlyList<PreVehicleMaster>)
+                    await QueryAsync(
+                        connection,
+                        null,
+                        schema,
+                        chassisNumber: trimmed,
+                        allowedSiteCodes: allowedSiteCodes,
+                        currentUserId: currentUserId
+                    );
             });
 
     public Task<VehicleAuthorizationPage> GetPendingAuthorizationsAsync(
@@ -249,6 +296,31 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             var pageSize = Math.Clamp(requestedPageSize, 1, 100);
             var page = Math.Max(1, requestedPage);
             var schema = await GetSchemaAsync(connection, null);
+            var overlay = await TryLoadQueueFromProcedureAsync(
+                connection,
+                schema,
+                status,
+                awaiting,
+                allowedSiteCodes,
+                currentUserId
+            );
+            if (overlay is not null)
+            {
+                var overlayTotal = overlay.Count;
+                var overlayPages = Math.Max(
+                    1,
+                    (int)Math.Ceiling(overlayTotal / (double)pageSize)
+                );
+                page = Math.Min(page, overlayPages);
+                var overlaySkip = checked((page - 1) * pageSize);
+                return new VehicleAuthorizationPage(
+                    overlay.Skip(overlaySkip).Take(pageSize).ToList(),
+                    page,
+                    pageSize,
+                    overlayTotal
+                );
+            }
+
             var totalRecords = await CountByStatusAsync(
                 connection,
                 null,
@@ -290,6 +362,20 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             var historyStatuses = schema.Columns.Contains("Authority_Status")
                 ? new[] { "Authorized", "Rejected" }
                 : Array.Empty<string>();
+            var overlay = await TryLoadHistoryFromProcedureAsync(
+                connection,
+                schema,
+                historyStatuses,
+                startDate,
+                endDate,
+                allowedSiteCodes,
+                currentUserId
+            );
+            if (overlay is not null)
+            {
+                return overlay;
+            }
+
             var rows = await QueryAsync(
                 connection,
                 null,
@@ -303,6 +389,292 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             );
             return (IEnumerable<PreVehicleMaster>)rows;
         });
+
+    private static async Task<bool?> TryConfirmChassisFromDetailsProcedureAsync(
+        DbConnection connection,
+        string chassisNumber
+    )
+    {
+        if (
+            !await ProcedureMatchesAsync(
+                connection,
+                null,
+                "DEV_SEL_Pre_Vehicle_Details",
+                "@chassis_number"
+            )
+        )
+        {
+            return null;
+        }
+
+        var rows = await ExecuteProcedureRowsAsync(
+            connection,
+            null,
+            "DEV_SEL_Pre_Vehicle_Details",
+            new ProcedureParameter("@chassis_number", DbType.String, chassisNumber)
+        );
+        return rows.Count > 0;
+    }
+
+    private static async Task<IReadOnlyList<PreVehicleMaster>?> TryLoadFilterPreVehiclesAsync(
+        DbConnection connection,
+        VehicleAuthorizationSchema schema,
+        string chassisNo,
+        IReadOnlySet<short>? allowedSiteCodes
+    )
+    {
+        if (
+            !await ProcedureMatchesAsync(
+                connection,
+                null,
+                "DEV_SEL_FilterPreVehicles",
+                "@chassisno"
+            )
+        )
+        {
+            return null;
+        }
+
+        var procedureRows = await ExecuteProcedureRowsAsync(
+            connection,
+            null,
+            "DEV_SEL_FilterPreVehicles",
+            new ProcedureParameter("@chassisno", DbType.String, chassisNo)
+        );
+        if (procedureRows.Count == 0)
+        {
+            return [];
+        }
+
+        var chassisOrder = ReadQueueChassisNumbers(procedureRows);
+        if (chassisOrder.Count == 0)
+        {
+            return null;
+        }
+
+        var leftover = new List<PreVehicleMaster>();
+        foreach (var chassis in chassisOrder)
+        {
+            leftover.AddRange(
+                await QueryAsync(
+                    connection,
+                    null,
+                    schema,
+                    chassisNumber: chassis,
+                    allowedSiteCodes: allowedSiteCodes
+                )
+            );
+        }
+
+        return OrderByProcedureChassis(leftover, chassisOrder);
+    }
+
+    private static async Task<IReadOnlyList<PreVehicleMaster>?> TryLoadQueueFromProcedureAsync(
+        DbConnection connection,
+        VehicleAuthorizationSchema schema,
+        string status,
+        bool awaiting,
+        IReadOnlySet<short>? allowedSiteCodes,
+        int? currentUserId
+    )
+    {
+        var procedure = ResolveQueueProcedure(status, awaiting, currentUserId);
+        if (procedure is null)
+        {
+            return null;
+        }
+
+        return await LoadVehiclesFromQueueProcedureAsync(
+            connection,
+            schema,
+            procedure,
+            status,
+            statuses: null,
+            startDate: null,
+            endDate: null,
+            allowedSiteCodes
+        );
+    }
+
+    private static async Task<IReadOnlyList<PreVehicleMaster>?> TryLoadHistoryFromProcedureAsync(
+        DbConnection connection,
+        VehicleAuthorizationSchema schema,
+        IReadOnlyCollection<string> historyStatuses,
+        DateTime? startDate,
+        DateTime? endDate,
+        IReadOnlySet<short>? allowedSiteCodes,
+        int? currentUserId
+    )
+    {
+        if (currentUserId is not > 0)
+        {
+            return null;
+        }
+
+        var procedure = new QueueProcedure(
+            "DEV_SEL_RejectedVehicles",
+            ["@UserCode"],
+            [new ProcedureParameter("@UserCode", DbType.Int32, currentUserId.Value)]
+        );
+        return await LoadVehiclesFromQueueProcedureAsync(
+            connection,
+            schema,
+            procedure,
+            status: null,
+            statuses: historyStatuses,
+            startDate,
+            endDate,
+            allowedSiteCodes
+        );
+    }
+
+    private static QueueProcedure? ResolveQueueProcedure(
+        string status,
+        bool awaiting,
+        int? currentUserId
+    )
+    {
+        if (awaiting)
+        {
+            if (currentUserId is not > 0)
+            {
+                return null;
+            }
+
+            return new QueueProcedure(
+                "DEV_SEL_Pre_Vehicle_Awaiting_Authority",
+                ["@UserCode"],
+                [new ProcedureParameter("@UserCode", DbType.Int32, currentUserId.Value)]
+            );
+        }
+
+        if (string.Equals(status, "Authorized", StringComparison.OrdinalIgnoreCase))
+        {
+            return new QueueProcedure("DEV_SEL_AuthorizedVehicles", [], []);
+        }
+
+        if (string.Equals(status, "Rejected", StringComparison.OrdinalIgnoreCase))
+        {
+            if (currentUserId is not > 0)
+            {
+                return null;
+            }
+
+            return new QueueProcedure(
+                "DEV_SEL_RejectedVehicles",
+                ["@UserCode"],
+                [new ProcedureParameter("@UserCode", DbType.Int32, currentUserId.Value)]
+            );
+        }
+
+        return null;
+    }
+
+    private static async Task<IReadOnlyList<PreVehicleMaster>?> LoadVehiclesFromQueueProcedureAsync(
+        DbConnection connection,
+        VehicleAuthorizationSchema schema,
+        QueueProcedure procedure,
+        string? status,
+        IReadOnlyCollection<string>? statuses,
+        DateTime? startDate,
+        DateTime? endDate,
+        IReadOnlySet<short>? allowedSiteCodes
+    )
+    {
+        if (
+            !await ProcedureMatchesAsync(
+                connection,
+                null,
+                procedure.Name,
+                procedure.ExpectedParameters
+            )
+        )
+        {
+            return null;
+        }
+
+        var procedureRows = await ExecuteProcedureRowsAsync(
+            connection,
+            null,
+            procedure.Name,
+            procedure.Parameters
+        );
+        if (procedureRows.Count == 0)
+        {
+            return [];
+        }
+
+        var chassisOrder = ReadQueueChassisNumbers(procedureRows);
+        if (chassisOrder.Count == 0)
+        {
+            return null;
+        }
+
+        var leftover = await QueryAsync(
+            connection,
+            null,
+            schema,
+            status: status,
+            statuses: statuses,
+            allowedSiteCodes: allowedSiteCodes,
+            startDate: startDate,
+            endDate: endDate
+        );
+        return OrderByProcedureChassis(leftover, chassisOrder);
+    }
+
+    private static IReadOnlyList<string> ReadQueueChassisNumbers(
+        IReadOnlyList<Dictionary<string, object?>> rows
+    )
+    {
+        var chassisOrder = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var chassis = ReadRowString(
+                row,
+                "Chassis N0",
+                "Chassis NO",
+                "Chassis No",
+                "chassis_number",
+                "Chassis_Number"
+            );
+            if (string.IsNullOrWhiteSpace(chassis) || !seen.Add(chassis))
+            {
+                continue;
+            }
+
+            chassisOrder.Add(chassis);
+        }
+
+        return chassisOrder;
+    }
+
+    private static IReadOnlyList<PreVehicleMaster> OrderByProcedureChassis(
+        IReadOnlyList<PreVehicleMaster> leftover,
+        IReadOnlyList<string> chassisOrder
+    )
+    {
+        var byChassis = leftover
+            .Where(vehicle => !string.IsNullOrWhiteSpace(vehicle.chassis_number))
+            .GroupBy(vehicle => vehicle.chassis_number!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First(),
+                StringComparer.OrdinalIgnoreCase
+            );
+
+        var ordered = new List<PreVehicleMaster>(chassisOrder.Count);
+        foreach (var chassis in chassisOrder)
+        {
+            if (byChassis.TryGetValue(chassis, out var vehicle))
+            {
+                ordered.Add(vehicle);
+            }
+        }
+
+        return ordered;
+    }
 
     public async Task<IReadOnlyList<VehicleMaintenanceTypeOption>> GetMaintenanceTypesAsync() =>
         await WithConnectionAsync(async connection =>
@@ -387,13 +759,17 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 );
                 await EnsureNoVehicleDuplicateAsync(connection, transaction, vehicleAuth);
 
-                // The legacy capture page deliberately looks up the original
-                // capturer when recalling a rejected/pending row. The user
-                // performing the recall is only the action user; never replace
-                // ownership merely because a new person edits the capture.
-                var capturedByUserId = existing?.captured_by_user_code is > 0
-                    ? existing.captured_by_user_code.Value
-                    : currentUserId;
+                // The legacy capture page looks up the original capturer with
+                // DEV_Check_UserCodeExists before insert. The user performing
+                // the recall is only the action user; never replace ownership
+                // merely because a new person edits the capture.
+                var capturedByUserId = await ResolveCapturedByUserCodeAsync(
+                    connection,
+                    transaction,
+                    vehicleAuth.chassis_number,
+                    existing,
+                    currentUserId
+                );
                 vehicleAuth.captured_by_user_code = ToShortUserCode(capturedByUserId);
 
                 if (
@@ -1159,6 +1535,15 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             );
         });
 
+    public Task<IReadOnlyList<VehicleStatusComment>> GetVehicleStatusCommentsAsync(
+        string chassisNumber
+    ) =>
+        string.IsNullOrWhiteSpace(chassisNumber)
+            ? Task.FromResult<IReadOnlyList<VehicleStatusComment>>([])
+            : WithConnectionAsync(connection =>
+                ReadStatusCommentsAsync(connection, chassisNumber.Trim())
+            );
+
     private async Task<T> WithConnectionAsync<T>(Func<DbConnection, Task<T>> operation)
     {
         var connection = _context.Database.GetDbConnection();
@@ -1583,6 +1968,41 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         }
 
         return await ExecuteInsertAsync(connection, transaction, values, outputKey: true);
+    }
+
+    private static async Task<int> ResolveCapturedByUserCodeAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        string? chassisNumber,
+        PreVehicleMaster? existing,
+        int currentUserId
+    )
+    {
+        if (
+            !string.IsNullOrWhiteSpace(chassisNumber)
+            && await ProcedureMatchesAsync(
+                connection,
+                transaction,
+                "DEV_Check_UserCodeExists",
+                "@chassis_no"
+            )
+        )
+        {
+            var rows = await ExecuteProcedureRowsAsync(
+                connection,
+                transaction,
+                "DEV_Check_UserCodeExists",
+                new ProcedureParameter("@chassis_no", DbType.String, chassisNumber.Trim())
+            );
+            var userCode = rows.Count == 0
+                ? null
+                : ReadRowInt32(rows[0], "User Code", "UserCode", "user_code");
+            return userCode is > 0 ? userCode.Value : currentUserId;
+        }
+
+        return existing?.captured_by_user_code is > 0
+            ? existing.captured_by_user_code.Value
+            : currentUserId;
     }
 
     private static async Task EnsureLegacyCaptureIdentityAsync(
@@ -3121,6 +3541,159 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         return extras;
     }
 
+    private static async Task OverlayCaptureExtrasAsync(
+        DbConnection connection,
+        PreVehicleMaster? vehicle
+    )
+    {
+        if (vehicle is null || string.IsNullOrWhiteSpace(vehicle.chassis_number))
+        {
+            return;
+        }
+
+        if (
+            !await ProcedureMatchesAsync(
+                connection,
+                null,
+                "DEV_SEL_NewVehicle_Extras",
+                "@SearchVal"
+            )
+        )
+        {
+            return;
+        }
+
+        vehicle.ExtraCodes = await ReadCaptureExtraCodesAsync(
+            connection,
+            vehicle.chassis_number
+        );
+    }
+
+    private static async Task<List<short>> ReadCaptureExtraCodesAsync(
+        DbConnection connection,
+        string chassisNumber
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = "dbo.DEV_SEL_NewVehicle_Extras";
+        AddParameter(command, "@SearchVal", DbType.String, chassisNumber);
+        var extras = new List<short>();
+        var unresolvedDescriptions = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                var extraCode = ReadAliased(reader, "extra_code", "Extra_Code", "ExtraCode");
+                if (short.TryParse(extraCode, out var parsed) && parsed > 0)
+                {
+                    extras.Add(parsed);
+                    continue;
+                }
+
+                var description = ReadAliased(reader, "extra_description", "Extra_Description");
+                if (!string.IsNullOrWhiteSpace(description))
+                {
+                    unresolvedDescriptions.Add(description);
+                }
+            }
+        }
+
+        foreach (var description in unresolvedDescriptions)
+        {
+            var resolved = await ResolveExtraCodeByDescriptionAsync(connection, description);
+            if (resolved is > 0)
+            {
+                extras.Add(resolved.Value);
+            }
+        }
+
+        return extras.Distinct().ToList();
+    }
+
+    private static async Task<short?> ResolveExtraCodeByDescriptionAsync(
+        DbConnection connection,
+        string? description
+    )
+    {
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return null;
+        }
+
+        var columns = await GetColumnsAsync(connection, null, "dbo", ExtraCodeTableName);
+        if (!columns.Contains("extra_code") || !columns.Contains("extra_description"))
+        {
+            return null;
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT TOP (1) [extra_code]
+            FROM [dbo].[extra_codes]
+            WHERE LOWER(LTRIM(RTRIM([extra_description]))) = @description
+            """;
+        AddParameter(
+            command,
+            "@description",
+            DbType.String,
+            description.Trim().ToLowerInvariant()
+        );
+        var value = await command.ExecuteScalarAsync();
+        return value is null or DBNull ? null : Convert.ToInt16(value);
+    }
+
+    private static async Task<IReadOnlyList<VehicleStatusComment>> ReadStatusCommentsAsync(
+        DbConnection connection,
+        string chassisNumber
+    )
+    {
+        if (
+            !await ProcedureMatchesAsync(
+                connection,
+                null,
+                "DEV_SEL_Vehicle_Status_Comments",
+                "@chassis_No"
+            )
+        )
+        {
+            return [];
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = "dbo.DEV_SEL_Vehicle_Status_Comments";
+        AddParameter(command, "@chassis_No", DbType.String, chassisNumber);
+        var comments = new List<VehicleStatusComment>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var commentDateText = ReadAliased(
+                reader,
+                "Comment_Date",
+                "comment_date",
+                "CommentDate"
+            );
+            comments.Add(
+                new VehicleStatusComment(
+                    ReadAliased(reader, "Captured By", "CapturedBy", "captured_by"),
+                    DateTime.TryParse(commentDateText, out var commentDate)
+                        ? commentDate
+                        : null,
+                    ReadAliased(
+                        reader,
+                        "Authority_Status",
+                        "Authority Status",
+                        "authority_status"
+                    ),
+                    ReadAliased(reader, "Comment", "comment")
+                )
+            );
+        }
+
+        return comments;
+    }
+
     private static async Task<Dictionary<string, string?>?> ReadPrintUserDetailsAsync(
         DbConnection connection,
         string? chassisNumber
@@ -3312,4 +3885,10 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
     private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 
     private sealed record ProcedureParameter(string Name, DbType Type, object? Value);
+
+    private sealed record QueueProcedure(
+        string Name,
+        string[] ExpectedParameters,
+        ProcedureParameter[] Parameters
+    );
 }

@@ -43,7 +43,20 @@ public class TypeRepository : ITypeRepository
         return types.FirstOrDefault();
     }
 
-    public async Task<IEnumerable<TypeEntity>> GetAllTypesAsync() => await QueryLegacyTypesAsync();
+    public async Task<IEnumerable<TypeEntity>> GetAllTypesAsync()
+    {
+        var leftover = await QueryLegacyTypesAsync();
+        var keys = await LegacySelectorProcedure.TryReadOrderedKeysAsync(
+            _context,
+            "DEV_SEL_Vehicle_Hire_Types",
+            [],
+            null,
+            "type_code"
+        );
+        return keys is null
+            ? leftover
+            : LegacySelectorProcedure.OrderByKeys(leftover, keys, type => type.type_code);
+    }
 
     public async Task<IEnumerable<TypeEntity>> SearchTypesAsync(string searchTerm)
     {

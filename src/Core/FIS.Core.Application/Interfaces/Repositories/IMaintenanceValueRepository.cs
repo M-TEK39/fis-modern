@@ -70,4 +70,25 @@ public interface IMaintenanceValueRepository
     /// </summary>
     /// <param name="tariffParameterId">Tariff parameter identifier</param>
     Task DeleteByTariffParameterAsync(int tariffParameterId);
+
+    /// <summary>
+    /// Archive gvMaintenanceValues uses
+    /// fin.DEV_SEL_MaintenanceValues_ByTariffParameterID @TariffParameterID.
+    /// Null means the procedure is absent; empty means it returned no row.
+    /// </summary>
+    Task<IReadOnlyList<TariffMaintenanceSnapshot>?> GetSelectorAsync(int tariffParameterId);
 }
+
+public sealed record TariffMaintenanceSnapshot(
+    short ClassCode,
+    string? ClassDescription,
+    string? ClassNumber,
+    int? AssignedCount,
+    short? PreviousMonthsAge,
+    int? PreviousKilometerAge,
+    decimal? PreviousRandPerKilometer,
+    short MonthsAge,
+    int KilometerAge,
+    decimal Amount,
+    decimal RandPerKilometer
+);

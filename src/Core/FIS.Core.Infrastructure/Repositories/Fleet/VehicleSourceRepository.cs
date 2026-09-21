@@ -48,7 +48,17 @@ public sealed class VehicleSourceRepository : IVehicleSourceRepository
     public async Task<VehicleSourcePage> GetPageAsync()
     {
         var schema = await GetSchemaAsync();
-        var items = await QueryAsync(schema);
+        var leftover = await QueryAsync(schema);
+        var keys = await LegacySelectorProcedure.TryReadOrderedKeysAsync(
+            _context,
+            "DEV_SEL_Vehicle_Suppliers",
+            [],
+            null,
+            "vs_code"
+        );
+        var items = keys is null
+            ? leftover
+            : LegacySelectorProcedure.OrderByKeys(leftover, keys, source => source.SourceCode);
         return new(
             items,
             new VehicleSourceCapabilities(

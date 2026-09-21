@@ -4,8 +4,10 @@ import { redirect } from "next/navigation";
 
 import {
   createVehicleAgainstApi,
+  recallCaptureAgainstApi,
   searchVehiclesAgainstApi,
   type CreateVehicleRequest,
+  type VehicleCaptureRecall,
   type VehicleSearchResult,
   VehicleCreateApiError,
 } from "@/lib/api/vehicles/api-vehicle-create";
@@ -21,6 +23,7 @@ export type SearchVehicleActionState = {
   status: "idle" | "success" | "error";
   message?: string;
   results: VehicleSearchResult[];
+  recall?: VehicleCaptureRecall;
 };
 
 class VehicleFormValidationError extends Error {}
@@ -358,16 +361,42 @@ export async function searchVehicleAction(
   if (!searchTerm) {
     return {
       status: "error",
-      message: "Enter a VIN, engine, GG, or invoice number to search.",
+      message: "Please supply VIN / Engine / GG No.",
       results: [],
     };
+  }
+
+  if (formData.get("intent") === "recall") {
+    try {
+      const recall = await recallCaptureAgainstApi(searchTerm);
+      return { status: "success", results: [], recall };
+    } catch (error) {
+      if (error instanceof VehicleCreateApiError) {
+        return {
+          status: "error",
+          message:
+            error.reason === "unauthorized"
+              ? "Your session has expired. Sign in again before recalling a capture."
+              : error.reason === "forbidden"
+                ? "You do not have permission to recall a pending capture."
+                : error.message || "Vehicle Not Found.",
+          results: [],
+        };
+      }
+
+      console.error(
+        "FIS vehicle recall failed",
+        error instanceof Error ? error.message : "unknown error",
+      );
+      return { status: "error", message: "Vehicle recall failed. Please try again.", results: [] };
+    }
   }
 
   try {
     const results = await searchVehiclesAgainstApi(searchTerm);
     return results.length > 0
       ? { status: "success", results }
-      : { status: "success", message: "No matching vehicles found.", results: [] };
+      : { status: "success", message: "Vehicle Not Found.", results: [] };
   } catch (error) {
     if (error instanceof VehicleCreateApiError) {
       return {

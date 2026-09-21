@@ -369,9 +369,10 @@ async function AuthorisersContent({ searchParams }: Readonly<{ searchParams: Sea
       getDriverManagementAuthorisersPage(siteCode, {
         page: requestedPage,
         pageSize: DEFAULT_DRIVER_MANAGEMENT_PAGE_SIZE,
+        departmentCode,
       }),
       getDriverManagementDepartments(),
-      getDriverManagementSites(),
+      getDriverManagementSites(departmentCode),
     ]);
     const department = departments.find((item) => item.code === departmentCode);
     const site = sites.find((item) => item.code === siteCode);

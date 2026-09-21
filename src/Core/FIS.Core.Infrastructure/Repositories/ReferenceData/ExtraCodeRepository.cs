@@ -71,7 +71,27 @@ public sealed class ExtraCodeRepository : IExtraCodeRepository
         ).SingleOrDefault();
     }
 
-    public async Task<IEnumerable<ExtraCode>> GetAllAsync() => await QueryAsync();
+    public async Task<IEnumerable<ExtraCode>> GetAllAsync()
+    {
+        var leftover = (await QueryAsync()).ToList();
+        var keys = await LegacySelectorProcedure.TryReadOrderedKeysAsync(
+            _context,
+            "DEV_SEL_Vehicle_Extras",
+            ["@Vehicle_Search"],
+            command =>
+            {
+                var parameter = command.CreateParameter();
+                parameter.ParameterName = "@Vehicle_Search";
+                parameter.DbType = DbType.String;
+                parameter.Value = string.Empty;
+                command.Parameters.Add(parameter);
+            },
+            "extra_code"
+        );
+        return keys is null
+            ? leftover
+            : LegacySelectorProcedure.OrderByKeys(leftover, keys, extra => extra.extra_code);
+    }
 
     [SuppressMessage(
         "Security",

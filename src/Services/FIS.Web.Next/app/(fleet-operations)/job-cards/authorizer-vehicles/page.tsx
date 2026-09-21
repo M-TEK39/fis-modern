@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { JobCardSearchForm, JobCardTable } from "@/app/(fleet-operations)/job-cards/_components";
+import { JobCardSearchForm, JobCardTable, JobCardAuthorizerGgStatsTable, AuthorizerJobCardDetails } from "@/app/(fleet-operations)/job-cards/_components";
 import { hasJobCardAccess, hasRole } from "@/app/(fleet-operations)/job-cards/_utils";
 import {
   AccessRestricted,
@@ -9,6 +9,7 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_page";
 import {
   getJobCardSession,
+  getAuthorizerDetailsForSelection,
   jobCardPageHref,
   queryPage,
   querySearchType,
@@ -16,7 +17,8 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_page-utils";
 import {
   DEFAULT_JOB_CARD_PAGE_SIZE,
-  getJobCardsPage,
+  getAuthorizerGgStatsPage,
+  getAuthorizerJobCardsPage,
   JobCardApiError,
 } from "@/lib/api/fleet-operations/api-job-cards";
 
@@ -47,19 +49,35 @@ async function AuthorizerVehicleViewContent({
   const search = queryValue(query.search);
   const mode = querySearchType(query.mode);
   const page = queryPage(query.page);
+  const selectedId = Number(queryValue(query.id));
   try {
-    const pageData = await getJobCardsPage({
-      page,
-      pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
-      search,
-      searchType: mode,
-      statusCodes: [1, 2],
-    });
+    const statsPage =
+      mode === "GP"
+        ? null
+        : await getAuthorizerGgStatsPage({
+            page: search.length > 0 ? 1 : page,
+            pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+            ggNumber: search,
+          });
+    const pageData =
+      statsPage === null || search.length > 0
+        ? await getAuthorizerJobCardsPage({
+            page,
+            pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+            search,
+            searchType: mode,
+            statusCodes: [1, 2],
+          })
+        : null;
     const tableReturnPath = jobCardPageHref(
       "/job-cards/authorizer-vehicles",
       { ...query, id: undefined },
-      pageData.page,
+      statsPage === null ? (pageData?.page ?? page) : page,
     );
+    const selectedDetails =
+      Number.isInteger(selectedId) && selectedId > 0
+        ? await getAuthorizerDetailsForSelection(selectedId)
+        : null;
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="authorizer-vehicles-title">
@@ -67,7 +85,7 @@ async function AuthorizerVehicleViewContent({
             <div>
               <p className="eyebrow">Job Cards</p>
               <h1 id="authorizer-vehicles-title">Job Card Authorizer</h1>
-              <p>Filter job cards by GG or GP number before reviewing them.</p>
+              <p>Review job-card stats per GG number, then open the cards for a selected vehicle.</p>
             </div>
             <Link className="button button-secondary" href="/job-cards/authorizer-dashboard">
               Back
@@ -83,21 +101,50 @@ async function AuthorizerVehicleViewContent({
               search={search}
             />
           </section>
-          <section className="vehicle-status-maintenance-panel">
-            <p className="eyebrow">{pageData.totalRecords} pending</p>
-            <h2>Matching Job Cards</h2>
-            <JobCardTable
-              cards={pageData.items}
-              mode="review"
-              returnPath={tableReturnPath}
-              currentUserCode={Number(session.userAccessCode) || null}
-              page={pageData.page}
-              totalPages={pageData.totalPages}
-              pageHref={(nextPage) =>
-                jobCardPageHref("/job-cards/authorizer-vehicles", query, nextPage)
-              }
-            />
-          </section>
+          {statsPage ? (
+            <section className="vehicle-status-maintenance-panel">
+              <p className="eyebrow">{statsPage.totalRecords} GG number{statsPage.totalRecords === 1 ? "" : "s"}</p>
+              <h2>Job Card Stats per GG Number</h2>
+              <JobCardAuthorizerGgStatsTable
+                rows={statsPage.items}
+                page={search.length > 0 ? undefined : statsPage.page}
+                totalPages={search.length > 0 ? undefined : statsPage.totalPages}
+                pageHref={
+                  search.length > 0
+                    ? undefined
+                    : (nextPage) =>
+                        jobCardPageHref("/job-cards/authorizer-vehicles", query, nextPage)
+                }
+                ggHref={(ggNumber) =>
+                  jobCardPageHref(
+                    "/job-cards/authorizer-vehicles",
+                    { search: ggNumber, mode: "GG" },
+                    1,
+                  )
+                }
+              />
+            </section>
+          ) : null}
+          {pageData ? (
+            <section className="vehicle-status-maintenance-panel">
+              <p className="eyebrow">{pageData.totalRecords} pending</p>
+              <h2>
+                {statsPage ? "Job Card for specific GG Number" : "Matching Job Cards"}
+              </h2>
+              <JobCardTable
+                cards={pageData.items}
+                mode="review"
+                returnPath={tableReturnPath}
+                currentUserCode={Number(session.userAccessCode) || null}
+                page={pageData.page}
+                totalPages={pageData.totalPages}
+                pageHref={(nextPage) =>
+                  jobCardPageHref("/job-cards/authorizer-vehicles", query, nextPage)
+                }
+              />
+            </section>
+          ) : null}
+          {selectedDetails ? <AuthorizerJobCardDetails details={selectedDetails} /> : null}
         </section>
       </main>
     );

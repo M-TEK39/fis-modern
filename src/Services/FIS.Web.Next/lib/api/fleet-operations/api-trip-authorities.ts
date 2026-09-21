@@ -101,11 +101,41 @@ export type TripAuthorityRoute = {
   editedByUserCode: number | null;
 };
 
+export type TripAuthorityShowVehicle = {
+  departmentName: string | null;
+  siteCode: number | null;
+  siteName: string | null;
+  contractCode: number | null;
+  vmfCode: number | null;
+  fleetNumber: string | null;
+  make: string | null;
+  model: string | null;
+  registrationNumber: string | null;
+  startOdometer: number | null;
+};
+
 export type TripAuthorityDetails = {
   trip: TripAuthorityRecord;
   drivers: TripAuthorityDriver[];
   passengers: TripAuthorityPassenger[];
   routes: TripAuthorityRoute[];
+  hasShowTripVehicleSelector: boolean;
+  showTripVehicle: TripAuthorityShowVehicle | null;
+  showTripTypeName: string | null;
+  showTripIncidentTypeName: string | null;
+  showTripCapturedBy: string | null;
+  hasShowTripIncidentSelector: boolean;
+  incidentTypes: TripAuthorityIncidentType[];
+};
+
+export type TripAuthorityIncidentType = {
+  code: number;
+  name: string | null;
+};
+
+export type TripAuthorityTripType = {
+  code: number;
+  name: string | null;
 };
 
 export type CloseTripAuthorityRequest = {
@@ -426,6 +456,42 @@ function mapRoute(value: unknown): TripAuthorityRoute | null {
   };
 }
 
+function mapTripType(value: unknown): TripAuthorityTripType | null {
+  if (!isRecord(value)) return null;
+  const code = asNumber(getValue(value, "code", "Code", "trip_type_code"));
+  if (code === null || code <= 0) return null;
+  return {
+    code,
+    name: asString(getValue(value, "name", "Name", "trip_type_name")),
+  };
+}
+
+function mapIncidentType(value: unknown): TripAuthorityIncidentType | null {
+  if (!isRecord(value)) return null;
+  const code = asNumber(getValue(value, "code", "Code", "trip_incident_type_code"));
+  if (code === null || code <= 0) return null;
+  return {
+    code,
+    name: asString(getValue(value, "name", "Name", "trip_incident_type_name")),
+  };
+}
+
+function mapShowTripVehicle(value: unknown): TripAuthorityShowVehicle | null {
+  if (!isRecord(value)) return null;
+  return {
+    departmentName: asString(getValue(value, "departmentName", "DepartmentName")),
+    siteCode: asNumber(getValue(value, "siteCode", "SiteCode")),
+    siteName: asString(getValue(value, "siteName", "SiteName")),
+    contractCode: asNumber(getValue(value, "contractCode", "ContractCode")),
+    vmfCode: asNumber(getValue(value, "vmfCode", "VMFCode")),
+    fleetNumber: asString(getValue(value, "fleetNumber", "FleetNumber")),
+    make: asString(getValue(value, "make", "Make")),
+    model: asString(getValue(value, "model", "Model")),
+    registrationNumber: asString(getValue(value, "registrationNumber", "RegistrationNumber")),
+    startOdometer: asNumber(getValue(value, "startOdometer", "StartODOMeter")),
+  };
+}
+
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
   if (!cookieHeader) {
@@ -562,7 +628,34 @@ export async function getTripAuthorityDetails(tripId: number) {
     drivers: mapDetailCollection("drivers", mapDriver),
     passengers: mapDetailCollection("passengers", mapPassenger),
     routes: mapDetailCollection("routes", mapRoute),
+    hasShowTripVehicleSelector: asBoolean(
+      getValue(payload, "hasShowTripVehicleSelector", "HasShowTripVehicleSelector"),
+    ),
+    showTripVehicle: mapShowTripVehicle(getValue(payload, "showTripVehicle", "ShowTripVehicle")),
+    showTripTypeName: asString(getValue(payload, "showTripTypeName", "ShowTripTypeName")),
+    showTripIncidentTypeName: asString(
+      getValue(payload, "showTripIncidentTypeName", "ShowTripIncidentTypeName"),
+    ),
+    showTripCapturedBy: asString(getValue(payload, "showTripCapturedBy", "ShowTripCapturedBy")),
+    hasShowTripIncidentSelector: asBoolean(
+      getValue(payload, "hasShowTripIncidentSelector", "HasShowTripIncidentSelector"),
+    ),
+    incidentTypes: mapDetailCollection("incidentTypes", mapIncidentType),
   } satisfies TripAuthorityDetails;
+}
+
+export async function getTripTypes(): Promise<TripAuthorityTripType[]> {
+  const payload = await requestApi("api/Trip/trip-types");
+  if (!Array.isArray(payload)) {
+    throw new TripAuthorityApiError(
+      "invalid-response",
+      "The FIS API returned an invalid trip type list.",
+    );
+  }
+
+  return payload
+    .map(mapTripType)
+    .filter((item): item is TripAuthorityTripType => item !== null);
 }
 
 export async function closeTripAuthority(tripId: number, request: CloseTripAuthorityRequest) {

@@ -69,6 +69,765 @@ public class JobCardController : BaseApiController
     }
 
     /// <summary>
+    /// Archive AuthorizerPerGGNumberView uses DEV_SEL_JobcardsForAuthorizers
+    /// @ggnumber. AuthorizerJobcardStatusScreen uses
+    /// DEV_SEL_JobcardsStatusReportForAuthorizer @statusCode.
+    /// </summary>
+    [HttpGet("authorizer/page")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult> GetAuthorizerPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24,
+        [FromQuery] string? search = null,
+        [FromQuery] string? searchType = "GG",
+        [FromQuery] string[]? statusCodes = null,
+        [FromQuery] string? mode = null
+    )
+    {
+        if (!HasJobCardAuthorizerRole())
+            return Forbid();
+
+        var normalizedSearchType = (mode ?? searchType)?.Trim().ToUpperInvariant() ?? "GG";
+        if (normalizedSearchType is not ("GG" or "GP"))
+            return BadRequest(new { error = "Search type must be GG or GP." });
+
+        if (!TryParseStatusCodes(statusCodes, out var parsedStatusCodes))
+            return BadRequest(new { error = "Status codes must be integers." });
+
+        try
+        {
+            var result = await _repository.GetAuthorizerPageAsync(
+                new JobCardPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100),
+                    search,
+                    normalizedSearchType,
+                    parsedStatusCodes.Length > 0 ? parsedStatusCodes : [1, 2],
+                    JobCardId: null,
+                    await GetAccessibleVmfCodesAsync()
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(MapToDto),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    totalRecords = result.TotalRecords,
+                    total = result.TotalRecords,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting authorizer job cards");
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving authorizer job cards" }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Archive AuthorizerPerGGNumberView / AuthorizerVehicleView first grid uses
+    /// DEV_SEL_JobcardsPerGGNumberAuthorizer with no parameters, or @ggnumber.
+    /// BoundFields: GGNumber, Jobcards, Pending, AwaitingAuthorisation,
+    /// Authorised, Inprogress, Canceled, Failed, Completed.
+    /// </summary>
+    [HttpGet("authorizer/gg-stats")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetAuthorizerGgStats(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24,
+        [FromQuery] string? ggNumber = null,
+        [FromQuery] string? search = null
+    )
+    {
+        if (!HasJobCardAuthorizerRole())
+            return Forbid();
+
+        var filter = (ggNumber ?? search)?.Trim();
+        try
+        {
+            var overlay = await _repository.GetAuthorizerGgStatsAsync(
+                new JobCardAuthorizerGgStatsQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100),
+                    filter,
+                    await GetAccessibleVmfCodesAsync()
+                )
+            );
+            if (overlay is null)
+            {
+                return Ok(new { overlay = false });
+            }
+
+            return Ok(
+                new
+                {
+                    overlay = true,
+                    items = overlay.Items.Select(item => new
+                    {
+                        ggNumber = item.GgNumber,
+                        jobcards = item.Jobcards,
+                        pending = item.Pending,
+                        awaitingAuthorisation = item.AwaitingAuthorisation,
+                        authorised = item.Authorised,
+                        inProgress = item.InProgress,
+                        canceled = item.Canceled,
+                        failed = item.Failed,
+                        completed = item.Completed,
+                    }),
+                    page = overlay.Page,
+                    pageSize = overlay.PageSize,
+                    totalRecords = overlay.TotalRecords,
+                    totalPages = overlay.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting authorizer job-card stats per GG number");
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving authorizer job-card stats" }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Archive AuthorizerPerGGNumberView DetailsView uses
+    /// DEV_SEL_JobcardAuthorizerDetails @ggNumber @extraCode.
+    /// </summary>
+    [HttpGet("authorizer/details")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetAuthorizerDetails(
+        [FromQuery] int? jobCardId,
+        [FromQuery] string? ggNumber,
+        [FromQuery] string? extraCode
+    )
+    {
+        if (!HasJobCardAuthorizerRole())
+            return Forbid();
+
+        try
+        {
+            JobCard? leftover = null;
+            if (jobCardId is > 0)
+            {
+                leftover = await _repository.GetByIdAsync(jobCardId.Value);
+                if (leftover is null || !await IsVehicleAllowedAsync(leftover.vmf_code))
+                    return NotFound(new { error = "Job card not found." });
+                ggNumber = leftover.Vehicle?.fleet_number;
+                extraCode = leftover.extra_code.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture
+                );
+            }
+
+            var trimmedGg = ggNumber?.Trim() ?? string.Empty;
+            var trimmedExtra = extraCode?.Trim() ?? string.Empty;
+            if (trimmedGg.Length == 0 || trimmedExtra.Length == 0)
+                return BadRequest(new { error = "A GG number and extra code are required." });
+
+            var overlay = await _repository.GetAuthorizerDetailsAsync(trimmedGg, trimmedExtra);
+            if (overlay is null)
+            {
+                return Ok(new { overlay = false });
+            }
+
+            var item = overlay.FirstOrDefault();
+            if (item is not null && leftover is not null)
+            {
+                item = item with { JobCardId = leftover.job_card_id };
+            }
+
+            return Ok(
+                new
+                {
+                    overlay = true,
+                    item = item is null
+                        ? null
+                        : new
+                        {
+                            jobCardId = item.JobCardId,
+                            jcNumber = item.JcNumber,
+                            ggNumber = item.GgNumber,
+                            extraDescription = item.ExtraDescription,
+                            initialCapturedDate = item.InitialCapturedDate,
+                            initialCapturer = item.InitialCapturer,
+                            barcode = item.Barcode,
+                            capturedDate = item.CapturedDate,
+                            jobCardsCapturer = item.JobCardsCapturer,
+                            handoverName = item.HandoverName,
+                            handoverDate = item.HandoverDate,
+                            damages = item.Damages,
+                            comments = item.Comments,
+                            statusDescription = item.StatusDescription,
+                            priority = item.Priority,
+                            authorizer = item.Authorizer,
+                            authorizedDate = item.AuthorizedDate,
+                            authorizerComments = item.AuthorizerComments,
+                        },
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting authorizer job-card details");
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving authorizer job-card details" }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Archive AuthorizerActionControl dropdown uses DEV_SEL_JobcardAuthorizerStatus
+    /// with DataTextField status_code_description and DataValueField status_code.
+    /// </summary>
+    [HttpGet("authorizer/statuses")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetAuthorizerStatuses()
+    {
+        if (!HasJobCardAuthorizerRole())
+            return Forbid();
+
+        try
+        {
+            var overlay = await _repository.GetAuthorizerStatusCodesAsync();
+            if (overlay is null)
+            {
+                return Ok(new { overlay = false });
+            }
+
+            return Ok(
+                new
+                {
+                    overlay = true,
+                    items = overlay.Select(status => new
+                    {
+                        statusCode = status.StatusCode,
+                        description = status.Description,
+                    }),
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting authorizer job-card statuses");
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving authorizer job-card statuses" }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Archive VehiclesAvailableForJobcards uses DEV_SEL_NewVehiclesWithoutJobcards
+    /// with no parameters. Membership and order come from GG Number.
+    /// </summary>
+    [HttpGet("vehicles-available")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetVehiclesAvailableForCapture()
+    {
+        if (!HasJobCardCapturerRole())
+            return Forbid();
+
+        try
+        {
+            var allowedVehicles = await GetAccessibleVmfCodesAsync();
+            var overlay = await _repository.GetVehiclesAvailableForCaptureAsync();
+            IEnumerable<object> vehicles;
+            if (overlay is not null)
+            {
+                vehicles = overlay
+                    .Where(vehicle => allowedVehicles.Contains(vehicle.VmfCode))
+                    .Select(vehicle => new
+                    {
+                        vmf_code = vehicle.VmfCode,
+                        fleet_number = vehicle.FleetNumber,
+                        registration_number = vehicle.RegistrationNumber,
+                        model_code = vehicle.ModelCode,
+                    });
+            }
+            else
+            {
+                vehicles = (await _vehicleRepository.GetAllAsync(
+                    await _vehicleScope.ResolveAllowedSiteCodesAsync(
+                        User,
+                        HttpContext.RequestAborted
+                    ),
+                    GetCurrentUserId()
+                ))
+                    .Where(vehicle => allowedVehicles.Contains(vehicle.vmf_code))
+                    .Select(vehicle => new
+                    {
+                        vmf_code = vehicle.vmf_code,
+                        fleet_number = vehicle.fleet_number,
+                        registration_number = vehicle.registration_number,
+                        model_code = (short?)vehicle.model_code,
+                    });
+            }
+
+            return Ok(vehicles);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting vehicles available for job card capture");
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving vehicles available for job cards" }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Archive CreateJobcard.aspx loads DEV_SEL_NewVehicleSummary @ggnumber,
+    /// DEV_SEL_ExtrasInCategory @ggnumber, DEV_SEL_FittedExtras @ggnumber, and
+    /// DEV_SEL_JobcardsOnStatus @ggnumber. Do not invent @CatID for the
+    /// two-parameter extras procedure.
+    /// </summary>
+    [HttpGet("capture-context")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetCaptureContext([FromQuery] string? ggNumber)
+    {
+        if (!HasJobCardCapturerRole())
+            return Forbid();
+
+        var trimmed = ggNumber?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0)
+            return BadRequest(new { error = "A GG number is required." });
+
+        try
+        {
+            var allowedVehicles = await GetAccessibleVmfCodesAsync();
+            var summary = await _repository.GetCaptureVehicleSummaryAsync(trimmed);
+            var extras = await _repository.GetCaptureExtrasInCategoryAsync(trimmed);
+            var fittedExtras = await _repository.GetCaptureFittedExtraDescriptionsAsync(trimmed);
+            var jobcardsOnStatus = await _repository.GetCaptureJobcardsOnStatusDescriptionsAsync(
+                trimmed
+            );
+
+            object summaryPayload;
+            if (summary is null)
+            {
+                summaryPayload = new { overlay = false };
+            }
+            else
+            {
+                var item = summary.FirstOrDefault();
+                if (item?.VmfCode is int vmfCode && !allowedVehicles.Contains(vmfCode))
+                {
+                    item = null;
+                }
+
+                summaryPayload = new
+                {
+                    overlay = true,
+                    item = item is null
+                        ? null
+                        : new
+                        {
+                            vmf_code = item.VmfCode,
+                            ggNumber = item.GgNumber,
+                            registrationNumber = item.RegistrationNumber,
+                            classDescription = item.ClassDescription,
+                            modelDescription = item.ModelDescription,
+                            odoReading = item.OdoReading,
+                            vinNumber = item.VinNumber,
+                            engineNumber = item.EngineNumber,
+                            yearModel = item.YearModel,
+                            purchasedFrom = item.PurchasedFrom,
+                            hireType = item.HireType,
+                            hiredFrom = item.HiredFrom,
+                            location = item.Location,
+                        },
+                };
+            }
+
+            return Ok(
+                new
+                {
+                    summary = summaryPayload,
+                    extras = extras is null
+                        ? new { overlay = false, items = Array.Empty<object>() }
+                        : (object)
+                            new
+                            {
+                                overlay = true,
+                                items = extras.Select(extra => new
+                                {
+                                    extraCode = extra.ExtraCode,
+                                    description = extra.Description,
+                                }),
+                            },
+                    fittedExtras = fittedExtras is null
+                        ? new { overlay = false, items = Array.Empty<string>() }
+                        : (object)new { overlay = true, items = fittedExtras },
+                    jobcardsOnStatus = jobcardsOnStatus is null
+                        ? new { overlay = false, items = Array.Empty<string>() }
+                        : (object)new { overlay = true, items = jobcardsOnStatus },
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting job-card capture context for {GGNumber}", trimmed);
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving the job-card capture context" }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Archive JobcardEditUpdateAndPrint DetailsView uses
+    /// DEV_SEL_SpecificJobPerVehicle @ggNumber @extraCode.
+    /// Do not overlay this onto authorizer details or leftover GetById.
+    /// </summary>
+    [HttpGet("capturer/details")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetCapturerDetails(
+        [FromQuery] int? jobCardId,
+        [FromQuery] string? ggNumber,
+        [FromQuery] string? extraCode
+    )
+    {
+        if (!HasJobCardCapturerRole())
+            return Forbid();
+
+        try
+        {
+            JobCard? leftover = null;
+            if (jobCardId is > 0)
+            {
+                leftover = await _repository.GetByIdAsync(jobCardId.Value);
+                if (leftover is null || !await IsVehicleAllowedAsync(leftover.vmf_code))
+                    return NotFound(new { error = "Job card not found." });
+                ggNumber = leftover.Vehicle?.fleet_number;
+                extraCode = leftover.extra_code.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture
+                );
+            }
+
+            var trimmedGg = ggNumber?.Trim() ?? string.Empty;
+            var trimmedExtra = extraCode?.Trim() ?? string.Empty;
+            if (trimmedGg.Length == 0 || trimmedExtra.Length == 0)
+                return BadRequest(new { error = "A GG number and extra code are required." });
+
+            var overlay = await _repository.GetCapturerDetailsAsync(trimmedGg, trimmedExtra);
+            if (overlay is null)
+            {
+                return Ok(new { overlay = false });
+            }
+
+            var item = overlay.FirstOrDefault();
+            if (item is not null && leftover is not null)
+            {
+                item = item with { JobCardId = leftover.job_card_id };
+            }
+
+            return Ok(
+                new
+                {
+                    overlay = true,
+                    item = item is null
+                        ? null
+                        : new
+                        {
+                            jobCardId = item.JobCardId,
+                            jcNumber = item.JcNumber,
+                            ggNumber = item.GgNumber,
+                            extraDescription = item.ExtraDescription,
+                            barcode = item.Barcode,
+                            initialCapturer = item.InitialCapturer,
+                            initialCapturedDate = item.InitialCapturedDate,
+                            jobCardsCapturer = item.JobCardsCapturer,
+                            capturedDate = item.CapturedDate,
+                            handoverName = item.HandoverName,
+                            handoverDate = item.HandoverDate,
+                            damages = item.Damages,
+                            comments = item.Comments,
+                            statusDescription = item.StatusDescription,
+                            jobcardComment = item.JobcardComment,
+                            authorizer = item.Authorizer,
+                            authorizerDate = item.AuthorizerDate,
+                            authorizerComments = item.AuthorizerComments,
+                        },
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting capturer job-card details");
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving capturer job-card details" }
+            );
+        }
+    }
+
+    [HttpGet("close/details")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetCloseDetails([FromQuery] int? jobCardId)
+    {
+        if (!HasJobCardCapturerRole())
+            return Forbid();
+
+        try
+        {
+            if (jobCardId is not > 0)
+                return BadRequest(new { error = "A job card ID is required." });
+
+            var leftover = await _repository.GetByIdAsync(jobCardId.Value);
+            if (leftover is null || !await IsVehicleAllowedAsync(leftover.vmf_code))
+                return NotFound(new { error = "Job card not found." });
+
+            var jcNumber = leftover.jc_number?.Trim() ?? string.Empty;
+            if (jcNumber.Length == 0)
+            {
+                return Ok(new { overlay = false });
+            }
+
+            var overlay = await _repository.GetCloseDetailsAsync(jcNumber);
+            if (overlay is null)
+            {
+                return Ok(new { overlay = false });
+            }
+
+            var item = overlay.FirstOrDefault();
+            if (item is not null)
+            {
+                item = item with { JobCardId = leftover.job_card_id };
+            }
+
+            return Ok(
+                new
+                {
+                    overlay = true,
+                    item = item is null
+                        ? null
+                        : new
+                        {
+                            jobCardId = item.JobCardId,
+                            ggNumber = item.GgNumber,
+                            jcNumber = item.JcNumber,
+                            extraDescription = item.ExtraDescription,
+                            jobCardsCapturer = item.JobCardsCapturer,
+                            capturedDate = item.CapturedDate,
+                            handoverName = item.HandoverName,
+                            handoverDate = item.HandoverDate,
+                            authorizer = item.Authorizer,
+                            authorizedDate = item.AuthorizedDate,
+                            authorizerComments = item.AuthorizerComments,
+                            statusDescription = item.StatusDescription,
+                            dateClosed = item.DateClosed,
+                            barcode = item.Barcode,
+                            jobcardComment = item.JobcardComment,
+                            damages = item.Damages,
+                            comments = item.Comments,
+                        },
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting close job-card details");
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving close job-card details" }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Archive JobcardEditUpdateAndPrint status dropdown uses
+    /// DEV_SEL_JobcardStatus with DataTextField status_code_description
+    /// and DataValueField status_code.
+    /// </summary>
+    [HttpGet("capturer/statuses")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetCapturerStatuses()
+    {
+        if (!HasJobCardCapturerRole())
+            return Forbid();
+
+        try
+        {
+            var overlay = await _repository.GetCapturerStatusCodesAsync();
+            if (overlay is null)
+            {
+                return Ok(new { overlay = false });
+            }
+
+            return Ok(
+                new
+                {
+                    overlay = true,
+                    items = overlay.Select(status => new
+                    {
+                        statusCode = status.StatusCode,
+                        description = status.Description,
+                    }),
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting capturer job-card statuses");
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving capturer job-card statuses" }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Archive PrintAssignedJobcards binds DEV_SEL_JobcardsForPrintingSummary
+    /// @ggnumber with BoundFields Jobcard Number / GG Number /
+    /// Registration Number / Jobcard Description.
+    /// </summary>
+    [HttpGet("print/summary")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetPrintSummary([FromQuery] string? ggNumber)
+    {
+        if (!HasJobCardCapturerRole())
+            return Forbid();
+
+        var trimmed = ggNumber?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0)
+            return BadRequest(new { error = "A GG number is required." });
+
+        try
+        {
+            var overlay = await _repository.GetPrintableJobCardsAsync(trimmed);
+            if (overlay is null)
+            {
+                return Ok(new { overlay = false });
+            }
+
+            return Ok(
+                new
+                {
+                    overlay = true,
+                    items = overlay.Select(item => new
+                    {
+                        jobcardNumber = item.JobcardNumber,
+                        ggNumber = item.GgNumber,
+                        registrationNumber = item.RegistrationNumber,
+                        jobcardDescription = item.JobcardDescription,
+                    }),
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting printable job cards for {GGNumber}", trimmed);
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving printable job cards" }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Archive PrintJobcard.aspx / JobcardData.xsd uses
+    /// DEV_SEL_JobcardsForPrinting @ggNumber @jcNumber. Print-all binds
+    /// @jcNumber as empty. Changes.PrintJobcardsPerGGNumber is the 1-param
+    /// @ggnumber caller.
+    /// </summary>
+    [HttpGet("print/snapshot")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetPrintSnapshot(
+        [FromQuery] string? ggNumber,
+        [FromQuery] string? jcNumber
+    )
+    {
+        if (!HasJobCardCapturerRole())
+            return Forbid();
+
+        var trimmedGg = ggNumber?.Trim() ?? string.Empty;
+        if (trimmedGg.Length == 0)
+            return BadRequest(new { error = "A GG number is required." });
+
+        try
+        {
+            var overlay = await _repository.GetPrintJobCardsAsync(trimmedGg, jcNumber);
+            if (overlay is null)
+            {
+                return Ok(new { overlay = false });
+            }
+
+            return Ok(
+                new
+                {
+                    overlay = true,
+                    items = overlay.Select(item => new
+                    {
+                        ggNumber = item.GgNumber,
+                        registrationNumber = item.RegistrationNumber,
+                        dateDelivered = item.DateDelivered,
+                        odoReading = item.OdoReading,
+                        vinNumber = item.VinNumber,
+                        engineNumber = item.EngineNumber,
+                        modelDescription = item.ModelDescription,
+                        yearModel = item.YearModel,
+                        classDescription = item.ClassDescription,
+                        hireType = item.HireType,
+                        hiredFrom = item.HiredFrom,
+                        location = item.Location,
+                        capturedDate = item.CapturedDate,
+                        receivedBy = item.ReceivedBy,
+                        status = item.Status,
+                        statusDate = item.StatusDate,
+                        purchasedFrom = item.PurchasedFrom,
+                        purchasedDate = item.PurchasedDate,
+                        jobcardNumber = item.JobcardNumber,
+                        jobDescription = item.JobDescription,
+                        jobcardStatus = item.JobcardStatus,
+                        capturedBy = item.CapturedBy,
+                        jcsDate = item.JcsDate,
+                        assignedTo = item.AssignedTo,
+                        assignedDate = item.AssignedDate,
+                    }),
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting print job-card snapshot for {GGNumber}", trimmedGg);
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving the print job-card snapshot" }
+            );
+        }
+    }
+
+    /// <summary>
     /// Get a filtered page of job cards without changing the legacy unpaginated
     /// GET /api/jobcards response used by existing consumers.
     /// </summary>
@@ -83,7 +842,8 @@ public class JobCardController : BaseApiController
         [FromQuery] string? searchType = "GG",
         [FromQuery] int? jobCardId = null,
         [FromQuery] string[]? statusCodes = null,
-        [FromQuery] string? mode = null
+        [FromQuery] string? mode = null,
+        [FromQuery] string? list = null
     )
     {
         if (!HasJobCardAccess())
@@ -99,19 +859,27 @@ public class JobCardController : BaseApiController
         if (jobCardId is <= 0)
             return BadRequest(new { error = "Job card ID must be a positive integer." });
 
+        var listKind = list?.Trim().ToLowerInvariant();
+        if (listKind is not (null or "" or "close" or "cancel"))
+            return BadRequest(new { error = "List must be close or cancel." });
+
         try
         {
-            var result = await _repository.GetPageAsync(
-                new JobCardPageQuery(
-                    Math.Max(1, page),
-                    Math.Clamp(pageSize, 1, 100),
-                    search,
-                    normalizedSearchType,
-                    parsedStatusCodes,
-                    jobCardId,
-                    await GetAccessibleVmfCodesAsync()
-                )
+            var query = new JobCardPageQuery(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, 100),
+                search,
+                normalizedSearchType,
+                parsedStatusCodes,
+                jobCardId,
+                await GetAccessibleVmfCodesAsync()
             );
+            var result = listKind switch
+            {
+                "close" => await _repository.GetReadyForClosingPageAsync(query),
+                "cancel" => await _repository.GetCancelationPageAsync(query),
+                _ => await _repository.GetPageAsync(query),
+            };
 
             return Ok(
                 new
@@ -271,6 +1039,52 @@ public class JobCardController : BaseApiController
             return StatusCode(
                 StatusCodes.Status500InternalServerError,
                 new { error = "An error occurred while retrieving priority unassigned job cards" }
+            );
+        }
+    }
+
+    /// <summary>
+    /// Archive capturer default assigned-priority grid uses
+    /// DEV_SEL_JobcardsForAssignedPriority with no parameters.
+    /// </summary>
+    [HttpGet("priority/assigned/page")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult> GetAssignedPriorityPage(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 24
+    )
+    {
+        if (!HasJobCardAccess())
+            return Forbid();
+
+        try
+        {
+            var result = await _repository.GetAssignedPriorityPageAsync(
+                new PriorityUnassignedJobCardPageQuery(
+                    Math.Max(1, page),
+                    Math.Clamp(pageSize, 1, 100),
+                    await GetAccessibleVmfCodesAsync()
+                )
+            );
+
+            return Ok(
+                new
+                {
+                    items = result.Items.Select(MapToDto),
+                    page = result.Page,
+                    pageSize = result.PageSize,
+                    total = result.TotalRecords,
+                    totalPages = result.TotalPages,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting paged assigned priority job cards");
+            return StatusCode(
+                StatusCodes.Status500InternalServerError,
+                new { error = "An error occurred while retrieving assigned priority job cards" }
             );
         }
     }

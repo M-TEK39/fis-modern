@@ -28,6 +28,8 @@ import {
 } from "@/lib/api/finance/api-contracts";
 import {
   getTripAuthorityVehicles,
+  getTripTypes,
+  type TripAuthorityTripType,
   type TripAuthorityVehicle,
 } from "@/lib/api/fleet-operations/api-trip-authorities";
 import {
@@ -206,15 +208,18 @@ async function renderCreateTripPageContent({
   let vehicle: VehicleStatusVehicle;
   let users: UserApproverChoice[];
   let drivers: DriverManagementDriver[];
+  let tripTypes: TripAuthorityTripType[];
   try {
-    const [vehicleResult, userResult, driverResult] = await Promise.all([
+    const [vehicleResult, userResult, driverResult, tripTypeResult] = await Promise.all([
       getVehicleForStatus(selectedVmfCode),
       getUserApproverChoices(),
       getDriverManagementSiteDrivers(contract.siteCode),
+      getTripTypes(),
     ]);
     vehicle = vehicleResult;
     users = userResult;
     drivers = driverResult;
+    tripTypes = tripTypeResult;
   } catch (error) {
     console.error(
       "FIS trip creation context failed",
@@ -273,6 +278,7 @@ async function renderCreateTripPageContent({
         }}
         approvers={approvers}
         drivers={drivers}
+        tripTypes={tripTypes}
         mode={mode}
         result={result}
         today={today}

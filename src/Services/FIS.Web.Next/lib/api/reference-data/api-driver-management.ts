@@ -515,8 +515,12 @@ export async function getDriverManagementDepartments() {
   );
 }
 
-export async function getDriverManagementSites() {
-  const response = await requestApi("api/site");
+export async function getDriverManagementSites(departmentCode?: number) {
+  const path =
+    departmentCode !== undefined && departmentCode > 0
+      ? `api/site-drivers/sites?departmentId=${encodeURIComponent(departmentCode)}`
+      : "api/site";
+  const response = await requestApi(path);
   return mapCollection(await readJson(response), mapSite).sort((left, right) =>
     left.description.localeCompare(right.description),
   );
@@ -534,13 +538,16 @@ export async function getDriverManagementAuthorisers(siteCode: number) {
 
 export async function getDriverManagementAuthorisersPage(
   siteCode: number,
-  options: { page?: number; pageSize?: number } = {},
+  options: { page?: number; pageSize?: number; departmentCode?: number } = {},
 ): Promise<DriverManagementPage<DriverManagementAuthoriser>> {
   const params = new URLSearchParams({
     siteCode: String(siteCode),
     page: String(normalizePage(options.page)),
     pageSize: String(normalizePageSize(options.pageSize)),
   });
+  if (options.departmentCode !== undefined && options.departmentCode > 0) {
+    params.set("departmentCode", String(options.departmentCode));
+  }
   const response = await requestApi(`api/authorisers/page?${params.toString()}`);
   return readPage(await readJson(response), mapAuthoriser);
 }

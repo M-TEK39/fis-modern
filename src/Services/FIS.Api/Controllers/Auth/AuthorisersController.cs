@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using FIS.Core.Infrastructure.Repositories;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,41 +31,109 @@ public sealed class AuthorisersController : BaseApiController
     private const int MaximumPageSize = 100;
     private const string ApproversTable = "approvers";
     private const string RanksTable = "ranks";
+    private const string InsertApproverProcedure = "DEV_INS_Approvers";
+    private const string UpdateApproverProcedure = "DEV_UPD_Approvers";
+    private const string DeleteApproverProcedure = "DEV_DEL_Approvers";
+
+    private static readonly string[][] InsertApproverParameterSets =
+    [
+        [
+            "@Approver_Code",
+            "@Site_code",
+            "@Department_code",
+            "@Surname",
+            "@FirstName",
+            "@Rank_Code",
+            "@TelephoneNumber",
+        ],
+        [
+            "@ApproverCode",
+            "@SiteCode",
+            "@DepartmentCode",
+            "@RankCode",
+            "@Surname",
+            "@Firstname",
+            "@TelephoneNumber",
+        ],
+    ];
+
+    private static readonly string[][] UpdateApproverParameterSets =
+    [
+        [
+            "@Approver_Code",
+            "@Site_code",
+            "@Department_code",
+            "@Surname",
+            "@FirstName",
+            "@Rank_Code",
+            "@TelephoneNumber",
+        ],
+        [
+            "@ApproverCode",
+            "@SiteCode",
+            "@DepartmentCode",
+            "@RankCode",
+            "@Surname",
+            "@Firstname",
+            "@TelephoneNumber",
+        ],
+        [
+            "@Approver_Code",
+            "@Site_code",
+            "@Department_code",
+            "@Surname",
+            "@Firstname",
+            "@Rank_Code",
+            "@TelephoneNumber",
+        ],
+    ];
+
+    private static readonly string[][] DeleteApproverParameterSets = [["@ID"]];
 
     private readonly FisDbContext _context;
+    private readonly AuthoriserLookupOverlay _lookupOverlay;
     private readonly ILogger<AuthorisersController> _logger;
 
-    public AuthorisersController(FisDbContext context, ILogger<AuthorisersController> logger)
+    public AuthorisersController(
+        FisDbContext context,
+        AuthoriserLookupOverlay lookupOverlay,
+        ILogger<AuthorisersController> logger
+    )
     {
         _context = context;
+        _lookupOverlay = lookupOverlay;
         _logger = logger;
     }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<AuthoriserDto>>> GetAuthorisers(
-        [FromQuery] short? siteCode
+        [FromQuery] short? siteCode,
+        [FromQuery] int? departmentCode
     )
     {
         try
         {
-            var authorisers = await WithConnectionAsync(async connection =>
+            var overlayRows =
+                siteCode is > 0 && departmentCode is > 0
+                    ? await _lookupOverlay.ReadApproversForEditRowsAsync(
+                        siteCode.Value,
+                        departmentCode.Value
+                    )
+                    : null;
+            var leftover = await QueryLeftoverAuthorisersAsync(
+                overlayRows is null ? siteCode : null,
+                activeOnly: overlayRows is null
+            );
+            if (overlayRows is not null)
             {
-                var schema = await ReadTableSchemaAsync(connection, ApproversTable);
-                EnsureApproverTable(schema);
-
-                var siteFilter = siteCode.HasValue ? " AND [site_code] = @siteCode" : string.Empty;
-                await using var command = connection.CreateCommand();
-                command.CommandText =
-                    $"{BuildApproverSelect(schema)} WHERE {BuildActivePredicate(schema)}{siteFilter} ORDER BY [Surname], [Firstname], [approver_code]";
-                if (siteCode.HasValue)
+                var overlaid = OverlayAuthorisers(overlayRows, leftover);
+                if (overlaid is not null)
                 {
-                    AddParameter(command, "@siteCode", siteCode.Value);
+                    return Ok(overlaid.Select(MapToDto));
                 }
+            }
 
-                return await ReadAuthorisersAsync(command, schema);
-            });
-
-            return Ok(authorisers.Select(MapToDto));
+            return Ok(leftover.Select(MapToDto));
         }
         catch (Exception ex)
         {
@@ -75,6 +144,7 @@ public sealed class AuthorisersController : BaseApiController
     [HttpGet("page")]
     public async Task<ActionResult> GetAuthorisersPage(
         [FromQuery] short? siteCode,
+        [FromQuery] int? departmentCode,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = DefaultPageSize
     )
@@ -89,6 +159,23 @@ public sealed class AuthorisersController : BaseApiController
 
         try
         {
+            var overlayRows =
+                departmentCode is > 0
+                    ? await _lookupOverlay.ReadApproversForEditRowsAsync(
+                        siteCode.Value,
+                        departmentCode.Value
+                    )
+                    : null;
+            if (overlayRows is not null)
+            {
+                var leftover = await QueryLeftoverAuthorisersAsync(siteCode: null, activeOnly: false);
+                var overlaid = OverlayAuthorisers(overlayRows, leftover);
+                if (overlaid is not null)
+                {
+                    return Ok(PageAuthorisers(overlaid, normalizedPage, normalizedPageSize));
+                }
+            }
+
             var result = await WithConnectionAsync(async connection =>
             {
                 var schema = await ReadTableSchemaAsync(connection, ApproversTable);
@@ -141,17 +228,38 @@ public sealed class AuthorisersController : BaseApiController
     {
         try
         {
-            var authoriser = await WithConnectionAsync(async connection =>
+            var overlayRows = await _lookupOverlay.ReadSingleApproverRowsAsync(id);
+            AuthoriserRecord? leftover = null;
+            if (overlayRows is null || overlayRows.Count > 0)
             {
-                var schema = await ReadTableSchemaAsync(connection, ApproversTable);
-                EnsureApproverTable(schema);
+                try
+                {
+                    leftover = await WithConnectionAsync(async connection =>
+                    {
+                        var schema = await ReadTableSchemaAsync(connection, ApproversTable);
+                        EnsureApproverTable(schema);
+                        return await ReadAuthoriserByIdAsync(connection, schema, id);
+                    });
+                }
+                catch (Exception ex) when (overlayRows is not null)
+                {
+                    _logger.LogWarning(ex, "Leftover authoriser {AuthoriserCode} could not be hydrated", id);
+                }
+            }
 
-                await using var command = connection.CreateCommand();
-                command.CommandText = $"{BuildApproverSelect(schema)} WHERE [approver_code] = @id";
-                AddParameter(command, "@id", id);
-
-                return await ReadAuthoriserAsync(command, schema);
-            });
+            AuthoriserRecord? authoriser;
+            if (overlayRows is null)
+            {
+                authoriser = leftover;
+            }
+            else if (overlayRows.Count == 0)
+            {
+                authoriser = null;
+            }
+            else
+            {
+                authoriser = leftover ?? MapAuthoriserFromOverlay(overlayRows[0]);
+            }
 
             return authoriser is null
                 ? NotFound(new { message = $"Authoriser not found with code: {id}" })
@@ -168,47 +276,26 @@ public sealed class AuthorisersController : BaseApiController
     {
         try
         {
-            var ranks = await WithConnectionAsync(async connection =>
+            var overlayRows = await _lookupOverlay.ReadRankRowsAsync();
+            var leftover = await QueryLeftoverRanksAsync();
+            if (overlayRows is not null)
             {
-                var schema = await ReadTableSchemaAsync(connection, RanksTable);
-                if (!schema.Has("rank_code") || !schema.Has("description"))
+                var overlaid = OverlayRanks(overlayRows, leftover);
+                if (overlaid is not null)
                 {
-                    return new List<AuthoriserRankDto>();
+                    return Ok(overlaid);
                 }
+            }
 
-                var activePredicate = schema.Has("is_deleted")
-                    ? "([is_deleted] = 0 OR [is_deleted] IS NULL)"
-                    : "1 = 1";
-                await using var command = connection.CreateCommand();
-                command.CommandText =
-                    $"SELECT [rank_code] AS [RankCode], [description] AS [Description] FROM [dbo].[{RanksTable}] WHERE {activePredicate} ORDER BY [description], [rank_code]";
-
-                var result = new List<AuthoriserRankDto>();
-                await using var reader = await command.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
-                {
-                    var rankCode = ReadInt(reader, "RankCode");
-                    if (rankCode.HasValue)
-                    {
-                        var description = ReadString(reader, "Description");
-                        result.Add(
-                            new AuthoriserRankDto
-                            {
-                                Id = rankCode.Value,
-                                RankName = description,
-                                Description = description,
-                            }
-                        );
-                    }
-                }
-
-                return result;
-            });
-
-            return Ok(ranks);
+            return Ok(leftover);
         }
         catch (Exception ex)
         {
+            if (IsLegacySelectorContractException(ex))
+            {
+                return HandleFailure(ex, "retrieving authoriser ranks");
+            }
+
             _logger.LogWarning(
                 ex,
                 "Unable to retrieve authoriser ranks; returning an empty lookup"
@@ -380,6 +467,31 @@ public sealed class AuthorisersController : BaseApiController
                 EnsureApproverTable(schema);
                 ValidateAuthoriser(dto, schema);
 
+                var procedureParameters = await _lookupOverlay.TryGetProcedureParametersAsync(
+                    InsertApproverProcedure
+                );
+                if (procedureParameters is not null)
+                {
+                    if (
+                        !AuthoriserLookupOverlay.MatchesParameterSet(
+                            procedureParameters,
+                            InsertApproverParameterSets
+                        )
+                    )
+                    {
+                        throw new LegacyAuthoriserProcedureContractException(
+                            $"The deployed legacy procedure {InsertApproverProcedure} does not match its verified parameter contract. No direct-DML fallback was run."
+                        );
+                    }
+
+                    var createdId = await ExecuteInsertApproverProcedureAsync(
+                        connection,
+                        procedureParameters,
+                        dto
+                    );
+                    return await ReadAuthoriserByIdAsync(connection, schema, createdId);
+                }
+
                 var columns = new List<string>
                 {
                     "site_code",
@@ -414,8 +526,8 @@ public sealed class AuthorisersController : BaseApiController
                     AddParameter(command, name, value);
                 }
 
-                var createdId = Convert.ToInt32(await command.ExecuteScalarAsync());
-                return await ReadAuthoriserByIdAsync(connection, schema, createdId);
+                var leftoverCreatedId = Convert.ToInt32(await command.ExecuteScalarAsync());
+                return await ReadAuthoriserByIdAsync(connection, schema, leftoverCreatedId);
             });
 
             return created is null
@@ -457,6 +569,32 @@ public sealed class AuthorisersController : BaseApiController
                 if (existing is null)
                 {
                     return null;
+                }
+
+                var procedureParameters = await _lookupOverlay.TryGetProcedureParametersAsync(
+                    UpdateApproverProcedure
+                );
+                if (procedureParameters is not null)
+                {
+                    if (
+                        !AuthoriserLookupOverlay.MatchesParameterSet(
+                            procedureParameters,
+                            UpdateApproverParameterSets
+                        )
+                    )
+                    {
+                        throw new LegacyAuthoriserProcedureContractException(
+                            $"The deployed legacy procedure {UpdateApproverProcedure} does not match its verified parameter contract. No direct-DML fallback was run."
+                        );
+                    }
+
+                    await ExecuteUpdateApproverProcedureAsync(
+                        connection,
+                        procedureParameters,
+                        id,
+                        dto
+                    );
+                    return await ReadAuthoriserByIdAsync(connection, schema, id);
                 }
 
                 var assignments = new List<string>
@@ -536,6 +674,27 @@ public sealed class AuthorisersController : BaseApiController
                 if (existing is null)
                 {
                     return false;
+                }
+
+                var procedureParameters = await _lookupOverlay.TryGetProcedureParametersAsync(
+                    DeleteApproverProcedure
+                );
+                if (procedureParameters is not null)
+                {
+                    if (
+                        !AuthoriserLookupOverlay.MatchesParameterSet(
+                            procedureParameters,
+                            DeleteApproverParameterSets
+                        )
+                    )
+                    {
+                        throw new LegacyAuthoriserProcedureContractException(
+                            $"The deployed legacy procedure {DeleteApproverProcedure} does not match its verified parameter contract. No direct-DML fallback was run."
+                        );
+                    }
+
+                    await ExecuteDeleteApproverProcedureAsync(connection, id);
+                    return true;
                 }
 
                 var assignments = new List<string>();
@@ -987,9 +1146,361 @@ public sealed class AuthorisersController : BaseApiController
         };
     }
 
+    private async Task<List<AuthoriserRecord>> QueryLeftoverAuthorisersAsync(
+        short? siteCode,
+        bool activeOnly
+    )
+    {
+        return await WithConnectionAsync(async connection =>
+        {
+            var schema = await ReadTableSchemaAsync(connection, ApproversTable);
+            EnsureApproverTable(schema);
+            var filter = activeOnly ? BuildActivePredicate(schema) : "1 = 1";
+            if (siteCode.HasValue)
+            {
+                filter += " AND [site_code] = @siteCode";
+            }
+
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                $"{BuildApproverSelect(schema)} WHERE {filter} ORDER BY [Surname], [Firstname], [approver_code]";
+            if (siteCode.HasValue)
+            {
+                AddParameter(command, "@siteCode", siteCode.Value);
+            }
+
+            return await ReadAuthorisersAsync(command, schema);
+        });
+    }
+
+    private async Task<List<AuthoriserRankDto>> QueryLeftoverRanksAsync()
+    {
+        try
+        {
+            return await WithConnectionAsync(async connection =>
+            {
+                var schema = await ReadTableSchemaAsync(connection, RanksTable);
+                if (!schema.Has("rank_code") || !schema.Has("description"))
+                {
+                    return new List<AuthoriserRankDto>();
+                }
+
+                return await ReadRanksAsync(connection, schema);
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Leftover authoriser ranks could not be hydrated");
+            return [];
+        }
+    }
+
+    private static List<AuthoriserRecord>? OverlayAuthorisers(
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> overlayRows,
+        IReadOnlyList<AuthoriserRecord> leftover
+    )
+    {
+        if (overlayRows.Count == 0)
+        {
+            return [];
+        }
+
+        var leftoverByCode = leftover
+            .Where(item => item.AuthoriserCode > 0)
+            .GroupBy(item => item.AuthoriserCode)
+            .ToDictionary(group => group.Key, group => group.First());
+        var mapped = new List<AuthoriserRecord>();
+        var seen = new HashSet<int>();
+        foreach (var row in overlayRows)
+        {
+            var code = AuthoriserLookupOverlay.ReadInt32(
+                row,
+                "Code",
+                "Approver_Code",
+                "ApproverCode",
+                "AuthoriserCode"
+            );
+            if (code is null or <= 0 || !seen.Add(code.Value))
+            {
+                continue;
+            }
+
+            leftoverByCode.TryGetValue(code.Value, out var leftoverRecord);
+            var mappedRecord = leftoverRecord ?? MapAuthoriserFromOverlay(row);
+            if (mappedRecord is null)
+            {
+                continue;
+            }
+
+            mapped.Add(mappedRecord);
+        }
+
+        return mapped.Count == 0 ? null : mapped;
+    }
+
+    private static List<AuthoriserRankDto>? OverlayRanks(
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> overlayRows,
+        IReadOnlyList<AuthoriserRankDto> leftover
+    )
+    {
+        if (overlayRows.Count == 0)
+        {
+            return [];
+        }
+
+        var leftoverById = leftover
+            .Where(item => item.Id > 0)
+            .GroupBy(item => item.Id)
+            .ToDictionary(group => group.Key, group => group.First());
+        var mapped = new List<AuthoriserRankDto>();
+        var seen = new HashSet<int>();
+        foreach (var row in overlayRows)
+        {
+            var id = AuthoriserLookupOverlay.ReadInt32(row, "Rank_Code", "rank_code", "RankCode", "Id");
+            if (id is null or <= 0 || !seen.Add(id.Value))
+            {
+                continue;
+            }
+
+            leftoverById.TryGetValue(id.Value, out var leftoverRank);
+            var description = AuthoriserLookupOverlay.ReadString(
+                row,
+                "Rank Name",
+                "description",
+                "Description",
+                "RankName"
+            );
+            mapped.Add(
+                leftoverRank is null
+                    ? new AuthoriserRankDto
+                    {
+                        Id = id.Value,
+                        RankName = description,
+                        Description = description,
+                    }
+                    : leftoverRank
+            );
+        }
+
+        return mapped.Count == 0 ? null : mapped;
+    }
+
+    private static object PageAuthorisers(
+        IReadOnlyList<AuthoriserRecord> authorisers,
+        int page,
+        int pageSize
+    )
+    {
+        var total = authorisers.Count;
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var currentPage = Math.Min(Math.Max(1, page), totalPages);
+        var skip = (currentPage - 1) * pageSize;
+        return new
+        {
+            items = authorisers.Skip(skip).Take(pageSize).Select(MapToDto).ToList(),
+            page = currentPage,
+            pageSize,
+            total,
+            totalPages,
+        };
+    }
+
+    private static AuthoriserRecord? MapAuthoriserFromOverlay(
+        IReadOnlyDictionary<string, object?> row
+    )
+    {
+        var code = AuthoriserLookupOverlay.ReadInt32(
+            row,
+            "Approver_Code",
+            "ApproverCode",
+            "Code",
+            "AuthoriserCode"
+        );
+        if (code is null or <= 0)
+        {
+            return null;
+        }
+
+        var siteCode = AuthoriserLookupOverlay.ReadInt32(row, "Site_code", "SiteCode", "site_code");
+        return new AuthoriserRecord
+        {
+            AuthoriserCode = code.Value,
+            SiteCode =
+                siteCode is > 0 and <= short.MaxValue ? (short)siteCode.Value : null,
+            DepartmentCode =
+                AuthoriserLookupOverlay.ReadInt32(
+                    row,
+                    "Department_code",
+                    "DepartmentCode",
+                    "department_code"
+                ) ?? 0,
+            RankCode =
+                AuthoriserLookupOverlay.ReadInt32(row, "Rank_Code", "RankCode", "rank_code") ?? 0,
+            Surname = AuthoriserLookupOverlay.ReadString(row, "Surname"),
+            Firstname = AuthoriserLookupOverlay.ReadString(row, "Firstname", "FirstName"),
+            TelephoneNumber = AuthoriserLookupOverlay.ReadString(row, "TelephoneNumber"),
+            IsActive = true,
+            LegacyFieldsAvailable = !string.IsNullOrWhiteSpace(
+                AuthoriserLookupOverlay.ReadString(row, "TelephoneNumber")
+            ),
+        };
+    }
+
+    private static async Task<int> ExecuteInsertApproverProcedureAsync(
+        DbConnection connection,
+        IReadOnlyList<string> actualParameters,
+        CreateAuthoriserDto dto
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = $"[dbo].[{InsertApproverProcedure}]";
+        BindApproverProcedureParameters(command, actualParameters, dto, outputApproverCode: true);
+        await command.ExecuteNonQueryAsync();
+        var output = command
+            .Parameters.Cast<DbParameter>()
+            .FirstOrDefault(parameter => parameter.Direction != ParameterDirection.Input);
+        if (
+            output?.Value is null or DBNull
+            || !int.TryParse(output.Value.ToString(), out var id)
+            || id <= 0
+        )
+        {
+            throw new LegacyAuthoriserProcedureContractException(
+                $"The deployed legacy procedure {InsertApproverProcedure} did not return an authoriser code."
+            );
+        }
+
+        return id;
+    }
+
+    private static async Task ExecuteUpdateApproverProcedureAsync(
+        DbConnection connection,
+        IReadOnlyList<string> actualParameters,
+        int approverCode,
+        CreateAuthoriserDto dto
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = $"[dbo].[{UpdateApproverProcedure}]";
+        BindApproverProcedureParameters(
+            command,
+            actualParameters,
+            dto,
+            outputApproverCode: false,
+            approverCode
+        );
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task ExecuteDeleteApproverProcedureAsync(DbConnection connection, int id)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = $"[dbo].[{DeleteApproverProcedure}]";
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "@ID";
+        parameter.DbType = DbType.Int32;
+        parameter.Value = id;
+        command.Parameters.Add(parameter);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static void BindApproverProcedureParameters(
+        DbCommand command,
+        IReadOnlyList<string> actualParameters,
+        CreateAuthoriserDto dto,
+        bool outputApproverCode,
+        int? approverCode = null
+    )
+    {
+        foreach (var name in actualParameters)
+        {
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = name;
+            if (MatchesName(name, "@Approver_Code", "@ApproverCode"))
+            {
+                parameter.DbType = DbType.Int32;
+                if (outputApproverCode)
+                {
+                    parameter.Direction = ParameterDirection.Output;
+                    parameter.Value = DBNull.Value;
+                }
+                else
+                {
+                    parameter.Value = approverCode ?? 0;
+                }
+            }
+            else if (MatchesName(name, "@Site_code", "@SiteCode"))
+            {
+                parameter.DbType = DbType.Int32;
+                parameter.Value = dto.SiteCode.HasValue ? dto.SiteCode.Value : DBNull.Value;
+            }
+            else if (MatchesName(name, "@Department_code", "@DepartmentCode"))
+            {
+                parameter.DbType = DbType.Int32;
+                parameter.Value = dto.DepartmentCode;
+            }
+            else if (MatchesName(name, "@Rank_Code", "@RankCode"))
+            {
+                parameter.DbType = DbType.Int32;
+                parameter.Value = dto.RankCode;
+            }
+            else if (MatchesName(name, "@Surname"))
+            {
+                parameter.DbType = DbType.String;
+                parameter.Value = dto.Surname.Trim();
+            }
+            else if (MatchesName(name, "@FirstName", "@Firstname"))
+            {
+                parameter.DbType = DbType.String;
+                parameter.Value = dto.Firstname.Trim();
+            }
+            else if (MatchesName(name, "@TelephoneNumber"))
+            {
+                parameter.DbType = DbType.String;
+                parameter.Value = string.IsNullOrWhiteSpace(dto.TelephoneNumber)
+                    ? DBNull.Value
+                    : dto.TelephoneNumber.Trim();
+            }
+            else
+            {
+                throw new LegacyAuthoriserProcedureContractException(
+                    $"The deployed legacy procedure uses unverified parameter {name}."
+                );
+            }
+
+            command.Parameters.Add(parameter);
+        }
+    }
+
+    private static bool MatchesName(string actual, params string[] expected)
+    {
+        return expected.Any(name =>
+            string.Equals(actual, name, StringComparison.OrdinalIgnoreCase)
+        );
+    }
+
+    private static bool IsLegacySelectorContractException(Exception ex)
+    {
+        return ex is LegacyAuthoriserProcedureContractException
+            || (
+                ex is InvalidOperationException
+                && ex.Message.Contains(
+                    "does not match its verified parameter contract",
+                    StringComparison.Ordinal
+                )
+            );
+    }
+
     private ActionResult HandleFailure(Exception ex, string operation)
     {
         _logger.LogError(ex, "Error {Operation}", operation);
+        if (IsLegacySelectorContractException(ex))
+        {
+            return StatusCode(503, new { message = ex.Message });
+        }
         return ex is DbException
             ? StatusCode(503, new { message = "The authoriser database is unavailable." })
             : StatusCode(500, new { message = $"Error {operation}." });
@@ -1085,4 +1596,10 @@ public sealed class AuthoriserRankDto
     public int Id { get; set; }
     public string? RankName { get; set; }
     public string? Description { get; set; }
+}
+
+public sealed class LegacyAuthoriserProcedureContractException : InvalidOperationException
+{
+    public LegacyAuthoriserProcedureContractException(string message)
+        : base(message) { }
 }

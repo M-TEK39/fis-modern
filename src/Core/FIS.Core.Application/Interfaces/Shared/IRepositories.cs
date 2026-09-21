@@ -447,6 +447,11 @@ public interface IVehicleAuthorizationRepository
         IReadOnlySet<short>? allowedSiteCodes = null,
         int? currentUserId = null
     );
+    Task<IReadOnlyList<PreVehicleMaster>> SearchPreVehiclesAsync(
+        string chassisNo,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    );
     Task<VehicleAuthorizationPage> GetPendingAuthorizationsAsync(
         int page = 1,
         int pageSize = 24,
@@ -496,12 +501,22 @@ public interface IVehicleAuthorizationRepository
         IReadOnlySet<short>? allowedSiteCodes = null,
         int? currentUserId = null
     );
+    Task<IReadOnlyList<VehicleStatusComment>> GetVehicleStatusCommentsAsync(
+        string chassisNumber
+    );
 }
 
 public sealed record VehicleAuthorizationApprovalResult(
     string? AllocatedGgNumber,
     int? AvailableGgNumbers,
     int? ReturnStatus
+);
+
+public sealed record VehicleStatusComment(
+    string? CapturedBy,
+    DateTime? CommentDate,
+    string? AuthorityStatus,
+    string? Comment
 );
 
 public sealed record VehicleAuthorizationPrintSnapshot(
@@ -559,6 +574,14 @@ public interface IContractRepository
     Task<IEnumerable<Contract>> GetContractsByVehicleAsync(int vmfCode);
     Task<IEnumerable<Contract>> GetAllAsync();
     Task<ContractPage> GetPageAsync(ContractPageQuery query);
+    Task<ContractPage> GetActionRequiredPageAsync(
+        ContractActionRequiredQuery selector,
+        ContractPageQuery leftover
+    );
+    Task<ContractPage> GetBackdatingAuthorisationActionRequiredPageAsync(
+        ContractActionRequiredQuery selector,
+        ContractPageQuery leftover
+    );
     Task<IEnumerable<ContractVehicleLookup>> SearchVehiclesForContractsAsync(
         string searchTerm,
         IReadOnlyCollection<short>? allowedSiteCodes = null
@@ -626,6 +649,14 @@ public sealed record ContractPageQuery(
     int? VmfCode = null,
     IReadOnlyCollection<short>? AllowedSiteCodes = null,
     int? OwnerUserCode = null
+);
+
+public sealed record ContractActionRequiredQuery(
+    int Page = 1,
+    int PageSize = 24,
+    int? UserDeptCode = null,
+    int? UserSiteCode = null,
+    bool UserSiteContextOnly = false
 );
 
 public sealed record ContractPage(
@@ -807,6 +838,7 @@ public interface ITripRepository
     Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode, IReadOnlySet<short>? allowedSiteCodes = null);
     Task<IEnumerable<Trip>> GetTripsByDriverAsync(string driverId, IReadOnlySet<short>? allowedSiteCodes = null);
     Task<IEnumerable<Trip>> GetTripsByContractAsync(int contractCode, IReadOnlySet<short>? allowedSiteCodes = null);
+    Task<IReadOnlyList<TripAuthorityTripType>> GetTripTypesAsync();
     /// <summary>
     /// Checks for unexpired trip authorities using the archived
     /// NEW_DEV_VAL_OpenTripAuthority procedure when it is available.

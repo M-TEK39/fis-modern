@@ -22,10 +22,16 @@ export default function DriverManagementSelector({
   initialDepartmentCode,
   initialSiteCode,
 }: Readonly<DriverManagementSelectorProps>) {
-  const [departmentCode, setDepartmentCode] = useState(String(initialDepartmentCode ?? ""));
+  const [departmentCode] = useState(String(initialDepartmentCode ?? ""));
   const [siteCode, setSiteCode] = useState(String(initialSiteCode ?? ""));
   const availableSites = useMemo(
-    () => sites.filter((site) => !departmentCode || site.departmentCode === Number(departmentCode)),
+    () =>
+      !departmentCode
+        ? sites
+        : sites.filter(
+            (site) =>
+              site.departmentCode == null || site.departmentCode === Number(departmentCode),
+          ),
     [departmentCode, sites],
   );
   const selectedDepartment = Number(departmentCode);
@@ -44,10 +50,12 @@ export default function DriverManagementSelector({
     : "#";
 
   function changeDepartment(value: string) {
-    setDepartmentCode(value);
-    const nextDepartmentCode = Number(value);
-    const currentSite = sites.find((site) => site.code === Number(siteCode));
-    setSiteCode(currentSite?.departmentCode === nextDepartmentCode ? siteCode : "");
+    const params = new URLSearchParams();
+    if (value) {
+      params.set("departmentCode", value);
+    }
+    const query = params.toString();
+    window.location.assign(query ? `/drivers?${query}` : "/drivers");
   }
 
   return (

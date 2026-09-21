@@ -4,6 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Security.Claims;
 using FIS.Core.Application.Interfaces;
+using FIS.Core.Infrastructure.Repositories;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -81,16 +82,19 @@ public sealed class SiteDriversController : BaseApiController
 
     private readonly FisDbContext _context;
     private readonly ISiteRepository _siteRepository;
+    private readonly SiteDriverLookupOverlay _lookupOverlay;
     private readonly ILogger<SiteDriversController> _logger;
 
     public SiteDriversController(
         FisDbContext context,
         ISiteRepository siteRepository,
+        SiteDriverLookupOverlay lookupOverlay,
         ILogger<SiteDriversController> logger
     )
     {
         _context = context;
         _siteRepository = siteRepository;
+        _lookupOverlay = lookupOverlay;
         _logger = logger;
     }
 
@@ -288,12 +292,38 @@ public sealed class SiteDriversController : BaseApiController
 
         try
         {
-            var driver = await WithConnectionAsync(async connection =>
+            var overlayRows = await _lookupOverlay.ReadSingleSiteDriverRowsAsync(id);
+            DriverDto? leftover = null;
+            if (overlayRows is null || overlayRows.Count > 0)
             {
-                var schema = await ReadTableSchemaAsync(connection, DriversTable);
-                EnsureDriverTable(schema);
-                return await ReadDriverByIdAsync(connection, schema, id);
-            });
+                try
+                {
+                    leftover = await WithConnectionAsync(async connection =>
+                    {
+                        var schema = await ReadTableSchemaAsync(connection, DriversTable);
+                        EnsureDriverTable(schema);
+                        return await ReadDriverByIdAsync(connection, schema, id);
+                    });
+                }
+                catch (Exception ex) when (overlayRows is not null)
+                {
+                    _logger.LogWarning(ex, "Leftover site driver {SiteDriverCode} could not be hydrated", id);
+                }
+            }
+
+            DriverDto? driver;
+            if (overlayRows is null)
+            {
+                driver = leftover;
+            }
+            else if (overlayRows.Count == 0)
+            {
+                driver = null;
+            }
+            else
+            {
+                driver = leftover ?? MapDriverFromOverlay(overlayRows[0]);
+            }
 
             if (driver is not null && !await IsSiteAllowedAsync(driver.SiteCode))
                 return Forbid();
@@ -316,51 +346,72 @@ public sealed class SiteDriversController : BaseApiController
 
         try
         {
-            var types = await WithConnectionAsync(async connection =>
+            var overlayRows = await _lookupOverlay.ReadLicenceTypeRowsAsync();
+            var leftover = await QueryLeftoverLicenceTypesAsync();
+            if (overlayRows is not null)
             {
-                var schema = await ReadTableSchemaAsync(connection, LicenceTypesTable);
-                if (
-                    !schema.Has("driver_licence_type_id")
-                    || !schema.Has("driver_licence_type_code")
-                    || !schema.Has("driver_licence_type_description")
-                )
+                var overlaid = OverlayLicenceTypes(overlayRows, leftover);
+                if (overlaid is not null)
                 {
-                    return new List<SiteDriverLicenceTypeDto>();
+                    return Ok(overlaid);
                 }
+            }
 
-                var activePredicate = schema.Has("is_deleted")
-                    ? "COALESCE([is_deleted], 0) = 0"
-                    : "1 = 1";
-                await using var command = connection.CreateCommand();
-                command.CommandText =
-                    $"SELECT [driver_licence_type_id] AS [Id], [driver_licence_type_code] AS [Code], [driver_licence_type_description] AS [Description] FROM [dbo].[{LicenceTypesTable}] WHERE {activePredicate} ORDER BY [driver_licence_type_description], [driver_licence_type_id]";
-
-                var result = new List<SiteDriverLicenceTypeDto>();
-                await using var reader = await command.ExecuteReaderAsync();
-                while (await reader.ReadAsync())
-                {
-                    result.Add(
-                        new SiteDriverLicenceTypeDto
-                        {
-                            Id = ReadInt(reader, "Id") ?? 0,
-                            Code = ReadString(reader, "Code"),
-                            Description = ReadString(reader, "Description"),
-                        }
-                    );
-                }
-
-                return result.Where(item => item.Id > 0).ToList();
-            });
-
-            return Ok(types);
+            return Ok(leftover);
         }
         catch (Exception ex)
         {
+            if (IsLegacySelectorContractException(ex))
+            {
+                return HandleFailure(ex, "retrieving site-driver licence types");
+            }
+
             _logger.LogWarning(
                 ex,
                 "Unable to retrieve site-driver licence types; returning an empty lookup"
             );
             return Ok(Array.Empty<SiteDriverLicenceTypeDto>());
+        }
+    }
+
+    [HttpGet("sites")]
+    public async Task<ActionResult<IEnumerable<DriverManagementSiteLookupDto>>> GetSitesForEdit(
+        [FromQuery] int departmentId
+    )
+    {
+        if (!HasDriverWorkflowReadRole())
+            return Forbid();
+
+        if (departmentId <= 0)
+        {
+            return BadRequest(new { message = "departmentId is required." });
+        }
+
+        try
+        {
+            var overlayRows = await _lookupOverlay.ReadSitesForEditRowsAsync(departmentId);
+            var leftoverAll = (await _siteRepository.GetActiveSitesAsync())
+                .Select(MapSiteLookup)
+                .Where(site => site.SiteCode > 0)
+                .ToList();
+            var leftover = leftoverAll
+                .Where(site => site.DepartmentCode == departmentId)
+                .ToList();
+            var allowedSites = await ResolveAllowedSiteCodesAsync();
+            if (overlayRows is not null)
+            {
+                var overlaid = OverlaySitesForEdit(overlayRows, leftoverAll);
+                if (overlaid is not null)
+                {
+                    return Ok(FilterAllowedSites(overlaid, allowedSites));
+                }
+            }
+
+            return Ok(FilterAllowedSites(leftover, allowedSites));
+        }
+        catch (Exception ex)
+        {
+            return HandleFailure(ex, "retrieving sites for driver maintenance");
         }
     }
 
@@ -1485,12 +1536,296 @@ public sealed class SiteDriversController : BaseApiController
         return value is not DBNull && Convert.ToBoolean(value);
     }
 
+    private async Task<List<SiteDriverLicenceTypeDto>> QueryLeftoverLicenceTypesAsync()
+    {
+        try
+        {
+            return await WithConnectionAsync(async connection =>
+            {
+                var schema = await ReadTableSchemaAsync(connection, LicenceTypesTable);
+                if (
+                    !schema.Has("driver_licence_type_id")
+                    || !schema.Has("driver_licence_type_code")
+                    || !schema.Has("driver_licence_type_description")
+                )
+                {
+                    return new List<SiteDriverLicenceTypeDto>();
+                }
+
+                var activePredicate = schema.Has("is_deleted")
+                    ? "COALESCE([is_deleted], 0) = 0"
+                    : "1 = 1";
+                await using var command = connection.CreateCommand();
+                command.CommandText =
+                    $"SELECT [driver_licence_type_id] AS [Id], [driver_licence_type_code] AS [Code], [driver_licence_type_description] AS [Description] FROM [dbo].[{LicenceTypesTable}] WHERE {activePredicate} ORDER BY [driver_licence_type_description], [driver_licence_type_id]";
+
+                var result = new List<SiteDriverLicenceTypeDto>();
+                await using var reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    result.Add(
+                        new SiteDriverLicenceTypeDto
+                        {
+                            Id = ReadInt(reader, "Id") ?? 0,
+                            Code = ReadString(reader, "Code"),
+                            Description = ReadString(reader, "Description"),
+                        }
+                    );
+                }
+
+                return result.Where(item => item.Id > 0).ToList();
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Leftover driver licence types could not be hydrated");
+            return [];
+        }
+    }
+
+    private static List<SiteDriverLicenceTypeDto>? OverlayLicenceTypes(
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> overlayRows,
+        IReadOnlyList<SiteDriverLicenceTypeDto> leftover
+    )
+    {
+        if (overlayRows.Count == 0)
+        {
+            return [];
+        }
+
+        var leftoverById = leftover
+            .Where(item => item.Id > 0)
+            .GroupBy(item => item.Id)
+            .ToDictionary(group => group.Key, group => group.First());
+        var leftoverByCode = leftover
+            .Where(item => !string.IsNullOrWhiteSpace(item.Code))
+            .GroupBy(item => item.Code!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        var mapped = new List<SiteDriverLicenceTypeDto>();
+        var seen = new HashSet<int>();
+        foreach (var row in overlayRows)
+        {
+            var id = SiteDriverLookupOverlay.ReadInt32(
+                row,
+                "DriverLicenceTypeID",
+                "driver_licence_type_id",
+                "Id"
+            );
+            var code = SiteDriverLookupOverlay.ReadString(
+                row,
+                "driver_licence_type_code",
+                "Code"
+            );
+            leftoverById.TryGetValue(id ?? 0, out var leftoverByKey);
+            if (
+                leftoverByKey is null
+                && !string.IsNullOrWhiteSpace(code)
+                && leftoverByCode.TryGetValue(code, out var leftoverMatch)
+            )
+            {
+                leftoverByKey = leftoverMatch;
+                id = leftoverMatch.Id;
+            }
+
+            if (id is null or <= 0 || !seen.Add(id.Value))
+            {
+                continue;
+            }
+
+            var description = SiteDriverLookupOverlay.ReadString(
+                row,
+                "FullDescription",
+                "driver_licence_type_description",
+                "Description"
+            );
+            mapped.Add(
+                leftoverByKey is null
+                    ? new SiteDriverLicenceTypeDto
+                    {
+                        Id = id.Value,
+                        Code = code,
+                        Description = description,
+                    }
+                    : new SiteDriverLicenceTypeDto
+                    {
+                        Id = leftoverByKey.Id,
+                        Code = leftoverByKey.Code ?? code,
+                        Description = description ?? leftoverByKey.Description,
+                    }
+            );
+        }
+
+        return mapped.Count == 0 ? null : mapped;
+    }
+
+    private static List<DriverManagementSiteLookupDto>? OverlaySitesForEdit(
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> overlayRows,
+        IReadOnlyList<DriverManagementSiteLookupDto> leftover
+    )
+    {
+        if (overlayRows.Count == 0)
+        {
+            return [];
+        }
+
+        var leftoverByCode = leftover
+            .Where(site => site.SiteCode > 0)
+            .GroupBy(site => site.SiteCode)
+            .ToDictionary(group => group.Key, group => group.First());
+        var mapped = new List<DriverManagementSiteLookupDto>();
+        var seen = new HashSet<int>();
+        foreach (var row in overlayRows)
+        {
+            var siteCode = SiteDriverLookupOverlay.ReadInt32(
+                row,
+                "Site_code",
+                "SiteCode",
+                "site_code"
+            );
+            if (siteCode is null or <= 0 || !seen.Add(siteCode.Value))
+            {
+                continue;
+            }
+
+            leftoverByCode.TryGetValue(siteCode.Value, out var leftoverSite);
+            var description = SiteDriverLookupOverlay.ReadString(row, "Description", "description");
+            var departmentCode = SiteDriverLookupOverlay.ReadInt32(
+                row,
+                "Depatrment_code",
+                "DepartmentCode",
+                "department_code"
+            );
+            mapped.Add(
+                leftoverSite is null
+                    ? new DriverManagementSiteLookupDto
+                    {
+                        SiteCode = siteCode.Value,
+                        DepartmentCode = departmentCode,
+                        Description = description,
+                    }
+                    : leftoverSite
+            );
+        }
+
+        return mapped.Count == 0 ? null : mapped;
+    }
+
+    private static IReadOnlyList<DriverManagementSiteLookupDto> FilterAllowedSites(
+        IReadOnlyList<DriverManagementSiteLookupDto> sites,
+        IReadOnlySet<int>? allowedSites
+    )
+    {
+        return allowedSites is null
+            ? sites
+            : sites.Where(site => allowedSites.Contains(site.SiteCode)).ToList();
+    }
+
+    private static DriverManagementSiteLookupDto MapSiteLookup(FIS.Core.Domain.Entities.Site site)
+    {
+        return new DriverManagementSiteLookupDto
+        {
+            SiteCode = site.Site_code,
+            DepartmentCode = site.Depatrment_code,
+            Description = site.description,
+        };
+    }
+
+    private static DriverDto? MapDriverFromOverlay(IReadOnlyDictionary<string, object?> row)
+    {
+        var siteDriverCode = SiteDriverLookupOverlay.ReadInt32(
+            row,
+            "SiteDriverCode",
+            "site_driver_code"
+        );
+        if (siteDriverCode is null or <= 0)
+        {
+            return null;
+        }
+
+        return new DriverDto
+        {
+            SiteDriverCode = siteDriverCode.Value,
+            SiteCode = SiteDriverLookupOverlay.ReadInt32(row, "SiteCode", "site_code") ?? 0,
+            DriverLicenceTypeId =
+                SiteDriverLookupOverlay.ReadInt32(
+                    row,
+                    "DriverLicenceTypeID",
+                    "driver_licence_type_id"
+                ) ?? 0,
+            DriverSurname = SiteDriverLookupOverlay.ReadString(row, "Surname", "driver_surname"),
+            DriverFirstname = SiteDriverLookupOverlay.ReadString(
+                row,
+                "FirstName",
+                "driver_firstname"
+            ),
+            DriverSAId = SiteDriverLookupOverlay.ReadString(row, "SAIDNumber", "driver_SA_id"),
+            DriverPassportNumber = SiteDriverLookupOverlay.ReadString(
+                row,
+                "PassportNumber",
+                "driver_passportnumber"
+            ),
+            DriverPersonalNumber = SiteDriverLookupOverlay.ReadString(
+                row,
+                "PersalNumber",
+                "driver_persalnumber"
+            ),
+            DriverContractNumber = SiteDriverLookupOverlay.ReadString(
+                row,
+                "DriverContractNumber",
+                "driver_contractnumber"
+            ),
+            DriverLicenceNumber = SiteDriverLookupOverlay.ReadString(
+                row,
+                "DriverLicenceNumber",
+                "driver_licence_number"
+            ),
+            DriverLicenceIssueDate =
+                SiteDriverLookupOverlay.ReadDateTime(
+                    row,
+                    "DriverLicenceIssueDate",
+                    "driver_licence_issuedate"
+                ) ?? default,
+            DriverLicenceLastVerifiedDate =
+                SiteDriverLookupOverlay.ReadDateTime(
+                    row,
+                    "DriverLicenceLastVerifiedDate",
+                    "driver_licence_lastVerifiedDate"
+                ) ?? default,
+            DriverHasPDP =
+                SiteDriverLookupOverlay.ReadBool(row, "HasPDP", "driver_hasPDP") ?? false,
+            DriverPDPExpiryDate = SiteDriverLookupOverlay.ReadDateTime(
+                row,
+                "PDPExpiryDate",
+                "driver_PDP_ExpiryDate"
+            ),
+            DriverLicenceExpiryDate = SiteDriverLookupOverlay.ReadDateTime(
+                row,
+                "LicenceExpiryDate",
+                "driver_licence_ExpiryDate"
+            ),
+            DriverActive = SiteDriverLookupOverlay.ReadBool(row, "Active", "driver_active") ?? true,
+        };
+    }
+
+    private static bool IsLegacySelectorContractException(Exception ex)
+    {
+        return ex is LegacySiteDriverProcedureContractException
+            || (
+                ex is InvalidOperationException
+                && ex.Message.Contains(
+                    "does not match its verified parameter contract",
+                    StringComparison.Ordinal
+                )
+            );
+    }
+
     private ActionResult HandleFailure(Exception ex, string operation)
     {
         _logger.LogError(ex, "Error {Operation}", operation);
-        if (ex is LegacySiteDriverProcedureContractException contractException)
+        if (IsLegacySelectorContractException(ex))
         {
-            return StatusCode(503, new { message = contractException.Message });
+            return StatusCode(503, new { message = ex.Message });
         }
         return ex is DbException
             ? StatusCode(503, new { message = "The site-driver database is unavailable." })
@@ -1523,6 +1858,13 @@ public sealed class SiteDriverLicenceTypeDto
 {
     public int Id { get; set; }
     public string? Code { get; set; }
+    public string? Description { get; set; }
+}
+
+public sealed class DriverManagementSiteLookupDto
+{
+    public int SiteCode { get; set; }
+    public int? DepartmentCode { get; set; }
     public string? Description { get; set; }
 }
 

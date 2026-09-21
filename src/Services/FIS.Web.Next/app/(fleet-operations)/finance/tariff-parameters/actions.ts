@@ -53,7 +53,7 @@ export async function updateTariffParametersAction(formData: FormData) {
 
   const year = text(formData, "year");
   const operation = text(formData, "operation").toLowerCase();
-  if (!/^\d{4}$/.test(year) || operation !== "approve")
+  if (!/^\d+$/.test(year) || Number(year) <= 0 || operation !== "approve")
     redirect(resultPath(year, "error", "The tariff parameter operation is invalid."));
 
   let result: unknown;

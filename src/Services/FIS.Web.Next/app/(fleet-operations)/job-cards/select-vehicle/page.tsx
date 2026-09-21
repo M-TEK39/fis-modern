@@ -8,7 +8,7 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_page";
 import { getJobCardSession, queryValue } from "@/app/(fleet-operations)/job-cards/_page-utils";
 import { hasJobCardAccess, hasRole } from "@/app/(fleet-operations)/job-cards/_utils";
-import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
+import { getJobCardCaptureVehicles, JobCardApiError } from "@/lib/api/fleet-operations/api-job-cards";
 
 export default function SelectJobCardVehiclePage({
   searchParams,
@@ -33,7 +33,7 @@ async function SelectJobCardVehicleContent({
   const query = await searchParams;
   const search = queryValue(query.search).trim();
   try {
-    const vehicles = await getVehicleOptions();
+    const vehicles = await getJobCardCaptureVehicles();
     const normalized = search.toLocaleLowerCase();
     const filtered = normalized
       ? vehicles.filter((vehicle) =>
@@ -101,7 +101,7 @@ async function SelectJobCardVehicleContent({
     );
   } catch (error) {
     const message =
-      error instanceof VehicleApiError && error.reason === "unavailable"
+      error instanceof JobCardApiError && error.reason === "unavailable"
         ? "The vehicle service is temporarily unavailable. Please try again."
         : "Vehicles could not be loaded.";
     return (

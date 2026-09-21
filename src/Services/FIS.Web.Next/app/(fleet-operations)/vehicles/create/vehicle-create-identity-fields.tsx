@@ -1,12 +1,13 @@
 import type {
+  VehicleCaptureRecall,
   VehicleCreateReferenceData,
-  VehicleSearchResult,
 } from "@/lib/api/vehicles/api-vehicle-create";
 
 import { VehicleCreateField } from "./vehicle-create-form-ui";
 
 export function VehicleCreateIdentityFields({
   colourSelection,
+  defaults,
   referenceData,
   selectedColour,
   selectedMakeCode,
@@ -17,6 +18,7 @@ export function VehicleCreateIdentityFields({
   onModelChange,
 }: Readonly<{
   colourSelection: string;
+  defaults?: VehicleCaptureRecall;
   referenceData: VehicleCreateReferenceData;
   selectedColour: string;
   selectedMakeCode: number;
@@ -48,6 +50,7 @@ export function VehicleCreateIdentityFields({
             pattern="G[A-Za-z]{2}[0-9]{3}G"
             title="Use the legacy GG format, for example GVN001G."
             maxLength={20}
+            defaultValue={defaults?.fleetNumber ?? undefined}
             required
           />
         </VehicleCreateField>
@@ -58,10 +61,16 @@ export function VehicleCreateIdentityFields({
             type="text"
             autoComplete="off"
             maxLength={20}
+            defaultValue={defaults?.replacedGgNumber ?? undefined}
           />
         </VehicleCreateField>
         <VehicleCreateField id="locationCode" label="Location" required>
-          <select id="locationCode" name="locationCode" defaultValue="" required>
+          <select
+            id="locationCode"
+            name="locationCode"
+            defaultValue={defaults?.locationCode?.toString() ?? ""}
+            required
+          >
             <option value="">Select location...</option>
             {referenceData.locations.map((location) => (
               <option key={location.code} value={location.code}>
@@ -71,7 +80,14 @@ export function VehicleCreateIdentityFields({
           </select>
         </VehicleCreateField>
         <VehicleCreateField id="gpNumber" label="GP number">
-          <input id="gpNumber" name="gpNumber" type="text" autoComplete="off" maxLength={9} />
+          <input
+            id="gpNumber"
+            name="gpNumber"
+            type="text"
+            autoComplete="off"
+            maxLength={9}
+            defaultValue={defaults?.gpNumber ?? undefined}
+          />
         </VehicleCreateField>
         <VehicleCreateField id="yearManufactured" label="Year manufactured" required>
           <input
@@ -80,6 +96,7 @@ export function VehicleCreateIdentityFields({
             type="number"
             min="1900"
             max="9999"
+            defaultValue={defaults?.yearManufactured ?? undefined}
             required
           />
         </VehicleCreateField>
@@ -161,6 +178,7 @@ export function VehicleCreateIdentityFields({
             type="text"
             autoComplete="off"
             maxLength={60}
+            defaultValue={defaults?.engineNumber ?? undefined}
             required
           />
         </VehicleCreateField>
@@ -171,11 +189,18 @@ export function VehicleCreateIdentityFields({
             type="text"
             autoComplete="off"
             maxLength={60}
+            defaultValue={defaults?.chassisNumber ?? undefined}
             required
           />
         </VehicleCreateField>
         <VehicleCreateField id="takeOnDate" label="Take-on date" required>
-          <input id="takeOnDate" name="takeOnDate" type="date" defaultValue={today} required />
+          <input
+            id="takeOnDate"
+            name="takeOnDate"
+            type="date"
+            defaultValue={defaults?.takeOnDate ?? today}
+            required
+          />
         </VehicleCreateField>
         <VehicleCreateField id="takeOnOdo" label="Take-on odometer (KM)" required>
           <input
@@ -185,11 +210,17 @@ export function VehicleCreateIdentityFields({
             min="0"
             max="999999"
             step="1"
+            defaultValue={defaults?.takeOnOdo ?? undefined}
             required
           />
         </VehicleCreateField>
         <VehicleCreateField id="typeCode" label="Hire type" required>
-          <select id="typeCode" name="typeCode" defaultValue="" required>
+          <select
+            id="typeCode"
+            name="typeCode"
+            defaultValue={defaults?.typeCode?.toString() ?? ""}
+            required
+          >
             <option value="">Select hire type...</option>
             {referenceData.types.map((type) => (
               <option key={type.code} value={type.code}>
@@ -199,7 +230,12 @@ export function VehicleCreateIdentityFields({
           </select>
         </VehicleCreateField>
         <VehicleCreateField id="sourceCode" label="Hired from" required>
-          <select id="sourceCode" name="sourceCode" defaultValue="" required>
+          <select
+            id="sourceCode"
+            name="sourceCode"
+            defaultValue={defaults?.vsCode?.toString() ?? ""}
+            required
+          >
             <option value="">Select source...</option>
             {referenceData.sources.map((source) => (
               <option key={source.code} value={source.code}>
@@ -209,7 +245,13 @@ export function VehicleCreateIdentityFields({
           </select>
         </VehicleCreateField>
         <VehicleCreateField id="purchaseDate" label="Purchase date" required>
-          <input id="purchaseDate" name="purchaseDate" type="date" defaultValue={today} required />
+          <input
+            id="purchaseDate"
+            name="purchaseDate"
+            type="date"
+            defaultValue={defaults?.purchaseDate ?? today}
+            required
+          />
         </VehicleCreateField>
         <VehicleCreateField id="purchaseAmount" label="Purchase amount (R)" required>
           <input
@@ -219,6 +261,7 @@ export function VehicleCreateIdentityFields({
             min="5000"
             max="9999999"
             step="0.01"
+            defaultValue={defaults?.purchaseAmount ?? undefined}
             required
           />
         </VehicleCreateField>
@@ -229,6 +272,7 @@ export function VehicleCreateIdentityFields({
             type="text"
             autoComplete="organization"
             maxLength={60}
+            defaultValue={defaults?.purchaseFrom ?? undefined}
             required
           />
         </VehicleCreateField>
@@ -239,10 +283,16 @@ export function VehicleCreateIdentityFields({
             type="text"
             autoComplete="off"
             maxLength={60}
+            defaultValue={defaults?.invoiceNumber ?? undefined}
           />
         </VehicleCreateField>
         <VehicleCreateField id="siteCode" label="Site allocation" required>
-          <select id="siteCode" name="siteCode" defaultValue="" required>
+          <select
+            id="siteCode"
+            name="siteCode"
+            defaultValue={defaults?.siteCode?.toString() ?? ""}
+            required
+          >
             <option value="">Select site...</option>
             {referenceData.sites.map((site) => (
               <option key={site.code} value={site.code}>

@@ -132,6 +132,39 @@ public class TripAuthorityDetailsDto
     public IReadOnlyList<TripAuthorityDriverDto> Drivers { get; set; } = [];
     public IReadOnlyList<TripAuthorityPassengerDto> Passengers { get; set; } = [];
     public IReadOnlyList<TripAuthorityRouteDto> Routes { get; set; } = [];
+    public bool HasShowTripVehicleSelector { get; set; }
+    public TripAuthorityVehicleSnapshotDto? ShowTripVehicle { get; set; }
+    public string? ShowTripTypeName { get; set; }
+    public string? ShowTripIncidentTypeName { get; set; }
+    public string? ShowTripCapturedBy { get; set; }
+    public bool HasShowTripIncidentSelector { get; set; }
+    public IReadOnlyList<TripAuthorityIncidentTypeDto> IncidentTypes { get; set; } = [];
+}
+
+public sealed class TripAuthorityTripTypeDto
+{
+    public int Code { get; set; }
+    public string? Name { get; set; }
+}
+
+public sealed class TripAuthorityIncidentTypeDto
+{
+    public int Code { get; set; }
+    public string? Name { get; set; }
+}
+
+public sealed class TripAuthorityVehicleSnapshotDto
+{
+    public string? DepartmentName { get; set; }
+    public int? SiteCode { get; set; }
+    public string? SiteName { get; set; }
+    public int? ContractCode { get; set; }
+    public int? VmfCode { get; set; }
+    public string? FleetNumber { get; set; }
+    public string? Make { get; set; }
+    public string? Model { get; set; }
+    public string? RegistrationNumber { get; set; }
+    public int? StartOdometer { get; set; }
 }
 
 public class TripAuthorityDriverDto
@@ -238,6 +271,35 @@ public class TripController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving all trip authorities");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpGet("trip-types")]
+    public async Task<ActionResult<IEnumerable<TripAuthorityTripTypeDto>>> GetTripTypes()
+    {
+        try
+        {
+            var types = await _tripService.GetTripTypesAsync();
+            return Ok(
+                types.Select(item => new TripAuthorityTripTypeDto
+                {
+                    Code = item.Code,
+                    Name = item.Name,
+                })
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Trip types overlay could not be read");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new { message = ex.Message }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving trip types");
             return StatusCode(500, "Internal server error");
         }
     }
@@ -475,6 +537,34 @@ public class TripController : BaseApiController
                             EditedByUserCode = route.EditedByUserCode,
                         })
                         .ToArray(),
+                    HasShowTripVehicleSelector = details.HasShowTripVehicleSelector,
+                    ShowTripVehicle =
+                        details.ShowTripVehicle is null
+                            ? null
+                            : new TripAuthorityVehicleSnapshotDto
+                            {
+                                DepartmentName = details.ShowTripVehicle.DepartmentName,
+                                SiteCode = details.ShowTripVehicle.SiteCode,
+                                SiteName = details.ShowTripVehicle.SiteName,
+                                ContractCode = details.ShowTripVehicle.ContractCode,
+                                VmfCode = details.ShowTripVehicle.VmfCode,
+                                FleetNumber = details.ShowTripVehicle.FleetNumber,
+                                Make = details.ShowTripVehicle.Make,
+                                Model = details.ShowTripVehicle.Model,
+                                RegistrationNumber = details.ShowTripVehicle.RegistrationNumber,
+                                StartOdometer = details.ShowTripVehicle.StartOdometer,
+                            },
+                    ShowTripTypeName = details.ShowTripTypeName,
+                    ShowTripIncidentTypeName = details.ShowTripIncidentTypeName,
+                    ShowTripCapturedBy = details.ShowTripCapturedBy,
+                    HasShowTripIncidentSelector = details.HasShowTripIncidentSelector,
+                    IncidentTypes = (details.IncidentTypes ?? [])
+                        .Select(item => new TripAuthorityIncidentTypeDto
+                        {
+                            Code = item.Code,
+                            Name = item.Name,
+                        })
+                        .ToList(),
                 }
             );
         }

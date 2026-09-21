@@ -440,6 +440,57 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         return options;
     }
 
+    public async Task<IReadOnlyList<ThirdPartyDepartmentOption>?> GetRentalDepartmentsAsync(
+        CancellationToken cancellationToken = default
+    )
+    {
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_Third_party_departments",
+            [[]],
+            _ => null
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var departments = new List<ThirdPartyDepartmentOption>();
+        var seen = new HashSet<short>();
+        foreach (var row in rows)
+        {
+            var departmentCode = LegacySelectorProcedure.ReadInt32(
+                row,
+                "id",
+                "department_code",
+                "Department_Code"
+            );
+            if (
+                departmentCode is null
+                or <= 0
+                or > short.MaxValue
+                || !seen.Add((short)departmentCode.Value)
+            )
+            {
+                continue;
+            }
+
+            departments.Add(
+                new ThirdPartyDepartmentOption(
+                    (short)departmentCode.Value,
+                    LegacySelectorProcedure.ReadString(row, "Department", "description")
+                )
+            );
+        }
+
+        if (rows.Count > 0 && departments.Count == 0)
+        {
+            return null;
+        }
+
+        return departments;
+    }
+
     public async Task<IReadOnlyList<ThirdPartyProjectRecord>> GetProjectsAsync(
         CancellationToken cancellationToken = default
     ) => await QueryProjectsAsync(cancellationToken);
@@ -453,6 +504,36 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
 
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var requestedPage = Math.Max(1, query.Page);
+        if (query.DepartmentCode.HasValue)
+        {
+            var overlay = await OverlayProjectsByDepartmentAsync(
+                query.DepartmentCode.Value,
+                cancellationToken
+            );
+            if (overlay is not null)
+            {
+                var overlayTotal = overlay.Count;
+                if (overlayTotal == 0)
+                {
+                    return new ThirdPartyProjectPage(
+                        Array.Empty<ThirdPartyProjectRecord>(),
+                        1,
+                        pageSize,
+                        0
+                    );
+                }
+
+                var overlayPage = ClampPage(requestedPage, overlayTotal, pageSize);
+                var skip = CalculateSkip(overlayPage, pageSize);
+                return new ThirdPartyProjectPage(
+                    overlay.Skip((int)skip).Take(pageSize).ToList(),
+                    overlayPage,
+                    pageSize,
+                    overlayTotal
+                );
+            }
+        }
+
         var schema = await GetProjectSchemaOrNullAsync(cancellationToken);
         if (schema is null)
         {
@@ -498,12 +579,20 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
     public async Task<IReadOnlyList<ThirdPartyProjectRecord>> GetProjectsByDepartmentAsync(
         short departmentCode,
         CancellationToken cancellationToken = default
-    ) =>
-        await QueryProjectsAsync(
+    )
+    {
+        var overlay = await OverlayProjectsByDepartmentAsync(departmentCode, cancellationToken);
+        if (overlay is not null)
+        {
+            return overlay;
+        }
+
+        return await QueryProjectsAsync(
             cancellationToken,
             $"{ColumnForRequired(await GetProjectSchemaOrNullAsync(cancellationToken), "department_code", "Department_Code")} = @departmentCode",
             command => AddParameter(command, "@departmentCode", DbType.Int16, departmentCode)
         );
+    }
 
     public async Task<ThirdPartyProjectRecord?> GetProjectAsync(
         int projectId,
@@ -1154,6 +1243,83 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         configure?.Invoke(command);
         AddPagingParameters(command, skip, pageSize);
         return await ReadSuppliersAsync(command, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<ThirdPartyProjectRecord>?> OverlayProjectsByDepartmentAsync(
+        short departmentCode,
+        CancellationToken cancellationToken
+    )
+    {
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_Third_party_projects",
+            [["@id"]],
+            _ => command => AddParameter(command, "@id", DbType.Int32, departmentCode)
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var schema = await GetProjectSchemaOrNullAsync(cancellationToken);
+        var leftover =
+            schema is null
+                ? new List<ThirdPartyProjectRecord>()
+                : await QueryProjectsAsync(
+                    cancellationToken,
+                    $"{Column(schema, "department_code", "Department_Code")} = @departmentCode",
+                    command =>
+                        AddParameter(command, "@departmentCode", DbType.Int16, departmentCode)
+                );
+        var leftoverById = leftover
+            .Where(project => project.project_id > 0)
+            .GroupBy(project => project.project_id)
+            .ToDictionary(group => group.Key, group => group.First());
+        var projects = new List<ThirdPartyProjectRecord>();
+        var seen = new HashSet<int>();
+        foreach (var row in rows)
+        {
+            var projectId = LegacySelectorProcedure.ReadInt32(
+                row,
+                "id",
+                "project_id",
+                "Project_id"
+            );
+            if (projectId is null or <= 0 || !seen.Add(projectId.Value))
+            {
+                continue;
+            }
+
+            leftoverById.TryGetValue(projectId.Value, out var leftoverProject);
+            projects.Add(
+                new ThirdPartyProjectRecord(
+                    projectId.Value,
+                    leftoverProject?.department_code ?? departmentCode,
+                    leftoverProject?.site_code,
+                    LegacySelectorProcedure.ReadString(row, "Project_Description", "description")
+                        ?? leftoverProject?.description,
+                    leftoverProject?.start_date,
+                    leftoverProject?.end_date,
+                    leftoverProject?.responsible_person,
+                    leftoverProject?.rp_physical_address,
+                    leftoverProject?.rp_postal_address,
+                    leftoverProject?.rp_tel,
+                    leftoverProject?.rp_fax,
+                    leftoverProject?.rp_email,
+                    leftoverProject?.rp_cell,
+                    leftoverProject?.notes,
+                    leftoverProject?.order_reference,
+                    leftoverProject?.class_configuration
+                )
+            );
+        }
+
+        if (rows.Count > 0 && projects.Count == 0)
+        {
+            return null;
+        }
+
+        return projects;
     }
 
     private async Task<List<ThirdPartyProjectRecord>> QueryProjectsAsync(

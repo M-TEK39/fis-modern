@@ -44,8 +44,20 @@ public class LocationRepository : ILocationRepository
         return locations.FirstOrDefault();
     }
 
-    public Task<IEnumerable<Location>> GetAllLocationsAsync() =>
-        QueryLegacyLocationsAsEnumerableAsync();
+    public async Task<IEnumerable<Location>> GetAllLocationsAsync()
+    {
+        var leftover = await QueryLegacyLocationsAsync();
+        var keys = await LegacySelectorProcedure.TryReadOrderedKeysAsync(
+            _context,
+            "DEV_SEL_locations",
+            [],
+            null,
+            "location_code"
+        );
+        return keys is null
+            ? leftover
+            : LegacySelectorProcedure.OrderByKeys(leftover, keys, location => location.LocationId);
+    }
 
     public async Task<LocationPage> GetPageAsync(int page = 1, int pageSize = 24)
     {

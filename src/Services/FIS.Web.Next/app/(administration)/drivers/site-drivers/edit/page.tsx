@@ -368,7 +368,7 @@ async function renderSiteDriverEdit({ searchParams }: Readonly<{ searchParams: S
   try {
     const [departments, sites, licenceTypes, driver] = await Promise.all([
       getDriverManagementDepartments(),
-      getDriverManagementSites(),
+      getDriverManagementSites(departmentCode),
       getDriverManagementLicenceTypes(),
       siteDriverCode ? getDriverManagementSiteDriver(siteDriverCode) : Promise.resolve(null),
     ]);

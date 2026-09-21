@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
 import {
   createVehicleAction,
@@ -20,6 +20,7 @@ import { VehicleCreateSubmitButton } from "./vehicle-create-form-ui";
 
 const INITIAL_ACTION_STATE: CreateVehicleActionState = { status: "idle" };
 const INITIAL_SEARCH_STATE: SearchVehicleActionState = { status: "idle", results: [] };
+const COLOURS = ["Black", "Blue", "Green", "Red", "Yellow", "White"];
 
 type VehicleCreateClientProps = {
   referenceData: VehicleCreateReferenceData;
@@ -48,11 +49,13 @@ function SearchResults({ results }: Readonly<{ results: VehicleSearchResult[] }>
   );
 }
 
-function QuickSearch() {
-  const [state, formAction] = useActionState<SearchVehicleActionState, FormData>(
-    searchVehicleAction,
-    INITIAL_SEARCH_STATE,
-  );
+function QuickSearch({
+  state,
+  formAction,
+}: Readonly<{
+  state: SearchVehicleActionState;
+  formAction: (payload: FormData) => void;
+}>) {
   return (
     <section className="vehicle-form-section" aria-labelledby="vehicle-search-title">
       <div className="vehicle-form-section-header">
@@ -76,12 +79,7 @@ function QuickSearch() {
           <button className="button button-secondary" type="submit" name="intent" value="reset">
             Reset search
           </button>
-          <button
-            className="button button-secondary"
-            type="button"
-            disabled
-            title="Pending capture recall is not supported by the current API"
-          >
+          <button className="button button-secondary" type="submit" name="intent" value="recall">
             Recall pending capture
           </button>
           <button className="button button-primary" type="submit" name="intent" value="search">
@@ -108,11 +106,34 @@ export default function VehicleCreateClient({ referenceData, today }: VehicleCre
     createVehicleAction,
     INITIAL_ACTION_STATE,
   );
+  const [searchState, searchAction] = useActionState<SearchVehicleActionState, FormData>(
+    searchVehicleAction,
+    INITIAL_SEARCH_STATE,
+  );
   const formRef = useRef<HTMLFormElement>(null);
   const [selectedMakeCode, setSelectedMakeCode] = useState(0);
   const [selectedModelCode, setSelectedModelCode] = useState(0);
   const [colourSelection, setColourSelection] = useState("");
   const [selectedColour, setSelectedColour] = useState("");
+  const recall = searchState.recall;
+
+  useEffect(() => {
+    if (!recall) {
+      return;
+    }
+
+    const model = referenceData.models.find((item) => item.code === recall.modelCode);
+    setSelectedMakeCode(model?.makeCode ?? 0);
+    setSelectedModelCode(recall.modelCode ?? 0);
+    const colour = recall.colour?.trim() ?? "";
+    if (colour && COLOURS.includes(colour)) {
+      setColourSelection(colour);
+      setSelectedColour(colour);
+    } else if (colour) {
+      setColourSelection("Other");
+      setSelectedColour(colour);
+    }
+  }, [recall, referenceData.models]);
 
   function clearForm() {
     formRef.current?.reset();
@@ -124,8 +145,8 @@ export default function VehicleCreateClient({ referenceData, today }: VehicleCre
 
   return (
     <div className="vehicle-create-form">
-      <QuickSearch />
-      <form ref={formRef} action={formAction}>
+      <QuickSearch state={searchState} formAction={searchAction} />
+      <form ref={formRef} action={formAction} key={recall?.chassisNumber ?? "new-capture"}>
         {state.status === "error" && state.message ? (
           <div className="notice notice-error" role="alert">
             <span aria-hidden="true">!</span>
@@ -142,6 +163,7 @@ export default function VehicleCreateClient({ referenceData, today }: VehicleCre
         </div>
         <VehicleCreateIdentityFields
           colourSelection={colourSelection}
+          defaults={recall}
           referenceData={referenceData}
           selectedColour={selectedColour}
           selectedMakeCode={selectedMakeCode}
@@ -157,7 +179,7 @@ export default function VehicleCreateClient({ referenceData, today }: VehicleCre
           }}
           onModelChange={setSelectedModelCode}
         />
-        <VehicleCreateAdditionalFields referenceData={referenceData} />
+        <VehicleCreateAdditionalFields defaults={recall} referenceData={referenceData} />
         <div className="vehicle-create-actions">
           <Link className="button button-secondary" href="/vehicles">
             Cancel

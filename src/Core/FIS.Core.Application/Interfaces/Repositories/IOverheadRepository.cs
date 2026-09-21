@@ -62,4 +62,20 @@ public interface IOverheadRepository
     /// </summary>
     /// <param name="tariffParameterId">Tariff parameter identifier</param>
     Task DeleteByTariffParameterAsync(int tariffParameterId);
+
+    /// <summary>
+    /// Archive Fiscal_TariffParameter_Management Fixed/Kilo grids use
+    /// fin.DEV_SEL_Overhead_ByTariffParameterID @TariffParameterID.
+    /// Null means the procedure is absent; empty means it returned no row.
+    /// </summary>
+    Task<IReadOnlyList<TariffOverheadSnapshot>?> GetSelectorAsync(int tariffParameterId);
 }
+
+public sealed record TariffOverheadSnapshot(
+    int OverheadId,
+    byte OverheadTypeId,
+    string? Description,
+    decimal? PreviousAmount,
+    decimal Amount,
+    string? Note
+);

@@ -302,32 +302,45 @@ export function getFinanceYears() {
   );
 }
 
-function fallbackFinanceYears(): FinanceOption[] {
-  const currentYear = new Date().getUTCFullYear();
-  return Array.from({ length: 7 }, (_, index) => currentYear - 5 + index).map((year) => ({
-    value: String(year),
-    label: String(year),
-  }));
-}
-
-export async function getFinanceTariffYears() {
-  try {
-    const options = collection(await requestJson("api/finance/tariff-parameters/years"))
+export async function getFinanceTariffYears(): Promise<{
+  overlay: boolean;
+  options: FinanceOption[];
+}> {
+  const payload = await requestJson("api/finance/tariff-parameters/years");
+  if (isRecord(payload) && payload.overlay === true) {
+    const options = collection(getValue(payload, "items"))
       .map((item) => {
-        if (typeof item === "number" && Number.isSafeInteger(item))
-          return { value: String(item), label: String(item) };
-        if (typeof item === "string" && /^\d{4}$/.test(item.trim()))
-          return { value: item.trim(), label: item.trim() };
         if (!isRecord(item)) return null;
-        const raw = getValue(item, "value", "Value", "code", "Code", "year", "Year");
-        const year = typeof raw === "number" ? raw : Number(raw);
-        return Number.isSafeInteger(year) ? { value: String(year), label: String(year) } : null;
+        const id = asNumber(getValue(item, "tariffParameterId", "TariffParameterID"));
+        if (id === null || id <= 0) return null;
+        const rawLabel = getValue(item, "dropdownText", "DropdownText");
+        const label =
+          asString(rawLabel) ??
+          (typeof rawLabel === "number" || typeof rawLabel === "bigint"
+            ? String(rawLabel)
+            : String(id));
+        return { value: String(id), label };
       })
       .filter((item): item is FinanceOption => item !== null);
-    return options.length > 0 ? options : fallbackFinanceYears();
-  } catch {
-    return fallbackFinanceYears();
+    return { overlay: true, options };
   }
+
+  const leftoverYears = isRecord(payload)
+    ? collection(getValue(payload, "years", "Years"))
+    : collection(payload);
+  const options = leftoverYears
+    .map((item) => {
+      if (typeof item === "number" && Number.isSafeInteger(item))
+        return { value: String(item), label: String(item) };
+      if (typeof item === "string" && /^\d+$/.test(item.trim()))
+        return { value: item.trim(), label: item.trim() };
+      if (!isRecord(item)) return null;
+      const raw = getValue(item, "value", "Value", "code", "Code", "year", "Year");
+      const year = typeof raw === "number" ? raw : Number(raw);
+      return Number.isSafeInteger(year) ? { value: String(year), label: String(year) } : null;
+    })
+    .filter((item): item is FinanceOption => item !== null);
+  return { overlay: false, options };
 }
 
 export type FinanceTariffParameters = {
@@ -337,22 +350,27 @@ export type FinanceTariffParameters = {
   effectiveDate: string | null;
   parameters: Array<{ parameterName: string; value: number | null; unit: string }>;
   fixedTariffs: Array<{
-    classCode: number | null;
-    classDescription: string;
+    overheadId: number | null;
+    overheadDescription: string;
+    previousAmount: number | null;
     amount: number | null;
-    unit: string;
-    effectiveDate: string | null;
+    note: string | null;
   }>;
   kiloTariffs: Array<{
-    classCode: number | null;
-    classDescription: string;
+    overheadId: number | null;
+    overheadDescription: string;
+    previousAmount: number | null;
     amount: number | null;
-    unit: string;
-    effectiveDate: string | null;
+    note: string | null;
   }>;
   maintenanceValues: Array<{
     classCode: number | null;
     classDescription: string;
+    classNumber: string | null;
+    assignedCount: number | null;
+    previousMonthsAge: number | null;
+    previousKilometerAge: number | null;
+    previousRandPerKilometer: number | null;
     monthsAge: number | null;
     kilometerAge: number | null;
     amount: number | null;
@@ -360,20 +378,26 @@ export type FinanceTariffParameters = {
   }>;
 };
 
-function mapTariffClassRow(item: unknown) {
+function mapTariffOverheadRow(item: unknown) {
   if (!isRecord(item)) return null;
   return {
-    classCode: asNumber(getValue(item, "classCode", "ClassCode")),
-    classDescription: asString(getValue(item, "classDescription", "ClassDescription")) ?? "",
-    amount: asNumber(getValue(item, "amount", "Amount")),
-    unit: asString(getValue(item, "unit", "Unit")) ?? "",
-    effectiveDate: asString(getValue(item, "effectiveDate", "EffectiveDate")),
+    overheadId: asNumber(getValue(item, "overheadId", "OverheadId", "OverheadID")),
+    overheadDescription:
+      asString(getValue(item, "overheadDescription", "OverheadDescription")) ?? "",
+    previousAmount: asNumber(getValue(item, "previousAmount", "PreviousAmount", "prev_OverheadAmount")),
+    amount: asNumber(getValue(item, "amount", "Amount", "OverheadAmount")),
+    note: asString(getValue(item, "note", "Note", "OverheadNote")),
   };
 }
 
-export async function getFinanceTariffParameters(year: number): Promise<FinanceTariffParameters> {
+export async function getFinanceTariffParameters(
+  year: number,
+  overlay = false,
+): Promise<FinanceTariffParameters> {
   const payload = await requestJson(
-    `api/finance/tariff-parameters/${encodeURIComponent(String(year))}`,
+    overlay
+      ? `api/finance/tariff-parameters/id/${encodeURIComponent(String(year))}`
+      : `api/finance/tariff-parameters/${encodeURIComponent(String(year))}`,
   );
   if (!isRecord(payload))
     throw new FinanceApiError(
@@ -381,7 +405,7 @@ export async function getFinanceTariffParameters(year: number): Promise<FinanceT
       "The FIS API returned invalid tariff parameters.",
     );
   const mapRows = (keys: string[]) =>
-    mapPresent(collection(getValue(payload, ...keys)), mapTariffClassRow);
+    mapPresent(collection(getValue(payload, ...keys)), mapTariffOverheadRow);
   const parameters = mapPresent(
     collection(getValue(payload, "parameters", "Parameters")),
     (item) => {
@@ -399,7 +423,16 @@ export async function getFinanceTariffParameters(year: number): Promise<FinanceT
       if (!isRecord(item)) return null;
       return {
         classCode: asNumber(getValue(item, "classCode", "ClassCode")),
-        classDescription: asString(getValue(item, "classDescription", "ClassDescription")) ?? "",
+        classDescription: asString(getValue(item, "classDescription", "ClassDescription", "class_description")) ?? "",
+        classNumber: asString(getValue(item, "classNumber", "ClassNumber", "class_number")),
+        assignedCount: asNumber(getValue(item, "assignedCount", "AssignedCount", "class_ActiveVehicleCount")),
+        previousMonthsAge: asNumber(getValue(item, "previousMonthsAge", "PreviousMonthsAge", "prev_months_age")),
+        previousKilometerAge: asNumber(
+          getValue(item, "previousKilometerAge", "PreviousKilometerAge", "prev_kilometer_age"),
+        ),
+        previousRandPerKilometer: asNumber(
+          getValue(item, "previousRandPerKilometer", "PreviousRandPerKilometer", "prev_RandPerKilometer"),
+        ),
         monthsAge: asNumber(getValue(item, "monthsAge", "MonthsAge")),
         kilometerAge: asNumber(getValue(item, "kilometerAge", "KilometerAge")),
         amount: asNumber(getValue(item, "amount", "Amount")),

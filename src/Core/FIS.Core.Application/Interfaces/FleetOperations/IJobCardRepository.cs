@@ -12,13 +12,43 @@ public interface IJobCardRepository
     Task<JobCard?> GetByVehicleAndExtraAsync(int vmfCode, short extraCode);
     Task<IEnumerable<JobCard>> GetAllAsync();
     Task<JobCardPage> GetPageAsync(JobCardPageQuery query);
+    Task<JobCardPage> GetAuthorizerPageAsync(JobCardPageQuery query);
     Task<JobCardPage> GetPriorityUnassignedPageAsync(PriorityUnassignedJobCardPageQuery query);
+    Task<JobCardPage> GetAssignedPriorityPageAsync(PriorityUnassignedJobCardPageQuery query);
+    Task<JobCardPage> GetReadyForClosingPageAsync(JobCardPageQuery query);
+    Task<JobCardPage> GetCancelationPageAsync(JobCardPageQuery query);
     Task<RepairCostReportPage> GetRepairCostReportPageAsync(RepairCostReportPageQuery query);
     Task<IEnumerable<JobCard>> GetByGGNumberAsync(string ggNumber);
     Task<IEnumerable<JobCard>> GetPriorityUnassignedAsync();
     Task<IEnumerable<JobCard>> GetAssignedPriorityAsync();
     Task<IEnumerable<JobCard>> GetByStatusAsync(int statusCode);
     Task<IEnumerable<JobCard>> GetByAuthorizerAsync(int authorizerUserId);
+    Task<IReadOnlyList<JobCardCaptureVehicle>?> GetVehiclesAvailableForCaptureAsync();
+    Task<JobCardAuthorizerGgStatsPage?> GetAuthorizerGgStatsAsync(
+        JobCardAuthorizerGgStatsQuery query
+    );
+    Task<IReadOnlyList<JobCardCaptureVehicleSummary>?> GetCaptureVehicleSummaryAsync(
+        string ggNumber
+    );
+    Task<IReadOnlyList<JobCardCaptureExtra>?> GetCaptureExtrasInCategoryAsync(string ggNumber);
+    Task<IReadOnlyList<string>?> GetCaptureFittedExtraDescriptionsAsync(string ggNumber);
+    Task<IReadOnlyList<string>?> GetCaptureJobcardsOnStatusDescriptionsAsync(string ggNumber);
+    Task<IReadOnlyList<JobCardAuthorizerDetails>?> GetAuthorizerDetailsAsync(
+        string ggNumber,
+        string extraCode
+    );
+    Task<IReadOnlyList<JobCardAuthorizerStatus>?> GetAuthorizerStatusCodesAsync();
+    Task<IReadOnlyList<JobCardCapturerDetails>?> GetCapturerDetailsAsync(
+        string ggNumber,
+        string extraCode
+    );
+    Task<IReadOnlyList<JobCardCapturerStatus>?> GetCapturerStatusCodesAsync();
+    Task<IReadOnlyList<JobCardCloseDetails>?> GetCloseDetailsAsync(string jcNumber);
+    Task<IReadOnlyList<JobCardPrintSummary>?> GetPrintableJobCardsAsync(string ggNumber);
+    Task<IReadOnlyList<JobCardPrintSnapshot>?> GetPrintJobCardsAsync(
+        string ggNumber,
+        string? jcNumber
+    );
 
     Task<JobCard> CreateAsync(JobCard jobCard, int currentUserId);
     Task<JobCard> UpdateAsync(JobCard jobCard, int currentUserId);
@@ -74,6 +104,161 @@ public sealed record JobCardPageQuery(
 
 public sealed record JobCardPage(
     IReadOnlyList<JobCard> Items,
+    int Page,
+    int PageSize,
+    int TotalRecords
+)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
+}
+
+public sealed record JobCardCaptureVehicle(
+    int VmfCode,
+    string? FleetNumber,
+    string? RegistrationNumber,
+    short? ModelCode
+);
+
+public sealed record JobCardCaptureVehicleSummary(
+    int? VmfCode,
+    string GgNumber,
+    string? RegistrationNumber,
+    string? ClassDescription,
+    string? ModelDescription,
+    string? OdoReading,
+    string? VinNumber,
+    string? EngineNumber,
+    string? YearModel,
+    string? PurchasedFrom,
+    string? HireType,
+    string? HiredFrom,
+    string? Location
+);
+
+public sealed record JobCardCaptureExtra(short ExtraCode, string? Description);
+
+public sealed record JobCardAuthorizerDetails(
+    int? JobCardId,
+    string? JcNumber,
+    string? GgNumber,
+    string? ExtraDescription,
+    string? InitialCapturedDate,
+    string? InitialCapturer,
+    string? Barcode,
+    string? CapturedDate,
+    string? JobCardsCapturer,
+    string? HandoverName,
+    string? HandoverDate,
+    string? Damages,
+    string? Comments,
+    string? StatusDescription,
+    string? Priority,
+    string? Authorizer,
+    string? AuthorizedDate,
+    string? AuthorizerComments
+);
+
+public sealed record JobCardAuthorizerStatus(int StatusCode, string? Description);
+
+public sealed record JobCardCapturerDetails(
+    int? JobCardId,
+    string? JcNumber,
+    string? GgNumber,
+    string? ExtraDescription,
+    string? Barcode,
+    string? InitialCapturer,
+    string? InitialCapturedDate,
+    string? JobCardsCapturer,
+    string? CapturedDate,
+    string? HandoverName,
+    string? HandoverDate,
+    string? Damages,
+    string? Comments,
+    string? StatusDescription,
+    string? JobcardComment,
+    string? Authorizer,
+    string? AuthorizerDate,
+    string? AuthorizerComments
+);
+
+public sealed record JobCardCapturerStatus(int StatusCode, string? Description);
+
+public sealed record JobCardCloseDetails(
+    int? JobCardId,
+    string? GgNumber,
+    string? JcNumber,
+    string? ExtraDescription,
+    string? JobCardsCapturer,
+    string? CapturedDate,
+    string? HandoverName,
+    string? HandoverDate,
+    string? Authorizer,
+    string? AuthorizedDate,
+    string? AuthorizerComments,
+    string? StatusDescription,
+    string? DateClosed,
+    string? Barcode,
+    string? JobcardComment,
+    string? Damages,
+    string? Comments
+);
+
+public sealed record JobCardPrintSummary(
+    string JobcardNumber,
+    string GgNumber,
+    string? RegistrationNumber,
+    string? JobcardDescription
+);
+
+public sealed record JobCardPrintSnapshot(
+    string? GgNumber,
+    string? RegistrationNumber,
+    string? DateDelivered,
+    string? OdoReading,
+    string? VinNumber,
+    string? EngineNumber,
+    string? ModelDescription,
+    string? YearModel,
+    string? ClassDescription,
+    string? HireType,
+    string? HiredFrom,
+    string? Location,
+    string? CapturedDate,
+    string? ReceivedBy,
+    string? Status,
+    string? StatusDate,
+    string? PurchasedFrom,
+    string? PurchasedDate,
+    string? JobcardNumber,
+    string? JobDescription,
+    string? JobcardStatus,
+    string? CapturedBy,
+    string? JcsDate,
+    string? AssignedTo,
+    string? AssignedDate
+);
+
+public sealed record JobCardAuthorizerGgStatsQuery(
+    int Page = 1,
+    int PageSize = 24,
+    string? GgNumber = null,
+    IReadOnlyCollection<int>? AllowedVmfCodes = null
+);
+
+public sealed record JobCardAuthorizerGgStats(
+    string GgNumber,
+    int? Jobcards,
+    int? Pending,
+    int? AwaitingAuthorisation,
+    int? Authorised,
+    int? InProgress,
+    int? Canceled,
+    int? Failed,
+    int? Completed
+);
+
+public sealed record JobCardAuthorizerGgStatsPage(
+    IReadOnlyList<JobCardAuthorizerGgStats> Items,
     int Page,
     int PageSize,
     int TotalRecords

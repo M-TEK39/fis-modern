@@ -164,6 +164,33 @@ function asString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function asNumberList(value: unknown) {
+  const items = Array.isArray(value) ? value : [];
+  return items
+    .map((item) => asNumber(item))
+    .filter((item): item is number => item !== null && item > 0);
+}
+
+function asStatusComments(value: unknown): VehicleStatusComment[] {
+  const items = Array.isArray(value) ? value : [];
+  return items.flatMap((item) => {
+    if (!isRecord(item)) {
+      return [];
+    }
+
+    return [
+      {
+        capturedBy: asString(getValue(item, "capturedBy", "CapturedBy", "Captured By")),
+        commentDate: asString(getValue(item, "commentDate", "CommentDate", "Comment_Date")),
+        authorityStatus: asString(
+          getValue(item, "authorityStatus", "AuthorityStatus", "Authority_Status"),
+        ),
+        comment: asString(getValue(item, "comment", "Comment")),
+      },
+    ];
+  });
+}
+
 function getCollection(payload: unknown) {
   if (Array.isArray(payload)) {
     return payload;
@@ -347,22 +374,101 @@ function mapMaintenanceTypes(payload: unknown) {
 function mapSearchResults(payload: unknown) {
   return mapPresent(getCollection(payload), (item) => {
     if (!isRecord(item)) return null;
-    const vmfCode = asNumber(getValue(item, "vmf_code", "vmfCode"));
+    const vmfCode = asNumber(
+      getValue(item, "tempVmfCode", "TempVmfCode", "temp_vmf_code", "vmf_code", "vmfCode"),
+    );
     if (vmfCode === null) {
       return null;
     }
 
     return {
       vmfCode,
-      fleetNumber: asString(getValue(item, "fleet_number", "fleetNumber")) || null,
+      fleetNumber: asString(getValue(item, "fleet_number", "fleetNumber", "FleetNumber")) || null,
       registrationNumber:
-        asString(getValue(item, "registration_number", "registrationNumber")) || null,
-      chassisNumber: asString(getValue(item, "chassis_number", "chassisNumber")) || null,
+        asString(
+          getValue(item, "registration_number", "registrationNumber", "RegistrationNumber"),
+        ) || null,
+      chassisNumber:
+        asString(getValue(item, "chassis_number", "chassisNumber", "ChassisNumber")) || null,
       engineNumber:
-        asString(getValue(item, "engine_number_1", "engineNumber1", "engine_number")) || null,
-      invoiceNumber: asString(getValue(item, "invoice_number", "invoiceNumber")) || null,
+        asString(
+          getValue(item, "engine_number_1", "engineNumber1", "engine_number", "EngineNumber"),
+        ) || null,
+      invoiceNumber:
+        asString(getValue(item, "invoice_number", "invoiceNumber", "InvoiceNumber")) || null,
     } satisfies VehicleSearchResult;
   });
+}
+
+function asIsoDate(value: unknown) {
+  const text = asString(value);
+  if (!text) {
+    return null;
+  }
+
+  const iso = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (iso) {
+    return iso[1];
+  }
+
+  const archive = text.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+  if (archive) {
+    return `${archive[1]}-${archive[2]}-${archive[3]}`;
+  }
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+}
+
+function mapCaptureRecall(payload: unknown): VehicleCaptureRecall | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const chassisNumber = asString(
+    getValue(payload, "chassisNumber", "ChassisNumber", "chassis_number"),
+  );
+  if (!chassisNumber) {
+    return null;
+  }
+
+  const damage = asString(
+    getValue(payload, "damageStatus", "DamageStatus", "damage_status"),
+  )?.toUpperCase();
+
+  return {
+    chassisNumber,
+    engineNumber: asString(getValue(payload, "engineNumber", "EngineNumber", "engine_number")),
+    colour: asString(getValue(payload, "colour", "Colour")),
+    replacedGgNumber: asString(
+      getValue(payload, "replacedGgNumber", "ReplacedGGNumber", "replaced_gg_number"),
+    ),
+    vsCode: asNumber(getValue(payload, "vsCode", "VsCode", "vs_code")),
+    typeCode: asNumber(getValue(payload, "typeCode", "TypeCode", "type_code")),
+    modelCode: asNumber(getValue(payload, "modelCode", "ModelCode", "model_code")),
+    siteCode: asNumber(getValue(payload, "siteCode", "SiteCode", "site_code")),
+    locationCode: asNumber(getValue(payload, "locationCode", "LocationCode", "location_code")),
+    yearManufactured: asNumber(
+      getValue(payload, "yearManufactured", "YearManufactured", "year_manufactured"),
+    ),
+    purchaseAmount: asNumber(
+      getValue(payload, "purchaseAmount", "PurchaseAmount", "purchase_amount"),
+    ),
+    purchaseDate: asIsoDate(getValue(payload, "purchaseDate", "PurchaseDate", "purchase_date")),
+    purchaseFrom: asString(getValue(payload, "purchaseFrom", "PurchaseFrom", "purchase_from")),
+    takeOnDate: asIsoDate(getValue(payload, "takeOnDate", "TakeOnDate", "take_on_date")),
+    takeOnOdo: asNumber(getValue(payload, "takeOnOdo", "TakeOnOdo", "take_on_odo")),
+    fleetNotes: asString(getValue(payload, "fleetNotes", "FleetNotes", "Fleet_Notes")),
+    damageStatus: damage === "Y" || damage === "N" ? damage : null,
+    damagesComment: asString(
+      getValue(payload, "damagesComment", "DamagesComment", "damages_comment"),
+    ),
+    fleetNumber: asString(getValue(payload, "fleetNumber", "FleetNumber", "fleet_number")),
+    invoiceNumber: asString(getValue(payload, "invoiceNumber", "InvoiceNumber", "invoice_number")),
+    gpNumber: asString(getValue(payload, "gpNumber", "GpNumber", "gp_number")),
+    extraCodes: asNumberList(getValue(payload, "extraCodes", "ExtraCodes")),
+    statusComments: asStatusComments(getValue(payload, "statusComments", "StatusComments")),
+  };
 }
 
 export async function getVehicleCreateReferenceData(): Promise<VehicleCreateReferenceData> {
@@ -430,11 +536,57 @@ export async function getVehicleEditReferenceData(): Promise<VehicleEditReferenc
   return { models, locations, types };
 }
 
+export type VehicleStatusComment = {
+  capturedBy: string;
+  commentDate: string;
+  authorityStatus: string;
+  comment: string;
+};
+
+export type VehicleCaptureRecall = {
+  chassisNumber: string;
+  engineNumber: string | null;
+  colour: string | null;
+  replacedGgNumber: string | null;
+  vsCode: number | null;
+  typeCode: number | null;
+  modelCode: number | null;
+  siteCode: number | null;
+  locationCode: number | null;
+  yearManufactured: number | null;
+  purchaseAmount: number | null;
+  purchaseDate: string | null;
+  purchaseFrom: string | null;
+  takeOnDate: string | null;
+  takeOnOdo: number | null;
+  fleetNotes: string | null;
+  damageStatus: "Y" | "N" | null;
+  damagesComment: string | null;
+  fleetNumber: string | null;
+  invoiceNumber: string | null;
+  gpNumber: string | null;
+  extraCodes: number[];
+  statusComments: VehicleStatusComment[];
+};
+
 export async function searchVehiclesAgainstApi(searchTerm: string) {
   const response = await fetchApi(
-    `api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm)}`,
+    `api/vehicle/authorization/search?chassisno=${encodeURIComponent(searchTerm)}`,
   );
   return mapSearchResults(await readJson(response));
+}
+
+export async function recallCaptureAgainstApi(searchTerm: string): Promise<VehicleCaptureRecall> {
+  const response = await fetchApi(
+    `api/vehicle/authorization/chassis/${encodeURIComponent(searchTerm)}/recall`,
+  );
+  const payload = await readJson(response);
+  const recall = mapCaptureRecall(payload);
+  if (!recall) {
+    throw new VehicleCreateApiError("invalid-response", "Vehicle Not Found.");
+  }
+
+  return recall;
 }
 
 export async function createVehicleAgainstApi(request: CreateVehicleRequest) {

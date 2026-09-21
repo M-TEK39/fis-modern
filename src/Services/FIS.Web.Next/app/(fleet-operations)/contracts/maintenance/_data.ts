@@ -43,6 +43,7 @@ export async function loadContractMaintenanceData({
       getContractPage({
         page,
         pageSize: 24,
+        list: "action-required",
         statusCode: statusFilter,
         siteCode,
         stillCurrent,

@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import {
   JobCardPrintPreview,
+  JobCardPrintSnapshotPanel,
+  JobCardPrintSummaryTable,
   JobCardSearchForm,
   JobCardTable,
 } from "@/app/(fleet-operations)/job-cards/_components";
@@ -22,6 +24,8 @@ import {
 import {
   DEFAULT_JOB_CARD_PAGE_SIZE,
   getJobCardsPage,
+  getPrintableJobCards,
+  getPrintJobCardSnapshot,
   JobCardApiError,
 } from "@/lib/api/fleet-operations/api-job-cards";
 
@@ -49,24 +53,46 @@ async function PrintJobCardsContent({
   const search = queryValue(query.search);
   const mode = querySearchType(query.mode);
   const selectedId = Number(queryValue(query.id));
+  const selectedJc = queryValue(query.jc);
+  const printAll = queryValue(query.printAll) === "1";
   const page = queryPage(query.page);
   try {
-    const pageData = await getJobCardsPage({
-      page,
-      pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
-      search,
-      searchType: mode,
-      statusCodes: [3],
-    });
+    const printOverlay =
+      mode === "GG" && search.length > 0 ? await getPrintableJobCards(search) : null;
+    const useOverlay = printOverlay?.overlay === true;
+    const pageData = useOverlay
+      ? null
+      : await getJobCardsPage({
+          page,
+          pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+          search,
+          searchType: mode,
+          statusCodes: [3],
+        });
     const selectedCandidate =
-      Number.isInteger(selectedId) && selectedId > 0
+      !useOverlay && Number.isInteger(selectedId) && selectedId > 0
         ? await getJobCardForSelection(selectedId)
         : null;
     const selected = selectedCandidate?.statusCode === 3 ? selectedCandidate : null;
+    const snapshot =
+      useOverlay && (printAll || selectedJc.length > 0)
+        ? await getPrintJobCardSnapshot(search, printAll ? "" : selectedJc)
+        : null;
     const tableReturnPath = jobCardPageHref(
       "/job-cards/print",
-      { ...query, id: undefined },
-      pageData.page,
+      { ...query, id: undefined, jc: undefined, printAll: undefined },
+      pageData?.page ?? page,
+    );
+    const printHref = (ggNumber: string, jobcardNumber: string) =>
+      jobCardPageHref(
+        "/job-cards/print",
+        { ...query, id: undefined, printAll: undefined, search: ggNumber, jc: jobcardNumber },
+        1,
+      );
+    const printAllHref = jobCardPageHref(
+      "/job-cards/print",
+      { ...query, id: undefined, jc: undefined, printAll: "1" },
+      1,
     );
     return (
       <main className="page-shell vehicle-page-shell">
@@ -89,19 +115,36 @@ async function PrintJobCardsContent({
             placeholder="GG, GP, or job card number"
             search={search}
           />
-          <section className="vehicle-status-maintenance-panel">
-            <p className="eyebrow">{pageData.totalRecords} authorized</p>
-            <h2>Authorized Job Cards</h2>
-            <JobCardTable
-              cards={pageData.items}
-              mode="print"
-              returnPath={tableReturnPath}
-              page={pageData.page}
-              totalPages={pageData.totalPages}
-              pageHref={(nextPage) => jobCardPageHref("/job-cards/print", query, nextPage)}
-            />
-          </section>
-          {selected ? <JobCardPrintPreview card={selected} /> : null}
+          {useOverlay && printOverlay ? (
+            <section className="vehicle-status-maintenance-panel">
+              <p className="eyebrow">Print Authorized Jobcards</p>
+              <h2>Print Authorized Jobcards</h2>
+              <div className="button-row">
+                <Link className="button button-secondary" href={`${printAllHref}#job-card-print`}>
+                  Print All Assigned Jobcards
+                </Link>
+              </div>
+              <JobCardPrintSummaryTable rows={printOverlay.items} printHref={printHref} />
+            </section>
+          ) : pageData ? (
+            <section className="vehicle-status-maintenance-panel">
+              <p className="eyebrow">{pageData.totalRecords} authorized</p>
+              <h2>Authorized Job Cards</h2>
+              <JobCardTable
+                cards={pageData.items}
+                mode="print"
+                returnPath={tableReturnPath}
+                page={pageData.page}
+                totalPages={pageData.totalPages}
+                pageHref={(nextPage) => jobCardPageHref("/job-cards/print", query, nextPage)}
+              />
+            </section>
+          ) : null}
+          {snapshot?.overlay === true ? (
+            <JobCardPrintSnapshotPanel snapshots={snapshot.items} />
+          ) : selected ? (
+            <JobCardPrintPreview card={selected} />
+          ) : null}
         </section>
       </main>
     );
