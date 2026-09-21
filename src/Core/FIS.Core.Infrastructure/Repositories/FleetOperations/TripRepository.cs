@@ -131,15 +131,28 @@ public sealed class TripRepository : ITripRepository
         IReadOnlySet<short>? allowedSiteCodes = null
     )
     {
+        var tripKeys = await LegacySelectorProcedure.TryReadOrderedKeysAsync(
+            _context,
+            "DEV_SEL_Trip_PerTripID",
+            ["@TripID"],
+            command => AddParameter(command, "@TripID", DbType.Int32, tripId),
+            "TripID",
+            "trip_authority_code"
+        );
+        if (tripKeys is not null && (tripKeys.Count == 0 || !tripKeys.Contains(tripId)))
+        {
+            return null;
+        }
+
         var trip = await GetByIdAsync(tripId, allowedSiteCodes);
         if (trip is null)
         {
             return null;
         }
 
-        var drivers = await GetTripDriversAsync(tripId);
-        var passengers = await GetTripPassengersAsync(tripId);
-        var routes = await GetRouteDetailsAsync(tripId);
+        var drivers = await OverlayShowTripDriversAsync(tripId);
+        var passengers = await OverlayShowTripPassengersAsync(tripId);
+        var routes = await OverlayShowTripRoutesAsync(tripId);
         return new TripAuthorityDetails(trip, drivers, passengers, routes);
     }
 
@@ -2634,6 +2647,248 @@ public sealed class TripRepository : ITripRepository
         {
             values.Add(new WriteValue(column, parameter, dbType, value));
         }
+    }
+
+    private async Task<IReadOnlyList<TripAuthorityDriver>> OverlayShowTripDriversAsync(int tripId)
+    {
+        var overlayRows = await ReadShowTripSelectorRowsAsync(
+            "DEV_SEL_TripDrivers_PerTripID",
+            tripId
+        );
+        var leftover = await GetTripDriversAsync(tripId);
+        if (overlayRows is null)
+        {
+            return leftover;
+        }
+
+        if (overlayRows.Count == 0)
+        {
+            return [];
+        }
+
+        return OverlayShowTripRows(
+            overlayRows,
+            leftover,
+            item => item.TripDriverCode,
+            ["DriverDBId", "trip_driver_code"],
+            MapShowTripDriver
+        );
+    }
+
+    private async Task<IReadOnlyList<TripAuthorityPassenger>> OverlayShowTripPassengersAsync(
+        int tripId
+    )
+    {
+        var overlayRows = await ReadShowTripSelectorRowsAsync(
+            "DEV_SEL_TripPassangers_PerTripID",
+            tripId
+        );
+        var leftover = await GetTripPassengersAsync(tripId);
+        if (overlayRows is null)
+        {
+            return leftover;
+        }
+
+        if (overlayRows.Count == 0)
+        {
+            return [];
+        }
+
+        return OverlayShowTripRows(
+            overlayRows,
+            leftover,
+            item => item.TripPassengerCode,
+            ["PassengerDBId", "trip_passenger_code"],
+            MapShowTripPassenger
+        );
+    }
+
+    private async Task<IReadOnlyList<TripAuthorityRoute>> OverlayShowTripRoutesAsync(int tripId)
+    {
+        var overlayRows = await ReadShowTripSelectorRowsAsync(
+            "DEV_SEL_TripRouteDetails_PerTripID",
+            tripId
+        );
+        var leftover = await GetRouteDetailsAsync(tripId);
+        if (overlayRows is null)
+        {
+            return leftover;
+        }
+
+        if (overlayRows.Count == 0)
+        {
+            return [];
+        }
+
+        return OverlayShowTripRows(
+            overlayRows,
+            leftover,
+            item => item.RouteCode,
+            ["RouteDBId", "route_code"],
+            MapShowTripRoute
+        );
+    }
+
+    private async Task<IReadOnlyList<IReadOnlyDictionary<string, object?>>?> ReadShowTripSelectorRowsAsync(
+        string procedureName,
+        int tripId
+    )
+    {
+        return await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            procedureName,
+            [["@TripID"]],
+            _ =>
+                command => AddParameter(command, "@TripID", DbType.Int32, tripId)
+        );
+    }
+
+    private static IReadOnlyList<T> OverlayShowTripRows<T>(
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> overlayRows,
+        IReadOnlyList<T> leftover,
+        Func<T, int> keySelector,
+        string[] keyColumnNames,
+        Func<IReadOnlyDictionary<string, object?>, int, T> mapOverlay
+    )
+    {
+        var keys = new List<int>();
+        var overlayByKey = new Dictionary<int, IReadOnlyDictionary<string, object?>>();
+        foreach (var row in overlayRows)
+        {
+            var key = LegacySelectorProcedure.ReadInt32(row, keyColumnNames);
+            if (key is null or <= 0 || !overlayByKey.TryAdd(key.Value, row))
+            {
+                continue;
+            }
+
+            keys.Add(key.Value);
+        }
+
+        if (keys.Count == 0)
+        {
+            return leftover;
+        }
+
+        var leftoverByKey = leftover
+            .GroupBy(keySelector)
+            .ToDictionary(group => group.Key, group => group.First());
+        var ordered = new List<T>(keys.Count);
+        foreach (var key in keys)
+        {
+            if (leftoverByKey.TryGetValue(key, out var leftoverItem))
+            {
+                ordered.Add(leftoverItem);
+            }
+            else
+            {
+                ordered.Add(mapOverlay(overlayByKey[key], key));
+            }
+        }
+
+        return ordered;
+    }
+
+    private static TripAuthorityDriver MapShowTripDriver(
+        IReadOnlyDictionary<string, object?> row,
+        int tripDriverCode
+    )
+    {
+        return new TripAuthorityDriver(
+            tripDriverCode,
+            LegacySelectorProcedure.ReadString(row, "DriverName", "trip_driver_name"),
+            LegacySelectorProcedure.ReadString(row, "DriverSAID", "trip_driver_id"),
+            ReadOverlayBoolean(row, "DriverIsPrimary", "trip_driver_primary"),
+            LegacySelectorProcedure.ReadInt32(row, "site_code"),
+            LegacySelectorProcedure.ReadInt32(row, "DriverLicenseTypeId", "driver_licence_type_id"),
+            LegacySelectorProcedure.ReadString(row, "DriverPassportNumber", "driver_passportnumber"),
+            LegacySelectorProcedure.ReadString(row, "DriverPersalNumber", "driver_persalnumber"),
+            LegacySelectorProcedure.ReadString(row, "DriverContractNo", "driver_contractnumber"),
+            LegacySelectorProcedure.ReadString(row, "DriverLicenceNumber", "driver_licence_number"),
+            null,
+            null,
+            ReadOverlayBoolean(row, "DriverHasPDP", "driver_hasPDP"),
+            null,
+            null,
+            ReadOverlayBoolean(row, "DriverIsActive", "driver_active")
+        );
+    }
+
+    private static TripAuthorityPassenger MapShowTripPassenger(
+        IReadOnlyDictionary<string, object?> row,
+        int tripPassengerCode
+    )
+    {
+        return new TripAuthorityPassenger(
+            tripPassengerCode,
+            LegacySelectorProcedure.ReadString(row, "PassengerName", "trip_passenger_name")
+        );
+    }
+
+    private static TripAuthorityRoute MapShowTripRoute(
+        IReadOnlyDictionary<string, object?> row,
+        int routeCode
+    )
+    {
+        return new TripAuthorityRoute(
+            routeCode,
+            null,
+            null,
+            LegacySelectorProcedure.ReadInt32(row, "StartODOMeter", "start_odo_meter"),
+            LegacySelectorProcedure.ReadInt32(row, "EndODOMeter", "end_odo_meter"),
+            LegacySelectorProcedure.ReadString(row, "Responsibility", "bas_responsibility_code"),
+            LegacySelectorProcedure.ReadString(row, "Objective", "bas_object_code"),
+            LegacySelectorProcedure.ReadString(row, "StartLocationName", "start_route_location_name"),
+            LegacySelectorProcedure.ReadString(row, "EndLocationName", "end_route_location_name"),
+            LegacySelectorProcedure.ReadInt32(row, "EstimatedDistance", "estimated_distance"),
+            LegacySelectorProcedure.ReadInt32(row, "Distance", "distance"),
+            LegacySelectorProcedure.ReadString(row, "ProjectNumber", "project_number"),
+            LegacySelectorProcedure.ReadString(row, "Fund", "fund_code", "bas_fund_code"),
+            LegacySelectorProcedure.ReadInt32(row, "EditedBy", "modified_by_user_code")
+        );
+    }
+
+    private static bool ReadOverlayBoolean(
+        IReadOnlyDictionary<string, object?> row,
+        params string[] keys
+    )
+    {
+        foreach (var key in keys)
+        {
+            if (!row.TryGetValue(key, out var value) || value is null or DBNull)
+            {
+                continue;
+            }
+
+            switch (value)
+            {
+                case bool flag:
+                    return flag;
+                case byte numericByte:
+                    return numericByte != 0;
+                case short numericShort:
+                    return numericShort != 0;
+                case int numericInt:
+                    return numericInt != 0;
+                default:
+                    var text = Convert.ToString(value, CultureInfo.InvariantCulture);
+                    if (bool.TryParse(text, out var parsed))
+                    {
+                        return parsed;
+                    }
+
+                    if (
+                        string.Equals(text, "Y", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(text, "1", StringComparison.OrdinalIgnoreCase)
+                    )
+                    {
+                        return true;
+                    }
+
+                    break;
+            }
+        }
+
+        return false;
     }
 
     private async Task<IReadOnlyList<TripAuthorityDriver>> GetTripDriversAsync(int tripId)
