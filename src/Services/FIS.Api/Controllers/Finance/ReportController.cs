@@ -113,7 +113,8 @@ public class ReportController : BaseApiController
         CancellationToken cancellationToken = default
     )
     {
-        if (!HasDynamicReportAccess(reportKey))
+        var resolvedReportKey = _legacyReportResultService.ResolveReportKeyAlias(reportKey);
+        if (!HasDynamicReportAccess(resolvedReportKey))
         {
             return Forbid();
         }
@@ -136,10 +137,10 @@ public class ReportController : BaseApiController
             NormalizeLegacyAliases(filters);
             RemoveDynamicReportPagingControls(filters);
 
-            if (IsAssetListReportKey(reportKey))
+            if (IsAssetListReportKey(resolvedReportKey))
             {
                 var assetListScope = await ApplyAssetListProfileScopeAsync(
-                    reportKey,
+                    resolvedReportKey,
                     filters,
                     cancellationToken
                 );
@@ -149,7 +150,7 @@ public class ReportController : BaseApiController
                 }
             }
 
-            if (IsFineReportKey(reportKey))
+            if (IsFineReportKey(resolvedReportKey))
             {
                 var fineScope = await ResolveFineReportSiteScopeAsync(cancellationToken);
                 if (fineScope is null)
@@ -162,14 +163,14 @@ public class ReportController : BaseApiController
                 }
             }
 
-            if (IsLogbookOrLogsheetReportKey(reportKey) || IsTaxiReportKey(reportKey))
+            if (IsLogbookOrLogsheetReportKey(resolvedReportKey) || IsTaxiReportKey(resolvedReportKey))
             {
                 var reportScope = await ResolveFineReportSiteScopeAsync(cancellationToken);
                 if (
                     reportScope is not null
                     && (
-                        reportKey.Equals("logsheets-all-outstanding", StringComparison.OrdinalIgnoreCase)
-                        || reportKey.Equals("all-outstanding", StringComparison.OrdinalIgnoreCase)
+                        resolvedReportKey.Equals("logsheets-all-outstanding", StringComparison.OrdinalIgnoreCase)
+                        || resolvedReportKey.Equals("all-outstanding", StringComparison.OrdinalIgnoreCase)
                     )
                 )
                 {
@@ -190,7 +191,7 @@ public class ReportController : BaseApiController
             }
 
             var report = await _legacyReportResultService.GetPagedReportAsync(
-                reportKey,
+                resolvedReportKey,
                 filters,
                 page,
                 Math.Clamp(pageSize, 1, MaximumReportPageSize),
@@ -3519,9 +3520,11 @@ public class ReportController : BaseApiController
     {
         if (IsLossReportKey(reportKey))
         {
-            // losses.aspx requires Losses. FIS_Report lists the link, but the
-            // inner page is the resource boundary.
-            return HasAnyRole("Losses");
+            // losses.aspx requires Losses; the leaf RPT_All_losses_menu.aspx:5 also
+            // requires Reports, so that one report needs both.
+            return reportKey.Equals("losses-all-losses-sorted", StringComparison.OrdinalIgnoreCase)
+                ? HasAnyRole("Losses") && HasReportsRole()
+                : HasAnyRole("Losses");
         }
 
         if (IsTaxiFinancialReportKey(reportKey))
@@ -3546,6 +3549,18 @@ public class ReportController : BaseApiController
 
         if (IsContractReportKey(reportKey))
         {
+            if (reportKey.Equals("contract-history", StringComparison.OrdinalIgnoreCase))
+            {
+                // Logs/RPT_Contracts_per_vehicle.aspx has no gate; its only legacy entry is
+                // FISReports/Reports.aspx:64-67 behind the Reports page gate (:10).
+                return HasReportsRole();
+            }
+            if (reportKey.Equals("contracts-checklist", StringComparison.OrdinalIgnoreCase))
+            {
+                // check_list.aspx:5 requires Reports and its Contracts.aspx parent
+                // requires Contracts.
+                return HasAnyRole("Contracts") && HasReportsRole();
+            }
             return HasAnyRole("Contracts");
         }
 
@@ -3565,6 +3580,14 @@ public class ReportController : BaseApiController
             return HasAnyRole("Management Reports");
         }
 
+        if (IsReportsAndFinancialReportsReportKey(reportKey))
+        {
+            // GeneratedReports.aspx.vb:8 requires Reports AND Financial Reports for
+            // vehicle-status-all / incorrect-quantities; Reports.aspx:143-153 gates
+            // the vehicle additions/disposals/date-range items the same way.
+            return HasReportsRole() && HasAnyRole("Financial Reports");
+        }
+
         if (reportKey.Equals("driver-information-finyear", StringComparison.OrdinalIgnoreCase))
         {
             return HasAnyRole("TripAuthorities", "Trip Authorities", "Reports")
@@ -3577,6 +3600,19 @@ public class ReportController : BaseApiController
             // user's scope; it must not turn the Finance role into access to
             // fleet asset data.
             return HasReportsRole();
+        }
+
+        if (IsFinancialDataAllDepartmentsReportKey(reportKey))
+        {
+            // FISReports/TripReports.aspx items 1.2/1.4/2.2/2.5/3.7 render only under
+            // Financial Data (All Departments).
+            return HasReportsRole() && HasAnyRole("Financial Data (All Departments)");
+        }
+        if (IsFinancialDataOwnDepartmentReportKey(reportKey))
+        {
+            // TripReports.aspx items 2.3/2.4/3.5/3.6/3.8 render only under
+            // Financial Data (Own Department).
+            return HasReportsRole() && HasAnyRole("Financial Data (Own Department)");
         }
 
         return HasReportsRole();
@@ -3629,6 +3665,10 @@ public class ReportController : BaseApiController
         || reportKey.Equals("contract-history", StringComparison.OrdinalIgnoreCase)
         || reportKey.StartsWith("contract-", StringComparison.OrdinalIgnoreCase)
         || reportKey.StartsWith("contracts-", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("permanent-contracts-without-tariff", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("vehicle-contract-single", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("vehicle-contract-multiple", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("vehicle-contract-universal", StringComparison.OrdinalIgnoreCase)
         || reportKey.Equals("lease-nom-contract-split", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsAssetListReportKey(string reportKey) =>
@@ -3656,6 +3696,27 @@ public class ReportController : BaseApiController
     private static bool IsAssetListSiteReportKey(string reportKey) =>
         reportKey.Equals("asset-list-by-site", StringComparison.OrdinalIgnoreCase)
         || reportKey.Equals("by-site", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsReportsAndFinancialReportsReportKey(string reportKey) =>
+        reportKey.Equals("vehicle-status-all", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("incorrect-quantities", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("vehicle-additions", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("vehicle-disposals", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("vehicle-list-date-range", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsFinancialDataAllDepartmentsReportKey(string reportKey) =>
+        reportKey.Equals("vehicles-per-department", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("vehicles-contract-type-department", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("users-per-department", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("trips-per-user-department", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("high-distance-dept", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsFinancialDataOwnDepartmentReportKey(string reportKey) =>
+        reportKey.Equals("users-all-departments", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("trips-per-user-all", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("vehicles-no-trips", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("vehicles-no-trips-daterange", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("high-distance-all", StringComparison.OrdinalIgnoreCase);
 
     private sealed record AssetListScopeResult(bool Allowed)
     {
