@@ -147,6 +147,26 @@ export type JobCardCapturerStatus = {
   description: string | null;
 };
 
+export type JobCardCloseDetails = {
+  jobCardId: number | null;
+  ggNumber: string | null;
+  jcNumber: string | null;
+  extraDescription: string | null;
+  jobCardsCapturer: string | null;
+  capturedDate: string | null;
+  handoverName: string | null;
+  handoverDate: string | null;
+  authorizer: string | null;
+  authorizedDate: string | null;
+  authorizerComments: string | null;
+  statusDescription: string | null;
+  dateClosed: string | null;
+  barcode: string | null;
+  jobcardComment: string | null;
+  damages: string | null;
+  comments: string | null;
+};
+
 export type JobCardPrintSummary = {
   jobcardNumber: string;
   ggNumber: string;
@@ -188,6 +208,7 @@ export type JobCardPageOptions = {
   search?: string;
   searchType?: "GG" | "GP";
   statusCodes?: readonly number[];
+  list?: "close" | "cancel";
 };
 
 export type JobCardCreateInput = {
@@ -619,6 +640,7 @@ export async function getJobCardsPage(options: JobCardPageOptions = {}): Promise
   if (options.statusCodes && options.statusCodes.length > 0) {
     params.set("statusCodes", options.statusCodes.join(","));
   }
+  if (options.list) params.set("list", options.list);
 
   return readJobCardPage(await requestApi(`api/jobcards/page?${params.toString()}`));
 }
@@ -802,6 +824,56 @@ export async function getCapturerJobCardDetails(
     authorizer: asString(getValue(item, "authorizer", "Authorizer")),
     authorizerDate: asString(getValue(item, "authorizerDate", "AuthorizerDate")),
     authorizerComments: asString(getValue(item, "authorizerComments", "AuthorizerComments")),
+  };
+}
+
+export async function getCloseJobCardDetails(
+  jobCardId: number,
+): Promise<{ overlay: boolean; item: JobCardCloseDetails | null }> {
+  const params = new URLSearchParams({ jobCardId: String(jobCardId) });
+  const payload = await readJson(
+    await requestApi(`api/jobcards/close/details?${params.toString()}`),
+  );
+  if (!isRecord(payload) || typeof payload.overlay !== "boolean") {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned invalid close job-card details.",
+    );
+  }
+  if (payload.overlay === false) {
+    return { overlay: false, item: null };
+  }
+  const item = getValue(payload, "item");
+  if (item === null || item === undefined) {
+    return { overlay: true, item: null };
+  }
+  if (!isRecord(item)) {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned invalid close job-card details.",
+    );
+  }
+  return {
+    overlay: true,
+    item: {
+      jobCardId: asNumber(getValue(item, "jobCardId", "job_card_id")),
+      ggNumber: asString(getValue(item, "ggNumber", "GGNumber")),
+      jcNumber: asString(getValue(item, "jcNumber", "jc_number")),
+      extraDescription: asString(getValue(item, "extraDescription", "extra_description")),
+      jobCardsCapturer: asString(getValue(item, "jobCardsCapturer", "JobCardsCapturer")),
+      capturedDate: asString(getValue(item, "capturedDate")),
+      handoverName: asString(getValue(item, "handoverName")),
+      handoverDate: asString(getValue(item, "handoverDate")),
+      authorizer: asString(getValue(item, "authorizer", "Authorizer")),
+      authorizedDate: asString(getValue(item, "authorizedDate", "AuthorizedDate")),
+      authorizerComments: asString(getValue(item, "authorizerComments", "AuthorizerComments")),
+      statusDescription: asString(getValue(item, "statusDescription", "status_code_description")),
+      dateClosed: asString(getValue(item, "dateClosed", "DateClosed")),
+      barcode: asString(getValue(item, "barcode")),
+      jobcardComment: asString(getValue(item, "jobcardComment")),
+      damages: asString(getValue(item, "damages", "Damages")),
+      comments: asString(getValue(item, "comments")),
+    },
   };
 }
 

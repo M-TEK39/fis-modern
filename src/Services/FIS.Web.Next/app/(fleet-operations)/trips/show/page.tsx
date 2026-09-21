@@ -141,6 +141,39 @@ function VehicleInformation({
   department: DepartmentRecord | null;
 }>) {
   const trip = details.trip;
+  if (details.hasShowTripVehicleSelector) {
+    const overlay = details.showTripVehicle;
+    const siteName = overlay?.siteName;
+    const siteCode = overlay?.siteCode;
+    return (
+      <section className="vehicle-form-section" aria-labelledby="trip-vehicle-information-title">
+        <div className="vehicle-form-section-header">
+          <div>
+            <p className="eyebrow">Vehicle context</p>
+            <h2 id="trip-vehicle-information-title">Vehicle Information</h2>
+          </div>
+        </div>
+        <FactsTable
+          caption="Trip authority vehicle information"
+          rows={[
+            ["Department Name", overlay?.departmentName],
+            [
+              "Site",
+              siteName ? (siteCode ? `${siteName} (${siteCode})` : siteName) : valueOrDash(siteCode),
+            ],
+            ["Contract ID", overlay?.contractCode],
+            ["VMF Code", overlay?.vmfCode],
+            ["Fleet Number", overlay?.fleetNumber],
+            ["Make", overlay?.make],
+            ["Model", overlay?.model],
+            ["Registration Number", overlay?.registrationNumber],
+            ["Start ODO Meter", overlay?.startOdometer],
+          ]}
+        />
+      </section>
+    );
+  }
+
   return (
     <section className="vehicle-form-section" aria-labelledby="trip-vehicle-information-title">
       <div className="vehicle-form-section-header">
@@ -195,10 +228,17 @@ function TripInformation({
           ["Expiry Date", formatDate(trip.expiryDate)],
           ["End ODO Meter", trip.endOdometer],
           ["Trip Reason", trip.tripReason],
-          ["Trip Type", tripTypeLabel(trip.tripTypeCode)],
-          ["Trip Incident Type Code", trip.tripIncidentTypeCode],
+          ["Trip Type", details.showTripTypeName ?? tripTypeLabel(trip.tripTypeCode)],
+          [
+            "Trip Incident Type",
+            details.showTripIncidentTypeName ?? valueOrDash(trip.tripIncidentTypeCode),
+          ],
           ["Trip Request Number", trip.tripRequestNumber],
-          ["Trip Captured by", trip.userAccessCode ? `User ${trip.userAccessCode}` : null],
+          [
+            "Trip Captured by",
+            details.showTripCapturedBy ??
+              (trip.userAccessCode ? `User ${trip.userAccessCode}` : null),
+          ],
           ["Contract Driver ID", contract?.driverId],
           ["Locked for Transfer", formatBoolean(trip.lockedForTransfer)],
           ["Monthly Trip", formatBoolean(trip.tripIsMonthly)],
@@ -369,6 +409,47 @@ function RouteInformation({ details }: Readonly<{ details: TripAuthorityDetails 
   );
 }
 
+function ShowTripIncidentTypeField({
+  details,
+}: Readonly<{ details: TripAuthorityDetails }>) {
+  const types = details.incidentTypes;
+  if (!details.hasShowTripIncidentSelector && types.length === 0) {
+    return null;
+  }
+
+  if (details.hasShowTripIncidentSelector && types.length === 0) {
+    return (
+      <p id="trip-incident-type-empty">
+        No Incidents types are linked
+      </p>
+    );
+  }
+
+  const selectedCode =
+    details.trip.tripIncidentTypeCode && details.trip.tripIncidentTypeCode > 0
+      ? details.trip.tripIncidentTypeCode
+      : 1;
+
+  return (
+    <div className="form-field">
+      <label className="form-label" htmlFor="trip-incident-type">
+        Trip Incident Type
+      </label>
+      <select
+        className="form-select"
+        defaultValue={String(selectedCode)}
+        id="trip-incident-type"
+      >
+        {types.map((type) => (
+          <option key={type.code} value={type.code}>
+            {type.name?.trim() || String(type.code)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function CloseTripForm({ details }: Readonly<{ details: TripAuthorityDetails }>) {
   if (details.trip.endOdometer !== null || details.trip.lockedForTransfer) return null;
 
@@ -440,6 +521,7 @@ function CloseTripForm({ details }: Readonly<{ details: TripAuthorityDetails }>)
           </table>
         </div>
       )}
+      <ShowTripIncidentTypeField details={details} />
       <div className="button-row">
         <button className="button button-primary" name="intent" value="close" type="submit">
           Save and Close
@@ -563,15 +645,21 @@ async function renderShowTripPageContent({
   }
 
   const contractResult =
-    details.trip.contractCode > 0
-      ? await Promise.allSettled([getContract(details.trip.contractCode)])
-      : [];
+    details.hasShowTripVehicleSelector
+      ? []
+      : details.trip.contractCode > 0
+        ? await Promise.allSettled([getContract(details.trip.contractCode)])
+        : [];
   const contract = contractResult[0]?.status === "fulfilled" ? contractResult[0].value : null;
   const vehicleCode = contract?.vmfCode ?? details.trip.vmfCode;
-  const vehicle = vehicleCode ? await getVehicleForStatus(vehicleCode).catch(() => null) : null;
+  const vehicle = details.hasShowTripVehicleSelector
+    ? null
+    : vehicleCode
+      ? await getVehicleForStatus(vehicleCode).catch(() => null)
+      : null;
   let site: SiteRecord | null = null;
   let department: DepartmentRecord | null = null;
-  if (contract?.siteCode) {
+  if (!details.hasShowTripVehicleSelector && contract?.siteCode) {
     const siteResult = await getSite(contract.siteCode).catch(() => null);
     site = siteResult;
     if (site?.departmentCode)

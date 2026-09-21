@@ -15,6 +15,8 @@ public interface IJobCardRepository
     Task<JobCardPage> GetAuthorizerPageAsync(JobCardPageQuery query);
     Task<JobCardPage> GetPriorityUnassignedPageAsync(PriorityUnassignedJobCardPageQuery query);
     Task<JobCardPage> GetAssignedPriorityPageAsync(PriorityUnassignedJobCardPageQuery query);
+    Task<JobCardPage> GetReadyForClosingPageAsync(JobCardPageQuery query);
+    Task<JobCardPage> GetCancelationPageAsync(JobCardPageQuery query);
     Task<RepairCostReportPage> GetRepairCostReportPageAsync(RepairCostReportPageQuery query);
     Task<IEnumerable<JobCard>> GetByGGNumberAsync(string ggNumber);
     Task<IEnumerable<JobCard>> GetPriorityUnassignedAsync();
@@ -41,6 +43,7 @@ public interface IJobCardRepository
         string extraCode
     );
     Task<IReadOnlyList<JobCardCapturerStatus>?> GetCapturerStatusCodesAsync();
+    Task<IReadOnlyList<JobCardCloseDetails>?> GetCloseDetailsAsync(string jcNumber);
     Task<IReadOnlyList<JobCardPrintSummary>?> GetPrintableJobCardsAsync(string ggNumber);
     Task<IReadOnlyList<JobCardPrintSnapshot>?> GetPrintJobCardsAsync(
         string ggNumber,
@@ -179,6 +182,26 @@ public sealed record JobCardCapturerDetails(
 );
 
 public sealed record JobCardCapturerStatus(int StatusCode, string? Description);
+
+public sealed record JobCardCloseDetails(
+    int? JobCardId,
+    string? GgNumber,
+    string? JcNumber,
+    string? ExtraDescription,
+    string? JobCardsCapturer,
+    string? CapturedDate,
+    string? HandoverName,
+    string? HandoverDate,
+    string? Authorizer,
+    string? AuthorizedDate,
+    string? AuthorizerComments,
+    string? StatusDescription,
+    string? DateClosed,
+    string? Barcode,
+    string? JobcardComment,
+    string? Damages,
+    string? Comments
+);
 
 public sealed record JobCardPrintSummary(
     string JobcardNumber,

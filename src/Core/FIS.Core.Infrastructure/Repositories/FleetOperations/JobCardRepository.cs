@@ -42,6 +42,12 @@ public class JobCardRepository : IJobCardRepository
         PriorityUnassignedJobCardPageQuery query
     ) => _legacyRepository.GetAssignedPriorityPageAsync(query);
 
+    public Task<JobCardPage> GetReadyForClosingPageAsync(JobCardPageQuery query) =>
+        _legacyRepository.GetReadyForClosingPageAsync(query);
+
+    public Task<JobCardPage> GetCancelationPageAsync(JobCardPageQuery query) =>
+        _legacyRepository.GetCancelationPageAsync(query);
+
     public Task<RepairCostReportPage> GetRepairCostReportPageAsync(RepairCostReportPageQuery query) =>
         _legacyRepository.GetRepairCostReportPageAsync(query);
 
@@ -97,6 +103,9 @@ public class JobCardRepository : IJobCardRepository
 
     public Task<IReadOnlyList<JobCardCapturerStatus>?> GetCapturerStatusCodesAsync() =>
         _legacyRepository.GetCapturerStatusCodesAsync();
+
+    public Task<IReadOnlyList<JobCardCloseDetails>?> GetCloseDetailsAsync(string jcNumber) =>
+        _legacyRepository.GetCloseDetailsAsync(jcNumber);
 
     public Task<IReadOnlyList<JobCardPrintSummary>?> GetPrintableJobCardsAsync(string ggNumber) =>
         _legacyRepository.GetPrintableJobCardsAsync(ggNumber);

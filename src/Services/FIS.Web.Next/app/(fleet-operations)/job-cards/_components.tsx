@@ -11,7 +11,7 @@ import {
   updateJobCardAction,
 } from "@/app/(fleet-operations)/job-cards/actions";
 import { MenuSection } from "@/components/ui/menu-section";
-import type { JobCardRecord, RepairCostLine, JobCardAuthorizerGgStats, JobCardAuthorizerDetails, JobCardCapturerDetails, JobCardPrintSummary, JobCardPrintSnapshot } from "@/lib/api/fleet-operations/api-job-cards";
+import type { JobCardRecord, RepairCostLine, JobCardAuthorizerGgStats, JobCardAuthorizerDetails, JobCardCapturerDetails, JobCardCloseDetails, JobCardPrintSummary, JobCardPrintSnapshot } from "@/lib/api/fleet-operations/api-job-cards";
 import type { VehicleOption } from "@/lib/api/vehicles/api-vehicles";
 import {
   formatDate,
@@ -390,53 +390,12 @@ export function JobCardTable({
                       </button>
                     </form>
                   ) : mode === "close" ? (
-                    <form action={closeJobCardAction} className="job-card-close-form">
-                      <input name="returnPath" type="hidden" value={returnPath} />
-                      <input name="jobCardId" type="hidden" value={card.jobCardId} />
-                      <label className="sr-only" htmlFor={`close-notes-${card.jobCardId}`}>
-                        Close notes for job card {card.jobCardId}
-                      </label>
-                      <input
-                        className="form-input"
-                        id={`close-notes-${card.jobCardId}`}
-                        name="closeNotes"
-                        maxLength={150}
-                        placeholder="Close notes"
-                      />
-                      <select
-                        aria-label={`Damage status for job card ${card.jobCardId}`}
-                        className="form-select"
-                        defaultValue={card.damages?.toUpperCase() === "Y" ? "Y" : "N"}
-                        name="damages"
-                      >
-                        <option value="N">No damage</option>
-                        <option value="Y">Damage recorded</option>
-                      </select>
-                      <input
-                        aria-label={`Damage comment for job card ${card.jobCardId}`}
-                        className="form-input"
-                        maxLength={500}
-                        name="damageComment"
-                        placeholder="Damage comment"
-                      />
-                      <input
-                        aria-label={`Vehicle barcode for job card ${card.jobCardId}`}
-                        className="form-input"
-                        maxLength={20}
-                        name="barcode"
-                        placeholder="Vehicle barcode"
-                      />
-                      <input
-                        aria-label={`Close date for job card ${card.jobCardId}`}
-                        className="form-input"
-                        defaultValue={new Date().toISOString().slice(0, 10)}
-                        name="closeDate"
-                        type="date"
-                      />
-                      <button className="button button-primary button-small" type="submit">
-                        Close
-                      </button>
-                    </form>
+                    <Link
+                      className="button button-secondary button-small"
+                      href={withJobCardId(returnPath, card.jobCardId)}
+                    >
+                      Job Card Number
+                    </Link>
                   ) : mode === "print" ? (
                     <Link
                       className="button button-secondary button-small"
@@ -653,6 +612,171 @@ export function JobCardDetails({
       </p>
     </section>
   );
+}
+
+export function CloseJobCardDetails({
+  details,
+  returnPath,
+}: Readonly<{ details: JobCardCloseDetails; returnPath: string }>) {
+  const rows: Array<[string, string | null]> = [
+    ["GG Number", details.ggNumber],
+    ["Job Card Number", details.jcNumber],
+    ["Job Card Description", details.extraDescription],
+    ["Job Card Capturer", details.jobCardsCapturer],
+    ["Last Captured Date", details.capturedDate],
+    ["Assigned To", details.handoverName],
+    ["Assigned Date", details.handoverDate],
+    ["Authoriser", details.authorizer],
+    ["Authorised Date", details.authorizedDate],
+    ["Authoriser Comments", details.authorizerComments],
+    ["Status", details.statusDescription],
+    ["Date Completed/Failed", details.dateClosed],
+    ["Barcode", details.barcode],
+    ["Job Card Comment", details.jobcardComment],
+    ["Damages", details.damages],
+    ["Damages Comment", details.comments],
+  ];
+  const closeDate = toDateInputValue(details.dateClosed) ?? new Date().toISOString().slice(0, 10);
+  return (
+    <section className="vehicle-status-maintenance-panel" aria-labelledby="close-details-title">
+      <p className="eyebrow">Job Card Details</p>
+      <h2 id="close-details-title">
+        {details.jcNumber ? `Job Card Details: ${details.jcNumber}` : "Job Card Details"}
+      </h2>
+      <dl className="form-grid">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{valueOrDash(value)}</dd>
+          </div>
+        ))}
+      </dl>
+      {details.jobCardId ? (
+        <CloseJobCardForm
+          barcode={details.barcode}
+          closeDate={closeDate}
+          closeNotes={details.jobcardComment}
+          damages={details.damages}
+          jobCardId={details.jobCardId}
+          returnPath={returnPath}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+export function LeftoverCloseJobCardForm({
+  card,
+  returnPath,
+}: Readonly<{ card: JobCardRecord; returnPath: string }>) {
+  return (
+    <CloseJobCardForm
+      barcode={null}
+      closeDate={new Date().toISOString().slice(0, 10)}
+      closeNotes={card.jcsComment}
+      damages={card.damages}
+      jobCardId={card.jobCardId}
+      returnPath={returnPath}
+    />
+  );
+}
+
+function CloseJobCardForm({
+  barcode,
+  closeDate,
+  closeNotes,
+  damages,
+  jobCardId,
+  returnPath,
+}: Readonly<{
+  barcode: string | null;
+  closeDate: string;
+  closeNotes: string | null;
+  damages: string | null;
+  jobCardId: number;
+  returnPath: string;
+}>) {
+  return (
+    <form action={closeJobCardAction} className="job-card-close-form">
+      <input name="returnPath" type="hidden" value={returnPath} />
+      <input name="jobCardId" type="hidden" value={jobCardId} />
+      <label className="form-label" htmlFor={`close-notes-${jobCardId}`}>
+        Job Card Comment
+      </label>
+      <textarea
+        className="form-input"
+        defaultValue={closeNotes ?? ""}
+        id={`close-notes-${jobCardId}`}
+        maxLength={150}
+        name="closeNotes"
+        required
+        rows={4}
+      />
+      <fieldset>
+        <legend>Damages</legend>
+        <label className="vehicle-checkbox-label" htmlFor={`damages-yes-${jobCardId}`}>
+          <input
+            defaultChecked={damages?.toUpperCase() === "Y"}
+            id={`damages-yes-${jobCardId}`}
+            name="damages"
+            type="radio"
+            value="Y"
+          />{" "}
+          Yes
+        </label>
+        <label className="vehicle-checkbox-label" htmlFor={`damages-no-${jobCardId}`}>
+          <input
+            defaultChecked={damages?.toUpperCase() !== "Y"}
+            id={`damages-no-${jobCardId}`}
+            name="damages"
+            type="radio"
+            value="N"
+          />{" "}
+          No
+        </label>
+      </fieldset>
+      <label className="form-label" htmlFor={`damage-comment-${jobCardId}`}>
+        Add New Comment
+      </label>
+      <textarea
+        className="form-input"
+        id={`damage-comment-${jobCardId}`}
+        maxLength={500}
+        name="damageComment"
+        rows={3}
+      />
+      <label className="form-label" htmlFor={`barcode-${jobCardId}`}>
+        Barcode
+      </label>
+      <input
+        className="form-input"
+        defaultValue={barcode ?? ""}
+        id={`barcode-${jobCardId}`}
+        maxLength={20}
+        name="barcode"
+      />
+      <label className="form-label" htmlFor={`close-date-${jobCardId}`}>
+        Date Completed/Failed
+      </label>
+      <input
+        className="form-input"
+        defaultValue={closeDate}
+        id={`close-date-${jobCardId}`}
+        name="closeDate"
+        required
+        type="date"
+      />
+      <button className="button button-primary" type="submit">
+        Close
+      </button>
+    </form>
+  );
+}
+
+function toDateInputValue(value: string | null) {
+  if (!value) return null;
+  const match = value.match(/^(\d{4})[/-](\d{2})[/-](\d{2})/);
+  return match ? `${match[1]}-${match[2]}-${match[3]}` : null;
 }
 
 export function CapturerJobCardDetails({

@@ -460,6 +460,9 @@ public class TripService : ITripService
         return await _tripRepository.GetDetailsAsync(tripAuthorityCode, allowedSiteCodes);
     }
 
+    public Task<IReadOnlyList<TripAuthorityTripType>> GetTripTypesAsync() =>
+        _tripRepository.GetTripTypesAsync();
+
     public async Task<IEnumerable<Trip>> GetAllTripsAsync(
         IReadOnlySet<short>? allowedSiteCodes = null
     )

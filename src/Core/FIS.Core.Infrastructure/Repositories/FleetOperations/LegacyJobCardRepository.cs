@@ -444,6 +444,66 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         return PaginateJobCards(items, query.Page, query.PageSize);
     }
 
+    public async Task<JobCardPage> GetReadyForClosingPageAsync(JobCardPageQuery query)
+    {
+        var searchTerm = query.SearchTerm?.Trim() ?? string.Empty;
+        var overlay = await OverlayJobCardsFromSelectorAsync(
+            "DEV_SEL_JobcardReadyForClosing",
+            ["@jcnumber"],
+            command =>
+                AddParameter(
+                    command,
+                    "@jcnumber",
+                    DbType.String,
+                    searchTerm.Length == 0 ? null : searchTerm
+                ),
+            allowedVmfCodes: query.AllowedVmfCodes,
+            keyColumnNames: ["jc_number", "JobcardNumber", "Jobcard Number", "Number"]
+        );
+        if (overlay is not null)
+        {
+            return PaginateJobCards(overlay, query.Page, query.PageSize);
+        }
+
+        return await GetPageAsync(
+            query with
+            {
+                StatusCodes = query.StatusCodes is { Count: > 0 } ? query.StatusCodes : [4],
+            }
+        );
+    }
+
+    public async Task<JobCardPage> GetCancelationPageAsync(JobCardPageQuery query)
+    {
+        var searchTerm = query.SearchTerm?.Trim() ?? string.Empty;
+        var overlay = await OverlayJobCardsFromSelectorAsync(
+            "DEV_SEL_JobcardsForCancelation",
+            ["@ggnumber"],
+            command =>
+                AddParameter(
+                    command,
+                    "@ggnumber",
+                    DbType.String,
+                    searchTerm.Length == 0 ? null : searchTerm
+                ),
+            allowedVmfCodes: query.AllowedVmfCodes,
+            keyColumnNames: ["jc_number", "JobcardNumber", "Jobcard Number", "Number"]
+        );
+        if (overlay is not null)
+        {
+            return PaginateJobCards(overlay, query.Page, query.PageSize);
+        }
+
+        return await GetPageAsync(
+            query with
+            {
+                StatusCodes = query.StatusCodes is { Count: > 0 }
+                    ? query.StatusCodes
+                    : [3, 4, 6, 7],
+            }
+        );
+    }
+
     public async Task<RepairCostReportPage> GetRepairCostReportPageAsync(
         RepairCostReportPageQuery query
     )
@@ -1097,6 +1157,76 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         }
 
         return statuses;
+    }
+
+    public async Task<IReadOnlyList<JobCardCloseDetails>?> GetCloseDetailsAsync(string jcNumber)
+    {
+        var trimmed = jcNumber.Trim();
+        if (trimmed.Length == 0)
+        {
+            return [];
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_JobardDetailsForClosing",
+            [["@jcnumber"]],
+            _ => command => AddParameter(command, "@jcnumber", DbType.String, trimmed)
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var leftover = (
+            await QueryAsync(
+                command => AddParameter(command, "@jcNumber", DbType.String, trimmed),
+                columns =>
+                {
+                    var numberColumn = GetNumberColumn(columns);
+                    return numberColumn is null ? "1 = 0" : $"j.[{numberColumn}] = @jcNumber";
+                }
+            )
+        ).FirstOrDefault();
+
+        var details = new List<JobCardCloseDetails>();
+        foreach (var row in rows)
+        {
+            details.Add(
+                new JobCardCloseDetails(
+                    leftover?.job_card_id,
+                    LegacySelectorProcedure.ReadString(row, "GGNumber", "GG Number")
+                        ?? leftover?.Vehicle?.fleet_number,
+                    LegacySelectorProcedure.ReadString(
+                        row,
+                        "jc_number",
+                        "Jobcard Number",
+                        "JobcardNumber"
+                    ) ?? leftover?.jc_number ?? trimmed,
+                    LegacySelectorProcedure.ReadString(row, "extra_description"),
+                    LegacySelectorProcedure.ReadString(row, "JobCardsCapturer"),
+                    LegacySelectorProcedure.ReadString(row, "capturedDate"),
+                    LegacySelectorProcedure.ReadString(row, "handoverName"),
+                    LegacySelectorProcedure.ReadString(row, "handoverDate"),
+                    LegacySelectorProcedure.ReadString(row, "Authorizer"),
+                    LegacySelectorProcedure.ReadString(row, "AuthorizedDate", "AuthorizerDate"),
+                    LegacySelectorProcedure.ReadString(row, "AuthorizerComments"),
+                    LegacySelectorProcedure.ReadString(row, "status_code_description"),
+                    LegacySelectorProcedure.ReadString(row, "DateClosed"),
+                    LegacySelectorProcedure.ReadString(row, "barcode"),
+                    LegacySelectorProcedure.ReadString(row, "jobcardComment"),
+                    LegacySelectorProcedure.ReadString(row, "Damages"),
+                    LegacySelectorProcedure.ReadString(row, "comments")
+                )
+            );
+        }
+
+        if (rows.Count > 0 && details.Count == 0)
+        {
+            return null;
+        }
+
+        return details;
     }
 
     public async Task<IReadOnlyList<JobCardPrintSummary>?> GetPrintableJobCardsAsync(string ggNumber)

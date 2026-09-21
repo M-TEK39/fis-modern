@@ -63,6 +63,11 @@ public interface ITripService
     );
 
     /// <summary>
+    /// Create-trip dropdown membership from DEV_SEL_TripTypes.
+    /// </summary>
+    Task<IReadOnlyList<TripAuthorityTripType>> GetTripTypesAsync();
+
+    /// <summary>
     /// Get all trip authorities with their contract vehicle context.
     /// </summary>
     Task<IEnumerable<Trip>> GetAllTripsAsync(IReadOnlySet<short>? allowedSiteCodes = null);
@@ -202,7 +207,31 @@ public sealed record TripAuthorityDetails(
     Trip Trip,
     IReadOnlyList<TripAuthorityDriver> Drivers,
     IReadOnlyList<TripAuthorityPassenger> Passengers,
-    IReadOnlyList<TripAuthorityRoute> Routes
+    IReadOnlyList<TripAuthorityRoute> Routes,
+    bool HasShowTripVehicleSelector = false,
+    TripAuthorityVehicleSnapshot? ShowTripVehicle = null,
+    string? ShowTripTypeName = null,
+    string? ShowTripIncidentTypeName = null,
+    string? ShowTripCapturedBy = null,
+    bool HasShowTripIncidentSelector = false,
+    IReadOnlyList<TripAuthorityIncidentType>? IncidentTypes = null
+);
+
+public sealed record TripAuthorityIncidentType(int Code, string? Name);
+
+public sealed record TripAuthorityTripType(int Code, string? Name);
+
+public sealed record TripAuthorityVehicleSnapshot(
+    string? DepartmentName,
+    int? SiteCode,
+    string? SiteName,
+    int? ContractCode,
+    int? VmfCode,
+    string? FleetNumber,
+    string? Make,
+    string? Model,
+    string? RegistrationNumber,
+    int? StartOdometer
 );
 
 public sealed record TripAuthorityDriver(

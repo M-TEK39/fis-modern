@@ -10,6 +10,7 @@ import {
 } from "@/app/(fleet-operations)/trips/create/create-trip-form-sections";
 import type { DriverManagementDriver } from "@/lib/api/reference-data/api-driver-management";
 import type { UserApproverChoice } from "@/lib/api/administration/api-user-admin";
+import type { TripAuthorityTripType } from "@/lib/api/fleet-operations/api-trip-authorities";
 
 type FormAction = (formData: FormData) => void | Promise<void>;
 
@@ -37,6 +38,7 @@ export default function CreateTripForm({
   context,
   approvers,
   drivers,
+  tripTypes,
   mode,
   today,
   result,
@@ -45,10 +47,16 @@ export default function CreateTripForm({
   context: VehicleContext;
   approvers: UserApproverChoice[];
   drivers: DriverManagementDriver[];
+  tripTypes: TripAuthorityTripType[];
   mode: string;
   today: string;
   result: string;
 }>) {
+  const defaultTripTypeCode = tripTypes.some((type) => type.code === 1)
+    ? "1"
+    : tripTypes[0]
+      ? String(tripTypes[0].code)
+      : "";
   return (
     <form action={action} className="vehicle-card-form">
       <input name="contractCode" type="hidden" value={context.contractCode} />
@@ -142,14 +150,22 @@ export default function CreateTripForm({
             </label>
             <select
               className="form-input"
-              defaultValue="1"
+              defaultValue={defaultTripTypeCode}
               id="trip-type"
               name="tripTypeCode"
               required
             >
-              <option value="1">Normal (Official Business)</option>
-              <option value="2">Emergency</option>
-              <option value="3">Standby</option>
+              {tripTypes.length === 0 ? (
+                <option disabled value="">
+                  No trip types are linked
+                </option>
+              ) : (
+                tripTypes.map((type) => (
+                  <option key={type.code} value={type.code}>
+                    {type.name?.trim() || String(type.code)}
+                  </option>
+                ))
+              )}
             </select>
           </div>
           <div className="form-field">

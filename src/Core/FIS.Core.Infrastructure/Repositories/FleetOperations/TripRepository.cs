@@ -131,17 +131,23 @@ public sealed class TripRepository : ITripRepository
         IReadOnlySet<short>? allowedSiteCodes = null
     )
     {
-        var tripKeys = await LegacySelectorProcedure.TryReadOrderedKeysAsync(
-            _context,
-            "DEV_SEL_Trip_PerTripID",
-            ["@TripID"],
-            command => AddParameter(command, "@TripID", DbType.Int32, tripId),
-            "TripID",
-            "trip_authority_code"
-        );
-        if (tripKeys is not null && (tripKeys.Count == 0 || !tripKeys.Contains(tripId)))
+        var tripRows = await ReadShowTripSelectorRowsAsync("DEV_SEL_Trip_PerTripID", tripId);
+        if (tripRows is not null)
         {
-            return null;
+            var tripKeys = new List<int>();
+            foreach (var row in tripRows)
+            {
+                var key = LegacySelectorProcedure.ReadInt32(row, "TripID", "trip_authority_code");
+                if (key is > 0)
+                {
+                    tripKeys.Add(key.Value);
+                }
+            }
+
+            if (tripRows.Count == 0 || !tripKeys.Contains(tripId))
+            {
+                return null;
+            }
         }
 
         var trip = await GetByIdAsync(tripId, allowedSiteCodes);
@@ -153,7 +159,108 @@ public sealed class TripRepository : ITripRepository
         var drivers = await OverlayShowTripDriversAsync(tripId);
         var passengers = await OverlayShowTripPassengersAsync(tripId);
         var routes = await OverlayShowTripRoutesAsync(tripId);
-        return new TripAuthorityDetails(trip, drivers, passengers, routes);
+        var vehicleOverlay = await OverlayShowTripVehicleAsync(tripId);
+        var incidentOverlay = await OverlayShowTripIncidentTypesAsync();
+        var tripRow = tripRows?.FirstOrDefault();
+        return new TripAuthorityDetails(
+            trip,
+            drivers,
+            passengers,
+            routes,
+            vehicleOverlay.Present,
+            vehicleOverlay.Vehicle,
+            tripRow is null
+                ? null
+                : LegacySelectorProcedure.ReadString(tripRow, "TripTypeName"),
+            tripRow is null
+                ? null
+                : LegacySelectorProcedure.ReadString(tripRow, "IncidentTypeName"),
+            tripRow is null
+                ? null
+                : LegacySelectorProcedure.ReadString(tripRow, "TripCapturedby", "TripCapturedBy"),
+            incidentOverlay.Present,
+            incidentOverlay.Types
+        );
+    }
+
+    public async Task<IReadOnlyList<TripAuthorityTripType>> GetTripTypesAsync()
+    {
+        var overlayRows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_TripTypes",
+            [[]],
+            _ => null
+        );
+        if (overlayRows is null)
+        {
+            return await GetLeftoverTripTypesAsync();
+        }
+
+        if (overlayRows.Count == 0)
+        {
+            return [];
+        }
+
+        var types = new List<TripAuthorityTripType>();
+        var seen = new HashSet<int>();
+        foreach (var row in overlayRows)
+        {
+            var code = LegacySelectorProcedure.ReadInt32(
+                row,
+                "trip_type_code",
+                "TripTypeCode"
+            );
+            if (code is null or <= 0 || !seen.Add(code.Value))
+            {
+                continue;
+            }
+
+            types.Add(
+                new TripAuthorityTripType(
+                    code.Value,
+                    LegacySelectorProcedure.ReadString(row, "trip_type_name", "TripTypeName")
+                )
+            );
+        }
+
+        return types.Count == 0 ? await GetLeftoverTripTypesAsync() : types;
+    }
+
+    private async Task<IReadOnlyList<TripAuthorityTripType>> GetLeftoverTripTypesAsync()
+    {
+        var columns = await GetTableColumnsAsync("trip_types");
+        if (!columns.Contains("trip_type_code") || !columns.Contains("trip_type_name"))
+        {
+            return [];
+        }
+
+        var results = new List<TripAuthorityTripType>();
+        var conditions = columns.Contains("is_deleted")
+            ? "ISNULL([is_deleted], 0) = 0"
+            : "1 = 1";
+        await ReadRowsAsync(
+            $"""
+            SELECT [trip_type_code], [trip_type_name]
+            FROM [dbo].[trip_types]
+            WHERE {conditions}
+            ORDER BY [trip_type_code]
+            """,
+            _ => { },
+            reader =>
+            {
+                var code = ReadInt16(reader, "trip_type_code");
+                if (code is > 0)
+                {
+                    results.Add(
+                        new TripAuthorityTripType(
+                            code.Value,
+                            ReadString(reader, "trip_type_name")
+                        )
+                    );
+                }
+            }
+        );
+        return results;
     }
 
     public async Task<IEnumerable<Trip>> GetAllAsync(IReadOnlySet<short>? allowedSiteCodes = null) =>
@@ -2647,6 +2754,135 @@ public sealed class TripRepository : ITripRepository
         {
             values.Add(new WriteValue(column, parameter, dbType, value));
         }
+    }
+
+    private async Task<(
+        bool Present,
+        IReadOnlyList<TripAuthorityIncidentType> Types
+    )> OverlayShowTripIncidentTypesAsync()
+    {
+        var overlayRows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_TripIncidentTypes",
+            [[]],
+            _ => null
+        );
+        if (overlayRows is null)
+        {
+            return (false, await GetLeftoverTripIncidentTypesAsync());
+        }
+
+        if (overlayRows.Count == 0)
+        {
+            return (true, []);
+        }
+
+        var types = new List<TripAuthorityIncidentType>();
+        var seen = new HashSet<int>();
+        foreach (var row in overlayRows)
+        {
+            var code = LegacySelectorProcedure.ReadInt32(
+                row,
+                "trip_incident_type_code",
+                "TripIncidentTypeCode"
+            );
+            if (code is null or <= 0 || !seen.Add(code.Value))
+            {
+                continue;
+            }
+
+            types.Add(
+                new TripAuthorityIncidentType(
+                    code.Value,
+                    LegacySelectorProcedure.ReadString(
+                        row,
+                        "trip_incident_type_name",
+                        "TripIncidentTypeName"
+                    )
+                )
+            );
+        }
+
+        return types.Count == 0
+            ? (true, await GetLeftoverTripIncidentTypesAsync())
+            : (true, types);
+    }
+
+    private async Task<IReadOnlyList<TripAuthorityIncidentType>> GetLeftoverTripIncidentTypesAsync()
+    {
+        var columns = await GetTableColumnsAsync("trip_incident_types");
+        if (
+            !columns.Contains("trip_incident_type_code")
+            || !columns.Contains("trip_incident_type_name")
+        )
+        {
+            return [];
+        }
+
+        var results = new List<TripAuthorityIncidentType>();
+        var conditions = columns.Contains("is_deleted")
+            ? "ISNULL([is_deleted], 0) = 0"
+            : "1 = 1";
+        await ReadRowsAsync(
+            $"""
+            SELECT [trip_incident_type_code], [trip_incident_type_name]
+            FROM [dbo].[trip_incident_types]
+            WHERE {conditions}
+            ORDER BY [trip_incident_type_code]
+            """,
+            _ => { },
+            reader =>
+            {
+                var code = ReadInt16(reader, "trip_incident_type_code");
+                if (code is > 0)
+                {
+                    results.Add(
+                        new TripAuthorityIncidentType(
+                            code.Value,
+                            ReadString(reader, "trip_incident_type_name")
+                        )
+                    );
+                }
+            }
+        );
+        return results;
+    }
+
+    private async Task<(
+        bool Present,
+        TripAuthorityVehicleSnapshot? Vehicle
+    )> OverlayShowTripVehicleAsync(int tripId)
+    {
+        var overlayRows = await ReadShowTripSelectorRowsAsync(
+            "DEV_SEL_Vehicle_PerTripID",
+            tripId
+        );
+        if (overlayRows is null)
+        {
+            return (false, null);
+        }
+
+        if (overlayRows.Count == 0)
+        {
+            return (true, null);
+        }
+
+        var row = overlayRows[0];
+        return (
+            true,
+            new TripAuthorityVehicleSnapshot(
+                LegacySelectorProcedure.ReadString(row, "DepartmentName"),
+                LegacySelectorProcedure.ReadInt32(row, "SiteCode"),
+                LegacySelectorProcedure.ReadString(row, "SiteName"),
+                LegacySelectorProcedure.ReadInt32(row, "ContractCode"),
+                LegacySelectorProcedure.ReadInt32(row, "VMFCode", "vmf_code"),
+                LegacySelectorProcedure.ReadString(row, "FleetNumber"),
+                LegacySelectorProcedure.ReadString(row, "Make"),
+                LegacySelectorProcedure.ReadString(row, "Model"),
+                LegacySelectorProcedure.ReadString(row, "RegistrationNumber"),
+                LegacySelectorProcedure.ReadInt32(row, "StartODOMeter")
+            )
+        );
     }
 
     private async Task<IReadOnlyList<TripAuthorityDriver>> OverlayShowTripDriversAsync(int tripId)

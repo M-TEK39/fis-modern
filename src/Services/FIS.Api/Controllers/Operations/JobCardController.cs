@@ -583,6 +583,82 @@ public class JobCardController : BaseApiController
         }
     }
 
+    [HttpGet("close/details")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetCloseDetails([FromQuery] int? jobCardId)
+    {
+        if (!HasJobCardCapturerRole())
+            return Forbid();
+
+        try
+        {
+            if (jobCardId is not > 0)
+                return BadRequest(new { error = "A job card ID is required." });
+
+            var leftover = await _repository.GetByIdAsync(jobCardId.Value);
+            if (leftover is null || !await IsVehicleAllowedAsync(leftover.vmf_code))
+                return NotFound(new { error = "Job card not found." });
+
+            var jcNumber = leftover.jc_number?.Trim() ?? string.Empty;
+            if (jcNumber.Length == 0)
+            {
+                return Ok(new { overlay = false });
+            }
+
+            var overlay = await _repository.GetCloseDetailsAsync(jcNumber);
+            if (overlay is null)
+            {
+                return Ok(new { overlay = false });
+            }
+
+            var item = overlay.FirstOrDefault();
+            if (item is not null)
+            {
+                item = item with { JobCardId = leftover.job_card_id };
+            }
+
+            return Ok(
+                new
+                {
+                    overlay = true,
+                    item = item is null
+                        ? null
+                        : new
+                        {
+                            jobCardId = item.JobCardId,
+                            ggNumber = item.GgNumber,
+                            jcNumber = item.JcNumber,
+                            extraDescription = item.ExtraDescription,
+                            jobCardsCapturer = item.JobCardsCapturer,
+                            capturedDate = item.CapturedDate,
+                            handoverName = item.HandoverName,
+                            handoverDate = item.HandoverDate,
+                            authorizer = item.Authorizer,
+                            authorizedDate = item.AuthorizedDate,
+                            authorizerComments = item.AuthorizerComments,
+                            statusDescription = item.StatusDescription,
+                            dateClosed = item.DateClosed,
+                            barcode = item.Barcode,
+                            jobcardComment = item.JobcardComment,
+                            damages = item.Damages,
+                            comments = item.Comments,
+                        },
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting close job-card details");
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving close job-card details" }
+            );
+        }
+    }
+
     /// <summary>
     /// Archive JobcardEditUpdateAndPrint status dropdown uses
     /// DEV_SEL_JobcardStatus with DataTextField status_code_description
@@ -766,7 +842,8 @@ public class JobCardController : BaseApiController
         [FromQuery] string? searchType = "GG",
         [FromQuery] int? jobCardId = null,
         [FromQuery] string[]? statusCodes = null,
-        [FromQuery] string? mode = null
+        [FromQuery] string? mode = null,
+        [FromQuery] string? list = null
     )
     {
         if (!HasJobCardAccess())
@@ -782,19 +859,27 @@ public class JobCardController : BaseApiController
         if (jobCardId is <= 0)
             return BadRequest(new { error = "Job card ID must be a positive integer." });
 
+        var listKind = list?.Trim().ToLowerInvariant();
+        if (listKind is not (null or "" or "close" or "cancel"))
+            return BadRequest(new { error = "List must be close or cancel." });
+
         try
         {
-            var result = await _repository.GetPageAsync(
-                new JobCardPageQuery(
-                    Math.Max(1, page),
-                    Math.Clamp(pageSize, 1, 100),
-                    search,
-                    normalizedSearchType,
-                    parsedStatusCodes,
-                    jobCardId,
-                    await GetAccessibleVmfCodesAsync()
-                )
+            var query = new JobCardPageQuery(
+                Math.Max(1, page),
+                Math.Clamp(pageSize, 1, 100),
+                search,
+                normalizedSearchType,
+                parsedStatusCodes,
+                jobCardId,
+                await GetAccessibleVmfCodesAsync()
             );
+            var result = listKind switch
+            {
+                "close" => await _repository.GetReadyForClosingPageAsync(query),
+                "cancel" => await _repository.GetCancelationPageAsync(query),
+                _ => await _repository.GetPageAsync(query),
+            };
 
             return Ok(
                 new

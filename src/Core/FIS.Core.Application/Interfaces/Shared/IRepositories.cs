@@ -822,6 +822,7 @@ public interface ITripRepository
     Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode, IReadOnlySet<short>? allowedSiteCodes = null);
     Task<IEnumerable<Trip>> GetTripsByDriverAsync(string driverId, IReadOnlySet<short>? allowedSiteCodes = null);
     Task<IEnumerable<Trip>> GetTripsByContractAsync(int contractCode, IReadOnlySet<short>? allowedSiteCodes = null);
+    Task<IReadOnlyList<TripAuthorityTripType>> GetTripTypesAsync();
     /// <summary>
     /// Checks for unexpired trip authorities using the archived
     /// NEW_DEV_VAL_OpenTripAuthority procedure when it is available.

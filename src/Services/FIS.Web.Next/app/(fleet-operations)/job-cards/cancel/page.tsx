@@ -50,7 +50,7 @@ async function CancelJobCardsContent({
       pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
       search,
       searchType: mode,
-      statusCodes: [3, 4, 6, 7],
+      list: "cancel",
     });
     const tableReturnPath = jobCardPageHref(
       "/job-cards/cancel",
@@ -74,9 +74,9 @@ async function CancelJobCardsContent({
             <JobCardSearchForm
               action="/job-cards/cancel"
               inputId="cancel-job-card-search"
-              inputLabel="Vehicle or job card"
+              inputLabel="GG Number"
               mode={mode}
-              placeholder="GG, GP, or job card number"
+              placeholder="GG number"
               search={search}
             />
           </section>

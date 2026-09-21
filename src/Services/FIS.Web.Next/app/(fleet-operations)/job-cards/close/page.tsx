@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { JobCardSearchForm, JobCardTable } from "@/app/(fleet-operations)/job-cards/_components";
+import { CloseJobCardDetails, JobCardSearchForm, JobCardTable, LeftoverCloseJobCardForm } from "@/app/(fleet-operations)/job-cards/_components";
 import { hasJobCardAccess, hasRole } from "@/app/(fleet-operations)/job-cards/_utils";
 import {
   AccessRestricted,
@@ -16,6 +16,7 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_page-utils";
 import {
   DEFAULT_JOB_CARD_PAGE_SIZE,
+  getCloseJobCardDetails,
   getJobCardsPage,
   JobCardApiError,
 } from "@/lib/api/fleet-operations/api-job-cards";
@@ -44,19 +45,34 @@ async function CloseJobCardsContent({
   const search = queryValue(query.search);
   const mode = querySearchType(query.mode);
   const page = queryPage(query.page);
+    const selectedId = Number(queryValue(query.id));
   try {
     const pageData = await getJobCardsPage({
       page,
       pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
       search,
       searchType: mode,
-      statusCodes: [4],
+      list: "close",
     });
     const tableReturnPath = jobCardPageHref(
       "/job-cards/close",
       { ...query, id: undefined },
       pageData.page,
     );
+    const selectedCard =
+      Number.isInteger(selectedId) && selectedId > 0
+        ? (pageData.items.find((card) => card.jobCardId === selectedId) ?? null)
+        : null;
+    let closeDetails: Awaited<ReturnType<typeof getCloseJobCardDetails>> | null = null;
+    if (Number.isInteger(selectedId) && selectedId > 0) {
+      try {
+        closeDetails = await getCloseJobCardDetails(selectedId);
+      } catch (error) {
+        if (!(error instanceof JobCardApiError && error.reason === "not-found")) {
+          throw error;
+        }
+      }
+    }
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="close-job-cards-title">
@@ -74,9 +90,9 @@ async function CloseJobCardsContent({
             <JobCardSearchForm
               action="/job-cards/close"
               inputId="close-job-card-search"
-              inputLabel="Vehicle or job card"
+              inputLabel="Job card number"
               mode={mode}
-              placeholder="GG, GP, or job card number"
+              placeholder="Job card number"
               search={search}
             />
           </section>
@@ -92,6 +108,16 @@ async function CloseJobCardsContent({
               pageHref={(nextPage) => jobCardPageHref("/job-cards/close", query, nextPage)}
             />
           </section>
+          {closeDetails?.overlay && closeDetails.item ? (
+            <CloseJobCardDetails details={closeDetails.item} returnPath={tableReturnPath} />
+          ) : closeDetails?.overlay ? (
+            <p className="muted-copy">No job card details found.</p>
+          ) : selectedCard ? (
+            <section className="vehicle-status-maintenance-panel" aria-labelledby="leftover-close-title">
+              <h2 id="leftover-close-title">Job Card Details</h2>
+              <LeftoverCloseJobCardForm card={selectedCard} returnPath={tableReturnPath} />
+            </section>
+          ) : null}
         </section>
       </main>
     );
