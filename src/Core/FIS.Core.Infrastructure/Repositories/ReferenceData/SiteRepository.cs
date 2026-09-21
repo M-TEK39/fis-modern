@@ -92,9 +92,10 @@ public sealed class SiteRepository : ISiteRepository
 
     public async Task<IEnumerable<Site>> GetActiveSitesAsync()
     {
+        List<Site> leftover;
         try
         {
-            return await QueryAsync("[site_active] = 1");
+            leftover = (await QueryAsync("[site_active] = 1")).ToList();
         }
         catch (InvalidOperationException ex)
             when (ex.Message.Contains("missing stable legacy columns", StringComparison.OrdinalIgnoreCase))
@@ -102,8 +103,21 @@ public sealed class SiteRepository : ISiteRepository
             // Vehicle inception only needs the site selector. Preserve that
             // legacy surface even when a restored database predates one of the
             // later site-maintenance columns used by the full repository.
-            return await QueryVehicleSelectorSitesAsync();
+            leftover = await QueryVehicleSelectorSitesAsync();
         }
+
+        var keys = await LegacySelectorProcedure.TryReadOrderedKeysAsync(
+            _context,
+            "DEV_SEL_SitesAll",
+            [],
+            null,
+            "site_code",
+            "Site_code",
+            "SiteCode"
+        );
+        return keys is null
+            ? leftover
+            : LegacySelectorProcedure.OrderByKeys(leftover, keys, site => site.Site_code);
     }
 
     private async Task<List<Site>> QueryVehicleSelectorSitesAsync()

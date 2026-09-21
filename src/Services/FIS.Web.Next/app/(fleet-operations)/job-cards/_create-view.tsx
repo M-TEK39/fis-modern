@@ -5,22 +5,31 @@ import { JobCardVehicleResults } from "@/app/(fleet-operations)/job-cards/_compo
 import { valueOrDash } from "@/app/(fleet-operations)/job-cards/_utils";
 import type { ExtraCodeRecord } from "@/lib/api/reference-data/api-extra-codes";
 import type { VehicleOption } from "@/lib/api/vehicles/api-vehicles";
+import type { JobCardCaptureVehicleSummary } from "@/lib/api/fleet-operations/api-job-cards";
 
 type CreateJobCardViewProps = Readonly<{
   errorMessage: string;
   extraCodes: readonly ExtraCodeRecord[];
+  extrasPreserveOrder: boolean;
+  fittedExtras: readonly string[] | null;
+  jobcardsOnStatus: readonly string[] | null;
   matchingVehicles: readonly VehicleOption[];
   saved: boolean;
   search: string;
+  summary: JobCardCaptureVehicleSummary | null;
   vehicle?: VehicleOption;
 }>;
 
 export function CreateJobCardView({
   errorMessage,
   extraCodes,
+  extrasPreserveOrder,
+  fittedExtras,
+  jobcardsOnStatus,
   matchingVehicles,
   saved,
   search,
+  summary,
   vehicle,
 }: CreateJobCardViewProps) {
   return (
@@ -48,8 +57,14 @@ export function CreateJobCardView({
         ) : null}
         {vehicle ? (
           <>
-            <VehicleSummary vehicle={vehicle} />
-            <CreateJobCardCategories vehicle={vehicle} extraCodes={extraCodes} />
+            <VehicleSummary summary={summary} vehicle={vehicle} />
+            <CreateJobCardCategories
+              extraCodes={extraCodes}
+              extrasPreserveOrder={extrasPreserveOrder}
+              fittedExtras={fittedExtras}
+              jobcardsOnStatus={jobcardsOnStatus}
+              vehicle={vehicle}
+            />
           </>
         ) : (
           <CreateJobCardVehicleSelection search={search} vehicles={matchingVehicles} />
@@ -98,14 +113,23 @@ function CreateJobCardVehicleSelection({
 
 function CreateJobCardCategories({
   extraCodes,
+  extrasPreserveOrder,
+  fittedExtras,
+  jobcardsOnStatus,
   vehicle,
-}: Readonly<{ extraCodes: readonly ExtraCodeRecord[]; vehicle: VehicleOption }>) {
+}: Readonly<{
+  extraCodes: readonly ExtraCodeRecord[];
+  extrasPreserveOrder: boolean;
+  fittedExtras: readonly string[] | null;
+  jobcardsOnStatus: readonly string[] | null;
+  vehicle: VehicleOption;
+}>) {
   return (
     <section className="vehicle-status-maintenance-panel" aria-labelledby="job-card-category-title">
       <div className="vehicle-form-section-header">
         <div>
           <p className="eyebrow">{extraCodes.length} available</p>
-          <h2 id="job-card-category-title">Select Job Card Categories</h2>
+          <h2 id="job-card-category-title">Select a Job Card and click create</h2>
         </div>
       </div>
       {extraCodes.length === 0 ? (
@@ -118,13 +142,45 @@ function CreateJobCardCategories({
             value={`/job-cards/create?vmfCode=${vehicle.vmfCode}`}
           />
           <input name="vmfCode" type="hidden" value={vehicle.vmfCode} />
+          {fittedExtras ? (
+            <details className="vehicle-status-maintenance-panel">
+              <summary>View extras on vehicle</summary>
+              <p>These are the extras already fitted to the vehicle</p>
+              {fittedExtras.length === 0 ? (
+                <p className="muted-copy">No extras are fitted to this vehicle.</p>
+              ) : (
+                <ul>
+                  {fittedExtras.map((item, index) => (
+                    <li key={`${item}-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              )}
+            </details>
+          ) : null}
+          {jobcardsOnStatus ? (
+            <details className="vehicle-status-maintenance-panel">
+              <summary>View Jobcards for vehicle</summary>
+              <p>Job Cards created for this vehicle</p>
+              {jobcardsOnStatus.length === 0 ? (
+                <p className="muted-copy">No job cards exist for this vehicle.</p>
+              ) : (
+                <ul>
+                  {jobcardsOnStatus.map((item, index) => (
+                    <li key={`${item}-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              )}
+            </details>
+          ) : null}
           <div className="form-grid">
-            {extraCodes
-              .filter((item) => !item.isDeleted)
-              .sort((left, right) =>
-                (left.description ?? "").localeCompare(right.description ?? ""),
-              )
-              .map((item) => (
+            {(extrasPreserveOrder
+              ? extraCodes.filter((item) => !item.isDeleted)
+              : extraCodes
+                  .filter((item) => !item.isDeleted)
+                  .toSorted((left, right) =>
+                    (left.description ?? "").localeCompare(right.description ?? ""),
+                  )
+            ).map((item) => (
                 <label className="vehicle-checkbox-label" key={item.extraCode}>
                   <input name="extraCode" type="checkbox" value={item.extraCode} />{" "}
                   {item.description || `Extra code ${item.extraCode}`}
@@ -148,17 +204,48 @@ function CreateJobCardCategories({
   );
 }
 
-function VehicleSummary({ vehicle }: Readonly<{ vehicle: VehicleOption }>) {
+function VehicleSummary({
+  summary,
+  vehicle,
+}: Readonly<{ summary: JobCardCaptureVehicleSummary | null; vehicle: VehicleOption }>) {
+  const rows = summary
+    ? [
+        ["GG Number", summary.ggNumber],
+        ["Registration Number", summary.registrationNumber],
+        ["Class Description", summary.classDescription],
+        ["Model Description", summary.modelDescription],
+        ["Take on Odo", summary.odoReading],
+        ["VIN Number", summary.vinNumber],
+        ["Engine Number", summary.engineNumber],
+        ["Year Model", summary.yearModel],
+        ["Purchased From", summary.purchasedFrom],
+        ["Hire Type", summary.hireType],
+        ["Hired From", summary.hiredFrom],
+        ["Location", summary.location],
+      ]
+    : [
+        ["GG Number", vehicle.fleetNumber],
+        ["Registration Number", vehicle.registrationNumber],
+        ["VMF code", String(vehicle.vmfCode)],
+      ];
   return (
     <section
       className="vehicle-status-maintenance-panel"
       aria-labelledby="job-card-vehicle-summary-title"
     >
-      <p className="eyebrow">Selected vehicle</p>
+      <p className="eyebrow">Vehicle Summary</p>
       <h2 id="job-card-vehicle-summary-title">
-        {valueOrDash(vehicle.fleetNumber)} / {valueOrDash(vehicle.registrationNumber)}
+        {valueOrDash(summary?.ggNumber ?? vehicle.fleetNumber)} /{" "}
+        {valueOrDash(summary?.registrationNumber ?? vehicle.registrationNumber)}
       </h2>
-      <p className="muted-copy">VMF code {vehicle.vmfCode}</p>
+      <dl className="form-grid">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{valueOrDash(value)}</dd>
+          </div>
+        ))}
+      </dl>
     </section>
   );
 }

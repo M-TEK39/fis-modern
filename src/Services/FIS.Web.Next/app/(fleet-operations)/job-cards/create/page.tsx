@@ -9,8 +9,8 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_page";
 import { getJobCardSession, queryValue } from "@/app/(fleet-operations)/job-cards/_page-utils";
 import { hasJobCardAccess, hasRole } from "@/app/(fleet-operations)/job-cards/_utils";
+import { getJobCardCaptureVehicles, getJobCardCaptureContext, JobCardApiError } from "@/lib/api/fleet-operations/api-job-cards";
 import { getExtraCodes, ExtraCodeApiError } from "@/lib/api/reference-data/api-extra-codes";
-import { getVehicleOptions, VehicleApiError } from "@/lib/api/vehicles/api-vehicles";
 
 export default function CreateJobCardPage({
   searchParams,
@@ -39,7 +39,10 @@ async function CreateJobCardContent({
   const saved = queryValue(query.saved) === "1";
   const errorMessage = queryValue(query.error);
   try {
-    const [vehicles, extraCodes] = await Promise.all([getVehicleOptions(), getExtraCodes()]);
+    const [vehicles, leftoverExtras] = await Promise.all([
+      getJobCardCaptureVehicles(),
+      getExtraCodes(),
+    ]);
     const normalized = search.toLocaleLowerCase();
     const matchingVehicles = normalized
       ? vehicles.filter((vehicle) =>
@@ -54,19 +57,50 @@ async function CreateJobCardContent({
       Number.isInteger(vmfCode) && vmfCode > 0
         ? vehicles.find((item) => item.vmfCode === vmfCode)
         : null;
+    const captureContext =
+      vehicle?.fleetNumber
+        ? await getJobCardCaptureContext(vehicle.fleetNumber)
+        : null;
+    const extraCodes =
+      captureContext?.extras.overlay === true
+        ? captureContext.extras.items.map((item) => ({
+            extraCode: item.extraCode,
+            description: item.description,
+            categoryTypeCode: null,
+            specific: null,
+            additional: null,
+            dateCreated: null,
+            dateUpdated: null,
+            createdByUserCode: null,
+            modifiedByUserCode: null,
+            isDeleted: false,
+          }))
+        : leftoverExtras;
     return (
       <CreateJobCardView
         errorMessage={errorMessage}
         extraCodes={extraCodes}
+        extrasPreserveOrder={captureContext?.extras.overlay === true}
+        fittedExtras={
+          captureContext?.fittedExtras.overlay === true ? captureContext.fittedExtras.items : null
+        }
+        jobcardsOnStatus={
+          captureContext?.jobcardsOnStatus.overlay === true
+            ? captureContext.jobcardsOnStatus.items
+            : null
+        }
         matchingVehicles={matchingVehicles}
         saved={saved}
         search={search}
+        summary={
+          captureContext?.summary.overlay === true ? captureContext.summary.item : null
+        }
         vehicle={vehicle ?? undefined}
       />
     );
   } catch (error) {
     const message =
-      error instanceof VehicleApiError || error instanceof ExtraCodeApiError
+      error instanceof JobCardApiError || error instanceof ExtraCodeApiError
         ? "Vehicle or job card categories could not be loaded."
         : "The create Job Card page could not be loaded.";
     return (

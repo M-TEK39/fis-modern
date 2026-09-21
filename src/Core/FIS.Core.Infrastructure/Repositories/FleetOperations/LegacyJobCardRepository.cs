@@ -175,10 +175,185 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         return new JobCardPage(items, page, pageSize, totalRecords);
     }
 
+    public async Task<JobCardPage> GetAuthorizerPageAsync(JobCardPageQuery query)
+    {
+        var searchTerm = query.SearchTerm?.Trim() ?? string.Empty;
+        var searchType = string.Equals(query.SearchType, "GP", StringComparison.OrdinalIgnoreCase)
+            ? "GP"
+            : "GG";
+        var jobCardKeys = new[]
+        {
+            "Jobcard Number",
+            "jc_number",
+            "JobcardNumber",
+            "Number",
+        };
+
+        if (searchTerm.Length > 0 && searchType == "GG")
+        {
+            var overlay = await OverlayJobCardsFromSelectorAsync(
+                "DEV_SEL_JobcardsForAuthorizers",
+                ["@ggnumber"],
+                command => AddParameter(command, "@ggnumber", DbType.String, searchTerm),
+                allowedVmfCodes: query.AllowedVmfCodes,
+                keyColumnNames: jobCardKeys,
+                leftoverPredicate: _ =>
+                    "(vm.[fleet_number] = @ggNumber OR vm.[registration_number] = @ggNumber)",
+                leftoverBind: command =>
+                    AddParameter(command, "@ggNumber", DbType.String, searchTerm)
+            );
+            if (overlay is not null)
+            {
+                return PaginateJobCards(overlay, query.Page, query.PageSize);
+            }
+        }
+
+        var statusCodes = query.StatusCodes?.Distinct().ToArray() ?? [];
+        if (statusCodes.Length > 0)
+        {
+            var overlay = await OverlayAuthorizerStatusReportAsync(
+                statusCodes,
+                query.AllowedVmfCodes,
+                jobCardKeys
+            );
+            if (overlay is not null)
+            {
+                if (searchTerm.Length > 0)
+                {
+                    overlay = overlay
+                        .Where(jobCard => MatchesAuthorizerSearch(jobCard, searchTerm, searchType))
+                        .ToList();
+                }
+
+                return PaginateJobCards(overlay, query.Page, query.PageSize);
+            }
+        }
+
+        return await GetPageAsync(query);
+    }
+
+    public async Task<JobCardAuthorizerGgStatsPage?> GetAuthorizerGgStatsAsync(
+        JobCardAuthorizerGgStatsQuery query
+    )
+    {
+        var ggNumber = query.GgNumber?.Trim() ?? string.Empty;
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_JobcardsPerGGNumberAuthorizer",
+            [[], ["@ggnumber"]],
+            actualParameters =>
+            {
+                if (
+                    actualParameters.Count == 1
+                    && actualParameters[0].Equals("@ggnumber", StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    return command =>
+                        AddParameter(
+                            command,
+                            "@ggnumber",
+                            DbType.String,
+                            ggNumber.Length > 0 ? ggNumber : DBNull.Value
+                        );
+                }
+
+                return null;
+            }
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var stats = new List<JobCardAuthorizerGgStats>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var fleetNumber = LegacySelectorProcedure.ReadString(
+                row,
+                "GGNumber",
+                "GG Number",
+                "fleet_number"
+            );
+            if (string.IsNullOrWhiteSpace(fleetNumber) || !seen.Add(fleetNumber))
+            {
+                continue;
+            }
+
+            stats.Add(
+                new JobCardAuthorizerGgStats(
+                    fleetNumber,
+                    LegacySelectorProcedure.ReadInt32(row, "Jobcards"),
+                    LegacySelectorProcedure.ReadInt32(row, "Pending"),
+                    LegacySelectorProcedure.ReadInt32(
+                        row,
+                        "AwaitingAuthorisation",
+                        "Awaiting Authorisation"
+                    ),
+                    LegacySelectorProcedure.ReadInt32(row, "Authorised", "Authorized"),
+                    LegacySelectorProcedure.ReadInt32(row, "Inprogress", "In Progress"),
+                    LegacySelectorProcedure.ReadInt32(row, "Canceled", "Cancelled"),
+                    LegacySelectorProcedure.ReadInt32(row, "Failed"),
+                    LegacySelectorProcedure.ReadInt32(row, "Completed")
+                )
+            );
+        }
+
+        if (rows.Count > 0 && stats.Count == 0)
+        {
+            return null;
+        }
+
+        if (ggNumber.Length > 0)
+        {
+            stats = stats
+                .Where(item => item.GgNumber.Equals(ggNumber, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        if (query.AllowedVmfCodes is not null)
+        {
+            if (stats.Count == 0)
+            {
+                return new JobCardAuthorizerGgStatsPage([], Math.Max(1, query.Page), Math.Clamp(query.PageSize, 1, 100), 0);
+            }
+
+            var leftover = await LoadCaptureVehiclesByFleetNumbersAsync(
+                stats.Select(item => item.GgNumber).ToList()
+            );
+            var allowedFleets = leftover
+                .Where(vehicle => query.AllowedVmfCodes.Contains(vehicle.VmfCode))
+                .Select(vehicle => vehicle.FleetNumber)
+                .Where(fleet => !string.IsNullOrWhiteSpace(fleet))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            stats = stats
+                .Where(item => allowedFleets.Contains(item.GgNumber))
+                .ToList();
+        }
+
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var totalRecords = stats.Count;
+        var items = stats.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return new JobCardAuthorizerGgStatsPage(items, page, pageSize, totalRecords);
+    }
+
     public async Task<JobCardPage> GetPriorityUnassignedPageAsync(
         PriorityUnassignedJobCardPageQuery query
     )
     {
+        var overlay = await OverlayJobCardsFromSelectorAsync(
+            "DEV_SEL_JobcardPriotiyForCapturers",
+            [],
+            bind: null,
+            allowedVmfCodes: query.AllowedVmfCodes,
+            ["JobcardNumber", "jc_number", "Jobcard Number", "Number"]
+        );
+        if (overlay is not null)
+        {
+            return PaginateJobCards(overlay, query.Page, query.PageSize);
+        }
+
         var page = Math.Max(1, query.Page);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var columns = await GetAvailableColumnsAsync();
@@ -241,6 +416,32 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             items.Add(Map(reader));
 
         return new JobCardPage(items, page, pageSize, totalRecords);
+    }
+
+    public async Task<JobCardPage> GetAssignedPriorityPageAsync(
+        PriorityUnassignedJobCardPageQuery query
+    )
+    {
+        var overlay = await OverlayJobCardsFromSelectorAsync(
+            "DEV_SEL_JobcardsForAssignedPriority",
+            [],
+            bind: null,
+            allowedVmfCodes: query.AllowedVmfCodes,
+            ["JobcardNumber", "jc_number", "Jobcard Number", "Number"]
+        );
+        if (overlay is not null)
+        {
+            return PaginateJobCards(overlay, query.Page, query.PageSize);
+        }
+
+        var leftover = await QueryAsync(null, AssignedPriorityPredicate);
+        IReadOnlyList<JobCard> items = leftover;
+        if (query.AllowedVmfCodes is { } allowedVmfCodes)
+        {
+            items = leftover.Where(jobCard => allowedVmfCodes.Contains(jobCard.vmf_code)).ToList();
+        }
+
+        return PaginateJobCards(items, query.Page, query.PageSize);
     }
 
     public async Task<RepairCostReportPage> GetRepairCostReportPageAsync(
@@ -376,25 +577,53 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         );
     }
 
-    public async Task<IEnumerable<JobCard>> GetByGGNumberAsync(string ggNumber) =>
-        await QueryAsync(
-            command => AddParameter(command, "@ggNumber", DbType.String, ggNumber.Trim()),
+    public async Task<IEnumerable<JobCard>> GetByGGNumberAsync(string ggNumber)
+    {
+        var trimmed = ggNumber.Trim();
+        var overlay = await OverlayJobCardsFromSelectorAsync(
+            "DEV_SEL_JobCards",
+            ["@ggNumber"],
+            command => AddParameter(command, "@ggNumber", DbType.String, trimmed),
+            allowedVmfCodes: null,
+            ["jc_number", "JobcardNumber", "Jobcard Number", "Number"],
+            leftoverPredicate: _ =>
+                "(vm.[fleet_number] = @ggNumber OR vm.[registration_number] = @ggNumber)",
+            leftoverBind: command => AddParameter(command, "@ggNumber", DbType.String, trimmed)
+        );
+        if (overlay is not null)
+        {
+            return overlay;
+        }
+
+        return await QueryAsync(
+            command => AddParameter(command, "@ggNumber", DbType.String, trimmed),
             _ => "(vm.[fleet_number] = @ggNumber OR vm.[registration_number] = @ggNumber)"
         );
+    }
 
-    public async Task<IEnumerable<JobCard>> GetPriorityUnassignedAsync() =>
-        await QueryAsync(null, PriorityUnassignedPredicate);
-
-    public async Task<IEnumerable<JobCard>> GetAssignedPriorityAsync() =>
-        await QueryAsync(
-            null,
-            columns =>
-                HasLegacyReviewedColumn(columns) && GetNumberColumn(columns) is { } numberColumn
-                    ? IsBitColumn(columns, "priority")
-                        ? $"j.[priority] = 1 AND j.[status_code] = 3 AND j.[{numberColumn}] <> 'Not Assigned'"
-                        : $"j.[priority] = 'Y' AND j.[status_code] = 3 AND j.[{numberColumn}] <> 'Not Assigned'"
-                    : "j.[priority] = 'H' AND j.[assigned_to] IS NOT NULL AND j.[status_code] NOT IN (5, 7)"
+    public async Task<IEnumerable<JobCard>> GetPriorityUnassignedAsync()
+    {
+        var overlay = await OverlayJobCardsFromSelectorAsync(
+            "DEV_SEL_JobcardPriotiyForCapturers",
+            [],
+            bind: null,
+            allowedVmfCodes: null,
+            ["JobcardNumber", "jc_number", "Jobcard Number", "Number"]
         );
+        return overlay ?? await QueryAsync(null, PriorityUnassignedPredicate);
+    }
+
+    public async Task<IEnumerable<JobCard>> GetAssignedPriorityAsync()
+    {
+        var overlay = await OverlayJobCardsFromSelectorAsync(
+            "DEV_SEL_JobcardsForAssignedPriority",
+            [],
+            bind: null,
+            allowedVmfCodes: null,
+            ["JobcardNumber", "jc_number", "Jobcard Number", "Number"]
+        );
+        return overlay ?? await QueryAsync(null, AssignedPriorityPredicate);
+    }
 
     public async Task<IEnumerable<JobCard>> GetByStatusAsync(int statusCode) =>
         await QueryAsync(
@@ -407,6 +636,614 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             command => AddParameter(command, "@authorizer", DbType.Int32, authorizerUserId),
             columns => $"{AuthorizerExpression(columns)} = @authorizer"
         );
+
+    public async Task<IReadOnlyList<JobCardCaptureVehicle>?> GetVehiclesAvailableForCaptureAsync()
+    {
+        var keys = await LegacySelectorProcedure.TryReadOrderedStringKeysAsync(
+            _context,
+            "DEV_SEL_NewVehiclesWithoutJobcards",
+            [],
+            bind: null,
+            "GG Number",
+            "GGNumber",
+            "fleet_number"
+        );
+        if (keys is null)
+        {
+            return null;
+        }
+
+        if (keys.Count == 0)
+        {
+            return [];
+        }
+
+        var leftover = await LoadCaptureVehiclesByFleetNumbersAsync(keys);
+        return LegacySelectorProcedure.OrderByKeys(
+            leftover,
+            keys,
+            vehicle => vehicle.FleetNumber
+        );
+    }
+
+    public async Task<IReadOnlyList<JobCardCaptureVehicleSummary>?> GetCaptureVehicleSummaryAsync(
+        string ggNumber
+    )
+    {
+        var trimmed = ggNumber.Trim();
+        if (trimmed.Length == 0)
+        {
+            return [];
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_NewVehicleSummary",
+            [["@ggnumber"]],
+            _ => command => AddParameter(command, "@ggnumber", DbType.String, trimmed)
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var leftover = await LoadCaptureVehiclesByFleetNumbersAsync([trimmed]);
+        var leftoverByFleet = leftover
+            .Where(vehicle => !string.IsNullOrWhiteSpace(vehicle.FleetNumber))
+            .GroupBy(vehicle => vehicle.FleetNumber!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        var summaries = new List<JobCardCaptureVehicleSummary>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var fleetNumber = LegacySelectorProcedure.ReadString(
+                row,
+                "GGNumber",
+                "GG Number",
+                "fleet_number"
+            );
+            if (string.IsNullOrWhiteSpace(fleetNumber) || !seen.Add(fleetNumber))
+            {
+                continue;
+            }
+
+            leftoverByFleet.TryGetValue(fleetNumber, out var leftoverVehicle);
+            summaries.Add(
+                new JobCardCaptureVehicleSummary(
+                    leftoverVehicle?.VmfCode,
+                    fleetNumber,
+                    LegacySelectorProcedure.ReadString(row, "RegistrationNumber", "registration_number")
+                        ?? leftoverVehicle?.RegistrationNumber,
+                    LegacySelectorProcedure.ReadString(row, "ClassDescription"),
+                    LegacySelectorProcedure.ReadString(row, "ModelDescription"),
+                    LegacySelectorProcedure.ReadString(row, "OdoReading"),
+                    LegacySelectorProcedure.ReadString(row, "VINNumber", "VinNumber"),
+                    LegacySelectorProcedure.ReadString(row, "EngineNumber"),
+                    LegacySelectorProcedure.ReadString(row, "YearModel"),
+                    LegacySelectorProcedure.ReadString(row, "PurchasedFrom"),
+                    LegacySelectorProcedure.ReadString(row, "HireType"),
+                    LegacySelectorProcedure.ReadString(row, "HiredFrom"),
+                    LegacySelectorProcedure.ReadString(row, "Location")
+                )
+            );
+        }
+
+        if (rows.Count > 0 && summaries.Count == 0)
+        {
+            return null;
+        }
+
+        return summaries;
+    }
+
+    public async Task<IReadOnlyList<JobCardCaptureExtra>?> GetCaptureExtrasInCategoryAsync(
+        string ggNumber
+    )
+    {
+        var trimmed = ggNumber.Trim();
+        if (trimmed.Length == 0)
+        {
+            return [];
+        }
+
+        var parameters = await LegacySelectorProcedure.TryGetProcedureParametersAsync(
+            _context,
+            "DEV_SEL_ExtrasInCategory"
+        );
+        if (parameters is null)
+        {
+            return null;
+        }
+
+        if (
+            parameters.Count == 2
+            && parameters[0].Equals("@CatID", StringComparison.OrdinalIgnoreCase)
+            && parameters[1].Equals("@ggnumber", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return null;
+        }
+
+        if (
+            parameters.Count != 1
+            || !parameters[0].Equals("@ggnumber", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            throw new InvalidOperationException(
+                "The deployed legacy procedure DEV_SEL_ExtrasInCategory does not match its verified parameter contract. No direct-DML fallback was run."
+            );
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_ExtrasInCategory",
+            [["@ggnumber"]],
+            _ => command => AddParameter(command, "@ggnumber", DbType.String, trimmed)
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var keys = new List<short>();
+        var seen = new HashSet<short>();
+        foreach (var row in rows)
+        {
+            var extraCode = LegacySelectorProcedure.ReadInt32(row, "extra_code", "extraCode");
+            if (extraCode is null or <= 0 or > short.MaxValue || !seen.Add((short)extraCode.Value))
+            {
+                continue;
+            }
+
+            keys.Add((short)extraCode.Value);
+        }
+
+        if (rows.Count > 0 && keys.Count == 0)
+        {
+            return null;
+        }
+
+        if (keys.Count == 0)
+        {
+            return [];
+        }
+
+        var leftover = await LoadExtrasByCodesAsync(keys);
+        var leftoverByCode = leftover.ToDictionary(extra => extra.ExtraCode, extra => extra.Description);
+        var extras = new List<JobCardCaptureExtra>();
+        var seenExtras = new HashSet<short>();
+        foreach (var row in rows)
+        {
+            var extraCode = LegacySelectorProcedure.ReadInt32(row, "extra_code", "extraCode");
+            if (extraCode is null or <= 0 or > short.MaxValue || !seenExtras.Add((short)extraCode.Value))
+            {
+                continue;
+            }
+
+            var code = (short)extraCode.Value;
+            leftoverByCode.TryGetValue(code, out var leftoverDescription);
+            extras.Add(
+                new JobCardCaptureExtra(
+                    code,
+                    LegacySelectorProcedure.ReadString(row, "extra_description", "extraDescription")
+                        ?? leftoverDescription
+                )
+            );
+        }
+
+        return extras;
+    }
+
+    public Task<IReadOnlyList<string>?> GetCaptureFittedExtraDescriptionsAsync(string ggNumber) =>
+        ReadCaptureDescriptionOverlayAsync(
+            "DEV_SEL_FittedExtras",
+            ggNumber,
+            "extra_description",
+            "extraDescription"
+        );
+
+    public Task<IReadOnlyList<string>?> GetCaptureJobcardsOnStatusDescriptionsAsync(
+        string ggNumber
+    ) =>
+        ReadCaptureDescriptionOverlayAsync(
+            "DEV_SEL_JobcardsOnStatus",
+            ggNumber,
+            "extra_description",
+            "extraDescription"
+        );
+
+    public async Task<IReadOnlyList<JobCardAuthorizerDetails>?> GetAuthorizerDetailsAsync(
+        string ggNumber,
+        string extraCode
+    )
+    {
+        var trimmedGg = ggNumber.Trim();
+        var trimmedExtra = extraCode.Trim();
+        if (trimmedGg.Length == 0 || trimmedExtra.Length == 0)
+        {
+            return [];
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_JobcardAuthorizerDetails",
+            [["@ggNumber", "@extraCode"]],
+            _ =>
+                command =>
+                {
+                    AddParameter(command, "@ggNumber", DbType.String, trimmedGg);
+                    AddParameter(command, "@extraCode", DbType.String, trimmedExtra);
+                }
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        JobCard? leftover = null;
+        if (
+            short.TryParse(
+                trimmedExtra,
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var extra
+            )
+        )
+        {
+            var leftoverVehicle = (
+                await LoadCaptureVehiclesByFleetNumbersAsync([trimmedGg])
+            ).FirstOrDefault();
+            if (leftoverVehicle is not null)
+            {
+                leftover = await GetByVehicleAndExtraAsync(leftoverVehicle.VmfCode, extra);
+            }
+        }
+
+        var details = new List<JobCardAuthorizerDetails>();
+        foreach (var row in rows)
+        {
+            details.Add(
+                new JobCardAuthorizerDetails(
+                    leftover?.job_card_id,
+                    LegacySelectorProcedure.ReadString(row, "jc_number", "Jobcard Number", "JobcardNumber")
+                        ?? leftover?.jc_number,
+                    LegacySelectorProcedure.ReadString(row, "GGNumber", "GG Number", "fleet_number")
+                        ?? trimmedGg,
+                    LegacySelectorProcedure.ReadString(row, "extra_description"),
+                    LegacySelectorProcedure.ReadString(row, "InitialCapturedDate"),
+                    LegacySelectorProcedure.ReadString(row, "InitialCapturer"),
+                    LegacySelectorProcedure.ReadString(row, "barcode"),
+                    LegacySelectorProcedure.ReadString(row, "capturedDate"),
+                    LegacySelectorProcedure.ReadString(row, "JobCardsCapturer"),
+                    LegacySelectorProcedure.ReadString(row, "handoverName"),
+                    LegacySelectorProcedure.ReadString(row, "handoverDate"),
+                    LegacySelectorProcedure.ReadString(row, "Damages"),
+                    LegacySelectorProcedure.ReadString(row, "comments"),
+                    LegacySelectorProcedure.ReadString(row, "status_code_description"),
+                    LegacySelectorProcedure.ReadString(row, "priority"),
+                    LegacySelectorProcedure.ReadString(row, "Authorizer"),
+                    LegacySelectorProcedure.ReadString(row, "AuthorizedDate", "Authorized Date"),
+                    LegacySelectorProcedure.ReadString(row, "AuthorizerComments", "Authorizer Comments")
+                )
+            );
+        }
+
+        if (rows.Count > 0 && details.Count == 0)
+        {
+            return null;
+        }
+
+        return details;
+    }
+
+    public async Task<IReadOnlyList<JobCardAuthorizerStatus>?> GetAuthorizerStatusCodesAsync()
+    {
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_JobcardAuthorizerStatus",
+            [[]],
+            _ => null
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var statuses = new List<JobCardAuthorizerStatus>();
+        var seen = new HashSet<int>();
+        foreach (var row in rows)
+        {
+            var statusCode = LegacySelectorProcedure.ReadInt32(row, "status_code");
+            if (statusCode is null || !seen.Add(statusCode.Value))
+            {
+                continue;
+            }
+
+            statuses.Add(
+                new JobCardAuthorizerStatus(
+                    statusCode.Value,
+                    LegacySelectorProcedure.ReadString(row, "status_code_description")
+                )
+            );
+        }
+
+        if (rows.Count > 0 && statuses.Count == 0)
+        {
+            return null;
+        }
+
+        return statuses;
+    }
+
+    public async Task<IReadOnlyList<JobCardCapturerDetails>?> GetCapturerDetailsAsync(
+        string ggNumber,
+        string extraCode
+    )
+    {
+        var trimmedGg = ggNumber.Trim();
+        var trimmedExtra = extraCode.Trim();
+        if (trimmedGg.Length == 0 || trimmedExtra.Length == 0)
+        {
+            return [];
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_SpecificJobPerVehicle",
+            [["@ggNumber", "@extraCode"]],
+            _ =>
+                command =>
+                {
+                    AddParameter(command, "@ggNumber", DbType.String, trimmedGg);
+                    AddParameter(command, "@extraCode", DbType.String, trimmedExtra);
+                }
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        JobCard? leftover = null;
+        if (
+            short.TryParse(
+                trimmedExtra,
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var extra
+            )
+        )
+        {
+            var leftoverVehicle = (
+                await LoadCaptureVehiclesByFleetNumbersAsync([trimmedGg])
+            ).FirstOrDefault();
+            if (leftoverVehicle is not null)
+            {
+                leftover = await GetByVehicleAndExtraAsync(leftoverVehicle.VmfCode, extra);
+            }
+        }
+
+        var details = new List<JobCardCapturerDetails>();
+        foreach (var row in rows)
+        {
+            details.Add(
+                new JobCardCapturerDetails(
+                    leftover?.job_card_id,
+                    LegacySelectorProcedure.ReadString(row, "jc_number", "Jobcard Number", "JobcardNumber")
+                        ?? leftover?.jc_number,
+                    LegacySelectorProcedure.ReadString(row, "GGNumber", "GG Number", "fleet_number")
+                        ?? trimmedGg,
+                    LegacySelectorProcedure.ReadString(row, "extra_description"),
+                    LegacySelectorProcedure.ReadString(row, "barcode"),
+                    LegacySelectorProcedure.ReadString(row, "InitialCapturer"),
+                    LegacySelectorProcedure.ReadString(row, "initialCapturedDate"),
+                    LegacySelectorProcedure.ReadString(row, "JobCardsCapturer"),
+                    LegacySelectorProcedure.ReadString(row, "capturedDate"),
+                    LegacySelectorProcedure.ReadString(row, "handoverName"),
+                    LegacySelectorProcedure.ReadString(row, "handoverDate"),
+                    LegacySelectorProcedure.ReadString(row, "Damages"),
+                    LegacySelectorProcedure.ReadString(row, "comments"),
+                    LegacySelectorProcedure.ReadString(row, "status_code_description"),
+                    LegacySelectorProcedure.ReadString(row, "jobcardComment"),
+                    LegacySelectorProcedure.ReadString(row, "Authorizer"),
+                    LegacySelectorProcedure.ReadString(row, "AuthorizerDate"),
+                    LegacySelectorProcedure.ReadString(row, "AuthorizerComments")
+                )
+            );
+        }
+
+        if (rows.Count > 0 && details.Count == 0)
+        {
+            return null;
+        }
+
+        return details;
+    }
+
+    public async Task<IReadOnlyList<JobCardCapturerStatus>?> GetCapturerStatusCodesAsync()
+    {
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_JobcardStatus",
+            [[]],
+            _ => null
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var statuses = new List<JobCardCapturerStatus>();
+        var seen = new HashSet<int>();
+        foreach (var row in rows)
+        {
+            var statusCode = LegacySelectorProcedure.ReadInt32(row, "status_code");
+            if (statusCode is null || !seen.Add(statusCode.Value))
+            {
+                continue;
+            }
+
+            statuses.Add(
+                new JobCardCapturerStatus(
+                    statusCode.Value,
+                    LegacySelectorProcedure.ReadString(row, "status_code_description")
+                )
+            );
+        }
+
+        if (rows.Count > 0 && statuses.Count == 0)
+        {
+            return null;
+        }
+
+        return statuses;
+    }
+
+    public async Task<IReadOnlyList<JobCardPrintSummary>?> GetPrintableJobCardsAsync(string ggNumber)
+    {
+        var trimmed = ggNumber.Trim();
+        if (trimmed.Length == 0)
+        {
+            return [];
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_JobcardsForPrintingSummary",
+            [["@ggnumber"]],
+            _ => command => AddParameter(command, "@ggnumber", DbType.String, trimmed)
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var leftoverByJc = (await GetByGGNumberAsync(trimmed))
+            .Where(card => !string.IsNullOrWhiteSpace(card.jc_number))
+            .GroupBy(card => card.jc_number!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        var summaries = new List<JobCardPrintSummary>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var jobcardNumber = LegacySelectorProcedure.ReadString(
+                row,
+                "Jobcard Number",
+                "JobcardNumber",
+                "jc_number"
+            );
+            if (string.IsNullOrWhiteSpace(jobcardNumber) || !seen.Add(jobcardNumber))
+            {
+                continue;
+            }
+
+            leftoverByJc.TryGetValue(jobcardNumber, out var leftover);
+            summaries.Add(
+                new JobCardPrintSummary(
+                    jobcardNumber,
+                    LegacySelectorProcedure.ReadString(row, "GG Number", "GGNumber", "fleet_number")
+                        ?? trimmed,
+                    LegacySelectorProcedure.ReadString(
+                        row,
+                        "Registration Number",
+                        "RegistrationNumber",
+                        "registration_number"
+                    ) ?? leftover?.Vehicle?.registration_number,
+                    LegacySelectorProcedure.ReadString(
+                        row,
+                        "Jobcard Description",
+                        "JobcardDescription",
+                        "extra_description"
+                    )
+                )
+            );
+        }
+
+        if (rows.Count > 0 && summaries.Count == 0)
+        {
+            return null;
+        }
+
+        return summaries;
+    }
+
+    public async Task<IReadOnlyList<JobCardPrintSnapshot>?> GetPrintJobCardsAsync(
+        string ggNumber,
+        string? jcNumber
+    )
+    {
+        var trimmedGg = ggNumber.Trim();
+        var trimmedJc = jcNumber?.Trim() ?? string.Empty;
+        if (trimmedGg.Length == 0)
+        {
+            return [];
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_JobcardsForPrinting",
+            [["@ggNumber", "@jcNumber"], ["@ggnumber"]],
+            actualParameters =>
+            {
+                if (
+                    actualParameters.Count == 2
+                    && actualParameters[0].Equals("@ggNumber", StringComparison.OrdinalIgnoreCase)
+                    && actualParameters[1].Equals("@jcNumber", StringComparison.OrdinalIgnoreCase)
+                )
+                {
+                    return command =>
+                    {
+                        AddParameter(command, "@ggNumber", DbType.String, trimmedGg);
+                        AddParameter(
+                            command,
+                            "@jcNumber",
+                            DbType.String,
+                            trimmedJc.Length > 0 ? trimmedJc : DBNull.Value
+                        );
+                    };
+                }
+
+                return command => AddParameter(command, "@ggnumber", DbType.String, trimmedGg);
+            }
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var snapshots = rows
+            .Select(row => new JobCardPrintSnapshot(
+                LegacySelectorProcedure.ReadString(row, "GG Number", "GGNumber"),
+                LegacySelectorProcedure.ReadString(row, "Registration Number", "RegistrationNumber"),
+                LegacySelectorProcedure.ReadString(row, "Date Delivered", "DateDelivered"),
+                LegacySelectorProcedure.ReadString(row, "Odo Reading", "OdoReading"),
+                LegacySelectorProcedure.ReadString(row, "VIN Number", "VINNumber", "VinNumber"),
+                LegacySelectorProcedure.ReadString(row, "Engine Number", "EngineNumber"),
+                LegacySelectorProcedure.ReadString(row, "Model Description", "ModelDescription"),
+                LegacySelectorProcedure.ReadString(row, "Year Model", "YearModel"),
+                LegacySelectorProcedure.ReadString(row, "Class Description", "ClassDescription"),
+                LegacySelectorProcedure.ReadString(row, "Hire Type", "HireType"),
+                LegacySelectorProcedure.ReadString(row, "Hired From", "HiredFrom"),
+                LegacySelectorProcedure.ReadString(row, "Location"),
+                LegacySelectorProcedure.ReadString(row, "captured_date", "capturedDate"),
+                LegacySelectorProcedure.ReadString(row, "ReceivedBy"),
+                LegacySelectorProcedure.ReadString(row, "Status"),
+                LegacySelectorProcedure.ReadString(row, "Status Date", "StatusDate"),
+                LegacySelectorProcedure.ReadString(row, "Purchased From", "PurchasedFrom"),
+                LegacySelectorProcedure.ReadString(row, "Purchased Date", "PurchasedDate"),
+                LegacySelectorProcedure.ReadString(row, "Jobcard Number", "JobcardNumber", "jc_number"),
+                LegacySelectorProcedure.ReadString(row, "Job Description", "JobDescription"),
+                LegacySelectorProcedure.ReadString(row, "Jobcard Status", "JobcardStatus"),
+                LegacySelectorProcedure.ReadString(row, "CapturedBy"),
+                LegacySelectorProcedure.ReadString(row, "jcs_date"),
+                LegacySelectorProcedure.ReadString(row, "AssignedTo"),
+                LegacySelectorProcedure.ReadString(row, "AssignedDate")
+            ))
+            .ToList();
+
+        return snapshots;
+    }
 
     public async Task<JobCard> CreateAsync(JobCard jobCard, int currentUserId)
     {
@@ -1732,6 +2569,322 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         await command.ExecuteNonQueryAsync();
     }
 
+    private async Task<IReadOnlyList<JobCardCaptureVehicle>> LoadCaptureVehiclesByFleetNumbersAsync(
+        IReadOnlyList<string> fleetNumbers
+    )
+    {
+        var columns = await GetAvailableColumnsAsync(VehicleTableName);
+        if (!columns.ContainsKey("vmf_code") || !columns.ContainsKey("fleet_number"))
+        {
+            return [];
+        }
+
+        var projection = new List<string> { "vm.[vmf_code]", "vm.[fleet_number]" };
+        if (columns.ContainsKey("registration_number"))
+        {
+            projection.Add("vm.[registration_number]");
+        }
+
+        if (columns.ContainsKey("model_code"))
+        {
+            projection.Add("vm.[model_code]");
+        }
+
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        var parameters = new List<string>();
+        for (var index = 0; index < fleetNumbers.Count; index++)
+        {
+            var name = $"@fleet{index}";
+            parameters.Add(name);
+            AddParameter(command, name, DbType.String, fleetNumbers[index]);
+        }
+
+        command.CommandText = $"""
+            SELECT {string.Join(", ", projection)}
+            FROM [dbo].[{VehicleTableName}] vm
+            WHERE vm.[fleet_number] IN ({string.Join(", ", parameters)})
+            """;
+        var vehicles = new List<JobCardCaptureVehicle>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var vmfCode = ReadInt(reader, "vmf_code");
+            if (vmfCode is not > 0)
+            {
+                continue;
+            }
+
+            vehicles.Add(
+                new JobCardCaptureVehicle(
+                    vmfCode.Value,
+                    ReadString(reader, "fleet_number"),
+                    columns.ContainsKey("registration_number")
+                        ? ReadString(reader, "registration_number")
+                        : null,
+                    columns.ContainsKey("model_code")
+                        ? (short?)ReadInt(reader, "model_code")
+                        : null
+                )
+            );
+        }
+
+        return vehicles;
+    }
+
+    private async Task<IReadOnlyList<JobCardCaptureExtra>> LoadExtrasByCodesAsync(
+        IReadOnlyList<short> extraCodes
+    )
+    {
+        if (extraCodes.Count == 0)
+        {
+            return [];
+        }
+
+        var columns = await GetAvailableColumnsAsync(ExtraCodeTableName);
+        if (!columns.ContainsKey("extra_code"))
+        {
+            return [];
+        }
+
+        var projection = new List<string> { "[extra_code]" };
+        if (columns.ContainsKey("extra_description"))
+        {
+            projection.Add("[extra_description]");
+        }
+
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = CurrentTransaction;
+        var parameters = new List<string>();
+        for (var index = 0; index < extraCodes.Count; index++)
+        {
+            var name = $"@extra{index}";
+            parameters.Add(name);
+            AddParameter(command, name, DbType.Int16, extraCodes[index]);
+        }
+
+        command.CommandText = $"""
+            SELECT {string.Join(", ", projection)}
+            FROM [dbo].[{ExtraCodeTableName}]
+            WHERE [extra_code] IN ({string.Join(", ", parameters)})
+            """;
+        var extras = new List<JobCardCaptureExtra>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var extraCode = ReadInt(reader, "extra_code");
+            if (extraCode is null or <= 0 or > short.MaxValue)
+            {
+                continue;
+            }
+
+            extras.Add(
+                new JobCardCaptureExtra(
+                    (short)extraCode.Value,
+                    columns.ContainsKey("extra_description")
+                        ? ReadString(reader, "extra_description")
+                        : null
+                )
+            );
+        }
+
+        return extras;
+    }
+
+    private async Task<IReadOnlyList<string>?> ReadCaptureDescriptionOverlayAsync(
+        string procedureName,
+        string ggNumber,
+        params string[] descriptionColumns
+    )
+    {
+        var trimmed = ggNumber.Trim();
+        if (trimmed.Length == 0)
+        {
+            return [];
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            procedureName,
+            [["@ggnumber"]],
+            _ => command => AddParameter(command, "@ggnumber", DbType.String, trimmed)
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var descriptions = new List<string>();
+        foreach (var row in rows)
+        {
+            var description = LegacySelectorProcedure.ReadString(row, descriptionColumns);
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                continue;
+            }
+
+            descriptions.Add(description);
+        }
+
+        if (rows.Count > 0 && descriptions.Count == 0)
+        {
+            return null;
+        }
+
+        return descriptions;
+    }
+
+    private async Task<IReadOnlyList<JobCard>?> OverlayJobCardsFromSelectorAsync(
+        string procedureName,
+        string[] expectedParameters,
+        Action<DbCommand>? bind,
+        IReadOnlyCollection<int>? allowedVmfCodes,
+        string[] keyColumnNames,
+        Func<IReadOnlyDictionary<string, ColumnInfo>, string?>? leftoverPredicate = null,
+        Action<DbCommand>? leftoverBind = null
+    )
+    {
+        var keys = await LegacySelectorProcedure.TryReadOrderedStringKeysAsync(
+            _context,
+            procedureName,
+            expectedParameters,
+            bind,
+            keyColumnNames
+        );
+        if (keys is null)
+        {
+            return null;
+        }
+
+        if (keys.Count == 0)
+        {
+            return [];
+        }
+
+        var leftover = await QueryAsync(
+            command =>
+            {
+                leftoverBind?.Invoke(command);
+                for (var index = 0; index < keys.Count; index++)
+                {
+                    AddParameter(command, $"@overlayKey{index}", DbType.String, keys[index]);
+                }
+            },
+            columns =>
+            {
+                var numberColumn = GetNumberColumn(columns);
+                if (numberColumn is null)
+                {
+                    return "1 = 0";
+                }
+
+                var inList = string.Join(
+                    ", ",
+                    keys.Select((_, index) => $"@overlayKey{index}")
+                );
+                var predicate = $"j.[{numberColumn}] IN ({inList})";
+                var extra = leftoverPredicate?.Invoke(columns);
+                return string.IsNullOrWhiteSpace(extra) ? predicate : $"({predicate}) AND ({extra})";
+            }
+        );
+        var ordered = LegacySelectorProcedure.OrderByKeys(
+            leftover.ToList(),
+            keys,
+            jobCard => jobCard.jc_number
+        );
+        if (allowedVmfCodes is null)
+        {
+            return ordered;
+        }
+
+        return ordered.Where(jobCard => allowedVmfCodes.Contains(jobCard.vmf_code)).ToList();
+    }
+
+    private async Task<IReadOnlyList<JobCard>?> OverlayAuthorizerStatusReportAsync(
+        IReadOnlyList<int> statusCodes,
+        IReadOnlyCollection<int>? allowedVmfCodes,
+        string[] keyColumnNames
+    )
+    {
+        List<JobCard>? combined = null;
+        var seen = new HashSet<int>();
+        foreach (var statusCode in statusCodes)
+        {
+            var slice = await OverlayJobCardsFromSelectorAsync(
+                "DEV_SEL_JobcardsStatusReportForAuthorizer",
+                ["@statusCode"],
+                command => AddParameter(command, "@statusCode", DbType.Int32, statusCode),
+                allowedVmfCodes,
+                keyColumnNames
+            );
+            if (slice is null)
+            {
+                return null;
+            }
+
+            combined ??= [];
+            foreach (var jobCard in slice)
+            {
+                if (seen.Add(jobCard.job_card_id))
+                {
+                    combined.Add(jobCard);
+                }
+            }
+        }
+
+        return combined ?? [];
+    }
+
+    private static bool MatchesAuthorizerSearch(
+        JobCard jobCard,
+        string searchTerm,
+        string searchType
+    )
+    {
+        var normalized = searchTerm.Trim();
+        if (normalized.Length == 0)
+        {
+            return true;
+        }
+
+        if (
+            int.TryParse(normalized, out var jobCardId)
+            && jobCard.job_card_id == jobCardId
+        )
+        {
+            return true;
+        }
+
+        var vehicleValue =
+            searchType == "GP"
+                ? jobCard.Vehicle?.registration_number
+                : jobCard.Vehicle?.fleet_number;
+        return !string.IsNullOrWhiteSpace(vehicleValue)
+            && vehicleValue.Contains(normalized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static JobCardPage PaginateJobCards(
+        IReadOnlyList<JobCard> items,
+        int page,
+        int pageSize
+    )
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var totalRecords = items.Count;
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalRecords / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = (page - 1) * pageSize;
+        return new JobCardPage(
+            items.Skip(skip).Take(pageSize).ToList(),
+            page,
+            pageSize,
+            totalRecords
+        );
+    }
+
     private async Task<List<JobCard>> QueryAsync(
         Action<DbCommand>? configure = null,
         Func<IReadOnlyDictionary<string, ColumnInfo>, string?>? predicateFactory = null
@@ -1847,6 +3000,15 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             AddParameter(command, "@toDate", DbType.DateTime2, query.ToDate.Value.AddDays(1));
     }
 
+    private static string AssignedPriorityPredicate(
+        IReadOnlyDictionary<string, ColumnInfo> columns
+    ) =>
+        HasLegacyReviewedColumn(columns) && GetNumberColumn(columns) is { } numberColumn
+            ? IsBitColumn(columns, "priority")
+                ? $"j.[priority] = 1 AND j.[status_code] = 3 AND j.[{numberColumn}] <> 'Not Assigned'"
+                : $"j.[priority] = 'Y' AND j.[status_code] = 3 AND j.[{numberColumn}] <> 'Not Assigned'"
+            : "j.[priority] = 'H' AND j.[assigned_to] IS NOT NULL AND j.[status_code] NOT IN (5, 7)";
+
     private static string PriorityUnassignedPredicate(
         IReadOnlyDictionary<string, ColumnInfo> columns
     ) =>
@@ -1946,6 +3108,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             ",\n                ",
             [
                 $"{IdExpression(columns)} AS [job_card_id]",
+                NumberExpression(columns) + " AS [jc_number]",
                 "j.[vmf_code] AS [vmf_code]",
                 VehicleColumnExpression(vehicleColumns, "fleet_number", "varchar(50)")
                     + " AS [gg_number]",
@@ -1993,6 +3156,11 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         columns.ContainsKey("extra_code") && columns.ContainsKey("extra_description")
             ? "ec.[extra_description]"
             : "CAST(NULL AS varchar(255))";
+
+    private static string NumberExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
+        GetNumberColumn(columns) is { } numberColumn
+            ? $"CONVERT(varchar(50), j.[{numberColumn}])"
+            : "CAST(NULL AS varchar(50))";
 
     private static string IdExpression(IReadOnlyDictionary<string, ColumnInfo> columns) =>
         $"j.[{GetIdColumn(columns)}]";
@@ -2097,6 +3265,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
         return new JobCard
         {
             job_card_id = ReadInt(reader, "job_card_id") ?? 0,
+            jc_number = ReadString(reader, "jc_number"),
             vmf_code = ReadInt(reader, "vmf_code") ?? 0,
             extra_code = (short)(ReadInt(reader, "extra_code") ?? 0),
             status_code = ReadInt(reader, "status_code") ?? 0,

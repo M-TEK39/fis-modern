@@ -122,4 +122,7 @@ public class JobCard
 
     [ForeignKey("modified_by_user_code")]
     public virtual User? ModifiedByUser { get; set; }
+
+    [NotMapped]
+    public string? jc_number { get; set; }
 }

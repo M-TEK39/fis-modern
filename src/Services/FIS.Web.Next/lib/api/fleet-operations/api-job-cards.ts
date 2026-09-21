@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
+import type { VehicleOption } from "@/lib/api/vehicles/api-vehicles";
 
 const API_TIMEOUT_MS = 8_000;
 export const DEFAULT_JOB_CARD_PAGE_SIZE = 24;
@@ -44,6 +45,141 @@ export type JobCardPage = {
   pageSize: number;
   totalRecords: number;
   totalPages: number;
+};
+
+export type JobCardAuthorizerGgStats = {
+  ggNumber: string;
+  jobcards: number | null;
+  pending: number | null;
+  awaitingAuthorisation: number | null;
+  authorised: number | null;
+  inProgress: number | null;
+  canceled: number | null;
+  failed: number | null;
+  completed: number | null;
+};
+
+export type JobCardAuthorizerGgStatsPage = {
+  items: JobCardAuthorizerGgStats[];
+  page: number;
+  pageSize: number;
+  totalRecords: number;
+  totalPages: number;
+};
+
+export type JobCardCaptureVehicleSummary = {
+  vmfCode: number | null;
+  ggNumber: string;
+  registrationNumber: string | null;
+  classDescription: string | null;
+  modelDescription: string | null;
+  odoReading: string | null;
+  vinNumber: string | null;
+  engineNumber: string | null;
+  yearModel: string | null;
+  purchasedFrom: string | null;
+  hireType: string | null;
+  hiredFrom: string | null;
+  location: string | null;
+};
+
+export type JobCardCaptureExtra = {
+  extraCode: number;
+  description: string | null;
+};
+
+export type JobCardCaptureContext = {
+  summary: { overlay: true; item: JobCardCaptureVehicleSummary | null } | { overlay: false };
+  extras: { overlay: true; items: JobCardCaptureExtra[] } | { overlay: false };
+  fittedExtras: { overlay: true; items: string[] } | { overlay: false };
+  jobcardsOnStatus: { overlay: true; items: string[] } | { overlay: false };
+};
+
+export type JobCardAuthorizerDetails = {
+  jobCardId: number | null;
+  jcNumber: string | null;
+  ggNumber: string | null;
+  extraDescription: string | null;
+  initialCapturedDate: string | null;
+  initialCapturer: string | null;
+  barcode: string | null;
+  capturedDate: string | null;
+  jobCardsCapturer: string | null;
+  handoverName: string | null;
+  handoverDate: string | null;
+  damages: string | null;
+  comments: string | null;
+  statusDescription: string | null;
+  priority: string | null;
+  authorizer: string | null;
+  authorizedDate: string | null;
+  authorizerComments: string | null;
+};
+
+export type JobCardAuthorizerStatus = {
+  statusCode: number;
+  description: string | null;
+};
+
+export type JobCardCapturerDetails = {
+  jobCardId: number | null;
+  jcNumber: string | null;
+  ggNumber: string | null;
+  extraDescription: string | null;
+  barcode: string | null;
+  initialCapturer: string | null;
+  initialCapturedDate: string | null;
+  jobCardsCapturer: string | null;
+  capturedDate: string | null;
+  handoverName: string | null;
+  handoverDate: string | null;
+  damages: string | null;
+  comments: string | null;
+  statusDescription: string | null;
+  jobcardComment: string | null;
+  authorizer: string | null;
+  authorizerDate: string | null;
+  authorizerComments: string | null;
+};
+
+export type JobCardCapturerStatus = {
+  statusCode: number;
+  description: string | null;
+};
+
+export type JobCardPrintSummary = {
+  jobcardNumber: string;
+  ggNumber: string;
+  registrationNumber: string | null;
+  jobcardDescription: string | null;
+};
+
+export type JobCardPrintSnapshot = {
+  ggNumber: string | null;
+  registrationNumber: string | null;
+  dateDelivered: string | null;
+  odoReading: string | null;
+  vinNumber: string | null;
+  engineNumber: string | null;
+  modelDescription: string | null;
+  yearModel: string | null;
+  classDescription: string | null;
+  hireType: string | null;
+  hiredFrom: string | null;
+  location: string | null;
+  capturedDate: string | null;
+  receivedBy: string | null;
+  status: string | null;
+  statusDate: string | null;
+  purchasedFrom: string | null;
+  purchasedDate: string | null;
+  jobcardNumber: string | null;
+  jobDescription: string | null;
+  jobcardStatus: string | null;
+  capturedBy: string | null;
+  jcsDate: string | null;
+  assignedTo: string | null;
+  assignedDate: string | null;
 };
 
 export type JobCardPageOptions = {
@@ -329,6 +465,146 @@ export async function getJobCards() {
     .filter((item): item is JobCardRecord => item !== null);
 }
 
+export async function getJobCardCaptureVehicles(): Promise<VehicleOption[]> {
+  const payload = await readJson(await requestApi("api/jobcards/vehicles-available"));
+  return getCollection(payload).flatMap((item) => {
+    if (!isRecord(item)) {
+      return [];
+    }
+
+    const vmfCode = asNumber(getValue(item, "vmf_code", "vmfCode"));
+    if (vmfCode === null) {
+      return [];
+    }
+
+    return [
+      {
+        vmfCode,
+        fleetNumber: asString(getValue(item, "fleet_number", "fleetNumber")),
+        registrationNumber: asString(getValue(item, "registration_number", "registrationNumber")),
+            modelCode: asNumber(getValue(item, "model_code", "modelCode")),
+          },
+        ];
+      });
+}
+
+function readOverlayFlag(value: unknown): boolean | null {
+  if (!isRecord(value) || typeof value.overlay !== "boolean") {
+    return null;
+  }
+  return value.overlay;
+}
+
+function readStringList(value: unknown): string[] {
+  if (!isRecord(value) || !Array.isArray(value.items)) {
+    return [];
+  }
+  return value.items.flatMap((item) => {
+    const text = asString(item);
+    return text ? [text] : [];
+  });
+}
+
+export async function getJobCardCaptureContext(
+  ggNumber: string,
+): Promise<JobCardCaptureContext> {
+  const params = new URLSearchParams({ ggNumber });
+  const payload = await readJson(
+    await requestApi(`api/jobcards/capture-context?${params.toString()}`),
+  );
+  if (!isRecord(payload)) {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned an invalid job-card capture context.",
+    );
+  }
+
+  const summaryOverlay = readOverlayFlag(payload.summary);
+  const extrasOverlay = readOverlayFlag(payload.extras);
+  const fittedOverlay = readOverlayFlag(payload.fittedExtras);
+  const statusOverlay = readOverlayFlag(payload.jobcardsOnStatus);
+  if (
+    summaryOverlay === null ||
+    extrasOverlay === null ||
+    fittedOverlay === null ||
+    statusOverlay === null
+  ) {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned an invalid job-card capture context.",
+    );
+  }
+
+  let summary: JobCardCaptureContext["summary"] = { overlay: false };
+  if (summaryOverlay) {
+    const summaryPayload = isRecord(payload.summary) ? payload.summary : null;
+    const itemPayload = summaryPayload ? getValue(summaryPayload, "item") : null;
+    summary = {
+      overlay: true,
+      item: isRecord(itemPayload)
+        ? {
+            vmfCode: asNumber(getValue(itemPayload, "vmf_code", "vmfCode")),
+            ggNumber:
+              asString(getValue(itemPayload, "ggNumber", "GGNumber", "fleet_number")) ?? ggNumber,
+            registrationNumber: asString(
+              getValue(itemPayload, "registrationNumber", "RegistrationNumber"),
+            ),
+            classDescription: asString(
+              getValue(itemPayload, "classDescription", "ClassDescription"),
+            ),
+            modelDescription: asString(
+              getValue(itemPayload, "modelDescription", "ModelDescription"),
+            ),
+            odoReading: asString(getValue(itemPayload, "odoReading", "OdoReading")),
+            vinNumber: asString(getValue(itemPayload, "vinNumber", "VINNumber")),
+            engineNumber: asString(getValue(itemPayload, "engineNumber", "EngineNumber")),
+            yearModel: asString(getValue(itemPayload, "yearModel", "YearModel")),
+            purchasedFrom: asString(getValue(itemPayload, "purchasedFrom", "PurchasedFrom")),
+            hireType: asString(getValue(itemPayload, "hireType", "HireType")),
+            hiredFrom: asString(getValue(itemPayload, "hiredFrom", "HiredFrom")),
+            location: asString(getValue(itemPayload, "location", "Location")),
+          }
+        : null,
+    };
+  }
+
+  let extras: JobCardCaptureContext["extras"] = { overlay: false };
+  if (extrasOverlay) {
+    const extrasPayload = isRecord(payload.extras) ? payload.extras : null;
+    extras = {
+      overlay: true,
+      items: Array.isArray(extrasPayload?.items)
+        ? extrasPayload.items.flatMap((item) => {
+            if (!isRecord(item)) {
+              return [];
+            }
+            const extraCode = asNumber(getValue(item, "extraCode", "extra_code"));
+            if (extraCode === null) {
+              return [];
+            }
+            return [
+              {
+                extraCode,
+                description: asString(getValue(item, "description", "extra_description")),
+              },
+            ];
+          })
+        : [],
+    };
+  }
+
+  return {
+    summary,
+    extras,
+    fittedExtras: fittedOverlay
+      ? { overlay: true, items: readStringList(payload.fittedExtras) }
+      : { overlay: false },
+    jobcardsOnStatus: statusOverlay
+      ? { overlay: true, items: readStringList(payload.jobcardsOnStatus) }
+      : { overlay: false },
+  };
+}
+
 export async function getJobCardsPage(options: JobCardPageOptions = {}): Promise<JobCardPage> {
   const requestedPage = normalizePage(options.page);
   const pageSize = normalizePageSize(options.pageSize);
@@ -345,6 +621,291 @@ export async function getJobCardsPage(options: JobCardPageOptions = {}): Promise
   }
 
   return readJobCardPage(await requestApi(`api/jobcards/page?${params.toString()}`));
+}
+
+export async function getAuthorizerJobCardsPage(options: JobCardPageOptions = {}): Promise<JobCardPage> {
+  const requestedPage = normalizePage(options.page);
+  const pageSize = normalizePageSize(options.pageSize);
+  const searchType = options.searchType === "GP" ? "GP" : "GG";
+  const params = new URLSearchParams({
+    page: String(requestedPage),
+    pageSize: String(pageSize),
+    searchType,
+  });
+  const search = options.search?.trim();
+  if (search) params.set("search", search);
+  if (options.statusCodes && options.statusCodes.length > 0) {
+    params.set("statusCodes", options.statusCodes.join(","));
+  }
+
+  return readJobCardPage(await requestApi(`api/jobcards/authorizer/page?${params.toString()}`));
+}
+
+export async function getAuthorizerGgStatsPage(options: {
+  page?: number;
+  pageSize?: number;
+  ggNumber?: string;
+} = {}): Promise<JobCardAuthorizerGgStatsPage | null> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const ggNumber = options.ggNumber?.trim();
+  if (ggNumber) params.set("ggNumber", ggNumber);
+
+  const payload = await readJson(
+    await requestApi(`api/jobcards/authorizer/gg-stats?${params.toString()}`),
+  );
+  if (!isRecord(payload)) {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned an invalid authorizer GG stats page.",
+    );
+  }
+  if (payload.overlay === false) {
+    return null;
+  }
+  if (payload.overlay !== true || !Array.isArray(payload.items)) {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned an invalid authorizer GG stats page.",
+    );
+  }
+
+  const metadata = readPageMetadata(payload, ["totalRecords", "total_records"]);
+  if (!metadata) {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned incomplete authorizer GG stats pagination metadata.",
+    );
+  }
+
+  return {
+    items: payload.items.flatMap((item) => {
+      if (!isRecord(item)) {
+        return [];
+      }
+      const fleetNumber = asString(getValue(item, "ggNumber", "GGNumber", "fleet_number"));
+      if (!fleetNumber) {
+        return [];
+      }
+      return [
+        {
+          ggNumber: fleetNumber,
+          jobcards: asNumber(getValue(item, "jobcards", "Jobcards")),
+          pending: asNumber(getValue(item, "pending", "Pending")),
+          awaitingAuthorisation: asNumber(
+            getValue(item, "awaitingAuthorisation", "AwaitingAuthorisation"),
+          ),
+          authorised: asNumber(getValue(item, "authorised", "Authorised")),
+          inProgress: asNumber(getValue(item, "inProgress", "Inprogress")),
+          canceled: asNumber(getValue(item, "canceled", "Canceled")),
+          failed: asNumber(getValue(item, "failed", "Failed")),
+          completed: asNumber(getValue(item, "completed", "Completed")),
+        },
+      ];
+    }),
+    ...metadata,
+  };
+}
+
+export async function getAuthorizerJobCardDetails(
+  jobCardId: number,
+): Promise<JobCardAuthorizerDetails | null> {
+  const params = new URLSearchParams({ jobCardId: String(jobCardId) });
+  const payload = await readJson(
+    await requestApi(`api/jobcards/authorizer/details?${params.toString()}`),
+  );
+  if (!isRecord(payload) || typeof payload.overlay !== "boolean") {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned invalid authorizer job-card details.",
+    );
+  }
+  if (payload.overlay === false) {
+    return null;
+  }
+  const item = getValue(payload, "item");
+  if (item === null || item === undefined) {
+    return null;
+  }
+  if (!isRecord(item)) {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned invalid authorizer job-card details.",
+    );
+  }
+  return {
+    jobCardId: asNumber(getValue(item, "jobCardId", "job_card_id")),
+    jcNumber: asString(getValue(item, "jcNumber", "jc_number")),
+    ggNumber: asString(getValue(item, "ggNumber", "GGNumber")),
+    extraDescription: asString(getValue(item, "extraDescription", "extra_description")),
+    initialCapturedDate: asString(getValue(item, "initialCapturedDate", "InitialCapturedDate")),
+    initialCapturer: asString(getValue(item, "initialCapturer", "InitialCapturer")),
+    barcode: asString(getValue(item, "barcode")),
+    capturedDate: asString(getValue(item, "capturedDate")),
+    jobCardsCapturer: asString(getValue(item, "jobCardsCapturer", "JobCardsCapturer")),
+    handoverName: asString(getValue(item, "handoverName")),
+    handoverDate: asString(getValue(item, "handoverDate")),
+    damages: asString(getValue(item, "damages", "Damages")),
+    comments: asString(getValue(item, "comments")),
+    statusDescription: asString(getValue(item, "statusDescription", "status_code_description")),
+    priority: asString(getValue(item, "priority")),
+    authorizer: asString(getValue(item, "authorizer", "Authorizer")),
+    authorizedDate: asString(getValue(item, "authorizedDate", "AuthorizedDate")),
+    authorizerComments: asString(getValue(item, "authorizerComments", "AuthorizerComments")),
+  };
+}
+
+export async function getCapturerJobCardDetails(
+  jobCardId: number,
+): Promise<JobCardCapturerDetails | null> {
+  const params = new URLSearchParams({ jobCardId: String(jobCardId) });
+  const payload = await readJson(
+    await requestApi(`api/jobcards/capturer/details?${params.toString()}`),
+  );
+  if (!isRecord(payload) || typeof payload.overlay !== "boolean") {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned invalid capturer job-card details.",
+    );
+  }
+  if (payload.overlay === false) {
+    return null;
+  }
+  const item = getValue(payload, "item");
+  if (item === null || item === undefined) {
+    return null;
+  }
+  if (!isRecord(item)) {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned invalid capturer job-card details.",
+    );
+  }
+  return {
+    jobCardId: asNumber(getValue(item, "jobCardId", "job_card_id")),
+    jcNumber: asString(getValue(item, "jcNumber", "jc_number")),
+    ggNumber: asString(getValue(item, "ggNumber", "GGNumber")),
+    extraDescription: asString(getValue(item, "extraDescription", "extra_description")),
+    barcode: asString(getValue(item, "barcode")),
+    initialCapturer: asString(getValue(item, "initialCapturer", "InitialCapturer")),
+    initialCapturedDate: asString(getValue(item, "initialCapturedDate", "initialCapturedDate")),
+    jobCardsCapturer: asString(getValue(item, "jobCardsCapturer", "JobCardsCapturer")),
+    capturedDate: asString(getValue(item, "capturedDate")),
+    handoverName: asString(getValue(item, "handoverName")),
+    handoverDate: asString(getValue(item, "handoverDate")),
+    damages: asString(getValue(item, "damages", "Damages")),
+    comments: asString(getValue(item, "comments")),
+    statusDescription: asString(getValue(item, "statusDescription", "status_code_description")),
+    jobcardComment: asString(getValue(item, "jobcardComment")),
+    authorizer: asString(getValue(item, "authorizer", "Authorizer")),
+    authorizerDate: asString(getValue(item, "authorizerDate", "AuthorizerDate")),
+    authorizerComments: asString(getValue(item, "authorizerComments", "AuthorizerComments")),
+  };
+}
+
+function mapPrintSnapshot(item: JsonRecord): JobCardPrintSnapshot {
+  return {
+    ggNumber: asString(getValue(item, "ggNumber", "GG Number")),
+    registrationNumber: asString(getValue(item, "registrationNumber", "Registration Number")),
+    dateDelivered: asString(getValue(item, "dateDelivered", "Date Delivered")),
+    odoReading: asString(getValue(item, "odoReading", "Odo Reading")),
+    vinNumber: asString(getValue(item, "vinNumber", "VIN Number")),
+    engineNumber: asString(getValue(item, "engineNumber", "Engine Number")),
+    modelDescription: asString(getValue(item, "modelDescription", "Model Description")),
+    yearModel: asString(getValue(item, "yearModel", "Year Model")),
+    classDescription: asString(getValue(item, "classDescription", "Class Description")),
+    hireType: asString(getValue(item, "hireType", "Hire Type")),
+    hiredFrom: asString(getValue(item, "hiredFrom", "Hired From")),
+    location: asString(getValue(item, "location", "Location")),
+    capturedDate: asString(getValue(item, "capturedDate", "captured_date")),
+    receivedBy: asString(getValue(item, "receivedBy", "ReceivedBy")),
+    status: asString(getValue(item, "status", "Status")),
+    statusDate: asString(getValue(item, "statusDate", "Status Date")),
+    purchasedFrom: asString(getValue(item, "purchasedFrom", "Purchased From")),
+    purchasedDate: asString(getValue(item, "purchasedDate", "Purchased Date")),
+    jobcardNumber: asString(getValue(item, "jobcardNumber", "Jobcard Number")),
+    jobDescription: asString(getValue(item, "jobDescription", "Job Description")),
+    jobcardStatus: asString(getValue(item, "jobcardStatus", "Jobcard Status")),
+    capturedBy: asString(getValue(item, "capturedBy", "CapturedBy")),
+    jcsDate: asString(getValue(item, "jcsDate", "jcs_date")),
+    assignedTo: asString(getValue(item, "assignedTo", "AssignedTo")),
+    assignedDate: asString(getValue(item, "assignedDate", "AssignedDate")),
+  };
+}
+
+export async function getPrintableJobCards(
+  ggNumber: string,
+): Promise<{ overlay: true; items: JobCardPrintSummary[] } | { overlay: false }> {
+  const params = new URLSearchParams({ ggNumber });
+  const payload = await readJson(
+    await requestApi(`api/jobcards/print/summary?${params.toString()}`),
+  );
+  if (!isRecord(payload) || typeof payload.overlay !== "boolean") {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned invalid printable job cards.",
+    );
+  }
+  if (payload.overlay === false) {
+    return { overlay: false };
+  }
+  const items = getValue(payload, "items");
+  if (!Array.isArray(items)) {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned invalid printable job cards.",
+    );
+  }
+  return {
+    overlay: true,
+    items: items.flatMap((item) => {
+      if (!isRecord(item)) return [];
+      const jobcardNumber = asString(getValue(item, "jobcardNumber", "Jobcard Number"));
+      const fleetNumber = asString(getValue(item, "ggNumber", "GG Number"));
+      if (!jobcardNumber || !fleetNumber) return [];
+      return [
+        {
+          jobcardNumber,
+          ggNumber: fleetNumber,
+          registrationNumber: asString(getValue(item, "registrationNumber", "Registration Number")),
+          jobcardDescription: asString(getValue(item, "jobcardDescription", "Jobcard Description")),
+        },
+      ];
+    }),
+  };
+}
+
+export async function getPrintJobCardSnapshot(
+  ggNumber: string,
+  jcNumber?: string,
+): Promise<{ overlay: true; items: JobCardPrintSnapshot[] } | { overlay: false }> {
+  const params = new URLSearchParams({ ggNumber });
+  if (jcNumber && jcNumber.trim().length > 0) params.set("jcNumber", jcNumber.trim());
+  const payload = await readJson(
+    await requestApi(`api/jobcards/print/snapshot?${params.toString()}`),
+  );
+  if (!isRecord(payload) || typeof payload.overlay !== "boolean") {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned invalid print job-card snapshots.",
+    );
+  }
+  if (payload.overlay === false) {
+    return { overlay: false };
+  }
+  const items = getValue(payload, "items");
+  if (!Array.isArray(items)) {
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned invalid print job-card snapshots.",
+    );
+  }
+  return {
+    overlay: true,
+    items: items.flatMap((item) => (isRecord(item) ? [mapPrintSnapshot(item)] : [])),
+  };
 }
 
 export async function getPriorityUnassignedJobCardsPage(
@@ -370,6 +931,36 @@ export async function getPriorityUnassignedJobCardsPage(
     throw new JobCardApiError(
       "invalid-response",
       "The FIS API returned incomplete priority job card pagination metadata.",
+    );
+  return {
+    items: payload.items.map(mapJobCard).filter((item): item is JobCardRecord => item !== null),
+    ...metadata,
+  };
+}
+
+export async function getAssignedPriorityJobCardsPage(
+  options: {
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<JobCardPage> {
+  const params = new URLSearchParams({
+    page: String(normalizePage(options.page)),
+    pageSize: String(normalizePageSize(options.pageSize)),
+  });
+  const payload = await readJson(
+    await requestApi(`api/jobcards/priority/assigned/page?${params.toString()}`),
+  );
+  if (!isRecord(payload) || !Array.isArray(payload.items))
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned an invalid assigned priority job card page.",
+    );
+  const metadata = readPageMetadata(payload, ["totalRecords", "total_records", "total"]);
+  if (!metadata)
+    throw new JobCardApiError(
+      "invalid-response",
+      "The FIS API returned incomplete assigned priority job card pagination metadata.",
     );
   return {
     items: payload.items.map(mapJobCard).filter((item): item is JobCardRecord => item !== null),

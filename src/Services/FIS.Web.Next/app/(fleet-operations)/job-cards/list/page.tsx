@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import {
+  CapturerJobCardDetails,
   JobCardDetails,
   JobCardSearchForm,
   JobCardTable,
@@ -13,6 +14,7 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_page";
 import {
   getJobCardForSelection,
+  getCapturerDetailsForSelection,
   getJobCardSession,
   jobCardPageHref,
   queryPage,
@@ -70,6 +72,8 @@ async function renderListJobCardsContent({
       Number.isInteger(selectedId) && selectedId > 0
         ? await getJobCardForSelection(selectedId)
         : null;
+    const selectedDetails =
+      selected !== null ? await getCapturerDetailsForSelection(selected.jobCardId) : null;
     const tableReturnPath = jobCardPageHref(
       "/job-cards/list",
       { ...query, id: undefined },
@@ -116,6 +120,7 @@ async function renderListJobCardsContent({
               pageHref={(nextPage) => jobCardPageHref("/job-cards/list", query, nextPage)}
             />
           </section>
+          {selectedDetails ? <CapturerJobCardDetails details={selectedDetails} /> : null}
           {selected ? (
             <JobCardDetails
               card={selected}

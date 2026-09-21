@@ -31,9 +31,16 @@ public class JobCardRepository : IJobCardRepository
     public Task<JobCardPage> GetPageAsync(JobCardPageQuery query) =>
         _legacyRepository.GetPageAsync(query);
 
+    public Task<JobCardPage> GetAuthorizerPageAsync(JobCardPageQuery query) =>
+        _legacyRepository.GetAuthorizerPageAsync(query);
+
     public Task<JobCardPage> GetPriorityUnassignedPageAsync(
         PriorityUnassignedJobCardPageQuery query
     ) => _legacyRepository.GetPriorityUnassignedPageAsync(query);
+
+    public Task<JobCardPage> GetAssignedPriorityPageAsync(
+        PriorityUnassignedJobCardPageQuery query
+    ) => _legacyRepository.GetAssignedPriorityPageAsync(query);
 
     public Task<RepairCostReportPage> GetRepairCostReportPageAsync(RepairCostReportPageQuery query) =>
         _legacyRepository.GetRepairCostReportPageAsync(query);
@@ -52,6 +59,52 @@ public class JobCardRepository : IJobCardRepository
 
     public Task<IEnumerable<JobCard>> GetByAuthorizerAsync(int authorizerUserId) =>
         _legacyRepository.GetByAuthorizerAsync(authorizerUserId);
+
+    public Task<IReadOnlyList<JobCardCaptureVehicle>?> GetVehiclesAvailableForCaptureAsync() =>
+        _legacyRepository.GetVehiclesAvailableForCaptureAsync();
+
+    public Task<JobCardAuthorizerGgStatsPage?> GetAuthorizerGgStatsAsync(
+        JobCardAuthorizerGgStatsQuery query
+    ) => _legacyRepository.GetAuthorizerGgStatsAsync(query);
+
+    public Task<IReadOnlyList<JobCardCaptureVehicleSummary>?> GetCaptureVehicleSummaryAsync(
+        string ggNumber
+    ) => _legacyRepository.GetCaptureVehicleSummaryAsync(ggNumber);
+
+    public Task<IReadOnlyList<JobCardCaptureExtra>?> GetCaptureExtrasInCategoryAsync(
+        string ggNumber
+    ) => _legacyRepository.GetCaptureExtrasInCategoryAsync(ggNumber);
+
+    public Task<IReadOnlyList<string>?> GetCaptureFittedExtraDescriptionsAsync(string ggNumber) =>
+        _legacyRepository.GetCaptureFittedExtraDescriptionsAsync(ggNumber);
+
+    public Task<IReadOnlyList<string>?> GetCaptureJobcardsOnStatusDescriptionsAsync(
+        string ggNumber
+    ) => _legacyRepository.GetCaptureJobcardsOnStatusDescriptionsAsync(ggNumber);
+
+    public Task<IReadOnlyList<JobCardAuthorizerDetails>?> GetAuthorizerDetailsAsync(
+        string ggNumber,
+        string extraCode
+    ) => _legacyRepository.GetAuthorizerDetailsAsync(ggNumber, extraCode);
+
+    public Task<IReadOnlyList<JobCardAuthorizerStatus>?> GetAuthorizerStatusCodesAsync() =>
+        _legacyRepository.GetAuthorizerStatusCodesAsync();
+
+    public Task<IReadOnlyList<JobCardCapturerDetails>?> GetCapturerDetailsAsync(
+        string ggNumber,
+        string extraCode
+    ) => _legacyRepository.GetCapturerDetailsAsync(ggNumber, extraCode);
+
+    public Task<IReadOnlyList<JobCardCapturerStatus>?> GetCapturerStatusCodesAsync() =>
+        _legacyRepository.GetCapturerStatusCodesAsync();
+
+    public Task<IReadOnlyList<JobCardPrintSummary>?> GetPrintableJobCardsAsync(string ggNumber) =>
+        _legacyRepository.GetPrintableJobCardsAsync(ggNumber);
+
+    public Task<IReadOnlyList<JobCardPrintSnapshot>?> GetPrintJobCardsAsync(
+        string ggNumber,
+        string? jcNumber
+    ) => _legacyRepository.GetPrintJobCardsAsync(ggNumber, jcNumber);
 
     public Task<JobCard> CreateAsync(JobCard jobCard, int currentUserId) =>
         _legacyRepository.CreateAsync(jobCard, currentUserId);

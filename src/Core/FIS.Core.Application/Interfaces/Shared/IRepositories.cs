@@ -447,6 +447,11 @@ public interface IVehicleAuthorizationRepository
         IReadOnlySet<short>? allowedSiteCodes = null,
         int? currentUserId = null
     );
+    Task<IReadOnlyList<PreVehicleMaster>> SearchPreVehiclesAsync(
+        string chassisNo,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    );
     Task<VehicleAuthorizationPage> GetPendingAuthorizationsAsync(
         int page = 1,
         int pageSize = 24,
@@ -496,12 +501,22 @@ public interface IVehicleAuthorizationRepository
         IReadOnlySet<short>? allowedSiteCodes = null,
         int? currentUserId = null
     );
+    Task<IReadOnlyList<VehicleStatusComment>> GetVehicleStatusCommentsAsync(
+        string chassisNumber
+    );
 }
 
 public sealed record VehicleAuthorizationApprovalResult(
     string? AllocatedGgNumber,
     int? AvailableGgNumbers,
     int? ReturnStatus
+);
+
+public sealed record VehicleStatusComment(
+    string? CapturedBy,
+    DateTime? CommentDate,
+    string? AuthorityStatus,
+    string? Comment
 );
 
 public sealed record VehicleAuthorizationPrintSnapshot(

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { JobCardSearchForm, JobCardTable } from "@/app/(fleet-operations)/job-cards/_components";
+import { JobCardSearchForm, JobCardTable, AuthorizerJobCardDetails } from "@/app/(fleet-operations)/job-cards/_components";
 import { hasJobCardAccess, hasRole } from "@/app/(fleet-operations)/job-cards/_utils";
 import {
   AccessRestricted,
@@ -9,6 +9,7 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_page";
 import {
   getJobCardSession,
+  getAuthorizerDetailsForSelection,
   jobCardPageHref,
   queryPage,
   querySearchType,
@@ -16,7 +17,7 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_page-utils";
 import {
   DEFAULT_JOB_CARD_PAGE_SIZE,
-  getJobCardsPage,
+  getAuthorizerJobCardsPage,
   JobCardApiError,
 } from "@/lib/api/fleet-operations/api-job-cards";
 
@@ -47,8 +48,9 @@ async function AuthorizerDashboardContent({
   const search = queryValue(query.search);
   const mode = querySearchType(query.mode);
   const page = queryPage(query.page);
+  const selectedId = Number(queryValue(query.id));
   try {
-    const pageData = await getJobCardsPage({
+    const pageData = await getAuthorizerJobCardsPage({
       page,
       pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
       search,
@@ -60,6 +62,10 @@ async function AuthorizerDashboardContent({
       { ...query, id: undefined },
       pageData.page,
     );
+    const selectedDetails =
+      Number.isInteger(selectedId) && selectedId > 0
+        ? await getAuthorizerDetailsForSelection(selectedId)
+        : null;
     return (
       <main className="page-shell vehicle-page-shell">
         <section className="vehicle-card" aria-labelledby="authorizer-dashboard-title">
@@ -111,6 +117,7 @@ async function AuthorizerDashboardContent({
               }
             />
           </section>
+          {selectedDetails ? <AuthorizerJobCardDetails details={selectedDetails} /> : null}
         </section>
       </main>
     );

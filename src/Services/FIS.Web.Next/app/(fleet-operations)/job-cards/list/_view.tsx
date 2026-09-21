@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import {
+  CapturerJobCardDetails,
   JobCardDetails,
   JobCardSearchForm,
   JobCardTable,
@@ -10,7 +11,7 @@ import {
   jobCardPageHref,
 } from "@/app/(fleet-operations)/job-cards/_page-utils";
 import JobCardsListHeader from "@/components/ui/job-cards-list-header";
-import type { getJobCardsPage } from "@/lib/api/fleet-operations/api-job-cards";
+import type { getJobCardsPage, JobCardCapturerDetails } from "@/lib/api/fleet-operations/api-job-cards";
 
 type ListJobCardsViewProps = Readonly<{
   message: string;
@@ -19,6 +20,7 @@ type ListJobCardsViewProps = Readonly<{
   query: Record<string, string | string[] | undefined>;
   search: string;
   selected: Awaited<ReturnType<typeof getJobCardForSelection>>;
+  overlayDetails: JobCardCapturerDetails | null;
   tableReturnPath: string;
 }>;
 
@@ -29,6 +31,7 @@ export function ListJobCardsView({
   query,
   search,
   selected,
+  overlayDetails,
   tableReturnPath,
 }: ListJobCardsViewProps) {
   const messageIsSuccess = query.updated === "1" || query.deleted === "1";
@@ -70,6 +73,7 @@ export function ListJobCardsView({
             pageHref={(nextPage) => jobCardPageHref("/job-cards/list", query, nextPage)}
           />
         </section>
+        {overlayDetails ? <CapturerJobCardDetails details={overlayDetails} /> : null}
         {selected ? (
           <JobCardDetails
             card={selected}

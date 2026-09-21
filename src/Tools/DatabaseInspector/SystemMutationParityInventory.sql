@@ -125,6 +125,27 @@ VALUES
     (N'Job Cards', N'Delete a job card', N'JobCard', N'DEV_DEL_Jobcard', NULL),
     (N'Job Cards', N'Mark job cards in progress', N'JobCard', N'DEV_UPD_JobcardUpdateStatusToInProgress', NULL),
     (N'Job Cards', N'Amend post-close costs', N'JobCard', NULL, NULL),
+    -- VehiclesAvailableForJobcards.aspx binds DEV_SEL_NewVehiclesWithoutJobcards
+    -- with no parameters. Membership/order come from GG Number BoundField.
+    (N'Job Cards', N'List vehicles available for job-card capture', N'vehicle_master', N'DEV_SEL_NewVehiclesWithoutJobcards', NULL),
+    (N'Job Cards', N'List unassigned priority job cards for capturers', N'JobCard', N'DEV_SEL_JobcardPriotiyForCapturers', NULL),
+    (N'Job Cards', N'List assigned priority job cards for capturers', N'JobCard', N'DEV_SEL_JobcardsForAssignedPriority', NULL),
+    (N'Job Cards', N'List job cards for a GG number', N'JobCard', N'DEV_SEL_JobCards', NULL),
+    (N'Job Cards', N'List authorizer job cards for a GG number', N'JobCard', N'DEV_SEL_JobcardsForAuthorizers', NULL),
+    (N'Job Cards', N'List authorizer job cards by status', N'JobCard', N'DEV_SEL_JobcardsStatusReportForAuthorizer', NULL),
+    -- AuthorizerPerGGNumberView / AuthorizerVehicleView first grid. Do not map
+    -- these BoundField counts onto JobCard. Membership is GGNumber.
+    (N'Job Cards', N'List authorizer job-card stats per GG number', N'JobCard', N'DEV_SEL_JobcardsPerGGNumberAuthorizer', NULL),
+    (N'Job Cards', N'Show vehicle summary when creating a job card', N'vehicle_master', N'DEV_SEL_NewVehicleSummary', NULL),
+    (N'Job Cards', N'List extras available when creating a job card', N'extra_codes', N'DEV_SEL_ExtrasInCategory', NULL),
+    (N'Job Cards', N'List extras already fitted when creating a job card', N'extra_codes', N'DEV_SEL_FittedExtras', NULL),
+    (N'Job Cards', N'List existing job cards when creating a job card', N'JobCard', N'DEV_SEL_JobcardsOnStatus', NULL),
+    (N'Job Cards', N'Show authorizer job-card details', N'JobCard', N'DEV_SEL_JobcardAuthorizerDetails', NULL),
+    (N'Job Cards', N'List authorizer job-card statuses', N'JobCard', N'DEV_SEL_JobcardAuthorizerStatus', NULL),
+    (N'Job Cards', N'Show capturer job-card details', N'JobCard', N'DEV_SEL_SpecificJobPerVehicle', NULL),
+    (N'Job Cards', N'List capturer job-card statuses', N'JobCard', N'DEV_SEL_JobcardStatus', NULL),
+    (N'Job Cards', N'List authorized job cards ready to print', N'JobCard', N'DEV_SEL_JobcardsForPrintingSummary', NULL),
+    (N'Job Cards', N'Load the print job-card report dataset', N'JobCard', N'DEV_SEL_JobcardsForPrinting', NULL),
     (N'Lease Tariffs', N'Import a lease-tariff file', N'LeaseTariff_File', N'ADM_IMPORT_LeaseTariffFile', NULL),
     (N'Lease Tariffs', N'Import or recalculate lease tariffs', N'LeaseTariff', N'ADM_UPD_LeaseFixedTariff', N'TRG_UPSERT_Vehicle_Tariff'),
     (N'Lease Tariffs', N'Create a lease tariff', N'LeaseTariff', N'DEV_INS_LeaseTariff', N'TRG_Audit_LeaseTariff_Insert'),
@@ -170,7 +191,27 @@ VALUES
     (N'Vehicle Master', N'Allocate the next GG number on authorization', N'block_gg_numbers', N'DEV_SEL_Allocated_GG_NO', NULL),
     (N'Vehicle Master', N'Validate chassis uniqueness on capture', N'vehicle_master', N'Dev_Val_Chassis_No', NULL),
     (N'Vehicle Master', N'Validate engine uniqueness on capture', N'vehicle_master', N'Dev_Val_Engine_No', NULL),
-    (N'Vehicle Master', N'Validate a replacement GG number on capture', N'vehicle_master', N'DEV_VAL_Replace_GGNumber', NULL);
+    (N'Vehicle Master', N'Validate a replacement GG number on capture', N'vehicle_master', N'DEV_VAL_Replace_GGNumber', NULL),
+    -- PreCaptureNewVehicle.aspx binds these grids to User_Profile queue
+    -- procedures. Membership comes from the SP; leftover pre_vehicle_master
+    -- hydrates temp_vmf_code. DEV_SEL_RejectedVehicles is the authorized-and-
+    -- rejected history caller despite the name.
+    (N'Vehicle Master', N'List vehicles awaiting authorization', N'pre_vehicle_master', N'DEV_SEL_Pre_Vehicle_Awaiting_Authority', NULL),
+    (N'Vehicle Master', N'List authorized vehicles', N'pre_vehicle_master', N'DEV_SEL_AuthorizedVehicles', NULL),
+    (N'Vehicle Master', N'List authorized and rejected vehicles', N'pre_vehicle_master', N'DEV_SEL_RejectedVehicles', NULL),
+    (N'Vehicle Master', N'Load pre-vehicle details by chassis', N'pre_vehicle_master', N'DEV_SEL_Pre_Vehicle_Details', NULL),
+    (N'Vehicle Master', N'Resolve original capturer on recall', N'pre_vehicle_master', N'DEV_Check_UserCodeExists', NULL),
+    -- PreCaptureNewVehicle.aspx dropdowns. Membership/order come from these
+    -- procedures; leftover tables hydrate the modern entity shape.
+    (N'Vehicle Master', N'List capture vehicle models', N'model', N'DEV_SEL_Vehicle_models', NULL),
+    (N'Vehicle Master', N'List capture locations', N'location', N'DEV_SEL_locations', NULL),
+    (N'Vehicle Master', N'List capture hire types', N'type', N'DEV_SEL_Vehicle_Hire_Types', NULL),
+    (N'Vehicle Master', N'List capture active sites', N'site', N'DEV_SEL_SitesAll', NULL),
+    (N'Vehicle Master', N'List capture vehicle suppliers', N'vehicle_source', N'DEV_SEL_Vehicle_Suppliers', NULL),
+    (N'Vehicle Master', N'List capture extras', N'extra_codes', N'DEV_SEL_Vehicle_Extras', NULL),
+    (N'Vehicle Master', N'Search pre-vehicles by VIN / engine / GG', N'pre_vehicle_master', N'DEV_SEL_FilterPreVehicles', NULL),
+    (N'Vehicle Master', N'Recall pending capture extras', N'pre_vehicle_master', N'DEV_SEL_NewVehicle_Extras', NULL),
+    (N'Vehicle Master', N'Recall pending capture comments', N'pre_vehicle_master', N'DEV_SEL_Vehicle_Status_Comments', NULL);
 
 INSERT INTO @MutationTargets
     ([Module], [ModernMutation], [SchemaName], [TableName], [LegacyProcedure], [LegacyTrigger])
@@ -269,6 +310,21 @@ VALUES
     (N'Job Cards', N'DEV_UPD_JobcardUpdateStatusToInProgress', 2, N'@jcnumber', N'JobcardClasses/Changes.vb UpdateJobcardsStatusInProgress'),
     (N'Job Cards', N'DEV_DEL_Jobcard', 1, N'@vmf_code', N'jobcards2/classes/capturerControl.vb deleteJobcards'),
     (N'Job Cards', N'DEV_DEL_Jobcard', 2, N'@extraDescription', N'jobcards2/classes/capturerControl.vb deleteJobcards'),
+    (N'Job Cards', N'DEV_SEL_JobCards', 1, N'@ggNumber', N'JobcardClasses/selections.vb GetJobCardsPerVehicle'),
+    (N'Job Cards', N'DEV_SEL_JobcardsForAuthorizers', 1, N'@ggnumber', N'JobcardClasses/selections.vb getAuthorizerJobcards'),
+    (N'Job Cards', N'DEV_SEL_JobcardsStatusReportForAuthorizer', 1, N'@statusCode', N'JobcardClasses/selections.vb GetPendingJobcardsForAuthorizer'),
+    (N'Job Cards', N'DEV_SEL_JobcardsPerGGNumberAuthorizer', 1, N'@ggnumber', N'JobcardClasses/selections.vb getAuthorizerJobcardStats; 0-param caller also exists for the unfiltered grid'),
+    (N'Job Cards', N'DEV_SEL_NewVehicleSummary', 1, N'@ggnumber', N'JobcardClasses/selections.vb GetVehicleSummary; jobcards2 CreateJobcard BoundFields GGNumber/RegistrationNumber/ClassDescription/ModelDescription/OdoReading/VINNumber/EngineNumber/YearModel/PurchasedFrom/HireType/HiredFrom/Location'),
+    (N'Job Cards', N'DEV_SEL_ExtrasInCategory', 1, N'@ggnumber', N'jobcards2/classes/capturerControl.vb GetJobsPerCategory; 2-param @CatID/@ggnumber exists in JobcardClasses and is leftover'),
+    (N'Job Cards', N'DEV_SEL_FittedExtras', 1, N'@ggnumber', N'jobcards2 CreateJobcard BoundField extra_description'),
+    (N'Job Cards', N'DEV_SEL_JobcardsOnStatus', 1, N'@ggnumber', N'jobcards2 CreateJobcard BoundField extra_description'),
+    (N'Job Cards', N'DEV_SEL_JobcardAuthorizerDetails', 1, N'@ggNumber', N'JobcardClasses/selections.vb getAuthorizerJobcardDetails'),
+    (N'Job Cards', N'DEV_SEL_JobcardAuthorizerDetails', 2, N'@extraCode', N'JobcardClasses/selections.vb getAuthorizerJobcardDetails; AuthorizerPerGGNumberView DetailsView BoundFields'),
+    (N'Job Cards', N'DEV_SEL_SpecificJobPerVehicle', 1, N'@ggNumber', N'JobcardClasses/selections.vb GetJobCardDetails'),
+    (N'Job Cards', N'DEV_SEL_SpecificJobPerVehicle', 2, N'@extraCode', N'JobcardEditUpdateAndPrint DetailsView Bind GGNumber/barcode/InitialCapturer/initialCapturedDate/JobCardsCapturer/capturedDate/handoverName/handoverDate/Damages/comments/status_code_description/jobcardComment/Authorizer/AuthorizerDate/AuthorizerComments/jc_number/extra_description'),
+    (N'Job Cards', N'DEV_SEL_JobcardsForPrintingSummary', 1, N'@ggnumber', N'JobcardClasses/selections.vb getJobcardsforPrinting; PrintAssignedJobcards BoundFields Jobcard Number/GG Number/Registration Number/Jobcard Description'),
+    (N'Job Cards', N'DEV_SEL_JobcardsForPrinting', 1, N'@ggNumber', N'JobcardData.xsd JobcardsForPrintingTableAdapter; PrintJobcard.aspx ReportParameter ggNumber'),
+    (N'Job Cards', N'DEV_SEL_JobcardsForPrinting', 2, N'@jcNumber', N'JobcardData.xsd JobcardsForPrintingTableAdapter; PrintJobcard.aspx ReportParameter jcNumber; print-all binds empty. Changes.PrintJobcardsPerGGNumber is the 1-param @ggnumber caller'),
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 1, N'@ContractCode', N'GGFIS_DataAccessLayer/Contract.vb ExtendExisting'),
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 2, N'@VMFCode', N'GGFIS_DataAccessLayer/Contract.vb ExtendExisting'),
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 3, N'@TargetReturnDate', N'GGMT.Database/v2.1.08 DEV_UPD_Contract_ExtendExisting'),
@@ -429,7 +485,14 @@ VALUES
     (N'Vehicle Master', N'DEV_Chk_BlockExist', 2, N'@Veh_GG_End', N'Master-File/Add_GGBlockNumbers.aspx.vb CheckIfBlockExist'),
     (N'Vehicle Master', N'Dev_Val_Chassis_No', 1, N'@chassis_number', N'VehicleInception/PreCaptureNewVehicle.aspx.vb'),
     (N'Vehicle Master', N'Dev_Val_Engine_No', 1, N'@Engine_number', N'VehicleInception/PreCaptureNewVehicle.aspx.vb'),
-    (N'Vehicle Master', N'DEV_VAL_Replace_GGNumber', 1, N'@Replace_GGNumber', N'VehicleInception/PreCaptureNewVehicle.aspx.vb GetReplaceGG_Number');
+    (N'Vehicle Master', N'DEV_VAL_Replace_GGNumber', 1, N'@Replace_GGNumber', N'VehicleInception/PreCaptureNewVehicle.aspx.vb GetReplaceGG_Number'),
+    (N'Vehicle Master', N'DEV_SEL_Pre_Vehicle_Awaiting_Authority', 1, N'@UserCode', N'Master-File/PreCaptureNewVehicle.aspx.vb Getall_vehiclesAwaitingAuthority'),
+    (N'Vehicle Master', N'DEV_SEL_RejectedVehicles', 1, N'@UserCode', N'Master-File/PreCaptureNewVehicle.aspx.vb Getall_AuthorizedandRejectedvehicles'),
+    (N'Vehicle Master', N'DEV_SEL_Pre_Vehicle_Details', 1, N'@chassis_number', N'Master-File/PreCaptureNewVehicle.aspx.vb Pre_Vehicle_Detials'),
+    (N'Vehicle Master', N'DEV_Check_UserCodeExists', 1, N'@chassis_no', N'Master-File/PreCaptureNewVehicle.aspx.vb Check_UserCodeExistsForChassisNo'),
+    (N'Vehicle Master', N'DEV_SEL_Vehicle_Extras', 1, N'@Vehicle_Search', N'VehicleInception/PreCaptureNewVehicle.aspx.vb LoadExtras'),
+    (N'Vehicle Master', N'DEV_SEL_FilterPreVehicles', 1, N'@chassisno', N'Master-File/PreCaptureNewVehicle.aspx.vb FilterPreVehicles'),
+    (N'Vehicle Master', N'DEV_SEL_Vehicle_Status_Comments', 1, N'@chassis_No', N'GGFIS_DataAccessLayer/User_Profile.vb ViewVehicle_Status_Comments');
 INSERT INTO @ExpectedProcedureParameters
     ([Module], [LegacyProcedure], [ParameterOrdinal], [ParameterName], [SourceEvidence])
 VALUES

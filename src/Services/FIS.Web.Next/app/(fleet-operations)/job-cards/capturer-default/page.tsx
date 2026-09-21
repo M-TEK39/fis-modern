@@ -14,6 +14,7 @@ import {
 } from "@/app/(fleet-operations)/job-cards/_page-utils";
 import {
   DEFAULT_JOB_CARD_PAGE_SIZE,
+  getAssignedPriorityJobCardsPage,
   getPriorityUnassignedJobCardsPage,
   JobCardApiError,
 } from "@/lib/api/fleet-operations/api-job-cards";
@@ -40,11 +41,18 @@ async function JobCardCapturerContent({
     return <AccessRestricted message="Your profile does not include Job Card capturer access." />;
   const query = await searchParams;
   const page = queryPage(query.page);
+  const assignedPage = queryPage(query.assignedPage);
   try {
-    const pageData = await getPriorityUnassignedJobCardsPage({
-      page,
-      pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
-    });
+    const [pageData, assignedPageData] = await Promise.all([
+      getPriorityUnassignedJobCardsPage({
+        page,
+        pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+      }),
+      getAssignedPriorityJobCardsPage({
+        page: assignedPage,
+        pageSize: DEFAULT_JOB_CARD_PAGE_SIZE,
+      }),
+    ]);
     const tableReturnPath = jobCardPageHref("/job-cards/capturer-default", query, pageData.page);
     return (
       <main className="page-shell vehicle-page-shell">
@@ -96,6 +104,37 @@ async function JobCardCapturerContent({
               totalPages={pageData.totalPages}
               pageHref={(nextPage) =>
                 jobCardPageHref("/job-cards/capturer-default", query, nextPage)
+              }
+            />
+          </section>
+          <section
+            className="vehicle-status-maintenance-panel"
+            aria-labelledby="assigned-priority-job-cards-title"
+          >
+            <div className="vehicle-form-section-header">
+              <div>
+                <p className="eyebrow">
+                  {assignedPageData.totalRecords} record
+                  {assignedPageData.totalRecords === 1 ? "" : "s"}
+                </p>
+                <h2 id="assigned-priority-job-cards-title">
+                  Assigned job cards that require immediate attention
+                </h2>
+              </div>
+            </div>
+            <JobCardTable
+              cards={assignedPageData.items}
+              mode="print"
+              returnPath={jobCardPageHref(
+                "/job-cards/capturer-default",
+                query,
+                assignedPageData.page,
+                "assignedPage",
+              )}
+              page={assignedPageData.page}
+              totalPages={assignedPageData.totalPages}
+              pageHref={(nextPage) =>
+                jobCardPageHref("/job-cards/capturer-default", query, nextPage, "assignedPage")
               }
             />
           </section>

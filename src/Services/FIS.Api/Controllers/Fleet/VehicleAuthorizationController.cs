@@ -68,6 +68,41 @@ public class VehicleAuthorizationController : BaseApiController
     }
 
     /// <summary>
+    /// Archive PreCaptureNewVehicle Search uses DEV_SEL_FilterPreVehicles
+    /// @chassisno. Empty results are "Vehicle Not Found."
+    /// </summary>
+    [HttpGet("search")]
+    public async Task<IActionResult> SearchPreVehicles(
+        [FromQuery] string? chassisno,
+        [FromQuery] string? searchTerm
+    )
+    {
+        if (!CanViewVehicleInception())
+            return Forbid();
+
+        var term = string.IsNullOrWhiteSpace(chassisno) ? searchTerm : chassisno;
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            return BadRequest(new { message = "Please supply VIN / Engine / GG No." });
+        }
+
+        try
+        {
+            var vehicles = await _repository.SearchPreVehiclesAsync(
+                term.Trim(),
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
+            return Ok(vehicles.Select(MapToDto));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching pre-vehicles with term {SearchTerm}", term);
+            return StatusCode(500, "Error searching vehicles awaiting capture");
+        }
+    }
+
+    /// <summary>
     /// Get all vehicles awaiting authorization (pending queue)
     /// </summary>
     [HttpGet("pending")]
@@ -267,6 +302,79 @@ public class VehicleAuthorizationController : BaseApiController
                 chassisNumber
             );
             return StatusCode(500, "Error retrieving vehicle authorization");
+        }
+    }
+
+    /// <summary>
+    /// Archive PreCaptureNewVehicle Recall. Capturers only; authorizers do
+    /// not see the recall button. Authorized rows cannot be recalled.
+    /// </summary>
+    [HttpGet("chassis/{chassisNumber}/recall")]
+    public async Task<IActionResult> RecallByChassisNumber(string chassisNumber)
+    {
+        if (!CanCaptureVehicleInception())
+            return Forbid();
+
+        if (string.IsNullOrWhiteSpace(chassisNumber))
+        {
+            return BadRequest(new { message = "Please supply VIN / Engine / GG No." });
+        }
+
+        try
+        {
+            var vehicle = await _repository.GetByChassisNumberAsync(
+                chassisNumber.Trim(),
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                currentUserId: null
+            );
+            if (vehicle is null)
+            {
+                return NotFound(new { message = "Vehicle Not Found." });
+            }
+
+            if (
+                string.Equals(
+                    vehicle.Authority_Status,
+                    "Authorized",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                return BadRequest(new { message = "Can not recall a Authorized Vehicle." });
+            }
+
+            if (
+                !string.Equals(
+                    vehicle.Authority_Status,
+                    "Awaiting Authorization",
+                    StringComparison.OrdinalIgnoreCase
+                )
+                && !string.Equals(
+                    vehicle.Authority_Status,
+                    "Rejected",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                return BadRequest(new { message = "Can not recall a Authorized Vehicle." });
+            }
+
+            var dto = MapToDto(vehicle);
+            dto.Comment = null;
+            dto.ExtraCodes = vehicle.ExtraCodes;
+            dto.StatusComments = await _repository.GetVehicleStatusCommentsAsync(
+                vehicle.chassis_number ?? chassisNumber.Trim()
+            );
+            return Ok(dto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error recalling vehicle authorization for chassis {ChassisNumber}",
+                chassisNumber
+            );
+            return StatusCode(500, "Error recalling vehicle capture");
         }
     }
 
@@ -935,6 +1043,7 @@ public class VehicleAuthorizationController : BaseApiController
             VmfCode = v.vmf_code,
             DateCreated = v.date_created,
             CreatedByUserCode = v.created_by_user_code,
+            ExtraCodes = v.ExtraCodes,
         };
     }
 
@@ -1298,6 +1407,8 @@ public class PreVehicleMasterDto
     public string? CapturedByUserName { get; set; }
     public DateTime? CapturedDate { get; set; }
     public IReadOnlyList<string> Extras { get; set; } = [];
+    public IReadOnlyCollection<short> ExtraCodes { get; set; } = [];
+    public IReadOnlyList<VehicleStatusComment> StatusComments { get; set; } = [];
 }
 
 public class CreatePreVehicleMasterDto

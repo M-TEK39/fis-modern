@@ -11,7 +11,7 @@ import {
   updateJobCardAction,
 } from "@/app/(fleet-operations)/job-cards/actions";
 import { MenuSection } from "@/components/ui/menu-section";
-import type { JobCardRecord, RepairCostLine } from "@/lib/api/fleet-operations/api-job-cards";
+import type { JobCardRecord, RepairCostLine, JobCardAuthorizerGgStats, JobCardAuthorizerDetails, JobCardCapturerDetails, JobCardPrintSummary, JobCardPrintSnapshot } from "@/lib/api/fleet-operations/api-job-cards";
 import type { VehicleOption } from "@/lib/api/vehicles/api-vehicles";
 import {
   formatDate,
@@ -97,6 +97,118 @@ export function JobCardSearchForm({
   );
 }
 
+export function JobCardAuthorizerGgStatsTable({
+  rows,
+  page,
+  totalPages,
+  pageHref,
+  ggHref,
+}: Readonly<{
+  rows: readonly JobCardAuthorizerGgStats[];
+  page?: number;
+  totalPages?: number;
+  pageHref?: (page: number) => string;
+  ggHref: (ggNumber: string) => string;
+}>) {
+  const table =
+    rows.length === 0 ? (
+      <p className="muted-copy">No job card stats per GG number.</p>
+    ) : (
+      <div className="vehicle-table-wrapper">
+        <table className="vehicle-table">
+          <caption className="sr-only">Job card stats per GG number</caption>
+          <DataTableHeader
+            columns={[
+              { key: "gg", label: <>GG Number</> },
+              { key: "jobcards", label: <>Jobcards</> },
+              { key: "pending", label: <>Pending</> },
+              { key: "awaiting", label: <>Awaiting Authorisation</> },
+              { key: "authorised", label: <>Authorised</> },
+              { key: "inprogress", label: <>In Progress</> },
+              { key: "canceled", label: <>Cancelled</> },
+              { key: "failed", label: <>Failed</> },
+              { key: "completed", label: <>Completed</> },
+            ]}
+          />
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.ggNumber}>
+                <td>
+                  <Link className="vehicle-menu-link" href={ggHref(row.ggNumber)}>
+                    {row.ggNumber}
+                  </Link>
+                </td>
+                <td>{valueOrDash(row.jobcards)}</td>
+                <td>{valueOrDash(row.pending)}</td>
+                <td>{valueOrDash(row.awaitingAuthorisation)}</td>
+                <td>{valueOrDash(row.authorised)}</td>
+                <td>{valueOrDash(row.inProgress)}</td>
+                <td>{valueOrDash(row.canceled)}</td>
+                <td>{valueOrDash(row.failed)}</td>
+                <td>{valueOrDash(row.completed)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+
+  return (
+    <>
+      {table}
+      {page && totalPages && pageHref ? (
+        <JobCardPagination page={page} totalPages={totalPages} pageHref={pageHref} />
+      ) : null}
+    </>
+  );
+}
+
+export function JobCardPrintSummaryTable({
+  rows,
+  printHref,
+}: Readonly<{
+  rows: readonly JobCardPrintSummary[];
+  printHref: (ggNumber: string, jobcardNumber: string) => string;
+}>) {
+  if (rows.length === 0) {
+    return <p className="muted-copy">No jobcards assigned for this vehicle</p>;
+  }
+  return (
+    <div className="vehicle-table-wrapper">
+      <table className="vehicle-table">
+        <caption className="sr-only">Print authorized jobcards</caption>
+        <DataTableHeader
+          columns={[
+            { key: "print", label: <>Print</> },
+            { key: "jc", label: <>Jobcard Number</> },
+            { key: "gg", label: <>GG Number</> },
+            { key: "reg", label: <>Registration Number</> },
+            { key: "desc", label: <>Jobcard Description</> },
+          ]}
+        />
+        <tbody>
+          {rows.map((row) => (
+            <tr key={`${row.ggNumber}-${row.jobcardNumber}`}>
+              <td>
+                <Link
+                  className="button button-secondary button-small"
+                  href={`${printHref(row.ggNumber, row.jobcardNumber)}#job-card-print`}
+                >
+                  Print
+                </Link>
+              </td>
+              <td>{row.jobcardNumber}</td>
+              <td>{row.ggNumber}</td>
+              <td>{valueOrDash(row.registrationNumber)}</td>
+              <td>{valueOrDash(row.jobcardDescription)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function JobCardVehicleResults({
   caption,
   vehicles,
@@ -142,14 +254,23 @@ function ReviewActions({
 }: Readonly<{ card: JobCardRecord; currentUserCode: number | null; returnPath: string }>) {
   const canReview =
     (card.statusCode === 1 || card.statusCode === 2) && card.capturedByUserCode !== currentUserCode;
+  const detailsLink = (
+    <Link className="button button-secondary button-small" href={withJobCardId(returnPath, card.jobCardId)}>
+      Jobcard Details
+    </Link>
+  );
   if (!canReview)
     return (
-      <span className="muted-copy">
-        {card.capturedByUserCode === currentUserCode ? "Captured by you" : "No review action"}
-      </span>
+      <div className="button-row">
+        {detailsLink}
+        <span className="muted-copy">
+          {card.capturedByUserCode === currentUserCode ? "Captured by you" : "No review action"}
+        </span>
+      </div>
     );
   return (
     <div className="button-row">
+      {detailsLink}
       <form action={authorizeJobCardAction}>
         <input name="returnPath" type="hidden" value={returnPath} />
         <input name="jobCardId" type="hidden" value={card.jobCardId} />
@@ -534,6 +655,84 @@ export function JobCardDetails({
   );
 }
 
+export function CapturerJobCardDetails({
+  details,
+}: Readonly<{ details: JobCardCapturerDetails }>) {
+  const rows: Array<[string, string | null]> = [
+    ["Jobcards Details", [details.jcNumber, details.extraDescription].filter(Boolean).join(" - ")],
+    ["GG Number", details.ggNumber],
+    ["Barcode", details.barcode],
+    ["Receiver Name", details.initialCapturer],
+    ["Receiver Date", details.initialCapturedDate],
+    ["Jobcard Capturer", details.jobCardsCapturer],
+    ["Captured Date", details.capturedDate],
+    ["Jobcard Assigned to", details.handoverName],
+    ["Assigned Date", details.handoverDate],
+    ["Damages", details.damages],
+    ["Comments on Damages", details.comments],
+    ["Jobcard Status", details.statusDescription],
+    ["Jobcard Comment", details.jobcardComment],
+    ["Authorizer", details.authorizer],
+    ["Authorized Date", details.authorizerDate],
+    ["Authorizer Comments", details.authorizerComments],
+  ];
+  return (
+    <section className="vehicle-status-maintenance-panel" aria-labelledby="capturer-details-title">
+      <p className="eyebrow">Jobcards Details</p>
+      <h2 id="capturer-details-title">
+        {details.jcNumber ? `Jobcards Details: - ${details.jcNumber}` : "Jobcards Details"}
+      </h2>
+      <dl className="form-grid">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{valueOrDash(value)}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+export function AuthorizerJobCardDetails({
+  details,
+}: Readonly<{ details: JobCardAuthorizerDetails }>) {
+  const rows: Array<[string, string | null]> = [
+    ["Jobcard Details", [details.extraDescription, details.jcNumber].filter(Boolean).join(" - ")],
+    ["GG Number", details.ggNumber],
+    ["Vehicle Recieved Date", details.initialCapturedDate],
+    ["Vehicle Recieved By", details.initialCapturer],
+    ["Barcode", details.barcode],
+    ["Jobcard Captured Date", details.capturedDate],
+    ["Jobcard Captured By", details.jobCardsCapturer],
+    ["Jobcard Number", details.jcNumber],
+    ["Jobcard Description", details.extraDescription],
+    ["Assigned To", details.handoverName],
+    ["Date Assigned", details.handoverDate],
+    ["Damages", details.damages],
+    ["Damages Comments", details.comments],
+    ["Jobcard Status", details.statusDescription],
+    ["Priority", details.priority],
+    ["Authorizer Name", details.authorizer],
+    ["Authorizer Date", details.authorizedDate],
+    ["Authorizer Comments", details.authorizerComments],
+  ];
+  return (
+    <section className="vehicle-status-maintenance-panel" aria-labelledby="authorizer-details-title">
+      <p className="eyebrow">Authorizers Details</p>
+      <h2 id="authorizer-details-title">Jobcard Details</h2>
+      <dl className="form-grid">
+        {rows.map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{valueOrDash(value)}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 export function JobCardPrintPreview({ card }: Readonly<{ card: JobCardRecord }>) {
   return (
     <section
@@ -581,6 +780,70 @@ export function JobCardPrintPreview({ card }: Readonly<{ card: JobCardRecord }>)
         </p>
       </div>
     </section>
+  );
+}
+
+export function JobCardPrintSnapshotPanel({
+  snapshots,
+}: Readonly<{ snapshots: readonly JobCardPrintSnapshot[] }>) {
+  if (snapshots.length === 0) {
+    return <p className="muted-copy">No jobcards assigned for this vehicle</p>;
+  }
+  return (
+    <>
+      {snapshots.map((snapshot, index) => {
+        const rows: Array<[string, string | null]> = [
+          ["GG Number", snapshot.ggNumber],
+          ["Registration Number", snapshot.registrationNumber],
+          ["Date Delivered", snapshot.dateDelivered],
+          ["Odo Reading", snapshot.odoReading],
+          ["VIN Number", snapshot.vinNumber],
+          ["Engine Number", snapshot.engineNumber],
+          ["Model Description", snapshot.modelDescription],
+          ["Year Model", snapshot.yearModel],
+          ["Class Description", snapshot.classDescription],
+          ["Hire Type", snapshot.hireType],
+          ["Hired From", snapshot.hiredFrom],
+          ["Location", snapshot.location],
+          ["captured_date", snapshot.capturedDate],
+          ["ReceivedBy", snapshot.receivedBy],
+          ["Status", snapshot.status],
+          ["Status Date", snapshot.statusDate],
+          ["Purchased From", snapshot.purchasedFrom],
+          ["Purchased Date", snapshot.purchasedDate],
+          ["Jobcard Number", snapshot.jobcardNumber],
+          ["Job Description", snapshot.jobDescription],
+          ["Jobcard Status", snapshot.jobcardStatus],
+          ["CapturedBy", snapshot.capturedBy],
+          ["jcs_date", snapshot.jcsDate],
+          ["AssignedTo", snapshot.assignedTo],
+          ["AssignedDate", snapshot.assignedDate],
+        ];
+        return (
+          <section
+            className="vehicle-status-maintenance-panel print-sheet"
+            id={index === 0 ? "job-card-print" : undefined}
+            key={`${snapshot.jobcardNumber ?? "print"}-${index}`}
+            aria-labelledby={`job-card-print-title-${index}`}
+          >
+            <p className="eyebrow">Print Authorized Jobcards</p>
+            <h2 id={`job-card-print-title-${index}`}>
+              {snapshot.jobcardNumber
+                ? `Jobcard Number ${snapshot.jobcardNumber}`
+                : "Print Job Cards"}
+            </h2>
+            <dl className="form-grid">
+              {rows.map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{valueOrDash(value)}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        );
+      })}
+    </>
   );
 }
 

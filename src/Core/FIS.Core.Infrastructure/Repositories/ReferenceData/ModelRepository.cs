@@ -90,9 +90,10 @@ public sealed class ModelRepository : IModelRepository
 
     public async Task<IEnumerable<Model>> GetAllModelsAsync()
     {
+        List<Model> leftover;
         try
         {
-            return await QueryAsync();
+            leftover = (await QueryAsync()).ToList();
         }
         catch (InvalidOperationException ex)
             when (ex.Message.Contains("required model compatibility columns", StringComparison.OrdinalIgnoreCase))
@@ -101,8 +102,19 @@ public sealed class ModelRepository : IModelRepository
             // Some restored client generations do not carry every later model
             // maintenance column, so do not make the Add Vehicle page fail
             // merely because the full maintenance projection is unavailable.
-            return await QueryVehicleSelectorModelsAsync();
+            leftover = await QueryVehicleSelectorModelsAsync();
         }
+
+        var keys = await LegacySelectorProcedure.TryReadOrderedKeysAsync(
+            _context,
+            "DEV_SEL_Vehicle_models",
+            [],
+            null,
+            "model_code"
+        );
+        return keys is null
+            ? leftover
+            : LegacySelectorProcedure.OrderByKeys(leftover, keys, model => model.model_code);
     }
 
     [SuppressMessage(
