@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
@@ -64,14 +65,29 @@ public sealed class GgBlockRepository : IGgBlockRepository
 
         try
         {
-            var blockTables = await GetUsableBlockTablesAsync(connection, null);
-            EnsureBlockTableAvailable(blockTables);
-            var userProfileColumns = await GetOptionalUserProfileColumnsAsync(connection, null);
-            var history = new List<GgBlockHistoryRecord>();
-
-            foreach (var table in blockTables)
+            var historyProcedure = await ProcedureMatchesAsync(
+                connection,
+                null,
+                "DEV_SEL_ExistingGGNumbs"
+            );
+            List<GgBlockHistoryRecord> history;
+            if (historyProcedure == true)
             {
-                await ReadHistoryAsync(connection, null, table, userProfileColumns, history);
+                history = await ReadHistoryFromProcedureAsync(connection, null);
+            }
+            else
+            {
+                var blockTables = await GetUsableBlockTablesAsync(connection, null);
+                EnsureBlockTableAvailable(blockTables);
+                var userProfileColumns = await GetOptionalUserProfileColumnsAsync(
+                    connection,
+                    null
+                );
+                history = [];
+                foreach (var table in blockTables)
+                {
+                    await ReadHistoryAsync(connection, null, table, userProfileColumns, history);
+                }
             }
 
             var ordered = history
@@ -135,7 +151,7 @@ public sealed class GgBlockRepository : IGgBlockRepository
             EnsureBlockTableAvailable(blockTables);
 
             if (
-                await HasOverlappingRangeAsync(
+                await BlockRangeExistsAsync(
                     connection,
                     transaction,
                     blockTables,
@@ -159,6 +175,8 @@ public sealed class GgBlockRepository : IGgBlockRepository
                 "@Created_By_User_Code",
                 "@Modified_User_Code"
             );
+            // User_Profile.InsertGG_Blocks_Numbers / Add_GGBlockNumbers.aspx.vb
+            // pass only these four parameters. Do not invent @vch_exlusions.
             var generateProcedure = await ProcedureMatchesAsync(
                 connection,
                 transaction,
@@ -166,8 +184,7 @@ public sealed class GgBlockRepository : IGgBlockRepository
                 "@vch_start",
                 "@vch_end",
                 "@user_access_code",
-                "@vch_suffix",
-                "@vch_exlusions"
+                "@vch_suffix"
             );
 
             short blockId;
@@ -189,8 +206,7 @@ public sealed class GgBlockRepository : IGgBlockRepository
                     new ProcedureParameter("@vch_start", DbType.String, normalizedStart),
                     new ProcedureParameter("@vch_end", DbType.String, normalizedEnd),
                     new ProcedureParameter("@user_access_code", DbType.Int32, currentUserId),
-                    new ProcedureParameter("@vch_suffix", DbType.String, startSuffix.ToString()),
-                    new ProcedureParameter("@vch_exlusions", DbType.String, null)
+                    new ProcedureParameter("@vch_suffix", DbType.String, startSuffix.ToString())
                 );
                 blockId = await FindInsertedBlockIdAsync(
                         connection,
@@ -315,6 +331,68 @@ public sealed class GgBlockRepository : IGgBlockRepository
                 )
             );
         }
+    }
+
+    private static async Task<List<GgBlockHistoryRecord>> ReadHistoryFromProcedureAsync(
+        DbConnection connection,
+        DbTransaction? transaction
+    )
+    {
+        var rows = await ExecuteProcedureRowsAsync(connection, transaction, "DEV_SEL_ExistingGGNumbs");
+        var history = new List<GgBlockHistoryRecord>(rows.Count);
+        var index = 0;
+        foreach (var row in rows)
+        {
+            index++;
+            history.Add(
+                new GgBlockHistoryRecord(
+                    ReadInt16(row, "Block_ID", "Block ID") ?? (short)index,
+                    ReadString(row, "name", "Captured By") ?? "-",
+                    ReadDateTime(row, "Date Created", "Creation_Date", "Creation Date"),
+                    ReadString(row, "GG Start", "Vch_Start_Reg") ?? "-",
+                    ReadString(row, "GG End", "Vch_End_Reg") ?? "-"
+                )
+            );
+        }
+
+        return history;
+    }
+
+    private static async Task<bool> BlockRangeExistsAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        IReadOnlyList<BlockTable> blockTables,
+        string startGgNumber,
+        string endGgNumber
+    )
+    {
+        var checkProcedure = await ProcedureMatchesAsync(
+            connection,
+            transaction,
+            "DEV_Chk_BlockExist",
+            "@Veh_GG_Start",
+            "@Veh_GG_End"
+        );
+        if (checkProcedure == true)
+        {
+            var rows = await ExecuteProcedureRowsAsync(
+                connection,
+                transaction,
+                "DEV_Chk_BlockExist",
+                new ProcedureParameter("@Veh_GG_Start", DbType.String, startGgNumber),
+                new ProcedureParameter("@Veh_GG_End", DbType.String, endGgNumber)
+            );
+            var status = rows.Count == 0 ? null : ReadInt32(rows[0], "Block Status", "BlockStatus");
+            return status == 1;
+        }
+
+        return await HasOverlappingRangeAsync(
+            connection,
+            transaction,
+            blockTables,
+            startGgNumber,
+            endGgNumber
+        );
     }
 
     [SuppressMessage(
@@ -662,6 +740,43 @@ public sealed class GgBlockRepository : IGgBlockRepository
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The procedure name is selected only from fixed legacy compatibility branches; all values are parameters."
+    )]
+    private static async Task<List<Dictionary<string, object?>>> ExecuteProcedureRowsAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        string procedureName,
+        params ProcedureParameter[] parameters
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = $"[dbo].[{procedureName}]";
+        foreach (var parameter in parameters)
+        {
+            AddParameter(command, parameter.Name, parameter.Type, parameter.Value);
+        }
+
+        var rows = new List<Dictionary<string, object?>>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            for (var index = 0; index < reader.FieldCount; index++)
+            {
+                row[reader.GetName(index)] = reader.IsDBNull(index) ? null : reader.GetValue(index);
+            }
+
+            rows.Add(row);
+        }
+
+        return rows;
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "The table name is selected from fixed compatibility metadata; range values are parameters."
     )]
     private static async Task<short?> FindInsertedBlockIdAsync(
@@ -768,6 +883,69 @@ public sealed class GgBlockRepository : IGgBlockRepository
 
     private static DateTime? ReadDateTime(DbDataReader reader, string column) =>
         reader[column] is DBNull ? null : Convert.ToDateTime(reader[column]);
+
+    private static object? GetValue(IReadOnlyDictionary<string, object?> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (row.TryGetValue(key, out var value) && value is not null and not DBNull)
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ReadString(
+        IReadOnlyDictionary<string, object?> row,
+        params string[] keys
+    ) => GetValue(row, keys)?.ToString()?.Trim() is { Length: > 0 } value ? value : null;
+
+    private static int? ReadInt32(IReadOnlyDictionary<string, object?> row, params string[] keys)
+    {
+        var value = GetValue(row, keys);
+        if (value is null)
+        {
+            return null;
+        }
+
+        return int.TryParse(
+            Convert.ToString(value, CultureInfo.InvariantCulture),
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var parsed
+        )
+            ? parsed
+            : null;
+    }
+
+    private static short? ReadInt16(IReadOnlyDictionary<string, object?> row, params string[] keys)
+    {
+        var value = ReadInt32(row, keys);
+        return value.HasValue ? Convert.ToInt16(value.Value, CultureInfo.InvariantCulture) : null;
+    }
+
+    private static DateTime? ReadDateTime(
+        IReadOnlyDictionary<string, object?> row,
+        params string[] keys
+    )
+    {
+        var value = GetValue(row, keys);
+        if (value is DateTime dateTime)
+        {
+            return dateTime;
+        }
+
+        return DateTime.TryParse(
+            value?.ToString(),
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AllowWhiteSpaces,
+            out var parsed
+        )
+            ? parsed
+            : null;
+    }
 
     private sealed record ProcedureParameter(string Name, DbType Type, object? Value);
 

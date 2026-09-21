@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Vehicles;
 using FIS.Data.SqlServer;
@@ -366,8 +367,6 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
 
             try
             {
-                await EnsureNoVehicleDuplicateAsync(connection, transaction, vehicleAuth);
-
                 var existing = string.IsNullOrWhiteSpace(vehicleAuth.chassis_number)
                     ? null
                     : (
@@ -379,6 +378,14 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                                 .Trim()
                         )
                     ).SingleOrDefault();
+
+                await EnsureLegacyCaptureIdentityAsync(
+                    connection,
+                    transaction,
+                    vehicleAuth,
+                    existing
+                );
+                await EnsureNoVehicleDuplicateAsync(connection, transaction, vehicleAuth);
 
                 // The legacy capture page deliberately looks up the original
                 // capturer when recalling a rejected/pending row. The user
@@ -622,15 +629,20 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         _ = await CreateAsync(vehicleAuth, currentUserId);
     }
 
-    public async Task ApproveAsync(int tempVmfCode, int authorizedByUserId, string? comment = null)
+    public async Task<VehicleAuthorizationApprovalResult> ApproveAsync(
+        int tempVmfCode,
+        int authorizedByUserId,
+        string? comment = null
+    )
     {
-        await WithConnectionAsync(async connection =>
+        return await WithConnectionAsync(async connection =>
         {
             var schema = await GetSchemaAsync(connection, null);
             await using var transaction = await connection.BeginTransactionAsync(
                 IsolationLevel.Serializable
             );
             var committed = false;
+            VehicleAuthorizationApprovalResult approvalResult = new(null, null, null);
             try
             {
                 var vehicle = (
@@ -661,6 +673,11 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                         $"Vehicle authorization {tempVmfCode} is not awaiting authorization"
                     );
                 }
+
+                approvalResult = await EnsureGgNumbersAvailableForAuthorizationAsync(
+                    connection,
+                    transaction
+                );
 
                 var approvalProcedure = await ProcedureMatchesAsync(
                     connection,
@@ -795,7 +812,7 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 throw;
             }
 
-            return true;
+            return approvalResult;
         });
     }
 
@@ -1566,6 +1583,190 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         }
 
         return await ExecuteInsertAsync(connection, transaction, values, outputKey: true);
+    }
+
+    private static async Task EnsureLegacyCaptureIdentityAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        PreVehicleMaster vehicle,
+        PreVehicleMaster? existing
+    )
+    {
+        var chassisNumber = vehicle.chassis_number?.Trim();
+        if (
+            !string.IsNullOrWhiteSpace(chassisNumber)
+            && await ProcedureMatchesAsync(
+                connection,
+                transaction,
+                "Dev_Val_Chassis_No",
+                "@chassis_number"
+            )
+        )
+        {
+            var rows = await ExecuteProcedureRowsAsync(
+                connection,
+                transaction,
+                "Dev_Val_Chassis_No",
+                new ProcedureParameter("@chassis_number", DbType.String, chassisNumber)
+            );
+            var chassisRec = rows.Count == 0 ? 0 : ReadFirstColumnInt(rows[0]);
+            var existingChassis = existing?.chassis_number?.Trim();
+            if (
+                chassisRec == 1
+                && !string.Equals(existingChassis, chassisNumber, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                throw new InvalidOperationException(
+                    "There is a Vehicle with the VIN/Chassis Number you have entered, please validate and enter another one."
+                );
+            }
+        }
+
+        var engineNumber = vehicle.engine_number?.Trim();
+        if (
+            !string.IsNullOrWhiteSpace(engineNumber)
+            && await ProcedureMatchesAsync(
+                connection,
+                transaction,
+                "Dev_Val_Engine_No",
+                "@Engine_number"
+            )
+        )
+        {
+            var rows = await ExecuteProcedureRowsAsync(
+                connection,
+                transaction,
+                "Dev_Val_Engine_No",
+                new ProcedureParameter("@Engine_number", DbType.String, engineNumber)
+            );
+            var engineRec = rows.Count == 0 ? 0 : ReadFirstColumnInt(rows[0]);
+            var existingEngine = existing?.engine_number?.Trim();
+            if (
+                engineRec == 1
+                && !string.Equals(existingEngine, engineNumber, StringComparison.OrdinalIgnoreCase)
+            )
+            {
+                throw new InvalidOperationException(
+                    "There is a Vehicle with the Engine Number you have entered, please validate and enter another one."
+                );
+            }
+        }
+
+        var replacedGg = vehicle.replaced_gg_number?.Trim().ToUpperInvariant();
+        var existingReplaced = existing?.replaced_gg_number?.Trim().ToUpperInvariant();
+        if (
+            string.IsNullOrWhiteSpace(replacedGg)
+            || string.Equals(existingReplaced, replacedGg, StringComparison.OrdinalIgnoreCase)
+            || !await ProcedureMatchesAsync(
+                connection,
+                transaction,
+                "DEV_VAL_Replace_GGNumber",
+                "@Replace_GGNumber"
+            )
+        )
+        {
+            return;
+        }
+
+        var replaceRows = await ExecuteProcedureRowsAsync(
+            connection,
+            transaction,
+            "DEV_VAL_Replace_GGNumber",
+            new ProcedureParameter("@Replace_GGNumber", DbType.String, replacedGg)
+        );
+        var replaceStatus = replaceRows.Count == 0
+            ? null
+            : ReadRowString(replaceRows[0], "Replace GG Status", "ReplaceGGStatus");
+        if (string.Equals(replaceStatus, "in_pre_vehicle_master", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Cannot replace a Vehicle that is awaiting authorization, please validate and fix before you submit."
+            );
+        }
+
+        if (
+            string.Equals(replaceStatus, "in_block_gg_numbers", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(replaceStatus, "not_exists", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            throw new InvalidOperationException(
+                "The Replace GG Number you have entered does not exist, please validate and fix before you submit."
+            );
+        }
+
+        if (string.Equals(replaceStatus, "invalid_vehicle", StringComparison.OrdinalIgnoreCase))
+        {
+            var vehicleStatus = ReadRowString(replaceRows[0], "vehicle status", "Vehicle Status");
+            throw new InvalidOperationException(
+                $"The Replace GG Number you have entered is in status [{vehicleStatus}]. Only the following vehicle statuses may be replaced [Stolen, Withdrawn, Sold, Missing or Destroyed]."
+            );
+        }
+    }
+
+    private static async Task<VehicleAuthorizationApprovalResult> EnsureGgNumbersAvailableForAuthorizationAsync(
+        DbConnection connection,
+        DbTransaction transaction
+    )
+    {
+        if (!await ProcedureMatchesAsync(connection, transaction, "DEV_Check_GGNumAvailabilityStatus"))
+        {
+            return new VehicleAuthorizationApprovalResult(null, null, null);
+        }
+
+        var availabilityRows = await ExecuteProcedureRowsAsync(
+            connection,
+            transaction,
+            "DEV_Check_GGNumAvailabilityStatus"
+        );
+        if (availabilityRows.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "There are no available GG Numbers in the System, therefore this vehicle will not be accepted."
+            );
+        }
+
+        var available = ReadRowInt32(
+            availabilityRows[0],
+            "Availabe GGNumbs",
+            "Available GGNumbs",
+            "Available_GGNumbs"
+        );
+        var returnStatus = ReadRowInt32(
+            availabilityRows[0],
+            "Return Status",
+            "ReturnStatus"
+        );
+        if (available == 0 && returnStatus == 0)
+        {
+            throw new InvalidOperationException(
+                "There are no available GG Numbers in the System, therefore this vehicle will not be accepted."
+            );
+        }
+
+        var canAuthorize =
+            (available > 100 && returnStatus == -1)
+            || (available is >= 1 and <= 100 && returnStatus == 1);
+        if (!canAuthorize)
+        {
+            throw new InvalidOperationException(
+                "There are no available GG Numbers in the System, therefore this vehicle will not be accepted."
+            );
+        }
+
+        string? allocatedGg = null;
+        if (await ProcedureMatchesAsync(connection, transaction, "DEV_SEL_Allocated_GG_NO"))
+        {
+            var allocatedRows = await ExecuteProcedureRowsAsync(
+                connection,
+                transaction,
+                "DEV_SEL_Allocated_GG_NO"
+            );
+            allocatedGg = allocatedRows.Count == 0
+                ? null
+                : ReadRowString(allocatedRows[0], "GG_Number", "GG Number");
+        }
+
+        return new VehicleAuthorizationApprovalResult(allocatedGg, available, returnStatus);
     }
 
     private static async Task EnsureNoVehicleDuplicateAsync(
@@ -2669,6 +2870,105 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         }
 
         await command.ExecuteNonQueryAsync();
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The procedure name is selected only from fixed legacy compatibility branches; all values are parameters."
+    )]
+    private static async Task<List<Dictionary<string, object?>>> ExecuteProcedureRowsAsync(
+        DbConnection connection,
+        DbTransaction? transaction,
+        string procedureName,
+        params ProcedureParameter?[] parameters
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = $"dbo.{procedureName}";
+        foreach (var parameter in parameters)
+        {
+            if (parameter is null)
+                continue;
+            AddParameter(command, parameter.Name, parameter.Type, parameter.Value);
+        }
+
+        var rows = new List<Dictionary<string, object?>>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            for (var index = 0; index < reader.FieldCount; index++)
+            {
+                row[reader.GetName(index)] = reader.IsDBNull(index) ? null : reader.GetValue(index);
+            }
+
+            rows.Add(row);
+        }
+
+        return rows;
+    }
+
+    private static int? ReadFirstColumnInt(IReadOnlyDictionary<string, object?> row)
+    {
+        foreach (var value in row.Values)
+        {
+            return ToInt32(value);
+        }
+
+        return null;
+    }
+
+    private static int? ReadRowInt32(IReadOnlyDictionary<string, object?> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (row.TryGetValue(key, out var value))
+            {
+                return ToInt32(value);
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ReadRowString(
+        IReadOnlyDictionary<string, object?> row,
+        params string[] keys
+    )
+    {
+        foreach (var key in keys)
+        {
+            if (
+                row.TryGetValue(key, out var value)
+                && value is not null and not DBNull
+                && value.ToString()?.Trim() is { Length: > 0 } text
+            )
+            {
+                return text;
+            }
+        }
+
+        return null;
+    }
+
+    private static int? ToInt32(object? value)
+    {
+        if (value is null or DBNull)
+        {
+            return null;
+        }
+
+        return int.TryParse(
+            Convert.ToString(value, CultureInfo.InvariantCulture),
+            NumberStyles.Integer,
+            CultureInfo.InvariantCulture,
+            out var parsed
+        )
+            ? parsed
+            : null;
     }
 
     private static string GetProjection(string alias, IReadOnlySet<string> columns, string column)

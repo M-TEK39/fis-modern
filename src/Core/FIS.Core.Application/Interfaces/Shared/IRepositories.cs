@@ -477,7 +477,11 @@ public interface IVehicleAuthorizationRepository
     Task<IReadOnlyList<VehicleMaintenanceTypeOption>> GetMaintenanceTypesAsync();
     Task<PreVehicleMaster> CreateAsync(PreVehicleMaster vehicleAuth, int currentUserId);
     Task UpdateAsync(PreVehicleMaster vehicleAuth, int currentUserId);
-    Task ApproveAsync(int tempVmfCode, int authorizedByUserId, string? comment = null);
+    Task<VehicleAuthorizationApprovalResult> ApproveAsync(
+        int tempVmfCode,
+        int authorizedByUserId,
+        string? comment = null
+    );
     Task RejectAsync(
         int tempVmfCode,
         int rejectedByUserId,
@@ -493,6 +497,12 @@ public interface IVehicleAuthorizationRepository
         int? currentUserId = null
     );
 }
+
+public sealed record VehicleAuthorizationApprovalResult(
+    string? AllocatedGgNumber,
+    int? AvailableGgNumbers,
+    int? ReturnStatus
+);
 
 public sealed record VehicleAuthorizationPrintSnapshot(
     PreVehicleMaster Vehicle,

@@ -154,7 +154,23 @@ VALUES
     (N'Finance Batch', N'Roll back a batch', NULL, N'ADM_TriggerRollbackJob', NULL),
     (N'Finance Batch', N'Check SCOA before finishing a batch', NULL, N'ADM_CheckSCOA_Version5', NULL),
     (N'Finance Batch', N'Check batch job state and recorded logs', NULL, N'ADM_CheckJobStatus', NULL),
-    (N'Finance Batch', N'Check batch job state and recorded logs', NULL, N'ADM_CheckRecordedLogs', NULL);
+    (N'Finance Batch', N'Check batch job state and recorded logs', NULL, N'ADM_CheckRecordedLogs', NULL),
+    -- User_Profile.GetFMLVehiclesWithNoContracts / GetDataNoContractTariff pass
+    -- no parameters. Rpt_FMLVehiclesWithNoContracts.aspx and
+    -- NOMVehicleContractReport.aspx both bind this result set.
+    (N'FML Reports', N'List FML vehicles with tariffs but no client contracts', N'vehicle_master', N'DEV_REP_LeaseVehiclesWithTariffsButNoContract', NULL),
+    -- Add_GGBlockNumbers.aspx.vb InsertGG_Blocks then InsertGG_Blocks_Numbers.
+    -- DEV_GEN_GGBlockNumbers takes @vch_start,@vch_end,@user_access_code,@vch_suffix
+    -- only. Do not invent @vch_exlusions.
+    (N'Vehicle Master', N'Create a GG block range and generated numbers', N'GG_Blocks', N'DEV_INS_GGBlocks', NULL),
+    (N'Vehicle Master', N'Create a GG block range and generated numbers', N'block_gg_numbers', N'DEV_GEN_GGBlockNumbers', NULL),
+    (N'Vehicle Master', N'Check whether a GG block range already exists', N'GG_Blocks', N'DEV_Chk_BlockExist', NULL),
+    (N'Vehicle Master', N'List existing GG block ranges', N'GG_Blocks', N'DEV_SEL_ExistingGGNumbs', NULL),
+    (N'Vehicle Master', N'Check GG numbers remaining before authorization', N'block_gg_numbers', N'DEV_Check_GGNumAvailabilityStatus', NULL),
+    (N'Vehicle Master', N'Allocate the next GG number on authorization', N'block_gg_numbers', N'DEV_SEL_Allocated_GG_NO', NULL),
+    (N'Vehicle Master', N'Validate chassis uniqueness on capture', N'vehicle_master', N'Dev_Val_Chassis_No', NULL),
+    (N'Vehicle Master', N'Validate engine uniqueness on capture', N'vehicle_master', N'Dev_Val_Engine_No', NULL),
+    (N'Vehicle Master', N'Validate a replacement GG number on capture', N'vehicle_master', N'DEV_VAL_Replace_GGNumber', NULL);
 
 INSERT INTO @MutationTargets
     ([Module], [ModernMutation], [SchemaName], [TableName], [LegacyProcedure], [LegacyTrigger])
@@ -400,7 +416,20 @@ VALUES
     (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 1, N'@GG_Number', N'NOMPending/VehicleLease.aspx.vb Getdata2'),
     (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 2, N'@AuthorityStatus', N'NOMPending/VehicleLease.aspx.vb Getdata2'),
     (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 3, N'@Rejected', N'NOMPending/VehicleLease.aspx.vb Getdata2'),
-    (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 4, N'@UpdatedBy', N'NOMPending/VehicleLease.aspx.vb Getdata2');
+    (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 4, N'@UpdatedBy', N'NOMPending/VehicleLease.aspx.vb Getdata2'),
+    (N'Vehicle Master', N'DEV_INS_GGBlocks', 1, N'@vch_start_GG', N'Master-File/Add_GGBlockNumbers.aspx.vb'),
+    (N'Vehicle Master', N'DEV_INS_GGBlocks', 2, N'@vch_end_GG', N'Master-File/Add_GGBlockNumbers.aspx.vb'),
+    (N'Vehicle Master', N'DEV_INS_GGBlocks', 3, N'@Created_By_User_Code', N'Master-File/Add_GGBlockNumbers.aspx.vb'),
+    (N'Vehicle Master', N'DEV_INS_GGBlocks', 4, N'@Modified_User_Code', N'Master-File/Add_GGBlockNumbers.aspx.vb'),
+    (N'Vehicle Master', N'DEV_GEN_GGBlockNumbers', 1, N'@vch_start', N'Master-File/Add_GGBlockNumbers.aspx.vb InsertGG_Blocks_Numbers'),
+    (N'Vehicle Master', N'DEV_GEN_GGBlockNumbers', 2, N'@vch_end', N'Master-File/Add_GGBlockNumbers.aspx.vb InsertGG_Blocks_Numbers'),
+    (N'Vehicle Master', N'DEV_GEN_GGBlockNumbers', 3, N'@user_access_code', N'Master-File/Add_GGBlockNumbers.aspx.vb InsertGG_Blocks_Numbers'),
+    (N'Vehicle Master', N'DEV_GEN_GGBlockNumbers', 4, N'@vch_suffix', N'Master-File/Add_GGBlockNumbers.aspx.vb InsertGG_Blocks_Numbers'),
+    (N'Vehicle Master', N'DEV_Chk_BlockExist', 1, N'@Veh_GG_Start', N'Master-File/Add_GGBlockNumbers.aspx.vb CheckIfBlockExist'),
+    (N'Vehicle Master', N'DEV_Chk_BlockExist', 2, N'@Veh_GG_End', N'Master-File/Add_GGBlockNumbers.aspx.vb CheckIfBlockExist'),
+    (N'Vehicle Master', N'Dev_Val_Chassis_No', 1, N'@chassis_number', N'VehicleInception/PreCaptureNewVehicle.aspx.vb'),
+    (N'Vehicle Master', N'Dev_Val_Engine_No', 1, N'@Engine_number', N'VehicleInception/PreCaptureNewVehicle.aspx.vb'),
+    (N'Vehicle Master', N'DEV_VAL_Replace_GGNumber', 1, N'@Replace_GGNumber', N'VehicleInception/PreCaptureNewVehicle.aspx.vb GetReplaceGG_Number');
 INSERT INTO @ExpectedProcedureParameters
     ([Module], [LegacyProcedure], [ParameterOrdinal], [ParameterName], [SourceEvidence])
 VALUES
