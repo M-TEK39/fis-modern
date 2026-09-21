@@ -515,8 +515,12 @@ export async function getDriverManagementDepartments() {
   );
 }
 
-export async function getDriverManagementSites() {
-  const response = await requestApi("api/site");
+export async function getDriverManagementSites(departmentCode?: number) {
+  const path =
+    departmentCode !== undefined && departmentCode > 0
+      ? `api/site-drivers/sites?departmentId=${encodeURIComponent(departmentCode)}`
+      : "api/site";
+  const response = await requestApi(path);
   return mapCollection(await readJson(response), mapSite).sort((left, right) =>
     left.description.localeCompare(right.description),
   );

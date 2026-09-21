@@ -27,6 +27,9 @@ public interface IThirdPartyRentalRepository
     Task<IReadOnlyList<ThirdPartyServiceOption>> GetServiceOptionsAsync(
         CancellationToken cancellationToken = default
     );
+    Task<IReadOnlyList<ThirdPartyDepartmentOption>?> GetRentalDepartmentsAsync(
+        CancellationToken cancellationToken = default
+    );
 
     Task<IReadOnlyList<ThirdPartyProjectRecord>> GetProjectsAsync(
         CancellationToken cancellationToken = default
@@ -177,6 +180,8 @@ public sealed record ThirdPartySupplierWrite(
 );
 
 public sealed record ThirdPartyServiceOption(int code, string name);
+
+public sealed record ThirdPartyDepartmentOption(short department_code, string? description);
 
 public sealed record ThirdPartyProjectRecord(
     int project_id,

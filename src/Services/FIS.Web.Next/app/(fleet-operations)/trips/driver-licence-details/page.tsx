@@ -19,6 +19,7 @@ import {
 import {
   DriverManagementApiError,
   getDriverManagementLicenceTypes,
+  getDriverManagementSiteDriver,
   getDriverManagementSiteDrivers,
   getDriverManagementSites,
   type DriverManagementDriver,
@@ -129,15 +130,15 @@ async function renderDriverLicenceDetailsPageContent({
   );
 
   try {
-    const [drivers, sites, licenceTypes] = await Promise.all([
+    const [drivers, sites, licenceTypes, selectedDriver] = await Promise.all([
       getDriverManagementSiteDrivers(),
       getDriverManagementSites(),
       getDriverManagementLicenceTypes(),
-    ]);
-    const driver =
       selectedCode === null
-        ? null
-        : (drivers.find((item) => item.siteDriverCode === selectedCode) ?? null);
+        ? Promise.resolve(null)
+        : getDriverManagementSiteDriver(selectedCode),
+    ]);
+    const driver = selectedDriver;
     const site = driver === null ? null : sites.find((item) => item.code === driver.siteCode);
     const licenceType =
       driver === null ? null : licenceTypes.find((item) => item.id === driver.driverLicenceTypeId);

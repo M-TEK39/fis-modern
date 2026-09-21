@@ -516,10 +516,22 @@ public class ThirdPartyController : BaseApiController
     }
 
     [HttpGet("departments")]
-    public async Task<ActionResult<IEnumerable<Department>>> GetDepartments()
+    public async Task<IActionResult> GetDepartments(CancellationToken cancellationToken)
     {
         try
         {
+            var overlay = await _rentalRepository.GetRentalDepartmentsAsync(cancellationToken);
+            if (overlay is not null)
+            {
+                return Ok(
+                    overlay.Select(department => new
+                    {
+                        department_code = department.department_code,
+                        description = department.description,
+                    })
+                );
+            }
+
             return Ok(await _departmentRepository.GetActiveDepartmentsAsync());
         }
         catch (Exception ex)

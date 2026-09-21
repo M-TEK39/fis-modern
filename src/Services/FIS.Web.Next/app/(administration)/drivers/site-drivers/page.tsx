@@ -348,7 +348,7 @@ async function SiteDriversContent({ searchParams }: Readonly<{ searchParams: Sea
         pageSize: DEFAULT_DRIVER_MANAGEMENT_PAGE_SIZE,
       }),
       getDriverManagementDepartments(),
-      getDriverManagementSites(),
+      getDriverManagementSites(departmentCode),
     ]);
     const department = departments.find((item) => item.code === departmentCode);
     const site = sites.find((item) => item.code === siteCode);

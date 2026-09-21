@@ -84,7 +84,7 @@ async function DriverManagementContent({ searchParams }: Readonly<{ searchParams
   try {
     const [departments, sites] = await Promise.all([
       getDriverManagementDepartments(),
-      getDriverManagementSites(),
+      getDriverManagementSites(initialDepartmentCode ?? undefined),
     ]);
 
     return (

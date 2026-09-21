@@ -67,6 +67,9 @@ VALUES
     (N'Drivers', N'Create a site driver', N'site_drivers', N'DEV_INS_SiteDrivers', NULL),
     (N'Drivers', N'Update a site driver', N'site_drivers', N'DEV_UPD_SiteDrivers', NULL),
     (N'Drivers', N'Deactivate a site driver', N'site_drivers', N'DEV_DEL_SiteDrivers', NULL),
+    (N'Drivers', N'List driver licence types for site-driver maintenance', N'driver_licence_types', N'DEV_SEL_DriverLicenceTypes', NULL),
+    (N'Drivers', N'Load a site driver for licence details', N'site_drivers', N'DEV_SEL_SingleSiteDriver', NULL),
+    (N'Drivers', N'List sites for driver maintenance by department', N'site', N'DEV_SEL_Sites_ForEdit', NULL),
     (N'Fines', N'Create, update, or delete a fine', N'Fines', NULL, N'TRG_Audit_Fines_Insert'),
     (N'Fines', N'Create, update, or delete a fine', N'Fines', NULL, N'TRG_Audit_Fines_Update'),
     (N'Fines', N'Create, update, or delete a fine', N'Fines', NULL, N'TRG_Audit_Fines_Delete'),
@@ -235,6 +238,8 @@ VALUES
     (N'Suppliers', N'List or maintain dbo.Suppliers lookups', N'dbo', N'Suppliers', NULL, NULL),
     (N'Third Party', N'Create a third-party rental supplier', N'dbo', N'vehicle_source', N'DEV_INS_NewSupplier', NULL),
     (N'Third Party', N'Update a third-party rental supplier', N'dbo', N'vehicle_source', N'DEV_UPD_Suppliers', NULL),
+    (N'Third Party', N'List third-party rental departments for project edit', N'dbo', N'department', N'DEV_SEL_Third_party_departments', NULL),
+    (N'Third Party', N'List third-party rental projects for a selected department', N'dbo', N'third_party_projects', N'DEV_SEL_Third_party_projects', NULL),
     (N'Third Party', N'List or maintain third party projects', N'dbo', N'third_party_projects', N'DEV_INS_Third_party_projects', NULL),
     (N'Third Party', N'Update a third party project', N'dbo', N'third_party_projects', N'DEV_UPD_Third_party_project', NULL),
     (N'Third Party', N'Allocate a supplier to a third party project (archived GGFIS name)', N'dbo', N'third_party_project_suppliers', N'DEV_INS_Third_party_project_suppliers', NULL),
@@ -325,6 +330,7 @@ VALUES
     (N'Job Cards', N'DEV_SEL_JobcardsForPrintingSummary', 1, N'@ggnumber', N'JobcardClasses/selections.vb getJobcardsforPrinting; PrintAssignedJobcards BoundFields Jobcard Number/GG Number/Registration Number/Jobcard Description'),
     (N'Job Cards', N'DEV_SEL_JobcardsForPrinting', 1, N'@ggNumber', N'JobcardData.xsd JobcardsForPrintingTableAdapter; PrintJobcard.aspx ReportParameter ggNumber'),
     (N'Job Cards', N'DEV_SEL_JobcardsForPrinting', 2, N'@jcNumber', N'JobcardData.xsd JobcardsForPrintingTableAdapter; PrintJobcard.aspx ReportParameter jcNumber; print-all binds empty. Changes.PrintJobcardsPerGGNumber is the 1-param @ggnumber caller'),
+    (N'Third Party', N'DEV_SEL_Third_party_projects', 1, N'@id', N'ThirdParty/rental.aspx SqlDataSource2 ControlParameter from department dropdown DataValueField id DataTextField Project_Description'),
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 1, N'@ContractCode', N'GGFIS_DataAccessLayer/Contract.vb ExtendExisting'),
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 2, N'@VMFCode', N'GGFIS_DataAccessLayer/Contract.vb ExtendExisting'),
     (N'Contracts', N'DEV_UPD_Contract_ExtendExisting', 3, N'@TargetReturnDate', N'GGMT.Database/v2.1.08 DEV_UPD_Contract_ExtendExisting'),
@@ -492,7 +498,9 @@ VALUES
     (N'Vehicle Master', N'DEV_Check_UserCodeExists', 1, N'@chassis_no', N'Master-File/PreCaptureNewVehicle.aspx.vb Check_UserCodeExistsForChassisNo'),
     (N'Vehicle Master', N'DEV_SEL_Vehicle_Extras', 1, N'@Vehicle_Search', N'VehicleInception/PreCaptureNewVehicle.aspx.vb LoadExtras'),
     (N'Vehicle Master', N'DEV_SEL_FilterPreVehicles', 1, N'@chassisno', N'Master-File/PreCaptureNewVehicle.aspx.vb FilterPreVehicles'),
-    (N'Vehicle Master', N'DEV_SEL_Vehicle_Status_Comments', 1, N'@chassis_No', N'GGFIS_DataAccessLayer/User_Profile.vb ViewVehicle_Status_Comments');
+    (N'Vehicle Master', N'DEV_SEL_Vehicle_Status_Comments', 1, N'@chassis_No', N'GGFIS_DataAccessLayer/User_Profile.vb ViewVehicle_Status_Comments'),
+    (N'Drivers', N'DEV_SEL_SingleSiteDriver', 1, N'@SiteDriverCode', N'Trips/GetDriverLicenceDetails.aspx.vb and Trips/MaintainDrivers.ascx'),
+    (N'Drivers', N'DEV_SEL_Sites_ForEdit', 1, N'@DepartmentId', N'Trips/MaintainDriver.aspx.vb SitesGetByDepartment');
 INSERT INTO @ExpectedProcedureParameters
     ([Module], [LegacyProcedure], [ParameterOrdinal], [ParameterName], [SourceEvidence])
 VALUES
