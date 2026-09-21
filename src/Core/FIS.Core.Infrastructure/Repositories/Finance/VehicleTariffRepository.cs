@@ -102,12 +102,67 @@ public class VehicleTariffRepository : IVehicleTariffRepository
 
     public async Task<VehicleTariff> CreateAsync(VehicleTariff tariff)
     {
+        ArgumentNullException.ThrowIfNull(tariff);
         await EnsureLegacyTariffTriggerAsync();
-        tariff.date_created = DateTime.UtcNow;
-        tariff.calculation_date = DateTime.UtcNow;
 
-        _context.VehicleTariffs.Add(tariff);
-        await _context.SaveChangesAsync();
+        var columns = await GetAvailableColumnsAsync();
+        var values = new List<WriteValue>();
+        AddValue(values, columns, "vmf_code", "@vmfCode", DbType.Int32, tariff.vmf_code);
+        AddValue(values, columns, "start_date", "@startDate", DbType.DateTime2, tariff.start_date);
+        AddValue(values, columns, "end_date", "@endDate", DbType.DateTime2, tariff.end_date);
+        AddValue(
+            values,
+            columns,
+            "residual_percentage",
+            "@residualPercentage",
+            DbType.Decimal,
+            tariff.residual_percentage
+        );
+        AddValue(
+            values,
+            columns,
+            "parameter_year",
+            "@parameterYear",
+            DbType.Int32,
+            tariff.parameter_year
+        );
+        AddTariffComponentValues(values, columns, tariff);
+        AddValue(
+            values,
+            columns,
+            "calculation_date",
+            "@calculationDate",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddValue(values, columns, "comment", "@comment", DbType.String, tariff.comment);
+        AddValue(
+            values,
+            columns,
+            "date_created",
+            "@dateCreated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+
+        if (values.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "No compatible columns are available for inserting into fin.vehicle_tariff."
+            );
+        }
+
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = $"""
+            INSERT INTO [{SchemaName}].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+            OUTPUT INSERTED.[vehicle_tariff_code]
+            VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
+            """;
+        AddParameters(command, values);
+        tariff.vehicle_tariff_code = Convert.ToInt32(await command.ExecuteScalarAsync());
 
         _logger.LogInformation(
             "Created vehicle tariff {TariffCode} for vehicle {VmfCode}",
@@ -115,59 +170,109 @@ public class VehicleTariffRepository : IVehicleTariffRepository
             tariff.vmf_code
         );
 
-        return tariff;
+        return await GetByIdAsync(tariff.vehicle_tariff_code)
+            ?? throw new InvalidOperationException("Created vehicle tariff could not be read.");
     }
 
     public async Task UpdateAsync(VehicleTariff tariff)
     {
+        ArgumentNullException.ThrowIfNull(tariff);
         await EnsureLegacyTariffTriggerAsync();
-        var existing = await _context.VehicleTariffs.FirstOrDefaultAsync(t =>
-            t.vehicle_tariff_code == tariff.vehicle_tariff_code
-        );
 
-        if (existing == null)
-            throw new KeyNotFoundException(
+        var existing =
+            await GetByIdAsync(tariff.vehicle_tariff_code)
+            ?? throw new KeyNotFoundException(
                 $"Vehicle tariff {tariff.vehicle_tariff_code} not found"
             );
 
-        existing.start_date = tariff.start_date;
-        existing.end_date = tariff.end_date;
-        existing.residual_percentage = tariff.residual_percentage;
-        existing.parameter_year = tariff.parameter_year;
-        existing.annual_interest_percentage = tariff.annual_interest_percentage;
-        existing.purchase_amount = tariff.purchase_amount;
-        existing.purchase_date = tariff.purchase_date;
-        existing.purchase_amount_group = tariff.purchase_amount_group;
-        existing.overhead_unit_factor = tariff.overhead_unit_factor;
-        existing.target_replacement_date = tariff.target_replacement_date;
-        existing.year_manufactured = tariff.year_manufactured;
-        existing.model_code = tariff.model_code;
-        existing.class_code = tariff.class_code;
-        existing.kilometer_life = tariff.kilometer_life;
-        existing.months_life = tariff.months_life;
-        existing.residual_amount = tariff.residual_amount;
-        existing.capital_payment = tariff.capital_payment;
-        existing.overhead_payment = tariff.overhead_payment;
-        existing.adjustment_amount = tariff.adjustment_amount;
-        existing.vehicle_fixed_tariff = tariff.vehicle_fixed_tariff;
-        existing.vehicle_fixed_tariff_pool = tariff.vehicle_fixed_tariff_pool;
-        existing.class_fixed_tariff = tariff.class_fixed_tariff;
-        existing.class_fixed_pool_tariff = tariff.class_fixed_pool_tariff;
-        existing.lease_fixed_tariff = tariff.lease_fixed_tariff;
-        existing.calculation_date = DateTime.UtcNow;
-        existing.overhead_kilometer_amount = tariff.overhead_kilometer_amount;
-        existing.maintenance_kilometer_amount = tariff.maintenance_kilometer_amount;
-        existing.vehicle_kilometer_tariff = tariff.vehicle_kilometer_tariff;
-        existing.comment = tariff.comment;
-        existing.TariffWeightCalculation_Code = tariff.TariffWeightCalculation_Code;
-        existing.fuel_kilo_tariff = tariff.fuel_kilo_tariff;
+        var columns = await GetAvailableColumnsAsync();
+        var assignments = new List<string>();
+        var values = new List<WriteValue>();
+        AddAssignment(
+            assignments,
+            values,
+            columns,
+            "start_date",
+            "@startDate",
+            DbType.DateTime2,
+            tariff.start_date
+        );
+        AddAssignment(
+            assignments,
+            values,
+            columns,
+            "end_date",
+            "@endDate",
+            DbType.DateTime2,
+            tariff.end_date
+        );
+        AddAssignment(
+            assignments,
+            values,
+            columns,
+            "residual_percentage",
+            "@residualPercentage",
+            DbType.Decimal,
+            tariff.residual_percentage
+        );
+        AddAssignment(
+            assignments,
+            values,
+            columns,
+            "parameter_year",
+            "@parameterYear",
+            DbType.Int32,
+            tariff.parameter_year
+        );
+        AddTariffComponentAssignments(assignments, values, columns, tariff);
+        AddAssignment(
+            assignments,
+            values,
+            columns,
+            "calculation_date",
+            "@calculationDate",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
+        AddAssignment(assignments, values, columns, "comment", "@comment", DbType.String, tariff.comment);
+        AddAssignment(
+            assignments,
+            values,
+            columns,
+            "date_updated",
+            "@dateUpdated",
+            DbType.DateTime2,
+            DateTime.UtcNow
+        );
 
-        await _context.SaveChangesAsync();
+        if (assignments.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "No compatible columns are available for updating fin.vehicle_tariff."
+            );
+        }
+
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = $"""
+            UPDATE [{SchemaName}].[{TableName}]
+            SET {string.Join(", ", assignments)}
+            WHERE [vehicle_tariff_code] = @vehicleTariffCode
+            """;
+        AddParameters(command, values);
+        AddParameter(command, "@vehicleTariffCode", DbType.Int32, tariff.vehicle_tariff_code);
+        if (await command.ExecuteNonQueryAsync() == 0)
+        {
+            throw new KeyNotFoundException(
+                $"Vehicle tariff {tariff.vehicle_tariff_code} not found"
+            );
+        }
 
         _logger.LogInformation(
             "Updated vehicle tariff {TariffCode} for vehicle {VmfCode}",
-            tariff.vehicle_tariff_code,
-            tariff.vmf_code
+            existing.vehicle_tariff_code,
+            existing.vmf_code
         );
     }
 
@@ -456,12 +561,260 @@ public class VehicleTariffRepository : IVehicleTariffRepository
         }
     }
 
-    private static void AddParameter(DbCommand command, string name, DbType type, object value)
+    private static void AddTariffComponentValues(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        VehicleTariff tariff
+    )
+    {
+        AddValue(
+            values,
+            columns,
+            "annual_interest_percentage",
+            "@annualInterestPercentage",
+            DbType.Decimal,
+            tariff.annual_interest_percentage
+        );
+        AddValue(
+            values,
+            columns,
+            "purchase_amount",
+            "@purchaseAmount",
+            DbType.Decimal,
+            tariff.purchase_amount
+        );
+        AddValue(
+            values,
+            columns,
+            "purchase_date",
+            "@purchaseDate",
+            DbType.DateTime2,
+            tariff.purchase_date
+        );
+        AddValue(
+            values,
+            columns,
+            "purchase_amount_group",
+            "@purchaseAmountGroup",
+            DbType.Byte,
+            tariff.purchase_amount_group
+        );
+        AddValue(
+            values,
+            columns,
+            "overhead_unit_factor",
+            "@overheadUnitFactor",
+            DbType.Double,
+            tariff.overhead_unit_factor
+        );
+        AddValue(
+            values,
+            columns,
+            "target_replacement_date",
+            "@targetReplacementDate",
+            DbType.DateTime2,
+            tariff.target_replacement_date
+        );
+        AddValue(
+            values,
+            columns,
+            "year_manufactured",
+            "@yearManufactured",
+            DbType.Int32,
+            tariff.year_manufactured
+        );
+        AddValue(values, columns, "model_code", "@modelCode", DbType.Int32, tariff.model_code);
+        AddValue(values, columns, "class_code", "@classCode", DbType.Int32, tariff.class_code);
+        AddValue(
+            values,
+            columns,
+            "kilometer_life",
+            "@kilometerLife",
+            DbType.Int32,
+            tariff.kilometer_life
+        );
+        AddValue(values, columns, "months_life", "@monthsLife", DbType.Byte, tariff.months_life);
+        AddValue(
+            values,
+            columns,
+            "residual_amount",
+            "@residualAmount",
+            DbType.Decimal,
+            tariff.residual_amount
+        );
+        AddValue(
+            values,
+            columns,
+            "capital_payment",
+            "@capitalPayment",
+            DbType.Decimal,
+            tariff.capital_payment
+        );
+        AddValue(
+            values,
+            columns,
+            "overhead_payment",
+            "@overheadPayment",
+            DbType.Decimal,
+            tariff.overhead_payment
+        );
+        AddValue(
+            values,
+            columns,
+            "adjustment_amount",
+            "@adjustmentAmount",
+            DbType.Decimal,
+            tariff.adjustment_amount
+        );
+        AddValue(
+            values,
+            columns,
+            "vehicle_fixed_tariff",
+            "@vehicleFixedTariff",
+            DbType.Decimal,
+            tariff.vehicle_fixed_tariff
+        );
+        AddValue(
+            values,
+            columns,
+            "vehicle_fixed_daily_tariff",
+            "@vehicleFixedDailyTariff",
+            DbType.Decimal,
+            tariff.vehicle_fixed_daily_tariff
+        );
+        AddValue(
+            values,
+            columns,
+            "vehicle_fixed_tariff_pool",
+            "@vehicleFixedTariffPool",
+            DbType.Decimal,
+            tariff.vehicle_fixed_tariff_pool
+        );
+        AddValue(
+            values,
+            columns,
+            "class_fixed_tariff",
+            "@classFixedTariff",
+            DbType.Decimal,
+            tariff.class_fixed_tariff
+        );
+        AddValue(
+            values,
+            columns,
+            "class_fixed_pool_tariff",
+            "@classFixedPoolTariff",
+            DbType.Decimal,
+            tariff.class_fixed_pool_tariff
+        );
+        AddValue(
+            values,
+            columns,
+            "lease_fixed_tariff",
+            "@leaseFixedTariff",
+            DbType.Decimal,
+            tariff.lease_fixed_tariff
+        );
+        AddValue(
+            values,
+            columns,
+            "overhead_kilometer_amount",
+            "@overheadKilometerAmount",
+            DbType.Decimal,
+            tariff.overhead_kilometer_amount
+        );
+        AddValue(
+            values,
+            columns,
+            "maintenance_kilometer_amount",
+            "@maintenanceKilometerAmount",
+            DbType.Decimal,
+            tariff.maintenance_kilometer_amount
+        );
+        AddValue(
+            values,
+            columns,
+            "vehicle_kilometer_tariff",
+            "@vehicleKilometerTariff",
+            DbType.Decimal,
+            tariff.vehicle_kilometer_tariff
+        );
+        AddValue(
+            values,
+            columns,
+            "fuel_kilo_tariff",
+            "@fuelKiloTariff",
+            DbType.Decimal,
+            tariff.fuel_kilo_tariff
+        );
+        AddValue(
+            values,
+            columns,
+            "TariffWeightCalculation_Code",
+            "@tariffWeightCalculationCode",
+            DbType.Int32,
+            tariff.TariffWeightCalculation_Code
+        );
+    }
+
+    private static void AddTariffComponentAssignments(
+        ICollection<string> assignments,
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        VehicleTariff tariff
+    )
+    {
+        var buffer = new List<WriteValue>();
+        AddTariffComponentValues(buffer, columns, tariff);
+        foreach (var value in buffer)
+        {
+            assignments.Add($"[{value.Column}] = {value.Parameter}");
+            values.Add(value);
+        }
+    }
+
+    private static void AddValue(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        string column,
+        string parameter,
+        DbType dbType,
+        object? value
+    )
+    {
+        if (columns.Contains(column))
+            values.Add(new WriteValue(column, parameter, dbType, value));
+    }
+
+    private static void AddAssignment(
+        ICollection<string> assignments,
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        string column,
+        string parameter,
+        DbType dbType,
+        object? value
+    )
+    {
+        if (!columns.Contains(column))
+            return;
+        assignments.Add($"[{column}] = {parameter}");
+        values.Add(new WriteValue(column, parameter, dbType, value));
+    }
+
+    private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)
+    {
+        foreach (var value in values)
+            AddParameter(command, value.Parameter, value.DbType, value.Value);
+    }
+
+    private sealed record WriteValue(string Column, string Parameter, DbType DbType, object? Value);
+
+    private static void AddParameter(DbCommand command, string name, DbType type, object? value)
     {
         var parameter = command.CreateParameter();
         parameter.ParameterName = name;
         parameter.DbType = type;
-        parameter.Value = value;
+        parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
     }
 }

@@ -2,6 +2,8 @@ using FIS.Core.Application.Interfaces.Repositories;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Data;
 
 namespace FIS.Core.Infrastructure.Repositories;
 
@@ -90,11 +92,38 @@ public class InvoiceItemRepository : IInvoiceItemRepository
         if (invoiceItem == null)
             return false;
 
-        // Soft delete instead of hard delete
-        invoiceItem.is_deleted = true;
-        invoiceItem.date_updated = DateTime.UtcNow;
-        await _context.SaveChangesAsync();
-        return true;
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                IF COL_LENGTH('dbo.invoice_item', 'is_deleted') IS NOT NULL
+                    UPDATE [dbo].[invoice_item]
+                    SET [is_deleted] = 1
+                    WHERE [item_code] = @itemCode;
+                ELSE
+                    DELETE FROM [dbo].[invoice_item]
+                    WHERE [item_code] = @itemCode;
+                """;
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@itemCode";
+            parameter.DbType = DbType.Int32;
+            parameter.Value = id;
+            command.Parameters.Add(parameter);
+            await command.ExecuteNonQueryAsync();
+            _context.Entry(invoiceItem).State = EntityState.Detached;
+            return true;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
     }
 
     /// <summary>

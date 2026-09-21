@@ -279,13 +279,13 @@ public class TroubleshootController : BaseApiController
 
             var taRows = await tripQuery
                 .Join(
-                    _context.Contracts.AsNoTracking().Where(c => !c.is_deleted),
+                    _context.Contracts.AsNoTracking(),
                     t => t.contract_code,
                     c => c.contract_code,
                     (t, c) => new { t, c }
                 )
                 .Join(
-                    _context.Vehicles.AsNoTracking().Where(v => !v.is_deleted),
+                    _context.Vehicles.AsNoTracking(),
                     tc => tc.c.vmf_code,
                     v => v.vmf_code,
                     (tc, v) =>
@@ -672,13 +672,13 @@ public class TroubleshootController : BaseApiController
 
         return tripQuery
             .Join(
-                _context.Contracts.AsNoTracking().Where(c => !c.is_deleted),
+                _context.Contracts.AsNoTracking(),
                 t => t.contract_code,
                 c => c.contract_code,
                 (t, c) => new { t, c }
             )
             .Join(
-                _context.Vehicles.AsNoTracking().Where(v => !v.is_deleted),
+                _context.Vehicles.AsNoTracking(),
                 tc => tc.c.vmf_code,
                 v => v.vmf_code,
                 (tc, v) =>
@@ -697,7 +697,7 @@ public class TroubleshootController : BaseApiController
 
     private IQueryable<Vehicle> FilterOdometerVehicles(string mode, string searchValue)
     {
-        var vehicleQuery = _context.Vehicles.AsNoTracking().Where(v => !v.is_deleted);
+        var vehicleQuery = _context.Vehicles.AsNoTracking();
         if (string.IsNullOrWhiteSpace(searchValue))
         {
             return vehicleQuery;

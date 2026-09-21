@@ -306,7 +306,7 @@ public class ReportingService : IReportingService
 
         // vmf_code → registration_number
         var vehicleRegs = await _context
-            .Vehicles.Where(v => !v.is_deleted)
+            .Vehicles
             .ToDictionaryAsync(v => v.vmf_code, v => v.registration_number ?? string.Empty);
 
         return new ReportLookups(sites, statuses, types, models, vehicleRegs);
@@ -580,7 +580,7 @@ public class ReportingService : IReportingService
             case "detailed":
                 var detailedVehicles = await _context
                     .Vehicles.Where(v =>
-                        !v.is_deleted && (request.VmfCode == null || v.vmf_code == request.VmfCode)
+                        (request.VmfCode == null || v.vmf_code == request.VmfCode)
                     )
                     .Select(v => new
                     {
@@ -635,12 +635,11 @@ public class ReportingService : IReportingService
                     .ToDictionaryAsync(x => x.Site_code);
 
                 var detailContracts = await _context
-                    .Contracts.Where(c => !c.is_deleted && c.still_current == "Y")
+                    .Contracts.Where(c => c.still_current == "Y")
                     .Select(c => new
                     {
                         c.vmf_code,
                         c.contract_type,
-                        c.monthly_km,
                     })
                     .ToDictionaryAsync(c => c.vmf_code);
 
@@ -668,7 +667,7 @@ public class ReportingService : IReportingService
                             ["Site"] = (object)(site?.site_desc ?? ""),
                             ["Department"] = (object)(site?.dept_desc ?? ""),
                             ["Contract_Type"] = (object)(contract?.contract_type ?? "None"),
-                            ["Monthly_KM"] = contract?.monthly_km ?? 0,
+                            ["Monthly_KM"] = 0,
                             ["Monthly_Tariff"] = tariff?.fixed_tariff ?? 0m,
                             ["Monthly_Overhead"] = v.monthly_overhead ?? 0m,
                         };
@@ -793,7 +792,7 @@ public class ReportingService : IReportingService
                 var maintVmfFilter = request.VmfCode;
                 var maintVehicles = await _context
                     .Vehicles.Where(v =>
-                        !v.is_deleted && (maintVmfFilter == null || v.vmf_code == maintVmfFilter)
+                        (maintVmfFilter == null || v.vmf_code == maintVmfFilter)
                     )
                     .Select(v => new
                     {
@@ -939,7 +938,7 @@ public class ReportingService : IReportingService
 
         var vmfCodes = yearItems.Select(x => x.vmf_code).Distinct().ToList();
         var vehicleTypes = await _context
-            .Vehicles.Where(v => vmfCodes.Contains(v.vmf_code) && !v.is_deleted)
+            .Vehicles.Where(v => vmfCodes.Contains(v.vmf_code))
             .Join(
                 _context.VehicleTypes,
                 v => v.type_code,
@@ -1039,7 +1038,7 @@ public class ReportingService : IReportingService
 
         var vmfList = detailItems.Select(x => x.vmf_code).Distinct().ToList();
         var regNumbers = await _context
-            .Vehicles.Where(v => vmfList.Contains(v.vmf_code) && !v.is_deleted)
+            .Vehicles.Where(v => vmfList.Contains(v.vmf_code))
             .Select(v => new { v.vmf_code, v.registration_number })
             .ToDictionaryAsync(v => v.vmf_code, v => v.registration_number ?? "");
 
@@ -1094,7 +1093,7 @@ public class ReportingService : IReportingService
         var tariffs = await _context
             .LeaseTariffs.Where(t => !t.is_deleted && t.active)
             .Join(
-                _context.Vehicles.Where(v => !v.is_deleted),
+                _context.Vehicles,
                 t => t.vmf_code,
                 v => v.vmf_code,
                 (t, v) => new { t, v }
@@ -1425,7 +1424,7 @@ public class ReportingService : IReportingService
             endDate
         );
 
-        var vehicles = (await _vehicleRepository.GetAllAsync()).Where(v => !v.is_deleted).ToList();
+        var vehicles = (await _vehicleRepository.GetAllAsync()).ToList();
         var maintenance = (await _maintenanceRepository.GetAllAsync())
             .Where(m => !m.is_deleted)
             .GroupBy(m => m.VmfCode)
@@ -1691,7 +1690,7 @@ public class ReportingService : IReportingService
         var registrationNumber =
             vmfCode > 0
                 ? await _context
-                    .Vehicles.Where(v => !v.is_deleted && v.vmf_code == vmfCode)
+                    .Vehicles.Where(v => v.vmf_code == vmfCode)
                     .Select(v => v.registration_number ?? v.fleet_number ?? vmfCode.ToString())
                     .FirstOrDefaultAsync() ?? vmfCode.ToString()
                 : string.Empty;
@@ -1841,7 +1840,7 @@ public class ReportingService : IReportingService
         }
 
         var usedKilometers = tripLines.Sum(x => x.Distance);
-        var authorizedKilometers = contract.monthly_km ?? 0;
+        var authorizedKilometers = 0;
 
         return new AuthorityReport
         {
@@ -1900,16 +1899,9 @@ public class ReportingService : IReportingService
                 EndDate = c.end_date ?? DateTime.MinValue,
                 ContractValue = 0,
                 VehicleCount = 1,
-                Status =
-                    c.still_current == "Y"
-                        ? "Active"
-                        : (
-                            c.contract_status_code == 7 ? "Closed"
-                            : c.contract_status_code == 6 ? "Cancelled"
-                            : "Inactive"
-                        ),
+                Status = c.still_current == "Y" ? "Active" : "Inactive",
                 UsedKilometers = 0,
-                AuthorizedKilometers = c.monthly_km ?? 0,
+                AuthorizedKilometers = 0,
             })
             .ToList();
 
@@ -1946,7 +1938,7 @@ public class ReportingService : IReportingService
         var vmfCode = contract.vmf_code;
         var registration =
             await _context
-                .Vehicles.Where(v => !v.is_deleted && v.vmf_code == vmfCode)
+                .Vehicles.Where(v => v.vmf_code == vmfCode)
                 .Select(v => v.registration_number ?? v.fleet_number ?? vmfCode.ToString())
                 .FirstOrDefaultAsync() ?? vmfCode.ToString();
 

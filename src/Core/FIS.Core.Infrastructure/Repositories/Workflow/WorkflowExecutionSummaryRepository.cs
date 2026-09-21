@@ -16,57 +16,89 @@ public class WorkflowExecutionSummaryRepository : IWorkflowExecutionSummaryRepos
 
     public async Task<WorkflowExecutionSummary?> GetByIdAsync(int summaryId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowExecutionSummary"))
+        {
+            return null;
+        }
+
         return await _context
             .WorkflowExecutionSummaries.Include(s => s.Workflow)
             .Include(s => s.Status)
-            .FirstOrDefaultAsync(s => s.SummaryID == summaryId && !s.is_deleted);
+            .FirstOrDefaultAsync(s => s.SummaryID == summaryId);
     }
 
     public async Task<IEnumerable<WorkflowExecutionSummary>> GetAllAsync()
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowExecutionSummary"))
+        {
+            return [];
+        }
+
         return await _context
-            .WorkflowExecutionSummaries.Where(s => !s.is_deleted)
-            .OrderByDescending(s => s.StartedAt)
+            .WorkflowExecutionSummaries.OrderByDescending(s => s.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowExecutionSummary>> GetByWorkflowIdAsync(int workflowId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowExecutionSummary"))
+        {
+            return [];
+        }
+
         return await _context
-            .WorkflowExecutionSummaries.Where(s => s.WorkflowID == workflowId && !s.is_deleted)
+            .WorkflowExecutionSummaries.Where(s => s.WorkflowID == workflowId)
             .OrderByDescending(s => s.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowExecutionSummary>> GetByStatusAsync(string status)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowExecutionSummary"))
+        {
+            return [];
+        }
+
         return await _context
-            .WorkflowExecutionSummaries.Where(s => s.ExecutionStatus == status && !s.is_deleted)
+            .WorkflowExecutionSummaries.Where(s => s.ExecutionStatus == status)
             .OrderByDescending(s => s.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowExecutionSummary>> GetActiveExecutionsAsync()
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowExecutionSummary"))
+        {
+            return [];
+        }
+
         return await _context
-            .WorkflowExecutionSummaries.Where(s => s.ExecutionStatus == "Running" && !s.is_deleted)
+            .WorkflowExecutionSummaries.Where(s => s.ExecutionStatus == "Running")
             .OrderBy(s => s.StartedAt)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowExecutionSummary>> GetRecentExecutionsAsync(int count)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowExecutionSummary"))
+        {
+            return [];
+        }
+
         return await _context
-            .WorkflowExecutionSummaries.Where(s => !s.is_deleted)
-            .OrderByDescending(s => s.StartedAt)
+            .WorkflowExecutionSummaries.OrderByDescending(s => s.StartedAt)
             .Take(count)
             .ToListAsync();
     }
 
     public async Task<WorkflowExecutionSummary> CreateAsync(WorkflowExecutionSummary summary)
     {
-        summary.date_created = DateTime.UtcNow;
-        summary.is_deleted = false;
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowExecutionSummary"))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("WorkflowExecutionSummary")
+            );
+        }
 
         _context.WorkflowExecutionSummaries.Add(summary);
         await _context.SaveChangesAsync();
@@ -76,6 +108,13 @@ public class WorkflowExecutionSummaryRepository : IWorkflowExecutionSummaryRepos
 
     public async Task UpdateAsync(WorkflowExecutionSummary summary)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowExecutionSummary"))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("WorkflowExecutionSummary")
+            );
+        }
+
         var existing = await _context.WorkflowExecutionSummaries.FirstOrDefaultAsync(s =>
             s.SummaryID == summary.SummaryID
         );
@@ -86,7 +125,6 @@ public class WorkflowExecutionSummaryRepository : IWorkflowExecutionSummaryRepos
             );
 
         _context.Entry(existing).CurrentValues.SetValues(summary);
-        existing.date_updated = DateTime.UtcNow;
         await _context.SaveChangesAsync();
     }
 }

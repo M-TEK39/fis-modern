@@ -411,8 +411,26 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
     public async Task<JobCard> CreateAsync(JobCard jobCard, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(jobCard);
+
+        if (
+            await IsLegacyProcedureAvailableAsync(
+                "DEV_INS_NewJobCards",
+                "@GGNumber",
+                "@extraCode",
+                "@CaptureBy"
+            )
+        )
+        {
+            var createdId = await CreateLegacyAsync(jobCard, currentUserId);
+            return await GetByIdAsync(createdId)
+                ?? throw new InvalidOperationException(
+                    "The legacy DEV_INS_NewJobCards procedure completed without creating a readable job card."
+                );
+        }
+
         var columns = await GetAvailableColumnsAsync();
 
+        // Compatibility fallback only where DEV_INS_NewJobCards is genuinely absent.
         if (columns.ContainsKey("job_card_id"))
         {
             var values = new List<WriteValue>();
@@ -494,7 +512,7 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
                 ?? throw new InvalidOperationException("Created job card could not be read.");
         }
 
-        var legacyId = await CreateLegacyAsync(jobCard, currentUserId);
+        var legacyId = await InsertLegacyDirectAsync(jobCard, currentUserId);
         return await GetByIdAsync(legacyId)
             ?? throw new InvalidOperationException("Created legacy job card could not be read.");
     }
@@ -1310,20 +1328,6 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
 
     private async Task<int> CreateLegacyAsync(JobCard jobCard, int currentUserId)
     {
-        if (
-            !await IsLegacyProcedureAvailableAsync(
-                "DEV_INS_NewJobCards",
-                "@GGNumber",
-                "@extraCode",
-                "@CaptureBy"
-            )
-        )
-        {
-            // Compatibility fallback for databases that genuinely do not
-            // contain the archived legacy procedure.
-            return await InsertLegacyDirectAsync(jobCard, currentUserId);
-        }
-
         var vehicleNumber = await FindVehicleNumberAsync(jobCard);
         if (string.IsNullOrWhiteSpace(vehicleNumber))
         {
@@ -1916,13 +1920,17 @@ internal sealed class LegacyJobCardRepository : IJobCardRepository
             SELECT TOP (1) [TABLE_NAME]
             FROM [INFORMATION_SCHEMA].[TABLES]
             WHERE [TABLE_SCHEMA] = N'dbo'
-              AND [TABLE_NAME] IN (N'Jobcards', N'JobCard')
-            ORDER BY CASE WHEN [TABLE_NAME] = N'Jobcards' THEN 0 ELSE 1 END
+              AND [TABLE_NAME] IN (N'Jobcards', N'JobCard', N'job_cards')
+            ORDER BY CASE
+                WHEN [TABLE_NAME] = N'Jobcards' THEN 0
+                WHEN [TABLE_NAME] = N'JobCard' THEN 1
+                ELSE 2
+            END
             """;
         var value = await command.ExecuteScalarAsync();
         if (value is null or DBNull)
             throw new InvalidOperationException(
-                "Neither the legacy dbo.Jobcards nor dbo.JobCard table is available."
+                "Neither the legacy dbo.Jobcards / dbo.JobCard table nor the expanded dbo.job_cards table is available."
             );
 
         _resolvedTableName = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)!;

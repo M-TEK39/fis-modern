@@ -9,7 +9,7 @@ import {
 import {
   accessRestricted,
   getMonitorSession,
-  hasCallCentreAccess,
+  hasMonitorAccess,
   queryValue,
   sessionMessage,
 } from "@/app/(fleet-operations)/monitor/_page";
@@ -44,8 +44,8 @@ async function MonitorCapturePageContent({
   if (problem) return problem;
   if (session.status !== "authenticated")
     return accessRestricted("Your session could not be loaded.");
-  if (!hasCallCentreAccess(session))
-    return accessRestricted("Your profile does not include Call Centre access.");
+  if (!hasMonitorAccess(session))
+    return accessRestricted("Your profile does not include Monitor access.");
 
   const query = await searchParams;
   const search = queryValue(query.search);

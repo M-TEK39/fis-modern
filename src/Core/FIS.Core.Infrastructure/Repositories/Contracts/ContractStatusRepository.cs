@@ -1,16 +1,22 @@
+using System.Data;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Infrastructure.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FIS.Core.Infrastructure.Repositories;
 
 /// <summary>
-/// ContractStatus repository implementation for Entity Framework data access
-/// Handles all database operations for ContractStatus entities
+/// Contract status lookups against dbo.contract_status.
+/// The GGMT v2.1.05 table has no is_deleted/is_active/abbreviation columns.
+/// The 2012 GGFIS database may not have the table at all.
 /// </summary>
 public class ContractStatusRepository : IContractStatusRepository
 {
+    private const string MissingTableMessage =
+        "dbo.contract_status is unavailable on this database. No compatibility fallback was used.";
+
     private readonly FisDbContext _context;
 
     public ContractStatusRepository(FisDbContext context)
@@ -18,122 +24,91 @@ public class ContractStatusRepository : IContractStatusRepository
         _context = context;
     }
 
-    /// <summary>
-    /// Get contract status by status code
-    /// </summary>
-    /// <param name="statusCode">The status code to search for</param>
-    /// <returns>ContractStatus entity if found, null otherwise</returns>
     public async Task<ContractStatus?> GetByIdAsync(short statusCode)
     {
-        return await _context
-            .ContractStatuses.Where(x => !x.is_deleted)
-            .FirstOrDefaultAsync(cs => cs.contract_status_code == statusCode);
+        if (!await TableExistsAsync())
+        {
+            return null;
+        }
+
+        return await _context.ContractStatuses.FirstOrDefaultAsync(cs =>
+            cs.contract_status_code == statusCode
+        );
     }
 
-    /// <summary>
-    /// Get contract status by description
-    /// </summary>
-    /// <param name="description">The status description to search for</param>
-    /// <returns>ContractStatus entity if found, null otherwise</returns>
     public async Task<ContractStatus?> GetByDescriptionAsync(string description)
     {
-        return await _context
-            .ContractStatuses.Where(x => !x.is_deleted)
-            .FirstOrDefaultAsync(cs => cs.status_description == description);
+        if (!await TableExistsAsync())
+        {
+            return null;
+        }
+
+        return await _context.ContractStatuses.FirstOrDefaultAsync(cs =>
+            cs.status_description == description
+        );
     }
 
-    /// <summary>
-    /// Get contract status by abbreviation
-    /// </summary>
-    /// <param name="abbreviation">The status abbreviation to search for</param>
-    /// <returns>ContractStatus entity if found, null otherwise</returns>
     public async Task<ContractStatus?> GetByAbbreviationAsync(string abbreviation)
     {
-        return await _context
-            .ContractStatuses.Where(x => !x.is_deleted)
-            .FirstOrDefaultAsync(cs => cs.status_abbreviation == abbreviation);
+        // status_abbreviation is expanded-only. The archived table has no
+        // abbreviation column, so this lookup cannot be satisfied there.
+        if (!await TableExistsAsync() || string.IsNullOrWhiteSpace(abbreviation))
+        {
+            return null;
+        }
+
+        return null;
     }
 
-    /// <summary>
-    /// Get all contract statuses
-    /// </summary>
-    /// <returns>List of all contract status entities</returns>
     public async Task<IEnumerable<ContractStatus>> GetAllStatusesAsync()
     {
-        return await _context
-            .ContractStatuses.Where(x => !x.is_deleted)
-            .OrderBy(cs => cs.status_description)
-            .ToListAsync();
+        if (!await TableExistsAsync())
+        {
+            return [];
+        }
+
+        return await _context.ContractStatuses.OrderBy(cs => cs.status_description).ToListAsync();
     }
 
-    /// <summary>
-    /// Get active contract statuses only
-    /// </summary>
-    /// <returns>List of active contract status entities</returns>
-    public async Task<IEnumerable<ContractStatus>> GetActiveStatusesAsync()
-    {
-        return await _context
-            .ContractStatuses.Where(cs => cs.is_active)
-            .OrderBy(cs => cs.status_description)
-            .ToListAsync();
-    }
+    public Task<IEnumerable<ContractStatus>> GetActiveStatusesAsync() =>
+        GetAllStatusesAsync();
 
-    /// <summary>
-    /// Get final contract statuses only
-    /// </summary>
-    /// <returns>List of final contract status entities</returns>
-    public async Task<IEnumerable<ContractStatus>> GetFinalStatusesAsync()
-    {
-        return await _context
-            .ContractStatuses.Where(cs => cs.is_final)
-            .OrderBy(cs => cs.status_description)
-            .ToListAsync();
-    }
+    public Task<IEnumerable<ContractStatus>> GetFinalStatusesAsync() =>
+        GetAllStatusesAsync();
 
-    /// <summary>
-    /// Search contract statuses by partial description match
-    /// </summary>
-    /// <param name="searchTerm">The search term to match against descriptions</param>
-    /// <returns>List of matching contract status entities</returns>
     public async Task<IEnumerable<ContractStatus>> SearchStatusesAsync(string searchTerm)
     {
+        if (!await TableExistsAsync())
+        {
+            return [];
+        }
+
         return await _context
-            .ContractStatuses.Where(cs =>
-                cs.status_description.Contains(searchTerm)
-                || (cs.status_abbreviation != null && cs.status_abbreviation.Contains(searchTerm))
-            )
+            .ContractStatuses.Where(cs => cs.status_description.Contains(searchTerm))
             .OrderBy(cs => cs.status_description)
             .ToListAsync();
     }
 
-    /// <summary>
-    /// Create a new contract status
-    /// </summary>
-    /// <param name="status">The contract status entity to create</param>
-    /// <param name="currentUserId">The user creating the status</param>
-    /// <returns>The created contract status with generated ID</returns>
     public async Task<ContractStatus> CreateAsync(ContractStatus status, int currentUserId)
     {
-        // Auto-populate audit fields
-        status.date_created = DateTime.UtcNow;
-        status.created_by_user_code = currentUserId;
-        status.is_deleted = false;
+        if (!await TableExistsAsync())
+        {
+            throw new InvalidOperationException(MissingTableMessage);
+        }
 
         _context.ContractStatuses.Add(status);
         await _context.SaveChangesAsync();
         return status;
     }
 
-    /// <summary>
-    /// Update an existing contract status
-    /// </summary>
-    /// <param name="status">The contract status entity to update</param>
-    /// <param name="currentUserId">The user updating the status</param>
-    /// <returns>The updated contract status entity</returns>
     public async Task<ContractStatus> UpdateAsync(ContractStatus status, int currentUserId)
     {
         if (status == null)
             throw new ArgumentNullException(nameof(status));
+        if (!await TableExistsAsync())
+        {
+            throw new InvalidOperationException(MissingTableMessage);
+        }
 
         var existing = await _context.ContractStatuses.FindAsync(status.contract_status_code);
         if (existing == null)
@@ -141,35 +116,99 @@ public class ContractStatusRepository : IContractStatusRepository
                 $"ContractStatus with contract_status_code {status.contract_status_code} not found"
             );
 
-        // Preserve creation audit fields
-        status.date_created = existing.date_created;
-        status.created_by_user_code = existing.created_by_user_code;
-        // Set update audit fields
-        status.date_updated = DateTime.UtcNow;
-        status.modified_by_user_code = currentUserId;
-
-        _context.Entry(existing).CurrentValues.SetValues(status);
+        existing.status_description = status.status_description;
         await _context.SaveChangesAsync();
         return existing;
     }
 
-    /// <summary>
-    /// Delete a contract status by status code
-    /// </summary>
-    /// <param name="statusCode">The status code to delete</param>
-    /// <param name="currentUserId">The user deleting the status</param>
-    /// <returns>True if deleted, false if not found</returns>
     public async Task<bool> DeleteAsync(short statusCode, int currentUserId)
     {
+        if (!await TableExistsAsync())
+        {
+            return false;
+        }
+
         var status = await GetByIdAsync(statusCode);
         if (status == null)
             return false;
 
-        // Soft delete instead of hard delete
-        status.is_deleted = true;
-        status.date_updated = DateTime.UtcNow;
-        status.modified_by_user_code = currentUserId;
-        await _context.SaveChangesAsync();
-        return true;
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                IF COL_LENGTH('dbo.contract_status', 'is_deleted') IS NOT NULL
+                    UPDATE [dbo].[contract_status]
+                    SET [is_deleted] = 1
+                    WHERE [contract_status_code] = @statusCode;
+                ELSE
+                    DELETE FROM [dbo].[contract_status]
+                    WHERE [contract_status_code] = @statusCode;
+                """;
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@statusCode";
+            parameter.DbType = DbType.Int16;
+            parameter.Value = statusCode;
+            command.Parameters.Add(parameter);
+            await command.ExecuteNonQueryAsync();
+            _context.Entry(status).State = EntityState.Detached;
+            return true;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private async Task<bool> TableExistsAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1
+                    FROM [INFORMATION_SCHEMA].[TABLES]
+                    WHERE [TABLE_SCHEMA] = @schemaName
+                      AND [TABLE_NAME] = @tableName
+                ) THEN 1 ELSE 0 END
+                """;
+
+            var schema = command.CreateParameter();
+            schema.ParameterName = "@schemaName";
+            schema.DbType = DbType.String;
+            schema.Value = "dbo";
+            command.Parameters.Add(schema);
+
+            var table = command.CreateParameter();
+            table.ParameterName = "@tableName";
+            table.DbType = DbType.String;
+            table.Value = "contract_status";
+            command.Parameters.Add(table);
+
+            var result = await command.ExecuteScalarAsync();
+            return result is not null && Convert.ToInt32(result) == 1;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 }

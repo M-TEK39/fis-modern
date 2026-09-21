@@ -38,6 +38,8 @@ public class FinanceController : BaseApiController
     private readonly LegacyFinanceReportExecutionService _legacyFinanceReportExecutionService;
     private readonly LegacyBasCompatibilityService _legacyBasCompatibilityService;
     private readonly LegacyWesbankCompatibilityService _legacyWesbankCompatibilityService;
+    private readonly ITariffParameterRepository _tariffParameters;
+    private readonly IMaintenanceValueRepository _maintenanceValues;
     private readonly FisDbContext _context;
     private readonly ILogger<FinanceController> _logger;
     private static readonly ConcurrentDictionary<Guid, ExportTaskState> ExportTasks = new();
@@ -52,6 +54,8 @@ public class FinanceController : BaseApiController
         LegacyFinanceReportExecutionService legacyFinanceReportExecutionService,
         LegacyBasCompatibilityService legacyBasCompatibilityService,
         LegacyWesbankCompatibilityService legacyWesbankCompatibilityService,
+        ITariffParameterRepository tariffParameters,
+        IMaintenanceValueRepository maintenanceValues,
         FisDbContext context,
         ILogger<FinanceController> logger
     )
@@ -60,6 +64,8 @@ public class FinanceController : BaseApiController
         _legacyFinanceReportExecutionService = legacyFinanceReportExecutionService;
         _legacyBasCompatibilityService = legacyBasCompatibilityService;
         _legacyWesbankCompatibilityService = legacyWesbankCompatibilityService;
+        _tariffParameters = tariffParameters;
+        _maintenanceValues = maintenanceValues;
         _context = context;
         _logger = logger;
     }
@@ -3123,12 +3129,11 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var years = await _context
-                .TariffParameters.Where(tp => !tp.is_deleted)
+            var years = (await _tariffParameters.GetAllAsync())
                 .Select(tp => tp.TariffParameterYear)
                 .Distinct()
                 .OrderByDescending(y => y)
-                .ToListAsync();
+                .ToList();
 
             if (!years.Any())
                 years = new List<int> { DateTime.Now.Year };
@@ -3149,9 +3154,7 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var param = await _context
-                .TariffParameters.Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
-                .FirstOrDefaultAsync();
+            var param = await _tariffParameters.GetByYearAsync(year);
 
             // Global parameters (interest rate, fuel price, etc.)
             var globalParams = new List<TariffParameterItemDto>();
@@ -3269,12 +3272,9 @@ public class FinanceController : BaseApiController
             // Maintenance values for this parameter year
             var maintValues =
                 param != null
-                    ? await _context
-                        .MaintenanceValues.Where(mv =>
-                            mv.TariffParameterID == param.TariffParameterID
-                        )
+                    ? (await _maintenanceValues.GetByTariffParameterAsync(param.TariffParameterID))
                         .Join(
-                            _context.Classes,
+                            await _context.Classes.AsNoTracking().ToListAsync(),
                             mv => mv.class_code,
                             c => c.class_code,
                             (mv, c) =>
@@ -3290,7 +3290,7 @@ public class FinanceController : BaseApiController
                         )
                         .OrderBy(mv => mv.ClassCode)
                         .ThenBy(mv => mv.MonthsAge)
-                        .ToListAsync()
+                        .ToList()
                     : new List<MaintenanceValueRowDto>();
 
             return Ok(
@@ -3325,10 +3325,7 @@ public class FinanceController : BaseApiController
     {
         var currentUserId = GetCurrentUserId();
 
-        var tariff = await _context
-            .TariffParameters.Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
-            .OrderByDescending(tp => tp.TariffParameterID)
-            .FirstOrDefaultAsync();
+        var tariff = await _tariffParameters.GetByYearAsync(year);
 
         if (tariff is null)
         {

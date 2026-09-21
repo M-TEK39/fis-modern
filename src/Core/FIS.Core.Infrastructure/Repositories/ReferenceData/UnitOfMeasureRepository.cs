@@ -25,9 +25,9 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// <returns>UnitOfMeasure entity if found, null otherwise</returns>
     public async Task<UnitOfMeasure?> GetByIdAsync(short unitCode)
     {
-        return await _context
-            .UnitsOfMeasure.Where(x => !x.is_deleted)
-            .FirstOrDefaultAsync(u => u.unit_of_measure_code == unitCode);
+        return await _context.UnitsOfMeasure.FirstOrDefaultAsync(u =>
+            u.unit_of_measure_code == unitCode
+        );
     }
 
     /// <summary>
@@ -37,9 +37,9 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// <returns>UnitOfMeasure entity if found, null otherwise</returns>
     public async Task<UnitOfMeasure?> GetByDescriptionAsync(string description)
     {
-        return await _context
-            .UnitsOfMeasure.Where(x => !x.is_deleted)
-            .FirstOrDefaultAsync(u => u.unit_description == description);
+        return await _context.UnitsOfMeasure.FirstOrDefaultAsync(u =>
+            u.unit_description == description
+        );
     }
 
     /// <summary>
@@ -47,11 +47,11 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// </summary>
     /// <param name="abbreviation">The unit abbreviation to search for</param>
     /// <returns>UnitOfMeasure entity if found, null otherwise</returns>
-    public async Task<UnitOfMeasure?> GetByAbbreviationAsync(string abbreviation)
+    public Task<UnitOfMeasure?> GetByAbbreviationAsync(string abbreviation)
     {
-        return await _context
-            .UnitsOfMeasure.Where(x => !x.is_deleted)
-            .FirstOrDefaultAsync(u => u.unit_abbreviation == abbreviation);
+        _ = abbreviation;
+        // unit_abbreviation is expanded-only.
+        return Task.FromResult<UnitOfMeasure?>(null);
     }
 
     /// <summary>
@@ -60,11 +60,7 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// <returns>List of all unit of measure entities</returns>
     public async Task<IEnumerable<UnitOfMeasure>> GetAllUnitsAsync()
     {
-        return await _context
-            .UnitsOfMeasure.Where(x => !x.is_deleted)
-            .OrderBy(u => u.unit_category)
-            .ThenBy(u => u.unit_description)
-            .ToListAsync();
+        return await _context.UnitsOfMeasure.OrderBy(u => u.unit_description).ToListAsync();
     }
 
     /// <summary>
@@ -72,12 +68,11 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// </summary>
     /// <param name="category">The unit category to filter by</param>
     /// <returns>List of units in the specified category</returns>
-    public async Task<IEnumerable<UnitOfMeasure>> GetByCategoryAsync(string category)
+    public Task<IEnumerable<UnitOfMeasure>> GetByCategoryAsync(string category)
     {
-        return await _context
-            .UnitsOfMeasure.Where(u => u.unit_category == category)
-            .OrderBy(u => u.unit_description)
-            .ToListAsync();
+        _ = category;
+        // unit_category is expanded-only.
+        return Task.FromResult<IEnumerable<UnitOfMeasure>>([]);
     }
 
     /// <summary>
@@ -88,11 +83,7 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     public async Task<IEnumerable<UnitOfMeasure>> SearchUnitsAsync(string searchTerm)
     {
         return await _context
-            .UnitsOfMeasure.Where(u =>
-                u.unit_description.Contains(searchTerm)
-                || (u.unit_abbreviation != null && u.unit_abbreviation.Contains(searchTerm))
-                || (u.unit_category != null && u.unit_category.Contains(searchTerm))
-            )
+            .UnitsOfMeasure.Where(u => u.unit_description.Contains(searchTerm))
             .OrderBy(u => u.unit_description)
             .ToListAsync();
     }
@@ -101,11 +92,10 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     {
         var resolvedPage = Math.Max(1, page);
         var resolvedPageSize = Math.Clamp(pageSize, 1, 100);
-        var query = _context.UnitsOfMeasure.AsNoTracking().Where(unit => !unit.is_deleted);
+        var query = _context.UnitsOfMeasure.AsNoTracking();
         var total = await query.CountAsync();
         var items = await query
-            .OrderBy(unit => unit.unit_category)
-            .ThenBy(unit => unit.unit_description)
+            .OrderBy(unit => unit.unit_description)
             .ThenBy(unit => unit.unit_of_measure_code)
             .Skip((resolvedPage - 1) * resolvedPageSize)
             .Take(resolvedPageSize)
@@ -121,11 +111,6 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// <returns>The created unit of measure with generated ID</returns>
     public async Task<UnitOfMeasure> CreateAsync(UnitOfMeasure unit, int currentUserId)
     {
-        // Auto-populate audit fields
-        unit.date_created = DateTime.UtcNow;
-        unit.created_by_user_code = currentUserId;
-        unit.is_deleted = false;
-
         _context.UnitsOfMeasure.Add(unit);
         await _context.SaveChangesAsync();
         return unit;
@@ -148,14 +133,7 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
                 $"UnitOfMeasure with unit_of_measure_code {unit.unit_of_measure_code} not found"
             );
 
-        // Preserve creation audit fields
-        unit.date_created = existing.date_created;
-        unit.created_by_user_code = existing.created_by_user_code;
-        // Set update audit fields
-        unit.date_updated = DateTime.UtcNow;
-        unit.modified_by_user_code = currentUserId;
-
-        _context.Entry(existing).CurrentValues.SetValues(unit);
+        existing.unit_description = unit.unit_description;
         await _context.SaveChangesAsync();
         return existing;
     }
@@ -172,10 +150,7 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
         if (unit == null)
             return false;
 
-        // Soft delete instead of hard delete
-        unit.is_deleted = true;
-        unit.date_updated = DateTime.UtcNow;
-        unit.modified_by_user_code = currentUserId;
+        _context.UnitsOfMeasure.Remove(unit);
         await _context.SaveChangesAsync();
         return true;
     }

@@ -36,8 +36,8 @@ function normalizedRole(role: string) {
   return role.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export function hasCallCentreAccess(session: Extract<SessionState, { status: "authenticated" }>) {
-  return session.roles.some((role) => normalizedRole(role) === "callcentre");
+export function hasMonitorAccess(session: Extract<SessionState, { status: "authenticated" }>) {
+  return session.roles.some((role) => normalizedRole(role) === "monitor");
 }
 
 export function hasReportsAccess(session: Extract<SessionState, { status: "authenticated" }>) {

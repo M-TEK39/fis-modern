@@ -6,10 +6,13 @@ using Microsoft.EntityFrameworkCore;
 namespace FIS.Core.Infrastructure.Repositories;
 
 /// <summary>
-/// Repository for vehicle remarks — operational notes such as "missing" or "under investigation".
+/// vehicle_remarks is an expanded table. Archive vehicle notes live in
+/// dbo.fleet_notes.
 /// </summary>
 public class VehicleRemarkRepository : IVehicleRemarkRepository
 {
+    private const string TableName = "vehicle_remarks";
+
     private readonly FisDbContext _context;
 
     public VehicleRemarkRepository(FisDbContext context)
@@ -19,53 +22,77 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
 
     public async Task<VehicleRemark?> GetByIdAsync(int remarkId)
     {
-        return await _context
-            .VehicleRemarks.Include(r => r.Vehicle)
-            .Include(r => r.CreatedByUser)
-            .Include(r => r.ResolvedByUser)
-            .FirstOrDefaultAsync(r => r.remark_id == remarkId && !r.is_deleted);
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return null;
+        }
+
+        return await _context.VehicleRemarks.FirstOrDefaultAsync(r =>
+            r.remark_id == remarkId && !r.is_deleted
+        );
     }
 
     public async Task<IEnumerable<VehicleRemark>> GetByVehicleAsync(int vmfCode)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
-            .VehicleRemarks.Include(r => r.CreatedByUser)
-            .Include(r => r.ResolvedByUser)
-            .Where(r => r.vmf_code == vmfCode && !r.is_deleted)
+            .VehicleRemarks.Where(r => r.vmf_code == vmfCode && !r.is_deleted)
             .OrderByDescending(r => r.date_created)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<VehicleRemark>> GetActiveByVehicleAsync(int vmfCode)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
-            .VehicleRemarks.Include(r => r.CreatedByUser)
-            .Where(r => r.vmf_code == vmfCode && !r.is_deleted && !r.is_resolved)
+            .VehicleRemarks.Where(r => r.vmf_code == vmfCode && !r.is_deleted && !r.is_resolved)
             .OrderByDescending(r => r.date_created)
             .ToListAsync();
     }
 
     public async Task<VehicleRemark?> GetLatestActiveByVehicleAsync(int vmfCode)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return null;
+        }
+
         return await _context
-            .VehicleRemarks.Include(r => r.CreatedByUser)
-            .Where(r => r.vmf_code == vmfCode && !r.is_deleted && !r.is_resolved)
+            .VehicleRemarks.Where(r => r.vmf_code == vmfCode && !r.is_deleted && !r.is_resolved)
             .OrderByDescending(r => r.date_created)
             .FirstOrDefaultAsync();
     }
 
     public async Task<IEnumerable<VehicleRemark>> GetAllActiveAsync()
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
-            .VehicleRemarks.Include(r => r.Vehicle)
-            .Include(r => r.CreatedByUser)
-            .Where(r => !r.is_deleted && !r.is_resolved)
+            .VehicleRemarks.Where(r => !r.is_deleted && !r.is_resolved)
             .OrderByDescending(r => r.date_created)
             .ToListAsync();
     }
 
     public async Task<VehicleRemark> CreateAsync(VehicleRemark remark, int currentUserId)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
+
         remark.date_created = DateTime.UtcNow;
         remark.created_by_user_code = currentUserId;
         remark.is_resolved = false;
@@ -84,10 +111,18 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
         string? resolutionNotes
     )
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
+
         var remark =
             await _context.VehicleRemarks.FirstOrDefaultAsync(r =>
                 r.remark_id == remarkId && !r.is_deleted
-            ) ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
+            )
+            ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
 
         if (remark.is_resolved)
             throw new InvalidOperationException($"Remark {remarkId} is already resolved.");
@@ -107,10 +142,18 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
 
     public async Task DeleteAsync(int remarkId, int currentUserId)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
+
         var remark =
             await _context.VehicleRemarks.FirstOrDefaultAsync(r =>
                 r.remark_id == remarkId && !r.is_deleted
-            ) ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
+            )
+            ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
 
         remark.is_deleted = true;
         remark.date_updated = DateTime.UtcNow;

@@ -6,11 +6,13 @@ using Microsoft.EntityFrameworkCore;
 namespace FIS.Core.Infrastructure.Repositories;
 
 /// <summary>
-/// Repository implementation for ClassRequirement entity operations
-/// Provides CRUD operations for vehicle class requirements for projects
+/// ClassRequirements is not in the 2012 archive. Legacy class counts live in
+/// third_party_projects.ClassConfiguration through ThirdPartyRentalRepository.
 /// </summary>
 public class ClassRequirementRepository : IClassRequirementRepository
 {
+    private const string TableName = "ClassRequirements";
+
     private readonly FisDbContext _context;
 
     public ClassRequirementRepository(FisDbContext context)
@@ -20,38 +22,51 @@ public class ClassRequirementRepository : IClassRequirementRepository
 
     public async Task<ClassRequirement?> GetByIdAsync(int classRequirementId)
     {
-        return await _context
-            .ClassRequirements.Include(cr => cr.Class)
-            .Where(cr => !cr.is_deleted)
-            .FirstOrDefaultAsync(cr => cr.class_requirement_id == classRequirementId);
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return null;
+        }
+
+        return await _context.ClassRequirements.FirstOrDefaultAsync(cr =>
+            cr.class_requirement_id == classRequirementId
+        );
     }
 
     public async Task<IEnumerable<ClassRequirement>> GetAllAsync()
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
-            .ClassRequirements.Include(cr => cr.Class)
-            .Where(cr => !cr.is_deleted)
-            .OrderBy(cr => cr.project_id)
+            .ClassRequirements.OrderBy(cr => cr.project_id)
             .ThenBy(cr => cr.class_id)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<ClassRequirement>> GetByProjectIdAsync(int projectId)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
-            .ClassRequirements.Include(cr => cr.Class)
-            .Where(cr => !cr.is_deleted)
-            .Where(cr => cr.project_id == projectId)
+            .ClassRequirements.Where(cr => cr.project_id == projectId)
             .OrderBy(cr => cr.class_id)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<ClassRequirement>> GetByClassIdAsync(short classId)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
-            .ClassRequirements.Include(cr => cr.Class)
-            .Where(cr => !cr.is_deleted)
-            .Where(cr => cr.class_id == classId)
+            .ClassRequirements.Where(cr => cr.class_id == classId)
             .OrderByDescending(cr => cr.start_date)
             .ToListAsync();
     }
@@ -61,10 +76,13 @@ public class ClassRequirementRepository : IClassRequirementRepository
         DateTime endDate
     )
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
-            .ClassRequirements.Include(cr => cr.Class)
-            .Where(cr => !cr.is_deleted)
-            .Where(cr =>
+            .ClassRequirements.Where(cr =>
                 (cr.start_date <= endDate) && (cr.end_date == null || cr.end_date >= startDate)
             )
             .OrderBy(cr => cr.start_date)
@@ -76,9 +94,13 @@ public class ClassRequirementRepository : IClassRequirementRepository
         int currentUserId
     )
     {
-        classRequirement.date_created = DateTime.UtcNow;
-        classRequirement.created_by_user_code = currentUserId;
-        classRequirement.is_deleted = false;
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
 
         _context.ClassRequirements.Add(classRequirement);
         await _context.SaveChangesAsync();
@@ -90,33 +112,48 @@ public class ClassRequirementRepository : IClassRequirementRepository
         int currentUserId
     )
     {
+        _ = currentUserId;
         if (classRequirement == null)
             throw new ArgumentNullException(nameof(classRequirement));
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
 
         var existing = await _context.ClassRequirements.FindAsync(
             classRequirement.class_requirement_id
         );
-        if (existing == null || existing.is_deleted)
+        if (existing == null)
             throw new InvalidOperationException(
                 $"ClassRequirement with class_requirement_id {classRequirement.class_requirement_id} not found"
             );
 
-        classRequirement.date_updated = DateTime.UtcNow;
-        classRequirement.modified_by_user_code = currentUserId;
-
-        _context.Entry(existing).CurrentValues.SetValues(classRequirement);
+        existing.project_id = classRequirement.project_id;
+        existing.class_id = classRequirement.class_id;
+        existing.required_count = classRequirement.required_count;
+        existing.start_date = classRequirement.start_date;
+        existing.end_date = classRequirement.end_date;
+        existing.notes = classRequirement.notes;
         await _context.SaveChangesAsync();
         return existing;
     }
 
     public async Task DeleteAsync(int classRequirementId, int currentUserId)
     {
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
+
         var classRequirement = await _context.ClassRequirements.FindAsync(classRequirementId);
         if (classRequirement != null)
         {
-            classRequirement.is_deleted = true;
-            classRequirement.date_updated = DateTime.UtcNow;
-            classRequirement.modified_by_user_code = currentUserId;
+            _context.ClassRequirements.Remove(classRequirement);
             await _context.SaveChangesAsync();
         }
     }

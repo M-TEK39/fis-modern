@@ -3322,7 +3322,7 @@ public class ContractsController : BaseApiController
         try
         {
             var affected = await _context
-                .Contracts.Where(c => !c.is_deleted && c.contract_status_code == null)
+                .Contracts.Where(c => true)
                 .Select(c => new
                 {
                     c.contract_code,
@@ -3418,7 +3418,7 @@ public class ContractsController : BaseApiController
             int currentUserId = GetCurrentUserId();
 
             var nullStatusContracts = await _context
-                .Contracts.Where(c => !c.is_deleted && c.contract_status_code == null)
+                .Contracts.Where(c => true)
                 .ToListAsync();
 
             if (nullStatusContracts.Count == 0)
@@ -3544,6 +3544,25 @@ public class ReturnContractDto
     public string? Notes { get; set; }
 }
 
+/// <summary>
+/// Close an active contract through the archived billing-owned workflow.
+/// <para>
+/// The restored procedure <c>NEW_DEV_UPD_Contract_CLOSE</c> accepts only
+/// <c>@contractcode</c>, <c>@enddate</c>, and <c>@endodometer</c>. Home
+/// department/site and GFleet custody are applied after that procedure using
+/// existing site and site-driver rows; they are not extra columns on
+/// <c>contract</c>.
+/// </para>
+/// <para>
+/// There is no archived contract-close inspection object on the client
+/// schema. Accident inspection letters and workshop/monitor inspections are
+/// separate modules. Do not invent <c>inspection_notes</c> or an inspection
+/// status on <c>contract</c> to satisfy a modern close checklist; if a
+/// close-time inspection is required later, it has to be modelled as a
+/// separate persisted workflow against objects that already exist (or as an
+/// explicit schema expansion, which this compatibility work does not do).
+/// </para>
+/// </summary>
 public class CloseContractRequest
 {
     [Required]

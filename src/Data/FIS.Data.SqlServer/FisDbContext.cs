@@ -382,37 +382,36 @@ public class FisDbContext : DbContext
                 .HasIndex(e => e.registration_number)
                 .IsUnique()
                 .HasDatabaseName("IX_Vehicle_Registration_Unique");
-
-            // Performance: status/site filtering is on every list and report query
             entity
-                .HasIndex(e => new { e.vehicle_status_code, e.is_deleted })
-                .HasDatabaseName("IX_Vehicle_Status_Deleted");
+                .HasIndex(e => e.vehicle_status_code)
+                .HasDatabaseName("IX_Vehicle_Status");
             entity
-                .HasIndex(e => new { e.veh_site_code, e.is_deleted })
-                .HasDatabaseName("IX_Vehicle_Site_Deleted");
-
-            // Performance: fleet_number search (registration already has unique index)
+                .HasIndex(e => e.veh_site_code)
+                .HasDatabaseName("IX_Vehicle_Site");
             entity
                 .HasIndex(e => e.fleet_number)
                 .HasFilter("fleet_number IS NOT NULL")
                 .HasDatabaseName("IX_Vehicle_FleetNumber");
-
-            // Performance: capture activity report + ordering by capture date
-            entity
-                .HasIndex(e => new { e.date_created, e.is_deleted })
-                .HasDatabaseName("IX_Vehicle_DateCreated_Deleted");
-
-            // Performance: licence renewal dashboard / expiry reports
             entity
                 .HasIndex(e => e.licence_due_date)
-                .HasFilter("licence_due_date IS NOT NULL AND is_deleted = 0")
+                .HasFilter("licence_due_date IS NOT NULL")
                 .HasDatabaseName("IX_Vehicle_LicenceDueDate");
 
-            // Performance: invoice number search (new feature)
-            entity
-                .HasIndex(e => e.invoice_number)
-                .HasFilter("invoice_number IS NOT NULL")
-                .HasDatabaseName("IX_Vehicle_InvoiceNumber");
+            // Archive vehicle_master has no invoice/IFMS/NATIS/supplier or
+            // global audit columns. VehicleRepository and report helpers must
+            // not project them through static EF.
+            entity.Ignore(e => e.invoice_number);
+            entity.Ignore(e => e.ifms_vehicle_register_number);
+            entity.Ignore(e => e.natis_model_number);
+            entity.Ignore(e => e.supplier_id);
+            entity.Ignore(e => e.Supplier);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
 
             entity.ToTable(t =>
             {
@@ -428,31 +427,31 @@ public class FisDbContext : DbContext
                 .HasFilter("still_current = 'Y'")
                 .IsUnique()
                 .HasDatabaseName("IX_Contract_ActiveVehicle_Unique");
-
-            // Performance: per-vehicle contract list (loads on every vehicle detail page)
             entity
-                .HasIndex(e => new { e.vmf_code, e.is_deleted })
-                .HasDatabaseName("IX_Contract_VmfCode_Deleted");
-
-            // Performance: site-based contract views + still_current filter
+                .HasIndex(e => e.vmf_code)
+                .HasDatabaseName("IX_Contract_VmfCode");
             entity
-                .HasIndex(e => new
-                {
-                    e.site_code,
-                    e.still_current,
-                    e.is_deleted,
-                })
-                .HasDatabaseName("IX_Contract_Site_Current_Deleted");
+                .HasIndex(e => new { e.site_code, e.still_current })
+                .HasDatabaseName("IX_Contract_Site_Current");
+            entity.HasIndex(e => e.start_date).HasDatabaseName("IX_Contract_StartDate");
 
-            // Performance: date-range contract queries
-            entity
-                .HasIndex(e => new { e.start_date, e.is_deleted })
-                .HasDatabaseName("IX_Contract_StartDate_Deleted");
-
-            // Performance: capture activity report
-            entity
-                .HasIndex(e => new { e.date_created, e.is_deleted })
-                .HasDatabaseName("IX_Contract_DateCreated_Deleted");
+            // Archive contract has no status/assessment/collector or global
+            // audit columns. ContractRepository already uses compatibility SQL
+            // for those expanded fields.
+            entity.Ignore(e => e.monthly_km);
+            entity.Ignore(e => e.contract_status_code);
+            entity.Ignore(e => e.contract_status_date);
+            entity.Ignore(e => e.vehicle_assessment_code);
+            entity.Ignore(e => e.approver_code);
+            entity.Ignore(e => e.site_driver_code);
+            entity.Ignore(e => e.collector_firstname);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
 
             entity.ToTable(t =>
             {
@@ -467,6 +466,36 @@ public class FisDbContext : DbContext
                 );
                 t.HasCheckConstraint("CK_Contract_StillCurrent", "still_current IN ('Y', 'N')");
             });
+        });
+
+        // GGMT v2.1.05 contract_status is description + predecessors/roles only.
+        // Expanded audit, abbreviation, and active/final flags are optional.
+        modelBuilder.Entity<ContractStatus>(entity =>
+        {
+            entity.HasKey(e => e.contract_status_code);
+            entity.Ignore(e => e.status_abbreviation);
+            entity.Ignore(e => e.is_active);
+            entity.Ignore(e => e.is_final);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+            entity.Ignore(e => e.Contracts);
+        });
+
+        modelBuilder.Entity<FIS.Core.Domain.Entities.Contracts.ContractStatusHistory>(entity =>
+        {
+            entity.HasKey(e => e.contract_status_history_code);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
         });
 
         modelBuilder.Entity<Site>(entity =>
@@ -504,11 +533,42 @@ public class FisDbContext : DbContext
             entity.Ignore(e => e.CreatedByUser);
             entity.Ignore(e => e.ModifiedByUser);
         });
+
+        // fin.vehicle_tariff is the archived calculated-tariff table.
+        // Optional audit columns are not on the original client object;
+        // VehicleTariffRepository writes only columns confirmed at runtime.
+        modelBuilder.Entity<VehicleTariff>(entity =>
+        {
+            entity.HasKey(e => e.vehicle_tariff_code);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        // dbo.fuel_tariff is the archived fuel-rate table. Optional audit
+        // columns are negotiated by FuelTariffRepository at runtime.
+        modelBuilder.Entity<FuelTariff>(entity =>
+        {
+            entity.HasKey(e => e.fuel_tariff_code);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
         modelBuilder.Entity<PrivateHire>(entity => entity.HasKey(e => e.PHV_code));
         modelBuilder.Entity<Driver>(entity => entity.HasKey(e => e.site_driver_code));
         modelBuilder.Entity<Trip>(entity => entity.HasKey(e => e.trip_authority_code));
         modelBuilder.Entity<Department>(entity => entity.HasKey(e => e.department_code));
         modelBuilder.Entity<User>(entity => entity.HasKey(e => e.user_access_code));
+        modelBuilder.Entity<UserAccessOld>(entity => entity.HasKey(e => e.user_access_code));
 
         modelBuilder.Entity<Make>(entity =>
         {
@@ -532,17 +592,397 @@ public class FisDbContext : DbContext
         });
 
         // Batch 1 Reference Data configuration
-        modelBuilder.Entity<FuelType>(entity => entity.HasKey(e => e.fuel_type_code));
-        modelBuilder.Entity<MaintenanceTrigger>(entity => entity.HasKey(e => e.maint_trigger_code));
+        modelBuilder.Entity<FuelType>(entity =>
+        {
+            entity.HasKey(e => e.fuel_type_code);
+            entity.Property(e => e.fuel_type_code).ValueGeneratedNever();
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<VehicleType>(entity =>
+        {
+            entity.ToTable("type");
+            entity.HasKey(e => e.type_code);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<UnitOfMeasure>(entity =>
+        {
+            entity.ToTable("unit_of_measure");
+            entity.HasKey(e => e.unit_of_measure_code);
+            entity.Property(e => e.unit_of_measure_code).ValueGeneratedNever();
+            entity.Property(e => e.unit_description).HasColumnName("uom_description");
+            entity.Ignore(e => e.unit_abbreviation);
+            entity.Ignore(e => e.unit_category);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<Location>(entity =>
+        {
+            entity.ToTable("location");
+            entity.HasKey(e => e.LocationId);
+            entity.Property(e => e.LocationId).HasColumnName("location_code").ValueGeneratedNever();
+            entity.Property(e => e.LocationName).HasColumnName("description");
+            entity.Ignore(e => e.Description);
+            entity.Ignore(e => e.ContactPerson);
+            entity.Ignore(e => e.PhoneNumber);
+            entity.Ignore(e => e.Email);
+            entity.Ignore(e => e.AddressLine1);
+            entity.Ignore(e => e.AddressLine2);
+            entity.Ignore(e => e.City);
+            entity.Ignore(e => e.PostalCode);
+            entity.Ignore(e => e.Province);
+            entity.Ignore(e => e.Country);
+            entity.Ignore(e => e.Latitude);
+            entity.Ignore(e => e.Longitude);
+            entity.Ignore(e => e.IsActive);
+            entity.Ignore(e => e.CreatedDate);
+            entity.Ignore(e => e.ModifiedDate);
+            entity.Ignore(e => e.Vehicles);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+        modelBuilder.Entity<MaintenanceTrigger>(entity =>
+        {
+            entity.HasKey(e => e.maint_trigger_code);
+            entity.Property(e => e.maint_trigger_code).ValueGeneratedNever();
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<StepType>(entity =>
+        {
+            entity.ToTable("StepType", "Workflow");
+            entity.HasKey(e => e.StepTypeID);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<Step>(entity =>
+        {
+            entity.ToTable("Step", "Workflow");
+            entity.HasKey(e => e.StepID);
+            entity.Ignore(e => e.StepParameters);
+            entity.Ignore(e => e.HandlerType);
+            entity.Ignore(e => e.IsConditional);
+            entity.Ignore(e => e.ConditionExpression);
+            entity.Ignore(e => e.TrueStepID);
+            entity.Ignore(e => e.FalseStepID);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<FIS.Core.Domain.Entities.System.Workflow>(entity =>
+        {
+            entity.ToTable("Workflow", "Workflow");
+            entity.HasKey(e => e.WorkflowID);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<FIS.Core.Domain.Entities.System.Status>(entity =>
+        {
+            entity.ToTable("Status", "Workflow");
+            entity.HasKey(e => e.StatusID);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<WorkflowTemplate>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<WorkflowNotification>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<WorkflowMetric>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+        });
+
+        modelBuilder.Entity<WorkflowExecutionSummary>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.is_deleted);
+        });
+
+        modelBuilder.Entity<StepExecutionHistory>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.is_deleted);
+        });
+
+        modelBuilder.Entity<AccessLevel>(entity =>
+        {
+            entity.Ignore(e => e.AccessLevelCalc);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<AccessLevels2>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<Supplier>(entity =>
+        {
+            entity.Property(e => e.supplier_name).HasColumnName("name");
+            entity.Property(e => e.phone_number).HasColumnName("tel");
+            entity.Ignore(e => e.email);
+            entity.Ignore(e => e.tax_number);
+            entity.Ignore(e => e.is_active);
+            entity.Ignore(e => e.notes);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<ThirdPartyProject>(entity =>
+        {
+            entity.Property(e => e.project_id).HasColumnName("Project_id");
+            entity.Property(e => e.department_code).HasColumnName("Department_Code");
+            entity.Property(e => e.site_code).HasColumnName("Site_Code");
+            entity.Property(e => e.description).HasColumnName("Project_Description");
+            entity.Property(e => e.start_date).HasColumnName("Project_Start_Date");
+            entity.Property(e => e.end_date).HasColumnName("Project_End_Date");
+            entity.Property(e => e.responsible_person).HasColumnName("Project_Responsible_Person");
+            entity.Property(e => e.rp_physical_address).HasColumnName("RP_Physical_Address");
+            entity.Property(e => e.rp_postal_address).HasColumnName("RP_Postal_Address");
+            entity.Property(e => e.rp_tel).HasColumnName("RP_TelNumber");
+            entity.Property(e => e.rp_fax).HasColumnName("RP_FaxNumber");
+            entity.Property(e => e.rp_email).HasColumnName("RP_Email_Address");
+            entity.Property(e => e.rp_cell).HasColumnName("RP_CellNumber");
+            entity.Property(e => e.notes).HasColumnName("Notes");
+            entity.Property(e => e.order_reference).HasColumnName("Client_OrderReference_Number");
+            entity.Property(e => e.class_configuration).HasColumnName("ClassConfiguration");
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+            entity.Ignore(e => e.Department);
+            entity.Ignore(e => e.Site);
+        });
+
+        modelBuilder.Entity<ThirdPartyAllocation>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+            entity.Ignore(e => e.Project);
+            entity.Ignore(e => e.Supplier);
+            entity.Ignore(e => e.Vehicle);
+        });
+
+        modelBuilder.Entity<ClassRequirement>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+            entity.Ignore(e => e.Class);
+        });
+
+        modelBuilder.Entity<NotificationTemplate>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<MaintenanceRecord>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
 
         modelBuilder.Entity<MaintenanceValue>(entity =>
         {
             entity.HasKey(e => new
             {
-                e.TariffParameterID,
-                e.class_code,
+                e.class_number,
                 e.months_age,
+                e.kilometer_age,
             });
+            entity.Ignore(e => e.TariffParameterID);
+            entity.Ignore(e => e.CaptureDate);
+            entity.Ignore(e => e.ModifiedDate);
+            entity.Ignore(e => e.user_access_code);
+            entity.Ignore(e => e.user_access_name);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.TariffParameter);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        // fin.Overhead 2012 uses TariffParameterYear, not TariffParameterID,
+        // and has no audit columns. Writes go through OverheadRepository.
+        modelBuilder.Entity<Overhead>(entity =>
+        {
+            entity.HasKey(e => e.OverheadId);
+            entity.Ignore(e => e.TariffParameterID);
+            entity.Ignore(e => e.TariffParameterYear);
+            entity.Ignore(e => e.CaptureDate);
+            entity.Ignore(e => e.ModifiedDate);
+            entity.Ignore(e => e.user_access_code);
+            entity.Ignore(e => e.user_access_name);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.TariffParameter);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        // fin.TariffParameter 2012 has the core fiscal columns plus computed
+        // EffectiveInterestRate. Approval, capture, and global audit columns
+        // are expanded-only; TariffParameterRepository selects them only when
+        // they exist at runtime.
+        modelBuilder.Entity<TariffParameter>(entity =>
+        {
+            entity.HasKey(e => e.TariffParameterID);
+            entity.Ignore(e => e.EffectiveInterestRate);
+            entity.Ignore(e => e.AverageFuelPrice);
+            entity.Ignore(e => e.EffectiveDate);
+            entity.Ignore(e => e.CaptureDate);
+            entity.Ignore(e => e.ModifiedDate);
+            entity.Ignore(e => e.user_access_code);
+            entity.Ignore(e => e.user_access_name);
+            entity.Ignore(e => e.Approved);
+            entity.Ignore(e => e.ApprovalDate);
+            entity.Ignore(e => e.Approval_user_access_code);
+            entity.Ignore(e => e.Approval_user_access_name);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.VehicleTariffs);
+            entity.Ignore(e => e.MaintenanceValues);
+            entity.Ignore(e => e.Overheads);
+            entity.Ignore(e => e.WeightCalculations);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        modelBuilder.Entity<TariffWeightCalculation>(entity =>
+        {
+            entity.HasKey(e => e.TariffWeightCalculation_Code);
+            entity.Ignore(e => e.TariffParameter);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
         });
 
         modelBuilder.Entity<BitmaskDef>(entity =>
@@ -649,7 +1089,6 @@ public class FisDbContext : DbContext
         // VehicleRemark indexes
         modelBuilder.Entity<VehicleRemark>(entity =>
         {
-            // Fast lookup: all open remarks for a vehicle
             entity
                 .HasIndex(e => new
                 {
@@ -658,13 +1097,9 @@ public class FisDbContext : DbContext
                     e.is_deleted,
                 })
                 .HasDatabaseName("IX_VehicleRemark_Vehicle_Active");
-
-            // For the fleet-wide active remarks query
             entity
                 .HasIndex(e => new { e.is_resolved, e.is_deleted })
                 .HasDatabaseName("IX_VehicleRemark_Active");
-
-            // Performance: capture activity report date filter
             entity
                 .HasIndex(e => new { e.date_created, e.is_deleted })
                 .HasDatabaseName("IX_VehicleRemark_DateCreated_Deleted");
@@ -765,30 +1200,49 @@ public class FisDbContext : DbContext
                 .HasDatabaseName("IX_JournalDetail_Accepted_Date");
         });
 
-        // Invoice indexes — billing / invoice reports
+        // Invoice indexes — billing / invoice reports. Audit columns are not
+        // on the original invoice tables; ignore them so leftover EF reads
+        // cannot project columns the client database does not have.
         modelBuilder.Entity<Invoice>(entity =>
         {
-            entity
-                .HasIndex(e => new
-                {
-                    e.posting_month_code,
-                    e.department_code,
-                    e.is_deleted,
-                })
-                .HasDatabaseName("IX_Invoice_PostingMonth_Dept_Deleted");
-            entity
-                .HasIndex(e => new { e.date_created, e.is_deleted })
-                .HasDatabaseName("IX_Invoice_DateCreated_Deleted");
+            entity.HasKey(e => e.invoice_code);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
         });
 
-        // Tariff indexes — approval workflow and class/year lookups
+        modelBuilder.Entity<InvoiceItem>(entity =>
+        {
+            entity.HasKey(e => e.item_code);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
+        // Tariff indexes — class/year lookups. Approval and global audit
+        // columns are expanded-only; TariffRepository writes them only when
+        // they exist at runtime.
         modelBuilder.Entity<Tariff>(entity =>
         {
-            // Status-based filtering (Draft/Pending/Approved/Rejected) — approval workflow
-            entity
-                .HasIndex(e => new { e.tariff_approval_status, e.is_deleted })
-                .HasDatabaseName("IX_Tariff_ApprovalStatus_Deleted");
-            // Tariff lookup by vehicle class + effective date range
+            entity.HasKey(e => e.tariff_code);
+            entity.Ignore(e => e.tariff_approval_status);
+            entity.Ignore(e => e.approver_code);
+            entity.Ignore(e => e.approval_date);
+            entity.Ignore(e => e.rejection_reason);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+            entity.Ignore(e => e.ApproverUser);
             entity
                 .HasIndex(e => new
                 {
@@ -797,10 +1251,6 @@ public class FisDbContext : DbContext
                     e.effective_end_date,
                 })
                 .HasDatabaseName("IX_Tariff_Class_EffectiveDates");
-            // Year filter used in tariff report
-            entity
-                .HasIndex(e => new { e.year_manufactured, e.is_deleted })
-                .HasDatabaseName("IX_Tariff_YearManufactured_Deleted");
         });
 
         // Logsheet indexes — monthly usage reports by site and date
@@ -819,13 +1269,12 @@ public class FisDbContext : DbContext
                 .HasDatabaseName("IX_Logsheet_VmfCode_Deleted");
         });
 
-        // NotificationLog indexes — batch notification processing
+        // NotificationLog is a Workflow satellite table, not in archive Setup.
         modelBuilder.Entity<NotificationLog>(entity =>
         {
-            // Pending/Failed notifications queried on every retry cycle
-            entity
-                .HasIndex(e => new { e.DeliveryStatus, e.date_created })
-                .HasDatabaseName("IX_NotificationLog_Status_Date");
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.is_deleted);
             entity.HasIndex(e => e.WorkflowID).HasDatabaseName("IX_NotificationLog_WorkflowID");
         });
 

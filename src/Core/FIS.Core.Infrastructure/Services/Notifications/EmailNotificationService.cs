@@ -1201,7 +1201,7 @@ public class EmailNotificationService : IEmailNotificationService
             var reminderWindowEnd = today.AddDays(30);
 
             var vehicles = (await _vehicleRepository.GetAllAsync())
-                .Where(v => !v.is_deleted && v.licence_due_date.HasValue)
+                .Where(v => v.licence_due_date.HasValue)
                 .Where(v =>
                     v.licence_due_date!.Value.Date >= today
                     && v.licence_due_date.Value.Date <= reminderWindowEnd
@@ -1277,7 +1277,7 @@ public class EmailNotificationService : IEmailNotificationService
             var reminderWindowEnd = today.AddDays(30);
 
             var vehicles = (await _vehicleRepository.GetAllAsync())
-                .Where(v => !v.is_deleted && v.cof_last_done.HasValue)
+                .Where(v => v.cof_last_done.HasValue)
                 .Where(v =>
                 {
                     var dueDate = v.cof_last_done!.Value.Date.AddDays(365);
@@ -1354,7 +1354,7 @@ public class EmailNotificationService : IEmailNotificationService
             var reminderWindowEnd = today.AddDays(30);
 
             var contracts = (await _contractRepository.GetActiveContractsAsync())
-                .Where(c => !c.is_deleted && c.target_return_date.HasValue)
+                .Where(c => c.target_return_date.HasValue)
                 .Where(c =>
                     c.target_return_date!.Value.Date >= today
                     && c.target_return_date.Value.Date <= reminderWindowEnd

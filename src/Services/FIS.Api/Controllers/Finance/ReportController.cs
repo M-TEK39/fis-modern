@@ -2972,7 +2972,7 @@ public class ReportController : BaseApiController
                 from scanDoc in _context.ScanDocs.AsNoTracking()
                 join vehicle in _context.Vehicles.AsNoTracking()
                     on scanDoc.vmf_code equals vehicle.vmf_code
-                where !scanDoc.is_deleted && !vehicle.is_deleted
+                where !scanDoc.is_deleted
                 select new
                 {
                     vehicle.vmf_code,
@@ -2980,7 +2980,7 @@ public class ReportController : BaseApiController
                     vehicle.registration_number,
                     vehicle.chassis_number,
                     vehicle.engine_number_1,
-                    vehicle.invoice_number,
+                    InvoiceNumber = (string?)null,
                     scanDoc.period_begin,
                     scanDoc.period_end,
                     scanDoc.image,
@@ -3006,9 +3006,7 @@ public class ReportController : BaseApiController
                     "VIN" => query.Where(row =>
                         row.chassis_number != null && row.chassis_number.Contains(normalizedSearch)
                     ),
-                    "INVOICE" => query.Where(row =>
-                        row.invoice_number != null && row.invoice_number.Contains(normalizedSearch)
-                    ),
+                    "INVOICE" => query.Where(row => false),
                     _ => query.Where(row =>
                         row.fleet_number != null && row.fleet_number.Contains(normalizedSearch)
                     ),
@@ -3094,7 +3092,7 @@ public class ReportController : BaseApiController
 
             // Build a lookup of vmf_code → (fleet_number, registration_number, veh_site_code) to enrich results
             // Only load vehicles that match site/vmf filters to keep query light
-            var vehicleBase = _context.Vehicles.Where(v => !v.is_deleted);
+            IQueryable<Vehicle> vehicleBase = _context.Vehicles.AsNoTracking();
             if (vmf_code.HasValue)
                 vehicleBase = vehicleBase.Where(v => v.vmf_code == vmf_code.Value);
             if (site_code.HasValue)
@@ -3136,15 +3134,15 @@ public class ReportController : BaseApiController
             if (moduleFilter == "All" || moduleFilter == "Vehicles")
             {
                 var q = _context.Vehicles.Where(v =>
-                    !v.is_deleted && v.date_created >= fromDate && v.date_created <= toDate
+                    v.captured_date >= fromDate && v.captured_date <= toDate
                 );
                 if (captured_by.HasValue)
-                    q = q.Where(v => v.created_by_user_code == captured_by.Value);
+                    q = q.Where(v => v.user_access_code == captured_by.Value);
                 if (vmf_code.HasValue)
                     q = q.Where(v => v.vmf_code == vmf_code.Value);
                 if (site_code.HasValue)
                     q = q.Where(v => v.veh_site_code == site_code.Value);
-                var rows = await q.OrderByDescending(v => v.date_created)
+                var rows = await q.OrderByDescending(v => v.captured_date)
                     .Select(v => new CaptureActivityEntry
                     {
                         record_id = v.vmf_code,
@@ -3153,8 +3151,8 @@ public class ReportController : BaseApiController
                         registration_number = v.registration_number,
                         description =
                             $"Vehicle {v.fleet_number ?? v.registration_number ?? v.vmf_code.ToString()} added",
-                        date_captured = v.date_created,
-                        captured_by_user_code = v.created_by_user_code,
+                        date_captured = v.captured_date ?? v.take_on_date,
+                        captured_by_user_code = v.user_access_code,
                         module = "Vehicles",
                     })
                     .ToListAsync();
@@ -3166,22 +3164,22 @@ public class ReportController : BaseApiController
             if (moduleFilter == "All" || moduleFilter == "Contracts")
             {
                 var q = _context.Contracts.Where(c =>
-                    !c.is_deleted && c.date_created >= fromDate && c.date_created <= toDate
+                    c.start_date >= fromDate && c.start_date <= toDate
                 );
                 if (captured_by.HasValue)
-                    q = q.Where(c => c.created_by_user_code == captured_by.Value);
+                    q = q.Where(c => c.user_code == captured_by.Value);
                 if (vmf_code.HasValue)
                     q = q.Where(c => c.vmf_code == vmf_code.Value);
                 if (site_code.HasValue)
                     q = q.Where(c => c.site_code == site_code.Value);
-                var rows = await q.OrderByDescending(c => c.date_created)
+                var rows = await q.OrderByDescending(c => c.start_date)
                     .Select(c => new
                     {
                         c.contract_code,
                         c.vmf_code,
                         c.site_code,
-                        c.date_created,
-                        c.created_by_user_code,
+                        c.start_date,
+                        c.user_code,
                         c.still_current,
                     })
                     .ToListAsync();
@@ -3196,8 +3194,8 @@ public class ReportController : BaseApiController
                                 registration_number = RegNum(c.vmf_code),
                                 description =
                                     $"Contract captured (status: {(c.still_current == "Y" ? "Active" : "Inactive")})",
-                                date_captured = c.date_created,
-                                captured_by_user_code = c.created_by_user_code,
+                                date_captured = c.start_date,
+                                captured_by_user_code = c.user_code,
                                 module = "Contracts",
                             }
                     )
@@ -3506,38 +3504,52 @@ public class ReportController : BaseApiController
 
     private bool HasDynamicReportAccess(string reportKey)
     {
-        if (IsTariffReportKey(reportKey))
-        {
-            // The legacy Validation/RPTtariffs.aspx menu is protected by the
-            // Validation role, while the broader FIS Reports menu remains
-            // protected by Reports. Keep both entry points valid without
-            // granting Validation access to unrelated report families.
-            return HasAnyRole("Validation", "Reports");
-        }
-
-        if (IsFineReportKey(reportKey))
-        {
-            return HasAnyRole("Fines", "Reports");
-        }
-
-        if (IsWorkshopReportKey(reportKey))
-        {
-            return HasAnyRole("Workshop", "Reports");
-        }
-
         if (IsLossReportKey(reportKey))
         {
-            return HasAnyRole("Losses", "Reports");
+            // losses.aspx requires Losses. FIS_Report lists the link, but the
+            // inner page is the resource boundary.
+            return HasAnyRole("Losses");
+        }
+
+        if (IsTaxiFinancialReportKey(reportKey))
+        {
+            return HasAnyRole("Private Hire Vehicles");
         }
 
         if (IsTaxiReportKey(reportKey))
         {
-            return HasAnyRole("Private Hire Vehicles", "Reports");
+            return HasReportsRole();
+        }
+
+        if (IsFineReportKey(reportKey))
+        {
+            return HasReportsRole();
+        }
+
+        if (IsWorkshopReportKey(reportKey))
+        {
+            return HasAnyRole("Workshop");
         }
 
         if (IsContractReportKey(reportKey))
         {
-            return HasAnyRole("Contracts", "Reports");
+            return HasAnyRole("Contracts");
+        }
+
+        if (IsValidationTariffReportKey(reportKey))
+        {
+            return HasAnyRole("Validation");
+        }
+
+        if (IsTariffReportKey(reportKey))
+        {
+            // Reports.aspx published-tariff ShowReport items remain Reports.
+            return HasReportsRole();
+        }
+
+        if (IsManagementReportKey(reportKey))
+        {
+            return HasAnyRole("Management Reports");
         }
 
         if (reportKey.Equals("driver-information-finyear", StringComparison.OrdinalIgnoreCase))
@@ -3569,11 +3581,35 @@ public class ReportController : BaseApiController
         reportKey.Equals("taxis", StringComparison.OrdinalIgnoreCase)
         || reportKey.StartsWith("taxis-", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsTaxiFinancialReportKey(string reportKey) =>
+        reportKey.Equals("taxis-financial", StringComparison.OrdinalIgnoreCase)
+        || reportKey.StartsWith("taxis-fin-", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsTariffReportKey(string reportKey) =>
         reportKey.Equals("tariffs", StringComparison.OrdinalIgnoreCase)
         || reportKey.StartsWith("tariffs-", StringComparison.OrdinalIgnoreCase)
         || reportKey.Equals("nom-vehicles-without-tariffs", StringComparison.OrdinalIgnoreCase)
         || reportKey.Equals("nom-vehicles-without-tariff", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsValidationTariffReportKey(string reportKey) =>
+        reportKey.Equals("tariffs-class-codes", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("tariffs-licence-fees", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("tariffs-make-model", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("tariffs-private-taxi", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("class-codes-with-tariffs", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("licence-fees", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("make-model-with-tariffs", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("private-taxi-tariffs", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("nom-vehicles-without-tariffs", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("nom-vehicles-without-tariff", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsManagementReportKey(string reportKey) =>
+        reportKey.Equals("management", StringComparison.OrdinalIgnoreCase)
+        || reportKey.StartsWith("management-", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("ggmt-management", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("incorrect-captured-data", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("fis-site-management-info", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("unallocated-vehicles", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsContractReportKey(string reportKey) =>
         reportKey.Equals("contracts", StringComparison.OrdinalIgnoreCase)

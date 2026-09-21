@@ -5,6 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Core.Infrastructure.Repositories;
 
+/// <summary>
+/// Workflow.NotificationTemplate is not in archive Workflow Setup.
+/// </summary>
 public class NotificationTemplateRepository : INotificationTemplateRepository
 {
     private readonly FisDbContext _context;
@@ -16,34 +19,57 @@ public class NotificationTemplateRepository : INotificationTemplateRepository
 
     public async Task<NotificationTemplate?> GetByIdAsync(int templateId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "NotificationTemplate"))
+        {
+            return null;
+        }
+
         return await _context.NotificationTemplates.FirstOrDefaultAsync(t =>
-            t.TemplateID == templateId && !t.is_deleted
+            t.TemplateID == templateId
         );
     }
 
     public async Task<NotificationTemplate?> GetByNameAsync(string templateName)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "NotificationTemplate"))
+        {
+            return null;
+        }
+
         return await _context.NotificationTemplates.FirstOrDefaultAsync(t =>
-            t.TemplateName == templateName && !t.is_deleted
+            t.TemplateName == templateName
         );
     }
 
     public async Task<IEnumerable<NotificationTemplate>> GetAllAsync()
     {
-        return await _context.NotificationTemplates.Where(t => !t.is_deleted).ToListAsync();
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "NotificationTemplate"))
+        {
+            return [];
+        }
+
+        return await _context.NotificationTemplates.ToListAsync();
     }
 
     public async Task<IEnumerable<NotificationTemplate>> GetActiveTemplatesAsync()
     {
-        return await _context
-            .NotificationTemplates.Where(t => t.IsActive && !t.is_deleted)
-            .ToListAsync();
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "NotificationTemplate"))
+        {
+            return [];
+        }
+
+        return await _context.NotificationTemplates.Where(t => t.IsActive).ToListAsync();
     }
 
     public async Task<IEnumerable<NotificationTemplate>> GetByTypeAsync(string templateType)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "NotificationTemplate"))
+        {
+            return [];
+        }
+
         return await _context
-            .NotificationTemplates.Where(t => t.TemplateType == templateType && !t.is_deleted)
+            .NotificationTemplates.Where(t => t.TemplateType == templateType)
             .ToListAsync();
     }
 
@@ -52,9 +78,13 @@ public class NotificationTemplateRepository : INotificationTemplateRepository
         int currentUserId
     )
     {
-        template.date_created = DateTime.UtcNow;
-        template.created_by_user_code = currentUserId;
-        template.is_deleted = false;
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "NotificationTemplate"))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("NotificationTemplate")
+            );
+        }
 
         _context.NotificationTemplates.Add(template);
         await _context.SaveChangesAsync();
@@ -64,6 +94,14 @@ public class NotificationTemplateRepository : INotificationTemplateRepository
 
     public async Task UpdateAsync(NotificationTemplate template, int currentUserId)
     {
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "NotificationTemplate"))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("NotificationTemplate")
+            );
+        }
+
         var existing = await _context.NotificationTemplates.FirstOrDefaultAsync(t =>
             t.TemplateID == template.TemplateID
         );
@@ -73,25 +111,27 @@ public class NotificationTemplateRepository : INotificationTemplateRepository
                 $"NotificationTemplate {template.TemplateID} not found"
             );
 
-        // Tracking-safe update pattern
         _context.Entry(existing).CurrentValues.SetValues(template);
-        existing.date_updated = DateTime.UtcNow;
-        existing.modified_by_user_code = currentUserId;
-
         await _context.SaveChangesAsync();
     }
 
     public async Task DeleteAsync(int templateId, int currentUserId)
     {
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "NotificationTemplate"))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("NotificationTemplate")
+            );
+        }
+
         var template = await _context.NotificationTemplates.FirstOrDefaultAsync(t =>
             t.TemplateID == templateId
         );
 
         if (template != null)
         {
-            template.is_deleted = true;
-            template.date_updated = DateTime.UtcNow;
-            template.modified_by_user_code = currentUserId;
+            _context.NotificationTemplates.Remove(template);
             await _context.SaveChangesAsync();
         }
     }

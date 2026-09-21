@@ -2,15 +2,21 @@ using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Data;
 
 namespace FIS.Core.Infrastructure.Repositories;
 
 /// <summary>
 /// Repository implementation for TariffWeightCalculation table.
 /// Handles weight calculations for overhead distribution across vehicle categories.
+/// fin.TariffWeightCalculation is a GGMT fiscal object and may be absent.
 /// </summary>
 public class TariffWeightCalculationRepository : ITariffWeightCalculationRepository
 {
+    private const string MissingTableMessage =
+        "fin.TariffWeightCalculation is unavailable on this database. No compatibility fallback was used.";
+
     private readonly FisDbContext _context;
 
     public TariffWeightCalculationRepository(FisDbContext context)
@@ -18,13 +24,15 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    /// <summary>
-    /// Get all weight calculations for a tariff parameter year.
-    /// </summary>
     public async Task<List<TariffWeightCalculation>> GetByTariffParameterAsync(
         int tariffParameterId
     )
     {
+        if (!await TableExistsAsync())
+        {
+            return [];
+        }
+
         return await _context
             .Set<TariffWeightCalculation>()
             .Where(twc => twc.TariffParameterID == tariffParameterId)
@@ -32,16 +40,16 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
             .ToListAsync();
     }
 
-    /// <summary>
-    /// Get weight calculation for a specific category.
-    /// </summary>
     public async Task<TariffWeightCalculation?> GetByCategoryAsync(
         int tariffParameterId,
         string category
     )
     {
-        // Note: The entity has category as decimal, which seems unusual
-        // Attempting to parse the string to decimal for comparison
+        if (!await TableExistsAsync())
+        {
+            return null;
+        }
+
         if (decimal.TryParse(category, out decimal categoryValue))
         {
             return await _context
@@ -53,11 +61,13 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
         return null;
     }
 
-    /// <summary>
-    /// Get weight calculation by ID.
-    /// </summary>
     public async Task<TariffWeightCalculation?> GetByIdAsync(int tariffWeightCalculationId)
     {
+        if (!await TableExistsAsync())
+        {
+            return null;
+        }
+
         return await _context
             .Set<TariffWeightCalculation>()
             .FirstOrDefaultAsync(twc =>
@@ -65,10 +75,6 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
             );
     }
 
-    /// <summary>
-    /// Get total weight for a tariff parameter year.
-    /// Formula: Sum(number * WeightFactorPerUnit)
-    /// </summary>
     public async Task<decimal> GetTotalWeightAsync(int tariffParameterId)
     {
         var calculations = await GetByTariffParameterAsync(tariffParameterId);
@@ -78,23 +84,22 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
             .Sum(twc => (decimal)(twc.number!.Value * twc.WeightFactorPerUnit!.Value));
     }
 
-    /// <summary>
-    /// Create new weight calculation.
-    /// </summary>
     public async Task<TariffWeightCalculation> CreateAsync(
         TariffWeightCalculation weightCalculation,
         int currentUserId
     )
     {
+        if (!await TableExistsAsync())
+        {
+            throw new InvalidOperationException(MissingTableMessage);
+        }
+
         weightCalculation.calculation_date_time = DateTime.Now;
         _context.Set<TariffWeightCalculation>().Add(weightCalculation);
         await _context.SaveChangesAsync();
         return weightCalculation;
     }
 
-    /// <summary>
-    /// Update existing weight calculation.
-    /// </summary>
     public async Task<TariffWeightCalculation> UpdateAsync(
         TariffWeightCalculation weightCalculation,
         int currentUserId
@@ -102,6 +107,10 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
     {
         if (weightCalculation == null)
             throw new ArgumentNullException(nameof(weightCalculation));
+        if (!await TableExistsAsync())
+        {
+            throw new InvalidOperationException(MissingTableMessage);
+        }
 
         var existing = await _context
             .Set<TariffWeightCalculation>()
@@ -117,9 +126,6 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
         return existing;
     }
 
-    /// <summary>
-    /// Delete weight calculation.
-    /// </summary>
     public async Task DeleteAsync(int tariffWeightCalculationId, int currentUserId)
     {
         var weightCalculation = await GetByIdAsync(tariffWeightCalculationId);
@@ -130,13 +136,61 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
         }
     }
 
-    /// <summary>
-    /// Delete all weight calculations for a tariff parameter year.
-    /// </summary>
     public async Task DeleteByTariffParameterAsync(int tariffParameterId)
     {
         var calculations = await GetByTariffParameterAsync(tariffParameterId);
+        if (calculations.Count == 0)
+        {
+            return;
+        }
+
         _context.Set<TariffWeightCalculation>().RemoveRange(calculations);
         await _context.SaveChangesAsync();
+    }
+
+    private async Task<bool> TableExistsAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT CASE WHEN EXISTS (
+                    SELECT 1
+                    FROM [INFORMATION_SCHEMA].[TABLES]
+                    WHERE [TABLE_SCHEMA] = @schemaName
+                      AND [TABLE_NAME] = @tableName
+                ) THEN 1 ELSE 0 END
+                """;
+
+            var schema = command.CreateParameter();
+            schema.ParameterName = "@schemaName";
+            schema.DbType = DbType.String;
+            schema.Value = "fin";
+            command.Parameters.Add(schema);
+
+            var table = command.CreateParameter();
+            table.ParameterName = "@tableName";
+            table.DbType = DbType.String;
+            table.Value = "TariffWeightCalculation";
+            command.Parameters.Add(table);
+
+            var result = await command.ExecuteScalarAsync();
+            return result is not null && Convert.ToInt32(result) == 1;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 }

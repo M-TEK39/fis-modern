@@ -25,16 +25,25 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
 
     public async Task<WorkflowTemplate?> GetByIdAsync(int templateId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowTemplate"))
+        {
+            return null;
+        }
+
         return await _context
             .Set<WorkflowTemplate>()
-            .FirstOrDefaultAsync(t => t.TemplateID == templateId && !t.is_deleted);
+            .FirstOrDefaultAsync(t => t.TemplateID == templateId);
     }
 
     public async Task<IEnumerable<WorkflowTemplate>> GetAllAsync()
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowTemplate"))
+        {
+            return [];
+        }
+
         return await _context
             .Set<WorkflowTemplate>()
-            .Where(t => !t.is_deleted)
             .OrderBy(t => t.Category)
             .ThenBy(t => t.TemplateName)
             .ToListAsync();
@@ -42,9 +51,14 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
 
     public async Task<IEnumerable<WorkflowTemplate>> GetActiveTemplatesAsync()
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowTemplate"))
+        {
+            return [];
+        }
+
         return await _context
             .Set<WorkflowTemplate>()
-            .Where(t => !t.is_deleted && t.IsActive)
+            .Where(t => t.IsActive)
             .OrderBy(t => t.Category)
             .ThenBy(t => t.TemplateName)
             .ToListAsync();
@@ -52,18 +66,27 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
 
     public async Task<IEnumerable<WorkflowTemplate>> GetByCategoryAsync(string category)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowTemplate"))
+        {
+            return [];
+        }
+
         return await _context
             .Set<WorkflowTemplate>()
-            .Where(t => !t.is_deleted && t.IsActive && t.Category == category)
+            .Where(t => t.IsActive && t.Category == category)
             .OrderBy(t => t.TemplateName)
             .ToListAsync();
     }
 
     public async Task<WorkflowTemplate> CreateAsync(WorkflowTemplate template, int currentUserId)
     {
-        template.date_created = DateTime.Now;
-        template.created_by_user_code = currentUserId;
-        template.is_deleted = false;
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowTemplate"))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("WorkflowTemplate")
+            );
+        }
 
         _context.Set<WorkflowTemplate>().Add(template);
         await _context.SaveChangesAsync();
@@ -79,6 +102,14 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
 
     public async Task UpdateAsync(WorkflowTemplate template, int currentUserId)
     {
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowTemplate"))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("WorkflowTemplate")
+            );
+        }
+
         var existingTemplate = await _context
             .Set<WorkflowTemplate>()
             .FirstOrDefaultAsync(t => t.TemplateID == template.TemplateID);
@@ -90,8 +121,6 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
 
         // Update using CurrentValues.SetValues for tracking-safe updates
         _context.Entry(existingTemplate).CurrentValues.SetValues(template);
-        existingTemplate.date_updated = DateTime.Now;
-        existingTemplate.modified_by_user_code = currentUserId;
 
         await _context.SaveChangesAsync();
 
@@ -104,6 +133,14 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
 
     public async Task DeleteAsync(int templateId, int currentUserId)
     {
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowTemplate"))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("WorkflowTemplate")
+            );
+        }
+
         var template = await _context
             .Set<WorkflowTemplate>()
             .FirstOrDefaultAsync(t => t.TemplateID == templateId);
@@ -113,15 +150,11 @@ public class WorkflowTemplateRepository : IWorkflowTemplateRepository
             throw new InvalidOperationException($"Template {templateId} not found");
         }
 
-        // Soft delete
-        template.is_deleted = true;
-        template.date_updated = DateTime.Now;
-        template.modified_by_user_code = currentUserId;
-
+        _context.Set<WorkflowTemplate>().Remove(template);
         await _context.SaveChangesAsync();
 
         _logger.LogInformation(
-            "Deleted (soft) workflow template {TemplateId}: {TemplateName}",
+            "Deleted workflow template {TemplateId}: {TemplateName}",
             templateId,
             template.TemplateName
         );

@@ -26,7 +26,7 @@ const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
     label: "Fleet operations",
     items: [
       { label: "Accidents", href: "/accidents", roles: ["Accidents"] },
-      { label: "Auction", href: "/auction", roles: ["Auction"], allRoles: ["Reports"] },
+      { label: "Auction", href: "/auction", roles: ["Auction"] },
       { label: "Call Centre", href: "/call-centre", roles: ["Call Centre"] },
       { label: "Clearance", href: "/clearance", roles: ["Clearance"] },
       { label: "Contracts", href: "/contracts", roles: ["Contracts"] },
@@ -39,7 +39,7 @@ const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
           "Financial Data (All Departments)",
         ],
       },
-      { label: "Fines", href: "/fines", roles: ["Fines"], allRoles: ["Reports"] },
+      { label: "Fines", href: "/fines", roles: ["Fines"] },
       { label: "Fuel Cards", href: "/fuel-cards", roles: ["Fuelcards"] },
       {
         label: "Job Cards",
@@ -52,9 +52,9 @@ const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
         href: "/log-books",
         roles: ["Logbooks", "SystemAdministrator", "System Administrator"],
       },
-      { label: "Log Sheets", href: "/log-sheets", roles: ["Logsheets"], allRoles: ["Reports"] },
+      { label: "Log Sheets", href: "/log-sheets", roles: ["Logsheets"] },
       { label: "Losses", href: "/losses", roles: ["Losses"] },
-      { label: "Monitor", href: "/monitor", roles: ["Monitor"], allRoles: ["Call Centre"] },
+      { label: "Monitor", href: "/monitor", roles: ["Monitor"] },
       { label: "Private Hire", href: "/private-hire", roles: ["Private Hire Vehicles"] },
       {
         label: "Reports",
