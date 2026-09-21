@@ -432,14 +432,22 @@ public class VehicleAuthorizationController : BaseApiController
             if (selfApprovalCheck != null)
                 return selfApprovalCheck;
 
-            await _repository.ApproveAsync(id, userId, authorizerComment);
+            var approvalResult = await _repository.ApproveAsync(id, userId, authorizerComment);
 
             _logger.LogInformation(
                 "Vehicle authorization {Id} approved by user {UserId}",
                 id,
                 userId
             );
-            return Ok(new { message = "Vehicle authorization approved successfully", id });
+            return Ok(
+                new
+                {
+                    message = BuildAuthorizationApprovedMessage(approvalResult),
+                    id,
+                    allocatedGgNumber = approvalResult.AllocatedGgNumber,
+                    availableGgNumbers = approvalResult.AvailableGgNumbers,
+                }
+            );
         }
         catch (KeyNotFoundException ex)
         {
@@ -963,6 +971,23 @@ public class VehicleAuthorizationController : BaseApiController
             totalRecords = page.TotalRecords,
             totalPages = page.TotalPages,
         };
+
+    private static string BuildAuthorizationApprovedMessage(
+        VehicleAuthorizationApprovalResult approval
+    )
+    {
+        if (string.IsNullOrWhiteSpace(approval.AllocatedGgNumber))
+        {
+            return "Vehicle authorization approved successfully";
+        }
+
+        if (approval.AvailableGgNumbers is >= 1 and <= 100 && approval.ReturnStatus == 1)
+        {
+            return $"Please note that the vehicle has been allocated with GG Number: {approval.AllocatedGgNumber}, also note that you have: [{approval.AvailableGgNumbers}] GG Numbers avalable in the System.";
+        }
+
+        return $"Please note that the vehicle has been allocated with GG Number: {approval.AllocatedGgNumber}.";
+    }
 
     private bool CanAccessAuthorizationQueue() =>
         HasSystemAdministratorRole() || HasAnyRole("vehicle inception authorizer");

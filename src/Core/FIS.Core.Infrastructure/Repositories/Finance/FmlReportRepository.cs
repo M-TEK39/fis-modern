@@ -531,6 +531,39 @@ public sealed class FmlReportRepository : IFmlReportRepository
         DbTransaction? transaction
     )
     {
+        var storedProcedureRows = await TryExecuteStoredProcedureAsync(
+            connection,
+            transaction,
+            "DEV_REP_LeaseVehiclesWithTariffsButNoContract",
+            null
+        );
+        if (storedProcedureRows is not null)
+        {
+            var records = storedProcedureRows
+                .Select(MapVehicleNoContractRecord)
+                .Where(record => record is not null)
+                .Cast<FmlVehicleNoContractRecord>()
+                .Select(
+                    (record, index) =>
+                        record with
+                        {
+                            VehicleCounter = record.VehicleCounter ?? index + 1,
+                        }
+                )
+                .ToList();
+            return new FmlVehiclesNoContractsReport(records);
+        }
+
+        return new FmlVehiclesNoContractsReport(
+            await QueryVehiclesNoContractsFallbackAsync(connection, transaction)
+        );
+    }
+
+    private async Task<IReadOnlyList<FmlVehicleNoContractRecord>> QueryVehiclesNoContractsFallbackAsync(
+        DbConnection connection,
+        DbTransaction? transaction
+    )
+    {
         var vehicleColumns = await GetColumnsAsync(connection, VehicleTable, transaction);
         var sourceColumns = await GetColumnsAsync(connection, VehicleSourceTable, transaction);
         var statusColumns = await GetColumnsAsync(connection, VehicleStatusTable, transaction);
@@ -556,19 +589,14 @@ public sealed class FmlReportRepository : IFmlReportRepository
             || !HasColumns(modelColumns, "model_code", "model_description", "class_code")
             || !HasColumns(classColumns, "class_code", "description")
             || !HasColumns(contractColumns, "vmf_code")
+            || !HasColumns(tariffColumns, "vmf_code")
         )
         {
-            return new FmlVehiclesNoContractsReport([]);
+            return [];
         }
 
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
-        var tariffJoin = HasColumns(tariffColumns, "vmf_code")
-            ? $"LEFT JOIN (SELECT DISTINCT [vmf_code] FROM [dbo].[{LeaseTariffTable}] WHERE {GetNotDeletedFilter(string.Empty, tariffColumns)}) AS [lt] ON [v].[vmf_code] = [lt].[vmf_code]"
-            : string.Empty;
-        var tariffPredicate = HasColumns(tariffColumns, "vmf_code")
-            ? "[lt].[vmf_code] IS NULL"
-            : "1 = 1";
         var notExistsContract =
             $"NOT EXISTS (SELECT 1 FROM [dbo].[{ContractTable}] AS [c] WHERE [c].[vmf_code] = [v].[vmf_code] AND {GetNotDeletedFilter("c", contractColumns)})";
 
@@ -588,10 +616,13 @@ public sealed class FmlReportRepository : IFmlReportRepository
             INNER JOIN [dbo].[{locationTable}] AS [l] ON [l].[location_code] = [v].[location_code]
             INNER JOIN [dbo].[{ModelTable}] AS [m] ON [v].[model_code] = [m].[model_code]
             INNER JOIN [dbo].[{ClassTable}] AS [cl] ON [m].[class_code] = [cl].[class_code]
-            {tariffJoin}
+            INNER JOIN (
+                SELECT DISTINCT [vmf_code]
+                FROM [dbo].[{LeaseTariffTable}]
+                WHERE {GetNotDeletedFilter(string.Empty, tariffColumns)}
+            ) AS [lt] ON [v].[vmf_code] = [lt].[vmf_code]
             WHERE [v].[vs_code] IN (2, 3)
               AND [v].[type_code] = 4
-              AND {tariffPredicate}
               AND {notExistsContract}
               AND {GetNotDeletedFilter("v", vehicleColumns)}
             ORDER BY [v].[fleet_number]
@@ -617,7 +648,7 @@ public sealed class FmlReportRepository : IFmlReportRepository
             );
         }
 
-        return new FmlVehiclesNoContractsReport(records);
+        return records;
     }
 
     private async Task<FmlOverUtilizedReport> QueryOverUtilizedAsync(
@@ -627,15 +658,14 @@ public sealed class FmlReportRepository : IFmlReportRepository
         DateTime? endDate
     )
     {
+        // User_Profile.GetOverUtilizedFMLVehiclesOnKm executes the procedure
+        // with no parameters. Rpt_OverUtilizedFMLVehiclesOnKm.aspx only uses
+        // Start_Date/End_Date for the page header.
         var storedProcedureRows = await TryExecuteStoredProcedureAsync(
             connection,
             transaction,
             "DEV_REP_OverUtilizedFMLVehiclesOnKm",
-            command =>
-            {
-                AddParameter(command, "@start_date", DbType.DateTime, startDate?.Date);
-                AddParameter(command, "@end_date", DbType.DateTime, endDate?.Date);
-            }
+            null
         );
 
         if (storedProcedureRows is not null)
@@ -846,6 +876,30 @@ public sealed class FmlReportRepository : IFmlReportRepository
             ReadString(row, "Contract Type", "contract_type"),
             ReadString(row, "Site Name", "site_name"),
             ReadDecimal(row, "fixed_tariff", "Fixed Tariff", "fixedTariff")
+        );
+    }
+
+    private static FmlVehicleNoContractRecord? MapVehicleNoContractRecord(
+        IReadOnlyDictionary<string, object?> row
+    )
+    {
+        var ggNumber = ReadString(row, "GG Number", "gg_number", "fleet_number");
+        if (ggNumber is null)
+        {
+            return null;
+        }
+
+        return new FmlVehicleNoContractRecord(
+            ReadInt32(row, "Vehicle Counter", "vehicle_counter", "rownumber"),
+            ggNumber,
+            ReadString(row, "Registration Number", "registration_number", "gp_number"),
+            ReadString(row, "Hired From", "hired_from"),
+            ReadString(row, "Vehicle Status", "vehicle_status"),
+            ReadString(row, "Location", "location"),
+            ReadInt16(row, "Year Model", "year_model"),
+            ReadString(row, "Model Description", "model_description"),
+            ReadString(row, "Class Description", "class_description"),
+            ReadDecimal(row, "Purchase Amount", "purchase_amount")
         );
     }
 
