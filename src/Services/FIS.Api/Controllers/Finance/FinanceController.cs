@@ -13,6 +13,7 @@ using System.Xml.Linq;
 using FIS.Api.Services.Finance;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
+using FIS.Core.Infrastructure.Repositories;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -43,6 +44,7 @@ public class FinanceController : BaseApiController
     private readonly ITariffParameterRepository _tariffParameters;
     private readonly IOverheadRepository _overheads;
     private readonly IMaintenanceValueRepository _maintenanceValues;
+    private readonly BasSegmentLookupOverlay _basSegmentLookup;
     private readonly FisDbContext _context;
     private readonly ILogger<FinanceController> _logger;
     private static readonly ConcurrentDictionary<Guid, ExportTaskState> ExportTasks = new();
@@ -60,6 +62,7 @@ public class FinanceController : BaseApiController
         ITariffParameterRepository tariffParameters,
         IOverheadRepository overheads,
         IMaintenanceValueRepository maintenanceValues,
+        BasSegmentLookupOverlay basSegmentLookup,
         FisDbContext context,
         ILogger<FinanceController> logger
     )
@@ -71,6 +74,7 @@ public class FinanceController : BaseApiController
         _tariffParameters = tariffParameters;
         _overheads = overheads;
         _maintenanceValues = maintenanceValues;
+        _basSegmentLookup = basSegmentLookup;
         _context = context;
         _logger = logger;
     }
@@ -904,6 +908,29 @@ public class FinanceController : BaseApiController
     {
         try
         {
+            IReadOnlyList<string>? orderedNumbers = null;
+            if (
+                departmentCode.HasValue
+                && byte.TryParse(segmentType?.Trim(), out var typeCode)
+                && typeCode is >= 1 and <= 6
+            )
+            {
+                orderedNumbers = await _basSegmentLookup.GetOrderedSegmentNumbersAsync(
+                    departmentCode.Value,
+                    typeCode
+                );
+                if (orderedNumbers is null)
+                {
+                    _logger.LogWarning(
+                        "DEV_SEL_BASSegments unavailable; returning leftover bassegment rows"
+                    );
+                }
+                else if (orderedNumbers.Count == 0)
+                {
+                    return Ok(Array.Empty<BasSegmentDto>());
+                }
+            }
+
             var query =
                 from seg in _context.BasSegments.AsNoTracking()
                 join grp in _context.SegmentGroups.AsNoTracking()
@@ -924,30 +951,50 @@ public class FinanceController : BaseApiController
                     SegmentTypeName = typ != null ? typ.segment_type_name : null,
                 };
 
-            if (departmentCode.HasValue)
+            if (orderedNumbers is null)
             {
-                var dept = (short)departmentCode.Value;
-                query = query.Where(x => x.department_code == dept);
+                if (departmentCode.HasValue)
+                {
+                    var dept = (short)departmentCode.Value;
+                    query = query.Where(x => x.department_code == dept);
+                }
+
+                if (!string.IsNullOrWhiteSpace(segmentType))
+                {
+                    var token = segmentType.Trim();
+                    query = query.Where(x =>
+                        (
+                            x.SegmentTypeName != null
+                            && EF.Functions.Like(x.SegmentTypeName, $"%{token}%")
+                        ) || (x.SegmentTypeCode.HasValue && x.SegmentTypeCode.Value.ToString() == token)
+                    );
+                }
+            }
+            else
+            {
+                var dept = (short)departmentCode.GetValueOrDefault();
+                var keys = orderedNumbers.ToList();
+                // The procedure returns RTRIM(segment_number); SQL Server equality ignores trailing spaces.
+                query = query
+                    .Where(x => x.department_code == dept)
+                    .Where(x => x.segment_number != null && keys.Contains(x.segment_number));
             }
 
-            if (!string.IsNullOrWhiteSpace(segmentType))
-            {
-                var token = segmentType.Trim();
-                query = query.Where(x =>
-                    (
-                        x.SegmentTypeName != null
-                        && EF.Functions.Like(x.SegmentTypeName, $"%{token}%")
-                    ) || (x.SegmentTypeCode.HasValue && x.SegmentTypeCode.Value.ToString() == token)
-                );
-            }
+            var rowsQuery = query.OrderBy(x => x.segment_number).ThenBy(x => x.segment_code);
+            var rows =
+                orderedNumbers is null
+                    ? await rowsQuery.Take(2000).ToListAsync()
+                    : await rowsQuery.ToListAsync();
 
-            var rows = await query
-                .OrderBy(x => x.segment_number)
-                .ThenBy(x => x.segment_code)
-                .Take(2000)
-                .ToListAsync();
+            var orderedRows =
+                orderedNumbers is null
+                    ? rows
+                    : BasSegmentLookupOverlay
+                        .OrderByKeys(rows, orderedNumbers, x => x.segment_number?.Trim())
+                        .Take(2000)
+                        .ToList();
 
-            var response = rows.Select(x => new BasSegmentDto
+            var response = orderedRows.Select(x => new BasSegmentDto
                 {
                     SegmentCode = x.segment_code,
                     SegmentNumber = x.segment_number ?? string.Empty,

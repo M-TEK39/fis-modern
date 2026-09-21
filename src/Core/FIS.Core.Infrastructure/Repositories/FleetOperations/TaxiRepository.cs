@@ -243,6 +243,20 @@ public sealed class TaxiRepository : ITaxiRepository
                 conditions.Add($"({string.Join(" OR ", searchPredicates)})");
         }
 
+        if (query.PendingOnly && !query.JiaPickupOnly)
+        {
+            var overlayPage = await TryGetPendingOverlayPageAsync(
+                columns,
+                conditions,
+                allowedSiteParameters,
+                searchTerm,
+                pageSize,
+                requestedPage
+            );
+            if (overlayPage is not null)
+                return overlayPage;
+        }
+
         if (query.PendingOnly)
         {
             if (columns.ContainsKey("cancelled"))
@@ -309,6 +323,108 @@ public sealed class TaxiRepository : ITaxiRepository
             items.Add(MapTaxi(reader));
 
         return new TaxiPage(items, page, pageSize, total);
+    }
+
+    /// <summary>
+    /// DEV_RPT_Today_Reqs decides pending membership and order; the leftover
+    /// Taxis query hydrates the modern entity. RPT_today_reqs.aspx:37-45 sends
+    /// an ignored site_code parameter.
+    /// </summary>
+    private async Task<TaxiPage?> TryGetPendingOverlayPageAsync(
+        IReadOnlyDictionary<string, ColumnInfo> columns,
+        IReadOnlyList<string> baseConditions,
+        IReadOnlyList<ReportParameter> allowedSiteParameters,
+        string searchTerm,
+        int pageSize,
+        int requestedPage
+    )
+    {
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_RPT_Today_Reqs",
+            [[], ["@site_code"]],
+            actual =>
+                actual.Count == 0
+                    ? null
+                    : command => AddParameter(command, actual[0], DbType.Int16, DBNull.Value),
+            "dbo"
+        );
+        if (rows is null)
+        {
+            // Absent or unreadable procedure: labelled leftover fallback (Overlay=false).
+            return null;
+        }
+
+        if (rows.Count == 0)
+            return new TaxiPage([], 1, pageSize, 0) { Overlay = true };
+
+        var keys = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var normalized = NormalizeKey(
+                LegacySelectorProcedure.ReadString(row, "rek_num", "RekNum", "Rek Num")
+            );
+            if (normalized.Length == 0 || !seen.Add(normalized))
+                continue;
+            keys.Add(normalized);
+        }
+
+        if (keys.Count == 0)
+        {
+            // Rows without a readable key: labelled leftover fallback (Overlay=false).
+            return null;
+        }
+
+        const int overlayBatchSize = 500;
+        var projection = string.Join(
+            ", ",
+            BusinessColumns
+                .Concat(AuditColumns)
+                .Select(column => GetProjection(columns, column, "t"))
+        );
+
+        var hydrated = new List<Taxi>();
+        await using var scope = await OpenConnectionAsync();
+        for (var offset = 0; offset < keys.Count; offset += overlayBatchSize)
+        {
+            var batch = keys.GetRange(offset, Math.Min(overlayBatchSize, keys.Count - offset));
+            var hydratedConditions = new List<string>(baseConditions)
+            {
+                $"UPPER(RTRIM(t.[rek_num])) IN ({string.Join(", ", batch.Select((_, index) => $"@overlayKey{index}"))})",
+            };
+            await using var command = scope.Connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                SELECT {projection},
+                       d.[department_code] AS [__department_code], d.[description] AS [__department_description],
+                       s.[Site_code] AS [__site_code], s.[description] AS [__site_description]
+                FROM [dbo].[{TableName}] t
+                LEFT JOIN [dbo].[department] d ON d.[department_code] = t.[department_code]
+                LEFT JOIN [dbo].[site] s ON s.[Site_code] = t.[site_code]
+                WHERE {string.Join(" AND ", hydratedConditions)}
+                """;
+            if (searchTerm.Length > 0)
+                AddParameter(command, "@search", DbType.String, searchTerm.ToLowerInvariant());
+            AddReportParameters(command, allowedSiteParameters);
+            for (var index = 0; index < batch.Count; index++)
+                AddParameter(command, $"@overlayKey{index}", DbType.String, batch[index]);
+
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                hydrated.Add(MapTaxi(reader));
+        }
+
+        var ordered = LegacySelectorProcedure
+            .OrderByKeys(hydrated, keys, taxi => NormalizeKey(taxi.rek_num))
+            .ToList();
+        var total = ordered.Count;
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        var page = Math.Min(requestedPage, totalPages);
+        var skip = (page - 1) * pageSize;
+        var items = ordered.Skip(skip).Take(pageSize).ToList();
+
+        return new TaxiPage(items, page, pageSize, total) { Overlay = true };
     }
 
     [SuppressMessage(

@@ -36,7 +36,13 @@ namespace FIS.Core.Application.Interfaces
         IReadOnlySet<short>? AllowedSiteCodes = null
     );
 
-    public sealed record TaxiPage(IReadOnlyList<Taxi> Items, int Page, int PageSize, int Total)
+    public sealed record TaxiPage(
+        IReadOnlyList<Taxi> Items,
+        int Page,
+        int PageSize,
+        int Total,
+        bool Overlay = false
+    )
     {
         public int TotalPages => Math.Max(1, (int)Math.Ceiling(Total / (double)PageSize));
     }

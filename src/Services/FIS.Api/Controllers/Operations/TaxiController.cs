@@ -82,6 +82,7 @@ public class TaxiController : BaseApiController
                     pageSize = result.PageSize,
                     total = result.Total,
                     totalPages = result.TotalPages,
+                    overlay = result.Overlay,
                 }
             );
         }
