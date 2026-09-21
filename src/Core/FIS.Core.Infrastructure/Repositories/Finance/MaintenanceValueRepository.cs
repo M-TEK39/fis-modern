@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
@@ -101,6 +102,81 @@ public class MaintenanceValueRepository : IMaintenanceValueRepository
             columns,
             "[class_code], [months_age], [kilometer_age]"
         );
+    }
+
+    public async Task<IReadOnlyList<TariffMaintenanceSnapshot>?> GetSelectorAsync(
+        int tariffParameterId
+    )
+    {
+        if (tariffParameterId <= 0)
+        {
+            return [];
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_MaintenanceValues_ByTariffParameterID",
+            [["@TariffParameterID"]],
+            _ =>
+                command =>
+                    AddParameter(command, "@TariffParameterID", DbType.Int32, tariffParameterId),
+            "fin"
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        var leftover = await GetByTariffParameterAsync(tariffParameterId);
+        var leftoverByKey = leftover
+            .GroupBy(item => (item.class_code, item.months_age, item.kilometer_age))
+            .ToDictionary(group => group.Key, group => group.First());
+        var items = new List<TariffMaintenanceSnapshot>();
+        foreach (var row in rows)
+        {
+            var classCode = LegacySelectorProcedure.ReadInt32(row, "class_code");
+            var monthsAge = LegacySelectorProcedure.ReadInt32(row, "months_age");
+            var kilometerAge = LegacySelectorProcedure.ReadInt32(row, "kilometer_age");
+            if (classCode is null || monthsAge is null || kilometerAge is null)
+            {
+                continue;
+            }
+
+            leftoverByKey.TryGetValue(
+                ((short)classCode.Value, (short)monthsAge.Value, kilometerAge.Value),
+                out var leftoverRow
+            );
+            items.Add(
+                new TariffMaintenanceSnapshot(
+                    (short)classCode.Value,
+                    LegacySelectorProcedure.ReadString(row, "class_description"),
+                    LegacySelectorProcedure.ReadString(row, "class_number")
+                        ?? leftoverRow?.class_number,
+                    LegacySelectorProcedure.ReadInt32(row, "class_ActiveVehicleCount"),
+                    (short?)LegacySelectorProcedure.ReadInt32(row, "prev_months_age"),
+                    LegacySelectorProcedure.ReadInt32(row, "prev_kilometer_age"),
+                    ReadDecimal(row, "prev_RandPerKilometer"),
+                    (short)monthsAge.Value,
+                    kilometerAge.Value,
+                    ReadDecimal(row, "amount") ?? leftoverRow?.amount ?? 0m,
+                    ReadDecimal(row, "RandPerKilometer")
+                        ?? leftoverRow?.RandPerKilometer
+                        ?? 0m
+                )
+            );
+        }
+
+        if (rows.Count > 0 && items.Count == 0)
+        {
+            return null;
+        }
+
+        return items;
     }
 
     public async Task<List<MaintenanceValue>> GetByClassAsync(int tariffParameterId, int classCode)
@@ -492,6 +568,28 @@ public class MaintenanceValueRepository : IMaintenanceValueRepository
         parameter.DbType = type;
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
+    }
+
+    private static decimal? ReadDecimal(
+        IReadOnlyDictionary<string, object?> row,
+        params string[] keys
+    )
+    {
+        var text = LegacySelectorProcedure.ReadString(row, keys);
+        if (
+            text is not null
+            && decimal.TryParse(
+                text,
+                NumberStyles.Number,
+                CultureInfo.InvariantCulture,
+                out var parsed
+            )
+        )
+        {
+            return parsed;
+        }
+
+        return null;
     }
 
     private sealed record WriteValue(string Column, string Parameter, DbType DbType, object? Value);

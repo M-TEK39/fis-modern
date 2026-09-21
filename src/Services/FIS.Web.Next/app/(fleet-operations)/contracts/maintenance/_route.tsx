@@ -384,8 +384,8 @@ function ContractTable({
     return (
       <div className="vehicle-empty-state">
         <p className="eyebrow">No records found</p>
-        <h2>No contracts matched the selected filters.</h2>
-        <p className="muted-copy">Search for a vehicle or adjust the contract filters.</p>
+        <h2>No pending contracts require action.</h2>
+        <p className="muted-copy">Search for a vehicle or wait for a contract to enter the action queue.</p>
       </div>
     );
   return (
@@ -536,7 +536,7 @@ function ContractResultsSection({
           <p className="eyebrow">
             {pageData.totalRecords} record{pageData.totalRecords === 1 ? "" : "s"}
           </p>
-          <h2 id="contract-results-title">Existing contracts</h2>
+          <h2 id="contract-results-title">Pending Contracts</h2>
         </div>
       </div>
       <ContractTable contracts={pageData.items} session={session} />

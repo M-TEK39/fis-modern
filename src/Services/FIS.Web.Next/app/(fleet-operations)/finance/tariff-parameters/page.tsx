@@ -63,7 +63,7 @@ function formatDate(value: string | null) {
 function optionList(options: FinanceOption[]) {
   return (
     <>
-      <option value="">Select Year</option>
+      <option value="">-- Please Select Fiscal Year --</option>
       {options.map((item) => (
         <option key={item.value} value={item.value}>
           {item.label}
@@ -110,34 +110,32 @@ function ParameterTable({ data }: Readonly<{ data: FinanceTariffParameters }>) {
       </section>
       <section className="vehicle-status-maintenance-panel" aria-labelledby="fixed-tariffs">
         <div className="vehicle-form-section-header">
-          <h2 id="fixed-tariffs">Fixed Tariffs</h2>
+          <h2 id="fixed-tariffs">Fixed Tariff</h2>
         </div>
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
-            <caption className="sr-only">Fixed tariffs</caption>
+            <caption className="sr-only">Fixed tariff overheads</caption>
             <DataTableHeader
               columns={[
-                { key: "column-1", label: <>Class Code</> },
-                { key: "column-2", label: <>Class Description</> },
-                { key: "column-3", label: <>Amount</> },
-                { key: "column-4", label: <>Unit</> },
-                { key: "column-5", label: <>Effective Date</> },
+                { key: "column-1", label: <>Overhead Description</> },
+                { key: "column-2", label: <>Previous Amount</> },
+                { key: "column-3", label: <>Overhead Amount</> },
+                { key: "column-4", label: <>Overhead Note</> },
               ]}
             />
             <tbody>
               {data.fixedTariffs.length > 0 ? (
                 data.fixedTariffs.map((item) => (
-                  <tr key={`${item.classCode ?? "class"}-${item.effectiveDate ?? "date"}`}>
-                    <td>{item.classCode ?? "-"}</td>
-                    <td>{item.classDescription || "-"}</td>
+                  <tr key={item.overheadId ?? item.overheadDescription}>
+                    <td>{item.overheadDescription || "-"}</td>
+                    <td>{formatNumber(item.previousAmount)}</td>
                     <td>{formatNumber(item.amount)}</td>
-                    <td>{item.unit || "-"}</td>
-                    <td>{formatDate(item.effectiveDate)}</td>
+                    <td>{item.note || "-"}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5}>No fixed tariffs found.</td>
+                  <td colSpan={4}>No fixed tariff overheads found.</td>
                 </tr>
               )}
             </tbody>
@@ -146,34 +144,32 @@ function ParameterTable({ data }: Readonly<{ data: FinanceTariffParameters }>) {
       </section>
       <section className="vehicle-status-maintenance-panel" aria-labelledby="kilo-tariffs">
         <div className="vehicle-form-section-header">
-          <h2 id="kilo-tariffs">Kilometre Tariffs</h2>
+          <h2 id="kilo-tariffs">Kilo Tariff</h2>
         </div>
         <div className="vehicle-table-wrapper">
           <table className="vehicle-table">
-            <caption className="sr-only">Kilometre tariffs</caption>
+            <caption className="sr-only">Kilo tariff overheads</caption>
             <DataTableHeader
               columns={[
-                { key: "column-1", label: <>Class Code</> },
-                { key: "column-2", label: <>Class Description</> },
-                { key: "column-3", label: <>Amount</> },
-                { key: "column-4", label: <>Unit</> },
-                { key: "column-5", label: <>Effective Date</> },
+                { key: "column-1", label: <>Overhead Description</> },
+                { key: "column-2", label: <>Previous Amount</> },
+                { key: "column-3", label: <>Overhead Amount</> },
+                { key: "column-4", label: <>Overhead Note</> },
               ]}
             />
             <tbody>
               {data.kiloTariffs.length > 0 ? (
                 data.kiloTariffs.map((item) => (
-                  <tr key={`${item.classCode ?? "class"}-${item.effectiveDate ?? "date"}`}>
-                    <td>{item.classCode ?? "-"}</td>
-                    <td>{item.classDescription || "-"}</td>
+                  <tr key={item.overheadId ?? item.overheadDescription}>
+                    <td>{item.overheadDescription || "-"}</td>
+                    <td>{formatNumber(item.previousAmount)}</td>
                     <td>{formatNumber(item.amount)}</td>
-                    <td>{item.unit || "-"}</td>
-                    <td>{formatDate(item.effectiveDate)}</td>
+                    <td>{item.note || "-"}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5}>No kilometre tariffs found.</td>
+                  <td colSpan={4}>No kilo tariff overheads found.</td>
                 </tr>
               )}
             </tbody>
@@ -189,11 +185,15 @@ function ParameterTable({ data }: Readonly<{ data: FinanceTariffParameters }>) {
             <caption className="sr-only">Maintenance values</caption>
             <DataTableHeader
               columns={[
-                { key: "column-1", label: <>Class</> },
-                { key: "column-2", label: <>Months Age</> },
-                { key: "column-3", label: <>KM Age</> },
-                { key: "column-4", label: <>Maintenance Value</> },
-                { key: "column-5", label: <>Rand per KM</> },
+                { key: "column-1", label: <>Description</> },
+                { key: "column-2", label: <>Number</> },
+                { key: "column-3", label: <>Assigned</> },
+                { key: "column-4", label: <>Previous Months Age</> },
+                { key: "column-5", label: <>Previous Kilometer Age</> },
+                { key: "column-6", label: <>Previous R/KM Value</> },
+                { key: "column-7", label: <>Months Age</> },
+                { key: "column-8", label: <>Kilometer Age</> },
+                { key: "column-9", label: <>R/KM Value</> },
               ]}
             />
             <tbody>
@@ -203,15 +203,19 @@ function ParameterTable({ data }: Readonly<{ data: FinanceTariffParameters }>) {
                     key={`${item.classCode ?? item.classDescription ?? "class"}-${item.monthsAge ?? "months"}-${item.kilometerAge ?? "km"}`}
                   >
                     <td>{item.classDescription || item.classCode || "-"}</td>
+                    <td>{item.classNumber || "-"}</td>
+                    <td>{item.assignedCount ?? "-"}</td>
+                    <td>{item.previousMonthsAge ?? "-"}</td>
+                    <td>{item.previousKilometerAge ?? "-"}</td>
+                    <td>{formatNumber(item.previousRandPerKilometer)}</td>
                     <td>{item.monthsAge ?? "-"}</td>
                     <td>{item.kilometerAge ?? "-"}</td>
-                    <td>{formatNumber(item.amount)}</td>
                     <td>{formatNumber(item.randPerKilometer)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5}>No maintenance values found.</td>
+                  <td colSpan={9}>No maintenance values found.</td>
                 </tr>
               )}
             </tbody>
@@ -253,12 +257,17 @@ async function renderTariffParametersContent({
   const yearText = queryValue(query, "year");
   const selectedYear = numberValue(yearText);
   let years: FinanceOption[] = [];
+  let overlayYears = false;
   let data: FinanceTariffParameters | null = null;
   let error: string | null = null;
   try {
-    years = await getFinanceTariffYears();
+    const yearOptions = await getFinanceTariffYears();
+    years = yearOptions.options;
+    overlayYears = yearOptions.overlay;
     if (yearText && !selectedYear) error = "Select a valid tariff parameter year.";
-    if (selectedYear) data = await getFinanceTariffParameters(selectedYear);
+    if (selectedYear) data = await getFinanceTariffParameters(selectedYear, overlayYears);
+    if (overlayYears && years.length === 0)
+      error = error ?? "No fiscal years are linked.";
   } catch (caught) {
     error =
       caught instanceof FinanceApiError

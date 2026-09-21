@@ -443,6 +443,7 @@ export async function getContractPage(
     startDateFrom?: string | null;
     startDateTo?: string | null;
     vmfCode?: number | null;
+    list?: "action-required" | "backdating-action-required" | null;
   } = {},
 ) {
   const page = Math.max(1, options.page ?? 1);
@@ -457,6 +458,7 @@ export async function getContractPage(
   if (options.startDateTo) params.set("startDateTo", options.startDateTo);
   if (options.vmfCode !== null && options.vmfCode !== undefined)
     params.set("vmfCode", String(options.vmfCode));
+  if (options.list) params.set("list", options.list);
 
   return mapPage(
     await readJson(await requestApi(`api/contracts?${params.toString()}`)),

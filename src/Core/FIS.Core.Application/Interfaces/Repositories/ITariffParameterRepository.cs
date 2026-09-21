@@ -36,6 +36,20 @@ public interface ITariffParameterRepository
     Task<List<TariffParameter>> GetAllAsync();
 
     /// <summary>
+    /// Archive Fiscal_TariffParameter_Management years dropdown uses
+    /// fin.DEV_SEL_TariffParameter_Lookup with DataTextField DropdownText
+    /// and DataValueField TariffParameterID.
+    /// </summary>
+    Task<IReadOnlyList<TariffParameterLookup>?> GetLookupAsync();
+
+    /// <summary>
+    /// Archive gvOverhead_General_Bind uses
+    /// fin.DEV_SEL_TariffParameter_ByTariffParameterID @TariffParameterID.
+    /// Null means the procedure is absent; empty means it returned no row.
+    /// </summary>
+    Task<IReadOnlyList<TariffParameter>?> GetBySelectorIdAsync(int tariffParameterId);
+
+    /// <summary>
     /// Get approved tariff parameters only.
     /// </summary>
     /// <returns>List of approved tariff parameters</returns>
@@ -68,3 +82,5 @@ public interface ITariffParameterRepository
     /// <returns>True if exists, false otherwise</returns>
     Task<bool> ExistsForYearAsync(int year);
 }
+
+public sealed record TariffParameterLookup(int TariffParameterId, string? DropdownText);

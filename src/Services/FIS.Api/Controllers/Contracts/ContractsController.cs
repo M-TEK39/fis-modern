@@ -328,6 +328,23 @@ public class ContractsController : BaseApiController
     private bool HasAllSitesInDepartmentRole() =>
         HasAnyRole("vehicle list for all sites in department");
 
+    private async Task<ContractActionRequiredQuery> ResolveActionRequiredSelectorAsync(
+        int page,
+        int pageSize
+    )
+    {
+        var scope = await ResolveContractLocationScopeAsync();
+        return new ContractActionRequiredQuery(
+            page,
+            pageSize,
+            scope?.DepartmentCode,
+            scope?.SiteCode,
+            scope is not null
+                && !scope.HasUnrestrictedLegacyScope
+                && !scope.HasAllSitesInDepartmentScope
+        );
+    }
+
     private async Task<ContractLocationScope?> ResolveContractLocationScopeAsync()
     {
         var userAccessCode = GetCurrentUserId();
@@ -1017,11 +1034,20 @@ public class ContractsController : BaseApiController
         [FromQuery] string? stillCurrent = null,
         [FromQuery] DateTime? startDateFrom = null,
         [FromQuery] DateTime? startDateTo = null,
-        [FromQuery] int? vmfCode = null
+        [FromQuery] int? vmfCode = null,
+        [FromQuery] string? list = null
     )
     {
         try
         {
+            var listKind = list?.Trim().ToLowerInvariant();
+            if (listKind is not (null or "" or "action-required" or "backdating-action-required"))
+            {
+                return BadRequest(
+                    new { error = "List must be action-required or backdating-action-required." }
+                );
+            }
+
             var allowedSiteCodes = await ResolveAllowedContractSiteCodesAsync();
             if (allowedSiteCodes is not null)
             {
@@ -1030,20 +1056,32 @@ public class ContractsController : BaseApiController
                 siteCode = null;
             }
 
-            var result = await _contractRepository.GetPageAsync(
-                new ContractPageQuery(
-                    page,
-                    pageSize,
-                    status,
-                    siteCode,
-                    stillCurrent,
-                    startDateFrom,
-                    startDateTo,
-                    vmfCode,
-                    allowedSiteCodes,
-                    HasGlobalContractVisibility() ? null : GetCurrentUserId()
-                )
+            var leftover = new ContractPageQuery(
+                page,
+                pageSize,
+                status,
+                siteCode,
+                stillCurrent,
+                startDateFrom,
+                startDateTo,
+                vmfCode,
+                allowedSiteCodes,
+                HasGlobalContractVisibility() ? null : GetCurrentUserId()
             );
+            var selector = await ResolveActionRequiredSelectorAsync(page, pageSize);
+            var result = listKind switch
+            {
+                "action-required" => await _contractRepository.GetActionRequiredPageAsync(
+                    selector,
+                    leftover
+                ),
+                "backdating-action-required" =>
+                    await _contractRepository.GetBackdatingAuthorisationActionRequiredPageAsync(
+                        selector,
+                        leftover
+                    ),
+                _ => await _contractRepository.GetPageAsync(leftover),
+            };
 
             return Ok(
                 new

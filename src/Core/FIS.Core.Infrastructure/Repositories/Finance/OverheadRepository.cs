@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
@@ -61,6 +62,74 @@ public class OverheadRepository : IOverheadRepository
             tariffParameterId
         );
         return await QueryAsync(predicate, configure, columns, "[OverheadTypeId], [OverheadId]");
+    }
+
+    public async Task<IReadOnlyList<TariffOverheadSnapshot>?> GetSelectorAsync(int tariffParameterId)
+    {
+        if (tariffParameterId <= 0)
+        {
+            return [];
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_Overhead_ByTariffParameterID",
+            [["@TariffParameterID"]],
+            _ =>
+                command =>
+                    AddParameter(command, "@TariffParameterID", DbType.Int32, tariffParameterId),
+            "fin"
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        var leftoverById = (await GetByTariffParameterAsync(tariffParameterId))
+            .GroupBy(item => item.OverheadId)
+            .ToDictionary(group => group.Key, group => group.First());
+        var items = new List<TariffOverheadSnapshot>();
+        foreach (var row in rows)
+        {
+            var overheadId = LegacySelectorProcedure.ReadInt32(row, "OverheadID", "OverheadId");
+            var typeId = LegacySelectorProcedure.ReadInt32(
+                row,
+                "OverheadTypeID",
+                "OverheadTypeId"
+            );
+            if (overheadId is null or <= 0 || typeId is null)
+            {
+                continue;
+            }
+
+            leftoverById.TryGetValue(overheadId.Value, out var leftover);
+            var amount =
+                ReadDecimal(row, "OverheadAmount") ?? leftover?.OverheadAmount ?? 0m;
+            items.Add(
+                new TariffOverheadSnapshot(
+                    overheadId.Value,
+                    (byte)typeId.Value,
+                    LegacySelectorProcedure.ReadString(row, "OverheadDescription")
+                        ?? leftover?.OverheadDescription,
+                    ReadDecimal(row, "prev_OverheadAmount"),
+                    amount,
+                    LegacySelectorProcedure.ReadString(row, "OverheadNote")
+                        ?? leftover?.OverheadNote
+                )
+            );
+        }
+
+        if (rows.Count > 0 && items.Count == 0)
+        {
+            return null;
+        }
+
+        return items;
     }
 
     public async Task<Overhead?> GetByTypeAsync(int tariffParameterId, int overheadTypeId)
@@ -531,6 +600,28 @@ public class OverheadRepository : IOverheadRepository
         parameter.DbType = type;
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
+    }
+
+    private static decimal? ReadDecimal(
+        IReadOnlyDictionary<string, object?> row,
+        params string[] keys
+    )
+    {
+        var text = LegacySelectorProcedure.ReadString(row, keys);
+        if (
+            text is not null
+            && decimal.TryParse(
+                text,
+                NumberStyles.Number,
+                CultureInfo.InvariantCulture,
+                out var parsed
+            )
+        )
+        {
+            return parsed;
+        }
+
+        return null;
     }
 
     private sealed record WriteValue(string Column, string Parameter, DbType DbType, object? Value);

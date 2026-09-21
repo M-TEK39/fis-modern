@@ -20,8 +20,15 @@ export async function loadBackdatingApprovalData(
   searchQuery: string,
 ): Promise<BackdatingApprovalData> {
   try {
+    const pending = (
+      await getContractPage({
+        page: 1,
+        pageSize: 100,
+        list: "backdating-action-required",
+        statusCode: 1,
+      })
+    ).items;
     if (!searchQuery) {
-      const pending = (await getContractPage({ page: 1, pageSize: 100, statusCode: 1 })).items;
       return { kind: "ok", pending, vehicles: [] };
     }
 
@@ -31,14 +38,7 @@ export async function loadBackdatingApprovalData(
       const value = searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber;
       return value?.toLocaleLowerCase().includes(normalizedQuery) === true;
     });
-    const pages = await Promise.all(
-      vehicles
-        .slice(0, 10)
-        .map((vehicle) =>
-          getContractPage({ page: 1, pageSize: 100, statusCode: 1, vmfCode: vehicle.vmfCode }),
-        ),
-    );
-    return { kind: "ok", pending: pages.flatMap((page) => page.items), vehicles };
+    return { kind: "ok", pending, vehicles };
   } catch (error) {
     if (error instanceof ContractApiError && error.reason === "unauthorized")
       return { kind: "unauthorized" };

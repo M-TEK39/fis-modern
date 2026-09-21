@@ -574,6 +574,14 @@ public interface IContractRepository
     Task<IEnumerable<Contract>> GetContractsByVehicleAsync(int vmfCode);
     Task<IEnumerable<Contract>> GetAllAsync();
     Task<ContractPage> GetPageAsync(ContractPageQuery query);
+    Task<ContractPage> GetActionRequiredPageAsync(
+        ContractActionRequiredQuery selector,
+        ContractPageQuery leftover
+    );
+    Task<ContractPage> GetBackdatingAuthorisationActionRequiredPageAsync(
+        ContractActionRequiredQuery selector,
+        ContractPageQuery leftover
+    );
     Task<IEnumerable<ContractVehicleLookup>> SearchVehiclesForContractsAsync(
         string searchTerm,
         IReadOnlyCollection<short>? allowedSiteCodes = null
@@ -641,6 +649,14 @@ public sealed record ContractPageQuery(
     int? VmfCode = null,
     IReadOnlyCollection<short>? AllowedSiteCodes = null,
     int? OwnerUserCode = null
+);
+
+public sealed record ContractActionRequiredQuery(
+    int Page = 1,
+    int PageSize = 24,
+    int? UserDeptCode = null,
+    int? UserSiteCode = null,
+    bool UserSiteContextOnly = false
 );
 
 public sealed record ContractPage(

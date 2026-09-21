@@ -240,6 +240,26 @@ public class ContractRepository : IContractRepository
         return new ContractPage(items, total, page, pageSize);
     }
 
+    public Task<ContractPage> GetActionRequiredPageAsync(
+        ContractActionRequiredQuery selector,
+        ContractPageQuery leftover
+    ) =>
+        GetSelectorPageAsync(
+            "DEV_SEL_Contract_ActionRequired",
+            selector,
+            leftover
+        );
+
+    public Task<ContractPage> GetBackdatingAuthorisationActionRequiredPageAsync(
+        ContractActionRequiredQuery selector,
+        ContractPageQuery leftover
+    ) =>
+        GetSelectorPageAsync(
+            "DEV_SEL_Contract_BackDatingAuthorisation_ActionRequired",
+            selector,
+            leftover
+        );
+
     public async Task<IEnumerable<ContractVehicleLookup>> SearchVehiclesForContractsAsync(
         string searchTerm,
         IReadOnlyCollection<short>? allowedSiteCodes = null
@@ -1967,6 +1987,86 @@ public class ContractRepository : IContractRepository
                 $"The legacy contract-close workflow did not preserve the billing boundary: {string.Join(", ", differences)}. The close was not accepted."
             );
         }
+    }
+
+    private async Task<ContractPage> GetSelectorPageAsync(
+        string procedureName,
+        ContractActionRequiredQuery selector,
+        ContractPageQuery leftover
+    )
+    {
+        var overlay = await OverlayContractsFromSelectorAsync(procedureName, selector);
+        if (overlay is not null)
+        {
+            return PaginateContracts(overlay, leftover.Page, leftover.PageSize);
+        }
+
+        return await GetPageAsync(leftover);
+    }
+
+    private async Task<IReadOnlyList<Contract>?> OverlayContractsFromSelectorAsync(
+        string procedureName,
+        ContractActionRequiredQuery selector
+    )
+    {
+        var keys = await LegacySelectorProcedure.TryReadOrderedKeysAsync(
+            _context,
+            procedureName,
+            ["@UserDeptCode", "@UserSiteCode", "@UserSiteContextOnly"],
+            command =>
+            {
+                AddParameter(command, "@UserDeptCode", DbType.Int32, selector.UserDeptCode);
+                AddParameter(command, "@UserSiteCode", DbType.Int32, selector.UserSiteCode);
+                AddParameter(
+                    command,
+                    "@UserSiteContextOnly",
+                    DbType.Boolean,
+                    selector.UserSiteContextOnly
+                );
+            },
+            "contract_code",
+            "ContractCode",
+            "Contract Code"
+        );
+        if (keys is null)
+        {
+            return null;
+        }
+
+        if (keys.Count == 0)
+        {
+            return [];
+        }
+
+        var (contractColumns, vehicleColumns, siteColumns) = await GetProjectionColumnsAsync();
+        var parameters = keys
+            .Select((key, index) => new QueryParameter($"@overlayKey{index}", DbType.Int32, key))
+            .ToArray();
+        var inList = string.Join(", ", keys.Select((_, index) => $"@overlayKey{index}"));
+        var leftover = await QueryAsync(
+            contractColumns,
+            vehicleColumns,
+            siteColumns,
+            $"[c].[contract_code] IN ({inList})",
+            parameters,
+            "[c].[contract_code] DESC"
+        );
+        return LegacySelectorProcedure.OrderByKeys(leftover, keys, contract => contract.contract_code);
+    }
+
+    private static ContractPage PaginateContracts(
+        IReadOnlyList<Contract> items,
+        int page,
+        int pageSize
+    )
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var total = items.Count;
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = checked((page - 1) * pageSize);
+        return new ContractPage(items.Skip(skip).Take(pageSize).ToList(), total, page, pageSize);
     }
 
     private async Task<(

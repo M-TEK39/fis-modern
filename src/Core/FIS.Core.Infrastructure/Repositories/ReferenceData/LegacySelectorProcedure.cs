@@ -161,7 +161,8 @@ internal static class LegacySelectorProcedure
             return await GetProcedureParametersAsync(
                 connection,
                 context.Database.CurrentTransaction?.GetDbTransaction(),
-                procedureName
+                procedureName,
+                "dbo"
             );
         }
         finally
@@ -220,7 +221,8 @@ internal static class LegacySelectorProcedure
         FisDbContext context,
         string procedureName,
         IReadOnlyList<string[]> acceptedParameterSets,
-        Func<IReadOnlyList<string>, Action<DbCommand>?> bindForActualParameters
+        Func<IReadOnlyList<string>, Action<DbCommand>?> bindForActualParameters,
+        string schemaName = "dbo"
     )
     {
         var connection = context.Database.GetDbConnection();
@@ -236,7 +238,8 @@ internal static class LegacySelectorProcedure
             var actualParameters = await GetProcedureParametersAsync(
                 connection,
                 transaction,
-                procedureName
+                procedureName,
+                schemaName
             );
             if (actualParameters is null)
             {
@@ -257,7 +260,8 @@ internal static class LegacySelectorProcedure
                 connection,
                 transaction,
                 procedureName,
-                bindForActualParameters(actualParameters)
+                bindForActualParameters(actualParameters),
+                schemaName
             );
             return rows.ConvertAll(row => (IReadOnlyDictionary<string, object?>)row);
         }
@@ -287,15 +291,16 @@ internal static class LegacySelectorProcedure
         string[] expectedParameters
     )
     {
-        var actualParameters = await GetProcedureParametersAsync(
-            connection,
-            transaction,
-            procedureName
-        );
-        if (actualParameters is null)
-        {
-            return false;
-        }
+            var actualParameters = await GetProcedureParametersAsync(
+                connection,
+                transaction,
+                procedureName,
+                "dbo"
+            );
+            if (actualParameters is null)
+            {
+                return false;
+            }
 
         if (!actualParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
         {
@@ -310,7 +315,8 @@ internal static class LegacySelectorProcedure
     private static async Task<List<string>?> GetProcedureParametersAsync(
         DbConnection connection,
         DbTransaction? transaction,
-        string procedureName
+        string procedureName,
+        string schemaName
     )
     {
         await using var command = connection.CreateCommand();
@@ -323,10 +329,11 @@ internal static class LegacySelectorProcedure
             LEFT JOIN [sys].[parameters] AS [parameterObject]
                 ON [parameterObject].[object_id] = [procedureObject].[object_id]
                AND [parameterObject].[parameter_id] > 0
-            WHERE [schemaObject].[name] = N'dbo'
+            WHERE [schemaObject].[name] = @schemaName
               AND [procedureObject].[name] = @procedureName
             ORDER BY [parameterObject].[parameter_id]
             """;
+        AddParameter(command, "@schemaName", DbType.String, schemaName);
         AddParameter(command, "@procedureName", DbType.String, procedureName);
 
         var actualParameters = new List<string>();
@@ -353,13 +360,14 @@ internal static class LegacySelectorProcedure
         DbConnection connection,
         DbTransaction? transaction,
         string procedureName,
-        Action<DbCommand>? bind
+        Action<DbCommand>? bind,
+        string schemaName = "dbo"
     )
     {
         await using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandType = CommandType.StoredProcedure;
-        command.CommandText = $"dbo.{procedureName}";
+        command.CommandText = QualifyProcedureName(schemaName, procedureName);
         bind?.Invoke(command);
 
         var rows = new List<Dictionary<string, object?>>();
@@ -426,6 +434,27 @@ internal static class LegacySelectorProcedure
         }
 
         return null;
+    }
+
+    private static string QualifyProcedureName(string schemaName, string procedureName)
+    {
+        if (
+            !string.Equals(schemaName, "dbo", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(schemaName, "fin", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            throw new ArgumentOutOfRangeException(nameof(schemaName));
+        }
+
+        if (
+            string.IsNullOrWhiteSpace(procedureName)
+            || procedureName.IndexOfAny([']', '.', ';', ' ', '\n', '\r']) >= 0
+        )
+        {
+            throw new ArgumentException("Procedure name is not an allow-listed identifier.", nameof(procedureName));
+        }
+
+        return $"[{schemaName}].[{procedureName}]";
     }
 
     private static void AddParameter(DbCommand command, string name, DbType type, object? value)

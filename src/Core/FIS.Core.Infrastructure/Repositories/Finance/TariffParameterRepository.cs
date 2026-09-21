@@ -102,6 +102,78 @@ public class TariffParameterRepository : ITariffParameterRepository
         );
     }
 
+    public async Task<IReadOnlyList<TariffParameterLookup>?> GetLookupAsync()
+    {
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_TariffParameter_Lookup",
+            [[]],
+            _ => null,
+            "fin"
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        var items = new List<TariffParameterLookup>();
+        foreach (var row in rows)
+        {
+            var tariffParameterId = LegacySelectorProcedure.ReadInt32(
+                row,
+                "TariffParameterID"
+            );
+            if (tariffParameterId is null or <= 0)
+            {
+                continue;
+            }
+
+            items.Add(
+                new TariffParameterLookup(
+                    tariffParameterId.Value,
+                    LegacySelectorProcedure.ReadString(row, "DropdownText")
+                )
+            );
+        }
+
+        if (rows.Count > 0 && items.Count == 0)
+        {
+            return null;
+        }
+
+        return items;
+    }
+
+    public async Task<IReadOnlyList<TariffParameter>?> GetBySelectorIdAsync(int tariffParameterId)
+    {
+        if (tariffParameterId <= 0)
+        {
+            return [];
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_TariffParameter_ByTariffParameterID",
+            [["@TariffParameterID"]],
+            _ =>
+                command =>
+                    AddParameter(command, "@TariffParameterID", DbType.Int32, tariffParameterId),
+            "fin"
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        var leftover = await GetByIdAsync(tariffParameterId);
+        return leftover is null ? null : [leftover];
+    }
+
     public async Task<List<TariffParameter>> GetApprovedAsync()
     {
         var columns = await GetAvailableColumnsAsync();
