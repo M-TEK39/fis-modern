@@ -369,6 +369,7 @@ async function AuthorisersContent({ searchParams }: Readonly<{ searchParams: Sea
       getDriverManagementAuthorisersPage(siteCode, {
         page: requestedPage,
         pageSize: DEFAULT_DRIVER_MANAGEMENT_PAGE_SIZE,
+        departmentCode,
       }),
       getDriverManagementDepartments(),
       getDriverManagementSites(departmentCode),

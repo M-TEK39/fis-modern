@@ -538,13 +538,16 @@ export async function getDriverManagementAuthorisers(siteCode: number) {
 
 export async function getDriverManagementAuthorisersPage(
   siteCode: number,
-  options: { page?: number; pageSize?: number } = {},
+  options: { page?: number; pageSize?: number; departmentCode?: number } = {},
 ): Promise<DriverManagementPage<DriverManagementAuthoriser>> {
   const params = new URLSearchParams({
     siteCode: String(siteCode),
     page: String(normalizePage(options.page)),
     pageSize: String(normalizePageSize(options.pageSize)),
   });
+  if (options.departmentCode !== undefined && options.departmentCode > 0) {
+    params.set("departmentCode", String(options.departmentCode));
+  }
   const response = await requestApi(`api/authorisers/page?${params.toString()}`);
   return readPage(await readJson(response), mapAuthoriser);
 }
