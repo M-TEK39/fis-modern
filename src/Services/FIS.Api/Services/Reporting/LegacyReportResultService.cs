@@ -354,49 +354,51 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         return key switch
         {
             // Top-level menu keys that should resolve to concrete dynamic definitions
-            "asset-verification" => "asset-list",
-            "auction" => "vehicle-disposals",
-            "class-code" => "tariffs-class-2007",
-            "class-code-totals" => "tariffs-class-2007",
-            "clearance" => "unallocated-vehicles",
-            "fuel-cards" => "wesbank",
-            "registration-certificate-one-vehicle" => "registration-certificates",
-            "tariffs-class-codes" => "tariffs-class-2007",
-            "tariffs-licence-fees" => "tariffs-fin-year",
-            "tariffs-make-model" => "tariffs-fin-year",
-            "tariffs-private-taxi" => "tariffs-fin-year",
-            "users" => "audit-trail",
-            "users-added" => "audit-trail",
-            "users-one" => "audit-trail",
-            "vehicle-by-barcode" => "vehicles",
-            "vehicles-with-history" => "vehicles",
+            "asset-verification" => "asset-verification",
+            "auction" => "auction",
+            "class-code" => "class-code",
+            "class-code-totals" => "class-code-totals",
+            "clearance" => "clearance-universal",
+            "fuel-cards" => "fuel-cards",
+            "registration-certificate-one-vehicle" => "registration-certificate-one-vehicle",
+            "tariffs-class-codes" => "tariffs-class-codes",
+            "tariffs-licence-fees" => "tariffs-licence-fees",
+            "tariffs-make-model" => "tariffs-make-model",
+            "tariffs-private-taxi" => "tariffs-private-taxi",
+            "users" => "users",
+            "users-added" => "users-added",
+            "users-one" => "users-one",
+            "vehicle-by-barcode" => "vehicle-by-barcode",
+            "vehicles-with-history" => "vehicles-with-history",
 
-            // Audit trail variants
-            "audit-trail-department" => "audit-trail",
-            "audit-trail-site" => "audit-trail",
-            "audit-trail-vehicle" => "audit-trail",
+            // Audit trail variants. AuditTrail.aspx filters by Mode; they are
+            // not the ELS-only stored procedure used by the generic key.
+            "audit-trail-department" => "audit-trail-department",
+            "audit-trail-site" => "audit-trail-site",
+            "audit-trail-vehicle" => "audit-trail-vehicle",
 
-            // Management menu variants
-            "management-ggmt" => "management",
-            "management-incorrect-captured-data" => "management",
-            "management-site-info" => "management",
-            "ggmt-management" => "management",
-            "incorrect-captured-data" => "management",
-            "fis-site-management-info" => "management",
+            // Management menu variants. Management.aspx opens distinct screens
+            // gated by Management Reports; they are not the generic menu list.
+            "management-ggmt" => "management-ggmt",
+            "management-incorrect-captured-data" => "management-incorrect-captured-data",
+            "management-site-info" => "management-site-info",
+            "ggmt-management" => "management-ggmt",
+            "incorrect-captured-data" => "management-incorrect-captured-data",
+            "fis-site-management-info" => "management-site-info",
 
-            // Contract report variants
-            "contract-summary" => "contracts",
-            "contract-trip-authority-dept-site-date" => "contracts",
-            "contract-trip-authority-multiple" => "contracts",
-            "contract-trip-authority-single" => "contracts",
-            "contract-vehicle-multiple" => "contracts",
-            "contract-vehicle-single" => "contracts",
-            "contracts-checklist" => "contracts",
-            "contracts-expiring-by-date" => "contracts",
-            "contracts-fleet-reports" => "contracts",
-            "contracts-no-distance" => "contracts",
-            "contracts-per-dept-period" => "contracts",
-            "lease-nom-contract-split" => "contracts",
+            // Contract report variants. Contracts.aspx opens distinct screens.
+            "contract-summary" => "contract-summary",
+            "contract-trip-authority-dept-site-date" => "contract-trip-authority-dept-site-date",
+            "contract-trip-authority-multiple" => "contract-trip-authority-multiple",
+            "contract-trip-authority-single" => "contract-trip-authority-single",
+            "contract-vehicle-multiple" => "contract-vehicle-multiple",
+            "contract-vehicle-single" => "contract-vehicle-single",
+            "contracts-checklist" => "contracts-checklist",
+            "contracts-expiring-by-date" => "contracts-expiring-by-date",
+            "contracts-fleet-reports" => "contracts-fleet-reports",
+            "contracts-no-distance" => "contracts-no-distance",
+            "contracts-per-dept-period" => "contracts-per-dept-period",
+            "lease-nom-contract-split" => "lease-nom-contract-split",
             "trip-authorities-single" => "contract-trip-authority-single",
             "trip-authorities-multiple" => "contract-trip-authority-multiple",
             "trip-authorities-by-dept-site-date" => "contract-trip-authority-dept-site-date",
@@ -423,31 +425,30 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "not-verified" => "asset-verification-not-verified",
             "verified-by-date-range" => "asset-verification-verified-by-date-range",
 
-            // Fine report variants
-            "fines-one-vehicle" => "fines",
-            "fines-appear-date" => "fines",
-            "fines-reissue-submission" => "fines",
-            "fines-traffic-dept-detail" => "fines",
-            "appear-date" => "fines-appear-date",
-            "reissue-submission" => "fines-reissue-submission",
-            "traffic-dept-detail" => "fines-traffic-dept-detail",
-            "dept-site-period" => "fines",
+            // Fine report variants. RPTFines.aspx opens distinct Crystal/HTML
+            // screens; they are not the generic fines list.
+            "fines-one-vehicle" => "fines-one-vehicle",
+            "fines-appear-date" => "fines-appear-date",
+            "fines-reissue-submission" => "fines-reissue-submission",
+            "fines-traffic-dept-detail" => "fines-traffic-dept-detail",
+            "dept-site-period" => "fines-dept-site-period",
 
-            // Taxis menu/report variants
-            "taxis-future-bookings-my-dept" => "taxis",
-            "taxis-history-bookings-period" => "taxis",
-            "taxis-requisition-numbers-period" => "taxis",
-            "taxis-per-hire-company" => "taxis",
+            // Taxis menu/report variants. RPTtaxis.aspx and Taxi_Fin_reports.aspx
+            // open distinct pages; they are not the generic taxi list.
+            "taxis-future-bookings-my-dept" => "taxis-future-bookings-my-dept",
+            "taxis-history-bookings-period" => "taxis-history-bookings-period",
+            "taxis-requisition-numbers-period" => "taxis-requisition-numbers-period",
+            "taxis-per-hire-company" => "taxis-per-hire-company",
             "taxis-list-inservice-per-department" => "taxis-list-inservice-per-department",
             "taxis-list-per-department" => "taxis-list-per-department",
-            "taxis-reprint-requisition" => "taxis",
-            "taxis-reprint-taxi-log" => "taxis",
-            "taxis-fin-general-requisitions" => "taxis-financial",
-            "taxis-fin-requisitions-per-department" => "taxis-financial",
-            "taxis-fin-outstanding-logsheets" => "taxis-financial",
-            "taxis-fin-log-odometer-gg" => "taxis-financial",
-            "taxis-fin-cancellations" => "taxis-financial",
-            "taxis-fin-no-objective-or-responsibility" => "taxis-financial",
+            "taxis-reprint-requisition" => "taxis-reprint-requisition",
+            "taxis-reprint-taxi-log" => "taxis-reprint-taxi-log",
+            "taxis-fin-general-requisitions" => "taxis-fin-general-requisitions",
+            "taxis-fin-requisitions-per-department" => "taxis-fin-requisitions-per-department",
+            "taxis-fin-outstanding-logsheets" => "taxis-fin-outstanding-logsheets",
+            "taxis-fin-log-odometer-gg" => "taxis-fin-log-odometer-gg",
+            "taxis-fin-cancellations" => "taxis-fin-cancellations",
+            "taxis-fin-no-objective-or-responsibility" => "taxis-fin-no-objective-or-responsibility",
             "future-bookings-my-dept" => "taxis-future-bookings-my-dept",
             "history-bookings-period" => "taxis-history-bookings-period",
             "requisition-numbers-period" => "taxis-requisition-numbers-period",
@@ -462,22 +463,23 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "cancellations" => "taxis-fin-cancellations",
             "no-objective-or-responsibility" => "taxis-fin-no-objective-or-responsibility",
 
-            // Wesbank variants
-            "wesbank-one-vehicle" => "wesbank",
-            "wesbank-one-vehicle-period" => "wesbank",
-            "wesbank-one-dept-site" => "wesbank",
-            "wesbank-overfills" => "wesbank",
-            "wesbank-multiple-daily-fuels" => "wesbank",
+            // Wesbank variants. Regional FinanceRegionWesbankMenu.aspx opens
+            // distinct date/province filter screens, not one expenses SP.
+            "wesbank-one-vehicle" => "wesbank-one-vehicle",
+            "wesbank-one-vehicle-period" => "wesbank-one-vehicle-period",
+            "wesbank-one-dept-site" => "wesbank-one-dept-site",
+            "wesbank-overfills" => "wesbank-overfills",
+            "wesbank-multiple-daily-fuels" => "wesbank-multiple-daily-fuels",
             "one-vehicle-period" => "wesbank-one-vehicle-period",
             "one-dept-site" => "wesbank-one-dept-site",
             "overfills" => "wesbank-overfills",
             "multiple-daily-fuels" => "wesbank-multiple-daily-fuels",
 
-            // Auction variants
-            "auction-one-vehicle" => "auction",
-            "auction-sale-to-name" => "auction",
-            "auction-one-sort-gg" => "auction",
-            "auction-one-sort-lot" => "auction",
+            // Auction variants. RPTAuction.aspx opens distinct Crystal screens.
+            "auction-one-vehicle" => "auction-one-vehicle",
+            "auction-sale-to-name" => "auction-sale-to-name",
+            "auction-one-sort-gg" => "auction-one-sort-gg",
+            "auction-one-sort-lot" => "auction-one-sort-lot",
             "sale-to-name" => "auction-sale-to-name",
             "one-auction-sort-gg" => "auction-one-sort-gg",
             "one-auction-sort-lot" => "auction-one-sort-lot",
@@ -496,35 +498,36 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "per-dept-site" => "logsheets",
             "period" => "workshop",
 
-            // Losses report variants
-            "losses-one-vehicle" => "losses",
-            "losses-all-losses-sorted" => "losses",
-            "losses-outstanding-report" => "losses",
-            "losses-with-report" => "losses",
-            "losses-site-period-vip-gg-hire" => "losses",
+            // Losses report variants. losses.aspx opens distinct screens.
+            "losses-one-vehicle" => "losses-one-vehicle",
+            "losses-all-losses-sorted" => "losses-all-losses-sorted",
+            "losses-outstanding-report" => "losses-outstanding-report",
+            "losses-with-report" => "losses-with-report",
+            "losses-site-period-vip-gg-hire" => "losses-site-period-vip-gg-hire",
             "all-losses-sorted" => "losses-all-losses-sorted",
             "outstanding-report" => "losses-outstanding-report",
             "with-report" => "losses-with-report",
             "site-period-vip-gg-hire" => "losses-site-period-vip-gg-hire",
 
-            // Licence variants
-            "licences-all-with-model-tare-fee" => "licences",
-            "licences-cof-info" => "licences",
-            "licences-expire-date" => "licences",
-            "licences-site" => "licences",
-            "licences-gg-number" => "licences",
-            "licences-register-number" => "licences",
-            "licences-chassis-number" => "licences",
-            "licences-engine-number" => "licences",
-            "licences-data-workgroup" => "licences",
-            "licences-data-workgroup-latest" => "licences",
-            "licences-received-by-ggmt" => "licences",
-            "licences-prov-reg-number" => "licences",
-            "licences-old-expire-dates" => "licences",
-            "licences-make-model-fee" => "licences",
-            "licences-month-fees" => "licences",
-            "licences-sap-info" => "licences",
-            "licences-dept-sites-period" => "licences",
+            // Licence variants. These are distinct License/*.htm and *.aspx
+            // screens, not the generic licence list.
+            "licences-all-with-model-tare-fee" => "licences-all-with-model-tare-fee",
+            "licences-cof-info" => "licences-cof-info",
+            "licences-expire-date" => "licences-expire-date",
+            "licences-site" => "licences-site",
+            "licences-gg-number" => "licences-gg-number",
+            "licences-register-number" => "licences-register-number",
+            "licences-chassis-number" => "licences-chassis-number",
+            "licences-engine-number" => "licences-engine-number",
+            "licences-data-workgroup" => "licences-data-workgroup",
+            "licences-data-workgroup-latest" => "licences-data-workgroup-latest",
+            "licences-received-by-ggmt" => "licences-received-by-ggmt",
+            "licences-prov-reg-number" => "licences-prov-reg-number",
+            "licences-old-expire-dates" => "licences-old-expire-dates",
+            "licences-make-model-fee" => "licences-make-model-fee",
+            "licences-month-fees" => "licences-month-fees",
+            "licences-sap-info" => "licences-sap-info",
+            "licences-dept-sites-period" => "licences-dept-sites-period",
             "gg-number" => "licences-gg-number",
             "prov-reg-number" => "licences-prov-reg-number",
             "register-number" => "licences-register-number",
@@ -541,37 +544,37 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "sap-info" => "licences-sap-info",
             "month-fees" => "licences-month-fees",
 
-            // Vehicle report variants
-            "vehicles-no-trips" => "vehicles",
-            "vehicles-no-trips-daterange" => "vehicles",
-            "vehicles-per-site" => "vehicles",
-            "vehicles-per-department" => "vehicles",
-            "vehicles-inservice-per-gg" => "vehicles",
-            "vehicles-inservice-per-dept" => "vehicles",
-            "vehicles-inservice-wesbank" => "vehicles",
-            "vehicles-provincial-numbers" => "vehicles",
-            "vehicles-with-barcodes" => "vehicles",
-            "vehicles-lpg-converted" => "vehicles",
-            "vehicles-replaced-per-dept" => "vehicles",
-            "vehicles-older-than-5y-over-120k" => "vehicles",
-            "vehicles-older-than-5y-over-120k-period" => "vehicles",
-            "vehicles-extended-service" => "vehicles",
-            "vehicles-value-inservice" => "vehicles",
-            "vehicles-extras" => "vehicles",
-            "vehicles-contract-type-site" => "vehicles",
-            "vehicles-contract-type-department" => "vehicles",
-            "vehicles-contract-type-department-site" => "vehicles",
-            "vehicles-universal-selected" => "vehicles",
-            "vehicles-selected" => "vehicles",
-            "vehicles-els-manual" => "vehicles",
-            "vehicle-contract-single" => "vehicles",
-            "vehicle-contract-multiple" => "vehicles",
-            "vehicle-contract-universal" => "vehicles",
-            "vehicle-contract-els-manual" => "vehicles",
-            "all-vehicles" => "vehicles",
-            "all-users" => "audit-trail",
-            "one-user" => "audit-trail",
-            "vehicle-by-number" => "vehicles",
+            // Vehicle report variants. TripReports.aspx ShowReport Items are
+            // distinct procedures; remaining vehicle keys are distinct screens
+            // and must not collapse into the generic vehicle_master list.
+            "vehicles-no-trips" => "vehicles-no-trips",
+            "vehicles-no-trips-daterange" => "vehicles-no-trips-daterange",
+            "vehicles-per-site" => "vehicles-per-site",
+            "vehicles-per-department" => "vehicles-per-department",
+            "vehicles-inservice-per-gg" => "vehicles-inservice-per-gg",
+            "vehicles-inservice-per-dept" => "vehicles-inservice-per-dept",
+            "vehicles-inservice-wesbank" => "vehicles-inservice-wesbank",
+            "vehicles-provincial-numbers" => "vehicles-provincial-numbers",
+            "vehicles-with-barcodes" => "vehicles-with-barcodes",
+            "vehicles-lpg-converted" => "vehicles-lpg-converted",
+            "vehicles-replaced-per-dept" => "vehicles-replaced-per-dept",
+            "vehicles-older-than-5y-over-120k" => "vehicles-older-than-5y-over-120k",
+            "vehicles-older-than-5y-over-120k-period" => "vehicles-older-than-5y-over-120k-period",
+            "vehicles-extended-service" => "vehicles-extended-service",
+            "vehicles-value-inservice" => "vehicles-value-inservice",
+            "vehicles-extras" => "vehicles-extras",
+            "vehicles-contract-type-site" => "vehicles-contract-type-site",
+            "vehicles-contract-type-department" => "vehicles-contract-type-department",
+            "vehicles-contract-type-department-site" => "vehicles-contract-type-department-site",
+            "vehicles-selected" => "vehicles-selected",
+            "vehicles-els-manual" => "vehicles-els-manual",
+            "vehicle-contract-single" => "vehicle-contract-single",
+            "vehicle-contract-multiple" => "vehicle-contract-multiple",
+            "vehicle-contract-els-manual" => "vehicle-contract-els-manual",
+            "all-vehicles" => "all-vehicles",
+            "all-users" => "users",
+            "one-user" => "users-one",
+            "vehicle-by-number" => "vehicle-by-number",
             "inservice-per-gg" => "vehicles-inservice-per-gg",
             "inservice-per-dept" => "vehicles-inservice-per-dept",
             "inservice-wesbank" => "vehicles-inservice-wesbank",
@@ -585,35 +588,35 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "value-inservice" => "vehicles-value-inservice",
             "vehicle-extras" => "vehicles-extras",
             "selected-vehicles" => "vehicles-selected",
-            "universal-selected" => "vehicles-universal-selected",
 
-            // Trip Authority report variants
-            "available-vehicles-site" => "trip-authority",
-            "unavailable-vehicles-site" => "trip-authority",
-            "users-per-site" => "trip-authority",
-            "users-per-department" => "trip-authority",
-            "users-all-departments" => "trip-authority",
-            "trips-per-user-all" => "trip-authority",
-            "trips-per-user-department" => "trip-authority",
-            "trips-for-vehicle" => "trip-authority",
-            "drivers-for-vehicle" => "trip-authority",
-            "vehicle-utilisation-driver" => "trip-authority",
-            "vehicle-utilisation" => "trip-authority",
-            "trip-count-last-3-months" => "trip-authority",
+            // TripReports.aspx ShowReport / SelectVehicleTrip items are distinct
+            // procedures. Do not collapse them into the generic trip-authority key.
+            "available-vehicles-site" => "available-vehicles-site",
+            "unavailable-vehicles-site" => "unavailable-vehicles-site",
+            "users-per-site" => "users-per-site",
+            "users-per-department" => "users-per-department",
+            "users-all-departments" => "users-all-departments",
+            "trips-per-user-all" => "trips-per-user-all",
+            "trips-per-user-department" => "trips-per-user-department",
+            "trips-for-vehicle" => "trips-for-vehicle",
+            "drivers-for-vehicle" => "drivers-for-vehicle",
+            "vehicle-utilisation-driver" => "vehicle-utilisation-driver",
+            "vehicle-utilisation" => "vehicle-utilisation",
+            "trip-count-last-3-months" => "trip-count-last-3-months",
             "trips-open-over-31" => "trips-open-31",
-            "trip-authorities-over-25000" => "trip-authority",
-            "trip-authorities-over-3500-per-day" => "trip-authority",
-            "els-manual-kilo" => "trip-authority",
+            "trip-authorities-over-25000" => "trip-authorities-over-25000",
+            "trip-authorities-over-3500-per-day" => "trip-authorities-over-3500-per-day",
+            "els-manual-kilo" => "els-manual-kilo",
             "high-distance-department" => "high-distance-dept",
             "high-distance-all" => "high-distance-all",
 
-            // Department/site variants
-            "departments-sites-contact" => "departments-sites",
-            "departments-outstanding-logs-combined" => "departments-sites",
-            "departments-one-department" => "departments-sites",
-            "departments-one-site" => "departments-sites",
-            "departments-vehicles-manual-logs" => "departments-sites",
-            "departments-vehicles-els" => "departments-sites",
+            // Department.aspx opens distinct Crystal/HTML screens.
+            "departments-sites-contact" => "departments-sites-contact",
+            "departments-outstanding-logs-combined" => "departments-outstanding-logs-combined",
+            "departments-one-department" => "departments-one-department",
+            "departments-one-site" => "departments-one-site",
+            "departments-vehicles-manual-logs" => "departments-vehicles-manual-logs",
+            "departments-vehicles-els" => "departments-vehicles-els",
             "one-department" => "departments-one-department",
             "one-site" => "departments-one-site",
             "all-dept-site-count" => "departments-sites",
@@ -622,18 +625,18 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "vehicles-on-manual-logs" => "departments-vehicles-manual-logs",
             "vehicles-on-els" => "departments-vehicles-els",
 
-            // Fuel card variants
-            "fuelcards-one-vehicle" => "fuel-cards",
-            "fuelcards-one-vehicle-handout" => "fuel-cards",
-            "fuelcards-expire-date" => "fuel-cards",
-            "fuelcards-one-site-expire-date" => "fuel-cards",
-            "fuelcards-dept-site-expire-period" => "fuel-cards",
-            "fuelcards-dept-site" => "fuel-cards",
-            "fuelcards-replace-reason" => "fuel-cards",
-            "fuelcards-one-pan" => "fuel-cards",
-            "fuelcards-wesbank-new-cards" => "fuel-cards",
-            "fuelcards-pool-vehicles" => "fuel-cards",
-            "fuelcards-vip-vehicles" => "fuel-cards",
+            // Fuelcard/RPTFuelcard.aspx opens distinct Crystal/HTML screens.
+            "fuelcards-one-vehicle" => "fuelcards-one-vehicle",
+            "fuelcards-one-vehicle-handout" => "fuelcards-one-vehicle-handout",
+            "fuelcards-expire-date" => "fuelcards-expire-date",
+            "fuelcards-one-site-expire-date" => "fuelcards-one-site-expire-date",
+            "fuelcards-dept-site-expire-period" => "fuelcards-dept-site-expire-period",
+            "fuelcards-dept-site" => "fuelcards-dept-site",
+            "fuelcards-replace-reason" => "fuelcards-replace-reason",
+            "fuelcards-one-pan" => "fuelcards-one-pan",
+            "fuelcards-wesbank-new-cards" => "fuelcards-wesbank-new-cards",
+            "fuelcards-pool-vehicles" => "fuelcards-pool-vehicles",
+            "fuelcards-vip-vehicles" => "fuelcards-vip-vehicles",
             "one-pan" => "fuelcards-one-pan",
             "one-vehicle-handout" => "fuelcards-one-vehicle-handout",
             "replace-reason" => "fuelcards-replace-reason",
@@ -654,7 +657,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "all-merchants" => "workshop-merchants",
 
             // Direct clearances shorthand from report menu
-            "clearance-universal" => "clearance",
 
             // Tariff menu shorthands
             "class-codes-with-tariffs" => "tariffs-class-codes",
@@ -748,16 +750,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
     private static string GetStoredProcedureName(LegacyReportDefinition definition) =>
         definition.StoredProcedureName
-        ?? definition.StoredProcedureItem switch
-        {
-            // The legacy Reports.aspx item is GetAllVehicleWithNoTariffs, but
-            // User_Profile.Getlistofcontractswithnotariffs executes the
-            // archived Dev_Rep_Permanentcontractswithouttariffs procedure.
-            // Keep the item key for navigation/fallbacks while invoking the
-            // actual database object when it exists.
-            "GetAllVehicleWithNoTariffs" => "dbo.Dev_Rep_Permanentcontractswithouttariffs",
-            _ => $"dbo.DEV_REP_{definition.StoredProcedureItem}",
-        };
+        ?? $"dbo.DEV_REP_{definition.StoredProcedureItem}";
 
     private static async Task<LegacyReportResultDto> ReadDynamicResultAsync(
         System.Data.Common.DbDataReader reader,
@@ -875,6 +868,42 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 BuildAuditTrailAsync,
                 BuildStoredProcedureParameters: _ => Array.Empty<LegacyStoredProcedureParameter>()
             ),
+            ["audit-trail-department"] = DistinctArchivedScreen(
+                "audit-trail-department",
+                "Audit Trail grouped by Department in a date range",
+                "Finance/GetFinancialAditTrailReportsDateRange.aspx?Mode=Department",
+                "AuditTrail.aspx item 1 is a Mode=Department date-range screen. It is not the generic ELS audit-trail procedure."
+            ),
+            ["audit-trail-site"] = DistinctArchivedScreen(
+                "audit-trail-site",
+                "Audit Trail grouped by Site in a date range",
+                "Finance/GetFinancialAditTrailReportsDateRange.aspx?Mode=Site",
+                "AuditTrail.aspx item 2 is a Mode=Site date-range screen. It is not the generic ELS audit-trail procedure."
+            ),
+            ["audit-trail-vehicle"] = DistinctArchivedScreen(
+                "audit-trail-vehicle",
+                "Audit Trail grouped per Vehicle in a date range",
+                "Finance/GetFinancialAditTrailReportsDateRange.aspx?Mode=Vehicle",
+                "AuditTrail.aspx item 3 is a Mode=Vehicle date-range screen. It is not the generic ELS audit-trail procedure."
+            ),
+            ["users"] = DistinctArchivedScreen(
+                "users",
+                "Users Report Menu",
+                "Users/Users.aspx",
+                "FIS_Report.aspx item 20 opens Users/Users.aspx. It is not the audit-trail procedure."
+            ),
+            ["users-one"] = DistinctArchivedScreen(
+                "users-one",
+                "Information On One User",
+                "Users/RPT_One_User.aspx",
+                "Users.aspx item 1 is a one-user Crystal/HTML screen. It is not the audit-trail procedure."
+            ),
+            ["users-added"] = DistinctArchivedScreen(
+                "users-added",
+                "Information On All Users Accounts Added On The System",
+                "Users/RPT_main_users_added.aspx",
+                "Users.aspx item 3 is the added-accounts screen. It is not the audit-trail procedure."
+            ),
 
             ["capture-activity"] = new(
                 "capture-activity",
@@ -903,6 +932,78 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 "The archived legacy source exposes this as a custom OpenReport_2/ActiveReports item but does not provide a matching stored procedure definition. This compatibility result is a labelled table projection and is not the operational invoice/billing report.",
                 BuildStoredProcedureParameters: _ => Array.Empty<LegacyStoredProcedureParameter>()
             ),
+            ["contract-vehicle-single"] = DistinctArchivedScreen(
+                "contract-vehicle-single",
+                "Information On A Vehicle Contracts",
+                "FISReports/Contracts/RPT_Vehicle_Contracts_1.aspx",
+                "Contracts.aspx item 1 is a one-vehicle contract screen. It is not VehicleContractsAuditReport."
+            ),
+            ["contract-vehicle-multiple"] = DistinctArchivedScreen(
+                "contract-vehicle-multiple",
+                "Information On Multiple Vehicle Contracts",
+                "FISReports/Contracts/RPT_Multiple_Contracts_1.aspx",
+                "Contracts.aspx item 2 is a multiple-vehicle contract screen. It is not VehicleContractsAuditReport."
+            ),
+            ["contracts-expiring-by-date"] = DistinctArchivedScreen(
+                "contracts-expiring-by-date",
+                "Information On All Contracts That Will Expire By a Specified Date",
+                "FISReports/Contracts/RPT_Daily_Contracts_1.aspx",
+                "Contracts.aspx item 4 is the expiry-by-date screen. It is not VehicleContractsAuditReport."
+            ),
+            ["contract-summary"] = DistinctArchivedScreen(
+                "contract-summary",
+                "Contract summarized report",
+                "FISReports/Contracts/Contract_Report.aspx",
+                "Contracts.aspx item 5 is the summarized contract screen. It is not VehicleContractsAuditReport."
+            ),
+            ["contract-trip-authority-single"] = DistinctArchivedScreen(
+                "contract-trip-authority-single",
+                "Vehicle Trip Authorities per GG or GP Number",
+                "FISReports/Contracts/RPT_Vehicle_Trip_1.aspx",
+                "Contracts.aspx item 6 is a trip-authority screen. It is not VehicleContractsAuditReport."
+            ),
+            ["contract-trip-authority-multiple"] = DistinctArchivedScreen(
+                "contract-trip-authority-multiple",
+                "Multiple Vehicle Trip Authorities per GG or GP Number",
+                "FISReports/Contracts/RPT_Multiple_Vehicle_Trip_1.aspx",
+                "Contracts.aspx item 7 is a multiple trip-authority screen. It is not VehicleContractsAuditReport."
+            ),
+            ["contract-trip-authority-dept-site-date"] = DistinctArchivedScreen(
+                "contract-trip-authority-dept-site-date",
+                "Vehicle Trip Authorities per Dept, Site or Date",
+                "FISReports/Contracts/RPT_Vehicle_Trip_3.aspx",
+                "Contracts.aspx item 8 is a dept/site/date trip-authority screen. It is not VehicleContractsAuditReport."
+            ),
+            ["contracts-checklist"] = DistinctArchivedScreen(
+                "contracts-checklist",
+                "Daily & Monthly Contract check list report",
+                "FISReports/Contracts/check_list.aspx",
+                "Contracts.aspx item 9 is the checklist screen. It is not VehicleContractsAuditReport."
+            ),
+            ["contracts-no-distance"] = DistinctArchivedScreen(
+                "contracts-no-distance",
+                "Vehicle Contracts with NO distance traveled",
+                "FISReports/Contracts/RPT_no_dist_1.aspx",
+                "Contracts.aspx item 10 is the no-distance screen. It is not VehicleContractsAuditReport."
+            ),
+            ["contracts-per-dept-period"] = DistinctArchivedScreen(
+                "contracts-per-dept-period",
+                "Contracts for a Department for period",
+                "FISReports/Contracts/RPT_PerDept_Period.aspx",
+                "Contracts.aspx item 11 is the department-period screen. It is not VehicleContractsAuditReport."
+            ),
+            ["contracts-fleet-reports"] = DistinctArchivedScreen(
+                "contracts-fleet-reports",
+                "Permanent Section - Contracts Fleet Reports",
+                "FISReports/FleetReportsMenu.aspx",
+                "Contracts.aspx item 12 opens the GFleet permanent-section menu. It is not VehicleContractsAuditReport."
+            ),
+            ["lease-nom-contract-split"] = DistinctArchivedScreen(
+                "lease-nom-contract-split",
+                "Lease Vehicles Split Report for Vehicles not on Contract and those on Contract",
+                "FISReports/LeaseNOMVehicleContract/NOMVehicleContractReport.aspx",
+                "Contracts.aspx NOM item 1 is the lease split screen. It is not VehicleContractsAuditReport."
+            ),
 
             ["departments-sites"] = new(
                 "departments-sites",
@@ -911,6 +1012,42 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 null,
                 BuildDepartmentsSitesAsync,
                 ""
+            ),
+            ["departments-one-department"] = DistinctArchivedScreen(
+                "departments-one-department",
+                "One Department",
+                "Department/rpt_single_dept_1.aspx",
+                "Department.aspx item 1 is the one-department Crystal screen. It is not the all-departments list."
+            ),
+            ["departments-one-site"] = DistinctArchivedScreen(
+                "departments-one-site",
+                "One Site",
+                "Department/rpt_single_site_1.aspx",
+                "Department.aspx item 2 is the one-site Crystal screen. It is not the all-departments list."
+            ),
+            ["departments-sites-contact"] = DistinctArchivedScreen(
+                "departments-sites-contact",
+                "All Departments & Sites with contact details",
+                "Department/rpt_all_sites.aspx",
+                "Department.aspx item 4 is the contact-details screen. It is not the vehicle-count list."
+            ),
+            ["departments-vehicles-els"] = DistinctArchivedScreen(
+                "departments-vehicles-els",
+                "List of Vehicles on ELS",
+                "Department/RPT_els_dept_period_main.aspx",
+                "Department.aspx item 5 is the ELS vehicle screen. It is not the all-departments list."
+            ),
+            ["departments-vehicles-manual-logs"] = DistinctArchivedScreen(
+                "departments-vehicles-manual-logs",
+                "List of Vehicles on Manual LOGSHEETS",
+                "Department/RPT_logs_dept_period_main.aspx",
+                "Department.aspx item 6 is the manual-logsheet screen. It is not the all-departments list."
+            ),
+            ["departments-outstanding-logs-combined"] = DistinctArchivedScreen(
+                "departments-outstanding-logs-combined",
+                "Outstanding Logs per Dept : ELS and Manual Logs Combined",
+                "Department/RPT_uits_els_en_logs_dept_period_main.aspx",
+                "Department.aspx item 7 is the combined outstanding-logs screen. It is not the all-departments list."
             ),
 
             ["fines"] = new(
@@ -921,6 +1058,31 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 BuildFinesAsync,
                 ""
             ),
+            ["fines-one-vehicle"] = DistinctFineScreen(
+                "fines-one-vehicle",
+                "Fines Report on ONE Vehicle",
+                "fines/RPT_one_num_main_Fines.htm"
+            ),
+            ["fines-dept-site-period"] = DistinctFineScreen(
+                "fines-dept-site-period",
+                "Fines Report, for a Dept / Site, for a period",
+                "fines/selectfines.htm"
+            ),
+            ["fines-appear-date"] = DistinctFineScreen(
+                "fines-appear-date",
+                "Fines Report on Appear Date",
+                "fines/RPT_app_date_main_Fines.htm"
+            ),
+            ["fines-reissue-submission"] = DistinctFineScreen(
+                "fines-reissue-submission",
+                "Submission to Re-Issue Fine in Transport Officer's Name",
+                "fines/RPT_letter_main_Fines.aspx"
+            ),
+            ["fines-traffic-dept-detail"] = DistinctFineScreen(
+                "fines-traffic-dept-detail",
+                "Traffic Dept Detail",
+                "fines/RPT_traffic_all_report.aspx"
+            ),
 
             ["losses"] = new(
                 "losses",
@@ -929,6 +1091,36 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 null,
                 BuildLossesAsync,
                 ""
+            ),
+            ["losses-one-vehicle"] = DistinctArchivedScreen(
+                "losses-one-vehicle",
+                "Losses for one vehicle",
+                "losses/RPT_loss_per_vehicle.htm",
+                "losses.aspx item 1 is a one-vehicle Crystal/HTML screen. It is not the generic losses list."
+            ),
+            ["losses-all-losses-sorted"] = DistinctArchivedScreen(
+                "losses-all-losses-sorted",
+                "All Losses Sorted By Loss type, Department number GG number or Loss Date",
+                "losses/RPT_All_Losses_menu.aspx",
+                "losses.aspx item 2 opens the all-losses sort menu. It is not the generic losses list."
+            ),
+            ["losses-outstanding-report"] = DistinctArchivedScreen(
+                "losses-outstanding-report",
+                "Losses where Report from Department is outstanding",
+                "losses/RPT_NoReport.aspx",
+                "losses.aspx item 3 is the outstanding-report screen. It is not the generic losses list."
+            ),
+            ["losses-with-report"] = DistinctArchivedScreen(
+                "losses-with-report",
+                "Losses where Reports from Departments were supplied",
+                "losses/RPT_WithReport.aspx",
+                "losses.aspx item 4 is the with-report screen. It is not the generic losses list."
+            ),
+            ["losses-site-period-vip-gg-hire"] = DistinctArchivedScreen(
+                "losses-site-period-vip-gg-hire",
+                "Losses Report for a Site, for a Period, for VIP/GG, for Hire Type",
+                "losses/RPT_dept_periodVIP_main_losses.aspx",
+                "losses.aspx item 5 is the site/period/VIP screen. It is not the generic losses list."
             ),
 
             ["manuals"] = new(
@@ -1060,6 +1252,24 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 BuildManagementAsync,
                 ""
             ),
+            ["management-ggmt"] = DistinctArchivedScreen(
+                "management-ggmt",
+                "GGMT Management Reports",
+                "Management_Reports/management2.aspx",
+                "Management.aspx item 1 is the GGMT management submenu. It is not the generic management list."
+            ),
+            ["management-incorrect-captured-data"] = DistinctArchivedScreen(
+                "management-incorrect-captured-data",
+                "Report On Incorrect Captured Data",
+                "Management_Reports/incorrect.aspx",
+                "Management.aspx item 2 is the incorrect-captured-data submenu. It is not the generic management list."
+            ),
+            ["management-site-info"] = DistinctArchivedScreen(
+                "management-site-info",
+                "FIS Site Management Information",
+                "Management_Reports/System_Info/SysInfo_menu.aspx",
+                "Management.aspx item 3 is the site-management information submenu. It is not the generic management list."
+            ),
 
             ["previous-fin-year"] = new(
                 "previous-fin-year",
@@ -1095,6 +1305,130 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 null,
                 BuildRegistrationCertificatesAsync,
                 "Legacy registration certificate flow is menu-driven. This approximation uses vehicle master registration certificate fields."
+            ),
+            ["registration-certificate-one-vehicle"] = DistinctArchivedScreen(
+                "registration-certificate-one-vehicle",
+                "Registration Certificate for One Vehicle",
+                "scandocs/RPT_ListOne.aspx",
+                "Reg_Cert_Menu.aspx item 2 is the one-vehicle certificate screen. It is not the all-vehicles certificate list."
+            ),
+
+            ["asset-verification"] = DistinctArchivedScreen(
+                "asset-verification",
+                "Asset Verification Reports Menu",
+                "Asset_Verification/RPT_Asset_Verification.aspx",
+                "FIS_Report.aspx item 3 opens the asset-verification menu. It is not the asset-list procedure."
+            ),
+
+            ["class-code"] = DistinctArchivedScreen(
+                "class-code",
+                "Class Codes, Make & Model",
+                "Class_Code/RPT_C_M_M.aspx",
+                "Class_Code.aspx item 1 is a class/make/model Crystal screen. It is not published tariffs."
+            ),
+            ["class-code-totals"] = DistinctArchivedScreen(
+                "class-code-totals",
+                "Class Codes & Totals",
+                "Vehicles/Test_1.aspx",
+                "Class_Code.aspx item 2 is a class-code totals screen. It is not published tariffs."
+            ),
+
+            ["tariffs-class-codes"] = DistinctArchivedScreen(
+                "tariffs-class-codes",
+                "Class codes with tariffs",
+                "validation/RPT_Class_Tariff.aspx",
+                "RPTtariffs.aspx item 1 is the class-tariff Crystal screen. It is not ShowReport Item=Tariffs."
+            ),
+            ["tariffs-licence-fees"] = DistinctArchivedScreen(
+                "tariffs-licence-fees",
+                "Licence fees",
+                "validation/RPT_licence_Tariff.aspx",
+                "RPTtariffs.aspx item 2 is the licence-fee Crystal screen. It is not ShowReport Item=Tariffs."
+            ),
+            ["tariffs-make-model"] = DistinctArchivedScreen(
+                "tariffs-make-model",
+                "Make Model with tariffs",
+                "validation/RPT_Model_Tariff.aspx",
+                "RPTtariffs.aspx item 3 is the make/model tariff Crystal screen. It is not ShowReport Item=Tariffs."
+            ),
+            ["tariffs-private-taxi"] = DistinctArchivedScreen(
+                "tariffs-private-taxi",
+                "Private Taxi Tariffs",
+                "validation/RPT_Taxi_Tariff.aspx",
+                "RPTtariffs.aspx item 4 is the private-taxi tariff Crystal screen. It is not ShowReport Item=Tariffs."
+            ),
+
+            ["fuel-cards"] = DistinctArchivedScreen(
+                "fuel-cards",
+                "FuelCard Reports Menu",
+                "fuelcard/RPTFuelcard.aspx",
+                "FIS_Report.aspx item 10 opens Fuelcard/RPTFuelcard.aspx. It is not Wesbank First Auto."
+            ),
+            ["fuelcards-one-vehicle"] = DistinctArchivedScreen(
+                "fuelcards-one-vehicle",
+                "Fuelcard Report for a Vehicle",
+                "fuelcard/RPT_one_vehicle_main_FuelCard.htm",
+                "RPTFuelcard.aspx item 1 is a one-vehicle fuelcard screen. It is not Wesbank First Auto."
+            ),
+            ["fuelcards-one-pan"] = DistinctArchivedScreen(
+                "fuelcards-one-pan",
+                "Fuelcard Report for a PAN Number",
+                "fuelcard/RPT_one_pan_main_FuelCard.htm",
+                "RPTFuelcard.aspx item 2 is a PAN fuelcard screen. It is not Wesbank First Auto."
+            ),
+            ["fuelcards-one-vehicle-handout"] = DistinctArchivedScreen(
+                "fuelcards-one-vehicle-handout",
+                "Fuelcard Handout Report",
+                "fuelcard/RPT_one_veh_handout_main_FuelCard.htm",
+                "RPTFuelcard.aspx item 3 is the handout screen. It is not Wesbank First Auto."
+            ),
+            ["fuelcards-expire-date"] = DistinctArchivedScreen(
+                "fuelcards-expire-date",
+                "Fuelcard Report for an Expire Date",
+                "fuelcard/RPT_expdate_main_FuelCard.aspx",
+                "RPTFuelcard.aspx item 5 is the expire-date screen. It is not Wesbank First Auto."
+            ),
+            ["fuelcards-replace-reason"] = DistinctArchivedScreen(
+                "fuelcards-replace-reason",
+                "Fuelcard Report for a Replace Reason",
+                "fuelcard/RPT_replace_reason_main_FuelCard.htm",
+                "RPTFuelcard.aspx item 6 is the replace-reason screen. It is not Wesbank First Auto."
+            ),
+            ["fuelcards-dept-site-expire-period"] = DistinctArchivedScreen(
+                "fuelcards-dept-site-expire-period",
+                "Fuelcard Report, for a Department / Site, for an Expire Period",
+                "fuelcard/RPT_dept_period_main_FuelCard.aspx",
+                "RPTFuelcard.aspx item 7 is the department/site expire-period screen. It is not Wesbank First Auto."
+            ),
+            ["fuelcards-dept-site"] = DistinctArchivedScreen(
+                "fuelcards-dept-site",
+                "Fuelcard Report for a Department / Site",
+                "fuelcard/RPT_dept_main_FuelCard.htm",
+                "RPTFuelcard.aspx item 8 is the department/site fuelcard screen. It is not Wesbank First Auto."
+            ),
+            ["fuelcards-one-site-expire-date"] = DistinctArchivedScreen(
+                "fuelcards-one-site-expire-date",
+                "Fuelcard Report for a Dept Site and Expire Date",
+                "fuelcard/RPT_one_site_expdate_main_FuelCard.htm",
+                "RPTFuelcard.aspx item 9 is the site expire-date screen. It is not Wesbank First Auto."
+            ),
+            ["fuelcards-pool-vehicles"] = DistinctArchivedScreen(
+                "fuelcards-pool-vehicles",
+                "Fuelcard Report for POOL Vehicles",
+                "fuelcard/RPT_pool_main_FuelCard.htm",
+                "RPTFuelcard.aspx item 10 is the pool-vehicle fuelcard screen. It is not Wesbank First Auto."
+            ),
+            ["fuelcards-vip-vehicles"] = DistinctArchivedScreen(
+                "fuelcards-vip-vehicles",
+                "Fuelcard Report for VIP Vehicles",
+                "fuelcard/RPT_vip_main_FuelCard.htm",
+                "RPTFuelcard.aspx item 11 is the VIP fuelcard screen. It is not Wesbank First Auto."
+            ),
+            ["fuelcards-wesbank-new-cards"] = DistinctArchivedScreen(
+                "fuelcards-wesbank-new-cards",
+                "Wesbank Application for New FuelCards",
+                "fuelcard/RPT_wesbank_main_FuelCard.aspx",
+                "RPTFuelcard.aspx item 12 is the new-card application screen. It is not Wesbank First Auto expenses."
             ),
 
             ["tariffs-class-2007"] = new(
@@ -1166,6 +1500,78 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 BuildTaxisFinancialAsync,
                 "Legacy taxi financial pages are custom forms. This approximation uses the legacy Taxis table and related department/site data."
             ),
+            ["taxis-future-bookings-my-dept"] = DistinctArchivedScreen(
+                "taxis-future-bookings-my-dept",
+                "Future booking made for my department.",
+                "Taxis/RPT_My_reqs.aspx",
+                "RPTtaxis.aspx item 1 is the future-bookings screen. It is not the generic taxi list."
+            ),
+            ["taxis-history-bookings-period"] = DistinctArchivedScreen(
+                "taxis-history-bookings-period",
+                "History bookings for period",
+                "Taxis/RPT_My_reqs2.aspx",
+                "RPTtaxis.aspx item 2 is the history-bookings screen. It is not the generic taxi list."
+            ),
+            ["taxis-requisition-numbers-period"] = DistinctArchivedScreen(
+                "taxis-requisition-numbers-period",
+                "List of Requisition Numbers for a period",
+                "Taxis/RPT_reqno_taxi_main.aspx",
+                "RPTtaxis.aspx item 3 is the requisition-number screen. It is not the generic taxi list."
+            ),
+            ["taxis-per-hire-company"] = DistinctArchivedScreen(
+                "taxis-per-hire-company",
+                "Taxis Per Hire Company",
+                "Taxis/RPT_taxis_per_company1_c.aspx",
+                "RPTtaxis.aspx item 4 is the hire-company screen. It is not the generic taxi list."
+            ),
+            ["taxis-reprint-requisition"] = DistinctArchivedScreen(
+                "taxis-reprint-requisition",
+                "Reprint A Requisition",
+                "Taxis/Report_Request_GGVIP_reprint_1_2.aspx",
+                "RPTtaxis.aspx item 7 is the requisition reprint screen. It is not the generic taxi list."
+            ),
+            ["taxis-reprint-taxi-log"] = DistinctArchivedScreen(
+                "taxis-reprint-taxi-log",
+                "Reprint A Taxi Log",
+                "Taxis/Report_Reprint_Taxi_Log_1.aspx",
+                "RPTtaxis.aspx item 8 is the taxi-log reprint screen. It is not the generic taxi list."
+            ),
+            ["taxis-fin-general-requisitions"] = DistinctArchivedScreen(
+                "taxis-fin-general-requisitions",
+                "General Reports: Requisitions",
+                "Taxis/RPT_General_1.aspx",
+                "Taxi_Fin_reports.aspx item 1 is the general requisitions screen. It is not the generic taxi-financial projection."
+            ),
+            ["taxis-fin-requisitions-per-department"] = DistinctArchivedScreen(
+                "taxis-fin-requisitions-per-department",
+                "Requisitions per Department",
+                "Taxis/RPT_dept_Invoices_1.aspx",
+                "Taxi_Fin_reports.aspx item 2 is the department requisitions screen. It is not the generic taxi-financial projection."
+            ),
+            ["taxis-fin-outstanding-logsheets"] = DistinctArchivedScreen(
+                "taxis-fin-outstanding-logsheets",
+                "All Outstanding Log sheets",
+                "Taxis/No_log.aspx",
+                "Taxi_Fin_reports.aspx item 3 is the outstanding logsheets screen. It is not the generic taxi-financial projection."
+            ),
+            ["taxis-fin-log-odometer-gg"] = DistinctArchivedScreen(
+                "taxis-fin-log-odometer-gg",
+                "Log Odometer (GG Vehicles)",
+                "Private_Hire/RPT_taxi_log_odo.aspx",
+                "Taxi_Fin_reports.aspx item 4 is the GG odometer screen. It is not the generic taxi-financial projection."
+            ),
+            ["taxis-fin-cancellations"] = DistinctArchivedScreen(
+                "taxis-fin-cancellations",
+                "Cancellations",
+                "Private_Hire/RPT_cancel.aspx",
+                "Taxi_Fin_reports.aspx item 5 is the cancellations screen. It is not the generic taxi-financial projection."
+            ),
+            ["taxis-fin-no-objective-or-responsibility"] = DistinctArchivedScreen(
+                "taxis-fin-no-objective-or-responsibility",
+                "Taxi log sheets with no Objective or Responsibility codes",
+                "Taxis/RPTnoObjOrResp.aspx",
+                "Taxi_Fin_reports.aspx item 6 is the missing-BAS-code screen. It is not the generic taxi-financial projection."
+            ),
 
             ["trip-authority"] = new(
                 "trip-authority",
@@ -1174,6 +1580,96 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 null,
                 BuildTripAuthorityAsync,
                 ""
+            ),
+            ["available-vehicles-site"] = DistinctShowReportItem(
+                "available-vehicles-site",
+                "Available vehicles at the user's site",
+                "VehiclesPerSite",
+                "TripReports.aspx executes DEV_REP_VehiclesPerSite. It is not the generic trip-authority projection."
+            ),
+            ["unavailable-vehicles-site"] = DistinctShowReportItem(
+                "unavailable-vehicles-site",
+                "Unavailable vehicles at the user's site",
+                "AuthVehiclesPerSite",
+                "TripReports.aspx executes DEV_REP_AuthVehiclesPerSite. It is not the generic trip-authority projection."
+            ),
+            ["users-per-site"] = DistinctShowReportItem(
+                "users-per-site",
+                "Registered Users at the user's site",
+                "UserDetailsPerSite",
+                "TripReports.aspx executes DEV_REP_UserDetailsPerSite. It is not the generic trip-authority projection."
+            ),
+            ["users-per-department"] = DistinctShowReportItem(
+                "users-per-department",
+                "Registered Users in the user's department",
+                "UserDetailsPerDepartment",
+                "TripReports.aspx executes DEV_REP_UserDetailsPerDepartment. It is not the generic trip-authority projection."
+            ),
+            ["users-all-departments"] = DistinctShowReportItem(
+                "users-all-departments",
+                "All Registered Users on the FIS",
+                "UserDetails",
+                "TripReports.aspx executes DEV_REP_UserDetails. It is not the generic trip-authority projection."
+            ),
+            ["trips-per-user-all"] = DistinctShowReportItem(
+                "trips-per-user-all",
+                "All trips issued per user",
+                "TripCountPerUser",
+                "TripReports.aspx executes DEV_REP_TripCountPerUser with no department filter. It is not the generic trip-authority projection."
+            ),
+            ["trips-per-user-department"] = DistinctShowReportItem(
+                "trips-per-user-department",
+                "All trips issued per user in the user's department",
+                "TripCountPerUser",
+                "TripReports.aspx executes DEV_REP_TripCountPerUser with FilterID. It is not the generic trip-authority projection."
+            ),
+            ["trips-for-vehicle"] = DistinctShowReportItem(
+                "trips-for-vehicle",
+                "All trips for a vehicle",
+                "VehicleTrips",
+                "TripReports.aspx SelectVehicleTrip Item=VehicleTrips. It is not the generic trip-authority projection."
+            ),
+            ["drivers-for-vehicle"] = DistinctShowReportItem(
+                "drivers-for-vehicle",
+                "All drivers for a vehicle",
+                "VehicleDrivers",
+                "TripReports.aspx SelectVehicleTrip Item=VehicleDrivers. It is not the generic trip-authority projection."
+            ),
+            ["vehicle-utilisation-driver"] = DistinctShowReportItem(
+                "vehicle-utilisation-driver",
+                "All vehicles for a driver",
+                "VehicleUtilisationByDriverID",
+                "TripReports.aspx SelectDriver Item=VehicleUtilisationByDriverID. It is not the generic trip-authority projection."
+            ),
+            ["vehicle-utilisation"] = DistinctShowReportItem(
+                "vehicle-utilisation",
+                "Vehicle utilisation for a vehicle",
+                "VehicleUtilisation",
+                "TripReports.aspx SelectVehicleTrip Item=VehicleUtilisation. It is not the generic trip-authority projection."
+            ),
+            ["trip-count-last-3-months"] = DistinctArchivedScreen(
+                "trip-count-last-3-months",
+                "Trip count last 3 months",
+                "FISReports/TripReports.aspx",
+                "This trip-authority key has no matching archived ShowReport Item in TripReports.aspx. No generic trip-authority projection was substituted."
+            ),
+            ["trip-authorities-over-25000"] = DistinctArchivedScreen(
+                "trip-authorities-over-25000",
+                "Max Kilos exceeding 25000",
+                "Finance/KiloMaxPerDep_Site_DateRange.aspx?Mode=DSR&Report=AllRoutesOver25000KM",
+                "TripReports.aspx opens the 25000km kilo-max screen. It is not the generic trip-authority projection."
+            ),
+            ["trip-authorities-over-3500-per-day"] = DistinctArchivedScreen(
+                "trip-authorities-over-3500-per-day",
+                "Max Kilos per Day exceeding 3500 per trip",
+                "Finance/KiloMaxPerDep_Site_DateRange.aspx?Mode=DSR&Report=AllDayTripsOver3500KM",
+                "TripReports.aspx opens the 3500km/day kilo-max screen. It is not the generic trip-authority projection."
+            ),
+            ["els-manual-kilo"] = DistinctArchivedScreen(
+                "els-manual-kilo",
+                "Electronic and Manual Logsheet Report",
+                "FISReports/GetReportBetweenStartAndEndDate.aspx?Report=ELSLogReport",
+                "TripReports.aspx opens ELSLogReport. It is not the generic trip-authority projection."
             ),
 
             ["driver-information-finyear"] = new(
@@ -1288,6 +1784,293 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 BuildStoredProcedureParameters: _ => Array.Empty<LegacyStoredProcedureParameter>()
             ),
 
+            ["vehicles-no-trips"] = new(
+                "vehicles-no-trips",
+                "Vehicles with no trips (Any Department)",
+                "ShowReport.aspx?Item=AllVehiclesNoTripsPerDepartment",
+                "AllVehiclesNoTripsPerDepartment",
+                BuildUnmappedUniversalReportAsync,
+                "TripReports.aspx item 3.5 executes DEV_REP_AllVehiclesNoTripsPerDepartment. It is not the generic vehicle list.",
+                _ => Array.Empty<LegacyStoredProcedureParameter>()
+            ),
+
+            ["vehicles-no-trips-daterange"] = new(
+                "vehicles-no-trips-daterange",
+                "Vehicles with no trips between a start and end date",
+                "ShowReport.aspx?Item=AllVehiclesNoTripsPerDepartmentBetweenStartAndEndDate",
+                "AllVehiclesNoTripsPerDepartmentBetweenStartAndEndDate",
+                BuildUnmappedUniversalReportAsync,
+                "TripReports.aspx item 3.6 executes DEV_REP_AllVehiclesNoTripsPerDepartmentBetweenStartAndEndDate. It is not the generic vehicle list.",
+                _ => Array.Empty<LegacyStoredProcedureParameter>()
+            ),
+
+            ["vehicles-per-site"] = new(
+                "vehicles-per-site",
+                "Registered Vehicles in site",
+                "ShowReport.aspx?Item=AllVehiclesPerSite",
+                "AllVehiclesPerSite",
+                BuildUnmappedUniversalReportAsync,
+                "TripReports.aspx executes DEV_REP_AllVehiclesPerSite. It is not the generic vehicle list.",
+                _ => Array.Empty<LegacyStoredProcedureParameter>()
+            ),
+
+            ["vehicles-per-department"] = new(
+                "vehicles-per-department",
+                "Registered Vehicles in department",
+                "ShowReport.aspx?Item=AllVehiclesPerDepartment",
+                "AllVehiclesPerDepartment",
+                BuildUnmappedUniversalReportAsync,
+                "TripReports.aspx executes DEV_REP_AllVehiclesPerDepartment. It is not the generic vehicle list.",
+                _ => Array.Empty<LegacyStoredProcedureParameter>()
+            ),
+
+            ["vehicles-contract-type-site"] = new(
+                "vehicles-contract-type-site",
+                "Vehicles in site by Contract Type",
+                "ShowReport.aspx?Item=CountVehiclesPerTypePerSite",
+                "CountVehiclesPerTypePerSite",
+                BuildUnmappedUniversalReportAsync,
+                "TripReports.aspx executes DEV_REP_CountVehiclesPerTypePerSite. It is not the generic vehicle list.",
+                _ => Array.Empty<LegacyStoredProcedureParameter>()
+            ),
+
+            ["vehicles-contract-type-department"] = new(
+                "vehicles-contract-type-department",
+                "Vehicles in department by Contract Type",
+                "ShowReport.aspx?Item=CountVehiclesPerTypePerDepartment",
+                "CountVehiclesPerTypePerDepartment",
+                BuildUnmappedUniversalReportAsync,
+                "TripReports.aspx executes DEV_REP_CountVehiclesPerTypePerDepartment. It is not the generic vehicle list.",
+                _ => Array.Empty<LegacyStoredProcedureParameter>()
+            ),
+
+            ["vehicles-contract-type-department-site"] = new(
+                "vehicles-contract-type-department-site",
+                "Vehicles in department by Site and by Contract Type",
+                "ShowReport.aspx?Item=CountVehiclesPerTypePerDepartmentPerSite",
+                "CountVehiclesPerTypePerDepartmentPerSite",
+                BuildUnmappedUniversalReportAsync,
+                "TripReports.aspx executes DEV_REP_CountVehiclesPerTypePerDepartmentPerSite. It is not the generic vehicle list.",
+                _ => Array.Empty<LegacyStoredProcedureParameter>()
+            ),
+
+            ["vehicles-inservice-per-gg"] = DistinctVehicleScreen(
+                "vehicles-inservice-per-gg",
+                "In-service vehicles per GG number"
+            ),
+            ["vehicles-inservice-per-dept"] = DistinctVehicleScreen(
+                "vehicles-inservice-per-dept",
+                "In-service vehicles per department"
+            ),
+            ["vehicles-inservice-wesbank"] = DistinctVehicleScreen(
+                "vehicles-inservice-wesbank",
+                "In-service Wesbank vehicles"
+            ),
+            ["vehicles-provincial-numbers"] = DistinctVehicleScreen(
+                "vehicles-provincial-numbers",
+                "Vehicles with provincial numbers"
+            ),
+            ["vehicles-with-barcodes"] = DistinctVehicleScreen(
+                "vehicles-with-barcodes",
+                "Vehicles with barcodes"
+            ),
+            ["vehicles-lpg-converted"] = DistinctVehicleScreen(
+                "vehicles-lpg-converted",
+                "LPG converted vehicles"
+            ),
+            ["vehicles-replaced-per-dept"] = DistinctVehicleScreen(
+                "vehicles-replaced-per-dept",
+                "Replaced vehicles per department"
+            ),
+            ["vehicles-older-than-5y-over-120k"] = DistinctVehicleScreen(
+                "vehicles-older-than-5y-over-120k",
+                "Vehicles older than 5 years over 120k km"
+            ),
+            ["vehicles-older-than-5y-over-120k-period"] = DistinctVehicleScreen(
+                "vehicles-older-than-5y-over-120k-period",
+                "Vehicles older than 5 years over 120k km for a period"
+            ),
+            ["vehicles-extended-service"] = DistinctVehicleScreen(
+                "vehicles-extended-service",
+                "Vehicles on extended service"
+            ),
+            ["vehicles-value-inservice"] = DistinctVehicleScreen(
+                "vehicles-value-inservice",
+                "Value of in-service vehicles"
+            ),
+            ["vehicles-extras"] = DistinctVehicleScreen(
+                "vehicles-extras",
+                "Vehicle extras"
+            ),
+            ["vehicles-selected"] = DistinctVehicleScreen(
+                "vehicles-selected",
+                "Selected vehicles"
+            ),
+            ["vehicles-els-manual"] = DistinctVehicleScreen(
+                "vehicles-els-manual",
+                "Vehicle report - Contracts, ELS and Manual Logs"
+            ),
+            ["vehicle-contract-single"] = DistinctVehicleScreen(
+                "vehicle-contract-single",
+                "Single vehicle contract report"
+            ),
+            ["vehicle-contract-multiple"] = DistinctVehicleScreen(
+                "vehicle-contract-multiple",
+                "Multiple vehicle contract report"
+            ),
+            ["vehicle-contract-els-manual"] = DistinctVehicleScreen(
+                "vehicle-contract-els-manual",
+                "Vehicle contract ELS and manual logs"
+            ),
+            ["vehicle-by-barcode"] = DistinctArchivedScreen(
+                "vehicle-by-barcode",
+                "Information On A Vehicle BY barcode",
+                "Vehicles/RPT_vehicle_barcode.aspx",
+                "Vehicles.aspx item 2 is the barcode lookup screen. It is not the generic vehicle_master list."
+            ),
+            ["vehicles-with-history"] = DistinctArchivedScreen(
+                "vehicles-with-history",
+                "Information On Vehicles With A History",
+                "Vehicles/RPT_History_Of_Vehicles.aspx",
+                "Vehicles.aspx item 4 is the vehicle-history screen. It is not the generic vehicle_master list."
+            ),
+            ["all-vehicles"] = DistinctArchivedScreen(
+                "all-vehicles",
+                "Information On All Vehicles",
+                "Vehicles/RPT_List_Of_Vehicles.aspx",
+                "Vehicles.aspx item 3 is the all-vehicles Crystal screen. It is not the generic vehicle_master list."
+            ),
+            ["vehicle-by-number"] = DistinctArchivedScreen(
+                "vehicle-by-number",
+                "Information On A Vehicle BY GG, Registration, Engine or Chassis Number",
+                "Vehicles/Vehicle_Report.aspx",
+                "Vehicles.aspx item 1 is the one-vehicle lookup screen. It is not the generic vehicle_master list."
+            ),
+
+            ["licences-gg-number"] = DistinctLicenceScreen(
+                "licences-gg-number",
+                "Licence Report for a GG Number",
+                "License/RPT_1gg_main_lic.htm"
+            ),
+            ["licences-prov-reg-number"] = DistinctLicenceScreen(
+                "licences-prov-reg-number",
+                "Licence Report for a Prov Reg Number",
+                "License/RPT_1gp_main_lic.htm"
+            ),
+            ["licences-register-number"] = DistinctLicenceScreen(
+                "licences-register-number",
+                "Licence Report for a Register Number",
+                "License/RPT_1rg_main_lic.htm"
+            ),
+            ["licences-engine-number"] = DistinctLicenceScreen(
+                "licences-engine-number",
+                "Licence Report for an Engine Number",
+                "License/RPT_1eng_main_lic.htm"
+            ),
+            ["licences-chassis-number"] = DistinctLicenceScreen(
+                "licences-chassis-number",
+                "Licence Report for a Chassis Number",
+                "License/RPT_1cha_main_lic.htm"
+            ),
+            ["licences-site"] = DistinctLicenceScreen(
+                "licences-site",
+                "Licence Report for a Site",
+                "License/RPT_1dept_main_lic.htm"
+            ),
+            ["licences-all-with-model-tare-fee"] = DistinctLicenceScreen(
+                "licences-all-with-model-tare-fee",
+                "Licence Report on ALL Vehicles",
+                "License/RPT_all_main_lic.htm"
+            ),
+            ["licences-dept-sites-period"] = DistinctLicenceScreen(
+                "licences-dept-sites-period",
+                "Licence report for department/site and period",
+                "License/RPT_dept_period_main_lic.aspx"
+            ),
+            ["licences-expire-date"] = DistinctLicenceScreen(
+                "licences-expire-date",
+                "Report on Licence EXPIRE DATE",
+                "License/RPT_dept_period_main_lic.aspx"
+            ),
+            ["licences-month-fees"] = DistinctLicenceScreen(
+                "licences-month-fees",
+                "Licence month fees",
+                "License/RPT_monthfees_main_lic.htm"
+            ),
+            ["licences-old-expire-dates"] = DistinctLicenceScreen(
+                "licences-old-expire-dates",
+                "Old licence expire dates",
+                "License/RPT_olddat_main_lic.aspx"
+            ),
+            ["licences-sap-info"] = DistinctLicenceScreen(
+                "licences-sap-info",
+                "Licence SAP info",
+                "License/RPT_sap_main_lic.htm"
+            ),
+            ["licences-cof-info"] = DistinctLicenceScreen(
+                "licences-cof-info",
+                "Licence COF info",
+                "License/RPT_cof_main_lic.htm"
+            ),
+            ["licences-make-model-fee"] = DistinctLicenceScreen(
+                "licences-make-model-fee",
+                "Licence make/model fee",
+                "License/RPT_model_licfees.aspx"
+            ),
+            ["licences-data-workgroup"] = DistinctLicenceScreen(
+                "licences-data-workgroup",
+                "Data Workgroup - Report for Each Or Group of Vehicle",
+                "License/RPT_wgone_main.htm"
+            ),
+            ["licences-data-workgroup-latest"] = DistinctLicenceScreen(
+                "licences-data-workgroup-latest",
+                "Data Workgroup - Only Latest Report for Each Or Group of Vehicle",
+                "License/RPT_wgonelst_main.htm"
+            ),
+            ["licences-received-by-ggmt"] = DistinctLicenceScreen(
+                "licences-received-by-ggmt",
+                "Licences received by GGMT",
+                "License/RPT_1ggrec_main_lic.htm"
+            ),
+
+            ["permanent-contracts-without-tariff"] = new(
+                "permanent-contracts-without-tariff",
+                "Permanent contracts without assigned tariffs",
+                "GFleetReports/VehiclesonContractWithoutTariffs.aspx",
+                null,
+                BuildPermanentContractsWithoutTariffAsync,
+                "The GFleet report VehiclesonContractWithoutTariffs executes dbo.Dev_Rep_Permanentcontractswithouttariffs. It is not the Reports.aspx GetAllVehicleWithNoTariffs item.",
+                _ => Array.Empty<LegacyStoredProcedureParameter>(),
+                "dbo.Dev_Rep_Permanentcontractswithouttariffs"
+            ),
+
+            ["vehicles-universal-selected"] = new(
+                "vehicles-universal-selected",
+                "Universal report for selected vehicles",
+                "Vehicles/RPT_Univ_Selected_Veh_GetReg.aspx",
+                null,
+                BuildUnmappedUniversalReportAsync,
+                "The archived universal selected-vehicle report builds a session collection and a custom field selection. It is not the generic vehicle list."
+            ),
+
+            ["vehicle-contract-universal"] = new(
+                "vehicle-contract-universal",
+                "Information On All Vehicles Contracts (Universal Report)",
+                "FISReports/Contracts/RPT_Contracts_Report_1.aspx",
+                null,
+                BuildUnmappedUniversalReportAsync,
+                "The archived all-contracts universal report is a custom filter screen, not the generic vehicle list."
+            ),
+
+            ["clearance-universal"] = new(
+                "clearance-universal",
+                "Clearance Universal Report",
+                "Clearance/RPT_Clear_Univ.aspx",
+                null,
+                BuildUnmappedUniversalReportAsync,
+                "The archived clearance universal report is a merchant/date filter screen, not the generic clearance list."
+            ),
+
             ["nom-vehicles-without-tariff"] = new(
                 "nom-vehicles-without-tariff",
                 "NOM Vehicles Without Tariffs",
@@ -1309,6 +2092,66 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                         ("@StartDate", (object?)GetDate(filters, "from"), DbType.DateTime),
                         ("@EndDate", (object?)GetDate(filters, "to"), DbType.DateTime)
                     )
+            ),
+            ["wesbank-one-vehicle"] = DistinctArchivedScreen(
+                "wesbank-one-vehicle",
+                "Summary Wesbank Expenses Reports – All Inclusive Summary Expenses Reports",
+                "Finance/GetWesbankReportsDates.aspx",
+                "FinanceRegionWesbankMenu.aspx item a is a date-range summary screen. It is not WesbankExpensesOneProvinceAndAllMonths."
+            ),
+            ["wesbank-one-vehicle-period"] = DistinctArchivedScreen(
+                "wesbank-one-vehicle-period",
+                "Summary Wesbank Expenses Reports – Selection on Summary Expenses Reports",
+                "Finance/GetWesbankReportsDatesAndProvince.aspx",
+                "FinanceRegionWesbankMenu.aspx item b is a province/date summary screen. It is not WesbankExpensesOneProvinceAndAllMonths."
+            ),
+            ["wesbank-one-dept-site"] = DistinctArchivedScreen(
+                "wesbank-one-dept-site",
+                "Detailed Wesbank Expenses Reports – All Inclusive Detailed Expenses Reports",
+                "Finance/GetWesbankReportsDatesProvince.aspx",
+                "FinanceRegionWesbankMenu.aspx item c is a detailed expenses screen. It is not WesbankExpensesOneProvinceAndAllMonths."
+            ),
+            ["wesbank-overfills"] = DistinctArchivedScreen(
+                "wesbank-overfills",
+                "Detailed Wesbank Expenses Reports – Selection on Detailed Expenses Reports",
+                "Finance/GetWesbankReportsDatesAndProvince2.aspx",
+                "FinanceRegionWesbankMenu.aspx item d is a detailed selection screen. It is not WesbankExpensesOneProvinceAndAllMonths."
+            ),
+            ["wesbank-multiple-daily-fuels"] = DistinctArchivedScreen(
+                "wesbank-multiple-daily-fuels",
+                "Wesbank multiple daily fuels",
+                "Finance/FinanceRegionWesbankMenu.aspx",
+                "This Wesbank key is a distinct archived expenses screen. It is not WesbankExpensesOneProvinceAndAllMonths."
+            ),
+            ["auction"] = DistinctArchivedScreen(
+                "auction",
+                "Auction Reports Menu",
+                "Auction/RPTAuction.aspx",
+                "RPTAuction.aspx is the auction reports menu. It is not the vehicle-disposals list."
+            ),
+            ["auction-one-vehicle"] = DistinctArchivedScreen(
+                "auction-one-vehicle",
+                "Auction Report on ONE Vehicle",
+                "auction/RPT_one_num_main_auction.htm",
+                "RPTAuction.aspx item 1 is a one-vehicle Crystal/HTML screen. It is not the vehicle-disposals list."
+            ),
+            ["auction-sale-to-name"] = DistinctArchivedScreen(
+                "auction-sale-to-name",
+                "Auction Report on Sale to Name",
+                "auction/RPT_one_name_main_auction.aspx",
+                "RPTAuction.aspx item 3 is the sale-to-name screen. It is not the vehicle-disposals list."
+            ),
+            ["auction-one-sort-gg"] = DistinctArchivedScreen(
+                "auction-one-sort-gg",
+                "Auction Report of ONE Auction - Sort by GG Number",
+                "auction/RPT_one_auct1_main_auction.aspx",
+                "RPTAuction.aspx item 4 is the GG-number sort screen. It is not the vehicle-disposals list."
+            ),
+            ["auction-one-sort-lot"] = DistinctArchivedScreen(
+                "auction-one-sort-lot",
+                "Auction Report of ONE Auction - Sort by LOT Number",
+                "auction/RPT_one_auct2_main_auction.aspx",
+                "RPTAuction.aspx item 5 is the lot-number sort screen. It is not the vehicle-disposals list."
             ),
 
             ["workshop"] = new(
@@ -1468,9 +2311,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 into vehicleProvinces
             from province in vehicleProvinces.DefaultIfEmpty()
             where
-                !vehicle.is_deleted
                 // Legacy report status contract: 0 = New, 1 = In-Service.
-                && vehicle.vehicle_status_code >= 0
+                vehicle.vehicle_status_code >= 0
                 && vehicle.vehicle_status_code <= 1
             select new
             {
@@ -1592,8 +2434,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 var chunkContracts = await _context
                     .Contracts.AsNoTracking()
                     .Where(contract =>
-                        !contract.is_deleted
-                        && (contract.still_current == "y" || contract.still_current == "n")
+                        (contract.still_current == "y" || contract.still_current == "n")
                         && vmfCodeChunk.Contains(contract.vmf_code)
                     )
                     .Select(contract => new AssetListFallbackContract(
@@ -1729,8 +2570,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var contracts = _context
             .Contracts.AsNoTracking()
             .Where(contract =>
-                !contract.is_deleted
-                && (contract.still_current == "y" || contract.still_current == "n")
+                (contract.still_current == "y" || contract.still_current == "n")
             );
         var currentContracts = contracts.Where(contract => contract.still_current == "y");
         var historicContracts = contracts.Where(contract => contract.still_current == "n");
@@ -1779,8 +2619,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 .Take(1)
                 .DefaultIfEmpty()
             where
-                !vehicle.is_deleted
-                && vehicle.vehicle_status_code >= 0
+                vehicle.vehicle_status_code >= 0
                 && vehicle.vehicle_status_code <= 1
             select new
             {
@@ -2665,7 +3504,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 on contract.site_code equals site.Site_code
                 into contractSites
             from site in contractSites.DefaultIfEmpty()
-            where !contract.is_deleted
+            where true
             select new
             {
                 contract.contract_code,
@@ -2676,7 +3515,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 contract.end_date,
                 contract.still_current,
                 contract.contract_type,
-                contract.contract_status_code,
+                contract_status_code = (short?)null,
                 Site = site != null ? site.description : null,
                 contract.Driver_name,
                 contract.Authorisation,
@@ -2752,7 +3591,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 on contract.site_code equals site.Site_code
                 into contractSites
             from site in contractSites.DefaultIfEmpty()
-            where !contract.is_deleted
+            where true
             select new
             {
                 contract.contract_code,
@@ -2766,7 +3605,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 contract.target_return_date,
                 contract.contract_type,
                 contract.still_current,
-                contract.contract_status_code,
+                contract_status_code = (short?)null,
                 contract.Driver_name,
                 contract.Authorisation,
                 contract.Notes,
@@ -4174,7 +5013,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
         var activeContracts = _context
             .Contracts.AsNoTracking()
-            .Where(contract => !contract.is_deleted && contract.still_current == "Y");
+            .Where(contract => contract.still_current == "Y");
         var query =
             from vehicle in _context.Vehicles.AsNoTracking()
             join status in _context.VehicleStatuses.AsNoTracking()
@@ -4190,8 +5029,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 into contractSites
             from site in contractSites.DefaultIfEmpty()
             where
-                !vehicle.is_deleted
-                && ((vehicle.highest_km ?? 0) >= threshold || vehicle.current_odo >= threshold)
+                ((vehicle.highest_km ?? 0) >= threshold || vehicle.current_odo >= threshold)
             select new
             {
                 vehicle.vmf_code,
@@ -4249,8 +5087,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var query = _context
             .Vehicles.AsNoTracking()
             .Where(vehicle =>
-                !vehicle.is_deleted
-                && (
+                (
                     vehicle.take_on_odo < 0
                     || vehicle.current_odo < 0
                     || vehicle.current_odo < vehicle.take_on_odo
@@ -4357,7 +5194,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 on model.licence_fee_code equals fee.licence_fee_code
                 into fees
             from fee in fees.DefaultIfEmpty()
-            where !vehicle.is_deleted
+            where true
             select new
             {
                 vehicle.vmf_code,
@@ -4976,7 +5813,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             from scanDoc in _context.ScanDocs.AsNoTracking()
             join vehicle in _context.Vehicles.AsNoTracking()
                 on scanDoc.vmf_code equals vehicle.vmf_code
-            where !scanDoc.is_deleted && !vehicle.is_deleted
             select new
             {
                 vehicle.vmf_code,
@@ -4984,7 +5820,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 vehicle.registration_number,
                 scanDoc.period_begin,
                 scanDoc.period_end,
-                DateUploaded = scanDoc.date_updated ?? scanDoc.date_created,
+                DateUploaded = scanDoc.period_end ?? scanDoc.period_begin,
                 scanDoc.image,
             };
 
@@ -5061,7 +5897,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     {
         var query = _context
             .Tariffs.AsNoTracking()
-            .Where(tariff => !tariff.is_deleted && (tariff.year_manufactured ?? 0) <= 2007)
+            .Where(tariff => (tariff.year_manufactured ?? 0) <= 2007)
             .AsQueryable();
         var page = await MaterializeDatabasePageAsync(
             query,
@@ -5102,7 +5938,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     {
         var from = GetDate(filters, "from")?.Date;
         var to = GetDate(filters, "to")?.Date;
-        var query = _context.Tariffs.AsNoTracking().Where(tariff => !tariff.is_deleted);
+        var query = _context.Tariffs.AsNoTracking();
         if (from.HasValue)
         {
             query = query.Where(tariff => tariff.effective_start_date.Date >= from.Value);
@@ -5154,7 +5990,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 on tariff.vmf_code equals vehicle.vmf_code
                 into tariffVehicles
             from vehicle in tariffVehicles.DefaultIfEmpty()
-            where !tariff.is_deleted && vehicle != null && (vehicle.year_manufactured ?? 0) >= 2008
+            where vehicle != null && (vehicle.year_manufactured ?? 0) >= 2008
             orderby vehicle.fleet_number, vehicle.registration_number, tariff.start_date descending
             select new
             {
@@ -5997,8 +6833,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 into tripVehicles
             from vehicle in tripVehicles.DefaultIfEmpty()
             where
-                !trip.is_deleted
-                && trip.issue_date.Date <= cutoffDate
+                trip.issue_date.Date <= cutoffDate
                 && (!trip.expiry_date.HasValue || trip.expiry_date >= DateTime.Today.Date)
             orderby trip.issue_date, trip.trip_authority_code
             select new
@@ -6066,7 +6901,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
         var activeVmfCodes = await _context
             .Contracts.AsNoTracking()
-            .Where(contract => !contract.is_deleted && contract.still_current == "Y")
+            .Where(contract => contract.still_current == "Y")
             .Select(contract => contract.vmf_code)
             .Distinct()
             .ToListAsync(cancellationToken);
@@ -6081,7 +6916,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 on vehicle.location_code equals site.Site_code
                 into sites
             from site in sites.DefaultIfEmpty()
-            where !vehicle.is_deleted && !activeVmfCodes.Contains(vehicle.vmf_code)
+            where !activeVmfCodes.Contains(vehicle.vmf_code)
             select new
             {
                 vehicle.vmf_code,
@@ -6146,8 +6981,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var query = _context
             .Vehicles.AsNoTracking()
             .Where(vehicle =>
-                !vehicle.is_deleted
-                && vehicle.purchase_date.HasValue
+                vehicle.purchase_date.HasValue
                 && vehicle.purchase_date.Value.Date >= from
                 && vehicle.purchase_date.Value.Date <= to
             )
@@ -6159,7 +6993,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 vehicle.purchase_date,
                 vehicle.purchase_amount,
                 vehicle.purchased_from,
-                vehicle.invoice_number,
+                InvoiceNumber = (string?)null,
                 vehicle.take_on_date,
                 vehicle.current_odo,
             });
@@ -6189,7 +7023,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Purchase Date", row => row.purchase_date),
             Column("Purchase Amount", row => row.purchase_amount),
             Column("Purchased From", row => row.purchased_from),
-            Column("Invoice Number", row => row.invoice_number),
+            Column("Invoice Number", row => row.InvoiceNumber),
             Column("Take On Date", row => row.take_on_date),
             Column("Current ODO", row => row.current_odo)
         );
@@ -6204,8 +7038,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var query = _context
             .Vehicles.AsNoTracking()
             .Where(vehicle =>
-                !vehicle.is_deleted
-                && vehicle.sold_date.HasValue
+                vehicle.sold_date.HasValue
                 && vehicle.sold_date.Value.Date >= from
                 && vehicle.sold_date.Value.Date <= to
             )
@@ -6410,8 +7243,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 into statuses
             from status in statuses.DefaultIfEmpty()
             where
-                !vehicle.is_deleted
-                && (
+                (
                     (vehicle.take_on_date.Date >= startDate && vehicle.take_on_date.Date <= endDate)
                     || (
                         vehicle.sold_date.HasValue
@@ -6489,7 +7321,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 on vehicle.location_code equals site.Site_code
                 into sites
             from site in sites.DefaultIfEmpty()
-            where !vehicle.is_deleted
+            where true
             orderby status.status_description, vehicle.fleet_number, vehicle.registration_number
             select new
             {
@@ -7239,8 +8071,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 into histories
             from vehicle in histories.DefaultIfEmpty()
             where
-                !history.is_deleted
-                && history.status_start_date.Date <= endDate
+                history.status_start_date.Date <= endDate
                 && history.status_end_date.Date >= startDate
             select new
             {
@@ -7252,7 +8083,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 history.vehicle_status_description,
                 history.status_start_date,
                 history.status_end_date,
-                history.date_created,
             };
 
         if (statusCode.HasValue)
@@ -7286,8 +8116,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Vehicle Status Code", row => row.vehicle_status_code),
             Column("Vehicle Status Description", row => row.vehicle_status_description),
             Column("Status Start Date", row => row.status_start_date),
-            Column("Status End Date", row => row.status_end_date),
-            Column("Captured On", row => row.date_created)
+            Column("Status End Date", row => row.status_end_date)
         );
     }
 
@@ -7325,7 +8154,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 on model.class_code equals vehicleClass.class_code
                 into vehicleClasses
             from vehicleClass in vehicleClasses.DefaultIfEmpty()
-            where !vehicle.is_deleted
+            where true
             select new
             {
                 vehicle.vmf_code,
@@ -7392,43 +8221,21 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         );
     }
 
-    private async Task<LegacyReportResultDto> BuildVehiclesNoTariffAsync(
+    private static Task<LegacyReportResultDto> BuildVehiclesNoTariffAsync(
         IDictionary<string, string?> filters,
         CancellationToken cancellationToken
     )
     {
-        // The archived report procedure is preferred. This fallback is only
-        // reached when that object is genuinely absent, so negotiate the
-        // legacy columns instead of querying VehicleTariffs through EF (whose
-        // expanded audit projection is not present on the original database).
-        var vehicleColumns = await GetReportTableColumnsAsync("vehicle_master", cancellationToken);
-        var statusColumns = await GetReportTableColumnsAsync("vehicle_status", cancellationToken);
-        var tariffColumns = await GetReportTableColumnsAsync(
-            "vehicle_tariff",
-            cancellationToken,
-            "fin"
-        );
-        var requiredVehicleColumns = new[]
-        {
-            "vmf_code",
-            "fleet_number",
-            "registration_number",
-            "year_manufactured",
-            "current_odo",
-            "location_code",
-            "vehicle_status_code",
-            "take_on_date",
-        };
-        if (
-            requiredVehicleColumns.Any(column => !vehicleColumns.Contains(column))
-            || !new[] { "vmf_code", "end_date" }.All(tariffColumns.Contains)
-        )
-        {
-            return CreateDynamicResult(
+        // ShowReport.aspx prefixes Item=GetAllVehicleWithNoTariffs to
+        // dbo.DEV_REP_GetAllVehicleWithNoTariffs. That object is missing from
+        // the archive and is not the GFleet Dev_Rep_Permanentcontractswithouttariffs
+        // report. Do not substitute a different procedure or table projection.
+        return Task.FromResult(
+            CreateDynamicResult(
                 "Vehicles with Expired or No Tariffs",
                 "ShowReport.aspx?Item=GetAllVehicleWithNoTariffs",
                 true,
-                "The legacy report procedure is unavailable and the compatible vehicle/tariff tables are not available for a safe fallback.",
+                "The legacy procedure dbo.DEV_REP_GetAllVehicleWithNoTariffs is unavailable; no different table projection was substituted.",
                 Array.Empty<object>(),
                 Column("VMF Code", _ => null),
                 Column("GG Number", _ => null),
@@ -7438,60 +8245,24 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 Column("Location Code", _ => null),
                 Column("Status", _ => null),
                 Column("Take On Date", _ => null)
-            );
-        }
-
-        var vehicleDeletedPredicate = vehicleColumns.Contains("is_deleted")
-            ? "AND COALESCE([v].[is_deleted], 0) = 0"
-            : string.Empty;
-        var tariffDeletedPredicate = tariffColumns.Contains("is_deleted")
-            ? "AND COALESCE([tariff].[is_deleted], 0) = 0"
-            : string.Empty;
-        var statusJoin = statusColumns.Contains("vehicle_status_code")
-            && statusColumns.Contains("status_description")
-            ? "LEFT JOIN [dbo].[vehicle_status] AS [status] ON [status].[vehicle_status_code] = [v].[vehicle_status_code]"
-            : string.Empty;
-        var statusProjection = statusJoin
-            .Length > 0
-                ? "[status].[status_description]"
-                : "CAST(NULL AS varchar(255))";
-        var sql = $"""
-            SELECT
-                [v].[vmf_code] AS [VMF Code],
-                [v].[fleet_number] AS [GG Number],
-                [v].[registration_number] AS [GP Number],
-                [v].[year_manufactured] AS [Year Manufactured],
-                [v].[current_odo] AS [Current ODO],
-                [v].[location_code] AS [Location Code],
-                {statusProjection} AS [Status],
-                [v].[take_on_date] AS [Take On Date]
-            FROM [dbo].[vehicle_master] AS [v]
-            {statusJoin}
-            WHERE [v].[vehicle_status_code] IN (1, 2)
-              {vehicleDeletedPredicate}
-              AND NOT EXISTS
-              (
-                  SELECT 1
-                  FROM [fin].[vehicle_tariff] AS [tariff]
-                  WHERE [tariff].[vmf_code] = [v].[vmf_code]
-                    AND ([tariff].[end_date] IS NULL OR [tariff].[end_date] >= CONVERT(date, GETDATE()))
-                    {tariffDeletedPredicate}
-              )
-            ORDER BY [v].[fleet_number], [v].[registration_number], [v].[vmf_code]
-            """;
-        var result = await ExecutePagedRawReportQueryAsync(
-            "vehicles-no-tariff",
-            "Vehicles with Expired or No Tariffs",
-            "ShowReport.aspx?Item=GetAllVehicleWithNoTariffs",
-            sql,
-            [],
-            filters,
-            cancellationToken
+            )
         );
-        result.IsApproximate = true;
-        result.ApproximationReason =
-            "The legacy report procedure was unavailable; the compatibility fallback preserves the vehicle status and current fin.vehicle_tariff absence filters without using EF optional columns.";
-        return result;
+    }
+
+    private static Task<LegacyReportResultDto> BuildPermanentContractsWithoutTariffAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    )
+    {
+        return Task.FromResult(
+            CreateDynamicResult(
+                "Permanent contracts without assigned tariffs",
+                "GFleetReports/VehiclesonContractWithoutTariffs.aspx",
+                true,
+                "The legacy procedure dbo.Dev_Rep_Permanentcontractswithouttariffs is unavailable; no different table projection was substituted.",
+                Array.Empty<object>()
+            )
+        );
     }
 
     private static Task<LegacyReportResultDto> BuildNomVehiclesWithoutTariffAsync(
@@ -7531,6 +8302,84 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 Column("Site", _ => null),
                 Column("Site Contact Details", _ => null),
                 Column("Province", _ => null)
+            )
+        );
+    }
+
+    private static LegacyReportDefinition DistinctArchivedScreen(
+        string key,
+        string title,
+        string legacyTarget,
+        string reason
+    ) =>
+        new(key, title, legacyTarget, null, BuildUnmappedUniversalReportAsync, reason);
+
+    private static LegacyReportDefinition DistinctFineScreen(
+        string key,
+        string title,
+        string legacyTarget
+    ) =>
+        new(
+            key,
+            title,
+            legacyTarget,
+            null,
+            BuildUnmappedUniversalReportAsync,
+            "Fines/RPTFines.aspx opens a distinct Crystal/HTML fines screen. It is not the generic fines list."
+        );
+
+    private static LegacyReportDefinition DistinctVehicleScreen(string key, string title) =>
+        new(
+            key,
+            title,
+            string.Empty,
+            null,
+            BuildUnmappedUniversalReportAsync,
+            "This archived vehicle report is a distinct screen. No generic vehicle_master projection was substituted."
+        );
+
+    private static LegacyReportDefinition DistinctLicenceScreen(
+        string key,
+        string title,
+        string legacyTarget
+    ) =>
+        new(
+            key,
+            title,
+            legacyTarget,
+            null,
+            BuildUnmappedUniversalReportAsync,
+            "License/RPTLicence.aspx opens a distinct Crystal/HTML licence screen. It is not the generic licence list."
+        );
+
+    private static LegacyReportDefinition DistinctShowReportItem(
+        string key,
+        string title,
+        string storedProcedureItem,
+        string reason
+    ) =>
+        new(
+            key,
+            title,
+            $"ShowReport.aspx?Item={storedProcedureItem}",
+            storedProcedureItem,
+            BuildUnmappedUniversalReportAsync,
+            reason,
+            _ => Array.Empty<LegacyStoredProcedureParameter>()
+        );
+
+    private static Task<LegacyReportResultDto> BuildUnmappedUniversalReportAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken
+    )
+    {
+        return Task.FromResult(
+            CreateDynamicResult(
+                "Universal report",
+                string.Empty,
+                true,
+                "This archived universal report is a custom filter screen. No generic table projection was substituted.",
+                Array.Empty<object>()
             )
         );
     }
@@ -8563,8 +9412,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         return await _context
             .Vehicles.AsNoTracking()
             .Where(vehicle =>
-                !vehicle.is_deleted
-                && (
+                (
                     (vehicle.fleet_number != null && vehicle.fleet_number == term)
                     || (vehicle.registration_number != null && vehicle.registration_number == term)
                     || (vehicle.chassis_number != null && vehicle.chassis_number == term)
@@ -8588,7 +9436,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         }
 
         var term = search.Trim();
-        var query = _context.Vehicles.AsNoTracking().Where(vehicle => !vehicle.is_deleted);
+        var query = _context.Vehicles.AsNoTracking();
 
         query = NormalizeVehicleSearchMode(mode) switch
         {
@@ -8601,9 +9449,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "VIN" => query.Where(vehicle =>
                 vehicle.chassis_number != null && vehicle.chassis_number == term
             ),
-            "INVOICE" => query.Where(vehicle =>
-                vehicle.invoice_number != null && vehicle.invoice_number == term
-            ),
+            "INVOICE" => query.Where(vehicle => false),
             _ => query.Where(vehicle =>
                 vehicle.fleet_number != null && vehicle.fleet_number == term
             ),
@@ -8627,7 +9473,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         }
 
         var term = search.Trim();
-        var query = _context.Vehicles.AsNoTracking().Where(vehicle => !vehicle.is_deleted);
+        var query = _context.Vehicles.AsNoTracking();
 
         query = NormalizeVehicleSearchMode(mode) switch
         {
@@ -8641,7 +9487,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 vehicle.chassis_number != null && vehicle.chassis_number.Contains(term)
             ),
             "INVOICE" => query.Where(vehicle =>
-                vehicle.invoice_number != null && vehicle.invoice_number.Contains(term)
+                false
             ),
             _ => query.Where(vehicle =>
                 vehicle.fleet_number != null && vehicle.fleet_number.Contains(term)

@@ -554,10 +554,6 @@ public class FinanceReportController : BaseApiController
                     join year in _context.PostingYears
                         on month.posting_year_code equals year.posting_year_code
                     where item.site_code == filterId
-                        && !item.is_deleted
-                        && !invoice.is_deleted
-                        && !month.is_deleted
-                        && !year.is_deleted
                     select new { year.year_start_date, month.month_number }
                 )
                 .Distinct()
@@ -571,9 +567,6 @@ public class FinanceReportController : BaseApiController
                     join year in _context.PostingYears
                         on month.posting_year_code equals year.posting_year_code
                     where invoice.department_code == filterId
-                        && !invoice.is_deleted
-                        && !month.is_deleted
-                        && !year.is_deleted
                     select new { year.year_start_date, month.month_number }
                 )
                 .Distinct()

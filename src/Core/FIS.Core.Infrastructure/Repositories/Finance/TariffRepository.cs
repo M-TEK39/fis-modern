@@ -5,6 +5,7 @@ using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FIS.Core.Infrastructure.Repositories;
 
@@ -357,46 +358,190 @@ public class TariffRepository : ITariffRepository
     }
 
     /// <summary>
-    /// Create new tariff.
+    /// Create new tariff using only columns confirmed on dbo.tariff.
     /// </summary>
     public async Task<Tariff> CreateAsync(Tariff tariff, int currentUserId)
     {
-        tariff.date_created = DateTime.Now;
-        _context.Set<Tariff>().Add(tariff);
-        await _context.SaveChangesAsync();
-        return tariff;
+        ArgumentNullException.ThrowIfNull(tariff);
+        var columns = await GetAvailableColumnsAsync();
+        var now = DateTime.Now;
+        var values = new List<WriteValue>();
+        AddValue(values, columns, "class_code", "@classCode", DbType.Int16, tariff.class_code);
+        AddValue(values, columns, "year_manufactured", "@yearManufactured", DbType.Int16, tariff.year_manufactured);
+        AddValue(values, columns, "monthly_fixed_amount", "@monthlyFixed", DbType.Decimal, tariff.monthly_fixed_amount);
+        AddValue(values, columns, "monthly_odo_amount", "@monthlyOdo", DbType.Decimal, tariff.monthly_odo_amount);
+        AddValue(values, columns, "daily_fixed_amount", "@dailyFixed", DbType.Decimal, tariff.daily_fixed_amount);
+        AddValue(values, columns, "effective_start_date", "@startDate", DbType.DateTime2, tariff.effective_start_date);
+        AddValue(values, columns, "effective_end_date", "@endDate", DbType.DateTime2, tariff.effective_end_date);
+        AddValue(values, columns, "replacement_percent", "@replacementPercent", DbType.Int16, tariff.replacement_percent);
+        AddValue(values, columns, "loss_percent", "@lossPercent", DbType.Int16, tariff.loss_percent);
+        AddValue(values, columns, "profit_percent", "@profitPercent", DbType.Int16, tariff.profit_percent);
+        AddValue(values, columns, "overhead_percent", "@overheadPercent", DbType.Int16, tariff.overhead_percent);
+        AddValue(values, columns, "accident_percent", "@accidentPercent", DbType.Int16, tariff.accident_percent);
+        AddValue(values, columns, "fuel_kilo_tariff", "@fuelKilo", DbType.Decimal, tariff.fuel_kilo_tariff);
+        AddValue(values, columns, "tariff_approval_status", "@approvalStatus", DbType.Int16, tariff.tariff_approval_status);
+        AddValue(values, columns, "approver_code", "@approverCode", DbType.Int32, tariff.approver_code);
+        AddValue(values, columns, "approval_date", "@approvalDate", DbType.DateTime2, tariff.approval_date);
+        AddValue(values, columns, "rejection_reason", "@rejectionReason", DbType.String, tariff.rejection_reason);
+        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, now);
+        AddValue(values, columns, "created_by", "@createdBy", DbType.Int32, currentUserId);
+        AddValue(values, columns, "created_by_user_code", "@createdByUser", DbType.Int32, currentUserId);
+        AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+
+        if (values.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "No compatible columns are available for inserting into dbo.tariff."
+            );
+        }
+
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = $"""
+            INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+            OUTPUT INSERTED.[tariff_code]
+            VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
+            """;
+        AddParameters(command, values);
+        tariff.tariff_code = Convert.ToInt32(await command.ExecuteScalarAsync());
+        return await GetByIdAsync(tariff.tariff_code)
+            ?? throw new InvalidOperationException("Created tariff could not be read.");
     }
 
     /// <summary>
-    /// Update existing tariff.
+    /// Update existing tariff using only columns confirmed on dbo.tariff.
     /// </summary>
     public async Task<Tariff> UpdateAsync(Tariff tariff, int currentUserId)
     {
-        if (tariff == null)
-            throw new ArgumentNullException(nameof(tariff));
-
-        var existing = await _context.Set<Tariff>().FindAsync(tariff.tariff_code);
-        if (existing == null)
-            throw new InvalidOperationException(
+        ArgumentNullException.ThrowIfNull(tariff);
+        _ =
+            await GetByIdAsync(tariff.tariff_code)
+            ?? throw new InvalidOperationException(
                 $"Tariff with tariff_code {tariff.tariff_code} not found"
             );
 
-        tariff.date_modified = DateTime.Now;
-        _context.Entry(existing).CurrentValues.SetValues(tariff);
-        await _context.SaveChangesAsync();
-        return existing;
+        var columns = await GetAvailableColumnsAsync();
+        var assignments = new List<string>();
+        var values = new List<WriteValue>();
+        AddAssignment(assignments, values, columns, "class_code", "@classCode", DbType.Int16, tariff.class_code);
+        AddAssignment(assignments, values, columns, "year_manufactured", "@yearManufactured", DbType.Int16, tariff.year_manufactured);
+        AddAssignment(assignments, values, columns, "monthly_fixed_amount", "@monthlyFixed", DbType.Decimal, tariff.monthly_fixed_amount);
+        AddAssignment(assignments, values, columns, "monthly_odo_amount", "@monthlyOdo", DbType.Decimal, tariff.monthly_odo_amount);
+        AddAssignment(assignments, values, columns, "daily_fixed_amount", "@dailyFixed", DbType.Decimal, tariff.daily_fixed_amount);
+        AddAssignment(assignments, values, columns, "effective_start_date", "@startDate", DbType.DateTime2, tariff.effective_start_date);
+        AddAssignment(assignments, values, columns, "effective_end_date", "@endDate", DbType.DateTime2, tariff.effective_end_date);
+        AddAssignment(assignments, values, columns, "replacement_percent", "@replacementPercent", DbType.Int16, tariff.replacement_percent);
+        AddAssignment(assignments, values, columns, "loss_percent", "@lossPercent", DbType.Int16, tariff.loss_percent);
+        AddAssignment(assignments, values, columns, "profit_percent", "@profitPercent", DbType.Int16, tariff.profit_percent);
+        AddAssignment(assignments, values, columns, "overhead_percent", "@overheadPercent", DbType.Int16, tariff.overhead_percent);
+        AddAssignment(assignments, values, columns, "accident_percent", "@accidentPercent", DbType.Int16, tariff.accident_percent);
+        AddAssignment(assignments, values, columns, "fuel_kilo_tariff", "@fuelKilo", DbType.Decimal, tariff.fuel_kilo_tariff);
+        AddAssignment(assignments, values, columns, "tariff_approval_status", "@approvalStatus", DbType.Int16, tariff.tariff_approval_status);
+        AddAssignment(assignments, values, columns, "approver_code", "@approverCode", DbType.Int32, tariff.approver_code);
+        AddAssignment(assignments, values, columns, "approval_date", "@approvalDate", DbType.DateTime2, tariff.approval_date);
+        AddAssignment(assignments, values, columns, "rejection_reason", "@rejectionReason", DbType.String, tariff.rejection_reason);
+        AddAssignment(assignments, values, columns, "date_modified", "@dateModified", DbType.DateTime2, DateTime.Now);
+        AddAssignment(assignments, values, columns, "modified_by", "@modifiedBy", DbType.Int32, currentUserId);
+        AddAssignment(assignments, values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, DateTime.Now);
+        AddAssignment(assignments, values, columns, "modified_by_user_code", "@modifiedByUser", DbType.Int32, currentUserId);
+
+        if (assignments.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "No compatible columns are available for updating dbo.tariff."
+            );
+        }
+
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = $"""
+            UPDATE [dbo].[{TableName}]
+            SET {string.Join(", ", assignments)}
+            WHERE [tariff_code] = @tariffCode
+            """;
+        AddParameters(command, values);
+        AddParameter(command, "@tariffCode", DbType.Int32, tariff.tariff_code);
+        if (await command.ExecuteNonQueryAsync() == 0)
+        {
+            throw new InvalidOperationException(
+                $"Tariff with tariff_code {tariff.tariff_code} not found"
+            );
+        }
+
+        return await GetByIdAsync(tariff.tariff_code)
+            ?? throw new InvalidOperationException("Updated tariff could not be read.");
     }
 
     /// <summary>
-    /// Delete tariff.
+    /// Delete tariff. Soft-delete when is_deleted exists; otherwise labelled hard DELETE.
     /// </summary>
     public async Task DeleteAsync(int tariffCode, int currentUserId)
     {
-        var tariff = await GetByIdAsync(tariffCode);
-        if (tariff != null)
+        var columns = await GetAvailableColumnsAsync();
+        await using var scope = await OpenConnectionAsync();
+        await using var command = scope.Connection.CreateCommand();
+        command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        if (columns.Contains("is_deleted"))
         {
-            _context.Set<Tariff>().Remove(tariff);
-            await _context.SaveChangesAsync();
+            var assignments = new List<string> { "[is_deleted] = @isDeleted" };
+            var values = new List<WriteValue> { new("is_deleted", "@isDeleted", DbType.Boolean, true) };
+            AddAssignment(assignments, values, columns, "date_modified", "@dateModified", DbType.DateTime2, DateTime.Now);
+            AddAssignment(assignments, values, columns, "modified_by", "@modifiedBy", DbType.Int32, currentUserId);
+            command.CommandText = $"""
+                UPDATE [dbo].[{TableName}]
+                SET {string.Join(", ", assignments)}
+                WHERE [tariff_code] = @tariffCode
+                """;
+            AddParameters(command, values);
         }
+        else
+        {
+            command.CommandText = $"""
+                DELETE FROM [dbo].[{TableName}]
+                WHERE [tariff_code] = @tariffCode
+                """;
+        }
+
+        AddParameter(command, "@tariffCode", DbType.Int32, tariffCode);
+        await command.ExecuteNonQueryAsync();
     }
+
+    private static void AddValue(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        string column,
+        string parameter,
+        DbType dbType,
+        object? value
+    )
+    {
+        if (columns.Contains(column))
+            values.Add(new WriteValue(column, parameter, dbType, value));
+    }
+
+    private static void AddAssignment(
+        ICollection<string> assignments,
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> columns,
+        string column,
+        string parameter,
+        DbType dbType,
+        object? value
+    )
+    {
+        if (!columns.Contains(column))
+            return;
+        assignments.Add($"[{column}] = {parameter}");
+        values.Add(new WriteValue(column, parameter, dbType, value));
+    }
+
+    private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)
+    {
+        foreach (var value in values)
+            AddParameter(command, value.Parameter, value.DbType, value.Value);
+    }
+
+    private sealed record WriteValue(string Column, string Parameter, DbType DbType, object? Value);
 }

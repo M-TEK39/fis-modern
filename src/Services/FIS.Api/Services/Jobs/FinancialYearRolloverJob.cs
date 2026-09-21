@@ -45,7 +45,7 @@ public class FinancialYearRolloverJob
 
         // Idempotency: do nothing if the record already exists
         var exists = await _context.FinancialYears.AnyAsync(y =>
-            y.financial_year_code == newFyCode && !y.is_deleted
+            y.financial_year_code == newFyCode
         );
 
         if (exists)
@@ -63,8 +63,6 @@ public class FinancialYearRolloverJob
             financial_year_name = fyName,
             start_date = startDate,
             end_date = endDate,
-            date_created = DateTime.UtcNow,
-            is_deleted = false,
         };
 
         _context.FinancialYears.Add(newYear);

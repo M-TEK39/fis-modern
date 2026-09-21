@@ -30,6 +30,9 @@ public class Overhead
     [Column("TariffParameterID")]
     public int TariffParameterID { get; set; }
 
+    [Column("TariffParameterYear")]
+    public int? TariffParameterYear { get; set; }
+
     [Column("CaptureDate")]
     public DateTime CaptureDate { get; set; }
 

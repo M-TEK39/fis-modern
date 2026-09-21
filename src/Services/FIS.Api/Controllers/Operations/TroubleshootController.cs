@@ -194,7 +194,7 @@ public class TroubleshootController : BaseApiController
     {
         var now = DateTime.UtcNow;
         var rows = await _context
-            .TSLogs.Where(x => !x.is_deleted && x.date_updated == null)
+            .TSLogs.Where(x => x.date_updated == null)
             .ToListAsync();
         foreach (var row in rows)
         {
@@ -264,7 +264,7 @@ public class TroubleshootController : BaseApiController
 
         if (mode == "TA")
         {
-            IQueryable<Trip> tripQuery = _context.Trips.AsNoTracking().Where(t => !t.is_deleted);
+            IQueryable<Trip> tripQuery = _context.Trips.AsNoTracking();
 
             if (int.TryParse(searchValue, out var taCode))
             {
@@ -279,13 +279,13 @@ public class TroubleshootController : BaseApiController
 
             var taRows = await tripQuery
                 .Join(
-                    _context.Contracts.AsNoTracking().Where(c => !c.is_deleted),
+                    _context.Contracts.AsNoTracking(),
                     t => t.contract_code,
                     c => c.contract_code,
                     (t, c) => new { t, c }
                 )
                 .Join(
-                    _context.Vehicles.AsNoTracking().Where(v => !v.is_deleted),
+                    _context.Vehicles.AsNoTracking(),
                     tc => tc.c.vmf_code,
                     v => v.vmf_code,
                     (tc, v) =>
@@ -491,20 +491,11 @@ public class TroubleshootController : BaseApiController
         [FromBody] List<ApproverRankDto> ranks
     )
     {
-        var userId = GetCurrentUserId();
-        var now = DateTime.UtcNow;
-
         foreach (var dto in ranks)
         {
             if (dto.Id <= 0)
             {
-                var created = new Rank
-                {
-                    description = dto.RankName ?? dto.Description,
-                    date_created = now,
-                    created_by_user_code = userId,
-                    is_deleted = false,
-                };
+                var created = new Rank { description = dto.RankName ?? dto.Description };
                 _context.Ranks.Add(created);
                 continue;
             }
@@ -516,9 +507,6 @@ public class TroubleshootController : BaseApiController
             }
 
             existing.description = dto.RankName ?? dto.Description;
-            existing.date_updated = now;
-            existing.modified_by_user_code = userId;
-            existing.is_deleted = false;
         }
 
         await _context.SaveChangesAsync();
@@ -605,7 +593,7 @@ public class TroubleshootController : BaseApiController
         DateTime? toDate
     )
     {
-        var query = _context.TSLogs.AsNoTracking().Where(x => !x.is_deleted).AsQueryable();
+        var query = _context.TSLogs.AsNoTracking().AsQueryable();
 
         if (userAccessCode.HasValue && userAccessCode.Value > 0)
         {
@@ -649,7 +637,7 @@ public class TroubleshootController : BaseApiController
             Id = x.ErrorID,
             VehicleIdentifier = x.ErrorCode,
             ProblemDescription = x.ErrorCode,
-            Status = x.is_deleted ? "Deleted" : "Active",
+            Status = x.date_updated == null ? "Active" : "Updated",
             LoggedDate = x.TSDate,
             LoggedBy = x.user_access_code == null ? null : x.user_access_code.ToString(),
         });
@@ -657,7 +645,7 @@ public class TroubleshootController : BaseApiController
 
     private IQueryable<OdometerCorrectionQueryRow> QueryOdometerTaRows(string searchValue)
     {
-        IQueryable<Trip> tripQuery = _context.Trips.AsNoTracking().Where(t => !t.is_deleted);
+        IQueryable<Trip> tripQuery = _context.Trips.AsNoTracking();
 
         if (int.TryParse(searchValue, out var taCode))
         {
@@ -672,13 +660,13 @@ public class TroubleshootController : BaseApiController
 
         return tripQuery
             .Join(
-                _context.Contracts.AsNoTracking().Where(c => !c.is_deleted),
+                _context.Contracts.AsNoTracking(),
                 t => t.contract_code,
                 c => c.contract_code,
                 (t, c) => new { t, c }
             )
             .Join(
-                _context.Vehicles.AsNoTracking().Where(v => !v.is_deleted),
+                _context.Vehicles.AsNoTracking(),
                 tc => tc.c.vmf_code,
                 v => v.vmf_code,
                 (tc, v) =>
@@ -697,7 +685,7 @@ public class TroubleshootController : BaseApiController
 
     private IQueryable<Vehicle> FilterOdometerVehicles(string mode, string searchValue)
     {
-        var vehicleQuery = _context.Vehicles.AsNoTracking().Where(v => !v.is_deleted);
+        var vehicleQuery = _context.Vehicles.AsNoTracking();
         if (string.IsNullOrWhiteSpace(searchValue))
         {
             return vehicleQuery;
@@ -720,12 +708,9 @@ public class TroubleshootController : BaseApiController
         return _context
             .Vehicles.AsNoTracking()
             .Where(v =>
-                !v.is_deleted
-                && (
-                    v.vmf_code.ToString() == id
-                    || (v.fleet_number != null && v.fleet_number.Contains(id))
-                    || (v.registration_number != null && v.registration_number.Contains(id))
-                )
+                v.vmf_code.ToString() == id
+                || (v.fleet_number != null && v.fleet_number.Contains(id))
+                || (v.registration_number != null && v.registration_number.Contains(id))
             );
     }
 
@@ -751,7 +736,6 @@ public class TroubleshootController : BaseApiController
     {
         return await _context
             .Ranks.AsNoTracking()
-            .Where(x => !x.is_deleted)
             .OrderBy(x => x.description)
             .Select(x => new ApproverRankDto
             {

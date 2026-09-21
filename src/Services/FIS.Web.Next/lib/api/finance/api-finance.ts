@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { getForwardedAuthCookieHeader } from "@/lib/auth/api-auth";
 
 const API_TIMEOUT_MS = 8_000;
@@ -25,6 +27,15 @@ export type FinanceBatchStatus = {
   isActive: boolean;
   totalTransactions: number;
   processedTransactions: number;
+  latestLog: string | null;
+  jobStartDate: string | null;
+  jobEndDate: string | null;
+  typicalHours: number | null;
+  rollbackStartDate: string | null;
+  rollbackEndDate: string | null;
+  databaseOperationsActive: boolean;
+  rollbackOperationsActive: boolean;
+  jobStatusError: string | null;
 };
 
 function getApiBaseUrl() {
@@ -162,7 +173,7 @@ export async function getFinanceOutput(
   }
 }
 
-export async function getBatchStatus(): Promise<FinanceBatchStatus> {
+export const getBatchStatus = cache(async function getBatchStatus(): Promise<FinanceBatchStatus> {
   const value = await requestJson("api/finance/batch/status");
   if (!isRecord(value))
     throw new FinanceApiError("invalid-response", "The FIS API returned an invalid batch status.");
@@ -176,8 +187,21 @@ export async function getBatchStatus(): Promise<FinanceBatchStatus> {
     totalTransactions: asNumber(getValue(value, "totalTransactions", "TotalTransactions")) ?? 0,
     processedTransactions:
       asNumber(getValue(value, "processedTransactions", "ProcessedTransactions")) ?? 0,
+    latestLog: asString(getValue(value, "latestLog", "LatestLog")),
+    jobStartDate: asString(getValue(value, "jobStartDate", "JobStartDate")),
+    jobEndDate: asString(getValue(value, "jobEndDate", "JobEndDate")),
+    typicalHours: asNumber(getValue(value, "typicalHours", "TypicalHours")),
+    rollbackStartDate: asString(getValue(value, "rollbackStartDate", "RollbackStartDate")),
+    rollbackEndDate: asString(getValue(value, "rollbackEndDate", "RollbackEndDate")),
+    databaseOperationsActive: asBoolean(
+      getValue(value, "databaseOperationsActive", "DatabaseOperationsActive"),
+    ),
+    rollbackOperationsActive: asBoolean(
+      getValue(value, "rollbackOperationsActive", "RollbackOperationsActive"),
+    ),
+    jobStatusError: asString(getValue(value, "jobStatusError", "JobStatusError")),
   };
-}
+});
 
 export type FinanceOption = { value: string; label: string };
 

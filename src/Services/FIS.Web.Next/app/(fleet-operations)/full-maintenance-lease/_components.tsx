@@ -89,6 +89,12 @@ export function ActionNotice({ result, message }: Readonly<{ result?: string; me
         Lease tariff rejected for correction.
       </div>
     );
+  if (result === "recalled")
+    return (
+      <div className="notice notice-success" role="status">
+        {message ?? "The vehicle has been successfully recalled."}
+      </div>
+    );
   return null;
 }
 

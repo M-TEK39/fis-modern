@@ -16,42 +16,66 @@ public class WorkflowNotificationRepository : IWorkflowNotificationRepository
 
     public async Task<WorkflowNotification?> GetByIdAsync(int notificationId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowNotification"))
+        {
+            return null;
+        }
+
         return await _context
             .WorkflowNotifications.Include(n => n.Workflow)
             .Include(n => n.Step)
             .Include(n => n.NotificationTemplate)
-            .FirstOrDefaultAsync(n => n.NotificationID == notificationId && !n.is_deleted);
+            .FirstOrDefaultAsync(n => n.NotificationID == notificationId);
     }
 
     public async Task<IEnumerable<WorkflowNotification>> GetAllAsync()
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowNotification"))
+        {
+            return [];
+        }
+
         return await _context
-            .WorkflowNotifications.Where(n => !n.is_deleted)
-            .Include(n => n.Workflow)
+            .WorkflowNotifications.Include(n => n.Workflow)
             .Include(n => n.Step)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowNotification>> GetByWorkflowIdAsync(int workflowId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowNotification"))
+        {
+            return [];
+        }
+
         return await _context
-            .WorkflowNotifications.Where(n => n.WorkflowID == workflowId && !n.is_deleted)
+            .WorkflowNotifications.Where(n => n.WorkflowID == workflowId)
             .Include(n => n.Step)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowNotification>> GetByStepIdAsync(int stepId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowNotification"))
+        {
+            return [];
+        }
+
         return await _context
-            .WorkflowNotifications.Where(n => n.StepID == stepId && !n.is_deleted)
+            .WorkflowNotifications.Where(n => n.StepID == stepId)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowNotification>> GetByEventTypeAsync(string eventType)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowNotification"))
+        {
+            return [];
+        }
+
         return await _context
             .WorkflowNotifications.Where(n =>
-                n.EventType == eventType && !n.is_deleted && n.IsActive
+                n.EventType == eventType && n.IsActive
             )
             .Include(n => n.Workflow)
             .Include(n => n.Step)
@@ -60,8 +84,13 @@ public class WorkflowNotificationRepository : IWorkflowNotificationRepository
 
     public async Task<IEnumerable<WorkflowNotification>> GetActiveNotificationsAsync()
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowNotification"))
+        {
+            return [];
+        }
+
         return await _context
-            .WorkflowNotifications.Where(n => n.IsActive && !n.is_deleted)
+            .WorkflowNotifications.Where(n => n.IsActive)
             .Include(n => n.Workflow)
             .Include(n => n.Step)
             .ToListAsync();
@@ -72,9 +101,12 @@ public class WorkflowNotificationRepository : IWorkflowNotificationRepository
         int currentUserId
     )
     {
-        notification.date_created = DateTime.UtcNow;
-        notification.created_by_user_code = currentUserId;
-        notification.is_deleted = false;
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowNotification"))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("WorkflowNotification")
+            );
+        }
 
         _context.WorkflowNotifications.Add(notification);
         await _context.SaveChangesAsync();
@@ -84,6 +116,13 @@ public class WorkflowNotificationRepository : IWorkflowNotificationRepository
 
     public async Task UpdateAsync(WorkflowNotification notification, int currentUserId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowNotification"))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("WorkflowNotification")
+            );
+        }
+
         var existing = await _context.WorkflowNotifications.FirstOrDefaultAsync(n =>
             n.NotificationID == notification.NotificationID
         );
@@ -95,23 +134,26 @@ public class WorkflowNotificationRepository : IWorkflowNotificationRepository
 
         // Tracking-safe update pattern
         _context.Entry(existing).CurrentValues.SetValues(notification);
-        existing.date_updated = DateTime.UtcNow;
-        existing.modified_by_user_code = currentUserId;
 
         await _context.SaveChangesAsync();
     }
 
     public async Task DeleteAsync(int notificationId, int currentUserId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowNotification"))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("WorkflowNotification")
+            );
+        }
+
         var notification = await _context.WorkflowNotifications.FirstOrDefaultAsync(n =>
             n.NotificationID == notificationId
         );
 
         if (notification != null)
         {
-            notification.is_deleted = true;
-            notification.date_updated = DateTime.UtcNow;
-            notification.modified_by_user_code = currentUserId;
+            _context.WorkflowNotifications.Remove(notification);
             await _context.SaveChangesAsync();
         }
     }

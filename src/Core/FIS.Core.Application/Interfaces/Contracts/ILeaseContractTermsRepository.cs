@@ -29,7 +29,11 @@ public interface ILeaseContractTermsRepository
         string username,
         int currentUserId = 0
     );
-    Task<LeaseContractTerms> RecallAsync(LeaseContractTerms terms);
+    Task<LeaseContractTerms> RecallAsync(
+        LeaseContractTerms terms,
+        string username,
+        int currentUserId = 0
+    );
     Task DeleteAsync(int termId, int currentUserId);
 }
 

@@ -26,6 +26,8 @@ DECLARE @MutationTargets TABLE
 INSERT INTO @MutationTargets
     ([Module], [ModernMutation], [TableName], [LegacyProcedure], [LegacyTrigger])
 VALUES
+    -- No archived caller parameter list exists for DEV_INS_Contract2.
+    -- Home-custody CreateAsync stays trigger-backed labelled DML.
     (N'Contracts', N'Create a pre-created contract', N'contract', N'DEV_INS_Contract2', N'TRG_INS_CheckDuplicateContract'),
     (N'Contracts', N'Create or submit a contract for approval', N'contract', N'DEV_INS_Contract_New_ForApproval', N'TRG_INS_ContractJournalDetailRecord'),
     (N'Contracts', N'Edit or resubmit a pending contract', N'contract', N'DEV_UPD_Contract_New_ApprovalPhase', N'TRG_UPD_ContractJournalDetailRecord'),
@@ -38,12 +40,16 @@ VALUES
     (N'Contracts', N'Close an active contract and finalize its billing boundary', N'contract', N'NEW_DEV_UPD_Contract_CLOSE', N'TRG_UPD_ContractJournalDetailRecord'),
     (N'Contracts', N'Reassign a contract', N'contract', N'DEV_UPD_Contract_ReassignExisting', N'TRG_INS_UpdateContractChargedUntil'),
     (N'Contracts', N'Run the legacy daily contract billing scheduler', N'contract', N'ADM_Contract_JobScheduler', N'TRG_INS_UpdateContractChargedUntil'),
+    -- DEV_UPD_ContractStatusHistory has no archived GGFIS caller and no
+    -- modern C# write path. Do not invent procedure parameters.
     (N'Contracts', N'Write contract status history', N'contract_status_history', N'DEV_UPD_ContractStatusHistory', NULL),
+    (N'Contracts', N'List or maintain contract status types', N'contract_status', NULL, NULL),
     (N'Contracts', N'Delete a contract', N'contract', NULL, N'TRG_DEL_Contract'),
     (N'Contracts', N'Delete a contract', N'contract', NULL, N'TRG_Audit_Contract_Delete'),
     (N'Vehicle Master', N'Capture a pre-vehicle', N'pre_vehicle_master', N'DEV_INS_New_Vehicle_Master', N'TRG_Audit_Pre_Vehicle_Master_Insert'),
     (N'Vehicle Master', N'Authorise a pre-vehicle', N'pre_vehicle_master', N'DEV_INS_VehicleFromPre_Vehicle_Master', N'TRG_Audit_Pre_Vehicle_Master_Update'),
     (N'Vehicle Master', N'Authorise a pre-vehicle and generate the calculated vehicle tariff', N'vehicle_master', NULL, N'TRG_UPSERT_CheckPurchaseAmount'),
+    (N'Vehicle Master', N'List vehicles with expired or no tariffs from Reports.aspx', N'vehicle_master', N'DEV_REP_GetAllVehicleWithNoTariffs', NULL),
     (N'Vehicle Master', N'List active permanent contracts without assigned tariffs', N'contract', N'Dev_Rep_Permanentcontractswithouttariffs', NULL),
     (N'Vehicle Master', N'List NOM lease vehicles without assigned tariffs', N'vehicle_master', N'DEV_REP_NOMVehiclesWithoutTariffs', NULL),
     (N'Vehicle Master', N'Reject a pre-vehicle', N'pre_vehicle_master', N'DEV_UPD_Rejected_PreVehicles', N'TRG_Audit_Pre_Vehicle_Master_Update'),
@@ -97,11 +103,21 @@ VALUES
     (N'Trips and Routes', N'Update a trip authority and routes', N'trip_authorities', N'DEV_UPD_TripXML', N'TRG_INS_UPD_RejectIncompleteTrip'),
     (N'Trips and Routes', N'Close a trip authority and routes', N'route_details', N'DEV_UPD_TripXMLForClosingOfTrip', N'TRG_UPD_RouteJournalDetailRecord'),
     (N'Trips and Routes', N'Renew a trip authority and routes', N'trip_authorities', N'DEV_UPD_TripXMLForRenewalOfTrip', N'TRG_INS_UPD_RejectIncompleteTrip'),
+    -- DEV_INS_RouteDetails2 has no archived caller parameter list.
+    -- Live trip create uses DEV_INS_TripXML; labelled DML is only the
+    -- fallback when TripXML is absent. Do not invent RouteDetails2 params.
     (N'Trips and Routes', N'Create or amend route details', N'route_details', N'DEV_INS_RouteDetails2', N'TRG_INS_RouteJournalDetailRecord'),
     (N'Trips and Routes', N'Create or amend route details', N'route_details', NULL, N'TRG_INS_UPD_CheckOverLapping_RouteDetailsKilos'),
     (N'Trips and Routes', N'Create or amend route details', N'route_details', NULL, N'TRG_INS_UPD_RouteDetails_CheckOverLapping_ManualLogsheets'),
     (N'Trips and Routes', N'Find or bulk-delete trips without routes', N'trip_authorities', N'DEV_SEL_TripsWithoutRoutes', NULL),
     (N'Trips and Routes', N'Find or bulk-delete trips without routes', N'trip_authorities', N'ADM_DEL_TripsWithoutRoutes', NULL),
+    -- trip_drivers is the archived table. There is no DEV_DEL_TripDrivers;
+    -- DEV_UPD_TripXML deletes and reinserts drivers for a trip. Standalone
+    -- assignment uses DEV_INS_TripDrivers / DEV_UPD_TripDrivers.
+    (N'Trips and Routes', N'Assign a trip driver from a site driver', N'trip_drivers', N'DEV_INS_TripDrivers', NULL),
+    (N'Trips and Routes', N'Update a trip driver name, SA ID, or primary flag', N'trip_drivers', N'DEV_UPD_TripDrivers', NULL),
+    (N'Trips and Routes', N'List trip drivers for a trip authority', N'trip_drivers', N'DEV_SEL_TripDrivers', NULL),
+    (N'Trips and Routes', N'List trip drivers for trip display', N'trip_drivers', N'DEV_SEL_TripDrivers_PerTripID', NULL),
     (N'Job Cards', N'Create a job card (fallback only when create procedure is absent)', N'JobCard', N'DEV_INS_NewJobCards', NULL),
     (N'Job Cards', N'Assign, start, or close a job card', N'JobCard', N'DEV_UPD_JobCard', NULL),
     (N'Job Cards', N'Authorise or decline a job card', N'JobCard', N'DEV_UPD_JobcardAuthorisersUpdates', NULL),
@@ -121,6 +137,14 @@ VALUES
     (N'Lease Contract Terms', N'Change recalled lease contract-term status', N'LeaseContractTerms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', NULL),
     (N'Lease Contract Terms', N'Write a lease contract-term comment (descriptive alias)', N'LeaseContractTermsComment', N'DEV_INS_LeaseContractTermsComments', NULL),
     (N'Lease Contract Terms', N'Write a lease contract-term comment (archived procedure name)', N'LeaseContractTermsComment', N'DEV_INS_Comments', NULL),
+    (N'Fuel Tariffs', N'Create, close, or delete a fuel rate', N'fuel_tariff', NULL, NULL),
+    (N'Class Tariffs', N'Create or update a class tariff', N'tariff', NULL, NULL),
+    (N'Reference Data', N'List or maintain locations', N'location', NULL, NULL),
+    (N'Reference Data', N'List or maintain units of measure', N'unit_of_measure', NULL, NULL),
+    (N'Reference Data', N'List or maintain vehicle types', N'type', NULL, NULL),
+    (N'Reference Data', N'List or maintain maintenance triggers', N'maintenance_trigger', NULL, NULL),
+    (N'Invoices', N'Create, update, or delete an invoice header', N'invoice', NULL, NULL),
+    (N'Invoices', N'Create, update, or delete an invoice item', N'invoice_item', NULL, NULL),
     (N'Finance Journals', N'Create a batch or close kilometre gaps', N'journal_detail', N'DEV_INS_Batch', N'TRG_UPD_AllocationExceptionJournalDetailRecord'),
     (N'Finance Journals', N'Create a batch or close kilometre gaps', N'journal_detail', N'DEV_INS_CloseKiloGapsFromXML', N'trg_upd_checkvehiclejournalrecords'),
     (N'Finance Journals', N'Reverse a standalone journal detail', N'journal_detail', N'NEW_DEV_UPD_JournalDetailReversal', NULL),
@@ -137,7 +161,34 @@ INSERT INTO @MutationTargets
 VALUES
     (N'Finance Tariff Parameters', N'Initiate, update, approve, or reject fiscal tariff parameters', N'fin', N'TariffParameter', N'DEV_UPD_TariffParameter', NULL),
     (N'Finance Tariff Parameters', N'Update a maintenance value for a fiscal tariff parameter', N'fin', N'MaintenanceValue', N'DEV_UPD_MaintenanceValue', NULL),
-    (N'Finance Tariff Parameters', N'Update an overhead for a fiscal tariff parameter', N'fin', N'Overhead', N'DEV_UPD_Overhead', NULL);
+    (N'Finance Tariff Parameters', N'Update an overhead for a fiscal tariff parameter', N'fin', N'Overhead', N'DEV_UPD_Overhead', NULL),
+    (N'Finance Tariff Parameters', N'Update tariff weight calculations for overhead distribution', N'fin', N'TariffWeightCalculation', NULL, NULL),
+    (N'Workflow', N'List or maintain workflow step types', N'Workflow', N'StepType', NULL, NULL),
+    (N'Workflow', N'List or maintain workflow definitions', N'Workflow', N'Workflow', NULL, NULL),
+    (N'Workflow', N'List or maintain workflow steps', N'Workflow', N'Step', NULL, NULL),
+    (N'Workflow', N'List or maintain workflow step status', N'Workflow', N'Status', NULL, NULL),
+    (N'Workflow', N'List or maintain workflow templates', N'Workflow', N'WorkflowTemplate', NULL, NULL),
+    (N'Workflow', N'List or maintain workflow notifications', N'Workflow', N'WorkflowNotification', NULL, NULL),
+    (N'Workflow', N'List or maintain workflow metrics', N'Workflow', N'WorkflowMetric', NULL, NULL),
+    (N'Workflow', N'List or maintain workflow execution summaries', N'Workflow', N'WorkflowExecutionSummary', NULL, NULL),
+    (N'Workflow', N'List or maintain step execution history', N'Workflow', N'StepExecutionHistory', NULL, NULL),
+    (N'Workflow', N'List or maintain notification templates', N'Workflow', N'NotificationTemplate', NULL, NULL),
+    (N'Workflow', N'List or maintain notification logs', N'Workflow', N'NotificationLog', NULL, NULL),
+    (N'Auth', N'List or maintain access levels', N'dbo', N'AccessLevels', NULL, NULL),
+    (N'Suppliers', N'List or maintain dbo.Suppliers lookups', N'dbo', N'Suppliers', NULL, NULL),
+    (N'Third Party', N'Create a third-party rental supplier', N'dbo', N'vehicle_source', N'DEV_INS_NewSupplier', NULL),
+    (N'Third Party', N'Update a third-party rental supplier', N'dbo', N'vehicle_source', N'DEV_UPD_Suppliers', NULL),
+    (N'Third Party', N'List or maintain third party projects', N'dbo', N'third_party_projects', N'DEV_INS_Third_party_projects', NULL),
+    (N'Third Party', N'Update a third party project', N'dbo', N'third_party_projects', N'DEV_UPD_Third_party_project', NULL),
+    (N'Third Party', N'Allocate a supplier to a third party project (archived GGFIS name)', N'dbo', N'third_party_project_suppliers', N'DEV_INS_Third_party_project_suppliers', NULL),
+    (N'Third Party', N'Allocate a supplier to a third party project', N'dbo', N'Third_Party_Project_Supplier', N'DEV_INS_Third_Party_Project_Supplier', NULL),
+    (N'Third Party', N'Remove a supplier from a third party project', N'dbo', N'Third_Party_Project_Supplier', N'DEV_DEL_Third_Party_Supplier_Allocation', NULL),
+    (N'Third Party', N'Expanded class-requirement rows when present', N'dbo', N'ClassRequirements', NULL, NULL),
+    (N'Third Party', N'Expanded allocation rows when present', N'dbo', N'third_party_allocations', NULL, NULL),
+    (N'Maintenance', N'Expanded maintenance history rows when present', N'dbo', N'maintenance_records', NULL, NULL),
+    (N'Vehicle Master', N'Expanded vehicle remarks when present', N'dbo', N'vehicle_remarks', NULL, NULL),
+    (N'Vehicle Master', N'Expanded vehicle documents when present', N'dbo', N'vehicle_documents', NULL, NULL),
+    (N'Auth', N'List or maintain the AccessLevels_2 catalog', N'dbo', N'AccessLevels_2', NULL, NULL);
 
 /* Function/view dependencies used to choose a billable contract type and to
    validate the effective tariff before a contract is captured. */
@@ -227,6 +278,12 @@ VALUES
     (N'Contracts', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', 3, N'@Approved_By_Username', N'GGFIS_DataAccessLayer/Contract.vb ApproveBackdatedAndNewContractDeclineOrCancel'),
     (N'Contracts', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', 4, N'@Declined_Date', N'GGFIS_DataAccessLayer/Contract.vb ApproveBackdatedAndNewContractDeclineOrCancel'),
     (N'Contracts', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', 5, N'@Declined_Username', N'GGFIS_DataAccessLayer/Contract.vb ApproveBackdatedAndNewContractDeclineOrCancel'),
+    (N'Vehicle Master', N'DEV_UPD_MaintenanceVmfCode', 1, N'@vmfCode', N'GGFIS_DataAccessLayer/Vehicle_Maintenance.vb UpdateVmfCode'),
+    (N'Vehicle Master', N'DEV_UPD_MaintenanceVmfCode', 2, N'@tempVmfCode', N'GGFIS_DataAccessLayer/Vehicle_Maintenance.vb UpdateVmfCode'),
+    (N'Vehicle Master', N'DEV_CLR_NewVehicleFromAuthList', 1, N'@chassisNo', N'GGFIS_DataAccessLayer/User_Profile.vb ClearNewVehicleFromAuthorityList'),
+    (N'Vehicle Master', N'DEV_SEL_PrintVehicle_Details', 1, N'@chassis_number', N'GGFIS_DataAccessLayer/User_Profile.vb Print_Pre_Vehicle_Detials'),
+    (N'Vehicle Master', N'DEV_SEL_NewVehicle_Extras', 1, N'@SearchVal', N'GGFIS_DataAccessLayer/User_Profile.vb GetNewVehicleExtras'),
+    (N'Vehicle Master', N'DEV_SEL_Vehicle_CapturerDetails', 1, N'@chassis_No', N'GGFIS_DataAccessLayer/User_Profile.vb GetLoggedInUserDetails'),
     (N'Drivers', N'DEV_INS_SiteDrivers', 1, N'@SiteDriverCode', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
     (N'Drivers', N'DEV_INS_SiteDrivers', 2, N'@SiteCode', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
     (N'Drivers', N'DEV_INS_SiteDrivers', 3, N'@DriverLicenceTypeID', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
@@ -302,6 +359,20 @@ VALUES
     (N'Trips and Routes', N'DEV_UPD_TripXMLForRenewalOfTrip', 1, N'@IncommingTrip', N'GGFIS_DataAccessLayer/Trips.vb RenewTrip'),
     (N'Trips and Routes', N'DEV_UPD_TripXMLForRenewalOfTrip', 2, N'@XmlDocument', N'GGFIS_DataAccessLayer/Trips.vb RenewTrip'),
     (N'Trips and Routes', N'DEV_UPD_TripXMLForRenewalOfTrip', 3, N'@Tript', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_TripXMLForRenewalOfTrip'),
+    (N'Trips and Routes', N'DEV_INS_TripDrivers', 1, N'@NewTripDriverID', N'ggTrips/clsSiteDriver.vb SaveTripDriverToDB'),
+    (N'Trips and Routes', N'DEV_INS_TripDrivers', 2, N'@TripID', N'ggTrips/clsSiteDriver.vb SaveTripDriverToDB'),
+    (N'Trips and Routes', N'DEV_INS_TripDrivers', 3, N'@DriverName', N'ggTrips/clsSiteDriver.vb SaveTripDriverToDB'),
+    (N'Trips and Routes', N'DEV_INS_TripDrivers', 4, N'@DriverSAID', N'ggTrips/clsSiteDriver.vb SaveTripDriverToDB'),
+    (N'Trips and Routes', N'DEV_INS_TripDrivers', 5, N'@DriverIsPrimary', N'ggTrips/clsSiteDriver.vb SaveTripDriverToDB'),
+    (N'Trips and Routes', N'DEV_INS_TripDrivers', 6, N'@SiteDriverID', N'ggTrips/clsSiteDriver.vb SaveTripDriverToDB'),
+    (N'Trips and Routes', N'DEV_UPD_TripDrivers', 1, N'@NewTripTriverID', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_UPD_TripDrivers'),
+    (N'Trips and Routes', N'DEV_UPD_TripDrivers', 2, N'@TripID', N'ggTrips/clsSiteDriver.vb SaveTripDriverToDB'),
+    (N'Trips and Routes', N'DEV_UPD_TripDrivers', 3, N'@DriverName', N'ggTrips/clsSiteDriver.vb SaveTripDriverToDB'),
+    (N'Trips and Routes', N'DEV_UPD_TripDrivers', 4, N'@DriverSAID', N'ggTrips/clsSiteDriver.vb SaveTripDriverToDB'),
+    (N'Trips and Routes', N'DEV_UPD_TripDrivers', 5, N'@DriverIsPrimary', N'ggTrips/clsSiteDriver.vb SaveTripDriverToDB'),
+    (N'Trips and Routes', N'DEV_UPD_TripDrivers', 6, N'@SiteDriverID', N'ggTrips/clsSiteDriver.vb SaveTripDriverToDB'),
+    (N'Trips and Routes', N'DEV_SEL_TripDrivers', 1, N'@TripID', N'ggTrips/clsSiteDrivers.vb GetTripDrivers'),
+    (N'Trips and Routes', N'DEV_SEL_TripDrivers_PerTripID', 1, N'@TripID', N'GGFIS_v2.0/Trips/ShowTrip.aspx.vb'),
     (N'Finance Tariff Parameters', N'DEV_UPD_TariffParameter', 1, N'@TariffParameterID', N'GGFIS_DataAccessLayer/Finance.vb TariffParameter_ApprovedYear'),
     (N'Finance Tariff Parameters', N'DEV_UPD_TariffParameter', 2, N'@TariffParameterYear', N'GGFIS_DataAccessLayer/Finance.vb TariffParameter_ApprovedYear'),
     (N'Finance Tariff Parameters', N'DEV_UPD_TariffParameter', 3, N'@AnnualInterestRatePercentage', N'GGFIS_DataAccessLayer/Finance.vb TariffParameter_ApprovedYear'),
@@ -324,8 +395,12 @@ VALUES
     (N'Finance Batch', N'ADM_TriggerRollbackJob', 2, N'@User', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb RollbackBatch'),
     (N'Finance Batch', N'ADM_TriggerRollbackJob', 3, N'@JobName', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb RollbackBatch'),
     (N'Finance Batch', N'ADM_TriggerRollbackJob', 4, N'@StepId', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb RollbackBatch'),
-    (N'Finance Batch', N'ADM_CheckJobStatus', 1, N'@JobName', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb GetJobDuration'),
-    (N'Finance Batch', N'ADM_CheckRecordedLogs', 1, N'@LogJob', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb GetLatestLogs');
+    (N'Finance Batch', N'ADM_CheckJobStatus', 1, N'@JobName', N'BatchInProgress.aspx.vb / BatchManagementFunctions.vb GetJobDuration'),
+    (N'Finance Batch', N'ADM_CheckRecordedLogs', 1, N'@LogJob', N'BatchInProgress.aspx.vb / BatchManagementFunctions.vb GetLatestLogs'),
+    (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 1, N'@GG_Number', N'NOMPending/VehicleLease.aspx.vb Getdata2'),
+    (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 2, N'@AuthorityStatus', N'NOMPending/VehicleLease.aspx.vb Getdata2'),
+    (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 3, N'@Rejected', N'NOMPending/VehicleLease.aspx.vb Getdata2'),
+    (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 4, N'@UpdatedBy', N'NOMPending/VehicleLease.aspx.vb Getdata2');
 INSERT INTO @ExpectedProcedureParameters
     ([Module], [LegacyProcedure], [ParameterOrdinal], [ParameterName], [SourceEvidence])
 VALUES

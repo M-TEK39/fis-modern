@@ -638,9 +638,7 @@ public class ContractsController : BaseApiController
         var byLegacyCode = await _context
             .Set<Department>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(d =>
-                d.department_code == LegacyGfleetDepartmentCode && !d.is_deleted
-            );
+            .FirstOrDefaultAsync(d => d.department_code == LegacyGfleetDepartmentCode);
 
         if (byLegacyCode != null)
         {
@@ -650,7 +648,7 @@ public class ContractsController : BaseApiController
         var byName = await _context
             .Set<Department>()
             .AsNoTracking()
-            .Where(d => !d.is_deleted && d.description != null)
+            .Where(d => d.description != null)
             .FirstOrDefaultAsync(d =>
                 EF.Functions.Like(d.description!, "%GFLEET%")
                 || EF.Functions.Like(d.description!, "%G-FLEET%")
@@ -760,7 +758,7 @@ public class ContractsController : BaseApiController
         var province = await _context
             .Set<Province>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.province_code == provinceCode.Value && !p.is_deleted);
+            .FirstOrDefaultAsync(p => p.province_code == provinceCode.Value);
 
         var provinceLabel = string.IsNullOrWhiteSpace(province?.province_name)
             ? $"Province {provinceCode.Value}"
@@ -3210,9 +3208,7 @@ public class ContractsController : BaseApiController
         return await _context
             .Drivers.AsNoTracking()
             .FirstOrDefaultAsync(driver =>
-                driver.site_driver_code == siteDriverCode.Value
-                && driver.driver_active
-                && !driver.is_deleted
+                driver.site_driver_code == siteDriverCode.Value && driver.driver_active
             );
     }
 
@@ -3322,7 +3318,7 @@ public class ContractsController : BaseApiController
         try
         {
             var affected = await _context
-                .Contracts.Where(c => !c.is_deleted && c.contract_status_code == null)
+                .Contracts.Where(c => true)
                 .Select(c => new
                 {
                     c.contract_code,
@@ -3418,7 +3414,7 @@ public class ContractsController : BaseApiController
             int currentUserId = GetCurrentUserId();
 
             var nullStatusContracts = await _context
-                .Contracts.Where(c => !c.is_deleted && c.contract_status_code == null)
+                .Contracts.Where(c => true)
                 .ToListAsync();
 
             if (nullStatusContracts.Count == 0)
@@ -3544,6 +3540,25 @@ public class ReturnContractDto
     public string? Notes { get; set; }
 }
 
+/// <summary>
+/// Close an active contract through the archived billing-owned workflow.
+/// <para>
+/// The restored procedure <c>NEW_DEV_UPD_Contract_CLOSE</c> accepts only
+/// <c>@contractcode</c>, <c>@enddate</c>, and <c>@endodometer</c>. Home
+/// department/site and GFleet custody are applied after that procedure using
+/// existing site and site-driver rows; they are not extra columns on
+/// <c>contract</c>.
+/// </para>
+/// <para>
+/// There is no archived contract-close inspection object on the client
+/// schema. Accident inspection letters and workshop/monitor inspections are
+/// separate modules. Do not invent <c>inspection_notes</c> or an inspection
+/// status on <c>contract</c> to satisfy a modern close checklist; if a
+/// close-time inspection is required later, it has to be modelled as a
+/// separate persisted workflow against objects that already exist (or as an
+/// explicit schema expansion, which this compatibility work does not do).
+/// </para>
+/// </summary>
 public class CloseContractRequest
 {
     [Required]

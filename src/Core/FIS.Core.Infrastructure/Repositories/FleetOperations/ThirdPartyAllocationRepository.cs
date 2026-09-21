@@ -5,8 +5,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Core.Infrastructure.Repositories;
 
+/// <summary>
+/// third_party_allocations is not in the 2012 archive. Archive allocations
+/// live on Third_Party_Project_Supplier / Third_Party_Vehicle_Allocations
+/// through ThirdPartyRentalRepository.
+/// </summary>
 public class ThirdPartyAllocationRepository : IThirdPartyAllocationRepository
 {
+    private const string TableName = "third_party_allocations";
+
     private readonly FisDbContext _context;
 
     public ThirdPartyAllocationRepository(FisDbContext context)
@@ -16,22 +23,26 @@ public class ThirdPartyAllocationRepository : IThirdPartyAllocationRepository
 
     public async Task<ThirdPartyAllocation?> GetByIdAsync(int allocationId)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return null;
+        }
+
         return await _context
             .Set<ThirdPartyAllocation>()
-            .Include(a => a.Project)
-            .Include(a => a.Supplier)
-            .Include(a => a.Vehicle)
-            .FirstOrDefaultAsync(a => a.allocation_id == allocationId && !a.is_deleted);
+            .FirstOrDefaultAsync(a => a.allocation_id == allocationId);
     }
 
     public async Task<IEnumerable<ThirdPartyAllocation>> GetByProjectAsync(int projectId)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
             .Set<ThirdPartyAllocation>()
-            .Include(a => a.Supplier)
-            .Include(a => a.Vehicle)
-            .Where(a => a.project_id == projectId && !a.is_deleted)
-            .OrderBy(a => a.date_created)
+            .Where(a => a.project_id == projectId)
             .ToListAsync();
     }
 
@@ -40,9 +51,13 @@ public class ThirdPartyAllocationRepository : IThirdPartyAllocationRepository
         int currentUserId
     )
     {
-        allocation.date_created = DateTime.UtcNow;
-        allocation.created_by_user_code = currentUserId;
-        allocation.is_deleted = false;
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
 
         _context.Set<ThirdPartyAllocation>().Add(allocation);
         await _context.SaveChangesAsync();
@@ -51,17 +66,21 @@ public class ThirdPartyAllocationRepository : IThirdPartyAllocationRepository
 
     public async Task DeleteAsync(int allocationId, int currentUserId)
     {
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
+
         var allocation =
             await _context
                 .Set<ThirdPartyAllocation>()
                 .FirstOrDefaultAsync(a => a.allocation_id == allocationId)
             ?? throw new KeyNotFoundException($"Allocation {allocationId} not found");
 
-        // Soft delete
-        allocation.is_deleted = true;
-        allocation.date_updated = DateTime.UtcNow;
-        allocation.modified_by_user_code = currentUserId;
-
+        _context.Set<ThirdPartyAllocation>().Remove(allocation);
         await _context.SaveChangesAsync();
     }
 }

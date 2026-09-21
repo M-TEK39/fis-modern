@@ -486,7 +486,27 @@ public interface IVehicleAuthorizationRepository
     );
     Task AddCommentAsync(int tempVmfCode, string comment, int modifiedByUserId);
     Task DeleteAsync(int tempVmfCode, int currentUserId);
+    Task ClearFromAuthorityListAsync(int tempVmfCode);
+    Task<VehicleAuthorizationPrintSnapshot?> GetPrintSnapshotAsync(
+        int tempVmfCode,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    );
 }
+
+public sealed record VehicleAuthorizationPrintSnapshot(
+    PreVehicleMaster Vehicle,
+    IReadOnlyList<string> Extras,
+    string? SiteName,
+    string? LocationDescription,
+    string? HiredFromDescription,
+    string? HireTypeDescription,
+    string? StatusDescription,
+    string? CapturedByUserName,
+    DateTime? CapturedAt,
+    string? AuthorizedByUserName,
+    DateTime? AuthorizedAt
+);
 
 public sealed record VehicleAuthorizationPage(
     IReadOnlyList<PreVehicleMaster> Data,
@@ -1484,6 +1504,7 @@ public interface IVehicleRemarkRepository
     Task<IEnumerable<VehicleRemark>> GetActiveByVehicleAsync(int vmfCode);
     Task<VehicleRemark?> GetLatestActiveByVehicleAsync(int vmfCode);
     Task<IEnumerable<VehicleRemark>> GetAllActiveAsync(); // All open remarks across fleet
+    Task<IEnumerable<VehicleRemark>> GetAllAsync();
     Task<VehicleRemark> CreateAsync(VehicleRemark remark, int currentUserId);
     Task<VehicleRemark> ResolveAsync(int remarkId, int resolvedByUserId, string? resolutionNotes);
     Task DeleteAsync(int remarkId, int currentUserId);
@@ -1567,6 +1588,7 @@ public interface IVehicleDocumentRepository
     Task<IEnumerable<VehicleDocument>> GetByVehicleAsync(int vmfCode, string? category = null);
     Task<IEnumerable<VehicleDocument>> GetByReferenceAsync(string referenceType, int referenceId);
     Task<VehicleDocument?> GetByIdAsync(int documentId);
+    Task<IEnumerable<VehicleDocument>> GetAllAsync();
     Task<VehicleDocument> CreateAsync(VehicleDocument document);
     Task DeleteAsync(int documentId);
 }

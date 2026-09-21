@@ -10,6 +10,9 @@ namespace FIS.Api.Controllers;
 [Authorize]
 public class WorkflowController : BaseApiController
 {
+    // GGFIS Main.aspx and AngularScreens have no Workflow Setup entry.
+    // The Workflow schema is GGMT-only; do not invent a module role until
+    // the archived GGMT Workflow screens are located.
     private readonly IWorkflowRepository _repository;
     private readonly ILogger<WorkflowController> _logger;
 

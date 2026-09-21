@@ -21,18 +21,21 @@ public class TripDriverController : BaseApiController
 {
     private readonly ITripDriverRepository _tripDriverRepository;
     private readonly ITripRepository _tripRepository;
+    private readonly IDriverRepository _driverRepository;
     private readonly LegacyVehicleScopeService _vehicleScope;
     private readonly ILogger<TripDriverController> _logger;
 
     public TripDriverController(
         ITripDriverRepository tripDriverRepository,
         ITripRepository tripRepository,
+        IDriverRepository driverRepository,
         LegacyVehicleScopeService vehicleScope,
         ILogger<TripDriverController> logger
     )
     {
         _tripDriverRepository = tripDriverRepository;
         _tripRepository = tripRepository;
+        _driverRepository = driverRepository;
         _vehicleScope = vehicleScope;
         _logger = logger;
     }
@@ -204,7 +207,22 @@ public class TripDriverController : BaseApiController
                 return BadRequest("A valid trip authority is required.");
             }
 
-            if (!await IsSiteAllowedAsync(tripDriver.site_code))
+            if (tripDriver.site_driver_code <= 0)
+            {
+                return BadRequest(
+                    "A site driver is required to assign a trip driver. Licence and identity fields are copied from the site driver."
+                );
+            }
+
+            var siteDriver = await _driverRepository.GetByIdAsync(
+                tripDriver.site_driver_code.ToString()
+            );
+            if (siteDriver is null)
+            {
+                return NotFound($"Site driver {tripDriver.site_driver_code} not found");
+            }
+
+            if (!await IsSiteAllowedAsync(siteDriver.site_code))
             {
                 return Forbid();
             }
@@ -219,8 +237,7 @@ public class TripDriverController : BaseApiController
             }
 
             if (authority.Contract?.site_code is short authoritySite
-                && tripDriver.site_code.HasValue
-                && tripDriver.site_code.Value != authoritySite)
+                && siteDriver.site_code != authoritySite)
             {
                 return BadRequest("A trip driver must belong to the same site as its trip authority.");
             }
@@ -240,6 +257,23 @@ public class TripDriverController : BaseApiController
                 new { tripDriverCode = createdTripDriver.trip_driver_code },
                 createdTripDriver
             );
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("procedure", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(ex, "Legacy trip-driver procedure contract is unavailable or incompatible");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The deployed legacy trip-driver procedure is unavailable or incompatible. No direct-DML fallback was run.",
+                }
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Trip driver creation was rejected");
+            return BadRequest(ex.Message);
         }
         catch (Exception ex)
         {
@@ -295,14 +329,52 @@ public class TripDriverController : BaseApiController
                 return BadRequest("A trip driver cannot be moved to another site by editing the assignment.");
             }
 
+            if (tripDriver.trip_authority_code != existingTripDriver.trip_authority_code)
+            {
+                var authority = await _tripRepository.GetByIdAsync(
+                    tripDriver.trip_authority_code,
+                    await ResolveAllowedSiteCodesAsync()
+                );
+                if (authority is null)
+                {
+                    return NotFound($"Trip authority {tripDriver.trip_authority_code} not found");
+                }
+
+                if (authority.Contract?.site_code is short authoritySite
+                    && existingTripDriver.site_code.HasValue
+                    && existingTripDriver.site_code.Value != authoritySite)
+                {
+                    return BadRequest("A trip driver must belong to the same site as its trip authority.");
+                }
+            }
+
             await _tripDriverRepository.UpdateAsync(tripDriver, currentUserId);
+            var updatedTripDriver = await _tripDriverRepository.GetByIdAsync(tripDriverCode)
+                ?? tripDriver;
             _logger.LogInformation(
                 "Updated trip driver {TripDriverCode}: {DriverName}",
                 tripDriverCode,
-                tripDriver.trip_driver_name
+                updatedTripDriver.trip_driver_name
             );
 
-            return Ok(tripDriver);
+            return Ok(updatedTripDriver);
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("procedure", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(ex, "Legacy trip-driver procedure contract is unavailable or incompatible");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    error = "The deployed legacy trip-driver procedure is unavailable or incompatible. No direct-DML fallback was run.",
+                }
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Trip driver update was rejected for {TripDriverCode}", tripDriverCode);
+            return BadRequest(ex.Message);
         }
         catch (Exception ex)
         {
@@ -344,6 +416,11 @@ public class TripDriverController : BaseApiController
             );
 
             return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Trip driver deletion was rejected for {TripDriverCode}", tripDriverCode);
+            return BadRequest(ex.Message);
         }
         catch (Exception ex)
         {

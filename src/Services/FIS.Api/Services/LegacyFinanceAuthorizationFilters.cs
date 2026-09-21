@@ -32,7 +32,8 @@ public sealed class LegacyFinanceAuthorizationFilter : IAsyncActionFilter, IOrde
             || (HasActionAttribute<LegacyFinanceHeadOfficeAccessAttribute>(context) && access.CanUseHeadOfficeFinanceFeatures)
             || (HasActionAttribute<LegacyFinanceTariffAccessAttribute>(context) && access.CanManageTariffParameters)
             || (HasActionAttribute<LegacyFinanceDataAccessAttribute>(context) && access.CanMaintainFinanceData)
-            || (HasActionAttribute<LegacyFinanceBasMaintenanceAccessAttribute>(context) && access.CanMaintainBASCorrectionData);
+            || (HasActionAttribute<LegacyFinanceBasMaintenanceAccessAttribute>(context) && access.CanMaintainBASCorrectionData)
+            || HasActionAttribute<LegacyFinanceBatchProgressReadAttribute>(context);
         if (!isAllowed)
         {
             context.Result = new ForbidResult();
@@ -51,6 +52,14 @@ public sealed class LegacyFinanceAuthorizationFilter : IAsyncActionFilter, IOrde
 
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class LegacyFinanceBatchAccessAttribute : Attribute;
+
+/// <summary>
+/// BatchInProgress.aspx is reachable by any authenticated user while a batch
+/// is running. Reading BatchIsRunning plus ADM_CheckJobStatus / ADM_CheckRecordedLogs
+/// is therefore not limited to Advanced Financial Operations - Batch.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class LegacyFinanceBatchProgressReadAttribute : Attribute;
 
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class LegacyFinanceReportsAccessAttribute : Attribute;

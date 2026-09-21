@@ -26,8 +26,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<FuelTypeEntity?> GetByIdAsync(short fuelTypeCode)
         {
             return await _context
-                .FuelTypes.Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(ft => ft.fuel_type_code == fuelTypeCode);
+                .FuelTypes.FirstOrDefaultAsync(ft => ft.fuel_type_code == fuelTypeCode);
         }
 
         /// <summary>
@@ -38,8 +37,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<FuelTypeEntity?> GetByDescriptionAsync(string fuelDescription)
         {
             return await _context
-                .FuelTypes.Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(ft =>
+                .FuelTypes.FirstOrDefaultAsync(ft =>
                     ft.fuel_description != null
                     && ft.fuel_description.ToLower() == fuelDescription.ToLower()
                 );
@@ -52,8 +50,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<IEnumerable<FuelTypeEntity>> GetAllFuelTypesAsync()
         {
             return await _context
-                .FuelTypes.Where(x => !x.is_deleted)
-                .OrderBy(ft => ft.fuel_description)
+                .FuelTypes.OrderBy(ft => ft.fuel_description)
                 .ToListAsync();
         }
 
@@ -77,7 +74,7 @@ namespace FIS.Core.Infrastructure.Repositories
         {
             var resolvedPage = Math.Max(1, page);
             var resolvedPageSize = Math.Clamp(pageSize, 1, 100);
-            var query = _context.FuelTypes.AsNoTracking().Where(fuelType => !fuelType.is_deleted);
+            var query = _context.FuelTypes.AsNoTracking();
             var total = await query.CountAsync();
             var items = await query
                 .OrderBy(fuelType => fuelType.fuel_description)
@@ -96,11 +93,6 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>The created fuel type entity</returns>
         public async Task<FuelTypeEntity> CreateAsync(FuelTypeEntity fuelType, int currentUserId)
         {
-            // Auto-populate audit fields
-            fuelType.date_created = DateTime.UtcNow;
-            fuelType.created_by_user_code = currentUserId;
-            fuelType.is_deleted = false;
-
             _context.FuelTypes.Add(fuelType);
             await _context.SaveChangesAsync();
             return fuelType;
@@ -123,14 +115,7 @@ namespace FIS.Core.Infrastructure.Repositories
                     $"FuelType with fuel_type_code {fuelType.fuel_type_code} not found"
                 );
 
-            // Preserve creation audit fields
-            fuelType.date_created = existing.date_created;
-            fuelType.created_by_user_code = existing.created_by_user_code;
-            // Set update audit fields
-            fuelType.date_updated = DateTime.UtcNow;
-            fuelType.modified_by_user_code = currentUserId;
-
-            _context.Entry(existing).CurrentValues.SetValues(fuelType);
+            existing.fuel_description = fuelType.fuel_description;
             await _context.SaveChangesAsync();
             return existing;
         }
@@ -145,10 +130,7 @@ namespace FIS.Core.Infrastructure.Repositories
             var fuelType = await _context.FuelTypes.FindAsync(fuelTypeCode);
             if (fuelType != null)
             {
-                // Soft delete instead of hard delete
-                fuelType.is_deleted = true;
-                fuelType.date_updated = DateTime.UtcNow;
-                fuelType.modified_by_user_code = currentUserId;
+                _context.FuelTypes.Remove(fuelType);
                 await _context.SaveChangesAsync();
             }
         }

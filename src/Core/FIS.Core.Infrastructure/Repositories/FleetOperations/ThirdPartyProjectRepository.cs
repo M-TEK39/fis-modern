@@ -5,100 +5,111 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Core.Infrastructure.Repositories;
 
+/// <summary>
+/// Compatibility facade over the third-party rental repository. Project
+/// writes use archived DEV_INS_Third_party_projects / DEV_UPD_Third_party_project
+/// with labelled DML fallback; leftover EF is not used for mutations.
+/// </summary>
 public class ThirdPartyProjectRepository : IThirdPartyProjectRepository
 {
     private readonly FisDbContext _context;
+    private readonly IThirdPartyRentalRepository _rental;
 
-    public ThirdPartyProjectRepository(FisDbContext context)
+    public ThirdPartyProjectRepository(
+        FisDbContext context,
+        IThirdPartyRentalRepository rental
+    )
     {
         _context = context;
+        _rental = rental;
     }
 
     public async Task<ThirdPartyProject?> GetByIdAsync(int projectId)
     {
-        return await _context
-            .Set<ThirdPartyProject>()
-            .Include(p => p.Department)
-            .Include(p => p.Site)
-            .FirstOrDefaultAsync(p => p.project_id == projectId && !p.is_deleted);
+        var record = await _rental.GetProjectAsync(projectId);
+        return record is null ? null : Map(record);
     }
 
     public async Task<IEnumerable<ThirdPartyProject>> GetAllAsync()
     {
-        return await _context
-            .Set<ThirdPartyProject>()
-            .Include(p => p.Department)
-            .Include(p => p.Site)
-            .Where(p => !p.is_deleted)
-            .OrderByDescending(p => p.date_created)
-            .ToListAsync();
+        var records = await _rental.GetProjectsAsync();
+        return records.Select(Map).ToList();
     }
 
     public async Task<IEnumerable<ThirdPartyProject>> GetByDepartmentAsync(short departmentCode)
     {
-        return await _context
-            .Set<ThirdPartyProject>()
-            .Include(p => p.Department)
-            .Include(p => p.Site)
-            .Where(p => p.department_code == departmentCode && !p.is_deleted)
-            .OrderByDescending(p => p.date_created)
-            .ToListAsync();
+        var records = await _rental.GetProjectsByDepartmentAsync(departmentCode);
+        return records.Select(Map).ToList();
     }
 
     public async Task<ThirdPartyProject> CreateAsync(ThirdPartyProject project, int currentUserId)
     {
-        project.date_created = DateTime.UtcNow;
-        project.created_by_user_code = currentUserId;
-        project.is_deleted = false;
-
-        _context.Set<ThirdPartyProject>().Add(project);
-        await _context.SaveChangesAsync();
-        return project;
+        var created = await _rental.CreateProjectAsync(ToWrite(project), currentUserId);
+        return Map(created);
     }
 
     public async Task<ThirdPartyProject> UpdateAsync(ThirdPartyProject project, int currentUserId)
     {
-        var existing =
-            await _context
-                .Set<ThirdPartyProject>()
-                .FirstOrDefaultAsync(p => p.project_id == project.project_id)
-            ?? throw new KeyNotFoundException($"Project {project.project_id} not found");
-
-        existing.department_code = project.department_code;
-        existing.site_code = project.site_code;
-        existing.description = project.description;
-        existing.start_date = project.start_date;
-        existing.end_date = project.end_date;
-        existing.responsible_person = project.responsible_person;
-        existing.rp_physical_address = project.rp_physical_address;
-        existing.rp_postal_address = project.rp_postal_address;
-        existing.rp_tel = project.rp_tel;
-        existing.rp_fax = project.rp_fax;
-        existing.rp_email = project.rp_email;
-        existing.rp_cell = project.rp_cell;
-        existing.notes = project.notes;
-        existing.order_reference = project.order_reference;
-        existing.class_configuration = project.class_configuration;
-        existing.date_updated = DateTime.UtcNow;
-        existing.modified_by_user_code = currentUserId;
-
-        await _context.SaveChangesAsync();
-        return existing;
+        var updated = await _rental.UpdateProjectAsync(
+            project.project_id,
+            ToWrite(project),
+            currentUserId
+        );
+        return Map(updated);
     }
 
     public async Task DeleteAsync(int projectId, int currentUserId)
     {
-        var project =
-            await _context
-                .Set<ThirdPartyProject>()
-                .FirstOrDefaultAsync(p => p.project_id == projectId)
-            ?? throw new KeyNotFoundException($"Project {projectId} not found");
-
-        // Soft delete
-        project.is_deleted = true;
-        project.date_updated = DateTime.UtcNow;
-        project.modified_by_user_code = currentUserId;
-
-        await _context.SaveChangesAsync();
+        await _rental.DeleteProjectAsync(projectId, currentUserId);
+        var tracked = await _context
+            .Set<ThirdPartyProject>()
+            .FirstOrDefaultAsync(p => p.project_id == projectId);
+        if (tracked is not null)
+        {
+            _context.Entry(tracked).State = EntityState.Detached;
+        }
     }
+
+    private static ThirdPartyProjectWrite ToWrite(ThirdPartyProject project)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        return new ThirdPartyProjectWrite(
+            project.department_code ?? 0,
+            project.site_code,
+            project.description ?? string.Empty,
+            project.start_date ?? default,
+            project.end_date ?? default,
+            project.responsible_person,
+            project.rp_physical_address,
+            project.rp_postal_address,
+            project.rp_tel,
+            project.rp_fax,
+            project.rp_email,
+            project.rp_cell,
+            project.notes,
+            project.order_reference,
+            project.class_configuration
+        );
+    }
+
+    private static ThirdPartyProject Map(ThirdPartyProjectRecord record) =>
+        new()
+        {
+            project_id = record.project_id,
+            department_code = record.department_code,
+            site_code = record.site_code,
+            description = record.description,
+            start_date = record.start_date,
+            end_date = record.end_date,
+            responsible_person = record.responsible_person,
+            rp_physical_address = record.rp_physical_address,
+            rp_postal_address = record.rp_postal_address,
+            rp_tel = record.rp_tel,
+            rp_fax = record.rp_fax,
+            rp_email = record.rp_email,
+            rp_cell = record.rp_cell,
+            notes = record.notes,
+            order_reference = record.order_reference,
+            class_configuration = record.class_configuration,
+        };
 }

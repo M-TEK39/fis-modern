@@ -30,6 +30,10 @@ export function hasVehicleInceptionAuthorizerRole(roles: readonly string[]) {
   return hasRole(roles, VEHICLE_INCEPTION_AUTHORIZER_ROLE);
 }
 
+export function canViewVehicleInception(roles: readonly string[]) {
+  return hasVehicleInceptionCapturerRole(roles) || hasVehicleInceptionAuthorizerRole(roles);
+}
+
 function hasSystemAdministratorRole(roles: readonly string[]) {
   return SYSTEM_ADMINISTRATOR_ROLES.some((role) => hasExactRole(roles, role));
 }

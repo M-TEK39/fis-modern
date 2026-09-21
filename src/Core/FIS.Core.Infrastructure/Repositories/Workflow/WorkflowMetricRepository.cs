@@ -16,24 +16,38 @@ public class WorkflowMetricRepository : IWorkflowMetricRepository
 
     public async Task<WorkflowMetric?> GetByIdAsync(int metricId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowMetric"))
+        {
+            return null;
+        }
+
         return await _context
             .WorkflowMetrics.Include(m => m.Workflow)
             .Include(m => m.BottleneckStep)
-            .FirstOrDefaultAsync(m => m.MetricID == metricId && !m.is_deleted);
+            .FirstOrDefaultAsync(m => m.MetricID == metricId);
     }
 
     public async Task<IEnumerable<WorkflowMetric>> GetAllAsync()
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowMetric"))
+        {
+            return [];
+        }
+
         return await _context
-            .WorkflowMetrics.Where(m => !m.is_deleted)
-            .OrderByDescending(m => m.MetricDate)
+            .WorkflowMetrics.OrderByDescending(m => m.MetricDate)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowMetric>> GetByWorkflowIdAsync(int workflowId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowMetric"))
+        {
+            return [];
+        }
+
         return await _context
-            .WorkflowMetrics.Where(m => m.WorkflowID == workflowId && !m.is_deleted)
+            .WorkflowMetrics.Where(m => m.WorkflowID == workflowId)
             .OrderByDescending(m => m.MetricDate)
             .ToListAsync();
     }
@@ -43,9 +57,14 @@ public class WorkflowMetricRepository : IWorkflowMetricRepository
         DateTime endDate
     )
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowMetric"))
+        {
+            return [];
+        }
+
         return await _context
             .WorkflowMetrics.Where(m =>
-                m.MetricDate >= startDate && m.MetricDate <= endDate && !m.is_deleted
+                m.MetricDate >= startDate && m.MetricDate <= endDate
             )
             .OrderBy(m => m.MetricDate)
             .ToListAsync();
@@ -53,17 +72,24 @@ public class WorkflowMetricRepository : IWorkflowMetricRepository
 
     public async Task<WorkflowMetric?> GetLatestMetricAsync(int workflowId)
     {
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowMetric"))
+        {
+            return null;
+        }
+
         return await _context
-            .WorkflowMetrics.Where(m => m.WorkflowID == workflowId && !m.is_deleted)
+            .WorkflowMetrics.Where(m => m.WorkflowID == workflowId)
             .OrderByDescending(m => m.MetricDate)
             .FirstOrDefaultAsync();
     }
 
     public async Task<WorkflowMetric> CreateAsync(WorkflowMetric metric, int currentUserId)
     {
-        metric.date_created = DateTime.UtcNow;
-        metric.created_by_user_code = currentUserId;
-        metric.is_deleted = false;
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowMetric"))
+        {
+            throw new InvalidOperationException(WorkflowOptionalTable.MissingMessage("WorkflowMetric"));
+        }
 
         _context.WorkflowMetrics.Add(metric);
         await _context.SaveChangesAsync();
@@ -73,6 +99,12 @@ public class WorkflowMetricRepository : IWorkflowMetricRepository
 
     public async Task UpdateAsync(WorkflowMetric metric, int currentUserId)
     {
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowMetric"))
+        {
+            throw new InvalidOperationException(WorkflowOptionalTable.MissingMessage("WorkflowMetric"));
+        }
+
         var existing = await _context.WorkflowMetrics.FirstOrDefaultAsync(m =>
             m.MetricID == metric.MetricID
         );
@@ -81,7 +113,6 @@ public class WorkflowMetricRepository : IWorkflowMetricRepository
             throw new InvalidOperationException($"WorkflowMetric {metric.MetricID} not found");
 
         _context.Entry(existing).CurrentValues.SetValues(metric);
-        existing.date_updated = DateTime.UtcNow;
         await _context.SaveChangesAsync();
     }
 }

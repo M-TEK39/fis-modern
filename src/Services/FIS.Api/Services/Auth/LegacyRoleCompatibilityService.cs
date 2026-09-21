@@ -82,6 +82,7 @@ public sealed class LegacyRoleCompatibilityService
         "Reports",
         "Taxi information maintenance",
         "Taxi Invoices",
+        "Third Party Rental",
         "Towing",
         "Tracking",
         "Trip Authorities",

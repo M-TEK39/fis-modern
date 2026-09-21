@@ -24,6 +24,33 @@ namespace FIS.Core.Infrastructure.Repositories;
 public sealed class JournalDetailRepository : IJournalDetailRepository
 {
     private const string TableName = "journal_detail";
+    private const string InsertProcedureName = "NEW_DEV_INS_JournalDetail";
+    private const string UpdateProcedureName = "NEW_DEV_UPD_JournalDetail";
+    private static readonly string[] InsertProcedureParameters =
+    [
+        "@journalDetailID",
+        "@journalDetailCode",
+        "@journalCode",
+        "@departmentCode",
+        "@siteCode",
+        "@vmfCode",
+        "@journalDetailTypeCode",
+        "@journalDetailIsdebit",
+        "@journalDetailQuantity",
+        "@journalDetailTariff",
+        "@journalDetailAmount",
+        "@journalDetailDescription",
+        "@journalDetailDateCreated",
+        "@journalDetailDateUpdated",
+        "@journalDetailDatePosted",
+        "@journalDetailIsaccepted",
+        "@journalDetailFinancialYear",
+        "@journalDetailDate",
+        "@journalDetailDateApproved",
+        "@journalDetailRebillCode",
+        "@JournalDetailReversalof",
+    ];
+    private static readonly string[] UpdateProcedureParameters = InsertProcedureParameters;
 
     private static readonly string[] RequiredColumns =
     [
@@ -251,6 +278,26 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
         if (journalDetail.journal_detail_date == DateTime.MinValue)
             journalDetail.journal_detail_date = journalDetail.journal_detail_date_created;
 
+        if (await TryExecuteLegacyMutationAsync(
+            InsertProcedureName,
+            InsertProcedureParameters,
+            command => BindLegacyMutationParameters(command, journalDetail, includeOutputId: true),
+            command =>
+            {
+                journalDetail.journal_detail_id = Convert.ToInt32(
+                    command.Parameters["@journalDetailID"].Value ?? 0
+                );
+            }
+        ))
+        {
+            return journalDetail;
+        }
+
+        _logger.LogInformation(
+            "{Procedure} is unavailable; inserting dbo.journal_detail through the compatibility column projection.",
+            InsertProcedureName
+        );
+
         var values = BuildValues(journalDetail, columns, currentUserId, includeCreatedValues: true);
         var scope = await OpenConnectionAsync();
         try
@@ -274,6 +321,21 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
         ArgumentNullException.ThrowIfNull(journalDetail);
         var columns = await GetColumnsAsync();
         journalDetail.journal_detail_date_updated = DateTime.UtcNow;
+
+        if (await TryExecuteLegacyMutationAsync(
+            UpdateProcedureName,
+            UpdateProcedureParameters,
+            command => BindLegacyMutationParameters(command, journalDetail, includeOutputId: false),
+            afterExecute: null
+        ))
+        {
+            return;
+        }
+
+        _logger.LogInformation(
+            "{Procedure} is unavailable; updating dbo.journal_detail through the compatibility column projection.",
+            UpdateProcedureName
+        );
 
         var values = BuildValues(
             journalDetail,
@@ -473,6 +535,186 @@ public sealed class JournalDetailRepository : IJournalDetailRepository
         {
             await CloseConnectionAsync(scope);
         }
+    }
+
+    private async Task<bool> TryExecuteLegacyMutationAsync(
+        string procedureName,
+        IReadOnlyList<string> expectedParameters,
+        Action<DbCommand> bindParameters,
+        Action<DbCommand>? afterExecute
+    )
+    {
+        var procedureParameters = await ResolveProcedureParametersAsync(procedureName);
+        if (procedureParameters is null)
+        {
+            return false;
+        }
+
+        if (!procedureParameters.SequenceEqual(expectedParameters, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The deployed legacy procedure {procedureName} does not match the archived parameter contract. No direct-DML journal fallback was run."
+            );
+        }
+
+        var scope = await OpenConnectionAsync();
+        try
+        {
+            await using var command = scope.Connection.CreateCommand();
+            command.Transaction = CurrentTransaction;
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = $"[dbo].[{procedureName}]";
+            bindParameters(command);
+            await command.ExecuteNonQueryAsync();
+            afterExecute?.Invoke(command);
+            return true;
+        }
+        finally
+        {
+            await CloseConnectionAsync(scope);
+        }
+    }
+
+    private static void BindLegacyMutationParameters(
+        DbCommand command,
+        JournalDetail journalDetail,
+        bool includeOutputId
+    )
+    {
+        if (includeOutputId)
+        {
+            AddOutputParameter(command, "@journalDetailID", DbType.Int32);
+        }
+        else
+        {
+            AddParameter(command, "@journalDetailID", DbType.Int32, journalDetail.journal_detail_id);
+        }
+
+        AddParameter(
+            command,
+            "@journalDetailCode",
+            DbType.Guid,
+            journalDetail.journal_detail_code == Guid.Empty ? null : journalDetail.journal_detail_code
+        );
+        AddParameter(
+            command,
+            "@journalCode",
+            DbType.Int32,
+            journalDetail.journal_code is > 0 and <= int.MaxValue
+                ? (int)journalDetail.journal_code.Value
+                : null
+        );
+        AddParameter(command, "@departmentCode", DbType.Int32, journalDetail.department_code);
+        AddParameter(command, "@siteCode", DbType.Int16, journalDetail.site_code);
+        AddParameter(command, "@vmfCode", DbType.Int32, journalDetail.vmf_code);
+        AddParameter(
+            command,
+            "@journalDetailTypeCode",
+            DbType.Int32,
+            journalDetail.journal_detail_type_code
+        );
+        AddParameter(
+            command,
+            "@journalDetailIsdebit",
+            DbType.Boolean,
+            journalDetail.journal_detail_isdebit
+        );
+        AddParameter(
+            command,
+            "@journalDetailQuantity",
+            DbType.Int32,
+            journalDetail.journal_detail_quantity
+        );
+        AddParameter(
+            command,
+            "@journalDetailTariff",
+            DbType.Double,
+            Convert.ToDouble(journalDetail.journal_detail_tariff)
+        );
+        AddParameter(
+            command,
+            "@journalDetailAmount",
+            DbType.Double,
+            Convert.ToDouble(journalDetail.journal_detail_amount)
+        );
+        AddParameter(
+            command,
+            "@journalDetailDescription",
+            DbType.String,
+            journalDetail.journal_detail_description
+        );
+        AddParameter(
+            command,
+            "@journalDetailDateCreated",
+            DbType.DateTime,
+            journalDetail.journal_detail_date_created == DateTime.MinValue
+                ? DateTime.Now
+                : journalDetail.journal_detail_date_created
+        );
+        AddParameter(
+            command,
+            "@journalDetailDateUpdated",
+            DbType.DateTime,
+            journalDetail.journal_detail_date_updated
+        );
+        AddParameter(
+            command,
+            "@journalDetailDatePosted",
+            DbType.DateTime,
+            journalDetail.journal_detail_date_posted
+        );
+        AddParameter(
+            command,
+            "@journalDetailIsaccepted",
+            DbType.Boolean,
+            journalDetail.journal_detail_isaccepted
+        );
+        AddParameter(
+            command,
+            "@journalDetailFinancialYear",
+            DbType.String,
+            journalDetail.journal_detail_financial_year
+        );
+        AddParameter(
+            command,
+            "@journalDetailDate",
+            DbType.DateTime,
+            journalDetail.journal_detail_date == DateTime.MinValue
+                ? DateTime.Now
+                : journalDetail.journal_detail_date
+        );
+        AddParameter(
+            command,
+            "@journalDetailDateApproved",
+            DbType.DateTime,
+            journalDetail.journal_detail_date_approved
+        );
+        AddParameter(
+            command,
+            "@journalDetailRebillCode",
+            DbType.Guid,
+            journalDetail.journal_detail_rebill_code is Guid rebill && rebill != Guid.Empty
+                ? rebill
+                : null
+        );
+        AddParameter(
+            command,
+            "@JournalDetailReversalof",
+            DbType.Guid,
+            journalDetail.journal_detail_reversalof is Guid reversal && reversal != Guid.Empty
+                ? reversal
+                : null
+        );
+    }
+
+    private static void AddOutputParameter(DbCommand command, string name, DbType type)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Direction = ParameterDirection.Output;
+        parameter.Value = DBNull.Value;
+        command.Parameters.Add(parameter);
     }
 
     private static List<WriteValue> BuildValues(

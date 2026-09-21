@@ -9,7 +9,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[Authorize(Roles = "Third Party Rental")]
 public class ThirdPartyController : BaseApiController
 {
     private const int DefaultPageSize = 24;

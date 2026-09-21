@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
@@ -8,8 +9,14 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace FIS.Core.Infrastructure.Repositories;
 
 /// <summary>
-/// Repository implementation for Location entity operations
+/// dbo.location is location_code + description only. Expanded address/audit
+/// columns are not queried or written.
 /// </summary>
+[SuppressMessage(
+    "Security",
+    "CA2100:Review SQL queries for security vulnerabilities",
+    Justification = "Predicates are fixed compatibility strings; values are parameterized."
+)]
 public class LocationRepository : ILocationRepository
 {
     private readonly FisDbContext _context;
@@ -21,28 +28,134 @@ public class LocationRepository : ILocationRepository
 
     public async Task<Location?> GetByIdAsync(int locationId)
     {
-        return await _context
-            .Locations.Where(x => !x.is_deleted)
-            .FirstOrDefaultAsync(l => l.LocationId == locationId);
+        var locations = await QueryLegacyLocationsAsync(
+            "[location_code] = @locationCode",
+            command => AddParameter(command, "@locationCode", DbType.Int32, locationId)
+        );
+        return locations.FirstOrDefault();
     }
 
     public async Task<Location?> GetByNameAsync(string locationName)
     {
-        return await _context
-            .Locations.Where(x => !x.is_deleted)
-            .FirstOrDefaultAsync(l => l.LocationName == locationName);
+        var locations = await QueryLegacyLocationsAsync(
+            "[description] = @locationName",
+            command => AddParameter(command, "@locationName", DbType.String, locationName)
+        );
+        return locations.FirstOrDefault();
     }
 
-    public async Task<IEnumerable<Location>> GetAllLocationsAsync()
+    public Task<IEnumerable<Location>> GetAllLocationsAsync() =>
+        QueryLegacyLocationsAsEnumerableAsync();
+
+    public async Task<LocationPage> GetPageAsync(int page = 1, int pageSize = 24)
     {
-        // dbo.location in the restored legacy database only has
-        // location_code and description. Do not route a vehicle-capture
-        // selector through the expanded EF entity, which projects modern
-        // audit/address columns that do not exist there.
-        return await QueryLegacyLocationsAsync();
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+        var locations = await QueryLegacyLocationsAsync();
+        var total = locations.Count;
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var items = locations.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return new LocationPage(items, page, pageSize, total);
     }
 
-    private async Task<List<Location>> QueryLegacyLocationsAsync()
+    public Task<IEnumerable<Location>> GetByCountryAsync(string country)
+    {
+        _ = country;
+        return Task.FromResult<IEnumerable<Location>>([]);
+    }
+
+    public Task<IEnumerable<Location>> GetByProvinceAsync(string province)
+    {
+        _ = province;
+        return Task.FromResult<IEnumerable<Location>>([]);
+    }
+
+    public async Task<Location> CreateAsync(Location location, int currentUserId)
+    {
+        if (location.LocationId <= 0)
+        {
+            throw new InvalidOperationException(
+                "dbo.location.location_code is not an identity column. No generated key was substituted."
+            );
+        }
+
+        await ExecuteNonQueryAsync(
+            """
+            INSERT INTO [dbo].[location] ([location_code], [description])
+            VALUES (@locationCode, @description);
+            """,
+            command =>
+            {
+                AddParameter(command, "@locationCode", DbType.Int32, location.LocationId);
+                AddParameter(command, "@description", DbType.String, location.LocationName);
+            }
+        );
+        return location;
+    }
+
+    public async Task UpdateAsync(Location location, int currentUserId)
+    {
+        if (location == null)
+            throw new ArgumentNullException(nameof(location));
+
+        var existing = await GetByIdAsync(location.LocationId);
+        if (existing == null)
+            throw new InvalidOperationException(
+                $"Location with LocationId {location.LocationId} not found"
+            );
+
+        await ExecuteNonQueryAsync(
+            """
+            UPDATE [dbo].[location]
+            SET [description] = @description
+            WHERE [location_code] = @locationCode;
+            """,
+            command =>
+            {
+                AddParameter(command, "@locationCode", DbType.Int32, location.LocationId);
+                AddParameter(command, "@description", DbType.String, location.LocationName);
+            }
+        );
+    }
+
+    public async Task DeleteAsync(int locationId, int currentUserId)
+    {
+        var location = await GetByIdAsync(locationId);
+        if (location == null)
+        {
+            return;
+        }
+
+        await ExecuteNonQueryAsync(
+            """
+            DELETE FROM [dbo].[location]
+            WHERE [location_code] = @locationCode;
+            """,
+            command => AddParameter(command, "@locationCode", DbType.Int32, locationId)
+        );
+    }
+
+    public async Task<IEnumerable<Location>> SearchLocationsAsync(string searchTerm)
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm))
+            return await GetAllLocationsAsync();
+
+        return await QueryLegacyLocationsAsEnumerableAsync(
+            "[description] LIKE @searchTerm",
+            command => AddParameter(command, "@searchTerm", DbType.String, $"%{searchTerm}%")
+        );
+    }
+
+    private async Task<IEnumerable<Location>> QueryLegacyLocationsAsEnumerableAsync(
+        string? predicate = null,
+        Action<System.Data.Common.DbCommand>? bind = null
+    ) => await QueryLegacyLocationsAsync(predicate, bind);
+
+    private async Task<List<Location>> QueryLegacyLocationsAsync(
+        string? predicate = null,
+        Action<System.Data.Common.DbCommand>? bind = null
+    )
     {
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
@@ -55,11 +168,19 @@ public class LocationRepository : ILocationRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = """
-                SELECT [location_code], [description]
-                FROM [dbo].[location]
-                ORDER BY [description], [location_code]
-                """;
+            command.CommandText = string.IsNullOrWhiteSpace(predicate)
+                ? """
+                    SELECT [location_code], [description]
+                    FROM [dbo].[location]
+                    ORDER BY [description], [location_code]
+                    """
+                : $"""
+                    SELECT [location_code], [description]
+                    FROM [dbo].[location]
+                    WHERE {predicate}
+                    ORDER BY [description], [location_code]
+                    """;
+            bind?.Invoke(command);
 
             var locations = new List<Location>();
             await using var reader = await command.ExecuteReaderAsync();
@@ -94,100 +215,46 @@ public class LocationRepository : ILocationRepository
         }
     }
 
-    public async Task<LocationPage> GetPageAsync(int page = 1, int pageSize = 24)
+    private async Task ExecuteNonQueryAsync(
+        string commandText,
+        Action<System.Data.Common.DbCommand> bind
+    )
     {
-        page = Math.Max(1, page);
-        pageSize = Math.Clamp(pageSize, 1, 100);
-
-        var activeLocations = _context.Locations.Where(l => l.IsActive).AsNoTracking();
-        var total = await activeLocations.CountAsync();
-        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
-        page = Math.Min(page, totalPages);
-
-        var items = await activeLocations
-            .OrderBy(l => l.LocationName)
-            .ThenBy(l => l.LocationId)
-            .Skip(checked((page - 1) * pageSize))
-            .Take(pageSize)
-            .ToListAsync();
-
-        return new LocationPage(items, page, pageSize, total);
-    }
-
-    public async Task<IEnumerable<Location>> GetByCountryAsync(string country)
-    {
-        return await _context
-            .Locations.Where(l => l.IsActive && l.Country == country)
-            .OrderBy(l => l.LocationName)
-            .ToListAsync();
-    }
-
-    public async Task<IEnumerable<Location>> GetByProvinceAsync(string province)
-    {
-        return await _context
-            .Locations.Where(l => l.IsActive && l.Province == province)
-            .OrderBy(l => l.LocationName)
-            .ToListAsync();
-    }
-
-    public async Task<Location> CreateAsync(Location location, int currentUserId)
-    {
-        location.CreatedDate = DateTime.UtcNow;
-        // Auto-populate audit fields
-        location.date_created = DateTime.UtcNow;
-        location.is_deleted = false;
-
-        _context.Locations.Add(location);
-        await _context.SaveChangesAsync();
-        return location;
-    }
-
-    public async Task UpdateAsync(Location location, int currentUserId)
-    {
-        if (location == null)
-            throw new ArgumentNullException(nameof(location));
-
-        var existing = await _context.Locations.FindAsync(location.LocationId);
-        if (existing == null)
-            throw new InvalidOperationException(
-                $"Location with LocationId {location.LocationId} not found"
-            );
-
-        location.ModifiedDate = DateTime.UtcNow;
-        _context.Entry(existing).CurrentValues.SetValues(location);
-        await _context.SaveChangesAsync();
-    }
-
-    public async Task DeleteAsync(int locationId, int currentUserId)
-    {
-        var location = await GetByIdAsync(locationId);
-        if (location != null)
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
         {
-            // Soft delete - mark as inactive
-            location.IsActive = false;
-            location.ModifiedDate = DateTime.UtcNow;
-            await UpdateAsync(location, currentUserId);
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = commandText;
+            bind(command);
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
         }
     }
 
-    public async Task<IEnumerable<Location>> SearchLocationsAsync(string searchTerm)
+    private static void AddParameter(
+        System.Data.Common.DbCommand command,
+        string name,
+        DbType type,
+        object value
+    )
     {
-        if (string.IsNullOrWhiteSpace(searchTerm))
-            return await GetAllLocationsAsync();
-
-        return await _context
-            .Locations.Where(l =>
-                l.IsActive
-                && (
-                    l.LocationName.Contains(searchTerm)
-                    || (l.Description != null && l.Description.Contains(searchTerm))
-                    || (l.City != null && l.City.Contains(searchTerm))
-                    || (l.Province != null && l.Province.Contains(searchTerm))
-                    || (l.Country != null && l.Country.Contains(searchTerm))
-                )
-            )
-            .OrderBy(l => l.LocationName)
-            .ThenBy(l => l.LocationId)
-            .ToListAsync();
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
     }
 }

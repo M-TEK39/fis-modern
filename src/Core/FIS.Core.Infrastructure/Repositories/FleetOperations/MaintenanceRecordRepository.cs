@@ -6,10 +6,13 @@ using Microsoft.EntityFrameworkCore;
 namespace FIS.Core.Infrastructure.Repositories;
 
 /// <summary>
-/// Repository implementation for MaintenanceRecord entity operations
+/// maintenance_records is not in the 2012 archive. Legacy maintenance history
+/// is reported through DEV_REP_*VehicleMaintenanceHistory procedures.
 /// </summary>
 public class MaintenanceRecordRepository : IMaintenanceRecordRepository
 {
+    private const string TableName = "maintenance_records";
+
     private readonly FisDbContext _context;
 
     public MaintenanceRecordRepository(FisDbContext context)
@@ -19,13 +22,23 @@ public class MaintenanceRecordRepository : IMaintenanceRecordRepository
 
     public async Task<MaintenanceRecord?> GetByIdAsync(int maintenanceId)
     {
-        return await _context
-            .MaintenanceRecords.Where(x => !x.is_deleted)
-            .FirstOrDefaultAsync(mr => mr.MaintenanceId == maintenanceId);
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return null;
+        }
+
+        return await _context.MaintenanceRecords.FirstOrDefaultAsync(mr =>
+            mr.MaintenanceId == maintenanceId
+        );
     }
 
     public async Task<IEnumerable<MaintenanceRecord>> GetByVehicleAsync(int vmfCode)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
             .MaintenanceRecords.Where(mr => mr.VmfCode == vmfCode)
             .OrderByDescending(mr => mr.MaintenanceDate)
@@ -37,6 +50,11 @@ public class MaintenanceRecordRepository : IMaintenanceRecordRepository
         DateTime endDate
     )
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
             .MaintenanceRecords.Where(mr =>
                 mr.MaintenanceDate >= startDate && mr.MaintenanceDate <= endDate
@@ -47,6 +65,11 @@ public class MaintenanceRecordRepository : IMaintenanceRecordRepository
 
     public async Task<IEnumerable<MaintenanceRecord>> GetByServiceTypeAsync(string serviceType)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
             .MaintenanceRecords.Where(mr => mr.MaintenanceType == serviceType)
             .OrderByDescending(mr => mr.MaintenanceDate)
@@ -55,9 +78,13 @@ public class MaintenanceRecordRepository : IMaintenanceRecordRepository
 
     public async Task<IEnumerable<MaintenanceRecord>> GetAllAsync()
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         return await _context
-            .MaintenanceRecords.Where(x => !x.is_deleted)
-            .OrderByDescending(mr => mr.MaintenanceDate)
+            .MaintenanceRecords.OrderByDescending(mr => mr.MaintenanceDate)
             .ToListAsync();
     }
 
@@ -66,10 +93,13 @@ public class MaintenanceRecordRepository : IMaintenanceRecordRepository
         int currentUserId
     )
     {
-        maintenanceRecord.CreatedDate = DateTime.UtcNow;
-        // Auto-populate audit fields
-        maintenanceRecord.date_created = DateTime.UtcNow;
-        maintenanceRecord.is_deleted = false;
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
 
         _context.MaintenanceRecords.Add(maintenanceRecord);
         await _context.SaveChangesAsync();
@@ -78,8 +108,15 @@ public class MaintenanceRecordRepository : IMaintenanceRecordRepository
 
     public async Task UpdateAsync(MaintenanceRecord maintenanceRecord, int currentUserId)
     {
+        _ = currentUserId;
         if (maintenanceRecord == null)
             throw new ArgumentNullException(nameof(maintenanceRecord));
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
 
         var existing = await _context.MaintenanceRecords.FindAsync(maintenanceRecord.MaintenanceId);
         if (existing == null)
@@ -87,19 +124,24 @@ public class MaintenanceRecordRepository : IMaintenanceRecordRepository
                 $"MaintenanceRecord with MaintenanceId {maintenanceRecord.MaintenanceId} not found"
             );
 
-        maintenanceRecord.ModifiedDate = DateTime.UtcNow;
         _context.Entry(existing).CurrentValues.SetValues(maintenanceRecord);
         await _context.SaveChangesAsync();
     }
 
     public async Task DeleteAsync(int maintenanceId, int currentUserId)
     {
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
+
         var maintenanceRecord = await GetByIdAsync(maintenanceId);
         if (maintenanceRecord != null)
         {
-            // Soft delete instead of hard delete
-            maintenanceRecord.is_deleted = true;
-            maintenanceRecord.date_updated = DateTime.UtcNow;
+            _context.MaintenanceRecords.Remove(maintenanceRecord);
             await _context.SaveChangesAsync();
         }
     }
@@ -108,10 +150,14 @@ public class MaintenanceRecordRepository : IMaintenanceRecordRepository
         string searchTerm
     )
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
         if (string.IsNullOrWhiteSpace(searchTerm))
             return await _context
-                .MaintenanceRecords.Where(x => !x.is_deleted)
-                .OrderByDescending(mr => mr.MaintenanceDate)
+                .MaintenanceRecords.OrderByDescending(mr => mr.MaintenanceDate)
                 .ToListAsync();
 
         return await _context

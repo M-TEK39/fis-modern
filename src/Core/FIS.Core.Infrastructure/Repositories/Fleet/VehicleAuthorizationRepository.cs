@@ -773,6 +773,15 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                     promotedVehicle.type_code,
                     promotedVehicle.model_code
                 );
+                if (promotedVmfCode is > 0)
+                {
+                    await UpdateMaintenanceVmfCodeAfterPromotionAsync(
+                        connection,
+                        transaction,
+                        promotedVmfCode.Value,
+                        tempVmfCode
+                    );
+                }
                 await transaction.CommitAsync();
                 committed = true;
             }
@@ -1014,6 +1023,125 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         });
     }
 
+    public async Task ClearFromAuthorityListAsync(int tempVmfCode)
+    {
+        await WithConnectionAsync(async connection =>
+        {
+            var schema = await GetSchemaAsync(connection, null);
+            var vehicle = (
+                await QueryAsync(connection, null, schema, tempVmfCode: tempVmfCode)
+            ).SingleOrDefault();
+            if (vehicle is null)
+            {
+                throw new KeyNotFoundException(
+                    $"Vehicle authorization with ID {tempVmfCode} not found"
+                );
+            }
+
+            if (
+                !string.Equals(
+                    vehicle.Authority_Status,
+                    "Authorized",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                throw new InvalidOperationException(
+                    $"Vehicle authorization {tempVmfCode} is not authorized for printing and inception."
+                );
+            }
+
+            var chassisNumber = vehicle.chassis_number?.Trim();
+            if (string.IsNullOrWhiteSpace(chassisNumber))
+            {
+                throw new InvalidOperationException(
+                    $"Vehicle authorization {tempVmfCode} has no chassis number for DEV_CLR_NewVehicleFromAuthList."
+                );
+            }
+
+            if (
+                await ProcedureMatchesAsync(
+                    connection,
+                    null,
+                    "DEV_CLR_NewVehicleFromAuthList",
+                    "@chassisNo"
+                )
+            )
+            {
+                await ExecuteProcedureAsync(
+                    connection,
+                    null,
+                    "DEV_CLR_NewVehicleFromAuthList",
+                    new ProcedureParameter("@chassisNo", DbType.String, chassisNumber)
+                );
+                return true;
+            }
+
+            if (!schema.Columns.Contains("printed"))
+            {
+                throw new NotSupportedException(
+                    "The legacy procedure DEV_CLR_NewVehicleFromAuthList is unavailable and pre_vehicle_master.printed is not present. No direct-DML fallback was run."
+                );
+            }
+
+            var values = new List<WriteValue>();
+            AddValue(values, schema.Columns, "printed", DbType.String, "Y");
+            AddValue(values, schema.Columns, "date_updated", DbType.DateTime2, DateTime.Now);
+            if (await ExecuteUpdateAsync(connection, null, tempVmfCode, values) == 0)
+            {
+                throw new KeyNotFoundException(
+                    $"Vehicle authorization with ID {tempVmfCode} not found"
+                );
+            }
+
+            return true;
+        });
+    }
+
+    public Task<VehicleAuthorizationPrintSnapshot?> GetPrintSnapshotAsync(
+        int tempVmfCode,
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? currentUserId = null
+    ) =>
+        WithConnectionAsync(async connection =>
+        {
+            var schema = await GetSchemaAsync(connection, null);
+            var vehicle = (
+                await QueryAsync(
+                    connection,
+                    null,
+                    schema,
+                    tempVmfCode: tempVmfCode,
+                    allowedSiteCodes: allowedSiteCodes,
+                    currentUserId: currentUserId
+                )
+            ).SingleOrDefault();
+            if (vehicle is null)
+            {
+                return null;
+            }
+
+            var chassisNumber = vehicle.chassis_number?.Trim();
+            var printRow = await ReadPrintVehicleDetailsAsync(connection, chassisNumber);
+            var extras = await ReadPrintExtrasAsync(connection, chassisNumber);
+            var userRow = await ReadPrintUserDetailsAsync(connection, chassisNumber);
+            OverlayPrintVehicleDetails(vehicle, printRow);
+
+            return new VehicleAuthorizationPrintSnapshot(
+                vehicle,
+                extras,
+                GetRowValue(printRow, "Site Name", "site_name", "SiteName"),
+                GetRowValue(printRow, "location", "Location"),
+                GetRowValue(printRow, "Hired From", "hired_from", "HiredFrom"),
+                GetRowValue(printRow, "Hire Type", "hire_type", "HireType"),
+                GetRowValue(printRow, "status", "Status"),
+                GetRowValue(userRow, "Captured By", "captured_by", "CapturedBy"),
+                ParseRowDate(userRow, "date captured", "date_captured", "captured_date"),
+                GetRowValue(userRow, "Authorized By", "authorized_by", "AuthorizedBy"),
+                ParseRowDate(userRow, "authority_date", "authorization_date", "date authorized")
+            );
+        });
+
     private async Task<T> WithConnectionAsync<T>(Func<DbConnection, Task<T>> operation)
     {
         var connection = _context.Database.GetDbConnection();
@@ -1117,6 +1245,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             conditions.Add("[p].[Authority_Status] = @authorityStatus");
             AddParameter(command, "@authorityStatus", DbType.String, status);
         }
+
+        AddUnprintedAuthorizedFilter(conditions, schema.Columns, status);
 
         if (capturedByUserCode.HasValue)
         {
@@ -1233,6 +1363,8 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 }
             }
         }
+
+        AddUnprintedAuthorizedFilter(conditions, schema.Columns, status);
 
         if (capturedByUserCode.HasValue)
         {
@@ -1713,6 +1845,39 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
                 DbType.Int16,
                 actingUserId
             )
+        );
+    }
+
+    private static async Task UpdateMaintenanceVmfCodeAfterPromotionAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        int vmfCode,
+        int tempVmfCode
+    )
+    {
+        // PreCaptureNewVehicleDetails.aspx.vb btnAccept_Click copies the
+        // captured maintenance plan from the temp pre-vehicle key onto the
+        // promoted vehicle_master code. Absence of the procedure leaves the
+        // capture-time DEV_UPD_VehicleMaintenanceOptions row unlinked.
+        if (
+            !await ProcedureMatchesAsync(
+                connection,
+                transaction,
+                "DEV_UPD_MaintenanceVmfCode",
+                "@vmfCode",
+                "@tempVmfCode"
+            )
+        )
+        {
+            return;
+        }
+
+        await ExecuteProcedureAsync(
+            connection,
+            transaction,
+            "DEV_UPD_MaintenanceVmfCode",
+            new ProcedureParameter("@vmfCode", DbType.Int32, vmfCode),
+            new ProcedureParameter("@tempVmfCode", DbType.Int32, tempVmfCode)
         );
     }
 
@@ -2533,6 +2698,28 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
             : "1 = 1";
     }
 
+    private static void AddUnprintedAuthorizedFilter(
+        ICollection<string> conditions,
+        IReadOnlySet<string> columns,
+        string? status
+    )
+    {
+        if (
+            !columns.Contains("printed")
+            || !string.Equals(status, "Authorized", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return;
+        }
+
+        // Archive print-and-clear marks printed so the row leaves the
+        // authorized queue. The modern entity maps printed as char(1);
+        // treat Y/1 as already printed on both char and bit stores.
+        conditions.Add(
+            "([p].[printed] IS NULL OR LTRIM(RTRIM(CONVERT(varchar(10), [p].[printed]))) NOT IN (N'Y', N'y', N'1'))"
+        );
+    }
+
     private static void AddValue(
         ICollection<WriteValue> values,
         IReadOnlySet<string> columns,
@@ -2570,6 +2757,208 @@ public sealed class VehicleAuthorizationRepository : IVehicleAuthorizationReposi
         parameter.DbType = type;
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
+    }
+
+    private static async Task<Dictionary<string, string?>?> ReadPrintVehicleDetailsAsync(
+        DbConnection connection,
+        string? chassisNumber
+    )
+    {
+        if (
+            string.IsNullOrWhiteSpace(chassisNumber)
+            || !await ProcedureMatchesAsync(
+                connection,
+                null,
+                "DEV_SEL_PrintVehicle_Details",
+                "@chassis_number"
+            )
+        )
+        {
+            return null;
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = "dbo.DEV_SEL_PrintVehicle_Details";
+        AddParameter(command, "@chassis_number", DbType.String, chassisNumber);
+        await using var reader = await command.ExecuteReaderAsync();
+        return await reader.ReadAsync() ? ReadRow(reader) : null;
+    }
+
+    private static async Task<IReadOnlyList<string>> ReadPrintExtrasAsync(
+        DbConnection connection,
+        string? chassisNumber
+    )
+    {
+        if (
+            string.IsNullOrWhiteSpace(chassisNumber)
+            || !await ProcedureMatchesAsync(
+                connection,
+                null,
+                "DEV_SEL_NewVehicle_Extras",
+                "@SearchVal"
+            )
+        )
+        {
+            return [];
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = "dbo.DEV_SEL_NewVehicle_Extras";
+        AddParameter(command, "@SearchVal", DbType.String, chassisNumber);
+        var extras = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var description = ReadAliased(reader, "extra_description", "Extra_Description");
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                extras.Add(description);
+            }
+        }
+
+        return extras;
+    }
+
+    private static async Task<Dictionary<string, string?>?> ReadPrintUserDetailsAsync(
+        DbConnection connection,
+        string? chassisNumber
+    )
+    {
+        if (
+            string.IsNullOrWhiteSpace(chassisNumber)
+            || !await ProcedureMatchesAsync(
+                connection,
+                null,
+                "DEV_SEL_Vehicle_CapturerDetails",
+                "@chassis_No"
+            )
+        )
+        {
+            return null;
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = "dbo.DEV_SEL_Vehicle_CapturerDetails";
+        AddParameter(command, "@chassis_No", DbType.String, chassisNumber);
+        await using var reader = await command.ExecuteReaderAsync();
+        return await reader.ReadAsync() ? ReadRow(reader) : null;
+    }
+
+    private static void OverlayPrintVehicleDetails(
+        PreVehicleMaster vehicle,
+        Dictionary<string, string?>? printRow
+    )
+    {
+        if (printRow is null || printRow.Count == 0)
+        {
+            return;
+        }
+
+        vehicle.fleet_number = GetRowValue(printRow, "GG Number", "fleet_number") ?? vehicle.fleet_number;
+        vehicle.registration_number =
+            GetRowValue(printRow, "registration_number") ?? vehicle.registration_number;
+        vehicle.replaced_gg_number =
+            GetRowValue(printRow, "replaced_gg_number") ?? vehicle.replaced_gg_number;
+        vehicle.colour = GetRowValue(printRow, "colour") ?? vehicle.colour;
+        vehicle.chassis_number = GetRowValue(printRow, "chassis_number") ?? vehicle.chassis_number;
+        vehicle.engine_number =
+            GetRowValue(printRow, "engine_number_1", "engine_number") ?? vehicle.engine_number;
+        vehicle.invoice_number = GetRowValue(printRow, "invoice_number") ?? vehicle.invoice_number;
+        vehicle.gp_number = GetRowValue(printRow, "gp_number") ?? vehicle.gp_number;
+        vehicle.purchase_from =
+            GetRowValue(printRow, "purchased_from", "purchase_from") ?? vehicle.purchase_from;
+        vehicle.Fleet_Notes = GetRowValue(printRow, "Fleet_Notes", "fleet_notes") ?? vehicle.Fleet_Notes;
+        vehicle.damages_comment =
+            GetRowValue(printRow, "damages_comment") ?? vehicle.damages_comment;
+        vehicle.authorization_comment =
+            GetRowValue(printRow, "comment") ?? vehicle.authorization_comment;
+        var modelDescription = GetRowValue(printRow, "model");
+        if (!string.IsNullOrWhiteSpace(modelDescription))
+        {
+            vehicle.Model ??= new FIS.Core.Domain.Entities.Model();
+            vehicle.Model.model_description = modelDescription;
+        }
+
+        var year = GetRowValue(printRow, "year_manufactured");
+        if (short.TryParse(year, out var yearManufactured))
+        {
+            vehicle.year_manufactured = yearManufactured;
+        }
+
+        var odo = GetRowValue(printRow, "take_on_odo");
+        if (int.TryParse(odo, out var takeOnOdo))
+        {
+            vehicle.take_on_odo = takeOnOdo;
+        }
+
+        var takeOnDate = ParseRowDate(printRow, "take_on_date");
+        if (takeOnDate.HasValue)
+        {
+            vehicle.take_on_date = takeOnDate;
+        }
+
+        var purchaseDate = ParseRowDate(printRow, "purchase_date");
+        if (purchaseDate.HasValue)
+        {
+            vehicle.purchase_date = purchaseDate;
+        }
+
+        var purchaseAmount = GetRowValue(printRow, "purchase_amount");
+        if (decimal.TryParse(purchaseAmount, out var amount))
+        {
+            vehicle.purchase_amount = amount;
+        }
+    }
+
+    private static Dictionary<string, string?> ReadRow(DbDataReader reader)
+    {
+        var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < reader.FieldCount; index++)
+        {
+            row[reader.GetName(index)] = reader.IsDBNull(index)
+                ? null
+                : reader.GetValue(index)?.ToString()?.Trim();
+        }
+
+        return row;
+    }
+
+    private static string? GetRowValue(Dictionary<string, string?>? row, params string[] keys)
+    {
+        if (row is null)
+        {
+            return null;
+        }
+
+        foreach (var key in keys)
+        {
+            if (row.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static DateTime? ParseRowDate(Dictionary<string, string?>? row, params string[] keys)
+    {
+        var value = GetRowValue(row, keys);
+        return DateTime.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private static string? ReadAliased(DbDataReader reader, params string[] columnNames)
+    {
+        var ordinal = FindOrdinal(reader, columnNames);
+        if (ordinal is null || reader.IsDBNull(ordinal.Value))
+        {
+            return null;
+        }
+
+        return reader.GetValue(ordinal.Value)?.ToString()?.Trim();
     }
 
     private static short? ToShortUserCode(int userId) =>

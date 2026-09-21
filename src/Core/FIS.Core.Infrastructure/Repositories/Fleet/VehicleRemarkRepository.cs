@@ -6,10 +6,13 @@ using Microsoft.EntityFrameworkCore;
 namespace FIS.Core.Infrastructure.Repositories;
 
 /// <summary>
-/// Repository for vehicle remarks — operational notes such as "missing" or "under investigation".
+/// vehicle_remarks is an expanded table. Archive vehicle notes live in
+/// dbo.fleet_notes. is_deleted is optional; leftover EF must not SELECT it.
 /// </summary>
 public class VehicleRemarkRepository : IVehicleRemarkRepository
 {
+    private const string TableName = "vehicle_remarks";
+
     private readonly FisDbContext _context;
 
     public VehicleRemarkRepository(FisDbContext context)
@@ -19,57 +22,134 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
 
     public async Task<VehicleRemark?> GetByIdAsync(int remarkId)
     {
-        return await _context
-            .VehicleRemarks.Include(r => r.Vehicle)
-            .Include(r => r.CreatedByUser)
-            .Include(r => r.ResolvedByUser)
-            .FirstOrDefaultAsync(r => r.remark_id == remarkId && !r.is_deleted);
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return null;
+        }
+
+        return await QueryByIdAsync(remarkId, track: false);
     }
 
     public async Task<IEnumerable<VehicleRemark>> GetByVehicleAsync(int vmfCode)
     {
-        return await _context
-            .VehicleRemarks.Include(r => r.CreatedByUser)
-            .Include(r => r.ResolvedByUser)
-            .Where(r => r.vmf_code == vmfCode && !r.is_deleted)
-            .OrderByDescending(r => r.date_created)
-            .ToListAsync();
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
+        return await HasDeletedColumnAsync()
+            ? await _context
+                .VehicleRemarks.FromSql(
+                    $"SELECT * FROM [dbo].[vehicle_remarks] WHERE [vmf_code] = {vmfCode} AND [is_deleted] = 0 ORDER BY [date_created] DESC"
+                )
+                .AsNoTracking()
+                .ToListAsync()
+            : await _context
+                .VehicleRemarks.FromSql(
+                    $"SELECT * FROM [dbo].[vehicle_remarks] WHERE [vmf_code] = {vmfCode} ORDER BY [date_created] DESC"
+                )
+                .AsNoTracking()
+                .ToListAsync();
     }
 
     public async Task<IEnumerable<VehicleRemark>> GetActiveByVehicleAsync(int vmfCode)
     {
-        return await _context
-            .VehicleRemarks.Include(r => r.CreatedByUser)
-            .Where(r => r.vmf_code == vmfCode && !r.is_deleted && !r.is_resolved)
-            .OrderByDescending(r => r.date_created)
-            .ToListAsync();
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
+        return await HasDeletedColumnAsync()
+            ? await _context
+                .VehicleRemarks.FromSql(
+                    $"SELECT * FROM [dbo].[vehicle_remarks] WHERE [vmf_code] = {vmfCode} AND [is_resolved] = 0 AND [is_deleted] = 0 ORDER BY [date_created] DESC"
+                )
+                .AsNoTracking()
+                .ToListAsync()
+            : await _context
+                .VehicleRemarks.FromSql(
+                    $"SELECT * FROM [dbo].[vehicle_remarks] WHERE [vmf_code] = {vmfCode} AND [is_resolved] = 0 ORDER BY [date_created] DESC"
+                )
+                .AsNoTracking()
+                .ToListAsync();
     }
 
     public async Task<VehicleRemark?> GetLatestActiveByVehicleAsync(int vmfCode)
     {
-        return await _context
-            .VehicleRemarks.Include(r => r.CreatedByUser)
-            .Where(r => r.vmf_code == vmfCode && !r.is_deleted && !r.is_resolved)
-            .OrderByDescending(r => r.date_created)
-            .FirstOrDefaultAsync();
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return null;
+        }
+
+        return await HasDeletedColumnAsync()
+            ? await _context
+                .VehicleRemarks.FromSql(
+                    $"SELECT * FROM [dbo].[vehicle_remarks] WHERE [vmf_code] = {vmfCode} AND [is_resolved] = 0 AND [is_deleted] = 0 ORDER BY [date_created] DESC"
+                )
+                .AsNoTracking()
+                .FirstOrDefaultAsync()
+            : await _context
+                .VehicleRemarks.FromSql(
+                    $"SELECT * FROM [dbo].[vehicle_remarks] WHERE [vmf_code] = {vmfCode} AND [is_resolved] = 0 ORDER BY [date_created] DESC"
+                )
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
     }
 
     public async Task<IEnumerable<VehicleRemark>> GetAllActiveAsync()
     {
-        return await _context
-            .VehicleRemarks.Include(r => r.Vehicle)
-            .Include(r => r.CreatedByUser)
-            .Where(r => !r.is_deleted && !r.is_resolved)
-            .OrderByDescending(r => r.date_created)
-            .ToListAsync();
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
+        return await HasDeletedColumnAsync()
+            ? await _context
+                .VehicleRemarks.FromSql(
+                    $"SELECT * FROM [dbo].[vehicle_remarks] WHERE [is_resolved] = 0 AND [is_deleted] = 0 ORDER BY [date_created] DESC"
+                )
+                .AsNoTracking()
+                .ToListAsync()
+            : await _context
+                .VehicleRemarks.FromSql(
+                    $"SELECT * FROM [dbo].[vehicle_remarks] WHERE [is_resolved] = 0 ORDER BY [date_created] DESC"
+                )
+                .AsNoTracking()
+                .ToListAsync();
+    }
+
+    public async Task<IEnumerable<VehicleRemark>> GetAllAsync()
+    {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            return [];
+        }
+
+        return await HasDeletedColumnAsync()
+            ? await _context
+                .VehicleRemarks.FromSql(
+                    $"SELECT * FROM [dbo].[vehicle_remarks] WHERE [is_deleted] = 0 ORDER BY [date_created] DESC"
+                )
+                .AsNoTracking()
+                .ToListAsync()
+            : await _context
+                .VehicleRemarks.FromSql($"SELECT * FROM [dbo].[vehicle_remarks] ORDER BY [date_created] DESC")
+                .AsNoTracking()
+                .ToListAsync();
     }
 
     public async Task<VehicleRemark> CreateAsync(VehicleRemark remark, int currentUserId)
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
+
         remark.date_created = DateTime.UtcNow;
         remark.created_by_user_code = currentUserId;
         remark.is_resolved = false;
-        remark.is_deleted = false;
 
         _context.VehicleRemarks.Add(remark);
         await _context.SaveChangesAsync();
@@ -84,10 +164,16 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
         string? resolutionNotes
     )
     {
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
+
         var remark =
-            await _context.VehicleRemarks.FirstOrDefaultAsync(r =>
-                r.remark_id == remarkId && !r.is_deleted
-            ) ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
+            await QueryByIdAsync(remarkId, track: true)
+            ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
 
         if (remark.is_resolved)
             throw new InvalidOperationException($"Remark {remarkId} is already resolved.");
@@ -107,15 +193,48 @@ public class VehicleRemarkRepository : IVehicleRemarkRepository
 
     public async Task DeleteAsync(int remarkId, int currentUserId)
     {
+        _ = currentUserId;
+        if (!await WorkflowOptionalTable.ExistsInSchemaAsync(_context, "dbo", TableName))
+        {
+            throw new InvalidOperationException(
+                WorkflowOptionalTable.MissingMessage("dbo", TableName)
+            );
+        }
+
+        if (await HasDeletedColumnAsync())
+        {
+            await _context.Database.ExecuteSqlAsync(
+                $"UPDATE [dbo].[vehicle_remarks] SET [is_deleted] = 1 WHERE [remark_id] = {remarkId}"
+            );
+            return;
+        }
+
         var remark =
-            await _context.VehicleRemarks.FirstOrDefaultAsync(r =>
-                r.remark_id == remarkId && !r.is_deleted
-            ) ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
+            await _context.VehicleRemarks.FirstOrDefaultAsync(r => r.remark_id == remarkId)
+            ?? throw new KeyNotFoundException($"Vehicle remark not found with ID: {remarkId}");
 
-        remark.is_deleted = true;
-        remark.date_updated = DateTime.UtcNow;
-        remark.modified_by_user_code = currentUserId;
-
+        _context.VehicleRemarks.Remove(remark);
         await _context.SaveChangesAsync();
     }
+
+    private async Task<VehicleRemark?> QueryByIdAsync(int remarkId, bool track)
+    {
+        var query = await HasDeletedColumnAsync()
+            ? _context.VehicleRemarks.FromSql(
+                $"SELECT * FROM [dbo].[vehicle_remarks] WHERE [remark_id] = {remarkId} AND [is_deleted] = 0"
+            )
+            : _context.VehicleRemarks.FromSql(
+                $"SELECT * FROM [dbo].[vehicle_remarks] WHERE [remark_id] = {remarkId}"
+            );
+
+        if (!track)
+        {
+            query = query.AsNoTracking();
+        }
+
+        return await query.FirstOrDefaultAsync();
+    }
+
+    private Task<bool> HasDeletedColumnAsync() =>
+        WorkflowOptionalTable.ColumnExistsAsync(_context, "dbo", TableName, "is_deleted");
 }

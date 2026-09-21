@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Data.Common;
@@ -38,6 +39,8 @@ public class FinanceController : BaseApiController
     private readonly LegacyFinanceReportExecutionService _legacyFinanceReportExecutionService;
     private readonly LegacyBasCompatibilityService _legacyBasCompatibilityService;
     private readonly LegacyWesbankCompatibilityService _legacyWesbankCompatibilityService;
+    private readonly ITariffParameterRepository _tariffParameters;
+    private readonly IMaintenanceValueRepository _maintenanceValues;
     private readonly FisDbContext _context;
     private readonly ILogger<FinanceController> _logger;
     private static readonly ConcurrentDictionary<Guid, ExportTaskState> ExportTasks = new();
@@ -52,6 +55,8 @@ public class FinanceController : BaseApiController
         LegacyFinanceReportExecutionService legacyFinanceReportExecutionService,
         LegacyBasCompatibilityService legacyBasCompatibilityService,
         LegacyWesbankCompatibilityService legacyWesbankCompatibilityService,
+        ITariffParameterRepository tariffParameters,
+        IMaintenanceValueRepository maintenanceValues,
         FisDbContext context,
         ILogger<FinanceController> logger
     )
@@ -60,6 +65,8 @@ public class FinanceController : BaseApiController
         _legacyFinanceReportExecutionService = legacyFinanceReportExecutionService;
         _legacyBasCompatibilityService = legacyBasCompatibilityService;
         _legacyWesbankCompatibilityService = legacyWesbankCompatibilityService;
+        _tariffParameters = tariffParameters;
+        _maintenanceValues = maintenanceValues;
         _context = context;
         _logger = logger;
     }
@@ -67,8 +74,7 @@ public class FinanceController : BaseApiController
     #region Batch Operations
 
     [HttpGet("batch/status")]
-    [LegacyFinanceBatchAccess]
-    [ServiceFilter(typeof(LegacyFinanceBatchAuthorizationFilter))]
+    [LegacyFinanceBatchProgressRead]
     public async Task<ActionResult<BatchStatusDto>> GetBatchStatus()
     {
         try
@@ -80,14 +86,14 @@ public class FinanceController : BaseApiController
             {
                 var value = await ReadLegacyParameterAsync("BatchIsRunning");
                 var isRunning = IsLegacyTrue(value);
-                return Ok(
-                    new BatchStatusDto
-                    {
-                        BatchCode = 0,
-                        Status = isRunning ? "Running" : "Not running",
-                        IsActive = isRunning,
-                    }
-                );
+                var dto = new BatchStatusDto
+                {
+                    BatchCode = 0,
+                    Status = isRunning ? "Running" : "Not running",
+                    IsActive = isRunning,
+                };
+                await OverlayArchivedBatchProgressAsync(dto);
+                return Ok(dto);
             }
 
             if (parameterProcedureAvailability == LegacyProcedureAvailability.Incompatible)
@@ -103,7 +109,7 @@ public class FinanceController : BaseApiController
             // A read-only compatibility fallback is retained only while the legacy
             // parameter procedure is absent. It does not authorize write shortcuts.
             var batch = await _context
-                .Batches.Where(b => !b.is_deleted)
+                .Batches
                 .OrderByDescending(b => b.batch_date)
                 .ThenByDescending(b => b.batch_code)
                 .FirstOrDefaultAsync();
@@ -862,10 +868,8 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var activeSegments = await _context.BasSegments.CountAsync(x => !x.is_deleted);
-            var invalidJournals = await _context.JournalWithInvalidBasCodes.CountAsync(x =>
-                !x.is_deleted
-            );
+            var activeSegments = await _context.BasSegments.CountAsync();
+            var invalidJournals = await _context.JournalWithInvalidBasCodes.CountAsync();
             var uninvoicedJournals = (await _journalService.GetAllJournalDetailsAsync()).Count(x =>
                 !x.is_deleted && !x.journal_detail_date_posted.HasValue
             );
@@ -906,7 +910,6 @@ public class FinanceController : BaseApiController
                     on grp.segment_type_code equals typ.segment_type_code
                     into segmentTypes
                 from typ in segmentTypes.DefaultIfEmpty()
-                where !seg.is_deleted
                 select new
                 {
                     seg.segment_code,
@@ -1004,7 +1007,6 @@ public class FinanceController : BaseApiController
                     on grp.segment_type_code equals typ.segment_type_code
                     into segmentTypes
                 from typ in segmentTypes.DefaultIfEmpty()
-                where !seg.is_deleted
                 select new
                 {
                     seg.segment_code,
@@ -1171,8 +1173,7 @@ public class FinanceController : BaseApiController
             }
 
             var query = _context
-                .JournalWithInvalidBasCodes.AsNoTracking()
-                .Where(x => !x.is_deleted);
+                .JournalWithInvalidBasCodes.AsNoTracking();
             var permittedSiteNames = await GetProfileInvalidJournalSiteNamesAsync(
                 departmentCode,
                 permitBasCorrectionSelection: true
@@ -1239,8 +1240,7 @@ public class FinanceController : BaseApiController
             }
 
             var query = _context
-                .JournalWithInvalidBasCodes.AsNoTracking()
-                .Where(item => !item.is_deleted);
+                .JournalWithInvalidBasCodes.AsNoTracking();
             var permittedSiteNames = await GetProfileInvalidJournalSiteNamesAsync(
                 departmentCode,
                 permitBasCorrectionSelection: true
@@ -1333,7 +1333,7 @@ public class FinanceController : BaseApiController
                 );
                 var invalidJournalQuery = _context
                     .JournalWithInvalidBasCodes.AsNoTracking()
-                    .Where(item => !item.is_deleted && item.Id == request.TransactionId);
+                    .Where(item => item.Id == request.TransactionId);
                 if (permittedSiteNames is not null)
                 {
                     invalidJournalQuery = invalidJournalQuery.Where(item =>
@@ -1356,8 +1356,7 @@ public class FinanceController : BaseApiController
                     (segment, group) => new { segment, group }
                 )
                 .Where(item =>
-                    !item.segment.is_deleted
-                    && item.segment.department_code == request.DepartmentCode
+                    item.segment.department_code == request.DepartmentCode
                     && (
                         (item.group.segment_type_code == 3 && item.segment.segment_number == request.Responsibility.Trim())
                         || (item.group.segment_type_code == 2 && item.segment.segment_number == request.Objective.Trim())
@@ -1584,8 +1583,7 @@ public class FinanceController : BaseApiController
                 )
                 .AnyAsync(
                     item =>
-                        !item.segment.is_deleted
-                        && item.segment.department_code == source.DepartmentCode
+                        item.segment.department_code == source.DepartmentCode
                         && item.group.segment_type_code == 1
                         && item.segment.segment_number == fundNumber,
                     HttpContext.RequestAborted
@@ -1634,13 +1632,12 @@ public class FinanceController : BaseApiController
         try
         {
             var departmentsWithBas = _context
-                .BasSegments.Where(s => !s.is_deleted)
-                .Select(s => s.department_code)
+                .BasSegments.Select(s => s.department_code)
                 .Distinct();
 
             var response = await _context
                 .Departments.AsNoTracking()
-                .Where(d => !d.is_deleted && !departmentsWithBas.Contains(d.department_code))
+                .Where(d => !departmentsWithBas.Contains(d.department_code))
                 .OrderBy(d => d.description)
                 .Select(d => new FinanceDepartmentDto
                 {
@@ -1672,14 +1669,12 @@ public class FinanceController : BaseApiController
         try
         {
             var departmentsWithBas = _context
-                .BasSegments.Where(segment => !segment.is_deleted)
-                .Select(segment => segment.department_code)
+                .BasSegments.Select(segment => segment.department_code)
                 .Distinct();
             var query = _context
                 .Departments.AsNoTracking()
                 .Where(department =>
-                    !department.is_deleted
-                    && !departmentsWithBas.Contains(department.department_code)
+                    !departmentsWithBas.Contains(department.department_code)
                 );
             var normalizedPage = NormalizePage(page);
             var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
@@ -1718,8 +1713,7 @@ public class FinanceController : BaseApiController
             var response = await _context
                 .Departments.AsNoTracking()
                 .Where(d =>
-                    !d.is_deleted
-                    && (!d.financial_system_code.HasValue || d.financial_system_code.Value == 0)
+                    !d.financial_system_code.HasValue || d.financial_system_code.Value == 0
                 )
                 .OrderBy(d => d.description)
                 .Select(d => new FinanceDepartmentDto
@@ -1754,11 +1748,8 @@ public class FinanceController : BaseApiController
             var query = _context
                 .Departments.AsNoTracking()
                 .Where(department =>
-                    !department.is_deleted
-                    && (
-                        !department.financial_system_code.HasValue
-                        || department.financial_system_code.Value == 0
-                    )
+                    !department.financial_system_code.HasValue
+                    || department.financial_system_code.Value == 0
                 );
             var normalizedPage = NormalizePage(page);
             var normalizedPageSize = Math.Clamp(pageSize, 1, MaximumPageSize);
@@ -1817,7 +1808,6 @@ public class FinanceController : BaseApiController
         {
             var dates = await _context
                 .Batches.AsNoTracking()
-                .Where(b => !b.is_deleted)
                 .Select(b => b.batch_date.Date)
                 .Distinct()
                 .OrderByDescending(d => d)
@@ -3123,12 +3113,11 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var years = await _context
-                .TariffParameters.Where(tp => !tp.is_deleted)
+            var years = (await _tariffParameters.GetAllAsync())
                 .Select(tp => tp.TariffParameterYear)
                 .Distinct()
                 .OrderByDescending(y => y)
-                .ToListAsync();
+                .ToList();
 
             if (!years.Any())
                 years = new List<int> { DateTime.Now.Year };
@@ -3149,9 +3138,7 @@ public class FinanceController : BaseApiController
     {
         try
         {
-            var param = await _context
-                .TariffParameters.Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
-                .FirstOrDefaultAsync();
+            var param = await _tariffParameters.GetByYearAsync(year);
 
             // Global parameters (interest rate, fuel price, etc.)
             var globalParams = new List<TariffParameterItemDto>();
@@ -3269,12 +3256,9 @@ public class FinanceController : BaseApiController
             // Maintenance values for this parameter year
             var maintValues =
                 param != null
-                    ? await _context
-                        .MaintenanceValues.Where(mv =>
-                            mv.TariffParameterID == param.TariffParameterID
-                        )
+                    ? (await _maintenanceValues.GetByTariffParameterAsync(param.TariffParameterID))
                         .Join(
-                            _context.Classes,
+                            await _context.Classes.AsNoTracking().ToListAsync(),
                             mv => mv.class_code,
                             c => c.class_code,
                             (mv, c) =>
@@ -3290,7 +3274,7 @@ public class FinanceController : BaseApiController
                         )
                         .OrderBy(mv => mv.ClassCode)
                         .ThenBy(mv => mv.MonthsAge)
-                        .ToListAsync()
+                        .ToList()
                     : new List<MaintenanceValueRowDto>();
 
             return Ok(
@@ -3325,10 +3309,7 @@ public class FinanceController : BaseApiController
     {
         var currentUserId = GetCurrentUserId();
 
-        var tariff = await _context
-            .TariffParameters.Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
-            .OrderByDescending(tp => tp.TariffParameterID)
-            .FirstOrDefaultAsync();
+        var tariff = await _tariffParameters.GetByYearAsync(year);
 
         if (tariff is null)
         {
@@ -3417,8 +3398,7 @@ public class FinanceController : BaseApiController
         var existingBatch = await _context
             .Batches.AsNoTracking()
             .Where(b =>
-                !b.is_deleted
-                && b.batch_date.Date == startDate.Date
+                b.batch_date.Date == startDate.Date
                 && b.financial_system_code == finSystemCode
             )
             .OrderByDescending(b => b.batch_code)
@@ -3447,7 +3427,7 @@ public class FinanceController : BaseApiController
                 );
                 var newBatch = await _context
                     .Batches.AsNoTracking()
-                    .FirstOrDefaultAsync(b => !b.is_deleted && b.batch_code == newBatchCode);
+                    .FirstOrDefaultAsync(b => b.batch_code == newBatchCode);
                 if (newBatch is null)
                 {
                     return ExportPreparationResult.Failed(
@@ -3474,7 +3454,7 @@ public class FinanceController : BaseApiController
             var newBatchCode = await CreateBatchViaLegacyProcAsync(startDate.Date, finSystemCode);
             var newBatch = await _context
                 .Batches.AsNoTracking()
-                .FirstOrDefaultAsync(b => !b.is_deleted && b.batch_code == newBatchCode);
+                .FirstOrDefaultAsync(b => b.batch_code == newBatchCode);
             if (newBatch is null)
             {
                 return ExportPreparationResult.Failed(
@@ -3599,7 +3579,7 @@ public class FinanceController : BaseApiController
             {
                 var batchByCode = await _context
                     .Batches.AsNoTracking()
-                    .FirstOrDefaultAsync(b => !b.is_deleted && b.batch_code == batchCode);
+                    .FirstOrDefaultAsync(b => b.batch_code == batchCode);
                 if (batchByCode is not null)
                 {
                     return (batchByCode.batch_date.Date, batchByCode.batch_date.Date);
@@ -3609,7 +3589,6 @@ public class FinanceController : BaseApiController
 
         var latestBatch = await _context
             .Batches.AsNoTracking()
-            .Where(b => !b.is_deleted)
             .OrderByDescending(b => b.batch_date)
             .ThenByDescending(b => b.batch_code)
             .FirstOrDefaultAsync();
@@ -3982,6 +3961,16 @@ public class FinanceController : BaseApiController
         []
     );
 
+    private static readonly LegacyProcedureContract CheckJobStatusProcedure = new(
+        "ADM_CheckJobStatus",
+        ["@JobName"]
+    );
+
+    private static readonly LegacyProcedureContract CheckRecordedLogsProcedure = new(
+        "ADM_CheckRecordedLogs",
+        ["@LogJob"]
+    );
+
     private static readonly LegacyProcedureContract UpdateTariffParameterProcedure = new(
         "DEV_UPD_TariffParameter",
         [
@@ -4163,6 +4152,188 @@ public class FinanceController : BaseApiController
         {
             if (shouldClose)
                 await connection.CloseAsync();
+        }
+    }
+
+    /// <summary>
+    /// BatchInProgress.aspx.vb overlays ADM_CheckRecordedLogs(@LogJob="batch")
+    /// and ADM_CheckJobStatus(@JobName=BatchJob/RollbackJob) onto the live
+    /// BatchIsRunning flag. Missing procedures stay omitted; incompatible
+    /// contracts are not replaced with leftover EF job history.
+    /// </summary>
+    private async Task OverlayArchivedBatchProgressAsync(BatchStatusDto dto)
+    {
+        try
+        {
+            var recordedLogsAvailability = await GetLegacyProcedureAvailabilityAsync(
+                CheckRecordedLogsProcedure
+            );
+            if (recordedLogsAvailability == LegacyProcedureAvailability.Compatible)
+            {
+                var latestLog = await ExecuteLegacyProcedureScalarAsync(
+                    CheckRecordedLogsProcedure,
+                    new LegacyProcedureParameter("@LogJob", DbType.String, "batch")
+                );
+                dto.LatestLog = latestLog is null or DBNull
+                    ? null
+                    : Convert.ToString(latestLog, CultureInfo.InvariantCulture)?.Trim();
+            }
+
+            var jobStatusAvailability = await GetLegacyProcedureAvailabilityAsync(
+                CheckJobStatusProcedure
+            );
+            if (jobStatusAvailability != LegacyProcedureAvailability.Compatible)
+                return;
+
+            var processStartDate = ToLegacyDateTime(await ReadLegacyParameterAsync("BatchStartDate"));
+            var processEndDate = ToLegacyDateTime(await ReadLegacyParameterAsync("BatchEndDate"));
+            var batchJob = await ReadLegacyParameterAsync("BatchJob") ?? "";
+            var rollbackJob = await ReadLegacyParameterAsync("RollbackJob") ?? "";
+
+            var jobRow = await ExecuteLegacyProcedureFirstRowAsync(
+                CheckJobStatusProcedure,
+                new LegacyProcedureParameter("@JobName", DbType.String, batchJob)
+            );
+            DateTime startDate;
+            DateTime endDate;
+            var hours = 0;
+            if (jobRow is not null)
+            {
+                startDate = ToLegacyDateTime(ReadRowValue(jobRow, "startDate"));
+                endDate = ToLegacyDateTime(ReadRowValue(jobRow, "endDate"));
+                var timeTook = ToLegacyInteger(ReadRowValue(jobRow, "timetook"));
+                if (timeTook != 0)
+                    hours = timeTook;
+            }
+            else
+            {
+                startDate = processStartDate;
+                endDate = processEndDate;
+                hours = (int)(processStartDate - processEndDate).TotalHours;
+            }
+
+            if (hours < 0)
+                hours = 4;
+
+            dto.JobStartDate = ToOptionalDateTime(startDate);
+            dto.JobEndDate = ToOptionalDateTime(endDate);
+            dto.TypicalHours = hours;
+            dto.DatabaseOperationsActive =
+                processStartDate > processEndDate || endDate == DateTime.MinValue;
+
+            var rollbackRow = await ExecuteLegacyProcedureFirstRowAsync(
+                CheckJobStatusProcedure,
+                new LegacyProcedureParameter("@JobName", DbType.String, rollbackJob)
+            );
+            if (rollbackRow is null)
+                return;
+
+            var rollbackStartDate = ToLegacyDateTime(ReadRowValue(rollbackRow, "startDate"));
+            var rollbackEndDate = ToLegacyDateTime(ReadRowValue(rollbackRow, "endDate"));
+            dto.RollbackStartDate = ToOptionalDateTime(rollbackStartDate);
+            dto.RollbackEndDate = ToOptionalDateTime(rollbackEndDate);
+            dto.RollbackOperationsActive =
+                rollbackEndDate != DateTime.MinValue && rollbackStartDate > rollbackEndDate;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Archived batch job-status overlay failed");
+            dto.JobStatusError = ex.InnerException?.Message ?? ex.Message;
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review if the query string passed to 'string DbCommand.CommandText' accepts any user input",
+        Justification = "Procedure names come only from fixed archived legacy procedure contracts."
+    )]
+    private async Task<Dictionary<string, object?>?> ExecuteLegacyProcedureFirstRowAsync(
+        LegacyProcedureContract procedure,
+        params LegacyProcedureParameter[] parameters
+    )
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandText = $"{procedure.SchemaName}.{procedure.Name}";
+            command.CommandTimeout = 0;
+            AddDbParameters(command, parameters);
+            await using var reader = await command.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+                return null;
+
+            var values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            for (var index = 0; index < reader.FieldCount; index++)
+            {
+                values[reader.GetName(index)] = reader.IsDBNull(index)
+                    ? null
+                    : reader.GetValue(index);
+            }
+
+            return values;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private static object? ReadRowValue(
+        IReadOnlyDictionary<string, object?> row,
+        string column
+    ) => row.TryGetValue(column, out var value) ? value : null;
+
+    private static DateTime ToLegacyDateTime(object? value)
+    {
+        if (value is null or DBNull)
+            return DateTime.MinValue;
+        if (value is DateTime dateTime)
+            return dateTime;
+        var text = Convert.ToString(value, CultureInfo.InvariantCulture)?.Trim();
+        if (string.IsNullOrWhiteSpace(text))
+            return DateTime.MinValue;
+        if (
+            DateTime.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeLocal,
+                out var invariant
+            )
+        )
+            return invariant;
+        if (
+            DateTime.TryParse(
+                text,
+                CultureInfo.CurrentCulture,
+                DateTimeStyles.AssumeLocal,
+                out var current
+            )
+        )
+            return current;
+        return DateTime.MinValue;
+    }
+
+    private static DateTime? ToOptionalDateTime(DateTime value) =>
+        value == DateTime.MinValue ? null : value;
+
+    private static int ToLegacyInteger(object? value)
+    {
+        if (value is null or DBNull)
+            return 0;
+        try
+        {
+            return Convert.ToInt32(value, CultureInfo.InvariantCulture);
+        }
+        catch (Exception)
+        {
+            return 0;
         }
     }
 
@@ -4838,6 +5009,15 @@ public class BatchStatusDto
     public bool IsActive { get; set; }
     public int TotalTransactions { get; set; }
     public int ProcessedTransactions { get; set; }
+    public string? LatestLog { get; set; }
+    public DateTime? JobStartDate { get; set; }
+    public DateTime? JobEndDate { get; set; }
+    public int? TypicalHours { get; set; }
+    public DateTime? RollbackStartDate { get; set; }
+    public DateTime? RollbackEndDate { get; set; }
+    public bool DatabaseOperationsActive { get; set; }
+    public bool RollbackOperationsActive { get; set; }
+    public string? JobStatusError { get; set; }
 }
 
 public class StartBatchDto

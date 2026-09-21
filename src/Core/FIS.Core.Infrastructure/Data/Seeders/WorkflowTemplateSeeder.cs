@@ -1,5 +1,6 @@
 using System.Text.Json;
 using FIS.Core.Domain.Entities.System;
+using FIS.Core.Infrastructure.Repositories;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -21,9 +22,17 @@ public class WorkflowTemplateSeeder
     {
         try
         {
+            if (!await WorkflowOptionalTable.ExistsAsync(_context, "WorkflowTemplate"))
+            {
+                _logger.LogInformation(
+                    "{Message}",
+                    WorkflowOptionalTable.MissingMessage("WorkflowTemplate")
+                );
+                return;
+            }
+
             var existingTemplates = await _context
                 .Set<WorkflowTemplate>()
-                .Where(t => !t.is_deleted)
                 .ToListAsync();
 
             if (existingTemplates.Any())
@@ -53,11 +62,8 @@ public class WorkflowTemplateSeeder
 
     private List<WorkflowTemplate> GetCommonTemplates()
     {
-        var systemUserId = 1;
-        var now = DateTime.Now;
-
-        return new List<WorkflowTemplate>
-        {
+        return
+        [
             new WorkflowTemplate
             {
                 TemplateName = "Vehicle Accident Approval Workflow",
@@ -66,9 +72,6 @@ public class WorkflowTemplateSeeder
                 IsActive = true,
                 Version = 1,
                 TemplateData = "[]",
-                date_created = now,
-                created_by_user_code = systemUserId,
-                is_deleted = false,
             },
             new WorkflowTemplate
             {
@@ -78,9 +81,6 @@ public class WorkflowTemplateSeeder
                 IsActive = true,
                 Version = 1,
                 TemplateData = "[]",
-                date_created = now,
-                created_by_user_code = systemUserId,
-                is_deleted = false,
             },
             new WorkflowTemplate
             {
@@ -90,9 +90,6 @@ public class WorkflowTemplateSeeder
                 IsActive = true,
                 Version = 1,
                 TemplateData = "[]",
-                date_created = now,
-                created_by_user_code = systemUserId,
-                is_deleted = false,
             },
             new WorkflowTemplate
             {
@@ -102,9 +99,6 @@ public class WorkflowTemplateSeeder
                 IsActive = true,
                 Version = 1,
                 TemplateData = "[]",
-                date_created = now,
-                created_by_user_code = systemUserId,
-                is_deleted = false,
             },
             new WorkflowTemplate
             {
@@ -114,10 +108,7 @@ public class WorkflowTemplateSeeder
                 IsActive = true,
                 Version = 1,
                 TemplateData = "[]",
-                date_created = now,
-                created_by_user_code = systemUserId,
-                is_deleted = false,
             },
-        };
+        ];
     }
 }

@@ -9,7 +9,7 @@ import {
 import {
   accessRestricted,
   getMonitorSession,
-  hasCallCentreAccess,
+  hasMonitorAccess,
   parsePositiveInteger,
   queryValue,
   sessionMessage,
@@ -29,8 +29,8 @@ async function MonitorEditPageContent({
   if (problem) return problem;
   if (session.status !== "authenticated")
     return accessRestricted("Your session could not be loaded.");
-  if (!hasCallCentreAccess(session))
-    return accessRestricted("Your profile does not include Call Centre access.");
+  if (!hasMonitorAccess(session))
+    return accessRestricted("Your profile does not include Monitor access.");
 
   const query = await searchParams;
   const reference = parsePositiveInteger(queryValue(query.referenceNumber));

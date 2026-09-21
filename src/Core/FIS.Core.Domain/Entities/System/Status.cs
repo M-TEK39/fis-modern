@@ -27,6 +27,10 @@ public class Status
     [StringLength(255)]
     public string? StartedByUserName { get; set; }
 
+    [Column("Identifier")]
+    [StringLength(50)]
+    public string Identifier { get; set; } = string.Empty;
+
     // Global audit fields
     [Column("date_created")]
     public DateTime date_created { get; set; }

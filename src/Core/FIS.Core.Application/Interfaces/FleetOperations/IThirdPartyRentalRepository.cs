@@ -54,6 +54,11 @@ public interface IThirdPartyRentalRepository
         int currentUserId,
         CancellationToken cancellationToken = default
     );
+    Task DeleteProjectAsync(
+        int projectId,
+        int currentUserId,
+        CancellationToken cancellationToken = default
+    );
 
     Task<IReadOnlyList<ThirdPartyAllocationRecord>> GetAllocationsByProjectAsync(
         int projectId,

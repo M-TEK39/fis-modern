@@ -12,6 +12,7 @@ import {
   ApiUnavailable,
   FmlFrame,
 } from "@/app/(fleet-operations)/full-maintenance-lease/_components";
+import { recallLeaseTermAction } from "@/app/(fleet-operations)/full-maintenance-lease/actions";
 import {
   formatCurrency,
   formatDate,
@@ -140,6 +141,30 @@ async function renderFmlTariffQueuePageContent({
         Capturers can edit pending or rejected records. Lease Vehicle Authorizers can review
         pending records captured by someone else.
       </div>
+      {canCapture || canReview ? (
+        <form action={recallLeaseTermAction} className="form-row">
+          <label className="form-label" htmlFor="fml-recall-registration">
+            Recall registration number
+          </label>
+          <input
+            className="form-input"
+            id="fml-recall-registration"
+            name="registrationNumber"
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            minLength={6}
+            maxLength={8}
+            aria-describedby="fml-recall-help"
+          />
+          <button className="button button-secondary" type="submit">
+            Recall
+          </button>
+          <p className="muted-copy" id="fml-recall-help">
+            Enter the vehicle registration number to recall a captured lease term for review.
+          </p>
+        </form>
+      ) : null}
       <form method="get" className="form-row">
         <input type="hidden" name="page" value="1" />
         <label className="form-label" htmlFor="fml-status">

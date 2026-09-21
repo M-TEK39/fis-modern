@@ -1,3 +1,4 @@
+using System.Data;
 using FIS.Api.Services;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
@@ -52,7 +53,21 @@ public class AuditController : BaseApiController
             pageSize = Math.Min(pageSize, MaxPageSize);
             pageNumber = Math.Max(pageNumber, 1);
 
-            var query = _context.Audits.AsNoTracking().Where(a => !a.is_deleted);
+            if (!await WorkflowAuditTableExistsAsync())
+            {
+                return Ok(
+                    new
+                    {
+                        TotalCount = 0,
+                        PageNumber = pageNumber,
+                        PageSize = pageSize,
+                        TotalPages = 0,
+                        Items = Array.Empty<object>(),
+                    }
+                );
+            }
+
+            var query = _context.Audits.AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(tableName))
                 query = query.Where(a => a.TableName != null && a.TableName.Contains(tableName));
@@ -117,9 +132,14 @@ public class AuditController : BaseApiController
     {
         try
         {
+            if (!await WorkflowAuditTableExistsAsync())
+            {
+                return Ok(Array.Empty<object>());
+            }
+
             var items = await _context
                 .Audits.AsNoTracking()
-                .Where(a => a.TableName == tableName && a.PrimaryKey == primaryKey && !a.is_deleted)
+                .Where(a => a.TableName == tableName && a.PrimaryKey == primaryKey)
                 .OrderByDescending(a => a.date_created)
                 .Select(a => new
                 {
@@ -285,6 +305,32 @@ public class AuditController : BaseApiController
         {
             _logger.LogError(ex, "Error querying password history");
             return StatusCode(500, "An error occurred while querying password history");
+        }
+    }
+
+    private async Task<bool> WorkflowAuditTableExistsAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT CASE WHEN OBJECT_ID(N'Workflow.Audit', N'U') IS NULL THEN 0 ELSE 1 END";
+            var result = await command.ExecuteScalarAsync();
+            return Convert.ToInt32(result) == 1;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
         }
     }
 }
