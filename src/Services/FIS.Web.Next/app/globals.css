@@ -1851,6 +1851,10 @@ input:focus-visible {
   font-size: 0.94rem;
 }
 
+.vehicle-print-underline {
+  text-decoration: underline;
+}
+
 .vehicle-detail-header {
   display: flex;
   align-items: flex-start;
@@ -3075,6 +3079,14 @@ input:focus-visible {
 
   .accident-letter .vehicle-status-maintenance-panel {
     break-inside: avoid;
+  }
+
+  .vehicle-inception-print-actions {
+    display: none !important;
+  }
+
+  .vehicle-print-underline {
+    text-decoration: underline;
   }
 }
 

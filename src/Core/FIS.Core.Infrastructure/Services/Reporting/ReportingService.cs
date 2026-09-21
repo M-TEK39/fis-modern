@@ -283,7 +283,7 @@ public class ReportingService : IReportingService
     private async Task<ReportLookups> LoadLookupsAsync()
     {
         var sites = await _context
-            .Sites.Where(s => !s.is_deleted)
+            .Sites
             .ToDictionaryAsync(s => s.Site_code, s => s.description ?? string.Empty);
 
         var statuses = await _context.VehicleStatuses.ToDictionaryAsync(
@@ -292,13 +292,12 @@ public class ReportingService : IReportingService
         );
 
         var types = await _context
-            .VehicleTypes.Where(t => !t.is_deleted)
+            .VehicleTypes
             .ToDictionaryAsync(t => t.type_code, t => t.type_description);
 
         // Model code → "{make_description} {model_description}"
         var models = await _context
             .Models.Include(m => m.Make)
-            .Where(m => !m.is_deleted)
             .ToDictionaryAsync(
                 m => m.model_code,
                 m => new ModelInfo(m.Make?.make_description ?? string.Empty, m.model_description)
@@ -619,9 +618,9 @@ public class ReportingService : IReportingService
                     .ToDictionaryAsync(x => x.model_code);
 
                 var detailSites = await _context
-                    .Sites.Where(s => detailSiteIds.Contains(s.Site_code) && !s.is_deleted)
+                    .Sites.Where(s => detailSiteIds.Contains(s.Site_code))
                     .Join(
-                        _context.Departments.Where(d => !d.is_deleted),
+                        _context.Departments,
                         s => s.Depatrment_code,
                         d => d.department_code,
                         (s, d) =>
@@ -644,7 +643,7 @@ public class ReportingService : IReportingService
                     .ToDictionaryAsync(c => c.vmf_code);
 
                 var detailTariffs = await _context
-                    .LeaseTariffs.Where(t => t.active && !t.is_deleted)
+                    .LeaseTariffs.Where(t => t.active)
                     .Select(t => new { t.vmf_code, t.fixed_tariff })
                     .ToDictionaryAsync(t => t.vmf_code);
 
@@ -688,26 +687,24 @@ public class ReportingService : IReportingService
                 var provinceFilter = GetNullableIntParameter(request.Parameters, "provinceCode");
                 var financialItems = await _context
                     .InvoiceItems.Where(ii =>
-                        !ii.is_deleted
-                        && (request.VmfCode == null || ii.vmf_code == request.VmfCode)
+                        (request.VmfCode == null || ii.vmf_code == request.VmfCode)
                         && (
                             !departmentFilter.HasValue
                             || _context.Invoices.Any(invoice =>
-                                !invoice.is_deleted
-                                && invoice.invoice_code == ii.invoice_code
+                                invoice.invoice_code == ii.invoice_code
                                 && invoice.department_code == departmentFilter.Value
                             )
                         )
                         && (!siteFilter.HasValue || ii.site_code == siteFilter.Value)
                     )
                     .Join(
-                        _context.Invoices.Where(i => !i.is_deleted),
+                        _context.Invoices,
                         ii => ii.invoice_code,
                         i => i.invoice_code,
                         (ii, i) => new { ii, i }
                     )
                     .Join(
-                        _context.PostingMonths.Where(pm => !pm.is_deleted),
+                        _context.PostingMonths,
                         x => x.i.posting_month_code,
                         pm => pm.posting_month_code,
                         (x, pm) =>
@@ -719,7 +716,7 @@ public class ReportingService : IReportingService
                             }
                     )
                     .Join(
-                        _context.PostingYears.Where(py => !py.is_deleted),
+                        _context.PostingYears,
                         x => x.pm.posting_year_code,
                         py => py.posting_year_code,
                         (x, py) =>
@@ -752,7 +749,7 @@ public class ReportingService : IReportingService
                 {
                     var provinceSiteCodes = await _context
                         .Sites.Where(site =>
-                            !site.is_deleted && (int?)site.province_code == provinceFilter.Value
+                            (int?)site.province_code == provinceFilter.Value
                         )
                         .Select(site => site.Site_code)
                         .ToListAsync();
@@ -882,15 +879,15 @@ public class ReportingService : IReportingService
 
         // Pull all invoice_items for the requested financial year, joining through invoice → posting_month → posting_year
         var yearItems = await _context
-            .InvoiceItems.Where(ii => !ii.is_deleted)
+            .InvoiceItems
             .Join(
-                _context.Invoices.Where(i => !i.is_deleted),
+                _context.Invoices,
                 ii => ii.invoice_code,
                 i => i.invoice_code,
                 (ii, i) => new { ii, i }
             )
             .Join(
-                _context.PostingMonths.Where(pm => !pm.is_deleted),
+                _context.PostingMonths,
                 x => x.i.posting_month_code,
                 pm => pm.posting_month_code,
                 (x, pm) =>
@@ -902,7 +899,7 @@ public class ReportingService : IReportingService
                     }
             )
             .Join(
-                _context.PostingYears.Where(py => !py.is_deleted),
+                _context.PostingYears,
                 x => x.pm.posting_year_code,
                 py => py.posting_year_code,
                 (x, py) =>
@@ -929,7 +926,7 @@ public class ReportingService : IReportingService
 
         var deptCodes = yearItems.Select(x => x.department_code).Distinct().ToList();
         var deptNames = await _context
-            .Departments.Where(d => deptCodes.Contains(d.department_code) && !d.is_deleted)
+            .Departments.Where(d => deptCodes.Contains(d.department_code))
             .Select(d => new { d.department_code, d.description })
             .ToDictionaryAsync(
                 d => d.department_code,
@@ -992,15 +989,15 @@ public class ReportingService : IReportingService
         );
 
         var detailItems = await _context
-            .InvoiceItems.Where(ii => !ii.is_deleted)
+            .InvoiceItems
             .Join(
-                _context.Invoices.Where(i => !i.is_deleted),
+                _context.Invoices,
                 ii => ii.invoice_code,
                 i => i.invoice_code,
                 (ii, i) => new { ii, i }
             )
             .Join(
-                _context.PostingMonths.Where(pm => !pm.is_deleted),
+                _context.PostingMonths,
                 x => x.i.posting_month_code,
                 pm => pm.posting_month_code,
                 (x, pm) =>
@@ -1012,7 +1009,7 @@ public class ReportingService : IReportingService
                     }
             )
             .Join(
-                _context.PostingYears.Where(py => !py.is_deleted),
+                _context.PostingYears,
                 x => x.pm.posting_year_code,
                 py => py.posting_year_code,
                 (x, py) =>
@@ -1044,7 +1041,7 @@ public class ReportingService : IReportingService
 
         var deptList = detailItems.Select(x => x.department_code).Distinct().ToList();
         var deptNameMap = await _context
-            .Departments.Where(d => deptList.Contains(d.department_code) && !d.is_deleted)
+            .Departments.Where(d => deptList.Contains(d.department_code))
             .Select(d => new { d.department_code, d.description })
             .ToDictionaryAsync(
                 d => d.department_code,
@@ -1091,7 +1088,7 @@ public class ReportingService : IReportingService
         );
 
         var tariffs = await _context
-            .LeaseTariffs.Where(t => !t.is_deleted && t.active)
+            .LeaseTariffs.Where(t => t.active)
             .Join(
                 _context.Vehicles,
                 t => t.vmf_code,
@@ -1148,15 +1145,15 @@ public class ReportingService : IReportingService
             throw new ArgumentException($"Vehicle with VMF Code {vmfCode} not found");
 
         var billingLines = await _context
-            .InvoiceItems.Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
+            .InvoiceItems.Where(ii => ii.vmf_code == vmfCode)
             .Join(
-                _context.Invoices.Where(i => !i.is_deleted),
+                _context.Invoices,
                 ii => ii.invoice_code,
                 i => i.invoice_code,
                 (ii, i) => new { ii, i }
             )
             .Join(
-                _context.PostingMonths.Where(pm => !pm.is_deleted),
+                _context.PostingMonths,
                 x => x.i.posting_month_code,
                 pm => pm.posting_month_code,
                 (x, pm) =>
@@ -1168,7 +1165,7 @@ public class ReportingService : IReportingService
                     }
             )
             .Join(
-                _context.PostingYears.Where(py => !py.is_deleted),
+                _context.PostingYears,
                 x => x.pm.posting_year_code,
                 py => py.posting_year_code,
                 (x, py) =>
@@ -1233,15 +1230,15 @@ public class ReportingService : IReportingService
         // Find odometer discontinuities: for each vehicle, compare consecutive invoice_item
         // end_odometer vs the next month's start_odometer across the financial year.
         var odoData = await _context
-            .InvoiceItems.Where(ii => !ii.is_deleted)
+            .InvoiceItems
             .Join(
-                _context.Invoices.Where(i => !i.is_deleted),
+                _context.Invoices,
                 ii => ii.invoice_code,
                 i => i.invoice_code,
                 (ii, i) => new { ii, i }
             )
             .Join(
-                _context.PostingMonths.Where(pm => !pm.is_deleted),
+                _context.PostingMonths,
                 x => x.i.posting_month_code,
                 pm => pm.posting_month_code,
                 (x, pm) =>
@@ -1253,7 +1250,7 @@ public class ReportingService : IReportingService
                     }
             )
             .Join(
-                _context.PostingYears.Where(py => !py.is_deleted),
+                _context.PostingYears,
                 x => x.pm.posting_year_code,
                 py => py.posting_year_code,
                 (x, py) =>
@@ -1659,8 +1656,7 @@ public class ReportingService : IReportingService
 
         var tripSequence = await _context
             .Trips.Where(t =>
-                !t.is_deleted
-                && t.contract_code == trip.contract_code
+                t.contract_code == trip.contract_code
                 && t.end_odo_meter.HasValue
                 && t.issue_date <= trip.issue_date
             )
@@ -1696,21 +1692,21 @@ public class ReportingService : IReportingService
                 : string.Empty;
 
         var tripMonthCosts = await _context
-            .InvoiceItems.Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
+            .InvoiceItems.Where(ii => ii.vmf_code == vmfCode)
             .Join(
-                _context.Invoices.Where(i => !i.is_deleted),
+                _context.Invoices,
                 ii => ii.invoice_code,
                 i => i.invoice_code,
                 (ii, i) => new { ii, i }
             )
             .Join(
-                _context.PostingMonths.Where(pm => !pm.is_deleted),
+                _context.PostingMonths,
                 x => x.i.posting_month_code,
                 pm => pm.posting_month_code,
                 (x, pm) => new { x.ii, pm }
             )
             .Join(
-                _context.PostingYears.Where(py => !py.is_deleted),
+                _context.PostingYears,
                 x => x.pm.posting_year_code,
                 py => py.posting_year_code,
                 (x, py) =>
@@ -1804,7 +1800,7 @@ public class ReportingService : IReportingService
         }
 
         var relatedTrips = await _context
-            .Trips.Where(t => !t.is_deleted && t.contract_code == contract.contract_code)
+            .Trips.Where(t => t.contract_code == contract.contract_code)
             .OrderBy(t => t.issue_date)
             .ThenBy(t => t.trip_authority_code)
             .ToListAsync();
@@ -1943,15 +1939,15 @@ public class ReportingService : IReportingService
                 .FirstOrDefaultAsync() ?? vmfCode.ToString();
 
         var rawRows = await _context
-            .InvoiceItems.Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
+            .InvoiceItems.Where(ii => ii.vmf_code == vmfCode)
             .Join(
-                _context.Invoices.Where(i => !i.is_deleted),
+                _context.Invoices,
                 ii => ii.invoice_code,
                 i => i.invoice_code,
                 (ii, i) => new { ii, i }
             )
             .Join(
-                _context.PostingMonths.Where(pm => !pm.is_deleted),
+                _context.PostingMonths,
                 x => x.i.posting_month_code,
                 pm => pm.posting_month_code,
                 (x, pm) =>
@@ -1963,7 +1959,7 @@ public class ReportingService : IReportingService
                     }
             )
             .Join(
-                _context.PostingYears.Where(py => !py.is_deleted),
+                _context.PostingYears,
                 x => x.pm.posting_year_code,
                 py => py.posting_year_code,
                 (x, py) =>

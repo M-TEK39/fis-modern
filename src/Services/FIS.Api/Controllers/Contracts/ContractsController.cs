@@ -638,9 +638,7 @@ public class ContractsController : BaseApiController
         var byLegacyCode = await _context
             .Set<Department>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(d =>
-                d.department_code == LegacyGfleetDepartmentCode && !d.is_deleted
-            );
+            .FirstOrDefaultAsync(d => d.department_code == LegacyGfleetDepartmentCode);
 
         if (byLegacyCode != null)
         {
@@ -650,7 +648,7 @@ public class ContractsController : BaseApiController
         var byName = await _context
             .Set<Department>()
             .AsNoTracking()
-            .Where(d => !d.is_deleted && d.description != null)
+            .Where(d => d.description != null)
             .FirstOrDefaultAsync(d =>
                 EF.Functions.Like(d.description!, "%GFLEET%")
                 || EF.Functions.Like(d.description!, "%G-FLEET%")
@@ -760,7 +758,7 @@ public class ContractsController : BaseApiController
         var province = await _context
             .Set<Province>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(p => p.province_code == provinceCode.Value && !p.is_deleted);
+            .FirstOrDefaultAsync(p => p.province_code == provinceCode.Value);
 
         var provinceLabel = string.IsNullOrWhiteSpace(province?.province_name)
             ? $"Province {provinceCode.Value}"
@@ -3210,9 +3208,7 @@ public class ContractsController : BaseApiController
         return await _context
             .Drivers.AsNoTracking()
             .FirstOrDefaultAsync(driver =>
-                driver.site_driver_code == siteDriverCode.Value
-                && driver.driver_active
-                && !driver.is_deleted
+                driver.site_driver_code == siteDriverCode.Value && driver.driver_active
             );
     }
 

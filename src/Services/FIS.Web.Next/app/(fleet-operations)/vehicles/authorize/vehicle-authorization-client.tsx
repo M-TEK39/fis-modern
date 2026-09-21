@@ -18,6 +18,7 @@ import {
 import ReviewModalActionForm from "./review-modal-action-form";
 import ReviewModalReadonly from "./review-modal-readonly";
 import ReviewModalSummary from "./review-modal-summary";
+import AuthorizedPrintButton from "./authorized-print-button";
 import type {
   VehicleAuthorization,
   VehicleAuthorizationQueuePage,
@@ -327,13 +328,19 @@ function QueueTable({
                         </span>
                       </td>
                       <td>
-                        <button
-                          className="button button-secondary button-small"
-                          type="button"
-                          onClick={() => onReview(vehicle)}
-                        >
-                          View
-                        </button>
+                        <div className="button-row">
+                          <button
+                            className="button button-secondary button-small"
+                            type="button"
+                            onClick={() => onReview(vehicle)}
+                          >
+                            View
+                          </button>
+                          <AuthorizedPrintButton
+                            id={vehicle.tempVmfCode}
+                            returnPath="/vehicles/authorize"
+                          />
+                        </div>
                       </td>
                     </tr>
                   );

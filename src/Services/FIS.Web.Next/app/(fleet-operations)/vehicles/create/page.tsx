@@ -8,6 +8,7 @@ import RouteLoading from "@/components/app-shell/route-loading";
 import AccessRestrictedCard from "@/components/app-shell/access-restricted-card";
 import SessionRecovery from "@/app/(workspace)/home/session-recovery";
 import VehicleCreateClient from "@/app/(fleet-operations)/vehicles/create/vehicle-create-client";
+import AuthorizedPrintQueue from "@/app/(fleet-operations)/vehicles/authorize/authorized-print-queue";
 import {
   hasVehicleInceptionCapturerRole,
 } from "@/app/(fleet-operations)/vehicles/access";
@@ -15,7 +16,20 @@ import {
   VehicleCreateApiError,
   getVehicleCreateReferenceData,
 } from "@/lib/api/vehicles/api-vehicle-create";
+import {
+  getAuthorizedVehiclesQueue,
+  VehicleAuthorizationApiError,
+} from "@/lib/api/vehicles/api-vehicle-authorization";
 import { getSession } from "@/lib/auth/session";
+
+type VehicleCreateSearchParams = Record<string, string | string[] | undefined>;
+
+function getPageValue(query: VehicleCreateSearchParams, key: string) {
+  const value = query[key];
+  const firstValue = Array.isArray(value) ? value[0] : value;
+  const parsed = Number.parseInt(firstValue ?? "1", 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
+}
 
 function AccessRestricted() {
   return <AccessRestrictedCard message="You do not have permission to capture a new vehicle." />;
@@ -45,7 +59,11 @@ function ApiUnavailable({ detail }: Readonly<{ detail?: string }>) {
   );
 }
 
-async function VehicleCreatePageContent() {
+async function VehicleCreatePageContent({
+  searchParams,
+}: Readonly<{
+  searchParams: Promise<VehicleCreateSearchParams>;
+}>) {
   await connection();
   const session = await getSession();
 
@@ -74,7 +92,11 @@ async function VehicleCreatePageContent() {
   }
 
   try {
-    const referenceData = await getVehicleCreateReferenceData();
+    const query = await searchParams;
+    const [referenceData, authorizedQueue] = await Promise.all([
+      getVehicleCreateReferenceData(),
+      getAuthorizedVehiclesQueue(getPageValue(query, "authorizedPage")),
+    ]);
     const today = new Date().toISOString().slice(0, 10);
 
     return (
@@ -91,6 +113,7 @@ async function VehicleCreatePageContent() {
             </Link>
           </header>
           <VehicleCreateClient referenceData={referenceData} today={today} />
+          <AuthorizedPrintQueue queue={authorizedQueue} />
           <div className="vehicle-footer-actions">
             <Link className="button button-secondary" href="/vehicles">
               Back to Vehicle Master
@@ -105,11 +128,17 @@ async function VehicleCreatePageContent() {
       </main>
     );
   } catch (error) {
-    if (error instanceof VehicleCreateApiError && error.reason === "unauthorized") {
+    if (
+      (error instanceof VehicleCreateApiError || error instanceof VehicleAuthorizationApiError) &&
+      error.reason === "unauthorized"
+    ) {
       return <SessionRecovery returnPath="/vehicles/create" />;
     }
 
-    if (error instanceof VehicleCreateApiError && error.reason === "forbidden") {
+    if (
+      (error instanceof VehicleCreateApiError || error instanceof VehicleAuthorizationApiError) &&
+      error.reason === "forbidden"
+    ) {
       return (
         <main className="page-shell vehicle-page-shell">
           <AccessRestricted />
@@ -124,17 +153,25 @@ async function VehicleCreatePageContent() {
     return (
       <main className="page-shell vehicle-page-shell">
         <ApiUnavailable
-          detail={error instanceof VehicleCreateApiError ? error.message : undefined}
+          detail={
+            error instanceof VehicleCreateApiError || error instanceof VehicleAuthorizationApiError
+              ? error.message
+              : undefined
+          }
         />
       </main>
     );
   }
 }
 
-export default function VehicleCreatePage() {
+export default function VehicleCreatePage(
+  props: Readonly<{
+    searchParams: Promise<VehicleCreateSearchParams>;
+  }>,
+) {
   return (
     <Suspense fallback={<RouteLoading />}>
-      <VehicleCreatePageContent />
+      <VehicleCreatePageContent {...props} />
     </Suspense>
   );
 }

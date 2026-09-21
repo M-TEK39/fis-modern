@@ -32,11 +32,14 @@ public class ReportController : BaseApiController
     private readonly ILegacyReportResultService _legacyReportResultService;
     private readonly LegacyFinanceReportExecutionService _legacyFinanceReportExecutionService;
     private readonly IFineRepository _fineRepository;
+    private readonly IAccidentRepository _accidentRepository;
     private readonly IVehicleSourceRepository _vehicleSourceRepository;
     private readonly IVehicleStatusReportRepository _vehicleStatusReportRepository;
     private readonly IFmlReportRepository _fmlReportRepository;
     private readonly IJobCardRepository _jobCardRepository;
     private readonly ILogbookRepository _logbookRepository;
+    private readonly IVehicleDocumentRepository _vehicleDocumentRepository;
+    private readonly IVehicleRemarkRepository _vehicleRemarkRepository;
     private readonly ISiteRepository _siteRepository;
     private readonly FisDbContext _context;
     private readonly ILogger<ReportController> _logger;
@@ -46,11 +49,14 @@ public class ReportController : BaseApiController
         ILegacyReportResultService legacyReportResultService,
         LegacyFinanceReportExecutionService legacyFinanceReportExecutionService,
         IFineRepository fineRepository,
+        IAccidentRepository accidentRepository,
         IVehicleSourceRepository vehicleSourceRepository,
         IVehicleStatusReportRepository vehicleStatusReportRepository,
         IFmlReportRepository fmlReportRepository,
         IJobCardRepository jobCardRepository,
         ILogbookRepository logbookRepository,
+        IVehicleDocumentRepository vehicleDocumentRepository,
+        IVehicleRemarkRepository vehicleRemarkRepository,
         ISiteRepository siteRepository,
         FisDbContext context,
         ILogger<ReportController> logger
@@ -65,6 +71,8 @@ public class ReportController : BaseApiController
             legacyFinanceReportExecutionService
             ?? throw new ArgumentNullException(nameof(legacyFinanceReportExecutionService));
         _fineRepository = fineRepository ?? throw new ArgumentNullException(nameof(fineRepository));
+        _accidentRepository =
+            accidentRepository ?? throw new ArgumentNullException(nameof(accidentRepository));
         _vehicleSourceRepository =
             vehicleSourceRepository
             ?? throw new ArgumentNullException(nameof(vehicleSourceRepository));
@@ -77,6 +85,12 @@ public class ReportController : BaseApiController
             jobCardRepository ?? throw new ArgumentNullException(nameof(jobCardRepository));
         _logbookRepository =
             logbookRepository ?? throw new ArgumentNullException(nameof(logbookRepository));
+        _vehicleDocumentRepository =
+            vehicleDocumentRepository
+            ?? throw new ArgumentNullException(nameof(vehicleDocumentRepository));
+        _vehicleRemarkRepository =
+            vehicleRemarkRepository
+            ?? throw new ArgumentNullException(nameof(vehicleRemarkRepository));
         _siteRepository = siteRepository ?? throw new ArgumentNullException(nameof(siteRepository));
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -2800,8 +2814,7 @@ public class ReportController : BaseApiController
                 (
                     (int?)
                         await _context
-                            .RequestChanges.Where(x => !x.is_deleted)
-                            .MaxAsync(x => (short?)x.request_code) ?? 0
+                            .RequestChanges.MaxAsync(x => (short?)x.request_code) ?? 0
                 ) + 1;
 
             if (nextCodeInt > short.MaxValue)
@@ -2845,9 +2858,6 @@ public class ReportController : BaseApiController
                 ),
                 tech_description = SerializeParameters(request.Parameters),
                 approve_or_not = "Pending",
-                date_created = now,
-                created_by_user_code = currentUserId > 0 ? currentUserId : null,
-                is_deleted = false,
             };
 
             await _context.RequestChanges.AddAsync(entity);
@@ -2972,7 +2982,6 @@ public class ReportController : BaseApiController
                 from scanDoc in _context.ScanDocs.AsNoTracking()
                 join vehicle in _context.Vehicles.AsNoTracking()
                     on scanDoc.vmf_code equals vehicle.vmf_code
-                where !scanDoc.is_deleted
                 select new
                 {
                     vehicle.vmf_code,
@@ -2984,7 +2993,7 @@ public class ReportController : BaseApiController
                     scanDoc.period_begin,
                     scanDoc.period_end,
                     scanDoc.image,
-                    DateUploaded = scanDoc.date_updated ?? scanDoc.date_created,
+                    DateUploaded = scanDoc.period_end ?? scanDoc.period_begin,
                 };
 
             if (vmfCode.HasValue)
@@ -3207,23 +3216,25 @@ public class ReportController : BaseApiController
             // ── Accidents ────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Accidents")
             {
-                var q = _context.Accidents.Where(a =>
-                    !a.is_deleted && a.date_created >= fromDate && a.date_created <= toDate
+                var q = (await _accidentRepository.GetAllAsync()).Where(a =>
+                    !a.is_deleted && AccidentCapturedAt(a) is DateTime captured
+                    && captured >= fromDate
+                    && captured <= toDate
                 );
                 if (captured_by.HasValue)
                     q = q.Where(a => a.created_by_user_code == captured_by.Value);
                 if (vmf_code.HasValue)
                     q = q.Where(a => a.vmf_code == vmf_code.Value);
-                var rows = await q.OrderByDescending(a => a.date_created)
+                var rows = q.OrderByDescending(AccidentCapturedAt)
                     .Select(a => new
                     {
                         a.accident_code,
                         a.vmf_code,
                         a.description,
-                        a.date_created,
+                        date_captured = AccidentCapturedAt(a) ?? DateTime.MinValue,
                         a.created_by_user_code,
                     })
-                    .ToListAsync();
+                    .ToList();
                 var mapped = rows.Where(a => VehicleInScope(a.vmf_code))
                     .Select(a =>
                         (object)
@@ -3234,7 +3245,7 @@ public class ReportController : BaseApiController
                                 fleet_number = FleetNum(a.vmf_code),
                                 registration_number = RegNum(a.vmf_code),
                                 description = a.description ?? "Accident recorded",
-                                date_captured = a.date_created,
+                                date_captured = a.date_captured,
                                 captured_by_user_code = a.created_by_user_code,
                                 module = "Accidents",
                             }
@@ -3248,19 +3259,21 @@ public class ReportController : BaseApiController
             if (moduleFilter == "All" || moduleFilter == "Fines")
             {
                 var q = (await _fineRepository.GetAllAsync()).Where(f =>
-                    !f.is_deleted && f.date_created >= fromDate && f.date_created <= toDate
+                    !f.is_deleted && FineCapturedAt(f) is DateTime captured
+                    && captured >= fromDate
+                    && captured <= toDate
                 );
                 if (captured_by.HasValue)
                     q = q.Where(f => f.created_by_user_code == captured_by.Value);
                 if (vmf_code.HasValue)
                     q = q.Where(f => f.vmf_code == vmf_code.Value);
-                var rows = q.OrderByDescending(f => f.date_created)
+                var rows = q.OrderByDescending(FineCapturedAt)
                     .Select(f => new
                     {
                         f.Fine_code,
                         f.vmf_code,
                         f.Offence_reference,
-                        f.date_created,
+                        date_captured = FineCapturedAt(f) ?? DateTime.MinValue,
                         f.created_by_user_code,
                     })
                     .ToList();
@@ -3275,7 +3288,7 @@ public class ReportController : BaseApiController
                                 registration_number = RegNum(f.vmf_code),
                                 description =
                                     $"Fine {f.Offence_reference ?? f.Fine_code.ToString()} captured",
-                                date_captured = f.date_created,
+                                date_captured = f.date_captured,
                                 captured_by_user_code = f.created_by_user_code,
                                 module = "Fines",
                             }
@@ -3376,14 +3389,14 @@ public class ReportController : BaseApiController
             // ── Documents ────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Documents")
             {
-                var q = _context.VehicleDocuments.Where(d =>
-                    !d.is_deleted && d.date_created >= fromDate && d.date_created <= toDate
+                var q = (await _vehicleDocumentRepository.GetAllAsync()).Where(d =>
+                    d.date_created >= fromDate && d.date_created <= toDate
                 );
                 if (captured_by.HasValue)
                     q = q.Where(d => d.created_by_user_code == captured_by.Value);
                 if (vmf_code.HasValue)
                     q = q.Where(d => d.vmf_code == vmf_code.Value);
-                var rows = await q.OrderByDescending(d => d.date_created)
+                var rows = q.OrderByDescending(d => d.date_created)
                     .Select(d => new
                     {
                         d.document_id,
@@ -3393,7 +3406,7 @@ public class ReportController : BaseApiController
                         d.date_created,
                         d.created_by_user_code,
                     })
-                    .ToListAsync();
+                    .ToList();
                 var mapped = rows.Where(d => VehicleInScope(d.vmf_code))
                     .Select(d =>
                         (object)
@@ -3418,14 +3431,14 @@ public class ReportController : BaseApiController
             // ── Remarks ──────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Remarks")
             {
-                var q = _context.VehicleRemarks.Where(r =>
-                    !r.is_deleted && r.date_created >= fromDate && r.date_created <= toDate
+                var q = (await _vehicleRemarkRepository.GetAllAsync()).Where(r =>
+                    r.date_created >= fromDate && r.date_created <= toDate
                 );
                 if (captured_by.HasValue)
                     q = q.Where(r => r.created_by_user_code == captured_by.Value);
                 if (vmf_code.HasValue)
                     q = q.Where(r => r.vmf_code == vmf_code.Value);
-                var rows = await q.OrderByDescending(r => r.date_created)
+                var rows = q.OrderByDescending(r => r.date_created)
                     .Select(r => new
                     {
                         r.remark_id,
@@ -3434,7 +3447,7 @@ public class ReportController : BaseApiController
                         r.date_created,
                         r.created_by_user_code,
                     })
-                    .ToListAsync();
+                    .ToList();
                 var mapped = rows.Where(r => VehicleInScope(r.vmf_code))
                     .Select(r =>
                         (object)
@@ -3664,6 +3677,26 @@ public class ReportController : BaseApiController
         string Title,
         IReadOnlyDictionary<string, object?> Parameters
     );
+
+    private static DateTime? AccidentCapturedAt(Accident accident)
+    {
+        if (accident.date_created != default)
+        {
+            return accident.date_created;
+        }
+
+        return accident.reported_date ?? accident.occurence_date;
+    }
+
+    private static DateTime? FineCapturedAt(Fine fine)
+    {
+        if (fine.date_created != default)
+        {
+            return fine.date_created;
+        }
+
+        return fine.Offence_date;
+    }
 
     private bool HasReportsRole() =>
         HasAnyRole("Reports", "SystemAdministrator", "System Administrator");

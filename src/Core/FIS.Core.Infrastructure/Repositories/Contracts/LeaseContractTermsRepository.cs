@@ -404,14 +404,30 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         return await GetByIdAsync(updated.VehicleContractTermID) ?? updated;
     }
 
-    public async Task<LeaseContractTerms> RecallAsync(LeaseContractTerms terms)
+    public async Task<LeaseContractTerms> RecallAsync(
+        LeaseContractTerms terms,
+        string username,
+        int currentUserId = 0
+    )
     {
         ArgumentNullException.ThrowIfNull(terms);
         ValidateVehicleCode(terms);
-        if (terms.Rejected != 3)
-            throw new InvalidOperationException(
-                "Only a pending lease contract term can be recalled in the legacy workflow."
+        if (string.IsNullOrWhiteSpace(username))
+            throw new UnauthorizedAccessException(
+                "The authenticated user does not include the legacy username required by the FML recall workflow."
             );
+        _ = currentUserId;
+
+        // VehicleLease.aspx.vb Getdata2 treats authorised terms as blocked and
+        // already-recalled Rejected values as a no-op before any write.
+        if (terms.AuthorityStatus == 2)
+            throw new InvalidOperationException(
+                "The vehicle has already been authorised. Kindly inform the relevant authorisor about the recalling of the vehicle."
+            );
+
+        var rejected = terms.Rejected ?? 0;
+        if (rejected is 0 or 1 or 2)
+            return await GetByIdAsync(terms.VehicleContractTermID) ?? terms;
 
         var registrationNumber = await FindVehicleRegistrationNumberAsync(terms.vmf_Code);
         if (string.IsNullOrWhiteSpace(registrationNumber))
@@ -419,21 +435,59 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
                 "The selected lease vehicle has no registration number required by the legacy recall procedure."
             );
 
-        if (!await IsLegacyProcedureAvailableAsync("DEV_UPD_LeaseContractTermsRecall", "@ggnum"))
+        var authorityStatusAvailable = await IsLegacyProcedureAvailableAsync(
+            "DEV_UPD_LeaseContractTermsAuthorityStatus",
+            "@GG_Number",
+            "@AuthorityStatus",
+            "@Rejected",
+            "@UpdatedBy"
+        );
+        if (authorityStatusAvailable)
         {
-            throw new NotSupportedException(
-                "The legacy lease-contract-term recall procedure is unavailable; recall cannot be approximated."
+            // Getdata2 sets AuthorityStatus=0 and Rejected=2, then writes the
+            // capturer recall comment. btnRecall only calls
+            // DEV_UPD_LeaseContractTermsRecall when Rejected is still 3 after
+            // that write, which this successful path never leaves in place.
+            await ExecuteLegacyProcedureAsync(
+                "DEV_UPD_LeaseContractTermsAuthorityStatus",
+                new ProcedureParameter("@GG_Number", DbType.String, registrationNumber),
+                new ProcedureParameter("@AuthorityStatus", DbType.Int32, 0),
+                new ProcedureParameter("@Rejected", DbType.Int32, 2),
+                new ProcedureParameter("@UpdatedBy", DbType.String, username.Trim())
             );
+
+            var updated =
+                await GetByIdAsync(terms.VehicleContractTermID)
+                ?? throw new InvalidOperationException(
+                    "The legacy lease-contract-term authority-status procedure completed without a readable term."
+                );
+            var comment =
+                $"Recalled by the Capturer '{username.Trim().ToUpperInvariant()}' in order to review the tariff information for this vehicle.";
+            await InsertLegacyCommentAsync(updated, comment, username.Trim());
+            return await GetByIdAsync(updated.VehicleContractTermID) ?? updated;
         }
 
-        await ExecuteLegacyProcedureAsync(
-            "DEV_UPD_LeaseContractTermsRecall",
-            new ProcedureParameter("@ggnum", DbType.String, registrationNumber)
-        );
-        return await GetByIdAsync(terms.VehicleContractTermID)
-            ?? throw new InvalidOperationException(
-                "The legacy lease-contract-term recall procedure removed the selected term."
+        if (
+            rejected == 3
+            && await IsLegacyProcedureAvailableAsync("DEV_UPD_LeaseContractTermsRecall", "@ggnum")
+        )
+        {
+            // Labelled fallback only while DEV_UPD_LeaseContractTermsAuthorityStatus
+            // is absent: VehicleLease.aspx.vb btnRecall still calls the recall
+            // procedure for pending Rejected=3 terms.
+            await ExecuteLegacyProcedureAsync(
+                "DEV_UPD_LeaseContractTermsRecall",
+                new ProcedureParameter("@ggnum", DbType.String, registrationNumber)
             );
+            return await GetByIdAsync(terms.VehicleContractTermID)
+                ?? throw new InvalidOperationException(
+                    "The legacy lease-contract-term recall procedure removed the selected term."
+                );
+        }
+
+        throw new NotSupportedException(
+            "The legacy lease-contract-term authority-status procedure is unavailable; recall cannot be approximated."
+        );
     }
 
     public async Task DeleteAsync(int termId, int currentUserId)

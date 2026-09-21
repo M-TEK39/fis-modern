@@ -266,8 +266,22 @@ async function requestApi(path: string, init: RequestInit = {}) {
     }
     if (response.status === 404)
       throw new FmlApiError("not-found", "The requested FML record was not found.");
-    if (!response.ok)
-      throw new FmlApiError("unavailable", `FIS API returned HTTP ${response.status}.`);
+    if (!response.ok) {
+      let detail: string | undefined;
+      try {
+        const body = (await response.json()) as unknown;
+        if (isRecord(body)) {
+          const error = getValue(body, "error", "Error", "message", "Message");
+          if (typeof error === "string" && error.trim()) detail = error.trim();
+        }
+      } catch {
+        detail = undefined;
+      }
+      throw new FmlApiError(
+        "unavailable",
+        detail ?? `FIS API returned HTTP ${response.status}.`,
+      );
+    }
     try {
       return (await response.json()) as unknown;
     } catch {
@@ -437,6 +451,13 @@ export async function updateLeaseTerm(termId: number, input: LeaseTermWriteInput
   const payload = await requestApi(`api/leasecontractterms/${termId}`, {
     method: "PUT",
     body: JSON.stringify({ VehicleContractTermID: termId, ...input }),
+  });
+  return mapTerm(payload);
+}
+
+export async function recallLeaseTerm(termId: number) {
+  const payload = await requestApi(`api/leasecontractterms/${termId}/recall`, {
+    method: "POST",
   });
   return mapTerm(payload);
 }

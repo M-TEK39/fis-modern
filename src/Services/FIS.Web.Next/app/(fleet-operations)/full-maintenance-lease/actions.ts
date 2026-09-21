@@ -7,7 +7,9 @@ import {
   createLeaseTariff,
   createLeaseTerm,
   getLeaseTerm,
+  getLeaseTermsPage,
   importLeaseTariffs,
+  recallLeaseTerm,
   updateLeaseTariff,
   updateLeaseTerm,
   type LeaseTariffWriteInput,
@@ -176,6 +178,48 @@ export async function createLeaseTermAction(formData: FormData) {
 
   revalidateFmlRoutes();
   redirect(resultPath(path, "created"));
+}
+
+const RECALL_REGISTRATION = /^G[A-Z]{2}[0-9]{3}G$|^G[A-Z][0-9]{2}[A-Z]{2}G$/;
+
+export async function recallLeaseTermAction(formData: FormData) {
+  const path = "/full-maintenance-lease/tariffs";
+  const capturer = await authorizeLeaseVehicleCapturer();
+  const authorizer = capturer.ok ? capturer : await authorizeLeaseVehicleAuthorizer();
+  if (!authorizer.ok)
+    redirect(
+      resultPath(
+        path,
+        "error",
+        "You need the Lease Vehicle Capturer or Lease Vehicle Authorizer role to recall a lease term.",
+      ),
+    );
+
+  const registration = getText(formData, "registrationNumber").toUpperCase();
+  try {
+    if (registration.length < 6 || !RECALL_REGISTRATION.test(registration))
+      throw new FmlValidationError("Please enter a valid Registration Number.");
+
+    const matches = await getLeaseTermsPage({
+      page: 1,
+      pageSize: 24,
+      search: registration,
+      mode: "GP",
+      status: "all",
+    });
+    const term = matches.items[0];
+    if (!term)
+      throw new FmlValidationError("No lease contract term was found for that registration number.");
+
+    const recalled = await recallLeaseTerm(term.termId);
+    if (!recalled)
+      throw new FmlValidationError("The FIS API did not return the recalled lease term.");
+  } catch (error) {
+    redirect(resultPath(path, "error", apiMessage(error, "The lease term could not be recalled.")));
+  }
+
+  revalidateFmlRoutes();
+  redirect(resultPath(path, "recalled", "The vehicle has been successfully recalled."));
 }
 
 export async function saveLeaseTermAction(formData: FormData) {

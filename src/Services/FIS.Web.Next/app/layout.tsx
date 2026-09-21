@@ -9,6 +9,7 @@ import SiteHeader from "@/components/app-shell/site-header";
 import { AppSidebar16 } from "@/components/ui/sidebar/app-sidebar-16";
 import { ThemeProvider } from "@/components/theme-provider";
 import { getSession } from "@/lib/auth/session";
+import { redirectIfBatchBlocksRoute } from "@/lib/finance/batch-redirection";
 
 import "./globals.css";
 
@@ -31,6 +32,8 @@ async function AuthenticatedHeader() {
     return null;
   }
 
+  await redirectIfBatchBlocksRoute();
+
   return (
     <>
       <SessionKeepAlive />
@@ -46,6 +49,8 @@ async function AuthenticatedSidebar() {
   if (session.status !== "authenticated") {
     return null;
   }
+
+  await redirectIfBatchBlocksRoute();
 
   const { groups, user, canManageSystemSettings } = getAppShellData(session);
   return (

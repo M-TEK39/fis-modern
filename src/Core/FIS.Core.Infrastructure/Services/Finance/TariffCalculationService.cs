@@ -529,12 +529,11 @@ public class TariffCalculationService : ITariffCalculationService
             return currentFuelTariff.fuel_tariff;
         }
 
-        var tariffAtDate = await _context
-            .FuelTariffs.Where(t => !t.is_deleted && t.fuel_type_code == fuelTypeCode)
+        var tariffAtDate = (await _fuelTariffRepository.GetTariffHistoryAsync((short)fuelTypeCode))
             .Where(t => t.start_date <= effectiveDate)
             .Where(t => t.end_date == null || t.end_date >= effectiveDate)
             .OrderByDescending(t => t.start_date)
-            .FirstOrDefaultAsync();
+            .FirstOrDefault();
 
         return tariffAtDate?.fuel_tariff ?? 0m;
     }

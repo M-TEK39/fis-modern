@@ -29,6 +29,71 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
     private const string LegacyProjectSupplierTable = "third_party_project_suppliers";
     private const string ExpandedProjectSupplierTable = "Third_Party_Project_Supplier";
     private const string LegacyVehicleTable = "Third_Party_Vehicles";
+    private const string InsertSupplierProcedure = "DEV_INS_NewSupplier";
+    private const string UpdateSupplierProcedure = "DEV_UPD_Suppliers";
+    private static readonly string[] InsertSupplierProcedureParameters =
+    [
+        "@name",
+        "@physical_address",
+        "@postal_address",
+        "@tel_number",
+        "@fax_number",
+        "@email_address",
+        "@contact_person",
+        "@serviceid",
+        "@active",
+        "@is_third_part",
+        "@Note",
+        "@ctg_code",
+    ];
+    private static readonly string[] UpdateSupplierProcedureParameters =
+    [
+        "@name",
+        "@physical_address",
+        "@postal_address",
+        "@tel_number",
+        "@fax_number",
+        "@email_address",
+        "@contact_person",
+        "@vs_code",
+        "@serviceid",
+        "@active",
+        "@ctg_code",
+        "@is_third_part",
+        "@Note",
+    ];
+    private const string InsertProjectProcedure = "DEV_INS_Third_party_projects";
+    private const string UpdateProjectProcedure = "DEV_UPD_Third_party_project";
+    private const string InsertProjectSupplierProcedure = "DEV_INS_Third_party_project_suppliers";
+    private const string InsertProjectSupplierProcedureAlias =
+        "DEV_INS_Third_Party_Project_Supplier";
+    private static readonly string[] InsertProjectSupplierProcedureParameters =
+    ["@project_id", "@third_party_id"];
+    private static readonly string[] InsertProjectProcedureParameters =
+    [
+        "@Department_Code",
+        "@Site_Code",
+        "@Project_Description",
+        "@Project_Start_Date",
+        "@Project_End_Date",
+        "@Project_Resoponsible_Person",
+        "@Project_RP_Physical_Address",
+        "@Project_RP_Postal_Address",
+        "@Project_RP_Tel_Number",
+        "@Project_RP_Fax_Number",
+        "@Project_RP_Email_Address",
+        "@Project_Notes",
+        "@Project_ClientReference_Number",
+    ];
+    private static readonly string[] UpdateProjectProcedureParameters =
+    [
+        "@project_id",
+        "@department_code",
+        "@Site_code",
+        "@project_description",
+        "@project_start_date",
+        "@project_end_date",
+    ];
 
     private readonly FisDbContext _context;
 
@@ -150,6 +215,75 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
     )
     {
         ValidateSupplier(input);
+        var type = await GetSchemaAsync("type", cancellationToken);
+        var typeCode = await ResolveTypeCodeAsync(input.service_code, type, cancellationToken);
+        var rental = await GetSchemaAsync(LegacySupplierTable, cancellationToken);
+        var source = await GetSchemaAsync(VehicleSourceTable, cancellationToken);
+        var mapping = await GetSchemaAsync("Contract_Type_Group_Mapping", cancellationToken);
+
+        if (rental is not null && source is not null)
+        {
+            if (
+                await FindLegacySupplierIdAsync(
+                    rental,
+                    source,
+                    typeCode,
+                    input.name,
+                    cancellationToken
+                )
+                is not null
+            )
+            {
+                throw new ArgumentException(
+                    "A supplier with this name and service already exists.",
+                    nameof(input)
+                );
+            }
+
+            var idLegacy = await InTransactionAsync(
+                async (connection, transaction, token) =>
+                {
+                    if (
+                        await TryExecuteSupplierInsertProcedureAsync(
+                            input,
+                            typeCode,
+                            connection,
+                            transaction,
+                            token
+                        )
+                    )
+                    {
+                        return await FindLegacySupplierIdAsync(
+                                rental,
+                                source,
+                                typeCode,
+                                input.name,
+                                connection,
+                                transaction,
+                                token
+                            )
+                            ?? throw new InvalidOperationException(
+                                "DEV_INS_NewSupplier completed but the supplier could not be loaded."
+                            );
+                    }
+
+                    return await InsertLegacySupplierAsync(
+                        input,
+                        typeCode,
+                        rental,
+                        source,
+                        mapping,
+                        currentUserId,
+                        connection,
+                        transaction,
+                        token
+                    );
+                },
+                cancellationToken
+            );
+            return await GetSupplierOrThrowAsync(idLegacy, cancellationToken);
+        }
+
         var modern = await GetSchemaAsync(ModernSupplierTable, cancellationToken);
         if (
             modern is not null
@@ -172,45 +306,9 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
             return await GetSupplierOrThrowAsync(id, cancellationToken);
         }
 
-        var rental =
-            await GetSchemaAsync(LegacySupplierTable, cancellationToken)
-            ?? throw new InvalidOperationException(
-                "Legacy third-party supplier storage is not available in this database."
-            );
-        var source =
-            await GetSchemaAsync(VehicleSourceTable, cancellationToken)
-            ?? throw new InvalidOperationException(
-                "Legacy vehicle source storage is not available in this database."
-            );
-        var type = await GetSchemaAsync("type", cancellationToken);
-        var mapping = await GetSchemaAsync("Contract_Type_Group_Mapping", cancellationToken);
-        var typeCode = await ResolveTypeCodeAsync(input.service_code, type, cancellationToken);
-        if (
-            await FindLegacySupplierIdAsync(rental, source, typeCode, input.name, cancellationToken)
-            is not null
-        )
-        {
-            throw new ArgumentException(
-                "A supplier with this name and service already exists.",
-                nameof(input)
-            );
-        }
-        var idLegacy = await InTransactionAsync(
-            (connection, transaction, token) =>
-                InsertLegacySupplierAsync(
-                    input,
-                    typeCode,
-                    rental,
-                    source,
-                    mapping,
-                    currentUserId,
-                    connection,
-                    transaction,
-                    token
-                ),
-            cancellationToken
+        throw new InvalidOperationException(
+            "Third-party supplier storage is not available in this database."
         );
-        return await GetSupplierOrThrowAsync(idLegacy, cancellationToken);
     }
 
     public async Task<ThirdPartySupplierRecord> UpdateSupplierAsync(
@@ -228,6 +326,50 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
                 nameof(input)
             );
         }
+        var type = await GetSchemaAsync("type", cancellationToken);
+        var typeCode = await ResolveTypeCodeAsync(input.service_code, type, cancellationToken);
+        var rental = await GetSchemaAsync(LegacySupplierTable, cancellationToken);
+        var source = await GetSchemaAsync(VehicleSourceTable, cancellationToken);
+        var mapping = await GetSchemaAsync("Contract_Type_Group_Mapping", cancellationToken);
+
+        if (rental is not null && source is not null)
+        {
+            await InTransactionAsync(
+                async (connection, transaction, token) =>
+                {
+                    if (
+                        await TryExecuteSupplierUpdateProcedureAsync(
+                            rental,
+                            supplierId,
+                            input,
+                            typeCode,
+                            connection,
+                            transaction,
+                            token
+                        )
+                    )
+                    {
+                        return;
+                    }
+
+                    await UpdateLegacySupplierAsync(
+                        supplierId,
+                        input,
+                        typeCode,
+                        rental,
+                        source,
+                        mapping,
+                        currentUserId,
+                        connection,
+                        transaction,
+                        token
+                    );
+                },
+                cancellationToken
+            );
+            return await GetSupplierOrThrowAsync(supplierId, cancellationToken);
+        }
+
         var modern = await GetSchemaAsync(ModernSupplierTable, cancellationToken);
         if (
             modern is not null
@@ -255,34 +397,7 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
             }
         }
 
-        var rental =
-            await GetSchemaAsync(LegacySupplierTable, cancellationToken)
-            ?? throw new KeyNotFoundException($"Third-party supplier {supplierId} was not found.");
-        var source =
-            await GetSchemaAsync(VehicleSourceTable, cancellationToken)
-            ?? throw new InvalidOperationException(
-                "Legacy vehicle source storage is not available in this database."
-            );
-        var type = await GetSchemaAsync("type", cancellationToken);
-        var mapping = await GetSchemaAsync("Contract_Type_Group_Mapping", cancellationToken);
-        var typeCode = await ResolveTypeCodeAsync(input.service_code, type, cancellationToken);
-        await InTransactionAsync(
-            (connection, transaction, token) =>
-                UpdateLegacySupplierAsync(
-                    supplierId,
-                    input,
-                    typeCode,
-                    rental,
-                    source,
-                    mapping,
-                    currentUserId,
-                    connection,
-                    transaction,
-                    token
-                ),
-            cancellationToken
-        );
-        return await GetSupplierOrThrowAsync(supplierId, cancellationToken);
+        throw new KeyNotFoundException($"Third-party supplier {supplierId} was not found.");
     }
 
     public async Task<IReadOnlyList<ThirdPartyServiceOption>> GetServiceOptionsAsync(
@@ -1820,6 +1935,18 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         CancellationToken cancellationToken
     )
     {
+        var insertedId = await TryExecuteProjectInsertProcedureAsync(
+            schema,
+            input,
+            connection,
+            transaction,
+            cancellationToken
+        );
+        if (insertedId is int projectId)
+        {
+            return projectId;
+        }
+
         var values = BuildProjectValues(schema, input);
         AddAuditCreate(values, schema, currentUserId);
         return await ExecuteInsertAsync(
@@ -1842,6 +1969,19 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         CancellationToken cancellationToken
     )
     {
+        if (
+            await TryExecuteProjectUpdateProcedureAsync(
+                projectId,
+                input,
+                connection,
+                transaction,
+                cancellationToken
+            )
+        )
+        {
+            return;
+        }
+
         var values = BuildProjectValues(schema, input);
         AddAuditUpdate(values, schema, currentUserId);
         await ExecuteUpdateAsync(
@@ -2036,11 +2176,7 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         CancellationToken cancellationToken
     )
     {
-        if (
-            input.supplier_id is not null
-            && projectSupplier is not null
-            && projectSupplier.Has("Third_Party_ProjectID", "Third_Party_SupplierID")
-        )
+        if (input.supplier_id is not null)
         {
             await EnsureLegacyProjectSupplierLinkAsync(
                 projectSupplier,
@@ -2096,7 +2232,7 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
     }
 
     private async Task EnsureLegacyProjectSupplierLinkAsync(
-        Schema schema,
+        Schema? schema,
         int projectId,
         int supplierId,
         DbConnection connection,
@@ -2104,21 +2240,77 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         CancellationToken cancellationToken
     )
     {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = $"""
-            IF NOT EXISTS (
+        var projectColumn = schema?.First(
+            "Third_Party_ProjectID",
+            "project_id",
+            "Project_id"
+        );
+        var supplierColumn = schema?.First(
+            "Third_Party_SupplierID",
+            "third_party_id",
+            "supplier_id"
+        );
+        if (schema is not null && projectColumn is not null && supplierColumn is not null)
+        {
+            await using var existsCommand = connection.CreateCommand();
+            existsCommand.Transaction = transaction;
+            existsCommand.CommandText = $"""
                 SELECT 1 FROM [dbo].[{schema.Table}]
-                WHERE [{schema.First("Third_Party_ProjectID")}] = @projectId
-                  AND [{schema.First("Third_Party_SupplierID")}] = @supplierId)
-            INSERT INTO [dbo].[{schema.Table}] ([{schema.First(
-                "Third_Party_ProjectID"
-            )}], [{schema.First("Third_Party_SupplierID")}])
+                WHERE [{projectColumn}] = @projectId
+                  AND [{supplierColumn}] = @supplierId
+                """;
+            AddParameter(existsCommand, "@projectId", DbType.Int32, projectId);
+            AddParameter(existsCommand, "@supplierId", DbType.Int32, supplierId);
+            var existing = await existsCommand.ExecuteScalarAsync(cancellationToken);
+            if (existing is not null && existing != DBNull.Value)
+            {
+                return;
+            }
+        }
+
+        Action<DbCommand> bind = command =>
+        {
+            AddParameter(command, "@project_id", DbType.Int32, projectId);
+            AddParameter(command, "@third_party_id", DbType.Int32, supplierId);
+        };
+        if (
+            await TryExecuteLegacyProcedureAsync(
+                InsertProjectSupplierProcedure,
+                InsertProjectSupplierProcedureParameters,
+                bind,
+                connection,
+                transaction,
+                cancellationToken
+            )
+            || await TryExecuteLegacyProcedureAsync(
+                InsertProjectSupplierProcedureAlias,
+                InsertProjectSupplierProcedureParameters,
+                bind,
+                connection,
+                transaction,
+                cancellationToken
+            )
+        )
+        {
+            return;
+        }
+
+        if (schema is null || projectColumn is null || supplierColumn is null)
+        {
+            throw new InvalidOperationException(
+                "DEV_INS_Third_party_project_suppliers is absent and the project-supplier link columns are not available."
+            );
+        }
+
+        await using var insertCommand = connection.CreateCommand();
+        insertCommand.Transaction = transaction;
+        insertCommand.CommandText = $"""
+            INSERT INTO [dbo].[{schema.Table}] ([{projectColumn}], [{supplierColumn}])
             VALUES (@projectId, @supplierId)
             """;
-        AddParameter(command, "@projectId", DbType.Int32, projectId);
-        AddParameter(command, "@supplierId", DbType.Int32, supplierId);
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        AddParameter(insertCommand, "@projectId", DbType.Int32, projectId);
+        AddParameter(insertCommand, "@supplierId", DbType.Int32, supplierId);
+        await insertCommand.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private async Task<int> ResolveTypeCodeAsync(
@@ -2180,7 +2372,29 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
     )
     {
         await using var scope = await OpenConnectionAsync(cancellationToken);
-        await using var command = scope.Connection.CreateCommand();
+        return await FindLegacySupplierIdAsync(
+            rental,
+            source,
+            typeCode,
+            name,
+            scope.Connection,
+            transaction: null,
+            cancellationToken
+        );
+    }
+
+    private static async Task<int?> FindLegacySupplierIdAsync(
+        Schema rental,
+        Schema source,
+        int typeCode,
+        string name,
+        DbConnection connection,
+        DbTransaction? transaction,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = $"""
             SELECT TOP (1) [tr].[{rental.First("third_party_id")}]
             FROM [dbo].[{rental.Table}] AS [tr]
@@ -2220,14 +2434,14 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
             LegacyProjectSupplierTable,
             ExpandedProjectSupplierTable
         );
+        var supplierColumn = projectSupplier?.First(
+            "Third_Party_SupplierID",
+            "third_party_id",
+            "supplier_id"
+        );
         return projectSupplier is not null
-            && projectSupplier.HasAll("Third_Party_ProjectID", "Third_Party_SupplierID")
-            && await ExistsAsync(
-                projectSupplier,
-                projectSupplier.First("Third_Party_SupplierID")!,
-                supplierId,
-                cancellationToken
-            );
+            && supplierColumn is not null
+            && await ExistsAsync(projectSupplier, supplierColumn, supplierId, cancellationToken);
     }
 
     private async Task<bool> ExistsAsync(
@@ -2854,6 +3068,283 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         parameter.DbType = type;
         parameter.Value = value ?? DBNull.Value;
         command.Parameters.Add(parameter);
+    }
+
+    private async Task<bool> TryExecuteSupplierInsertProcedureAsync(
+        ThirdPartySupplierWrite input,
+        int typeCode,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken
+    ) =>
+        await TryExecuteLegacyProcedureAsync(
+            InsertSupplierProcedure,
+            InsertSupplierProcedureParameters,
+            command => BindInsertSupplierParameters(command, input, typeCode),
+            connection,
+            transaction,
+            cancellationToken
+        );
+
+    private async Task<bool> TryExecuteSupplierUpdateProcedureAsync(
+        Schema rental,
+        int supplierId,
+        ThirdPartySupplierWrite input,
+        int typeCode,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken
+    )
+    {
+        if (!rental.HasAll("third_party_id", "vs_code"))
+        {
+            return false;
+        }
+
+        var vsCode = await GetLegacySourceCodeAsync(
+            rental,
+            supplierId,
+            connection,
+            transaction,
+            cancellationToken
+        );
+        if (vsCode is null)
+        {
+            return false;
+        }
+
+        return await TryExecuteLegacyProcedureAsync(
+            UpdateSupplierProcedure,
+            UpdateSupplierProcedureParameters,
+            command => BindUpdateSupplierParameters(command, input, typeCode, vsCode.Value),
+            connection,
+            transaction,
+            cancellationToken
+        );
+    }
+
+    private static void BindInsertSupplierParameters(
+        DbCommand command,
+        ThirdPartySupplierWrite input,
+        int typeCode
+    )
+    {
+        AddParameter(command, "@name", DbType.String, input.name);
+        AddParameter(command, "@physical_address", DbType.String, input.address);
+        AddParameter(command, "@postal_address", DbType.String, input.postal_address);
+        AddParameter(command, "@tel_number", DbType.String, input.tel);
+        AddParameter(command, "@fax_number", DbType.String, input.fax);
+        AddParameter(command, "@email_address", DbType.String, input.email);
+        AddParameter(command, "@contact_person", DbType.String, input.contact_person);
+        AddParameter(command, "@serviceid", DbType.Int32, typeCode);
+        AddParameter(command, "@active", DbType.Int32, input.active ? 1 : 0);
+        AddParameter(command, "@is_third_part", DbType.Int32, input.is_third_party ? 1 : 0);
+        AddParameter(command, "@Note", DbType.String, input.notes);
+        AddParameter(command, "@ctg_code", DbType.Int32, input.ctg_code);
+    }
+
+    private static void BindUpdateSupplierParameters(
+        DbCommand command,
+        ThirdPartySupplierWrite input,
+        int typeCode,
+        int vsCode
+    )
+    {
+        AddParameter(command, "@name", DbType.String, input.name);
+        AddParameter(command, "@physical_address", DbType.String, input.address);
+        AddParameter(command, "@postal_address", DbType.String, input.postal_address);
+        AddParameter(command, "@tel_number", DbType.String, input.tel);
+        AddParameter(command, "@fax_number", DbType.String, input.fax);
+        AddParameter(command, "@email_address", DbType.String, input.email);
+        AddParameter(command, "@contact_person", DbType.String, input.contact_person);
+        AddParameter(command, "@vs_code", DbType.Int32, vsCode);
+        AddParameter(command, "@serviceid", DbType.Int32, typeCode);
+        AddParameter(command, "@active", DbType.Int32, input.active ? 1 : 0);
+        AddParameter(command, "@ctg_code", DbType.Int32, input.ctg_code);
+        AddParameter(command, "@is_third_part", DbType.Int32, input.is_third_party ? 1 : 0);
+        AddParameter(command, "@Note", DbType.String, input.notes);
+    }
+
+    private async Task<int?> TryExecuteProjectInsertProcedureAsync(
+        Schema schema,
+        ThirdPartyProjectWrite input,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken
+    )
+    {
+        if (
+            !await TryExecuteLegacyProcedureAsync(
+                InsertProjectProcedure,
+                InsertProjectProcedureParameters,
+                command => BindInsertProjectParameters(command, input),
+                connection,
+                transaction,
+                cancellationToken
+            )
+        )
+        {
+            return null;
+        }
+
+        var idColumn =
+            schema.First("project_id", "Project_id")
+            ?? throw new InvalidOperationException(
+                "third_party_projects has no project identifier column."
+            );
+        await using var idCommand = connection.CreateCommand();
+        idCommand.Transaction = transaction;
+        idCommand.CommandText =
+            $"SELECT MAX([{idColumn}]) FROM [dbo].[{schema.Table}]";
+        var result = await idCommand.ExecuteScalarAsync(cancellationToken);
+        return result is null || result is DBNull ? null : Convert.ToInt32(result);
+    }
+
+    private async Task<bool> TryExecuteProjectUpdateProcedureAsync(
+        int projectId,
+        ThirdPartyProjectWrite input,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken
+    ) =>
+        await TryExecuteLegacyProcedureAsync(
+            UpdateProjectProcedure,
+            UpdateProjectProcedureParameters,
+            command =>
+            {
+                AddParameter(command, "@project_id", DbType.Int32, projectId);
+                AddParameter(command, "@department_code", DbType.Int32, input.department_code);
+                AddParameter(
+                    command,
+                    "@Site_code",
+                    DbType.Int16,
+                    input.site_code is > 0 ? input.site_code : null
+                );
+                AddParameter(command, "@project_description", DbType.String, input.description);
+                AddParameter(command, "@project_start_date", DbType.Date, input.start_date);
+                AddParameter(command, "@project_end_date", DbType.Date, input.end_date);
+            },
+            connection,
+            transaction,
+            cancellationToken
+        );
+
+    private async Task<bool> TryExecuteLegacyProcedureAsync(
+        string procedureName,
+        IReadOnlyList<string> expectedParameters,
+        Action<DbCommand> bindParameters,
+        DbConnection connection,
+        DbTransaction transaction,
+        CancellationToken cancellationToken
+    )
+    {
+        var procedureParameters = await ResolveProcedureParametersAsync(
+            connection,
+            transaction,
+            procedureName,
+            cancellationToken
+        );
+        if (procedureParameters is null)
+        {
+            return false;
+        }
+
+        if (
+            !procedureParameters.SequenceEqual(
+                expectedParameters,
+                StringComparer.OrdinalIgnoreCase
+            )
+        )
+        {
+            throw new InvalidOperationException(
+                $"The deployed legacy procedure {procedureName} does not match the archived parameter contract. No labelled direct-DML fallback was run."
+            );
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = $"[dbo].[{procedureName}]";
+        bindParameters(command);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+        return true;
+    }
+
+    private static async Task<IReadOnlyList<string>?> ResolveProcedureParametersAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        string procedureName,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT [p].[name]
+            FROM [sys].[procedures] AS [sp]
+            INNER JOIN [sys].[schemas] AS [s] ON [s].[schema_id] = [sp].[schema_id]
+            LEFT JOIN [sys].[parameters] AS [p]
+                ON [p].[object_id] = [sp].[object_id]
+               AND [p].[parameter_id] > 0
+            WHERE [s].[name] = N'dbo'
+              AND [sp].[name] = @procedureName
+            ORDER BY [p].[parameter_id]
+            """;
+        AddParameter(command, "@procedureName", DbType.String, procedureName);
+
+        var found = false;
+        var parameters = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            found = true;
+            if (!reader.IsDBNull(0))
+                parameters.Add(reader.GetString(0));
+        }
+
+        return found ? parameters : null;
+    }
+
+    private static void BindInsertProjectParameters(DbCommand command, ThirdPartyProjectWrite input)
+    {
+        AddParameter(command, "@Department_Code", DbType.Int32, input.department_code);
+        AddParameter(
+            command,
+            "@Site_Code",
+            DbType.Int16,
+            input.site_code is > 0 ? input.site_code : null
+        );
+        AddParameter(command, "@Project_Description", DbType.String, input.description);
+        AddParameter(command, "@Project_Start_Date", DbType.Date, input.start_date);
+        AddParameter(command, "@Project_End_Date", DbType.Date, input.end_date);
+        AddParameter(
+            command,
+            "@Project_Resoponsible_Person",
+            DbType.String,
+            input.responsible_person
+        );
+        AddParameter(
+            command,
+            "@Project_RP_Physical_Address",
+            DbType.String,
+            input.rp_physical_address
+        );
+        AddParameter(
+            command,
+            "@Project_RP_Postal_Address",
+            DbType.String,
+            input.rp_postal_address
+        );
+        AddParameter(command, "@Project_RP_Tel_Number", DbType.String, input.rp_tel);
+        AddParameter(command, "@Project_RP_Fax_Number", DbType.String, input.rp_fax);
+        AddParameter(command, "@Project_RP_Email_Address", DbType.String, input.rp_email);
+        AddParameter(command, "@Project_Notes", DbType.String, input.notes);
+        AddParameter(
+            command,
+            "@Project_ClientReference_Number",
+            DbType.String,
+            input.order_reference
+        );
     }
 
     private static void ValidateSupplier(ThirdPartySupplierWrite input)

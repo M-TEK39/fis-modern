@@ -5813,7 +5813,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             from scanDoc in _context.ScanDocs.AsNoTracking()
             join vehicle in _context.Vehicles.AsNoTracking()
                 on scanDoc.vmf_code equals vehicle.vmf_code
-            where !scanDoc.is_deleted
             select new
             {
                 vehicle.vmf_code,
@@ -5821,7 +5820,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 vehicle.registration_number,
                 scanDoc.period_begin,
                 scanDoc.period_end,
-                DateUploaded = scanDoc.date_updated ?? scanDoc.date_created,
+                DateUploaded = scanDoc.period_end ?? scanDoc.period_begin,
                 scanDoc.image,
             };
 
@@ -6834,8 +6833,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 into tripVehicles
             from vehicle in tripVehicles.DefaultIfEmpty()
             where
-                !trip.is_deleted
-                && trip.issue_date.Date <= cutoffDate
+                trip.issue_date.Date <= cutoffDate
                 && (!trip.expiry_date.HasValue || trip.expiry_date >= DateTime.Today.Date)
             orderby trip.issue_date, trip.trip_authority_code
             select new
@@ -8073,8 +8071,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 into histories
             from vehicle in histories.DefaultIfEmpty()
             where
-                !history.is_deleted
-                && history.status_start_date.Date <= endDate
+                history.status_start_date.Date <= endDate
                 && history.status_end_date.Date >= startDate
             select new
             {
@@ -8086,7 +8083,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 history.vehicle_status_description,
                 history.status_start_date,
                 history.status_end_date,
-                history.date_created,
             };
 
         if (statusCode.HasValue)
@@ -8120,8 +8116,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Vehicle Status Code", row => row.vehicle_status_code),
             Column("Vehicle Status Description", row => row.vehicle_status_description),
             Column("Status Start Date", row => row.status_start_date),
-            Column("Status End Date", row => row.status_end_date),
-            Column("Captured On", row => row.date_created)
+            Column("Status End Date", row => row.status_end_date)
         );
     }
 

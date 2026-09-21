@@ -26,6 +26,8 @@ DECLARE @MutationTargets TABLE
 INSERT INTO @MutationTargets
     ([Module], [ModernMutation], [TableName], [LegacyProcedure], [LegacyTrigger])
 VALUES
+    -- No archived caller parameter list exists for DEV_INS_Contract2.
+    -- Home-custody CreateAsync stays trigger-backed labelled DML.
     (N'Contracts', N'Create a pre-created contract', N'contract', N'DEV_INS_Contract2', N'TRG_INS_CheckDuplicateContract'),
     (N'Contracts', N'Create or submit a contract for approval', N'contract', N'DEV_INS_Contract_New_ForApproval', N'TRG_INS_ContractJournalDetailRecord'),
     (N'Contracts', N'Edit or resubmit a pending contract', N'contract', N'DEV_UPD_Contract_New_ApprovalPhase', N'TRG_UPD_ContractJournalDetailRecord'),
@@ -38,6 +40,8 @@ VALUES
     (N'Contracts', N'Close an active contract and finalize its billing boundary', N'contract', N'NEW_DEV_UPD_Contract_CLOSE', N'TRG_UPD_ContractJournalDetailRecord'),
     (N'Contracts', N'Reassign a contract', N'contract', N'DEV_UPD_Contract_ReassignExisting', N'TRG_INS_UpdateContractChargedUntil'),
     (N'Contracts', N'Run the legacy daily contract billing scheduler', N'contract', N'ADM_Contract_JobScheduler', N'TRG_INS_UpdateContractChargedUntil'),
+    -- DEV_UPD_ContractStatusHistory has no archived GGFIS caller and no
+    -- modern C# write path. Do not invent procedure parameters.
     (N'Contracts', N'Write contract status history', N'contract_status_history', N'DEV_UPD_ContractStatusHistory', NULL),
     (N'Contracts', N'List or maintain contract status types', N'contract_status', NULL, NULL),
     (N'Contracts', N'Delete a contract', N'contract', NULL, N'TRG_DEL_Contract'),
@@ -99,6 +103,9 @@ VALUES
     (N'Trips and Routes', N'Update a trip authority and routes', N'trip_authorities', N'DEV_UPD_TripXML', N'TRG_INS_UPD_RejectIncompleteTrip'),
     (N'Trips and Routes', N'Close a trip authority and routes', N'route_details', N'DEV_UPD_TripXMLForClosingOfTrip', N'TRG_UPD_RouteJournalDetailRecord'),
     (N'Trips and Routes', N'Renew a trip authority and routes', N'trip_authorities', N'DEV_UPD_TripXMLForRenewalOfTrip', N'TRG_INS_UPD_RejectIncompleteTrip'),
+    -- DEV_INS_RouteDetails2 has no archived caller parameter list.
+    -- Live trip create uses DEV_INS_TripXML; labelled DML is only the
+    -- fallback when TripXML is absent. Do not invent RouteDetails2 params.
     (N'Trips and Routes', N'Create or amend route details', N'route_details', N'DEV_INS_RouteDetails2', N'TRG_INS_RouteJournalDetailRecord'),
     (N'Trips and Routes', N'Create or amend route details', N'route_details', NULL, N'TRG_INS_UPD_CheckOverLapping_RouteDetailsKilos'),
     (N'Trips and Routes', N'Create or amend route details', N'route_details', NULL, N'TRG_INS_UPD_RouteDetails_CheckOverLapping_ManualLogsheets'),
@@ -169,8 +176,11 @@ VALUES
     (N'Workflow', N'List or maintain notification logs', N'Workflow', N'NotificationLog', NULL, NULL),
     (N'Auth', N'List or maintain access levels', N'dbo', N'AccessLevels', NULL, NULL),
     (N'Suppliers', N'List or maintain dbo.Suppliers lookups', N'dbo', N'Suppliers', NULL, NULL),
+    (N'Third Party', N'Create a third-party rental supplier', N'dbo', N'vehicle_source', N'DEV_INS_NewSupplier', NULL),
+    (N'Third Party', N'Update a third-party rental supplier', N'dbo', N'vehicle_source', N'DEV_UPD_Suppliers', NULL),
     (N'Third Party', N'List or maintain third party projects', N'dbo', N'third_party_projects', N'DEV_INS_Third_party_projects', NULL),
     (N'Third Party', N'Update a third party project', N'dbo', N'third_party_projects', N'DEV_UPD_Third_party_project', NULL),
+    (N'Third Party', N'Allocate a supplier to a third party project (archived GGFIS name)', N'dbo', N'third_party_project_suppliers', N'DEV_INS_Third_party_project_suppliers', NULL),
     (N'Third Party', N'Allocate a supplier to a third party project', N'dbo', N'Third_Party_Project_Supplier', N'DEV_INS_Third_Party_Project_Supplier', NULL),
     (N'Third Party', N'Remove a supplier from a third party project', N'dbo', N'Third_Party_Project_Supplier', N'DEV_DEL_Third_Party_Supplier_Allocation', NULL),
     (N'Third Party', N'Expanded class-requirement rows when present', N'dbo', N'ClassRequirements', NULL, NULL),
@@ -268,6 +278,12 @@ VALUES
     (N'Contracts', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', 3, N'@Approved_By_Username', N'GGFIS_DataAccessLayer/Contract.vb ApproveBackdatedAndNewContractDeclineOrCancel'),
     (N'Contracts', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', 4, N'@Declined_Date', N'GGFIS_DataAccessLayer/Contract.vb ApproveBackdatedAndNewContractDeclineOrCancel'),
     (N'Contracts', N'DEV_UPD_Contract_BackDating_RequestedApproveDecline', 5, N'@Declined_Username', N'GGFIS_DataAccessLayer/Contract.vb ApproveBackdatedAndNewContractDeclineOrCancel'),
+    (N'Vehicle Master', N'DEV_UPD_MaintenanceVmfCode', 1, N'@vmfCode', N'GGFIS_DataAccessLayer/Vehicle_Maintenance.vb UpdateVmfCode'),
+    (N'Vehicle Master', N'DEV_UPD_MaintenanceVmfCode', 2, N'@tempVmfCode', N'GGFIS_DataAccessLayer/Vehicle_Maintenance.vb UpdateVmfCode'),
+    (N'Vehicle Master', N'DEV_CLR_NewVehicleFromAuthList', 1, N'@chassisNo', N'GGFIS_DataAccessLayer/User_Profile.vb ClearNewVehicleFromAuthorityList'),
+    (N'Vehicle Master', N'DEV_SEL_PrintVehicle_Details', 1, N'@chassis_number', N'GGFIS_DataAccessLayer/User_Profile.vb Print_Pre_Vehicle_Detials'),
+    (N'Vehicle Master', N'DEV_SEL_NewVehicle_Extras', 1, N'@SearchVal', N'GGFIS_DataAccessLayer/User_Profile.vb GetNewVehicleExtras'),
+    (N'Vehicle Master', N'DEV_SEL_Vehicle_CapturerDetails', 1, N'@chassis_No', N'GGFIS_DataAccessLayer/User_Profile.vb GetLoggedInUserDetails'),
     (N'Drivers', N'DEV_INS_SiteDrivers', 1, N'@SiteDriverCode', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
     (N'Drivers', N'DEV_INS_SiteDrivers', 2, N'@SiteCode', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
     (N'Drivers', N'DEV_INS_SiteDrivers', 3, N'@DriverLicenceTypeID', N'GGMT.Database/SQLScripts/v2.0.0 dbo.DEV_INS_SiteDrivers'),
@@ -379,8 +395,12 @@ VALUES
     (N'Finance Batch', N'ADM_TriggerRollbackJob', 2, N'@User', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb RollbackBatch'),
     (N'Finance Batch', N'ADM_TriggerRollbackJob', 3, N'@JobName', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb RollbackBatch'),
     (N'Finance Batch', N'ADM_TriggerRollbackJob', 4, N'@StepId', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb RollbackBatch'),
-    (N'Finance Batch', N'ADM_CheckJobStatus', 1, N'@JobName', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb GetJobDuration'),
-    (N'Finance Batch', N'ADM_CheckRecordedLogs', 1, N'@LogJob', N'GGFIS_DataAccessLayer/BatchManagementFunctions.vb GetLatestLogs');
+    (N'Finance Batch', N'ADM_CheckJobStatus', 1, N'@JobName', N'BatchInProgress.aspx.vb / BatchManagementFunctions.vb GetJobDuration'),
+    (N'Finance Batch', N'ADM_CheckRecordedLogs', 1, N'@LogJob', N'BatchInProgress.aspx.vb / BatchManagementFunctions.vb GetLatestLogs'),
+    (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 1, N'@GG_Number', N'NOMPending/VehicleLease.aspx.vb Getdata2'),
+    (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 2, N'@AuthorityStatus', N'NOMPending/VehicleLease.aspx.vb Getdata2'),
+    (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 3, N'@Rejected', N'NOMPending/VehicleLease.aspx.vb Getdata2'),
+    (N'Lease Contract Terms', N'DEV_UPD_LeaseContractTermsAuthorityStatus', 4, N'@UpdatedBy', N'NOMPending/VehicleLease.aspx.vb Getdata2');
 INSERT INTO @ExpectedProcedureParameters
     ([Module], [LegacyProcedure], [ParameterOrdinal], [ParameterName], [SourceEvidence])
 VALUES

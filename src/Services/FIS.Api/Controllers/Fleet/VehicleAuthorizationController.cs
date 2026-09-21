@@ -106,7 +106,7 @@ public class VehicleAuthorizationController : BaseApiController
         [FromQuery] int pageSize = 24
     )
     {
-        if (!CanAccessAuthorizationQueue())
+        if (!CanViewVehicleInception())
             return Forbid();
 
         try
@@ -300,6 +300,94 @@ public class VehicleAuthorizationController : BaseApiController
         {
             _logger.LogError(ex, "Error fetching vehicle authorization {Id}", id);
             return StatusCode(500, "Error retrieving vehicle authorization");
+        }
+    }
+
+    /// <summary>
+    /// Snapshot an authorized vehicle then clear it from the authority list.
+    /// Archive RPT_PrintPreVehicleMaster loads print details then calls
+    /// DEV_CLR_NewVehicleFromAuthList.
+    /// </summary>
+    [HttpPost("{id}/print")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<PreVehicleMasterDto>> PrintAuthorizedVehicle(int id)
+    {
+        if (!CanViewVehicleInception())
+            return Forbid();
+
+        try
+        {
+            var snapshot = await _repository.GetPrintSnapshotAsync(
+                id,
+                await ResolveAllowedVehicleSiteCodesAsync(),
+                GetCurrentUserId()
+            );
+            if (snapshot is null)
+                return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
+
+            if (
+                !string.Equals(
+                    snapshot.Vehicle.Authority_Status,
+                    "Authorized",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                return BadRequest(
+                    new { message = "Only authorized vehicles can be printed and incepted." }
+                );
+            }
+
+            var dto = MapPrintDto(snapshot);
+            await _repository.ClearFromAuthorityListAsync(id);
+            _logger.LogInformation(
+                "User {UserId} printed and cleared vehicle authorization {Id}",
+                GetCurrentUserId(),
+                id
+            );
+            return Ok(dto);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "Vehicle authorization {Id} not found for print/clear", id);
+            return NotFound(new { message = ex.Message });
+        }
+        catch (NotSupportedException ex)
+        {
+            _logger.LogError(ex, "Legacy authorized-vehicle print/clear is unavailable for {Id}", id);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    message = "The legacy authorized-vehicle print procedure is unavailable. No print/clear fallback was committed.",
+                    source = "legacy-procedure-required",
+                }
+            );
+        }
+        catch (InvalidOperationException ex)
+            when (ex.Message.Contains("legacy procedure", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogError(ex, "Legacy authorized-vehicle print procedure contract mismatch on {Id}", id);
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new
+                {
+                    message = "The deployed legacy authorized-vehicle print procedure is incompatible. No direct-DML fallback was run.",
+                }
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Invalid print/clear for vehicle authorization {Id}", id);
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error printing vehicle authorization {Id}", id);
+            return StatusCode(500, "Error printing vehicle authorization");
         }
     }
 
@@ -842,6 +930,30 @@ public class VehicleAuthorizationController : BaseApiController
         };
     }
 
+    private PreVehicleMasterDto MapPrintDto(VehicleAuthorizationPrintSnapshot snapshot)
+    {
+        var dto = MapToDto(snapshot.Vehicle);
+        dto.SiteName = snapshot.SiteName;
+        dto.LocationDescription = snapshot.LocationDescription;
+        dto.HiredFromDescription = snapshot.HiredFromDescription;
+        dto.HireTypeDescription = snapshot.HireTypeDescription;
+        dto.StatusDescription = snapshot.StatusDescription;
+        dto.CapturedByUserName = snapshot.CapturedByUserName;
+        dto.CapturedDate = snapshot.CapturedAt;
+        dto.Extras = snapshot.Extras;
+        if (!string.IsNullOrWhiteSpace(snapshot.AuthorizedByUserName))
+        {
+            dto.AuthorizedByUserName = snapshot.AuthorizedByUserName;
+        }
+
+        if (snapshot.AuthorizedAt.HasValue)
+        {
+            dto.AuthorizationDate = snapshot.AuthorizedAt;
+        }
+
+        return dto;
+    }
+
     private object ToPageResponse(VehicleAuthorizationPage page) =>
         new
         {
@@ -1153,6 +1265,14 @@ public class PreVehicleMasterDto
     public int? VmfCode { get; set; }
     public DateTime DateCreated { get; set; }
     public int? CreatedByUserCode { get; set; }
+    public string? SiteName { get; set; }
+    public string? LocationDescription { get; set; }
+    public string? HiredFromDescription { get; set; }
+    public string? HireTypeDescription { get; set; }
+    public string? StatusDescription { get; set; }
+    public string? CapturedByUserName { get; set; }
+    public DateTime? CapturedDate { get; set; }
+    public IReadOnlyList<string> Extras { get; set; } = [];
 }
 
 public class CreatePreVehicleMasterDto

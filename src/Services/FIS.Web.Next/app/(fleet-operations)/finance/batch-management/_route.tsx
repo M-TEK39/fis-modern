@@ -152,19 +152,25 @@ async function renderBatchManagementContent({ searchParams, action }: BatchPageP
       ) : (
         <div className="vehicle-menu-tiles">
           <FinanceMenuSection title="Batch Management">
-            <FinanceMenuLink href="/finance/batch-management/start">
-              Start batch process and take site offline
-            </FinanceMenuLink>
+            {batch?.isActive !== true ? (
+              <FinanceMenuLink href="/finance/batch-management/start">
+                Start batch process and take site offline
+              </FinanceMenuLink>
+            ) : null}
             <FinanceMenuLink href="/finance">Access Finance menu</FinanceMenuLink>
-            <FinanceMenuLink href="/finance/batch-management/check-scoa">
-              Check the SCOA version and update where needed
-            </FinanceMenuLink>
-            <FinanceMenuLink href="/finance/batch-management/rollback">
-              Roll back batch
-            </FinanceMenuLink>
-            <FinanceMenuLink href="/finance/batch-management/finish">
-              Finish batch process and bring site back online
-            </FinanceMenuLink>
+            {batch?.isActive === true ? (
+              <>
+                <FinanceMenuLink href="/finance/batch-management/check-scoa">
+                  Check the SCOA version and update where needed
+                </FinanceMenuLink>
+                <FinanceMenuLink href="/finance/batch-management/rollback">
+                  Roll back batch
+                </FinanceMenuLink>
+                <FinanceMenuLink href="/finance/batch-management/finish">
+                  Finish batch process and bring site back online
+                </FinanceMenuLink>
+              </>
+            ) : null}
           </FinanceMenuSection>
         </div>
       )}

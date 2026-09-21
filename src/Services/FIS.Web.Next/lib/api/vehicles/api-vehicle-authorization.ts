@@ -44,6 +44,14 @@ export type VehicleAuthorization = {
   vmfCode: number | null;
   dateCreated: string | null;
   createdByUserCode: number | null;
+  siteName: string | null;
+  locationDescription: string | null;
+  hiredFromDescription: string | null;
+  hireTypeDescription: string | null;
+  statusDescription: string | null;
+  capturedByUserName: string | null;
+  capturedDate: string | null;
+  extras: string[];
 };
 
 export type VehicleAuthorizationQueuePage = {
@@ -97,6 +105,16 @@ function getValue(record: JsonRecord, ...keys: string[]) {
   }
 
   return undefined;
+}
+
+function asStringList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => asString(item))
+    .filter((item): item is string => item !== null);
 }
 
 function asString(value: unknown) {
@@ -180,6 +198,22 @@ function toVehicleAuthorization(value: unknown): VehicleAuthorization | null {
     vmfCode: asNumber(getValue(value, "vmfCode", "vmf_code")),
     dateCreated: asString(getValue(value, "dateCreated", "date_created")),
     createdByUserCode: asNumber(getValue(value, "createdByUserCode", "created_by_user_code")),
+    siteName: asString(getValue(value, "siteName", "site_name")),
+    locationDescription: asString(
+      getValue(value, "locationDescription", "location_description"),
+    ),
+    hiredFromDescription: asString(
+      getValue(value, "hiredFromDescription", "hired_from_description"),
+    ),
+    hireTypeDescription: asString(
+      getValue(value, "hireTypeDescription", "hire_type_description"),
+    ),
+    statusDescription: asString(getValue(value, "statusDescription", "status_description")),
+    capturedByUserName: asString(
+      getValue(value, "capturedByUserName", "captured_by_user_name"),
+    ),
+    capturedDate: asString(getValue(value, "capturedDate", "captured_date")),
+    extras: asStringList(getValue(value, "extras")),
   };
 }
 
@@ -365,4 +399,25 @@ export function rejectVehicleAuthorization(id: number, comment: string) {
 
 export function addVehicleAuthorizationComment(id: number, comment: string) {
   return postAuthorizationAction(`${id}/comment`, { comment });
+}
+
+export async function getAuthorizedVehiclesQueue(
+  page = 1,
+): Promise<VehicleAuthorizationQueuePage> {
+  return getAuthorizationQueue("authorized", page);
+}
+
+export async function printVehicleAuthorization(id: number): Promise<VehicleAuthorization> {
+  const payload = await requestApi(`${AUTHORIZATION_BASE_PATH}/${id}/print`, {
+    method: "POST",
+  });
+  const vehicle = toVehicleAuthorization(payload);
+  if (!vehicle) {
+    throw new VehicleAuthorizationApiError(
+      "invalid-response",
+      "The FIS API returned an invalid authorized-vehicle print snapshot.",
+    );
+  }
+
+  return vehicle;
 }

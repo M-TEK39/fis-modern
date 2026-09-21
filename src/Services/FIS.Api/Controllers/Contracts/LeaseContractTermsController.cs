@@ -292,7 +292,7 @@ public class LeaseContractTermsController : BaseApiController
     [HttpPost("{id}/recall")]
     public async Task<ActionResult<LeaseContractTerms>> Recall(int id)
     {
-        if (!HasLeaseVehicleCapturerRole())
+        if (!HasLeaseVehicleCapturerRole() && !HasLeaseVehicleAuthorizerRole())
             return Forbid();
 
         try
@@ -303,7 +303,13 @@ public class LeaseContractTermsController : BaseApiController
             if (!await IsTermAllowedAsync(existing))
                 return NotFound();
 
-            return Ok(await _repository.RecallAsync(existing));
+            return Ok(
+                await _repository.RecallAsync(existing, GetLegacyUsername(), GetCurrentUserId())
+            );
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            return Conflict(new { error = exception.Message });
         }
         catch (InvalidOperationException exception)
         {

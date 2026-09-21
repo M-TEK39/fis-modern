@@ -1,9 +1,14 @@
 "use client";
 
+import AuthorizedPrintButton from "./authorized-print-button";
 import type { VehicleAuthorization } from "@/lib/api/vehicles/api-vehicle-authorization";
 
 function valueOrDash(value: string | null | undefined) {
   return value?.trim() || "-";
+}
+
+function isAuthorized(vehicle: VehicleAuthorization) {
+  return vehicle.authorityStatus.toLowerCase() === "authorized";
 }
 
 export default function ReviewModalReadonly({
@@ -21,14 +26,19 @@ export default function ReviewModalReadonly({
         <dt>Authorizer&apos;s Comment</dt>
         <dd>{valueOrDash(vehicle.authorizationComment)}</dd>
       </div>
-      <button
-        className="button button-secondary"
-        type="button"
-        onClick={onClose}
-        disabled={pending}
-      >
-        Close
-      </button>
+      <div className="vehicle-create-actions">
+        <button
+          className="button button-secondary"
+          type="button"
+          onClick={onClose}
+          disabled={pending}
+        >
+          Close
+        </button>
+        {isAuthorized(vehicle) ? (
+          <AuthorizedPrintButton id={vehicle.tempVmfCode} returnPath="/vehicles/authorize" />
+        ) : null}
+      </div>
     </div>
   );
 }
