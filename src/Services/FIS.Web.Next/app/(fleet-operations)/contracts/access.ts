@@ -30,6 +30,8 @@ const REVIEWER_ROLES = [
 
 const BACKDATING_APPROVER_ROLES = [
   "back dating contract (approver)",
+  "backdating contract (approver)",
+  "contract (back dating approver)",
 ] as const;
 
 const CANCEL_CLOSE_ROLES = [
@@ -81,15 +83,11 @@ export function canCaptureNewContract(roles: readonly string[]) {
 }
 
 export function canManageActiveContract(roles: readonly string[]) {
-  return isContractAdministrator(roles) || hasContractReviewerRole(roles);
+  return isContractAdministrator(roles) || hasContractLoadAndManageRole(roles);
 }
 
 export function canCloseActiveContract(roles: readonly string[]) {
-  return (
-    isContractAdministrator(roles) ||
-    hasContractCancelAndCloseRole(roles) ||
-    hasContractReviewerRole(roles)
-  );
+  return isContractAdministrator(roles) || hasContractCancelAndCloseRole(roles);
 }
 
 export function hasContractLoadAndManageRole(roles: readonly string[]) {
@@ -141,4 +139,25 @@ export function canReviewContract(contract: ContractRecord, session: ContractSes
     (isContractAdministrator(session.roles) || hasContractReviewerRole(session.roles)) &&
     !isContractOwner(contract, session.userAccessCode)
   );
+}
+
+export function hasContractBackdatingRequest(contract: ContractRecord) {
+  const start = contract.backdatingStartDate?.trim();
+  if (start && !start.startsWith("1900-01-01")) return true;
+  const requested = contract.backdatingRequestedDate?.trim();
+  return Boolean(requested && !requested.startsWith("1900-01-01"));
+}
+
+export function canReviewContractDecision(contract: ContractRecord, session: ContractSession) {
+  if (hasContractBackdatingRequest(contract)) {
+    return (
+      hasContractBackdatingApproverRole(session.roles) &&
+      (isContractAdministrator(session.roles) ||
+        hasContractLoadAndManageRole(session.roles) ||
+        hasContractReviewerRole(session.roles) ||
+        hasContractCancelAndCloseRole(session.roles)) &&
+      !isContractOwner(contract, session.userAccessCode)
+    );
+  }
+  return canReviewContract(contract, session);
 }

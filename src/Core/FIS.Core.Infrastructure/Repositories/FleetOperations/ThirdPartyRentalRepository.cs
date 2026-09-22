@@ -94,6 +94,14 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         "@project_start_date",
         "@project_end_date",
     ];
+    private const string DeleteSupplierAllocationProcedure =
+        "DEV_DEL_Third_Party_Supplier_Allocation";
+    private static readonly string[] DeleteSupplierAllocationProcedureParameters =
+    [
+        "@Third_Party_Vehicle_ID",
+        "@Third_Party_Project_ID",
+        "@Third_Party_Supplier_ID",
+    ];
 
     private readonly FisDbContext _context;
 
@@ -870,6 +878,10 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
         var modern = await GetSchemaAsync(ModernAllocationTable, cancellationToken);
         if (modern is not null && modern.Has("allocation_id"))
         {
+            // Expanded-schema link cleanup is deferred until a DB-verified mapping
+            // exists: the archived DEV_DEL_Third_Party_Supplier_Allocation counts
+            // Third_Party_Vehicle_Allocations, which is not authoritative once
+            // allocations live in third_party_allocations.
             await InTransactionAsync(
                 (connection, transaction, token) =>
                     DeleteRecordAsync(
@@ -893,8 +905,37 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
                 $"Third-party allocation {allocationId} was not found."
             );
         await InTransactionAsync(
-            (connection, transaction, token) =>
-                DeleteRecordAsync(
+            async (connection, transaction, token) =>
+            {
+                // Resolve the link identifiers from the allocation row before the
+                // delete, because DEV_DEL_Third_Party_Supplier_Allocation is scoped
+                // by project and supplier rather than by allocation id.
+                var allocationKey = legacy.First("Third_Party_Vehicle_AllocationsID");
+                int? projectId = null;
+                int? supplierId = null;
+                int? vehicleId = null;
+                if (allocationKey is not null)
+                {
+                    await using var lookup = connection.CreateCommand();
+                    lookup.Transaction = transaction;
+                    lookup.CommandText = $"""
+                        SELECT {Projection(legacy, "project_id", "int", "Third_Party_ProjectID")},
+                               {Projection(legacy, "supplier_id", "int", "Third_Party_SupplierID")},
+                               {Projection(legacy, "vehicle_id", "int", "Third_Party_vs_code")}
+                        FROM [dbo].[{legacy.Table}]
+                        WHERE [{allocationKey}] = @allocationId
+                        """;
+                    AddParameter(lookup, "@allocationId", DbType.Int32, allocationId);
+                    await using var reader = await lookup.ExecuteReaderAsync(token);
+                    if (await reader.ReadAsync(token))
+                    {
+                        projectId = ReadInt32(reader, "project_id");
+                        supplierId = ReadInt32(reader, "supplier_id");
+                        vehicleId = ReadInt32(reader, "vehicle_id");
+                    }
+                }
+
+                await DeleteRecordAsync(
                     legacy,
                     "allocation_id",
                     "Third_Party_Vehicle_AllocationsID",
@@ -903,7 +944,51 @@ public sealed class ThirdPartyRentalRepository : IThirdPartyRentalRepository
                     connection,
                     transaction,
                     token
-                ),
+                );
+
+                if (projectId is null || supplierId is null)
+                {
+                    // Link identifiers cannot be resolved (columns absent or row unreadable):
+                    // skip the overlay rather than guess the project-supplier link.
+                    return;
+                }
+
+                if (
+                    await TryExecuteLegacyProcedureAsync(
+                        DeleteSupplierAllocationProcedure,
+                        DeleteSupplierAllocationProcedureParameters,
+                        command =>
+                        {
+                            AddParameter(
+                                command,
+                                "@Third_Party_Vehicle_ID",
+                                DbType.Int32,
+                                vehicleId ?? 0
+                            );
+                            AddParameter(
+                                command,
+                                "@Third_Party_Project_ID",
+                                DbType.Int32,
+                                projectId.Value
+                            );
+                            AddParameter(
+                                command,
+                                "@Third_Party_Supplier_ID",
+                                DbType.Int32,
+                                supplierId.Value
+                            );
+                        },
+                        connection,
+                        transaction,
+                        token
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Absent procedure: labelled leftover fallback, no project-supplier cleanup.
+            },
             cancellationToken
         );
     }

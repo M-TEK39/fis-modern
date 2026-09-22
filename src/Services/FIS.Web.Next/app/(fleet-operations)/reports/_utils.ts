@@ -26,6 +26,122 @@ export type ReportMenuEntry = {
   badge?: string;
 };
 
+type RolesCheck = (roles: readonly string[]) => boolean;
+
+function hasRole(roles: readonly string[], expected: string) {
+  const normalizedExpected = expected.trim().toLowerCase();
+  return roles.some((role) => role.trim().toLowerCase() === normalizedExpected);
+}
+
+export function hasContractsRole(roles: readonly string[]) {
+  return hasRole(roles, "Contracts");
+}
+
+export function hasLossesRole(roles: readonly string[]) {
+  return hasRole(roles, "Losses");
+}
+
+export function hasFinancialReportsRole(roles: readonly string[]) {
+  return hasRole(roles, "Financial Reports");
+}
+
+export function hasFinancialDataAllDepartmentsRole(roles: readonly string[]) {
+  return hasRole(roles, "Financial Data (All Departments)");
+}
+
+export function hasFinancialDataOwnDepartmentRole(roles: readonly string[]) {
+  return hasRole(roles, "Financial Data (Own Department)");
+}
+
+function reportsAnd(check: RolesCheck): RolesCheck {
+  return (roles) => hasReportsRole(roles) && check(roles);
+}
+
+// Only the aliases that change the authorization classification matter here.
+// The API resolves aliases before it checks HasDynamicReportAccess.
+const DYNAMIC_REPORT_KEY_ALIASES: Readonly<Record<string, string>> = {
+  "all-losses-sorted": "losses-all-losses-sorted",
+  "high-distance-department": "high-distance-dept",
+  "lease-nom-split": "lease-nom-contract-split",
+  "trip-authorities-single": "contract-trip-authority-single",
+  "trip-authorities-multiple": "contract-trip-authority-multiple",
+  "trip-authorities-by-dept-site-date": "contract-trip-authority-dept-site-date",
+};
+
+function dynamicReportKey(reportKey: string) {
+  const key = reportKey.trim().toLowerCase();
+  return DYNAMIC_REPORT_KEY_ALIASES[key] ?? key;
+}
+
+// Mirrors FIS.Api ReportController.HasDynamicReportAccess for the legacy
+// inner-page gates that are stricter than the report menu. Keys that are not
+// listed keep the existing slug-level behavior, so no route becomes stricter
+// or looser than it is today.
+const DYNAMIC_REPORT_ACCESS_RULES: Readonly<Record<string, RolesCheck | undefined>> = {
+  "contract-history": hasReportsRole,
+  "contracts-checklist": reportsAnd(hasContractsRole),
+  "vehicle-contract-single": hasContractsRole,
+  "vehicle-contract-multiple": hasContractsRole,
+  "vehicle-contract-universal": hasContractsRole,
+  "permanent-contracts-without-tariff": hasContractsRole,
+  "lease-nom-contract-split": hasContractsRole,
+  "contract-trip-authority-single": hasContractsRole,
+  "contract-trip-authority-multiple": hasContractsRole,
+  "contract-trip-authority-dept-site-date": hasContractsRole,
+  "losses-all-losses-sorted": reportsAnd(hasLossesRole),
+  "vehicle-status-all": reportsAnd(hasFinancialReportsRole),
+  "incorrect-quantities": reportsAnd(hasFinancialReportsRole),
+  "vehicle-additions": reportsAnd(hasFinancialReportsRole),
+  "vehicle-disposals": reportsAnd(hasFinancialReportsRole),
+  "vehicle-list-date-range": reportsAnd(hasFinancialReportsRole),
+  "vehicles-per-department": reportsAnd(hasFinancialDataAllDepartmentsRole),
+  "vehicles-contract-type-department": reportsAnd(hasFinancialDataAllDepartmentsRole),
+  "users-per-department": reportsAnd(hasFinancialDataAllDepartmentsRole),
+  "trips-per-user-department": reportsAnd(hasFinancialDataAllDepartmentsRole),
+  "high-distance-dept": reportsAnd(hasFinancialDataAllDepartmentsRole),
+  "users-all-departments": reportsAnd(hasFinancialDataOwnDepartmentRole),
+  "trips-per-user-all": reportsAnd(hasFinancialDataOwnDepartmentRole),
+  "vehicles-no-trips": reportsAnd(hasFinancialDataOwnDepartmentRole),
+  "vehicles-no-trips-daterange": reportsAnd(hasFinancialDataOwnDepartmentRole),
+  "high-distance-all": reportsAnd(hasFinancialDataOwnDepartmentRole),
+};
+
+function isContractReportKey(reportKey: string) {
+  return (
+    reportKey === "contracts" ||
+    reportKey.startsWith("contract-") ||
+    reportKey.startsWith("contracts-")
+  );
+}
+
+function isTariffReportKey(reportKey: string) {
+  return (
+    reportKey === "tariffs" ||
+    reportKey.startsWith("tariffs-") ||
+    reportKey === "nom-vehicles-without-tariff" ||
+    reportKey === "nom-vehicles-without-tariffs"
+  );
+}
+
+export function hasDynamicReportAccess(roles: readonly string[], reportKey: string) {
+  const key = dynamicReportKey(reportKey);
+  const rule = DYNAMIC_REPORT_ACCESS_RULES[key];
+  if (rule) return rule(roles);
+  if (isContractReportKey(key)) return hasContractsRole(roles);
+  if (isTariffReportKey(key)) return hasTariffReportsRole(roles);
+  return hasReportsRole(roles);
+}
+
+export function filterAccessibleReportMenuEntries<T extends ReportMenuEntry>(
+  roles: readonly string[],
+  entries: readonly T[],
+): readonly T[] {
+  return entries.filter((entry) => {
+    if (entry.key === undefined) return true;
+    return hasDynamicReportAccess(roles, dynamicReportKey(entry.key));
+  });
+}
+
 export type ReportField = {
   name: string;
   label: string;

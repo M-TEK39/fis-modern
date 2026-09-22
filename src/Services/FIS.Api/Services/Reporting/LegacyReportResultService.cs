@@ -15,6 +15,8 @@ namespace FIS.Api.Services;
 
 public interface ILegacyReportResultService
 {
+    string ResolveReportKeyAlias(string reportKey);
+
     Task<LegacyReportResultDto> GetReportAsync(
         string reportKey,
         IDictionary<string, string?> filters,
@@ -343,7 +345,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         return new LegacyReportDatabasePage<T>(pagedRows, totalCount, pageWindow);
     }
 
-    private static string ResolveReportKeyAlias(string reportKey)
+    public string ResolveReportKeyAlias(string reportKey)
     {
         if (string.IsNullOrWhiteSpace(reportKey))
         {

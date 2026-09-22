@@ -126,6 +126,9 @@ public sealed class SiteDriversController : BaseApiController
             "System Administrator"
         );
 
+    // Trip Authorities could open the legacy trip capture and driver-licence
+    // pages (TripsFilter.aspx.vb:459-463) and those pages had no inner role
+    // gate, so the read endpoints they call must accept the same role.
     private bool HasDriverWorkflowReadRole() =>
         HasDriverMaintenanceRole()
         || HasRole(
@@ -136,7 +139,9 @@ public sealed class SiteDriversController : BaseApiController
             "Contract (approver)",
             "Contracts approver",
             "Contract (cancel and close)",
-            "Contracts (cancel and close)"
+            "Contracts (cancel and close)",
+            "Trip Authorities",
+            "TripAuthorities"
         );
 
     private async Task<IReadOnlySet<int>?> ResolveAllowedSiteCodesAsync()
@@ -341,7 +346,7 @@ public sealed class SiteDriversController : BaseApiController
     [HttpGet("licence-types")]
     public async Task<ActionResult<IEnumerable<SiteDriverLicenceTypeDto>>> GetLicenceTypes()
     {
-        if (!HasDriverMaintenanceRole())
+        if (!HasDriverWorkflowReadRole())
             return Forbid();
 
         try

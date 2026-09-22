@@ -23,7 +23,7 @@ import {
   canCloseActiveContract,
   canEditContract,
   canManageActiveContract,
-  canReviewContract,
+  canReviewContractDecision,
   canSubmitContract,
   hasContractAccess,
   hasContractHistoryBackdatingRole,
@@ -188,9 +188,9 @@ function canRunContractAction(
     case "approve":
     case "decline-correction":
     case "decline":
-      return status === 1 && canReviewContract(contract, session);
+      return status === 1 && canReviewContractDecision(contract, session);
     case "approve-activate":
-      return (status === 1 || status === 2) && canReviewContract(contract, session);
+      return (status === 1 || status === 2) && canReviewContractDecision(contract, session);
     case "extend":
     case "reassign":
     case "relief":

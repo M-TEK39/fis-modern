@@ -38,6 +38,7 @@ public sealed class ContractAccessAttribute : Attribute, IAsyncActionFilter
         "contract_cancel_and_close",
         "contracts_cancel_and_close",
         "contract (approver)",
+        "contracts (approver)",
         "contracts approver",
         "contract approver",
         "contracts_approver",
@@ -222,6 +223,7 @@ public class ContractsController : BaseApiController
     private bool HasContractApproverRole() =>
         HasAnyRole(
             "contract (approver)",
+            "contracts (approver)",
             "contracts approver",
             "contract approver",
             "contracts_approver",
@@ -242,6 +244,18 @@ public class ContractsController : BaseApiController
             "systemadministrator"
         );
 
+    // Legacy MNT_Vehicle_Contract_BackDating_Authorise_Detail.aspx.vb:290-292
+    // shows and enables the backdating approve button only for
+    // Security.Roles.BackDatingContractApprover, and :300-311 ends the request
+    // for everyone else. The normal Contract (Approver) path stays as-is.
+    private bool HasContractBackdatingApproverRole() =>
+        HasContractAdminRole()
+        || HasAnyRole(
+            "back dating contract (approver)",
+            "backdating contract (approver)",
+            "contract (back dating approver)"
+        );
+
     private bool HasContractAccess()
     {
         if (
@@ -251,6 +265,7 @@ public class ContractsController : BaseApiController
             || HasContractCancelAndCloseRole()
             || HasContractApproverRole()
             || HasContractHistoryBackdatingRole()
+            || HasContractBackdatingApproverRole()
         )
         {
             return true;
@@ -265,7 +280,9 @@ public class ContractsController : BaseApiController
         || HasContractCancelAndCloseRole();
 
     private bool CanSeeContract(Contract contract, int currentUserId) =>
-        HasGlobalContractVisibility() || IsContractOwner(contract, currentUserId);
+        HasGlobalContractVisibility()
+        || IsContractOwner(contract, currentUserId)
+        || (HasContractBackdatingApproverRole() && HasBackdatingRequest(contract));
 
     private ActionResult? RequireContractRecordVisibility(Contract contract)
     {
@@ -275,6 +292,29 @@ public class ContractsController : BaseApiController
             StatusCodes.Status403Forbidden,
             new { error = "You may only view contracts you own or contracts covered by your approval scope." }
         );
+    }
+
+    private ActionResult? RequireApprovalDecisionRole(Contract contract)
+    {
+        // Legacy MNT_Vehicle_Contract_DetailManagement.aspx.vb:2335-2338 routes a
+        // pending contract with a backdated start date to the backdating
+        // authorisation screen, and :923 shows normal approvers View instead.
+        // The backdating screen itself stays in View unless the user also holds
+        // a base workflow role (MNT_Vehicle_Contract_BackDating_Authorise_Detail.aspx.vb:364-366).
+        var allowed = HasBackdatingRequest(contract)
+            ? HasContractBackdatingApproverRole()
+                && (
+                    HasContractLoadAndManageRole()
+                    || HasContractApproverRole()
+                    || HasContractCancelAndCloseRole()
+                )
+            : HasContractApproverRole();
+        return allowed
+            ? null
+            : StatusCode(
+                StatusCodes.Status403Forbidden,
+                new { error = "You do not have permission to review this vehicle contract." }
+            );
     }
 
     private bool CanCaptureContract() => HasContractAdminRole() || HasContractLoadAndManageRole();
@@ -317,10 +357,17 @@ public class ContractsController : BaseApiController
     private static bool IsMeaningfulBackdatingDate(DateTime? value) =>
         value.HasValue && value.Value.Date > new DateTime(1900, 1, 1);
 
-    private bool CanManageActiveContract() => HasContractAdminRole() || HasContractApproverRole();
+    // Legacy MNT_Vehicle_Contract_DetailManagement.aspx.vb:1379-1383 enables
+    // reassign/extend/relieve only for Contracts_LoadAndManage; the Approver
+    // role can view the screen (:361-363) but cannot act.
+    private bool CanManageActiveContract() =>
+        HasContractAdminRole() || HasContractLoadAndManageRole();
 
+    // Legacy contract status 7 (Closed) maps to Contract (Cancel and Close)
+    // (GGMT.Database/v2.1.05/05 - Apply New ASPNET Roles and Contract Status
+    // Hierarchy mappings.sql:36-37); the Approver role is not mapped to close.
     private bool CanCloseActiveContract() =>
-        HasContractAdminRole() || HasContractCancelAndCloseRole() || HasContractApproverRole();
+        HasContractAdminRole() || HasContractCancelAndCloseRole();
 
     private bool HasProvinceWideVehicleListRole() =>
         HasAnyRole("vehicle list for all departments in province");
@@ -1045,6 +1092,20 @@ public class ContractsController : BaseApiController
             {
                 return BadRequest(
                     new { error = "List must be action-required or backdating-action-required." }
+                );
+            }
+
+            // Contracts_Menu.aspx:48-54 shows the Back Date Requests queue link
+            // only to "back dating contract (approver)"; enforce that boundary
+            // at the API before the repository query runs.
+            if (listKind == "backdating-action-required" && !HasContractBackdatingApproverRole())
+            {
+                return StatusCode(
+                    StatusCodes.Status403Forbidden,
+                    new
+                    {
+                        error = "You do not have permission to view backdating authorisation requests.",
+                    }
                 );
             }
 
@@ -2432,7 +2493,7 @@ public class ContractsController : BaseApiController
         {
             if (
                 RequireContractAction(
-                    HasContractApproverRole(),
+                    HasContractApproverRole() || HasContractBackdatingApproverRole(),
                     "You do not have permission to review vehicle contracts."
                 ) is
                 { } authorization
@@ -2446,6 +2507,8 @@ public class ContractsController : BaseApiController
                 return NotFound(new { error = "Contract not found" });
             if (await RequireContractScopeAsync(contract) is { } scopeFailure)
                 return scopeFailure;
+            if (RequireApprovalDecisionRole(contract) is { } decisionRoleFailure)
+                return decisionRoleFailure;
             if (contract.contract_status_code != 1)
                 return BadRequest(new { error = "Only pending-review contracts can be approved." });
 
@@ -2498,9 +2561,10 @@ public class ContractsController : BaseApiController
     {
         try
         {
+            // Legacy MNT_Vehicle_Contract_BackDating_Authorise_Detail.aspx:1455 wires the backdating approver's button to approve-and-activate (.aspx.vb:2460-2489).
             if (
                 RequireContractAction(
-                    HasContractApproverRole(),
+                    HasContractApproverRole() || HasContractBackdatingApproverRole(),
                     "You do not have permission to review vehicle contracts."
                 ) is
                 { } authorization
@@ -2514,6 +2578,8 @@ public class ContractsController : BaseApiController
                 return NotFound(new { error = "Contract not found" });
             if (await RequireContractScopeAsync(contract) is { } scopeFailure)
                 return scopeFailure;
+            if (RequireApprovalDecisionRole(contract) is { } decisionRoleFailure)
+                return decisionRoleFailure;
             if (contract.contract_status_code is not (1 or 2))
                 return BadRequest(
                     new { error = "Only pending-review or approved contracts can be activated." }
@@ -2598,7 +2664,7 @@ public class ContractsController : BaseApiController
         {
             if (
                 RequireContractAction(
-                    HasContractApproverRole(),
+                    HasContractApproverRole() || HasContractBackdatingApproverRole(),
                     "You do not have permission to review vehicle contracts."
                 ) is
                 { } authorization
@@ -2612,6 +2678,8 @@ public class ContractsController : BaseApiController
                 return NotFound(new { error = "Contract not found" });
             if (await RequireContractScopeAsync(contract) is { } scopeFailure)
                 return scopeFailure;
+            if (RequireApprovalDecisionRole(contract) is { } decisionRoleFailure)
+                return decisionRoleFailure;
             if (contract.contract_status_code != 1)
                 return BadRequest(
                     new { error = "Only pending-review contracts can be returned for correction." }
@@ -2670,7 +2738,7 @@ public class ContractsController : BaseApiController
         {
             if (
                 RequireContractAction(
-                    HasContractApproverRole(),
+                    HasContractApproverRole() || HasContractBackdatingApproverRole(),
                     "You do not have permission to review vehicle contracts."
                 ) is
                 { } authorization
@@ -2684,6 +2752,8 @@ public class ContractsController : BaseApiController
                 return NotFound(new { error = "Contract not found" });
             if (await RequireContractScopeAsync(contract) is { } scopeFailure)
                 return scopeFailure;
+            if (RequireApprovalDecisionRole(contract) is { } decisionRoleFailure)
+                return decisionRoleFailure;
             if (contract.contract_status_code != 1)
                 return BadRequest(new { error = "Only pending-review contracts can be declined." });
 

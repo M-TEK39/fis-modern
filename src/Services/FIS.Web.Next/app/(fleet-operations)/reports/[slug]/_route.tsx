@@ -13,9 +13,8 @@ import {
   ReportsUnavailable,
 } from "@/app/(fleet-operations)/reports/_components";
 import {
-  hasContractReportsRole,
-  hasReportsRole,
-  hasTariffReportsRole,
+  filterAccessibleReportMenuEntries,
+  hasDynamicReportAccess,
   queryValue,
   REPORT_MENU_ENTRIES,
 } from "@/app/(fleet-operations)/reports/_utils";
@@ -1096,15 +1095,13 @@ async function renderReportsRoutePageContent({
         <ReportsUnavailable />
       </ReportsFrame>
     );
-  const hasRouteAccess =
-    slug === "contracts" || slug === "contract-history"
-      ? hasContractReportsRole(session.roles)
-      : slug === "tariffs"
-        || slug.startsWith("tariffs-")
-        || slug === "nom-vehicles-without-tariff"
-        || slug === "nom-vehicles-without-tariffs"
-        ? hasTariffReportsRole(session.roles)
-      : hasReportsRole(session.roles);
+  const query = await searchParams;
+  const definition = definitionFor(slug);
+  // The API authorizes the resolved dynamic report key, not the route slug, so
+  // the guard has to check the same key the page will request.
+  const reportKey =
+    forcedReportKey ?? definition?.resolveReportKey?.(query) ?? definition?.reportKey ?? "";
+  const hasRouteAccess = hasDynamicReportAccess(session.roles, reportKey);
   if (!hasRouteAccess)
     return (
       <ReportsFrame title="Reports" description="Legacy report access is enforced on the server.">
@@ -1112,8 +1109,6 @@ async function renderReportsRoutePageContent({
       </ReportsFrame>
     );
 
-  const query = await searchParams;
-  const definition = definitionFor(slug);
   if (!definition)
     return (
       <ReportsFrame
@@ -1123,6 +1118,10 @@ async function renderReportsRoutePageContent({
         <ReportsUnavailable message="The requested report route is not mapped." />
       </ReportsFrame>
     );
+
+  const menuEntries = definition.menu
+    ? filterAccessibleReportMenuEntries(session.roles, definition.menu)
+    : undefined;
 
   if (slug === "asset-list" && isAssetListModeQuery(query)) {
     return renderAssetListRoute(query);
@@ -1148,8 +1147,6 @@ async function renderReportsRoutePageContent({
     );
   }
 
-  const reportKey =
-    forcedReportKey ?? definition.resolveReportKey?.(query) ?? definition.reportKey ?? "";
   const reportFields = definition.fields ?? reportFieldsFor(slug, reportKey);
   const page = reportPage(query);
   const showingResult =
@@ -1157,10 +1154,10 @@ async function renderReportsRoutePageContent({
   const showFilter =
     reportFields && (!showingResult || reportInputIsMissing(slug, reportKey, query));
 
-  if (!showingResult && definition.menu) {
+  if (!showingResult && menuEntries) {
     return (
       <ReportsFrame title={definition.title} description={definition.description}>
-        <ReportMenu slug={slug} entries={definition.menu}>
+        <ReportMenu slug={slug} entries={menuEntries}>
           <div className="vehicle-footer-actions">
             <LinkBack href="/reports/fis-report" label="FIS Report Menu" />
             <LinkBack href="/reports" label="Reports Menu" />
