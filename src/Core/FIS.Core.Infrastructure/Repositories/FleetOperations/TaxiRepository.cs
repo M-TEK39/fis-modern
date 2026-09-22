@@ -200,6 +200,12 @@ public sealed class TaxiRepository : ITaxiRepository
     )
     {
         var normalized = NormalizeKey(rekNum);
+        var overlay = await TryOverlayLatestByRequisitionAsync(normalized, allowedSiteCodes);
+        if (overlay.overlay)
+        {
+            return overlay.taxi;
+        }
+
         return (
             await QueryAsync(
                 "UPPER(RTRIM(t.[rek_num])) = @rekNum AND NOT EXISTS ("
@@ -210,6 +216,128 @@ public sealed class TaxiRepository : ITaxiRepository
         )
             .OrderByDescending(taxi => taxi.request_id)
             .FirstOrDefault();
+    }
+
+    /// <summary>
+    /// Taxis/RPT_detail.aspx reprint membership is DEV_SEL_RequisitionNumberDetails
+    /// @RequisitionNumber. Leftover Taxis query hydrates the modern entity.
+    /// </summary>
+    private async Task<(bool overlay, Taxi? taxi)> TryOverlayLatestByRequisitionAsync(
+        string normalizedRekNum,
+        IReadOnlySet<short>? allowedSiteCodes
+    )
+    {
+        if (normalizedRekNum.Length == 0)
+        {
+            return (false, null);
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_RequisitionNumberDetails",
+            [["@RequisitionNumber"]],
+            actual =>
+                command => AddParameter(command, actual[0], DbType.String, normalizedRekNum),
+            "dbo"
+        );
+        if (rows is null)
+        {
+            return (false, null);
+        }
+
+        if (rows.Count == 0)
+        {
+            return (true, null);
+        }
+
+        var requestIds = new List<int>();
+        var seenRequestIds = new HashSet<int>();
+        var rekKeys = new List<string>();
+        var seenRekKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows)
+        {
+            var requestId = LegacySelectorProcedure.ReadInt32(
+                row,
+                "request_id",
+                "Request_id",
+                "RequestID"
+            );
+            if (requestId is > 0 && seenRequestIds.Add(requestId.Value))
+            {
+                requestIds.Add(requestId.Value);
+            }
+
+            var rekKey = NormalizeKey(
+                LegacySelectorProcedure.ReadString(
+                    row,
+                    "rek_num",
+                    "RekNum",
+                    "Rek Num",
+                    "RequisitionNumber",
+                    "Requisition Number"
+                )
+            );
+            if (rekKey.Length > 0 && seenRekKeys.Add(rekKey))
+            {
+                rekKeys.Add(rekKey);
+            }
+        }
+
+        if (requestIds.Count == 0 && rekKeys.Count == 0)
+        {
+            return (false, null);
+        }
+
+        List<Taxi> hydrated;
+        if (requestIds.Count > 0)
+        {
+            var placeholders = string.Join(
+                ", ",
+                requestIds.Select((_, index) => $"@overlayRequestId{index}")
+            );
+            hydrated = await QueryAsync(
+                $"t.[request_id] IN ({placeholders})",
+                command =>
+                {
+                    for (var index = 0; index < requestIds.Count; index++)
+                    {
+                        AddParameter(
+                            command,
+                            $"@overlayRequestId{index}",
+                            DbType.Int32,
+                            requestIds[index]
+                        );
+                    }
+                },
+                allowedSiteCodes
+            );
+            hydrated = LegacySelectorProcedure
+                .OrderByKeys(hydrated, requestIds, taxi => taxi.request_id)
+                .ToList();
+        }
+        else
+        {
+            var placeholders = string.Join(
+                ", ",
+                rekKeys.Select((_, index) => $"@overlayRek{index}")
+            );
+            hydrated = await QueryAsync(
+                $"UPPER(RTRIM(t.[rek_num])) IN ({placeholders})",
+                command =>
+                {
+                    for (var index = 0; index < rekKeys.Count; index++)
+                    {
+                        AddParameter(command, $"@overlayRek{index}", DbType.String, rekKeys[index]);
+                    }
+                },
+                allowedSiteCodes
+            );
+            hydrated = LegacySelectorProcedure
+                .OrderByKeys(hydrated, rekKeys, taxi => NormalizeKey(taxi.rek_num))
+                .ToList();
+        }
+
+        return (true, hydrated.FirstOrDefault());
     }
 
     public Task<IEnumerable<Taxi>> GetAllAsync(IReadOnlySet<short>? allowedSiteCodes = null) =>

@@ -94,7 +94,7 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
     description:
       "The reference number issued by the South African Police Service and allocated to this accident.",
   },
-  { term: "GG Car Damage", description: "Damage value." },
+  { term: "GG Car Damage", description: "Rand amount for the cost of repair to the GG vehicle." },
   { term: "GG Damage Desc", description: "Description of the damage to the GG vehicle." },
   {
     term: "Death",

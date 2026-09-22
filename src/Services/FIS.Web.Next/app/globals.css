@@ -416,6 +416,12 @@ input:focus-visible {
   outline: 0;
 }
 
+.field input:read-only {
+  background: hsl(var(--muted));
+  color: var(--fis-muted-text);
+  cursor: default;
+}
+
 .field select,
 .field textarea {
   width: 100%;
@@ -615,6 +621,14 @@ input:focus-visible {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   padding: 0.5rem 0.75rem;
+}
+
+input:read-only,
+textarea:read-only,
+.form-input:read-only {
+  background: hsl(var(--muted));
+  color: var(--fis-muted-text);
+  cursor: default;
 }
 
 .form-grid {

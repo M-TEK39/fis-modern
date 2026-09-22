@@ -161,8 +161,27 @@ public sealed class DepartmentRepository : IDepartmentRepository
         }
     }
 
-    public async Task<IEnumerable<Department>> GetActiveDepartmentsAsync() =>
-        await QueryAsync("[dept_active] = 1");
+    public async Task<IEnumerable<Department>> GetActiveDepartmentsAsync()
+    {
+        // TripsFilter.aspx and other department dropdowns use
+        // DEV_SEL_Departments (0-param). Leftover hydrates by department_code.
+        var leftover = (await QueryAsync("[dept_active] = 1")).ToList();
+        var keys = await LegacySelectorProcedure.TryReadOrderedKeysAsync(
+            _context,
+            "DEV_SEL_Departments",
+            [],
+            null,
+            "department_code",
+            "DepartmentCode"
+        );
+        return keys is null
+            ? leftover
+            : LegacySelectorProcedure.OrderByKeys(
+                leftover,
+                keys,
+                department => department.department_code
+            );
+    }
 
     public async Task<IEnumerable<Department>> GetByCompanyAsync(int companyCode) =>
         await QueryAsync(

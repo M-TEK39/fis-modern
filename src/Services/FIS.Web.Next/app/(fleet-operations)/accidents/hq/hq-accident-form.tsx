@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useActionState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import {
@@ -76,6 +76,17 @@ export default function HqAccidentForm({
   const action = mode === "add" ? createHqAccidentAction : updateHqAccidentAction;
   const [state, formAction] = useActionState(action, initialActionState);
   const values = mode === "edit" ? accident : undefined;
+  const [selectedVmfCode, setSelectedVmfCode] = useState(
+    initialVehicleCode ? String(initialVehicleCode) : "",
+  );
+  const lockedGgReference = useMemo(() => {
+    if (mode === "edit") {
+      return accident?.ggReference?.trim() || accident?.vehicleFleetNumber?.trim() || "";
+    }
+
+    const vehicle = vehicleOptions.find((option) => String(option.vmfCode) === selectedVmfCode);
+    return vehicle?.fleetNumber?.trim() || "";
+  }, [accident, mode, selectedVmfCode, vehicleOptions]);
 
   return (
     <form action={formAction} className="vehicle-create-form">
@@ -101,7 +112,13 @@ export default function HqAccidentForm({
         <div className="vehicle-create-grid">
           {mode === "add" ? (
             <Field id="vmfCode" label="GG / GP number">
-              <select id="vmfCode" name="vmfCode" defaultValue={initialVehicleCode ?? ""} required>
+              <select
+                id="vmfCode"
+                name="vmfCode"
+                value={selectedVmfCode}
+                required
+                onChange={(event) => setSelectedVmfCode(event.target.value)}
+              >
                 <option value="">Select vehicle...</option>
                 {vehicleOptions.map((vehicle) => (
                   <option key={vehicle.vmfCode} value={vehicle.vmfCode}>
@@ -123,7 +140,13 @@ export default function HqAccidentForm({
         </div>
       </section>
 
-      <HqAccidentFields mode={mode} sites={sites} today={today} values={values} />
+      <HqAccidentFields
+        mode={mode}
+        sites={sites}
+        today={today}
+        values={values}
+        lockedGgReference={lockedGgReference}
+      />
 
       <div className="vehicle-create-actions">
         <Link className="button button-secondary" href="/accidents/hq">

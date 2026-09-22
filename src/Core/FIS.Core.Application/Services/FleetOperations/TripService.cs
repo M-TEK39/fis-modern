@@ -471,10 +471,16 @@ public class TripService : ITripService
     }
 
     public async Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync(
-        IReadOnlySet<short>? allowedSiteCodes = null
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? vmfCode = null,
+        int? contractCode = null
     )
     {
-        return await _tripRepository.GetTripAuthorityVehiclesAsync(allowedSiteCodes);
+        return await _tripRepository.GetTripAuthorityVehiclesAsync(
+            allowedSiteCodes,
+            vmfCode,
+            contractCode
+        );
     }
 
     /// <summary>

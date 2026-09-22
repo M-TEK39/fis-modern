@@ -188,6 +188,10 @@ function reportTitle(kind: TaxiReportKind) {
 function reportKey(kind: TaxiReportKind) {
   if (kind === "taxis-per-department") return "taxis-list-per-department";
   if (kind === "taxis-inservice-per-department") return "taxis-list-inservice-per-department";
+  if (kind === "taxis-per-company") return "taxis-per-hire-company";
+  if (kind === "logs-per-user") return "taxis-logs-per-user";
+  if (kind === "old-requisitions") return "taxis-old-requisitions";
+  if (kind === "logs-requisitions-status") return "taxis-logs-requisitions-status";
   return "taxis-financial";
 }
 

@@ -3534,7 +3534,8 @@ public class ReportController : BaseApiController
 
         if (IsTaxiReportKey(reportKey))
         {
-            return HasReportsRole();
+            // Taxi_menu.aspx:4 is Private Hire Vehicles; RPTtaxis.aspx:8 is Reports.
+            return HasAnyRole("Private Hire Vehicles") || HasReportsRole();
         }
 
         if (IsFineReportKey(reportKey))

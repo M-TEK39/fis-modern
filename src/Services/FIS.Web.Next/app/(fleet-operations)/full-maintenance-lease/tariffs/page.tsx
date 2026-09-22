@@ -144,7 +144,7 @@ async function renderFmlTariffQueuePageContent({
       {canCapture || canReview ? (
         <form action={recallLeaseTermAction} className="form-row">
           <label className="form-label" htmlFor="fml-recall-registration">
-            Recall registration number
+            Recall GG number
           </label>
           <input
             className="form-input"
@@ -161,7 +161,7 @@ async function renderFmlTariffQueuePageContent({
             Recall
           </button>
           <p className="muted-copy" id="fml-recall-help">
-            Enter the vehicle registration number to recall a captured lease term for review.
+            Enter the GG fleet number to recall a captured lease term for review.
           </p>
         </form>
       ) : null}

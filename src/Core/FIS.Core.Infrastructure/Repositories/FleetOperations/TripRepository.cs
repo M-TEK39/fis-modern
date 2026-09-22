@@ -466,9 +466,21 @@ public sealed class TripRepository : ITripRepository
     }
 
     public async Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync(
-        IReadOnlySet<short>? allowedSiteCodes = null
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? vmfCode = null,
+        int? contractCode = null
     )
     {
+        var fillOverlay = await TryOverlayCreateTripVehicleFillAsync(
+            vmfCode,
+            contractCode,
+            allowedSiteCodes
+        );
+        if (fillOverlay.overlay)
+        {
+            return fillOverlay.items;
+        }
+
         var contractColumns = await GetTableColumnsAsync(ContractTableName);
         var vehicleColumns = await GetTableColumnsAsync(VehicleTableName);
         var requiredContractColumns = new[]
@@ -553,7 +565,7 @@ public sealed class TripRepository : ITripRepository
             conditions.Add("ISNULL([v].[is_deleted], 0) = 0");
         }
 
-        var siteParameters = new List<(string Name, object? Value)>();
+        var siteParameters = new List<(string Name, object? Value, DbType DbType)>();
         if (allowedSiteCodes is not null)
         {
             var siteCodes = allowedSiteCodes.Where(code => code > 0).Distinct().ToArray();
@@ -568,8 +580,20 @@ public sealed class TripRepository : ITripRepository
             conditions.Add($"[c].[site_code] IN ({string.Join(", ", placeholders)})");
             for (var index = 0; index < siteCodes.Length; index++)
             {
-                siteParameters.Add((placeholders[index], siteCodes[index]));
+                siteParameters.Add((placeholders[index], siteCodes[index], DbType.Int16));
             }
+        }
+
+        if (vmfCode is > 0)
+        {
+            conditions.Add("[c].[vmf_code] = @fillVmfCode");
+            siteParameters.Add(("@fillVmfCode", vmfCode.Value, DbType.Int32));
+        }
+
+        if (contractCode is > 0)
+        {
+            conditions.Add("[c].[contract_code] = @fillContractCode");
+            siteParameters.Add(("@fillContractCode", contractCode.Value, DbType.Int32));
         }
 
         var connection = _context.Database.GetDbConnection();
@@ -593,7 +617,7 @@ public sealed class TripRepository : ITripRepository
                 """;
             foreach (var parameter in siteParameters)
             {
-                AddParameter(command, parameter.Name, DbType.Int16, parameter.Value);
+                AddParameter(command, parameter.Name, parameter.DbType, parameter.Value);
             }
 
             var results = new List<TripAuthorityVehicle>();
@@ -624,6 +648,92 @@ public sealed class TripRepository : ITripRepository
                 await connection.CloseAsync();
             }
         }
+    }
+
+    /// <summary>
+    /// CreateTrip.aspx.vb FillInformation membership is DEV_SEL_VehicleByVMFCode
+    /// @vmf_code @contract_code. Leftover contract/vehicle query hydrates fleet
+    /// and registration when that procedure is present.
+    /// </summary>
+    private async Task<(bool overlay, IReadOnlyList<TripAuthorityVehicle> items)> TryOverlayCreateTripVehicleFillAsync(
+        int? vmfCode,
+        int? contractCode,
+        IReadOnlySet<short>? allowedSiteCodes
+    )
+    {
+        if (vmfCode is not > 0 || contractCode is not > 0)
+        {
+            return (false, []);
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_VehicleByVMFCode",
+            [["@vmf_code", "@contract_code"]],
+            actual =>
+                command =>
+                {
+                    AddParameter(command, actual[0], DbType.Int32, vmfCode.Value);
+                    AddParameter(command, actual[1], DbType.Int32, contractCode.Value);
+                }
+        );
+        if (rows is null)
+        {
+            return (false, []);
+        }
+
+        if (rows.Count == 0)
+        {
+            return (true, []);
+        }
+
+        var row = rows[0];
+        var overlayVmf =
+            LegacySelectorProcedure.ReadInt32(row, "vmf_code", "VMFCode", "VMF") ?? vmfCode.Value;
+        var overlaySite = (short)(
+            LegacySelectorProcedure.ReadInt32(row, "site_code", "SiteCode") ?? 0
+        );
+        if (
+            allowedSiteCodes is not null
+            && overlaySite > 0
+            && !allowedSiteCodes.Contains(overlaySite)
+        )
+        {
+            return (true, []);
+        }
+
+        var make = LegacySelectorProcedure.ReadString(row, "make", "Make", "make_description");
+        var model = LegacySelectorProcedure.ReadString(row, "model", "Model", "model_description");
+        var startOdometer = LegacySelectorProcedure.ReadInt32(
+            row,
+            "StartODOMeter",
+            "StartOdoMeter",
+            "start_odo_meter"
+        );
+        var fleetNumber = LegacySelectorProcedure.ReadString(row, "fleet_number", "FleetNumber");
+        var registrationNumber = LegacySelectorProcedure.ReadString(
+            row,
+            "registration_number",
+            "RegistrationNumber"
+        );
+
+        return (
+            true,
+            [
+                new TripAuthorityVehicle(
+                    overlayVmf,
+                    contractCode.Value,
+                    overlaySite,
+                    fleetNumber,
+                    registrationNumber,
+                    null,
+                    make,
+                    model,
+                    null,
+                    startOdometer
+                ),
+            ]
+        );
     }
 
     public Task<TripAuthorityVehiclePage> GetTripAuthorityInServicePageAsync(
@@ -658,9 +768,18 @@ public sealed class TripRepository : ITripRepository
             return EmptyTripAuthorityVehiclePage(normalizedQuery);
         }
 
-        // The legacy page only shows OUT rows for an authority-number search.
-        // Keep the IN result empty for that filter instead of silently ignoring
-        // the selected value and returning an unfiltered page.
+        var overlay = await OverlayTripAuthorityVehiclePageAsync(
+            normalizedQuery,
+            includeOutVehicles
+        );
+        if (overlay is not null)
+        {
+            return overlay;
+        }
+
+        // The leftover SQL has no matching IN selector for an authority-number
+        // search. Archive still fills IN from DEV_SEL_VehiclesAll_perTripAuth
+        // when that procedure is present.
         if (!includeOutVehicles && normalizedQuery.TripAuthorityCode.HasValue)
         {
             return EmptyTripAuthorityVehiclePage(normalizedQuery);
@@ -945,6 +1064,300 @@ public sealed class TripRepository : ITripRepository
     private static TripAuthorityVehiclePage EmptyTripAuthorityVehiclePage(
         TripAuthorityVehiclePageQuery query
     ) => new([], 1, query.PageSize, 0);
+
+    /// <summary>
+    /// TripsFilter.aspx IN/OUT grids: GG search uses
+    /// DEV_SEL_VehiclesAll_perGGNUM / DEV_SEL_AuthVehiclesAll_perGGNUM
+    /// (@GGNum @Mode @Dep @Site); authority search uses
+    /// DEV_SEL_VehiclesAll_perTripAuth / DEV_SEL_AuthVehiclesAll_perTripAuth
+    /// (@Auth @Mode @Dep @Site); department/site tab uses
+    /// DEV_SEL_VehiclesPerSite / DEV_SEL_AuthVehiclesPerSite (@site).
+    /// Empty selector results stay empty. Unreadable keys leftover.
+    /// </summary>
+    private async Task<TripAuthorityVehiclePage?> OverlayTripAuthorityVehiclePageAsync(
+        TripAuthorityVehiclePageQuery query,
+        bool includeOutVehicles
+    )
+    {
+        string procedureName;
+        IReadOnlyList<string[]> acceptedParameterSets;
+        Func<IReadOnlyList<string>, Action<DbCommand>?> bind;
+
+        if (query.TripAuthorityCode is > 0)
+        {
+            procedureName = includeOutVehicles
+                ? "DEV_SEL_AuthVehiclesAll_perTripAuth"
+                : "DEV_SEL_VehiclesAll_perTripAuth";
+            acceptedParameterSets = [["@Auth", "@Mode", "@Dep", "@Site"]];
+            bind = actual =>
+                command =>
+                {
+                    AddNamedParameter(
+                        command,
+                        actual,
+                        "@Auth",
+                        DbType.String,
+                        query.TripAuthorityCode.Value.ToString(CultureInfo.InvariantCulture)
+                    );
+                    AddNamedParameter(
+                        command,
+                        actual,
+                        "@Mode",
+                        DbType.String,
+                        NormalizeTripFilterAccessMode(query.AccessMode)
+                    );
+                    AddNamedParameter(
+                        command,
+                        actual,
+                        "@Dep",
+                        DbType.Int32,
+                        query.DepartmentCode ?? 0
+                    );
+                    AddNamedParameter(command, actual, "@Site", DbType.Int32, query.SiteCode ?? 0);
+                };
+        }
+        else if (!string.IsNullOrWhiteSpace(query.SearchTerm))
+        {
+            procedureName = includeOutVehicles
+                ? "DEV_SEL_AuthVehiclesAll_perGGNUM"
+                : "DEV_SEL_VehiclesAll_perGGNUM";
+            acceptedParameterSets = [["@GGNum", "@Mode", "@Dep", "@Site"]];
+            bind = actual =>
+                command =>
+                {
+                    AddNamedParameter(
+                        command,
+                        actual,
+                        "@GGNum",
+                        DbType.String,
+                        query.SearchTerm
+                    );
+                    AddNamedParameter(
+                        command,
+                        actual,
+                        "@Mode",
+                        DbType.String,
+                        NormalizeTripFilterAccessMode(query.AccessMode)
+                    );
+                    AddNamedParameter(
+                        command,
+                        actual,
+                        "@Dep",
+                        DbType.Int32,
+                        query.DepartmentCode ?? 0
+                    );
+                    AddNamedParameter(command, actual, "@Site", DbType.Int32, query.SiteCode ?? 0);
+                };
+        }
+        else if (query.SiteCode is > 0)
+        {
+            procedureName = includeOutVehicles
+                ? "DEV_SEL_AuthVehiclesPerSite"
+                : "DEV_SEL_VehiclesPerSite";
+            acceptedParameterSets = [["@site"]];
+            bind = actual =>
+                command =>
+                    AddNamedParameter(command, actual, "@site", DbType.Int16, query.SiteCode.Value);
+        }
+        else
+        {
+            return null;
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            procedureName,
+            acceptedParameterSets,
+            bind
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        if (rows.Count == 0)
+        {
+            return EmptyTripAuthorityVehiclePage(query);
+        }
+
+        var items = new List<TripAuthorityVehiclePageItem>(rows.Count);
+        var readableKeyCount = 0;
+        foreach (var row in rows)
+        {
+            var vmfCode = LegacySelectorProcedure.ReadInt32(row, "vmf_code", "VMFCode", "VMF");
+            var contractCode = LegacySelectorProcedure.ReadInt32(
+                row,
+                "contract_code",
+                "ContractCode"
+            );
+            if (vmfCode is not > 0 || contractCode is not > 0)
+            {
+                continue;
+            }
+
+            readableKeyCount++;
+            var siteCode = (short)(
+                LegacySelectorProcedure.ReadInt32(row, "site_code", "SiteCode")
+                ?? query.SiteCode
+                ?? 0
+            );
+            if (
+                query.AllowedSiteCodes is not null
+                && siteCode > 0
+                && !query.AllowedSiteCodes.Contains(siteCode)
+            )
+            {
+                continue;
+            }
+
+            items.Add(
+                new TripAuthorityVehiclePageItem(
+                    vmfCode.Value,
+                    contractCode.Value,
+                    siteCode,
+                    LegacySelectorProcedure.ReadString(row, "fleet_number", "FleetNumber"),
+                    LegacySelectorProcedure.ReadString(
+                        row,
+                        "registration_number",
+                        "RegistrationNumber"
+                    ),
+                    ReadOverlayLicenceDueDate(row),
+                    LegacySelectorProcedure.ReadString(
+                        row,
+                        "make_description",
+                        "MakeDescription",
+                        "make"
+                    ),
+                    LegacySelectorProcedure.ReadString(
+                        row,
+                        "model_description",
+                        "ModelDescription",
+                        "model"
+                    ),
+                    LegacySelectorProcedure.ReadString(
+                        row,
+                        "contract_type",
+                        "contract type",
+                        "Contract Type",
+                        "Contract_Type"
+                    ),
+                    includeOutVehicles
+                        ? LegacySelectorProcedure.ReadInt32(
+                            row,
+                            "trip_authority_code",
+                            "TripAuthorityCode"
+                        )
+                        : null
+                )
+            );
+        }
+
+        if (readableKeyCount == 0)
+        {
+            return null;
+        }
+
+        return PaginateTripAuthorityVehiclePage(items, query);
+    }
+
+    private static TripAuthorityVehiclePage PaginateTripAuthorityVehiclePage(
+        IReadOnlyList<TripAuthorityVehiclePageItem> items,
+        TripAuthorityVehiclePageQuery query
+    )
+    {
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var total = items.Count;
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        page = Math.Min(page, totalPages);
+        var skip = checked((page - 1) * pageSize);
+        return new TripAuthorityVehiclePage(
+            items.Skip(skip).Take(pageSize).ToList(),
+            page,
+            pageSize,
+            total
+        );
+    }
+
+    private static string NormalizeTripFilterAccessMode(string? accessMode)
+    {
+        var value = accessMode?.Trim().ToUpperInvariant();
+        return value is "ALL" or "DEP" or "SITE" ? value : "SITE";
+    }
+
+    private static DateTime? ReadOverlayLicenceDueDate(IReadOnlyDictionary<string, object?> row)
+    {
+        foreach (
+            var key in new[]
+            {
+                "licence_disk_expiry_date",
+                "Licence_Disk_Expiry_Date",
+                "licence_due_date",
+            }
+        )
+        {
+            if (!row.TryGetValue(key, out var value) || value is null or DBNull)
+            {
+                continue;
+            }
+
+            if (value is DateTime dateTime)
+            {
+                return dateTime;
+            }
+
+            var text = Convert.ToString(value, CultureInfo.InvariantCulture)?.Trim();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            if (
+                DateTime.TryParse(
+                    text,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AllowWhiteSpaces,
+                    out var invariant
+                )
+            )
+            {
+                return invariant;
+            }
+
+            if (
+                DateTime.TryParse(
+                    text,
+                    CultureInfo.CurrentCulture,
+                    DateTimeStyles.AllowWhiteSpaces,
+                    out var current
+                )
+            )
+            {
+                return current;
+            }
+        }
+
+        return null;
+    }
+
+    private static void AddNamedParameter(
+        DbCommand command,
+        IReadOnlyList<string> actual,
+        string expectedName,
+        DbType dbType,
+        object? value
+    )
+    {
+        var name = actual.FirstOrDefault(parameter =>
+            parameter.Equals(expectedName, StringComparison.OrdinalIgnoreCase)
+        );
+        if (name is null)
+        {
+            return;
+        }
+
+        AddParameter(command, name, dbType, value);
+    }
 
     private static List<string> BuildTripAuthorityVehiclePageFilters(
         DbCommand command,

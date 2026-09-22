@@ -76,7 +76,9 @@ public interface ITripService
     /// Get active-contract vehicles used by the Trip Authority filter.
     /// </summary>
     Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync(
-        IReadOnlySet<short>? allowedSiteCodes = null
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? vmfCode = null,
+        int? contractCode = null
     );
 
     /// <summary>
@@ -200,7 +202,8 @@ public sealed record TripAuthorityVehicle(
     DateTime? LicenceDueDate,
     string? MakeDescription,
     string? ModelDescription,
-    string? ContractType
+    string? ContractType,
+    int? StartOdometer = null
 );
 
 public sealed record TripAuthorityDetails(

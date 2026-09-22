@@ -261,6 +261,11 @@ public class TroubleshootController : BaseApiController
     {
         var mode = (request.SearchMode ?? string.Empty).Trim().ToUpperInvariant();
         var searchValue = (request.SearchValue ?? string.Empty).Trim();
+        var overlay = await TryReadOdometerTripDetailsAsync(mode, searchValue);
+        if (overlay is not null)
+        {
+            return Ok(overlay);
+        }
 
         if (mode == "TA")
         {
@@ -333,6 +338,24 @@ public class TroubleshootController : BaseApiController
         var mode = (request.SearchMode ?? string.Empty).Trim().ToUpperInvariant();
         var searchValue = (request.SearchValue ?? string.Empty).Trim();
         var (page, pageSize) = NormalizePaging(request.Page, request.PageSize);
+        var overlay = await TryReadOdometerTripDetailsAsync(mode, searchValue);
+        if (overlay is not null)
+        {
+            var total = overlay.Count;
+            var totalPages = CalculateTotalPages(total, pageSize);
+            page = Math.Min(page, totalPages);
+            var items = overlay.Skip(CalculateSkip(page, pageSize)).Take(pageSize).ToList();
+            return Ok(
+                new
+                {
+                    items,
+                    page,
+                    pageSize,
+                    total,
+                    totalPages,
+                }
+            );
+        }
 
         if (mode == "TA")
         {
@@ -681,6 +704,166 @@ public class TroubleshootController : BaseApiController
                         LastOdometer = tc.t.end_odo_meter ?? tc.c.end_odometer,
                     }
             );
+    }
+
+    private async Task<IReadOnlyList<OdometerCorrectionResultDto>?> TryReadOdometerTripDetailsAsync(
+        string mode,
+        string searchValue
+    )
+    {
+        if (string.IsNullOrWhiteSpace(searchValue))
+        {
+            return null;
+        }
+
+        var selectedId = mode is "GG" or "REG" or "TA" ? mode : "GG";
+        return await WithConnectionAsync(connection =>
+            ReadOdometerTripDetailsAsync(connection, selectedId, searchValue.Trim())
+        );
+    }
+
+    private static async Task<
+        IReadOnlyList<OdometerCorrectionResultDto>?
+    > ReadOdometerTripDetailsAsync(DbConnection connection, string mode, string searchValue)
+    {
+        var actualParameters = await GetProcedureParametersAsync(
+            connection,
+            "DEV_SEL_GetTripDetails"
+        );
+        if (actualParameters is null)
+        {
+            return null;
+        }
+
+        if (
+            !actualParameters.SequenceEqual(["@Value", "@Mode"], StringComparer.OrdinalIgnoreCase)
+        )
+        {
+            throw new InvalidOperationException(
+                "The deployed legacy procedure DEV_SEL_GetTripDetails does not match its verified parameter contract. No direct-DML fallback was run."
+            );
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "DEV_SEL_GetTripDetails";
+        command.CommandType = CommandType.StoredProcedure;
+        AddParameter(command, "@Value", searchValue);
+        AddParameter(command, "@Mode", mode);
+        await using var reader = await command.ExecuteReaderAsync();
+        var rows = new List<OdometerCorrectionResultDto>();
+        while (await reader.ReadAsync())
+        {
+            var mapped = MapOdometerTripDetailsRow(reader);
+            if (mapped is not null)
+            {
+                rows.Add(mapped);
+            }
+        }
+
+        return rows;
+    }
+
+    private static OdometerCorrectionResultDto? MapOdometerTripDetailsRow(DbDataReader reader)
+    {
+        var vehicleIdentifier =
+            ReadString(
+                reader,
+                "fleet_number",
+                "GG_Number",
+                "GG Number",
+                "GGNo",
+                "registration_number"
+            ) ?? ReadOrdinalString(reader, 0);
+        var tripAuthority =
+            ReadString(
+                reader,
+                "trip_authority_code",
+                "Trip_Authority_Code",
+                "Trip Auth.",
+                "TripAuth"
+            ) ?? ReadOrdinalString(reader, 2);
+        var startOdo =
+            ReadInt(reader, "start_odo_meter", "start_odo", "StartODO", "Start ODO")
+            ?? ReadOrdinalInt(reader, 5);
+        var endOdo =
+            ReadInt(reader, "end_odo_meter", "end_odo", "EndODO", "End ODO")
+            ?? ReadOrdinalInt(reader, 6);
+
+        if (
+            string.IsNullOrWhiteSpace(vehicleIdentifier)
+            && string.IsNullOrWhiteSpace(tripAuthority)
+            && startOdo is null
+            && endOdo is null
+        )
+        {
+            return null;
+        }
+
+        return new OdometerCorrectionResultDto
+        {
+            VehicleIdentifier = vehicleIdentifier,
+            TripAuthorityNumber = tripAuthority,
+            CurrentOdometer = startOdo,
+            LastOdometer = endOdo,
+        };
+    }
+
+    private static async Task<List<string>?> GetProcedureParametersAsync(
+        DbConnection connection,
+        string procedureName
+    )
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT [parameterObject].[name]
+            FROM [sys].[procedures] AS [procedureObject]
+            INNER JOIN [sys].[schemas] AS [schemaObject]
+                ON [schemaObject].[schema_id] = [procedureObject].[schema_id]
+            LEFT JOIN [sys].[parameters] AS [parameterObject]
+                ON [parameterObject].[object_id] = [procedureObject].[object_id]
+               AND [parameterObject].[parameter_id] > 0
+            WHERE [schemaObject].[name] = @schemaName
+              AND [procedureObject].[name] = @procedureName
+            ORDER BY [parameterObject].[parameter_id]
+            """;
+        AddParameter(command, "@schemaName", "dbo");
+        AddParameter(command, "@procedureName", procedureName);
+
+        var actualParameters = new List<string>();
+        var procedureFound = false;
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            procedureFound = true;
+            if (!reader.IsDBNull(0))
+            {
+                actualParameters.Add(reader.GetString(0));
+            }
+        }
+
+        return procedureFound ? actualParameters : null;
+    }
+
+    private static string? ReadOrdinalString(DbDataReader reader, int ordinal)
+    {
+        if (ordinal < 0 || ordinal >= reader.FieldCount || reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return Convert.ToString(reader.GetValue(ordinal))?.Trim();
+    }
+
+    private static int? ReadOrdinalInt(DbDataReader reader, int ordinal)
+    {
+        if (ordinal < 0 || ordinal >= reader.FieldCount || reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return int.TryParse(Convert.ToString(reader.GetValue(ordinal)), out var parsed)
+            ? parsed
+            : null;
     }
 
     private IQueryable<Vehicle> FilterOdometerVehicles(string mode, string searchValue)

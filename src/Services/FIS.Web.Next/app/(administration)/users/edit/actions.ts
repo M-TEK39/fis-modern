@@ -64,6 +64,29 @@ function getRequiredInteger(formData: FormData, name: string, label: string) {
   return value;
 }
 
+function getPersalNumber(formData: FormData) {
+  const value = getText(formData, "persalNumber");
+  if (!/^\d{8}$/.test(value)) {
+    throw new UserFormValidationError("Persal number must be 8 digits.");
+  }
+
+  return Number(value);
+}
+
+function getSaIdNumber(formData: FormData) {
+  const value = getText(formData, "saIdNumber");
+  if (!/^\d{13}$/.test(value)) {
+    throw new UserFormValidationError("ID Number must be 13 digits.");
+  }
+
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new UserFormValidationError("ID Number must be 13 digits.");
+  }
+
+  return parsed;
+}
+
 function getAccessLevel(formData: FormData) {
   const allowedBits = new Set<number>(userAdminAccessOptions.map((option) => option.permissionBit));
   let accessLevel = 0;
@@ -113,8 +136,12 @@ function getAlphabet(value: string) {
   return /^[A-Z]$/.test(candidate) ? candidate : "A";
 }
 
-function resultPath(username: string, alphabet: string, result: string) {
-  return `${RETURN_PATH}?${new URLSearchParams({ Username: username, Alphabet: alphabet, result }).toString()}`;
+function resultPath(username: string, alphabet: string, result: string, message?: string) {
+  const params = new URLSearchParams({ Username: username, Alphabet: alphabet, result });
+  if (message) {
+    params.set("message", message);
+  }
+  return `${RETURN_PATH}?${params.toString()}`;
 }
 
 function buildUpdateRequest(formData: FormData): {
@@ -143,25 +170,13 @@ function buildUpdateRequest(formData: FormData): {
     throw new UserFormValidationError("Cell or Tel Number is required.");
   }
 
-  const persalNumber = getOptionalInteger(formData, "persalNumber", "Persal");
-  const contractNumber = getOptionalInteger(formData, "contractNumber", "Contract Number");
-  if (persalNumber === null && contractNumber === null) {
-    throw new UserFormValidationError("Persal or Contract Number is required.");
-  }
-
-  const saIdNumber = getRequiredInteger(formData, "saIdNumber", "ID");
-  if (saIdNumber <= 0) {
-    throw new UserFormValidationError("ID must be a valid whole number.");
-  }
-
-  const approverCodeAtGfleet = getRequiredInteger(
+  const persalNumber = getPersalNumber(formData);
+  const saIdNumber = getSaIdNumber(formData);
+  const approverCodeAtGfleet = getOptionalInteger(
     formData,
     "approverCodeAtGfleet",
     "Client Approver Name",
   );
-  if (approverCodeAtGfleet <= 0) {
-    throw new UserFormValidationError("Client Approver Name is required.");
-  }
 
   return {
     userAccessCode,
@@ -175,12 +190,12 @@ function buildUpdateRequest(formData: FormData): {
       siteCode: getSiteCode(formData),
       positionCode: getPositionCode(formData),
       persalNumber,
-      contractNumber,
+      contractNumber: null,
       saIdNumber,
-      passportNumber: getOptionalInteger(formData, "passportNumber", "Passport Number"),
+      passportNumber: null,
       cellphoneNumber,
-      faxNumber: getOptionalInteger(formData, "faxNumber", "Fax"),
-      approverCodeAtGfleet,
+      faxNumber: null,
+      approverCodeAtGfleet: approverCodeAtGfleet ?? 0,
       accessLevel: getAccessLevel(formData),
     },
   };
@@ -194,7 +209,7 @@ export async function updateUserAdminAction(formData: FormData) {
     const username = getText(formData, "username");
     const alphabet = getAlphabet(getText(formData, "alphabet"));
     if (error instanceof UserFormValidationError) {
-      redirect(resultPath(username, alphabet, "invalid"));
+      redirect(resultPath(username, alphabet, "invalid", error.message));
     }
 
     throw error;

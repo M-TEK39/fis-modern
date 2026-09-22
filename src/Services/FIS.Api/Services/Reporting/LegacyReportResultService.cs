@@ -441,6 +441,13 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "taxis-history-bookings-period" => "taxis-history-bookings-period",
             "taxis-requisition-numbers-period" => "taxis-requisition-numbers-period",
             "taxis-per-hire-company" => "taxis-per-hire-company",
+            "taxis-per-company" => "taxis-per-hire-company",
+            "taxis-logs-per-user" => "taxis-logs-per-user",
+            "logs-per-user" => "taxis-logs-per-user",
+            "taxis-old-requisitions" => "taxis-old-requisitions",
+            "old-requisitions" => "taxis-old-requisitions",
+            "taxis-logs-requisitions-status" => "taxis-logs-requisitions-status",
+            "logs-requisitions-status" => "taxis-logs-requisitions-status",
             "taxis-list-inservice-per-department" => "taxis-list-inservice-per-department",
             "taxis-list-per-department" => "taxis-list-per-department",
             "taxis-reprint-requisition" => "taxis-reprint-requisition",
@@ -1523,14 +1530,51 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             ["taxis-per-hire-company"] = DistinctArchivedScreen(
                 "taxis-per-hire-company",
                 "Taxis Per Hire Company",
-                "Taxis/RPT_taxis_per_company1_c.aspx",
-                "RPTtaxis.aspx item 4 is the hire-company screen. It is not the generic taxi list."
+                "Taxis/RPT_taxis_per_company1.aspx",
+                "Taxi_menu.aspx item 4 is leftover contractor SQL. It is not the generic taxi-financial projection."
             ),
-            ["taxis-reprint-requisition"] = DistinctArchivedScreen(
+            ["taxis-logs-per-user"] = DistinctArchivedScreen(
+                "taxis-logs-per-user",
+                "Number Of Taxi Logs Captured Per User For Date",
+                "Taxis/RPT_TaxiCountLogsPerUser.aspx",
+                "Taxi_menu.aspx item 2 is leftover taxi-log SQL. It is not the generic taxi-financial projection."
+            ),
+            ["taxis-old-requisitions"] = DistinctArchivedScreen(
+                "taxis-old-requisitions",
+                "Old Requisitions For Period",
+                "Taxis/RPT_requests1.aspx",
+                "Taxi_menu.aspx item 3 is leftover requisition SQL. It is not the generic taxi-financial projection."
+            ),
+            ["taxis-logs-requisitions-status"] = DistinctArchivedScreen(
+                "taxis-logs-requisitions-status",
+                "Taxi Logs and Requisitions Statuses Reports",
+                "TS_Log/Rpr_TaxiLog_Menu.aspx",
+                "Taxi_menu.aspx item 7 is a distinct status-report menu. It is not the generic taxi-financial projection."
+            ),
+            ["taxis-reprint-requisition"] = new(
                 "taxis-reprint-requisition",
                 "Reprint A Requisition",
-                "Taxis/Report_Request_GGVIP_reprint_1_2.aspx",
-                "RPTtaxis.aspx item 7 is the requisition reprint screen. It is not the generic taxi list."
+                "Taxis/RPT_detail.aspx",
+                null,
+                BuildUnmappedUniversalReportAsync,
+                "The legacy reprint is owned by DEV_SEL_RequisitionNumberDetails; no taxi-list approximation is used when that procedure is unavailable.",
+                BuildStoredProcedureParameters: filters =>
+                {
+                    var requisition =
+                        GetString(filters, "search")
+                        ?? GetString(filters, "req_num")
+                        ?? GetString(filters, "requisition")
+                        ?? string.Empty;
+                    return
+                    [
+                        new LegacyStoredProcedureParameter(
+                            "@RequisitionNumber",
+                            requisition.Trim(),
+                            DbType.String
+                        ),
+                    ];
+                },
+                StoredProcedureName: "dbo.DEV_SEL_RequisitionNumberDetails"
             ),
             ["taxis-reprint-taxi-log"] = DistinctArchivedScreen(
                 "taxis-reprint-taxi-log",

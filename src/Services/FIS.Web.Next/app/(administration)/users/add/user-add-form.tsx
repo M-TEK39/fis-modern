@@ -164,26 +164,30 @@ export default function UserAddForm({
               ))}
             </select>
           </Field>
-          <Field id="persalNumber" label="Persal">
-            <input id="persalNumber" name="persalNumber" type="number" inputMode="numeric" />
+          <Field id="persalNumber" label="Persal" required>
+            <input
+              id="persalNumber"
+              name="persalNumber"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]{8}"
+              maxLength={8}
+              required
+            />
           </Field>
-          <Field id="contractNumber" label="Contract Number">
-            <input id="contractNumber" name="contractNumber" type="number" inputMode="numeric" />
-            <p className="muted-copy">Use when no Persal number is available.</p>
-          </Field>
-          <Field id="saIdNumber" label="ID" required>
-            <input id="saIdNumber" name="saIdNumber" type="number" inputMode="numeric" required />
-          </Field>
-          <Field id="passportNumber" label="Passport Number">
-            <input id="passportNumber" name="passportNumber" type="number" inputMode="numeric" />
-            <p className="muted-copy">Use when no SA ID is available.</p>
+          <Field id="saIdNumber" label="ID Number" required>
+            <input
+              id="saIdNumber"
+              name="saIdNumber"
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]{13}"
+              maxLength={13}
+              required
+            />
           </Field>
           <Field id="telephone" label="Tel">
             <input id="telephone" name="telephone" type="text" maxLength={50} autoComplete="tel" />
-          </Field>
-          <Field id="faxNumber" label="Fax">
-            <input id="faxNumber" name="faxNumber" type="number" inputMode="numeric" />
-            <p className="muted-copy">Optional.</p>
           </Field>
           <Field id="cellphoneNumber" label="Cell">
             <input
@@ -194,16 +198,19 @@ export default function UserAddForm({
               autoComplete="tel"
             />
           </Field>
-          <Field id="approverCodeAtGfleet" label="Client Approver Name" required>
+          <Field id="approverCodeAtGfleet" label="Client Approver Name">
             <select
               id="approverCodeAtGfleet"
               name="approverCodeAtGfleet"
               defaultValue=""
-              disabled={!selectedSiteCode || siteApprovers.length === 0}
-              required
+              disabled={!selectedSiteCode}
             >
               <option value="">
-                {selectedSiteCode ? "Select an approver..." : "Select site first..."}
+                {selectedSiteCode
+                  ? siteApprovers.length === 0
+                    ? "No approver at this site"
+                    : "Select an approver..."
+                  : "Select site first..."}
               </option>
               {siteApprovers.map((approver) => (
                 <option key={approver.userAccessCode} value={approver.userAccessCode}>
@@ -217,7 +224,8 @@ export default function UserAddForm({
           </Field>
         </div>
         <p className="muted-copy">
-          At least one of Persal or Contract Number, and at least one of Tel or Cell, is required.
+          Persal must be 8 digits, ID Number must be 13 digits, and at least one of Tel or Cell is
+          required.
         </p>
       </section>
 

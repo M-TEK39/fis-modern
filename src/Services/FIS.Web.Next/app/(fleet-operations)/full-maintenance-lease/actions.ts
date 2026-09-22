@@ -204,7 +204,7 @@ export async function recallLeaseTermAction(formData: FormData) {
       page: 1,
       pageSize: 24,
       search: registration,
-      mode: "GP",
+      mode: "GG",
       status: "all",
     });
     const term = matches.items[0];

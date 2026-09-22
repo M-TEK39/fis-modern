@@ -37,7 +37,7 @@ function normalizeAlphabet(value: string | undefined) {
   return /^[A-Z]$/.test(candidate) ? candidate : "A";
 }
 
-function resultMessage(result: string | undefined) {
+function resultMessage(result: string | undefined, detail?: string) {
   switch (result) {
     case "success":
       return { tone: "success", text: "User profile updated successfully." } as const;
@@ -46,7 +46,7 @@ function resultMessage(result: string | undefined) {
     case "invalid":
       return {
         tone: "error",
-        text: "Check the required fields and submit the complete legacy profile.",
+        text: detail || "Check the required fields and submit the complete profile.",
       } as const;
     case "rejected":
       return {
@@ -235,7 +235,7 @@ async function UserAdminEditPageContent({
   const alphabet = normalizeAlphabet(
     getQueryValue(query.Alphabet) ?? getQueryValue(query.alphabet),
   );
-  const message = resultMessage(getQueryValue(query.result));
+  const message = resultMessage(getQueryValue(query.result), getQueryValue(query.message));
 
   try {
     const [sites, positions, profiles] = await Promise.all([
