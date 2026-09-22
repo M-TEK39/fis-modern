@@ -423,14 +423,18 @@ public class UserProfileController : BaseApiController
 
             if (dto.SaIdNumber.HasValue)
             {
-                var duplicateId = await _context.UserAccessOlds.AnyAsync(user =>
-                    user.sa_id_number == dto.SaIdNumber
-                );
-                if (duplicateId)
+                var saIdNumber = ToLegacySaIdNumber(dto.SaIdNumber);
+                if (saIdNumber.HasValue)
                 {
-                    return Conflict(
-                        new { message = "A user profile already exists for this ID number" }
+                    var duplicateId = await _context.UserAccessOlds.AnyAsync(user =>
+                        user.sa_id_number == saIdNumber
                     );
+                    if (duplicateId)
+                    {
+                        return Conflict(
+                            new { message = "A user profile already exists for this ID number" }
+                        );
+                    }
                 }
             }
 
@@ -445,7 +449,7 @@ public class UserProfileController : BaseApiController
                 Position_Code = dto.PositionCode,
                 Persal_Number = dto.PersalNumber,
                 Contract_Number = dto.ContractNumber,
-                sa_id_number = dto.SaIdNumber,
+                sa_id_number = ToLegacySaIdNumber(dto.SaIdNumber),
                 passport_number = dto.PassportNumber,
                 Cellphone_Number = dto.CellphoneNumber,
                 Fax_Number = dto.FaxNumber,
@@ -530,14 +534,20 @@ public class UserProfileController : BaseApiController
 
             if (dto.SaIdNumber.HasValue)
             {
-                var duplicateId = await _context.UserAccessOlds.AnyAsync(user =>
-                    user.user_access_code != userAccessCode && user.sa_id_number == dto.SaIdNumber
-                );
-                if (duplicateId)
+                var saIdNumber = ToLegacySaIdNumber(dto.SaIdNumber);
+                if (saIdNumber.HasValue)
                 {
-                    return Conflict(
-                        new { message = "A user profile already exists for this ID number" }
+                    var duplicateId = await _context.UserAccessOlds.AnyAsync(user =>
+                        user.user_access_code != userAccessCode && user.sa_id_number == saIdNumber
                     );
+                    if (duplicateId)
+                    {
+                        return Conflict(
+                            new { message = "A user profile already exists for this ID number" }
+                        );
+                    }
+
+                    existing.sa_id_number = saIdNumber;
                 }
             }
 
@@ -550,7 +560,6 @@ public class UserProfileController : BaseApiController
             existing.Position_Code = dto.PositionCode ?? existing.Position_Code;
             existing.Persal_Number = dto.PersalNumber ?? existing.Persal_Number;
             existing.Contract_Number = dto.ContractNumber ?? existing.Contract_Number;
-            existing.sa_id_number = dto.SaIdNumber ?? existing.sa_id_number;
             existing.passport_number = dto.PassportNumber ?? existing.passport_number;
             existing.Cellphone_Number = dto.CellphoneNumber ?? existing.Cellphone_Number;
             existing.Fax_Number = dto.FaxNumber ?? existing.Fax_Number;
@@ -864,6 +873,16 @@ public class UserProfileController : BaseApiController
             );
         }
     }
+
+    private static int? ToLegacySaIdNumber(long? value)
+    {
+        if (value is null or < int.MinValue or > int.MaxValue)
+        {
+            return null;
+        }
+
+        return (int)value.Value;
+    }
 }
 
 #region DTOs
@@ -882,7 +901,7 @@ public class UserProfileDto
     public string? PositionName { get; set; }
     public int? PersalNumber { get; set; }
     public int? ContractNumber { get; set; }
-    public int? SaIdNumber { get; set; }
+    public long? SaIdNumber { get; set; }
     public int? PassportNumber { get; set; }
     public int? CellphoneNumber { get; set; }
     public int? FaxNumber { get; set; }
@@ -915,7 +934,7 @@ public class CreateUserProfileDto
     public byte? PositionCode { get; set; }
     public int? PersalNumber { get; set; }
     public int? ContractNumber { get; set; }
-    public int? SaIdNumber { get; set; }
+    public long? SaIdNumber { get; set; }
     public int? PassportNumber { get; set; }
     public int? CellphoneNumber { get; set; }
     public int? FaxNumber { get; set; }
@@ -934,7 +953,7 @@ public class UpdateUserProfileDto
     public byte? PositionCode { get; set; }
     public int? PersalNumber { get; set; }
     public int? ContractNumber { get; set; }
-    public int? SaIdNumber { get; set; }
+    public long? SaIdNumber { get; set; }
     public int? PassportNumber { get; set; }
     public int? CellphoneNumber { get; set; }
     public int? FaxNumber { get; set; }

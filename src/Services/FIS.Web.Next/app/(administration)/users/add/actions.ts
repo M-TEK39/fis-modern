@@ -64,6 +64,29 @@ function getRequiredInteger(formData: FormData, name: string, label: string) {
   return value;
 }
 
+function getPersalNumber(formData: FormData) {
+  const value = getText(formData, "persalNumber");
+  if (!/^\d{8}$/.test(value)) {
+    throw new UserFormValidationError("Persal number must be 8 digits.");
+  }
+
+  return Number(value);
+}
+
+function getSaIdNumber(formData: FormData) {
+  const value = getText(formData, "saIdNumber");
+  if (!/^\d{13}$/.test(value)) {
+    throw new UserFormValidationError("ID Number must be 13 digits.");
+  }
+
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new UserFormValidationError("ID Number must be 13 digits.");
+  }
+
+  return parsed;
+}
+
 function getSiteCode(formData: FormData) {
   const siteCode = getRequiredInteger(formData, "siteCode", "Site");
   if (siteCode <= 0 || siteCode > 32_767) {
@@ -123,25 +146,13 @@ function buildRequest(formData: FormData): UserAdminProfileInput {
     throw new UserFormValidationError("Cell or Tel Number is required.");
   }
 
-  const persalNumber = getOptionalInteger(formData, "persalNumber", "Persal");
-  const contractNumber = getOptionalInteger(formData, "contractNumber", "Contract Number");
-  if (persalNumber === null && contractNumber === null) {
-    throw new UserFormValidationError("Persal or Contract Number is required.");
-  }
-
-  const saIdNumber = getRequiredInteger(formData, "saIdNumber", "ID");
-  if (saIdNumber <= 0) {
-    throw new UserFormValidationError("ID must be a valid whole number.");
-  }
-
-  const approverCodeAtGfleet = getRequiredInteger(
+  const persalNumber = getPersalNumber(formData);
+  const saIdNumber = getSaIdNumber(formData);
+  const approverCodeAtGfleet = getOptionalInteger(
     formData,
     "approverCodeAtGfleet",
     "Client Approver Name",
   );
-  if (approverCodeAtGfleet <= 0) {
-    throw new UserFormValidationError("Client Approver Name is required.");
-  }
 
   return {
     userName,
@@ -152,12 +163,12 @@ function buildRequest(formData: FormData): UserAdminProfileInput {
     siteCode: getSiteCode(formData),
     positionCode: getPositionCode(formData),
     persalNumber,
-    contractNumber,
+    contractNumber: null,
     saIdNumber,
-    passportNumber: getOptionalInteger(formData, "passportNumber", "Passport Number"),
+    passportNumber: null,
     cellphoneNumber,
-    faxNumber: getOptionalInteger(formData, "faxNumber", "Fax"),
-    approverCodeAtGfleet,
+    faxNumber: null,
+    approverCodeAtGfleet: approverCodeAtGfleet ?? 0,
     accessLevel: getAccessLevel(formData),
   };
 }
@@ -167,8 +178,12 @@ function getAlphabet(lastName: string) {
   return /^[A-Z]$/.test(initial) ? initial : "A";
 }
 
-function resultPath(result: string, alphabet = "A") {
-  return `${RETURN_PATH}?${new URLSearchParams({ result, alphabet }).toString()}`;
+function resultPath(result: string, alphabet = "A", message?: string) {
+  const params = new URLSearchParams({ result, alphabet });
+  if (message) {
+    params.set("message", message);
+  }
+  return `${RETURN_PATH}?${params.toString()}`;
 }
 
 export async function createUserAdminAction(formData: FormData) {
@@ -177,7 +192,7 @@ export async function createUserAdminAction(formData: FormData) {
     request = buildRequest(formData);
   } catch (error) {
     if (error instanceof UserFormValidationError) {
-      redirect(resultPath("invalid"));
+      redirect(resultPath("invalid", "A", error.message));
     }
 
     throw error;

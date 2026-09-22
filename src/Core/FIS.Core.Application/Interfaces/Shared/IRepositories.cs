@@ -827,7 +827,9 @@ public interface ITripRepository
     Task<IEnumerable<Trip>> GetAllAsync(IReadOnlySet<short>? allowedSiteCodes = null);
     Task<TripSummaryPage> GetTripSummaryPageAsync(TripSummaryPageQuery query);
     Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync(
-        IReadOnlySet<short>? allowedSiteCodes = null
+        IReadOnlySet<short>? allowedSiteCodes = null,
+        int? vmfCode = null,
+        int? contractCode = null
     );
     Task<TripAuthorityVehiclePage> GetTripAuthorityInServicePageAsync(
         TripAuthorityVehiclePageQuery query
@@ -884,7 +886,8 @@ public sealed record TripAuthorityVehiclePageQuery(
     short? DepartmentCode = null,
     short? SiteCode = null,
     int? TripAuthorityCode = null,
-    IReadOnlySet<short>? AllowedSiteCodes = null
+    IReadOnlySet<short>? AllowedSiteCodes = null,
+    string? AccessMode = null
 );
 
 public sealed record TripAuthorityVehiclePageItem(

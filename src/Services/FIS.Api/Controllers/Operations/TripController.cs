@@ -110,6 +110,7 @@ public class TripAuthorityVehicleDto
     public string? MakeDescription { get; set; }
     public string? ModelDescription { get; set; }
     public string? ContractType { get; set; }
+    public int? StartOdometer { get; set; }
 }
 
 public sealed class TripAuthorityVehiclePageItemDto
@@ -305,12 +306,17 @@ public class TripController : BaseApiController
     }
 
     [HttpGet("vehicles")]
-    public async Task<ActionResult<IEnumerable<TripAuthorityVehicleDto>>> GetTripAuthorityVehicles()
+    public async Task<ActionResult<IEnumerable<TripAuthorityVehicleDto>>> GetTripAuthorityVehicles(
+        [FromQuery] int? vmfCode = null,
+        [FromQuery] int? contractCode = null
+    )
     {
         try
         {
             var vehicles = await _tripService.GetTripAuthorityVehiclesAsync(
-                await ResolveAllowedSiteCodesAsync()
+                await ResolveAllowedSiteCodesAsync(),
+                vmfCode,
+                contractCode
             );
             return Ok(
                 vehicles.Select(vehicle => new TripAuthorityVehicleDto
@@ -324,6 +330,7 @@ public class TripController : BaseApiController
                     MakeDescription = vehicle.MakeDescription,
                     ModelDescription = vehicle.ModelDescription,
                     ContractType = vehicle.ContractType,
+                    StartOdometer = vehicle.StartOdometer,
                 })
             );
         }
@@ -369,7 +376,11 @@ public class TripController : BaseApiController
 
         try
         {
-            query = query with { AllowedSiteCodes = await ResolveAllowedSiteCodesAsync() };
+            query = query with
+            {
+                AllowedSiteCodes = await ResolveAllowedSiteCodesAsync(),
+                AccessMode = ResolveTripFilterAccessMode(),
+            };
             var result = await _tripRepository.GetTripAuthorityInServicePageAsync(query);
             return Ok(MapTripAuthorityVehiclePage(result));
         }
@@ -417,7 +428,11 @@ public class TripController : BaseApiController
 
         try
         {
-            query = query with { AllowedSiteCodes = await ResolveAllowedSiteCodesAsync() };
+            query = query with
+            {
+                AllowedSiteCodes = await ResolveAllowedSiteCodesAsync(),
+                AccessMode = ResolveTripFilterAccessMode(),
+            };
             var result = await _tripRepository.GetTripAuthorityOutPageAsync(query);
             return Ok(MapTripAuthorityVehiclePage(result));
         }
@@ -1227,6 +1242,30 @@ public class TripController : BaseApiController
         }
 
         return sites.Select(site => site.Site_code).ToHashSet();
+    }
+
+    private string ResolveTripFilterAccessMode()
+    {
+        // TripsFilter.aspx.vb SetMode: Trip Authorities → SITE, then
+        // VehicleListForAllSitesInDepartment → DEP, then
+        // VehicleListForAllDepartmentsInProvince → ALL.
+        if (
+            HasRole("Vehicle List for All Departments in Province")
+            || HasRole("VehicleListForAllDepartmentsInProvince")
+        )
+        {
+            return "ALL";
+        }
+
+        if (
+            HasRole("Vehicle List for All Sites in Department")
+            || HasRole("VehicleListForAllSitesInDepartment")
+        )
+        {
+            return "DEP";
+        }
+
+        return "SITE";
     }
 
     private bool HasGlobalTripScope() =>

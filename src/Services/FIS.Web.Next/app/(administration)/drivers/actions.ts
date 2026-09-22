@@ -150,6 +150,19 @@ function mutationResult(result: { ok: true } | { ok: false; error: { reason: str
   return result.error.reason;
 }
 
+function getAuthoriserContactNumber(formData: FormData) {
+  const value = getOptionalText(formData, "telephoneNumber", "Contact number", 10);
+  if (!value) {
+    return null;
+  }
+
+  if (!/^\d{10}$/.test(value)) {
+    throw new DriverManagementValidationError("Contact number must be 10 digits.");
+  }
+
+  return value;
+}
+
 function buildAuthoriserInput(formData: FormData): DriverManagementAuthoriserInput {
   const context = getContext(formData);
   const rankCode = getInteger(formData, "rankCode", "Rank");
@@ -162,7 +175,7 @@ function buildAuthoriserInput(formData: FormData): DriverManagementAuthoriserInp
     firstname: getRequiredText(formData, "firstname", "First Name", 50),
     surname: getRequiredText(formData, "surname", "Surname", 50),
     persalNumber: getOptionalText(formData, "persalNumber", "Persal Number", 10),
-    telephoneNumber: getOptionalText(formData, "telephoneNumber", "Telephone Number", 20),
+    telephoneNumber: getAuthoriserContactNumber(formData),
     isActive: getText(formData, "isActive") !== "false",
     siteCode: context.siteCode,
     departmentCode: context.departmentCode,
@@ -235,7 +248,7 @@ export async function deleteAuthoriserAction(formData: FormData) {
 function buildSiteDriverInput(formData: FormData): DriverManagementDriverInput {
   const context = getContext(formData);
   const driverSAId = normalizeCompact(
-    getOptionalText(formData, "driverSAId", "South African ID", 13),
+    getOptionalText(formData, "driverSAId", "South African ID Number", 13),
   );
   const driverPassportNumber = normalizeCompact(
     getOptionalText(formData, "driverPassportNumber", "Passport Number", 20),

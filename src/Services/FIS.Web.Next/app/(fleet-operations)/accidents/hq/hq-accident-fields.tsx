@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { accidentFinancialYearChoices } from "@/app/(fleet-operations)/accidents/_financial-years";
 import type {
   AccidentEditRecord,
   AccidentSiteOption,
@@ -12,6 +13,7 @@ type HqAccidentFieldsProps = {
   sites: readonly AccidentSiteOption[];
   mode: "add" | "edit";
   today?: string;
+  lockedGgReference?: string;
 };
 
 type HqFieldSectionProps = {
@@ -23,6 +25,10 @@ type HqTimingFieldsProps = HqFieldSectionProps & {
   isAdd: boolean;
   today: string;
   amountDefault: number | "";
+};
+
+type HqReferencesFieldsProps = HqFieldSectionProps & {
+  lockedGgReference?: string;
 };
 
 type HqNotificationsFieldsProps = HqFieldSectionProps & {
@@ -37,8 +43,15 @@ function Field({
   id,
   label,
   required = false,
+  hint,
   children,
-}: Readonly<{ id: string; label: string; required?: boolean; children: ReactNode }>) {
+}: Readonly<{
+  id: string;
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: ReactNode;
+}>) {
   return (
     <div className="field">
       <label htmlFor={id}>
@@ -46,6 +59,7 @@ function Field({
         {required ? <span className="sr-only"> required</span> : null}
       </label>
       {children}
+      {hint ? <p className="muted-copy">{hint}</p> : null}
     </div>
   );
 }
@@ -99,39 +113,23 @@ function YesNoField({
 }>) {
   return (
     <SelectField id={id} label={label} name={name} value={value} required={required}>
-      {unknown ? <option value="?">?</option> : null}
-      <option value="N">N</option>
-      <option value="Y">Y</option>
+      <option value="">{required ? "Select yes or no" : "Not set"}</option>
+      {unknown ? <option value="?">Unknown</option> : null}
+      <option value="Y">Yes</option>
+      <option value="N">No</option>
     </SelectField>
   );
 }
 
-const financialYears = [
-  "18/19",
-  "17/18",
-  "16/17",
-  "15/16",
-  "14/15",
-  "13/14",
-  "12/13",
-  "11/12",
-  "10/11",
-  "09/10",
-  "08/09",
-  "07/08",
-  "06/07",
-  "05/06",
-  "04/05",
-  "03/04",
-  "02/03",
-  "01/02",
-  "00/01",
-  "99/00",
-  "98/99",
-  "97/98",
-];
-
-const capturePersons = ["?", "HM", "DF", "MDS", "CR", "JR", "MO", "AJ"];
+const capturePersons = [
+  { code: "HM", label: "HM" },
+  { code: "DF", label: "DF" },
+  { code: "MDS", label: "MDS" },
+  { code: "CR", label: "CR" },
+  { code: "JR", label: "JR" },
+  { code: "MO", label: "MO" },
+  { code: "AJ", label: "AJ" },
+] as const;
 
 function HqTimingFields({ values, sites, isAdd, today, amountDefault }: HqTimingFieldsProps) {
   return (
@@ -169,8 +167,15 @@ function HqTimingFields({ values, sites, isAdd, today, amountDefault }: HqTiming
             defaultValue={values.occurencePlace ?? ""}
           />
         </Field>
-        <SelectField id="finYear" label="Financial year" name="finYear" value={values.finYear}>
-          {financialYears.map((year) => (
+        <SelectField
+          id="finYear"
+          label="Financial year"
+          name="finYear"
+          value={values.finYear}
+          required
+        >
+          <option value="">Select financial year</option>
+          {accidentFinancialYearChoices(values.finYear).map((year) => (
             <option key={year} value={year}>
               {year}
             </option>
@@ -197,9 +202,11 @@ function HqTimingFields({ values, sites, isAdd, today, amountDefault }: HqTiming
           name="capturedPerson"
           value={values.capturedPerson}
         >
+          <option value="">Not set</option>
+          <option value="?">Unknown</option>
           {capturePersons.map((person) => (
-            <option key={person} value={person}>
-              {person}
+            <option key={person.code} value={person.code}>
+              {person.label}
             </option>
           ))}
         </SelectField>
@@ -253,10 +260,15 @@ function HqNotificationsFields({ values, isAdd }: HqNotificationsFieldsProps) {
             readOnly
           />
         </Field>
-        <Field id="flagTripAuthor" label="Notified - trip authority">
-          <input id="flagTripAuthor" type="text" value={values.flagTripAuthor ?? ""} readOnly />
+        <Field id="flagTripAuthor" label="Trip authority">
+          <input
+            id="flagTripAuthor"
+            type="text"
+            value={values.flagTripAuthor === "Y" ? "Yes" : values.flagTripAuthor === "N" ? "No" : values.flagTripAuthor ?? ""}
+            readOnly
+          />
         </Field>
-        <Field id="flagTripAuthDate" label="Notify trip date">
+        <Field id="flagTripAuthDate" label="Trip authority start date">
           <input
             id="flagTripAuthDate"
             type="date"
@@ -293,11 +305,11 @@ function HqDetailsFields({ values }: HqFieldSectionProps) {
           id="tripAuthor"
           label="Trip authority"
           name="tripAuthor"
-          value={values.tripAuthor ?? "?"}
+          value={values.tripAuthor === "?" ? "" : values.tripAuthor}
         >
-          <option value="?">?</option>
-          <option value="Y">Y</option>
-          <option value="N">N</option>
+          <option value="">Select yes or no</option>
+          <option value="Y">Yes</option>
+          <option value="N">No</option>
         </SelectField>
         <SelectField
           id="driverFault"
@@ -352,7 +364,9 @@ function HqDetailsFields({ values }: HqFieldSectionProps) {
   );
 }
 
-function HqReferencesFields({ values }: HqFieldSectionProps) {
+function HqReferencesFields({ values, lockedGgReference }: HqReferencesFieldsProps) {
+  const ggReference = lockedGgReference ?? values.ggReference ?? "";
+
   return (
     <section className="vehicle-form-section" aria-labelledby="hq-accident-references-title">
       <div className="vehicle-form-section-header">
@@ -371,13 +385,15 @@ function HqReferencesFields({ values }: HqFieldSectionProps) {
             defaultValue={values.hqReference ?? ""}
           />
         </Field>
-        <Field id="ggReference" label="GG reference">
+        <Field id="ggReference" label="GG reference (do not edit)">
           <input
             id="ggReference"
             name="ggReference"
             type="text"
             maxLength={20}
-            defaultValue={values.ggReference ?? ""}
+            value={ggReference}
+            readOnly
+            tabIndex={-1}
           />
         </Field>
         <Field id="saReference" label="SA reference">
@@ -413,7 +429,12 @@ function HqDamageFields({ values, amountDefault }: HqAmountFieldProps) {
         </div>
       </div>
       <div className="vehicle-create-grid">
-        <Field id="costOfRepair" label="GG car damage" required>
+        <Field
+          id="costOfRepair"
+          label="GG car damage amount (R)"
+          hint="Estimated repair cost in rand. The description field below is for the damage text."
+          required
+        >
           <input
             id="costOfRepair"
             name="costOfRepair"
@@ -433,12 +454,12 @@ function HqDamageFields({ values, amountDefault }: HqAmountFieldProps) {
             defaultValue={values.damageDescription ?? ""}
           />
         </Field>
-        <YesNoField id="death" label="Death" name="death" value={values.death ?? "?"} unknown />
+        <YesNoField id="death" label="Death?" name="death" value={values.death} unknown />
         <YesNoField
           id="injured"
-          label="Injured"
+          label="Injured?"
           name="injured"
-          value={values.injured ?? "?"}
+          value={values.injured}
           unknown
         />
         <Field id="thirdPartyRegistration" label="Private party registration">
@@ -459,7 +480,7 @@ function HqDamageFields({ values, amountDefault }: HqAmountFieldProps) {
             defaultValue={values.thirdPartyOwner ?? ""}
           />
         </Field>
-        <Field id="thirdPartyClaim" label="Private car damage" required>
+        <Field id="thirdPartyClaim" label="Private car damage (R)" required>
           <input
             id="thirdPartyClaim"
             name="thirdPartyClaim"
@@ -521,7 +542,7 @@ function HqClaimFields({ values, amountDefault }: HqAmountFieldProps) {
           value={values.claimReceived ?? "N"}
           required
         />
-        <Field id="claimAmount" label="Claim amount" required>
+        <Field id="claimAmount" label="Claim amount (R)" required>
           <input
             id="claimAmount"
             name="claimAmount"
@@ -566,7 +587,7 @@ function HqCloseFields({ values, amountDefault }: HqAmountFieldProps) {
         </div>
       </div>
       <div className="vehicle-create-grid">
-        <Field id="writeOffAmount" label="Write-off amount" required>
+        <Field id="writeOffAmount" label="Write-off amount (R)" required>
           <input
             id="writeOffAmount"
             name="writeOffAmount"
@@ -614,6 +635,7 @@ export default function HqAccidentFields({
   sites,
   mode,
   today = "",
+  lockedGgReference,
 }: HqAccidentFieldsProps) {
   const isAdd = mode === "add";
   const amountDefault = isAdd ? 0 : "";
@@ -629,7 +651,7 @@ export default function HqAccidentFields({
       />
       <HqNotificationsFields values={values} isAdd={isAdd} />
       <HqDetailsFields values={values} />
-      <HqReferencesFields values={values} />
+      <HqReferencesFields values={values} lockedGgReference={lockedGgReference} />
       <HqDamageFields values={values} amountDefault={amountDefault} />
       <HqClaimFields values={values} amountDefault={amountDefault} />
       <HqCloseFields values={values} amountDefault={amountDefault} />

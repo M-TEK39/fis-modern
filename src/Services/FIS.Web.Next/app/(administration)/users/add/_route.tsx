@@ -34,7 +34,7 @@ function hasUserAdministrationRole(roles: readonly string[]) {
   );
 }
 
-function resultMessage(result: string | undefined) {
+function resultMessage(result: string | undefined, detail?: string) {
   switch (result) {
     case "success":
       return { tone: "success", text: "User created successfully." } as const;
@@ -43,7 +43,7 @@ function resultMessage(result: string | undefined) {
     case "invalid":
       return {
         tone: "error",
-        text: "Check the required fields and submit the complete legacy profile.",
+        text: detail || "Check the required fields and submit the complete profile.",
       } as const;
     case "rejected":
       return {
@@ -193,7 +193,7 @@ async function UserAdminAddPageContent({
   }
 
   const query = searchParams ? await searchParams : {};
-  const message = resultMessage(getQueryValue(query.result));
+  const message = resultMessage(getQueryValue(query.result), getQueryValue(query.message));
 
   try {
     const [sites, positions, approvers] = await Promise.all([

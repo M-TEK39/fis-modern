@@ -180,8 +180,8 @@ async function renderOdometerCorrectionsPageContent({
                 columns={[
                   { key: "column-1", label: <>Vehicle</> },
                   { key: "column-2", label: <>Trip Authority</> },
-                  { key: "column-3", label: <>Current Odometer</> },
-                  { key: "column-4", label: <>Last Odometer</> },
+                  { key: "column-3", label: <>Start ODO</> },
+                  { key: "column-4", label: <>End ODO</> },
                 ]}
               />
               <tbody>

@@ -58,6 +58,15 @@ function dateInputValue(value: string | null | undefined) {
   return value ? value.slice(0, 10) : "";
 }
 
+function licenceTypeLabel(licenceType: DriverManagementLicenceType) {
+  const source = licenceType.description || licenceType.code || `Licence ${licenceType.id}`;
+  return source.replace(/enjine/gi, "Engine");
+}
+
+function isNotApplicableLicence(licenceType: DriverManagementLicenceType) {
+  return /not\s*applicable/i.test(`${licenceType.description ?? ""} ${licenceType.code ?? ""}`);
+}
+
 const SiteDriverEditView = renderSiteDriverEditView;
 
 function renderSiteDriverEditView({
@@ -80,6 +89,10 @@ function renderSiteDriverEditView({
   message: ReturnType<typeof resultMessage>;
 }>) {
   const title = driver ? "Edit Site Driver" : "Add Site Driver";
+  const visibleLicenceTypes = licenceTypes.filter(
+    (licenceType) =>
+      !isNotApplicableLicence(licenceType) || licenceType.id === driver?.driverLicenceTypeId,
+  );
 
   return (
     <main className="page-shell vehicle-page-shell">
@@ -171,7 +184,7 @@ function renderSiteDriverEditView({
             </div>
             <div className="form-field">
               <label className="form-label" htmlFor="site-driver-sa-id">
-                South African ID
+                South African ID Number
               </label>
               <input
                 className="form-input"
@@ -221,16 +234,15 @@ function renderSiteDriverEditView({
               />
             </div>
             <div className="form-field">
-              <label className="form-label" htmlFor="site-driver-verified-date">
-                Licence Last Verified Date
+              <label className="form-label" htmlFor="site-driver-licence-expiry">
+                Licence Expiry Date
               </label>
               <input
                 className="form-input"
-                id="site-driver-verified-date"
-                name="driverLicenceLastVerifiedDate"
+                id="site-driver-licence-expiry"
+                name="driverLicenceExpiryDate"
                 type="date"
-                defaultValue={dateInputValue(driver?.driverLicenceLastVerifiedDate)}
-                required
+                defaultValue={dateInputValue(driver?.driverLicenceExpiryDate)}
               />
             </div>
             <div className="form-field">
@@ -261,15 +273,16 @@ function renderSiteDriverEditView({
               />
             </div>
             <div className="form-field">
-              <label className="form-label" htmlFor="site-driver-licence-expiry">
-                Licence Expiry Date
+              <label className="form-label" htmlFor="site-driver-verified-date">
+                Licence Last Verified Date
               </label>
               <input
                 className="form-input"
-                id="site-driver-licence-expiry"
-                name="driverLicenceExpiryDate"
+                id="site-driver-verified-date"
+                name="driverLicenceLastVerifiedDate"
                 type="date"
-                defaultValue={dateInputValue(driver?.driverLicenceExpiryDate)}
+                defaultValue={dateInputValue(driver?.driverLicenceLastVerifiedDate)}
+                required
               />
             </div>
             <div className="form-field form-group-full">
@@ -284,9 +297,9 @@ function renderSiteDriverEditView({
                 required
               >
                 <option value="">Select driver licence type</option>
-                {licenceTypes.map((licenceType) => (
+                {visibleLicenceTypes.map((licenceType) => (
                   <option key={licenceType.id} value={licenceType.id}>
-                    {licenceType.description || licenceType.code || `Licence ${licenceType.id}`}
+                    {licenceTypeLabel(licenceType)}
                   </option>
                 ))}
               </select>

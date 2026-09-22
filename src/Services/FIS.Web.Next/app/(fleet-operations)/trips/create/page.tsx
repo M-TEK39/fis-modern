@@ -209,17 +209,24 @@ async function renderCreateTripPageContent({
   let users: UserApproverChoice[];
   let drivers: DriverManagementDriver[];
   let tripTypes: TripAuthorityTripType[];
+  let fillVehicle: TripAuthorityVehicle | undefined;
   try {
-    const [vehicleResult, userResult, driverResult, tripTypeResult] = await Promise.all([
-      getVehicleForStatus(selectedVmfCode),
-      getUserApproverChoices(),
-      getDriverManagementSiteDrivers(contract.siteCode),
-      getTripTypes(),
-    ]);
+    const [vehicleResult, userResult, driverResult, tripTypeResult, fillVehicles] =
+      await Promise.all([
+        getVehicleForStatus(selectedVmfCode),
+        getUserApproverChoices(),
+        getDriverManagementSiteDrivers(contract.siteCode),
+        getTripTypes(),
+        getTripAuthorityVehicles({
+          vmfCode: selectedVmfCode,
+          contractCode: selectedContractCode,
+        }),
+      ]);
     vehicle = vehicleResult;
     users = userResult;
     drivers = driverResult;
     tripTypes = tripTypeResult;
+    fillVehicle = fillVehicles[0];
   } catch (error) {
     console.error(
       "FIS trip creation context failed",
@@ -270,11 +277,16 @@ async function renderCreateTripPageContent({
         context={{
           vmfCode: selectedVmfCode,
           contractCode: selectedContractCode,
-          siteCode: contract.siteCode,
-          fleetNumber: vehicle.fleetNumber ?? contract.fleetNumber,
-          registrationNumber: vehicle.registrationNumber ?? contract.registrationNumber,
-          modelName: vehicle.modelName,
-          currentOdo: vehicle.currentOdo ?? contract.startOdometer,
+          siteCode: fillVehicle?.siteCode ?? contract.siteCode,
+          fleetNumber: fillVehicle?.fleetNumber ?? vehicle.fleetNumber ?? contract.fleetNumber,
+          registrationNumber:
+            fillVehicle?.registrationNumber ??
+            vehicle.registrationNumber ??
+            contract.registrationNumber,
+          modelName:
+            [fillVehicle?.make, fillVehicle?.model].filter(Boolean).join(" ") || vehicle.modelName,
+          currentOdo:
+            fillVehicle?.startOdometer ?? vehicle.currentOdo ?? contract.startOdometer,
         }}
         approvers={approvers}
         drivers={drivers}

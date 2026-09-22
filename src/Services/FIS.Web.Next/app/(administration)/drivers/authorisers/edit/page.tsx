@@ -86,6 +86,19 @@ function renderAuthoriserEditView({
   const selectedRank = authoriser?.rankCode ?? 0;
   const hasSelectedRank = ranks.some((rank) => rank.id === selectedRank);
   const title = authoriser ? "Edit Authoriser" : "Add Authoriser";
+  const preferredRanks = ranks.filter((rank) =>
+    /transport\s+(officer|manager)/i.test(rank.description ?? ""),
+  );
+  const visibleRanks =
+    preferredRanks.length > 0
+      ? [
+          ...preferredRanks,
+          ...ranks.filter(
+            (rank) =>
+              rank.id === selectedRank && !preferredRanks.some((item) => item.id === rank.id),
+          ),
+        ]
+      : ranks;
 
   return (
     <main className="page-shell vehicle-page-shell">
@@ -177,13 +190,15 @@ function renderAuthoriserEditView({
             </div>
             <div className="form-field">
               <label className="form-label" htmlFor="authoriser-telephone">
-                Telephone Number
+                Contact number
               </label>
               <input
                 className="form-input"
                 id="authoriser-telephone"
-                maxLength={20}
+                inputMode="numeric"
+                maxLength={10}
                 name="telephoneNumber"
+                pattern="[0-9]{10}"
                 defaultValue={authoriser?.telephoneNumber ?? ""}
               />
             </div>
@@ -202,7 +217,7 @@ function renderAuthoriserEditView({
                 {!hasSelectedRank && selectedRank > 0 ? (
                   <option value={selectedRank}>Rank {selectedRank} (current)</option>
                 ) : null}
-                {ranks.map((rank) => (
+                {visibleRanks.map((rank) => (
                   <option key={rank.id} value={rank.id}>
                     {rank.description || `Rank ${rank.id}`}
                   </option>

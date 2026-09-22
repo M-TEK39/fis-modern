@@ -96,8 +96,14 @@ export default function GarageEditForm({ accident, sites, accidentTypes }: Garag
               readOnly
             />
           </Field>
-          <Field id="ggReference" label="GG reference">
-            <input id="ggReference" type="text" value={accident.ggReference ?? ""} readOnly />
+          <Field id="ggReference" label="GG reference (do not edit)">
+            <input
+              id="ggReference"
+              type="text"
+              value={accident.ggReference ?? accident.vehicleFleetNumber ?? ""}
+              readOnly
+              tabIndex={-1}
+            />
           </Field>
         </div>
       </section>
@@ -210,7 +216,7 @@ export default function GarageEditForm({ accident, sites, accidentTypes }: Garag
           </div>
         </div>
         <div className="vehicle-create-grid">
-          <Field id="excessAmount" label="Excess amount">
+          <Field id="excessAmount" label="Excess amount (R)">
             <input
               id="excessAmount"
               name="excessAmount"

@@ -10,6 +10,7 @@ import {
   type AccidentEditRecord,
   type AccidentUpdateRequest,
 } from "@/lib/api/fleet-operations/api-accidents";
+import { accidentFinancialYearChoices } from "@/app/(fleet-operations)/accidents/_financial-years";
 import { getSession } from "@/lib/auth/session";
 
 const ACCIDENTS_ROLE = "Accidents";
@@ -135,6 +136,20 @@ function getChoice(formData: FormData, key: string, label: string, allowed: read
   return value;
 }
 
+function getRequiredChoice(
+  formData: FormData,
+  key: string,
+  label: string,
+  allowed: readonly string[],
+) {
+  const value = getChoice(formData, key, label, allowed);
+  if (!value) {
+    throw new AccidentFormValidationError(`${label} is required.`);
+  }
+
+  return value;
+}
+
 function getOptionalTime(formData: FormData, key: string, accidentDate: string) {
   const value = getText(formData, key);
   if (!value) {
@@ -184,21 +199,24 @@ function buildUpdateRequest(
     throw new AccidentFormValidationError("Driver ID number may contain only numbers and '/'.");
   }
 
-  const flagGgHq = getChoice(formData, "flagGgHq", "Notify HQ", ["N", "Y", "X"]);
+  const flagGgHq = getRequiredChoice(formData, "flagGgHq", "Notify HQ", ["N", "Y"]);
   const flagGgHqDate = getOptionalDate(formData, "flagGgHqDate", "Notify HQ date");
-  if ((flagGgHq === "Y" || flagGgHq === "X") && !flagGgHqDate) {
-    throw new AccidentFormValidationError("Notify HQ date is required when Notify HQ is Y or X.");
+  if (flagGgHq === "Y" && !flagGgHqDate) {
+    throw new AccidentFormValidationError("Notify HQ date is required when Notify HQ is Yes.");
   }
 
-  const flagTripAuthor = getChoice(formData, "flagTripAuthor", "Notify trip authority", [
+  const flagTripAuthor = getRequiredChoice(formData, "flagTripAuthor", "Trip authority", [
     "N",
     "Y",
-    "X",
   ]);
-  const flagTripAuthDate = getOptionalDate(formData, "flagTripAuthDate", "Notify trip date");
-  if ((flagTripAuthor === "Y" || flagTripAuthor === "X") && !flagTripAuthDate) {
+  const flagTripAuthDate = getOptionalDate(
+    formData,
+    "flagTripAuthDate",
+    "Trip authority start date",
+  );
+  if (flagTripAuthor === "Y" && !flagTripAuthDate) {
     throw new AccidentFormValidationError(
-      "Notify trip date is required when Notify trip authority is Y or X.",
+      "Trip authority start date is required when Trip authority is Yes.",
     );
   }
 
@@ -210,7 +228,7 @@ function buildUpdateRequest(
     driver_name: getOptionalText(formData, "driverName", "GG driver name", 25),
     driver_employ_number: driverEmployNumber,
     hq_reference: getOptionalText(formData, "hqReference", "HQ reference", 20),
-    gg_reference: existing.ggReference,
+    gg_reference: existing.ggReference?.trim() || existing.vehicleFleetNumber?.trim() || null,
     sa_reference: existing.saReference,
     occurence_date: accidentDate,
     occurence_time: getOptionalTime(formData, "occurenceTime", accidentDate),
@@ -228,14 +246,12 @@ function buildUpdateRequest(
       "MO",
       "AJ",
     ]),
-    fin_year: getChoice(formData, "finYear", "Financial year", [
-      "02/03",
-      "01/02",
-      "00/01",
-      "99/00",
-      "98/99",
-      "97/98",
-    ]),
+    fin_year: getRequiredChoice(
+      formData,
+      "finYear",
+      "Financial year",
+      accidentFinancialYearChoices(existing.finYear),
+    ),
     garage: getChoice(formData, "garage", "Garage", ["PTA", "JHB"]),
     driver_telno: getOptionalText(formData, "driverTelno", "Driver telephone", 30),
     driver_site_code: getOptionalInteger(formData, "driverSiteCode", "Site"),
@@ -255,8 +271,8 @@ function buildUpdateRequest(
     reporting_authority: getOptionalText(formData, "reportingAuthority", "Authority", 60),
     cost_of_repair: getAmount(formData, "costOfRepair", "GG car damage", existing.costOfRepair),
     damage_description: getOptionalText(formData, "damageDescription", "GG damage description", 60),
-    death: getChoice(formData, "death", "Death", ["?", "N", "Y"]),
-    injured: getChoice(formData, "injured", "Injured", ["?", "N", "Y"]),
+    death: getChoice(formData, "death", "Death?", ["?", "N", "Y"]),
+    injured: getChoice(formData, "injured", "Injured?", ["?", "N", "Y"]),
     third_party_regno: getOptionalText(
       formData,
       "thirdPartyRegistration",
@@ -294,8 +310,8 @@ function buildUpdateRequest(
     part3: getChoice(formData, "part3", "Part III", ["N", "Y"]),
     statement: getChoice(formData, "statement", "Statement", ["N", "Y"]),
     sketch: getChoice(formData, "sketch", "Sketch", ["N", "Y"]),
-    iddoc: getChoice(formData, "iddoc", "ID document", ["N", "Y"]),
-    drivelic: getChoice(formData, "drivelic", "Driving licence", ["N", "Y"]),
+    iddoc: getRequiredChoice(formData, "iddoc", "ID document", ["N", "Y"]),
+    drivelic: getRequiredChoice(formData, "drivelic", "Driving licence", ["N", "Y"]),
     docs_acc_relieve: getChoice(
       formData,
       "documentsAccidentRelieve",

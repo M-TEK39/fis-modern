@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { accidentFinancialYearChoices } from "@/app/(fleet-operations)/accidents/_financial-years";
 import type {
   AccidentEditRecord,
   AccidentSiteOption,
@@ -78,12 +79,24 @@ type GarageWorkflowFieldsProps = GarageFieldSectionProps & {
 function Field({
   id,
   label,
+  required = false,
+  hint,
   children,
-}: Readonly<{ id: string; label: string; children: ReactNode }>) {
+}: Readonly<{
+  id: string;
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: ReactNode;
+}>) {
   return (
     <div className="field">
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={id}>
+        {label} {required ? <span aria-hidden="true">*</span> : null}
+        {required ? <span className="sr-only"> required</span> : null}
+      </label>
       {children}
+      {hint ? <p className="muted-copy">{hint}</p> : null}
     </div>
   );
 }
@@ -97,17 +110,21 @@ function SelectField({
   label,
   name,
   value,
+  required = false,
+  hint,
   children,
 }: Readonly<{
   id: string;
   label: string;
   name: string;
   value: string | number | null | undefined;
+  required?: boolean;
+  hint?: string;
   children: ReactNode;
 }>) {
   return (
-    <Field id={id} label={label}>
-      <select id={id} name={name} defaultValue={value ?? ""}>
+    <Field id={id} label={label} required={required} hint={hint}>
+      <select id={id} name={name} defaultValue={value ?? ""} required={required}>
         {children}
       </select>
     </Field>
@@ -120,22 +137,34 @@ function YesNoField({
   name,
   value,
   unknown = false,
+  required = false,
 }: Readonly<{
   id: string;
   label: string;
   name: string;
   value: string | null | undefined;
   unknown?: boolean;
+  required?: boolean;
 }>) {
   return (
-    <SelectField id={id} label={label} name={name} value={value}>
-      <option value="">Not set</option>
-      {unknown ? <option value="?">?</option> : null}
-      <option value="N">N</option>
-      <option value="Y">Y</option>
+    <SelectField id={id} label={label} name={name} value={value} required={required}>
+      <option value="">{required ? "Select yes or no" : "Not set"}</option>
+      {unknown ? <option value="?">Unknown</option> : null}
+      <option value="Y">Yes</option>
+      <option value="N">No</option>
     </SelectField>
   );
 }
+
+const capturePersons = [
+  { code: "HM", label: "HM" },
+  { code: "DF", label: "DF" },
+  { code: "MDS", label: "MDS" },
+  { code: "CR", label: "CR" },
+  { code: "JR", label: "JR" },
+  { code: "MO", label: "MO" },
+  { code: "AJ", label: "AJ" },
+] as const;
 
 function GarageWorkflowFields({ values, sites, accidentTypes }: GarageWorkflowFieldsProps) {
   return (
@@ -147,9 +176,15 @@ function GarageWorkflowFields({ values, sites, accidentTypes }: GarageWorkflowFi
         </div>
       </div>
       <div className="vehicle-create-grid">
-        <SelectField id="finYear" label="Financial year" name="finYear" value={values.finYear}>
-          <option value="">Not set</option>
-          {["02/03", "01/02", "00/01", "99/00", "98/99", "97/98"].map((year) => (
+        <SelectField
+          id="finYear"
+          label="Financial year"
+          name="finYear"
+          value={values.finYear}
+          required
+        >
+          <option value="">Select financial year</option>
+          {accidentFinancialYearChoices(values.finYear).map((year) => (
             <option key={year} value={year}>
               {year}
             </option>
@@ -183,11 +218,13 @@ function GarageWorkflowFields({ values, sites, accidentTypes }: GarageWorkflowFi
             </option>
           ))}
         </SelectField>
-        <SelectField id="flagGgHq" label="Notify HQ" name="flagGgHq" value={values.flagGgHq ?? "N"}>
-          <option value="N">N</option>
-          <option value="Y">Y</option>
-          <option value="X">X</option>
-        </SelectField>
+        <YesNoField
+          id="flagGgHq"
+          label="Notify HQ"
+          name="flagGgHq"
+          value={values.flagGgHq === "X" ? "" : values.flagGgHq}
+          required
+        />
         <Field id="flagGgHqDate" label="Notify HQ date">
           <input
             id="flagGgHqDate"
@@ -209,11 +246,13 @@ function GarageWorkflowFields({ values, sites, accidentTypes }: GarageWorkflowFi
           label="Capture person"
           name="capturedPerson"
           value={values.capturedPerson}
+          hint="Legacy codes store initials. The value saved is still the original capture-person code."
         >
           <option value="">Not set</option>
-          {["?", "HM", "DF", "MDS", "CR", "JR", "MO", "AJ"].map((person) => (
-            <option key={person} value={person}>
-              {person}
+          <option value="?">Unknown</option>
+          {capturePersons.map((person) => (
+            <option key={person.code} value={person.code}>
+              {person.label}
             </option>
           ))}
         </SelectField>
@@ -316,7 +355,11 @@ function GarageCaseFields({ values }: GarageFieldSectionProps) {
             defaultValue={values.occurencePlace ?? ""}
           />
         </Field>
-        <Field id="costOfRepair" label="GG car damage">
+        <Field
+          id="costOfRepair"
+          label="GG car damage amount (R)"
+          hint="Estimated repair cost in rand. The description field below is for the damage text."
+        >
           <input
             id="costOfRepair"
             name="costOfRepair"
@@ -335,8 +378,8 @@ function GarageCaseFields({ values }: GarageFieldSectionProps) {
             defaultValue={values.damageDescription ?? ""}
           />
         </Field>
-        <YesNoField id="death" label="Death" name="death" value={values.death} unknown />
-        <YesNoField id="injured" label="Injured" name="injured" value={values.injured} unknown />
+        <YesNoField id="death" label="Death?" name="death" value={values.death} unknown />
+        <YesNoField id="injured" label="Injured?" name="injured" value={values.injured} unknown />
         <SelectField
           id="driverFault"
           label="GG driver fault"
@@ -390,7 +433,11 @@ function GarageThirdPartyFields({ values }: GarageFieldSectionProps) {
             defaultValue={values.thirdPartyTelephone ?? ""}
           />
         </Field>
-        <Field id="thirdPartyClaim" label="Private car damage">
+        <Field
+          id="thirdPartyClaim"
+          label="Private car damage (R)"
+          hint="Enter the rand amount."
+        >
           <input
             id="thirdPartyClaim"
             name="thirdPartyClaim"
@@ -500,15 +547,22 @@ function GarageDocumentFields({ values }: GarageFieldSectionProps) {
           name="tripAuthor"
           value={values.tripAuthor ?? "N"}
         >
-          <option value="Y">Y</option>
-          <option value="N">N</option>
+          <option value="Y">Yes</option>
+          <option value="N">No</option>
         </SelectField>
-        <YesNoField id="iddoc" label="ID document" name="iddoc" value={values.iddoc ?? "N"} />
+        <YesNoField
+          id="iddoc"
+          label="ID document"
+          name="iddoc"
+          value={values.iddoc}
+          required
+        />
         <YesNoField
           id="drivelic"
           label="Driving licence"
           name="drivelic"
-          value={values.drivelic ?? "N"}
+          value={values.drivelic}
+          required
         />
         <YesNoField
           id="flagCaseNumber"
@@ -524,15 +578,20 @@ function GarageDocumentFields({ values }: GarageFieldSectionProps) {
         />
         <SelectField
           id="flagTripAuthor"
-          label="Notify trip authority"
+          label="Trip authority"
           name="flagTripAuthor"
-          value={values.flagTripAuthor ?? "N"}
+          value={values.flagTripAuthor === "X" ? "Y" : values.flagTripAuthor}
+          required
         >
-          <option value="N">N</option>
-          <option value="Y">Y</option>
-          <option value="X">X</option>
+          <option value="">Select yes or no</option>
+          <option value="Y">Yes</option>
+          <option value="N">No</option>
         </SelectField>
-        <Field id="flagTripAuthDate" label="Notify trip date">
+        <Field
+          id="flagTripAuthDate"
+          label="Trip authority start date"
+          hint="The archive stores one trip-authority date. Use the start date (from)."
+        >
           <input
             id="flagTripAuthDate"
             name="flagTripAuthDate"
@@ -567,7 +626,11 @@ function GarageNotesFields({ values }: GarageFieldSectionProps) {
       </div>
       <div className="vehicle-create-grid">
         <YesNoField id="towNeed" label="Tow required" name="towNeed" value={values.towNeed} />
-        <Field id="writeOffAmount" label="Write-off amount">
+        <Field
+          id="writeOffAmount"
+          label="Write-off amount (R)"
+          hint="Rand amount written off for this accident. Leave blank when not written off."
+        >
           <input
             id="writeOffAmount"
             name="writeOffAmount"

@@ -12,6 +12,7 @@ import {
   type AccidentUpdateRequest,
   type CreateAccidentRequest,
 } from "@/lib/api/fleet-operations/api-accidents";
+import { accidentFinancialYearChoices } from "@/app/(fleet-operations)/accidents/_financial-years";
 import { getSession } from "@/lib/auth/session";
 
 const ACCIDENTS_ROLE = "Accidents";
@@ -147,6 +148,20 @@ function getChoice(formData: FormData, key: string, label: string, allowed: read
   return value;
 }
 
+function getRequiredChoice(
+  formData: FormData,
+  key: string,
+  label: string,
+  allowed: readonly string[],
+) {
+  const value = getChoice(formData, key, label, allowed);
+  if (!value) {
+    throw new AccidentFormValidationError(`${label} is required.`);
+  }
+
+  return value;
+}
+
 function getAmount(formData: FormData, key: string, label: string) {
   const value = getText(formData, key) || "0";
   const parsed = Number(value);
@@ -189,31 +204,6 @@ function getOptionalTime(formData: FormData, key: string, accidentDate: string) 
   return `${accidentDate.slice(0, 10)}T${value}:00.000Z`;
 }
 
-const FINANCIAL_YEARS = [
-  "18/19",
-  "17/18",
-  "16/17",
-  "15/16",
-  "14/15",
-  "13/14",
-  "12/13",
-  "11/12",
-  "10/11",
-  "09/10",
-  "08/09",
-  "07/08",
-  "06/07",
-  "05/06",
-  "04/05",
-  "03/04",
-  "02/03",
-  "01/02",
-  "00/01",
-  "99/00",
-  "98/99",
-  "97/98",
-] as const;
-
 const CAPTURE_PERSONS = ["?", "HM", "DF", "MDS", "CR", "JR", "MO", "AJ"] as const;
 
 function buildCreateRequest(formData: FormData): CreateAccidentRequest {
@@ -236,7 +226,7 @@ function buildCreateRequest(formData: FormData): CreateAccidentRequest {
     driver_name: getOptionalText(formData, "driverName", "GG driver name", 25),
     driver_employ_number: driverEmployNumber,
     hq_reference: getOptionalText(formData, "hqReference", "HQ reference", 20),
-    gg_reference: null,
+    gg_reference: getOptionalText(formData, "ggReference", "GG reference", 20),
     sa_reference: getOptionalText(formData, "saReference", "SA reference", 20),
     occurence_date: occurrenceDate,
     occurence_time: accidentTime,
@@ -245,7 +235,12 @@ function buildCreateRequest(formData: FormData): CreateAccidentRequest {
     excess_amount: 0,
     call_refer: null,
     captured_person: getChoice(formData, "capturedPerson", "Capture person", CAPTURE_PERSONS),
-    fin_year: getChoice(formData, "finYear", "Financial year", FINANCIAL_YEARS),
+    fin_year: getRequiredChoice(
+      formData,
+      "finYear",
+      "Financial year",
+      accidentFinancialYearChoices(),
+    ),
     garage: getChoice(formData, "garage", "Garage", ["PTA", "JHB"]),
     driver_telno: null,
     driver_site_code: getOptionalInteger(formData, "driverSiteCode", "Site"),
@@ -265,8 +260,8 @@ function buildCreateRequest(formData: FormData): CreateAccidentRequest {
     reporting_authority: null,
     cost_of_repair: getAmount(formData, "costOfRepair", "GG car damage"),
     damage_description: getOptionalText(formData, "damageDescription", "GG damage description", 60),
-    death: getChoice(formData, "death", "Death", ["?", "N", "Y"]),
-    injured: getChoice(formData, "injured", "Injured", ["?", "N", "Y"]),
+    death: getChoice(formData, "death", "Death?", ["?", "N", "Y"]),
+    injured: getChoice(formData, "injured", "Injured?", ["?", "N", "Y"]),
     third_party_regno: getOptionalText(
       formData,
       "thirdPartyRegistration",
@@ -288,7 +283,7 @@ function buildCreateRequest(formData: FormData): CreateAccidentRequest {
     drivelic: null,
     docs_acc_relieve: null,
     flag_case_num: null,
-    trip_author: getChoice(formData, "tripAuthor", "Trip authority", ["?", "Y", "N"]),
+    trip_author: getChoice(formData, "tripAuthor", "Trip authority", ["Y", "N"]),
     flag_trip_author: null,
     flag_trip_auth_date: null,
     driver_fault: getChoice(formData, "driverFault", "GG driver fault", [
@@ -368,7 +363,12 @@ function buildUpdateRequest(
     is_deleted: existing.isDeleted,
     call_refer: existing.callRefer,
     captured_person: getChoice(formData, "capturedPerson", "Capture person", CAPTURE_PERSONS),
-    fin_year: getChoice(formData, "finYear", "Financial year", FINANCIAL_YEARS),
+    fin_year: getRequiredChoice(
+      formData,
+      "finYear",
+      "Financial year",
+      accidentFinancialYearChoices(existing.finYear),
+    ),
     garage: getChoice(formData, "garage", "Garage", ["PTA", "JHB"]),
     driver_telno: existing.driverTelno,
     driver_site_code: getOptionalInteger(formData, "driverSiteCode", "Site"),
@@ -388,8 +388,8 @@ function buildUpdateRequest(
     reporting_authority: existing.reportingAuthority,
     cost_of_repair: getAmount(formData, "costOfRepair", "GG car damage"),
     damage_description: getOptionalText(formData, "damageDescription", "GG damage description", 60),
-    death: getChoice(formData, "death", "Death", ["?", "N", "Y"]),
-    injured: getChoice(formData, "injured", "Injured", ["?", "N", "Y"]),
+    death: getChoice(formData, "death", "Death?", ["?", "N", "Y"]),
+    injured: getChoice(formData, "injured", "Injured?", ["?", "N", "Y"]),
     third_party_regno: getOptionalText(
       formData,
       "thirdPartyRegistration",
@@ -411,7 +411,7 @@ function buildUpdateRequest(
     drivelic: existing.drivelic,
     docs_acc_relieve: existing.documentsAccidentRelieve,
     flag_case_num: existing.flagCaseNumber,
-    trip_author: getChoice(formData, "tripAuthor", "Trip authority", ["?", "Y", "N"]),
+    trip_author: getChoice(formData, "tripAuthor", "Trip authority", ["Y", "N"]),
     flag_trip_author: existing.flagTripAuthor,
     flag_trip_auth_date: existing.flagTripAuthDate,
     driver_fault: getChoice(formData, "driverFault", "GG driver fault", [

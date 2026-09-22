@@ -1,6 +1,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Text.RegularExpressions;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
@@ -51,6 +52,12 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
 
         var page = Math.Max(1, query.Page);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var overlay = await OverlayPageAsync(query);
+        if (overlay is not null)
+        {
+            return PaginateTerms(overlay, page, pageSize);
+        }
+
         var availableColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
         var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
         var filter = BuildPageFilter(query, availableColumns, vehicleColumns);
@@ -71,16 +78,33 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         return new LeaseContractTermsPage(items, page, pageSize, total);
     }
 
-    public async Task<LeaseContractTerms?> GetByVehicleAsync(int vmfCode) =>
-        (
+    public async Task<LeaseContractTerms?> GetByVehicleAsync(int vmfCode)
+    {
+        // VehicleLeaseDetail.aspx uses DEV_SEL_SingleNewVehicleLeaseContractTerms
+        // @GG_Number. Empty selector results fall back to leftover so capture
+        // cannot treat a missing overlay row as "no existing term".
+        var overlay = await OverlaySingleTermByVehicleAsync(vmfCode);
+        if (overlay is not null)
+        {
+            return overlay;
+        }
+
+        return (
             await QueryAsync(
                 "[l].[vmf_Code] = @vmfCode",
                 command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode)
             )
         ).FirstOrDefault();
+    }
 
     public async Task<string?> GetCapturedByUsernameAsync(int vmfCode)
     {
+        var overlayUsername = await OverlayCapturerUsernameAsync(vmfCode);
+        if (!string.IsNullOrWhiteSpace(overlayUsername))
+        {
+            return overlayUsername;
+        }
+
         var availableColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
         if (!availableColumns.Contains("CreatedBy"))
             return null;
@@ -418,21 +442,65 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
             );
         _ = currentUserId;
 
-        // VehicleLease.aspx.vb Getdata2 treats authorised terms as blocked and
-        // already-recalled Rejected values as a no-op before any write.
-        if (terms.AuthorityStatus == 2)
-            throw new InvalidOperationException(
-                "The vehicle has already been authorised. Kindly inform the relevant authorisor about the recalling of the vehicle."
+        // VehicleLease.aspx.vb Getdata2 reads DEV_SEL_GetVehStatusPerGGNumber
+        // before any write. @GG_Number is the fleet number, not GP registration.
+        var fleetNumber = await TryGetFleetNumberAsync(terms.vmf_Code);
+        var statusRows = string.IsNullOrWhiteSpace(fleetNumber)
+            ? null
+            : await LegacySelectorProcedure.TryReadRowsAsync(
+                _context,
+                "DEV_SEL_GetVehStatusPerGGNumber",
+                [["@ggnum"]],
+                _ =>
+                    command =>
+                        AddParameter(command, "@ggnum", DbType.String, fleetNumber)
             );
+        if (statusRows is not null)
+        {
+            if (statusRows.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "This is a New Lease Vehicles. Please capture Tariffs."
+                );
+            }
 
-        var rejected = terms.Rejected ?? 0;
-        if (rejected is 0 or 1 or 2)
-            return await GetByIdAsync(terms.VehicleContractTermID) ?? terms;
+            var rejectedFromSelector = LegacySelectorProcedure.ReadInt32(
+                statusRows[0],
+                "Rejected",
+                "rejected"
+            );
+            if (rejectedFromSelector is 0 or 1 or 2)
+            {
+                return await GetByIdAsync(terms.VehicleContractTermID) ?? terms;
+            }
 
-        var registrationNumber = await FindVehicleRegistrationNumberAsync(terms.vmf_Code);
-        if (string.IsNullOrWhiteSpace(registrationNumber))
+            var authorityFromSelector = LegacySelectorProcedure.ReadInt32(
+                statusRows[0],
+                "AuthorityStatus",
+                "Authority_Status"
+            );
+            if (authorityFromSelector == 2)
+            {
+                throw new InvalidOperationException(
+                    "The vehicle has already been authorised. Kindly inform the relevant authorisor about the recalling of the vehicle."
+                );
+            }
+        }
+        else
+        {
+            if (terms.AuthorityStatus == 2)
+                throw new InvalidOperationException(
+                    "The vehicle has already been authorised. Kindly inform the relevant authorisor about the recalling of the vehicle."
+                );
+
+            var rejected = terms.Rejected ?? 0;
+            if (rejected is 0 or 1 or 2)
+                return await GetByIdAsync(terms.VehicleContractTermID) ?? terms;
+        }
+
+        if (string.IsNullOrWhiteSpace(fleetNumber))
             throw new InvalidOperationException(
-                "The selected lease vehicle has no registration number required by the legacy recall procedure."
+                "The selected lease vehicle has no GG number required by the legacy recall procedure."
             );
 
         var authorityStatusAvailable = await IsLegacyProcedureAvailableAsync(
@@ -450,7 +518,7 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
             // that write, which this successful path never leaves in place.
             await ExecuteLegacyProcedureAsync(
                 "DEV_UPD_LeaseContractTermsAuthorityStatus",
-                new ProcedureParameter("@GG_Number", DbType.String, registrationNumber),
+                new ProcedureParameter("@GG_Number", DbType.String, fleetNumber),
                 new ProcedureParameter("@AuthorityStatus", DbType.Int32, 0),
                 new ProcedureParameter("@Rejected", DbType.Int32, 2),
                 new ProcedureParameter("@UpdatedBy", DbType.String, username.Trim())
@@ -468,7 +536,7 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         }
 
         if (
-            rejected == 3
+            (terms.Rejected ?? 0) == 3
             && await IsLegacyProcedureAvailableAsync("DEV_UPD_LeaseContractTermsRecall", "@ggnum")
         )
         {
@@ -477,7 +545,7 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
             // procedure for pending Rejected=3 terms.
             await ExecuteLegacyProcedureAsync(
                 "DEV_UPD_LeaseContractTermsRecall",
-                new ProcedureParameter("@ggnum", DbType.String, registrationNumber)
+                new ProcedureParameter("@ggnum", DbType.String, fleetNumber)
             );
             return await GetByIdAsync(terms.VehicleContractTermID)
                 ?? throw new InvalidOperationException(
@@ -617,30 +685,6 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
         }
 
         return null;
-    }
-
-    private async Task<string?> FindVehicleRegistrationNumberAsync(int vmfCode)
-    {
-        var connection = _context.Database.GetDbConnection();
-        var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose)
-            await connection.OpenAsync();
-
-        try
-        {
-            await using var command = connection.CreateCommand();
-            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText =
-                "SELECT TOP (1) NULLIF(LTRIM(RTRIM([registration_number])), '') FROM [dbo].[vehicle_master] WHERE [vmf_code] = @vmfCode";
-            AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
-            var value = await command.ExecuteScalarAsync();
-            return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
-        }
-        finally
-        {
-            if (shouldClose)
-                await connection.CloseAsync();
-        }
     }
 
     private async Task<int> ResolveLegacyUserCodeAsync(string username, int currentUserId)
@@ -842,6 +886,360 @@ public sealed class LeaseContractTermsRepository : ILeaseContractTermsRepository
                 await connection.CloseAsync();
         }
     }
+
+    private async Task<LeaseContractTerms?> OverlaySingleTermByVehicleAsync(int vmfCode)
+    {
+        var fleetNumber = await TryGetFleetNumberAsync(vmfCode);
+        if (string.IsNullOrWhiteSpace(fleetNumber))
+        {
+            return null;
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_SingleNewVehicleLeaseContractTerms",
+            [["@GG_Number"]],
+            _ =>
+                command => AddParameter(command, "@GG_Number", DbType.String, fleetNumber)
+        );
+        if (rows is null || rows.Count == 0)
+        {
+            return null;
+        }
+
+        var hydrated = await HydrateTermsFromSelectorRowsAsync(rows);
+        return hydrated is { Count: > 0 } ? hydrated[0] : null;
+    }
+
+    private async Task<string?> OverlayCapturerUsernameAsync(int vmfCode)
+    {
+        var fleetNumber = await TryGetFleetNumberAsync(vmfCode);
+        if (string.IsNullOrWhiteSpace(fleetNumber))
+        {
+            return null;
+        }
+
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            "DEV_SEL_LeaseTarrifCapturer_per_ggnumber",
+            [["@ggnum"]],
+            _ => command => AddParameter(command, "@ggnum", DbType.String, fleetNumber)
+        );
+        if (rows is null || rows.Count == 0)
+        {
+            return null;
+        }
+
+        var username = LegacySelectorProcedure.ReadString(
+            rows[0],
+            "CreatedBy",
+            "user_name",
+            "UserName",
+            "Capturer",
+            "name"
+        );
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            username = rows[0]
+                .Values.Select(value => Convert.ToString(value)?.Trim())
+                .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        }
+
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            return null;
+        }
+
+        if (!int.TryParse(username, out var userAccessCode) || userAccessCode <= 0)
+        {
+            return username;
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            return await ResolveLegacyUserNameAsync(connection, userAccessCode);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<string?> TryGetFleetNumberAsync(int vmfCode)
+    {
+        if (vmfCode <= 0)
+        {
+            return null;
+        }
+
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
+        if (!vehicleColumns.Contains("vmf_code") || !vehicleColumns.Contains("fleet_number"))
+        {
+            return null;
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT TOP (1) NULLIF(LTRIM(RTRIM([fleet_number])), '')
+                FROM [dbo].[vehicle_master]
+                WHERE [vmf_code] = @vmfCode
+                """;
+            AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
+            var value = await command.ExecuteScalarAsync();
+            return value is null or DBNull ? null : Convert.ToString(value)?.Trim();
+        }
+        catch (DbException)
+        {
+            return null;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<IReadOnlyList<LeaseContractTerms>?> OverlayPageAsync(
+        LeaseContractTermsPageQuery query
+    )
+    {
+        var search = query.Search?.Trim().ToUpperInvariant();
+        var status = query.Status?.Trim();
+        var isPending = string.Equals(status, "pending", StringComparison.OrdinalIgnoreCase);
+        var isAllStatus =
+            string.IsNullOrWhiteSpace(status)
+            || string.Equals(status, "all", StringComparison.OrdinalIgnoreCase);
+        var isGgMode =
+            string.IsNullOrWhiteSpace(query.Mode)
+            || string.Equals(query.Mode, "GG", StringComparison.OrdinalIgnoreCase);
+        var fullGgNumber = isGgMode && IsFullGgNumber(search) ? search : null;
+
+        // VehicleLease.aspx BindAuthoriseVehicleGrid uses
+        // DEV_SEL_AuthoriseLeaseVehicleInService. The capturer no-tariff report
+        // stays off this leftover terms page because those rows may have no
+        // VehicleContractTermID yet.
+        if (isPending && fullGgNumber is null)
+        {
+            return await OverlayFromSelectorAsync(
+                "DEV_SEL_AuthoriseLeaseVehicleInService",
+                [[]],
+                _ => null,
+                query
+            );
+        }
+
+        if (isPending && fullGgNumber is not null)
+        {
+            return await OverlayFromSelectorAsync(
+                "DEV_SEL_AuthoriseLeaseVehicleInServiceForGGNumber",
+                [["@GG_Number"]],
+                _ =>
+                    command =>
+                        AddParameter(command, "@GG_Number", DbType.String, fullGgNumber),
+                query
+            );
+        }
+
+        // VehicleLeaseDetail.aspx loads the GG's term history through
+        // DEV_SEL_AllLeaseContractTerms. The Next lookup uses the same GG.
+        if (isAllStatus && fullGgNumber is not null)
+        {
+            return await OverlayFromSelectorAsync(
+                "DEV_SEL_AllLeaseContractTerms",
+                [["@ggnum"]],
+                _ => command => AddParameter(command, "@ggnum", DbType.String, fullGgNumber),
+                query
+            );
+        }
+
+        return null;
+    }
+
+    private async Task<IReadOnlyList<LeaseContractTerms>?> OverlayFromSelectorAsync(
+        string procedureName,
+        IReadOnlyList<string[]> acceptedParameterSets,
+        Func<IReadOnlyList<string>, Action<DbCommand>?> bindForActualParameters,
+        LeaseContractTermsPageQuery query
+    )
+    {
+        var rows = await LegacySelectorProcedure.TryReadRowsAsync(
+            _context,
+            procedureName,
+            acceptedParameterSets,
+            bindForActualParameters
+        );
+        if (rows is null)
+        {
+            return null;
+        }
+
+        if (rows.Count == 0)
+        {
+            return [];
+        }
+
+        var hydrated = await HydrateTermsFromSelectorRowsAsync(rows);
+        return hydrated is null ? null : ApplyOverlayScope(hydrated, query);
+    }
+
+    private async Task<IReadOnlyList<LeaseContractTerms>?> HydrateTermsFromSelectorRowsAsync(
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> rows
+    )
+    {
+        var termIds = ReadOrderedIntKeys(
+            rows,
+            "VehicleContractTermID",
+            "vehicle_contract_termID",
+            "Vehicle_Contract_TermID"
+        );
+        if (termIds.Count > 0)
+        {
+            var leftover = await QueryByIntKeysAsync(
+                "[l].[VehicleContractTermID]",
+                termIds
+            );
+            return LegacySelectorProcedure.OrderByKeys(
+                leftover,
+                termIds,
+                terms => terms.VehicleContractTermID
+            );
+        }
+
+        var vmfCodes = ReadOrderedIntKeys(rows, "vmf_Code", "vmf_code", "VMF_Code");
+        if (vmfCodes.Count > 0)
+        {
+            var leftover = await QueryByIntKeysAsync("[l].[vmf_Code]", vmfCodes);
+            return LegacySelectorProcedure.OrderByKeys(leftover, vmfCodes, terms => terms.vmf_Code);
+        }
+
+        // Archive grids key off GG_Number. If the selector does not also
+        // return VehicleContractTermID or vmf_code, leftover SQL keeps the
+        // page instead of inventing a GG-to-term mapping.
+        return null;
+    }
+
+    private async Task<List<LeaseContractTerms>> QueryByIntKeysAsync(
+        string columnExpression,
+        IReadOnlyList<int> keys
+    )
+    {
+        var parameters = keys
+            .Select((key, index) => new QueryParameter($"@overlayKey{index}", DbType.Int32, key))
+            .ToArray();
+        var inList = string.Join(", ", keys.Select((_, index) => $"@overlayKey{index}"));
+        return await QueryAsync(
+            $"{columnExpression} IN ({inList})",
+            command =>
+            {
+                foreach (var parameter in parameters)
+                {
+                    AddParameter(command, parameter.Name, parameter.Type, parameter.Value);
+                }
+            }
+        );
+    }
+
+    private static IReadOnlyList<LeaseContractTerms> ApplyOverlayScope(
+        IReadOnlyList<LeaseContractTerms> items,
+        LeaseContractTermsPageQuery query
+    )
+    {
+        var allowedSiteCodes = query.AllowedSiteCodes;
+        if (allowedSiteCodes is null)
+        {
+            return items;
+        }
+
+        if (allowedSiteCodes.Count == 0)
+        {
+            return [];
+        }
+
+        return items
+            .Where(item =>
+                item.lease_site_code is not short site
+                || site <= 0
+                || allowedSiteCodes.Contains(site)
+            )
+            .ToList();
+    }
+
+    private static LeaseContractTermsPage PaginateTerms(
+        IReadOnlyList<LeaseContractTerms> items,
+        int page,
+        int pageSize
+    )
+    {
+        var total = items.Count;
+        var totalPages = Math.Max(1, (int)Math.Ceiling(total / (double)pageSize));
+        page = Math.Min(Math.Max(1, page), totalPages);
+        var skip = checked((page - 1) * pageSize);
+        return new LeaseContractTermsPage(
+            items.Skip(skip).Take(pageSize).ToList(),
+            page,
+            pageSize,
+            total
+        );
+    }
+
+    private static IReadOnlyList<int> ReadOrderedIntKeys(
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> rows,
+        params string[] names
+    )
+    {
+        var keys = new List<int>();
+        var seen = new HashSet<int>();
+        foreach (var row in rows)
+        {
+            var key = LegacySelectorProcedure.ReadInt32(row, names);
+            if (key is null or <= 0 || !seen.Add(key.Value))
+            {
+                continue;
+            }
+
+            keys.Add(key.Value);
+        }
+
+        return keys;
+    }
+
+    private static bool IsFullGgNumber(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return Regex.IsMatch(
+            value,
+            "^G[A-Z]{2}[0-9]{3}G$|^G[A-Z][0-9]{2}[A-Z]{2}G$",
+            RegexOptions.CultureInvariant
+        );
+    }
+
+    private sealed record QueryParameter(string Name, DbType Type, object? Value);
 
     private async Task<List<LeaseContractTerms>> QueryAsync(
         string? predicate = null,

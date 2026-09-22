@@ -20,11 +20,8 @@ type EditableValues = {
   siteCode: string;
   positionCode: string;
   persalNumber: string;
-  contractNumber: string;
   saIdNumber: string;
-  passportNumber: string;
   cellphoneNumber: string;
-  faxNumber: string;
   approverCodeAtGfleet: string;
 };
 
@@ -36,12 +33,11 @@ function valuesFromProfile(profile: UserAdminProfile): EditableValues {
     telephone: profile.telephone ?? "",
     siteCode: profile.siteCode === null ? "" : String(profile.siteCode),
     positionCode: profile.positionCode === null ? "" : String(profile.positionCode),
-    persalNumber: profile.persalNumber === null ? "" : String(profile.persalNumber),
-    contractNumber: profile.contractNumber === null ? "" : String(profile.contractNumber),
-    saIdNumber: profile.saIdNumber === null ? "" : String(profile.saIdNumber),
-    passportNumber: profile.passportNumber === null ? "" : String(profile.passportNumber),
+    persalNumber:
+      profile.persalNumber === null ? "" : String(profile.persalNumber).padStart(8, "0"),
+    saIdNumber:
+      profile.saIdNumber === null ? "" : String(profile.saIdNumber).padStart(13, "0"),
     cellphoneNumber: profile.cellphoneNumber === null ? "" : String(profile.cellphoneNumber),
-    faxNumber: profile.faxNumber === null ? "" : String(profile.faxNumber),
     approverCodeAtGfleet:
       profile.approverCodeAtGfleet === null ? "" : String(profile.approverCodeAtGfleet),
   };
@@ -121,8 +117,6 @@ export default function UserEditForm({
   const currentApproverIsListed = siteApprovers.some(
     (approver) => String(approver.userAccessCode) === values.approverCodeAtGfleet,
   );
-  const hasExistingApproverOption =
-    profile.approverCodeAtGfleet !== null && values.siteCode === String(profile.siteCode);
 
   function updateValue(key: keyof EditableValues, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
@@ -222,48 +216,31 @@ export default function UserEditForm({
               ))}
             </select>
           </Field>
-          <Field id="persalNumber" label="Persal">
+          <Field id="persalNumber" label="Persal" required>
             <input
               id="persalNumber"
               name="persalNumber"
-              type="number"
+              type="text"
               inputMode="numeric"
+              pattern="[0-9]{8}"
+              maxLength={8}
               value={values.persalNumber}
+              required
               onChange={(event) => updateValue("persalNumber", event.target.value)}
             />
           </Field>
-          <Field id="contractNumber" label="Contract Number">
-            <input
-              id="contractNumber"
-              name="contractNumber"
-              type="number"
-              inputMode="numeric"
-              value={values.contractNumber}
-              onChange={(event) => updateValue("contractNumber", event.target.value)}
-            />
-            <p className="muted-copy">Use when no Persal number is available.</p>
-          </Field>
-          <Field id="saIdNumber" label="ID" required>
+          <Field id="saIdNumber" label="ID Number" required>
             <input
               id="saIdNumber"
               name="saIdNumber"
-              type="number"
+              type="text"
               inputMode="numeric"
+              pattern="[0-9]{13}"
+              maxLength={13}
               value={values.saIdNumber}
               required
               onChange={(event) => updateValue("saIdNumber", event.target.value)}
             />
-          </Field>
-          <Field id="passportNumber" label="Passport Number">
-            <input
-              id="passportNumber"
-              name="passportNumber"
-              type="number"
-              inputMode="numeric"
-              value={values.passportNumber}
-              onChange={(event) => updateValue("passportNumber", event.target.value)}
-            />
-            <p className="muted-copy">Use when no SA ID is available.</p>
           </Field>
           <Field id="email" label="E-mail" required>
             <input
@@ -286,17 +263,6 @@ export default function UserEditForm({
               onChange={(event) => updateValue("telephone", event.target.value)}
             />
           </Field>
-          <Field id="faxNumber" label="Fax">
-            <input
-              id="faxNumber"
-              name="faxNumber"
-              type="number"
-              inputMode="numeric"
-              value={values.faxNumber}
-              onChange={(event) => updateValue("faxNumber", event.target.value)}
-            />
-            <p className="muted-copy">Optional.</p>
-          </Field>
           <Field id="cellphoneNumber" label="Cell">
             <input
               id="cellphoneNumber"
@@ -307,15 +273,12 @@ export default function UserEditForm({
               onChange={(event) => updateValue("cellphoneNumber", event.target.value)}
             />
           </Field>
-          <Field id="approverCodeAtGfleet" label="Client Approver Name" required>
+          <Field id="approverCodeAtGfleet" label="Client Approver Name">
             <select
               id="approverCodeAtGfleet"
               name="approverCodeAtGfleet"
               value={values.approverCodeAtGfleet}
-              disabled={
-                !values.siteCode || (siteApprovers.length === 0 && !hasExistingApproverOption)
-              }
-              required
+              disabled={!values.siteCode}
               onChange={(event) => updateValue("approverCodeAtGfleet", event.target.value)}
             >
               <option value="">
@@ -340,7 +303,8 @@ export default function UserEditForm({
           </Field>
         </div>
         <p className="muted-copy">
-          At least one of Persal or Contract Number, and at least one of Tel or Cell, is required.
+          Persal must be 8 digits, ID Number must be 13 digits, and at least one of Tel or Cell is
+          required.
         </p>
       </section>
 

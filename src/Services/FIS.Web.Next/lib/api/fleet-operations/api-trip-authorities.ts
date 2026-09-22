@@ -16,6 +16,7 @@ export type TripAuthorityVehicle = {
   model: string | null;
   contractType: string | null;
   siteCode: number | null;
+  startOdometer: number | null;
 };
 
 export type TripAuthorityVehiclePageItem = TripAuthorityVehicle & {
@@ -327,6 +328,7 @@ function mapVehicle(value: unknown): TripAuthorityVehicle | null {
       asString(getValue(value, "contractType", "contract_type")) ??
       statusDescriptionForCode(statusCode),
     siteCode: asNumber(getValue(value, "siteCode", "site_code")),
+    startOdometer: asNumber(getValue(value, "startOdometer", "StartOdometer", "StartODOMeter")),
   };
 }
 
@@ -541,8 +543,19 @@ async function requestApi(path: string, init: RequestInit = {}) {
   }
 }
 
-export async function getTripAuthorityVehicles() {
-  const payload = await requestApi("api/Trip/vehicles");
+export async function getTripAuthorityVehicles(options: {
+  vmfCode?: number;
+  contractCode?: number;
+} = {}) {
+  const params = new URLSearchParams();
+  if (Number.isSafeInteger(options.vmfCode) && (options.vmfCode ?? 0) > 0) {
+    params.set("vmfCode", String(options.vmfCode));
+  }
+  if (Number.isSafeInteger(options.contractCode) && (options.contractCode ?? 0) > 0) {
+    params.set("contractCode", String(options.contractCode));
+  }
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const payload = await requestApi(`api/Trip/vehicles${query}`);
   return getCollection(payload)
     .map(mapVehicle)
     .filter((vehicle): vehicle is TripAuthorityVehicle => vehicle !== null);

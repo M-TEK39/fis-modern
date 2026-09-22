@@ -170,28 +170,44 @@ public class LogsheetController : BaseApiController
         try
         {
             // Log_Entry_B2.aspx lists the vehicle's historical contract
-            // choices. The entry action subsequently verifies the selected
-            // period; it never auto-selects a contract.
+            // choices (start_date < today). When that leftover query is empty
+            // it falls back to permanent-hire contracts (contract_type = 'A').
+            // DEV_SEL_VehicleContracts belongs to Log_Entry_B3.aspx and is
+            // not mapped onto this B2 path.
             var contracts = await _contractRepository.GetContractsByVehicleAsync(vmfCode);
             var allowedSites = await ResolveAllowedSiteCodesAsync();
-            return Ok(
-                contracts
+            var scoped = contracts
+                .Where(contract =>
+                    allowedSites is null || allowedSites.Contains(contract.site_code)
+                )
+                .ToList();
+            var historical = scoped
+                .Where(contract => contract.start_date.Date < DateTime.Today)
+                .OrderByDescending(contract => contract.start_date)
+                .ThenByDescending(contract => contract.contract_code)
+                .ToList();
+            if (historical.Count == 0)
+            {
+                historical = scoped
                     .Where(contract =>
-                        allowedSites is null || allowedSites.Contains(contract.site_code)
+                        string.Equals(contract.contract_type, "A", StringComparison.OrdinalIgnoreCase)
                     )
-                    .Where(contract => contract.start_date.Date < DateTime.Today)
                     .OrderByDescending(contract => contract.start_date)
                     .ThenByDescending(contract => contract.contract_code)
-                    .Select(contract =>
-                        new LogsheetContractOptionDto
-                        {
-                            ContractCode = contract.contract_code,
-                            SiteCode = contract.site_code,
-                            SiteDescription = contract.Site?.description,
-                            StartDate = contract.start_date,
-                            EndDate = contract.end_date,
-                        }
-                    )
+                    .ToList();
+            }
+
+            return Ok(
+                historical.Select(contract =>
+                    new LogsheetContractOptionDto
+                    {
+                        ContractCode = contract.contract_code,
+                        SiteCode = contract.site_code,
+                        SiteDescription = contract.Site?.description,
+                        StartDate = contract.start_date,
+                        EndDate = contract.end_date,
+                    }
+                )
             );
         }
         catch (Exception ex)

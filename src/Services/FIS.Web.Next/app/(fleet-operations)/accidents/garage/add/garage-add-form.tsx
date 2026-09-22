@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useActionState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import {
@@ -33,8 +33,15 @@ function Field({
   id,
   label,
   required = false,
+  hint,
   children,
-}: Readonly<{ id: string; label: string; required?: boolean; children: ReactNode }>) {
+}: Readonly<{
+  id: string;
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: ReactNode;
+}>) {
   return (
     <div className="field">
       <label htmlFor={id}>
@@ -42,6 +49,7 @@ function Field({
         {required ? <span className="sr-only"> required</span> : null}
       </label>
       {children}
+      {hint ? <p className="muted-copy">{hint}</p> : null}
     </div>
   );
 }
@@ -73,6 +81,13 @@ export default function GarageAddForm({
   accidentTypes,
 }: GarageAddFormProps) {
   const [state, formAction] = useActionState(createGarageAccidentAction, initialActionState);
+  const [selectedVmfCode, setSelectedVmfCode] = useState(
+    initialVehicleCode ? String(initialVehicleCode) : "",
+  );
+  const ggReference = useMemo(() => {
+    const vehicle = vehicleOptions.find((option) => String(option.vmfCode) === selectedVmfCode);
+    return vehicle?.fleetNumber?.trim() || "";
+  }, [selectedVmfCode, vehicleOptions]);
 
   return (
     <form action={formAction} className="vehicle-create-form">
@@ -93,7 +108,13 @@ export default function GarageAddForm({
         </div>
         <div className="vehicle-create-grid">
           <Field id="vmfCode" label="GG / GP number" required>
-            <select id="vmfCode" name="vmfCode" defaultValue={initialVehicleCode ?? ""} required>
+            <select
+              id="vmfCode"
+              name="vmfCode"
+              value={selectedVmfCode}
+              required
+              onChange={(event) => setSelectedVmfCode(event.target.value)}
+            >
               <option value="">Select vehicle...</option>
               {vehicleOptions.map((vehicle) => (
                 <option key={vehicle.vmfCode} value={vehicle.vmfCode}>
@@ -173,8 +194,20 @@ export default function GarageAddForm({
           </div>
         </div>
         <div className="vehicle-create-grid">
-          <Field id="ggReference" label="GG reference (do not edit)">
-            <input id="ggReference" name="ggReference" type="text" maxLength={20} readOnly />
+          <Field
+            id="ggReference"
+            label="GG reference (do not edit)"
+            hint="Auto-filled from the selected GG number."
+          >
+            <input
+              id="ggReference"
+              name="ggReference"
+              type="text"
+              maxLength={20}
+              value={ggReference}
+              readOnly
+              tabIndex={-1}
+            />
           </Field>
           <Field id="hqReference" label="HQ reference">
             <input id="hqReference" name="hqReference" type="text" maxLength={20} />
@@ -190,7 +223,11 @@ export default function GarageAddForm({
           </div>
         </div>
         <div className="vehicle-create-grid">
-          <Field id="excessAmount" label="Excess amount">
+          <Field
+            id="excessAmount"
+            label="Excess amount (R)"
+            hint="Rand amount the department or driver pays as excess. Leave 0 when not applicable."
+          >
             <input
               id="excessAmount"
               name="excessAmount"

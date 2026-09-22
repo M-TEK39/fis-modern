@@ -125,7 +125,7 @@ function SiteDriverTable({
             columns={[
               { key: "column-1", label: <>First Name</> },
               { key: "column-2", label: <>Surname</> },
-              { key: "column-3", label: <>South African ID</> },
+              { key: "column-3", label: <>South African ID Number</> },
               { key: "column-4", label: <>Passport Number</> },
               { key: "column-5", label: <>Licence Number</> },
               { key: "column-6", label: <>Actions</> },
